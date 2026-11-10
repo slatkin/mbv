@@ -32,7 +32,9 @@ pub use self::audiobooks_projection::{
     GuiAudiobooksWorkspace,
 };
 pub use self::emby::GuiEmbyLibrarySelection;
-pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
+pub(in crate::app) use self::emby::{
+    GuiEmbyLatestItems, GuiEmbyLatestItemsEvent, GuiEmbyRootItems, GuiEmbyRootItemsEvent,
+};
 pub use self::emby_projection::{
     GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
@@ -66,7 +68,6 @@ pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
 
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::feed::FeedHomeVideoSelection;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::ui_util::is_playable;
 
@@ -337,7 +338,7 @@ impl App {
                 self.gui_emby_select(lib_idx, &row);
             }
             GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => {
-                self.gui_emby_set_feed_group(lib_idx, &FeedHomeVideoSelection::from(group));
+                self.gui_emby_set_feed_group(lib_idx, &group);
             }
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
                 self.play_gui_emby_item(lib_idx, &item_id);

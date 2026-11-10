@@ -10,14 +10,9 @@
 // geometry is asserted without a layout, which jsdom does not have.
 
 import type { GuiAudiobooksRow } from '$lib/bridge/types';
-import type { ListWindow, RailLetter } from './list';
-import {
-	LETTER_ROW_HEIGHT,
-	RAIL_LETTERS,
-	filterMatch,
-	listWindow,
-	rowsHeight,
-} from './list';
+import type { RailLetter } from './list';
+import { LETTER_ROW_HEIGHT, RAIL_LETTERS, filterMatch, moveCursor } from './list';
+import type { ListMove } from './list';
 
 /** The letter heading row's height in logical pixels (design D12, row 9.1):
  * the Music list's letter heading, which the book list reuses. */
@@ -42,22 +37,6 @@ export interface AudiobooksItemRow {
 	top: number;
 	height: number;
 	row: GuiAudiobooksRow;
-}
-
-/** The rows in view over the book list (row 9.1): the shared list window's
- * own answer for the Audiobooks row heights. */
-export function audiobooksListWindow(
-	rows: readonly AudiobooksListRow[],
-	scrollTop: number,
-	viewportHeight: number,
-): ListWindow {
-	return listWindow(rows, scrollTop, viewportHeight);
-}
-
-/** The painted height of the book list (row 9.1): the shared height's own
- * answer for the Audiobooks row heights. */
-export function audiobooksRowsHeight(rows: readonly AudiobooksListRow[]): number {
-	return rowsHeight(rows);
 }
 
 /**
@@ -120,28 +99,10 @@ export function audiobooksRowLetter(row: AudiobooksListRow): string | null {
 export function moveAudiobooksCursor(
 	rows: readonly AudiobooksListRow[],
 	cursor: string | null,
-	move: 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end',
+	move: ListMove,
 	page = 1,
 ): string | null {
-	const items = audiobooksSelectableRows(rows);
-	if (items.length === 0) {
-		return null;
-	}
-	const last = items.length - 1;
-	const at = items.findIndex((row) => row.id === cursor);
-	if (at < 0) {
-		return (move === 'up' || move === 'end' ? items[last] : items[0]).id;
-	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return items[Math.min(Math.max(to, 0), last)].id;
+	return moveCursor(audiobooksSelectableRows(rows), cursor, move, page);
 }
 
 /** The A–Z rail over the painted rows (row 9.1, design D7): each letter with

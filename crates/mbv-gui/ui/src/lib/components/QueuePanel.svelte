@@ -54,7 +54,7 @@
 	import { onMount } from 'svelte';
 	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleVar } from '$lib/bridge/theme';
+	import { canvasVar, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiOverlayFrame,
 		GuiQueue,
@@ -201,11 +201,6 @@
 		return row.kind === 'media' ? row.duration : null;
 	}
 
-	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
-	 * hexes that name no theme slot (U13). */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** The row's painted background: the hovered or picked row's fill, then the
 	 * zebra stripe. The playing row keeps its own fill, because a highlight marks

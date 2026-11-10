@@ -335,3 +335,40 @@ fn a_stale_selection_falls_back_to_the_first_row() {
         "the Hero follows the fallback row"
     );
 }
+
+/// The Hero's art box follows the fetched image's own pixels, not only the
+/// policy's declared arm (design D5's painted-shape rule, which the TUI's
+/// `HeroArtwork::painted_shape` re-arms on). A thumb-declared episode takes the
+/// landscape chain, and when that chain serves the portrait poster the box must
+/// take the image's arm: otherwise the Hero paints a poster inside a 16:9 band,
+/// which is the GUI/TUI divergence this guards.
+#[test]
+fn the_episode_heroes_art_box_follows_the_fetched_images_own_aspect() {
+    let _guard = TestStateDirGuard::new();
+    let mut episode = episode_item("ep-new", "Alfred", "The New Case", "2026-11-08T10:00:00Z");
+    episode.image_tags.thumb = "tag".into();
+    let mut app = shows_app(TvContentMode::Latest, vec![episode]);
+    // The declared landscape chain, seeded with a portrait poster: the policy's
+    // arm is Landscape, the fetched image's own aspect is Portrait.
+    app.images.insert_image(
+        "ep-new:Thumb,Primary,Backdrop,Logo".to_string(),
+        mbv_images::CachedImage {
+            img: Some(image::DynamicImage::ImageRgba8(
+                image::RgbaImage::from_pixel(300, 450, image::Rgba([20, 40, 60, 255])),
+            )),
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        },
+    );
+
+    let projection = app.gui_shows_projection(0);
+
+    let hero = projection.hero.expect("the episode Hero paints");
+    assert!(hero.art.is_some(), "the seeded image is the Hero's art");
+    assert_eq!(
+        hero.art_shape,
+        crate::app::gui_library::GuiArtShape::Portrait,
+        "the box follows the fetched poster's 3:4 pixels, not the declared landscape arm"
+    );
+}

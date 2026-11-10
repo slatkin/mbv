@@ -69,19 +69,19 @@ function mount(facts: GuiPodcastsHero | null = hero()): HTMLElement {
 	return render(LibraryPodcastsHero, { podcasts: podcasts(facts) }).container;
 }
 
-// The artwork box reserves the arm the frame declares (design D12): the
-// landscape box keeps the 16:9 height, the square the Music Hero's 300 px
-// side, and the portrait the tall box.
+// The artwork box takes the arm every Hero shares (design D15): the square
+// keeps the Music Hero's 300 px side, the portrait the tall box, and the
+// landscape fills the Hero content width at 16:9.
 test.each([
-	['landscape', 169],
-	['square', 300],
-	['portrait', 450],
-] as const)('a %s Hero places its artwork box at %s px high', (shape, height) => {
+	['landscape', '100%', 'auto'],
+	['square', '300px', '300px'],
+	['portrait', '300px', '450px'],
+] as const)('a %s Hero places its artwork box at the shared arm', (shape, width, height) => {
 	const container = mount(hero(shape));
 	const box = container.querySelector('[data-library-podcasts-hero-art]') as HTMLElement;
 
-	expect(box.style.width).toBe('300px');
-	expect(box.style.height).toBe(`${height}px`);
+	expect(box.style.width).toBe(width);
+	expect(box.style.height).toBe(height);
 });
 
 test('the Hero paints its title, its meta rows with their roles, and its overview', () => {

@@ -224,6 +224,7 @@ impl App {
             gui_tv_shows: std::collections::HashMap::new(),
             gui_emby_libs: std::collections::HashMap::new(),
             gui_emby_roots: std::collections::HashMap::new(),
+            gui_emby_latest: std::collections::HashMap::new(),
             gui_abs_libs: std::collections::HashMap::new(),
             gui_podcast_libs: std::collections::HashMap::new(),
             gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),

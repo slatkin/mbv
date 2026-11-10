@@ -8,9 +8,9 @@
 //! gutter, `crates/mbv-components/src/emby_library_content.rs`), so the two
 //! Clients cannot drift, and the projection reads `App` data only.
 
-use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_queue::QueueItem;
 use mbv_render::effective_sort_str;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 use mbv_ui_model::ui_util::fmt_duration_short;
@@ -20,34 +20,31 @@ use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
 
-/// The feed-group pill a press selects (row 8.1): `All`, or one root folder
-/// by its stable Service id. The single-select rule (design D6) keeps one
-/// pill selected, and the selection's one store is the library tab's own
-/// feed state.
+/// The feed-group pill a press selects (row 8.1): `New` (the destination
+/// Latest view), `All`, or one root folder by its stable Service id. The
+/// single-select rule (design D6) keeps one pill selected. `All` and `Folder`
+/// write the library tab's shared feed state (the TUI's one store of that
+/// fact); `New` is the GUI's own latest view over the destination-Latest
+/// snapshot, whose store the shared snapshot event fills.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiEmbyFeedGroup {
+    /// The New pill: the library's destination-Latest snapshot, newest first.
+    Latest,
     /// The All pill: the library root's own listing, newest first.
     All,
     /// One root folder that holds items, by its stable Service id.
     Folder(String),
 }
 
-impl From<GuiEmbyFeedGroup> for FeedHomeVideoSelection {
-    fn from(group: GuiEmbyFeedGroup) -> Self {
-        match group {
-            GuiEmbyFeedGroup::All => Self::All,
-            GuiEmbyFeedGroup::Folder(folder_id) => Self::Folder(folder_id),
-        }
-    }
-}
-
 /// One pill of a feed-view library's pill row (row 8.1): single-select, the
-/// selected one the feed state's current selection.
+/// selected one the feed state's current selection. The New pill's label is
+/// the TUI's own (`crates/mbv-components/src/emby_library_content/
+/// panel.rs`), so a user who knows one Client reads the other.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEmbyPill {
     /// The group the pill selects: the set-feed-group command carries it.
     pub group: GuiEmbyFeedGroup,
-    /// The pill's label: `All`, or the folder's name.
+    /// The pill's label: `New`, `All`, or the folder's name.
     pub name: String,
     /// Whether the feed state's selection is this pill's group.
     pub selected: bool,
@@ -180,6 +177,22 @@ impl App {
             .unwrap_or_default()
     }
 
+    /// The root listing's folders as `(id, name)` pairs (row 8.1): the
+    /// programme lookup's source, the listing the pill row already holds.
+    /// Empty while the listing has not landed.
+    fn gui_root_folder_names(&self, lib_idx: usize) -> Vec<(String, String)> {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|root| {
+                root.items
+                    .iter()
+                    .map(|item| (item.id.clone(), item.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// The plain mode's projection (row 8.1): the root-list store's rows in
     /// the server's `SortName` order, each with its rail letter and no pill,
     /// and the selected row's Hero.
@@ -209,17 +222,76 @@ impl App {
         }
     }
 
-    /// The feed-group mode's projection (row 8.1): the All and folder pills
-    /// over the counted folders, the selected group's items in the server's
-    /// date order with the gutter and no rail, and the selected row's Hero.
+    /// The feed-group mode's projection (row 8.1): the New, All, and folder
+    /// pills over the counted folders, the selected pill's items in the
+    /// server's date order with the gutter and no rail, and the selected
+    /// row's Hero. The New pill's list is the destination-Latest store's
+    /// snapshot; the All and folder pills' lists are the feed state's.
     fn gui_emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
+        if self
+            .gui_emby_libs
+            .get(&lib_idx)
+            .is_some_and(|selection| selection.feed_latest)
+        {
+            self.gui_emby_latest_projection(lib_idx)
+        } else {
+            self.gui_emby_group_projection(lib_idx)
+        }
+    }
+
+    /// The New pill's projection (row 8.1): the destination-Latest store's
+    /// snapshot — the TUI New pill's own list (`latest_items`, the TUI's
+    /// `EmbyLibraryContent` push) — with the feed rows' programme line and
+    /// the selected row's Hero. The store's loading mark is the list's
+    /// loading state; a failed fetch paints its empty list, as the TUI's New
+    /// pill does.
+    fn gui_emby_latest_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
+        let (loading, rows) = {
+            let folders = self.gui_root_folder_names(lib_idx);
+            match self.gui_emby_latest.get(&lib_idx) {
+                Some(super::GuiEmbyLatestItems::Loaded(items)) => {
+                    let rows = items
+                        .iter()
+                        .map(|item| {
+                            feed_row(item, latest_row_date(item), programme_of(item, &folders))
+                        })
+                        .collect();
+                    (false, rows)
+                }
+                Some(super::GuiEmbyLatestItems::Failed) => (false, Vec::new()),
+                Some(super::GuiEmbyLatestItems::Loading) | None => (true, Vec::new()),
+            }
+        };
+        let selected = self.gui_emby_selected(lib_idx, &rows);
+        let hero = selected
+            .as_ref()
+            .and_then(|selected| self.gui_emby_item(lib_idx, selected))
+            .filter(|item| self.gui_emby_hero_item(lib_idx, item))
+            .map(|item| self.gui_emby_hero(&item));
+        GuiEmbyProjection {
+            library_name: self.gui_emby_library_name(lib_idx),
+            pills: self.gui_emby_feed_pills(lib_idx),
+            collection_names: vec!["New".to_string()],
+            feed_group: true,
+            loading,
+            failed: false,
+            rows,
+            selected,
+            hero,
+        }
+    }
+
+    /// The All and folder pills' projection (row 8.1): the selected group's
+    /// items in the server's date order with the gutter and no rail, and the
+    /// selected row's Hero.
+    fn gui_emby_group_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let selection = self
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
             .map(|state| state.selection.clone())
             .unwrap_or_default();
-        let pills = self.gui_emby_feed_pills(lib_idx, &selection);
+        let pills = self.gui_emby_feed_pills(lib_idx);
         let collection_names = vec![selection_name(&pills, &selection)];
         let root_loading = self
             .libs
@@ -232,11 +304,13 @@ impl App {
                 .get(lib_idx)
                 .and_then(|lib| lib.feed_home_video.as_ref())
                 .is_some_and(|state| state.loading);
-        let rows: Vec<GuiEmbyRow> = self
-            .feed_home_video_selected_items(lib_idx)
-            .iter()
-            .map(feed_row)
-            .collect();
+        let rows: Vec<GuiEmbyRow> = {
+            let folders = self.gui_root_folder_names(lib_idx);
+            self.feed_home_video_selected_items(lib_idx)
+                .iter()
+                .map(|item| feed_row(item, feed_row_date(item), programme_of(item, &folders)))
+                .collect()
+        };
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
             .as_ref()
@@ -256,25 +330,40 @@ impl App {
         }
     }
 
-    /// The feed-group mode's pill row (row 8.1): All first, then each root
-    /// folder whose video count is positive, in listing order — the TUI's
-    /// pill row's membership rule. The selected pill is the feed state's
-    /// current selection; a folder the counts no longer admit falls back to
-    /// All, as the TUI's pill index clamps there.
-    fn gui_emby_feed_pills(
-        &self,
-        lib_idx: usize,
-        selection: &FeedHomeVideoSelection,
-    ) -> Vec<GuiEmbyPill> {
-        let mut pills = vec![GuiEmbyPill {
-            group: GuiEmbyFeedGroup::All,
-            name: "All".to_string(),
-            selected: *selection == FeedHomeVideoSelection::All,
-        }];
+    /// The feed-group mode's pill row (row 8.1): New first, then All, then
+    /// each root folder whose video count is positive, in listing order — the
+    /// TUI's pill row's membership rule (`EmbyLibraryContent`'s selector
+    /// row). The New pill is selected while the GUI's own Latest view is
+    /// active; otherwise the selected pill is the feed state's current
+    /// selection, and a folder the counts no longer admit falls back to All,
+    /// as the TUI's pill index clamps there.
+    fn gui_emby_feed_pills(&self, lib_idx: usize) -> Vec<GuiEmbyPill> {
+        let latest = self
+            .gui_emby_libs
+            .get(&lib_idx)
+            .is_some_and(|selection| selection.feed_latest);
+        let selection = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .map(|state| state.selection.clone())
+            .unwrap_or_default();
+        let mut pills = vec![
+            GuiEmbyPill {
+                group: GuiEmbyFeedGroup::Latest,
+                name: "New".to_string(),
+                selected: latest,
+            },
+            GuiEmbyPill {
+                group: GuiEmbyFeedGroup::All,
+                name: "All".to_string(),
+                selected: !latest && selection == FeedHomeVideoSelection::All,
+            },
+        ];
         pills.extend(self.counted_folder_iter(lib_idx).map(|folder| GuiEmbyPill {
             group: GuiEmbyFeedGroup::Folder(folder.id.clone()),
             name: folder.name.clone(),
-            selected: matches!(selection, FeedHomeVideoSelection::Folder(id) if &folder.id == id),
+            selected: matches!(&selection, FeedHomeVideoSelection::Folder(id) if folder.id == *id),
         }));
         pills
     }
@@ -292,15 +381,25 @@ impl App {
     }
 
     /// The Emby item a command names (row 8.1): the active list's rows — the
-    /// feed state's selected group's items in the feed-group mode, the
-    /// root-list store's rows in plain mode. `None` when no row carries the
-    /// id, so a stale command plays nothing.
+    /// New pill's Latest items, the feed state's selected group's items in
+    /// the feed-group mode, the root-list store's rows in plain mode. `None`
+    /// when no row carries the id, so a stale command plays nothing.
     pub(in crate::app::gui_library) fn gui_emby_item(
         &self,
         lib_idx: usize,
         item_id: &str,
     ) -> Option<EmbyItem> {
         if self.is_feed_home_video_library(lib_idx) {
+            if self
+                .gui_emby_libs
+                .get(&lib_idx)
+                .is_some_and(|selection| selection.feed_latest)
+            {
+                return self
+                    .gui_stored_emby_latest_items(lib_idx)
+                    .find(|item| item.id == item_id)
+                    .cloned();
+            }
             return self
                 .feed_home_video_selected_items(lib_idx)
                 .into_iter()
@@ -333,22 +432,16 @@ impl App {
     /// TUI's hero paints. No Workspace rides a plain Emby-library Hero.
     fn gui_emby_hero(&mut self, item: &EmbyItem) -> GuiEmbyHero {
         let content = hero_content_emby(item);
-        let art = match &content.facts.artwork.source {
-            Some(ArtworkSource::Emby {
-                item_id,
-                series_id,
-                image_types,
-                cache_key,
-            }) => Some(self.gui_home_hero_artwork(cache_key, item_id, series_id, image_types)),
-            Some(_) | None => None,
-        };
+        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
         GuiEmbyHero {
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
-            art_shape: artwork_shape(content.facts.artwork.shape),
+            art_shape: artwork_shape(
+                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
+            ),
             art,
         }
     }
@@ -369,19 +462,47 @@ fn plain_row(item: &EmbyItem) -> GuiEmbyRow {
     }
 }
 
-/// One row of the feed-group list (row 8.1): the TUI row's primary label
-/// with the year in the gutter — the date-ordered list's gutter — and no
-/// rail letter.
-fn feed_row(item: &EmbyItem) -> GuiEmbyRow {
-    let year = (item.production_year > 0).then(|| item.production_year.to_string());
+/// One row of the feed-group lists (row 8.1): the TUI row's primary label,
+/// the programme (root folder) the item sits in underneath it — the user
+/// rule of 2026-12-30, so a flat All row names the programme it belongs to
+/// — the gutter date (the New list's date added, the All and folder lists'
+/// production year), and no rail letter.
+fn feed_row(item: &EmbyItem, date: Option<String>, programme: Option<String>) -> GuiEmbyRow {
     GuiEmbyRow {
         id: item.id.clone(),
         title: row_title(item),
-        subtitle: None,
-        date: year,
+        subtitle: programme,
+        date,
         sort_letter: None,
         kind: row_kind(item),
     }
+}
+
+/// The All and folder lists' gutter date (row 8.1): the production year, as
+/// the TUI's feed-group rows paint it.
+fn feed_row_date(item: &EmbyItem) -> Option<String> {
+    (item.production_year > 0).then(|| item.production_year.to_string())
+}
+
+/// The New list's gutter date (row 8.1): the provider date added, short —
+/// the TUI's Latest rows' own gutter (`latest_row_projection`,
+/// `crates/mbv-components/src/emby_library_content.rs`).
+fn latest_row_date(item: &EmbyItem) -> Option<String> {
+    let item = QueueItem::Emby(Box::new(item.clone()));
+    mbv_ui_model::home_latest::provider_timestamp_secs(&item)
+        .map(mbv_ui_model::ui_util::fmt_publish_date_short)
+        .filter(|date| !date.is_empty())
+}
+
+/// The programme (root folder) an item sits in (row 8.1): the root listing's
+/// folder whose id is the item's containing item's id. `None` for a loose
+/// root video — whose containing item is the library itself — and for an
+/// item whose folder the listing does not hold.
+fn programme_of(item: &EmbyItem, folders: &[(String, String)]) -> Option<String> {
+    folders
+        .iter()
+        .find(|(folder_id, _)| *folder_id == item.parent_id)
+        .map(|(_, name)| name.clone())
 }
 
 /// The TUI browse row's primary label (`row_for`, `crates/mbv-components/

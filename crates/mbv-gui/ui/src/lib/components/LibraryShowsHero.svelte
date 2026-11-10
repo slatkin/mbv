@@ -18,6 +18,7 @@
 	// position.
 	import { ListEnd, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
 	import type { GuiShowsEpisodeRow, GuiShowsFrame } from '$lib/bridge/types';
 	import {
 		episodeProgress,
@@ -27,7 +28,7 @@
 		resolveShowsEpisodeCursor,
 		showsWorkspace,
 	} from '$lib/library/shows-workspace';
-	import LibraryHeroArt from './LibraryHeroArt.svelte';
+	
 
 	interface Props {
 		/** The carried Shows content (design D12): the selected row's Hero, its
@@ -106,67 +107,11 @@
 		Hero content width above the title and meta block, because a 16:9 frame
 		shrunk into the canvas's 300 px square box is not the TUI's hero. The
 		portrait and square arms keep the canvas's box beside the text. -->
-		<section
-			class={hero.artShape === 'landscape' ? 'flex flex-col' : 'flex items-start'}
-			style:gap={hero.artShape === 'landscape' ? '18px' : '28px'}
-			aria-label={hero.title}
-			data-library-shows-hero-summary=""
-		>
-			<!-- The artwork arm every Hero shares (design D15): the 300 px box for a
-			portrait or square cover, and the TUI's full-width 16:9 still for a
-			landscape one. -->
-			<LibraryHeroArt shape={hero.artShape} art={hero.art} title={hero.title} attr="shows" />
-			<div
-				class="flex min-w-0 flex-1 flex-col"
-				style:gap="14px"
-				style:padding-top={hero.artShape === 'landscape' ? '0' : '8px'}
-			>
-				<h2
-					style:margin="0"
-					style:font-size="26px"
-					style:font-weight="600"
-					style:letter-spacing="-0.01em"
-					style:color="var(--canvas-heading)"
-					data-library-shows-hero-title="">{hero.title}</h2
-				>
-				<div class="flex flex-col" style:gap="4px">
-					{#each hero.metaRows as meta, index (index)}
-						{#if index === hero.durationRow}
-							<span
-								class="font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-shows-hero-role="duration">{meta}</span
-							>
-						{:else if index === hero.progressRow}
-							<span
-								class="font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-accent)"
-								data-library-shows-hero-role="progress">{meta}</span
-							>
-						{:else}
-							<span
-								class="font-mono"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-shows-hero-role="meta">{meta}</span
-							>
-						{/if}
-					{/each}
-				</div>
-				{#if hero.overview !== null}
-					<p
-						class="min-w-0"
-						style:margin="0"
-						style:font-size="13px"
-						style:line-height="1.5"
-						style:color="var(--canvas-muted)"
-						data-library-shows-hero-overview="">{hero.overview}</p
-					>
-				{/if}
-			</div>
-		</section>
+		<LibraryHeroSummary
+			attr="shows"
+			section="data-library-shows-hero-summary"
+			{hero}
+		/>
 
 		{#if workspace !== null}
 			<!-- The series Hero's Workspace (design D12): the season pills, then

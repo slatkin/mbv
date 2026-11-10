@@ -275,6 +275,15 @@ pub struct App {
     /// reads. The TUI never reads it.
     pub(in crate::app) gui_emby_roots:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
+    /// The GUI Library's destination-Latest store (row 8.1): each Emby
+    /// library's Latest snapshot, keyed by the library index — the list the
+    /// New pill paints, fetched through the store's own `get_latest` fetch
+    /// the way the root-list store fetches its flat list. A loaded snapshot
+    /// lives for the session, and a failed one stays failed until the pill
+    /// is selected again. The TUI's own Latest snapshot stays the shell's
+    /// (`tv_latest_snapshots`), and the TUI never reads this store.
+    pub(in crate::app) gui_emby_latest:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLatestItems>,
     /// The GUI Library's Audiobooks selection (add-gui-library-panel design
     /// D12, row 9.1): per Audiobookshelf book library, the book the Hero
     /// shows, by stable `library_item_id`. The TUI's own resting selection is

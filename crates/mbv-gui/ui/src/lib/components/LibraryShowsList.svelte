@@ -16,15 +16,12 @@
 	// for the Hero, a press on a leaf or a flat row selects it, a double-click
 	// on an episode plays it, and a right-click opens the item menu, as the
 	// Music list's rows do.
-	import { onMount } from 'svelte';
 	import type { GuiShowsFrame } from '$lib/bridge/types';
 	import {
 		activeShowsMode,
 		buildShowsRows,
 		showsLetterRail,
-		showsListWindow,
 		showsRowLetter,
-		showsRowsHeight,
 		showsSeriesMode,
 	} from '$lib/library/shows-list';
 	import type { ShowsListRow } from '$lib/library/shows-list';
@@ -38,19 +35,19 @@
 		setShowsFilter,
 		showsUi,
 	} from '$lib/library/shows';
-	import { openLibraryRowMenu } from '$lib/library/state';
+	import { openRowMenuAt } from '$lib/library/state';
 	import { isPlayedEpisode, resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
+	import LibraryVirtualList from './LibraryVirtualList.svelte';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The carried Shows content (design D14): the tree or the flat rows. */
 		shows: GuiShowsFrame;
 	}
 	const { shows }: Props = $props();
-
-	let listEl: HTMLElement | undefined = $state();
 
 	/** The active view mode: the pill the core marked. */
 	const mode = $derived(activeShowsMode(shows));
@@ -63,16 +60,6 @@
 			closed: $showsUi.closed,
 		}),
 	);
-
-	/** The rows in view: only these paint. */
-	const view = $derived(showsListWindow(rows, $showsUi.scrollTop, $showsUi.viewportHeight));
-	const painted = $derived(rows.slice(view.start, view.end));
-
-	/** The list's whole painted height, and the spacers that hold its scroll
-	 * range while only the rows in view paint. */
-	const total = $derived(showsRowsHeight(rows));
-	const above = $derived(painted.length > 0 ? painted[0].top : 0);
-	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
 	/** The rail's A–Z letters over the painted rows: the All series mode paints
 	 * it, and the flat modes paint none. */
@@ -96,17 +83,6 @@
 	 * does. */
 	const filterPlaceholder = $derived(`Filter ${shows.collectionNames[0] ?? 'shows'}`);
 
-	/** The bottom edge of the last painted row: the below-spacer's pair. */
-	function lastBottom(): number {
-		const last = painted[painted.length - 1];
-		return last === undefined ? 0 : last.top + last.height;
-	}
-
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** The stable Service id a row names, or `null` on a heading: the item the
 	 * menu and the double-click act on. */
@@ -181,38 +157,11 @@
 		return `transform: rotate(${open ? 90 : 0}deg);`;
 	}
 
-	/** Report the list's measured height: the rows in view follow it. */
-	function measure(): void {
-		measureShowsList(listEl?.clientHeight ?? 0);
-	}
-
-	/** Report the list's native scroll offset, so the windowed paint follows a
-	 * user scroll. */
-	function onScroll(event: Event): void {
-		scrollShowsList((event.currentTarget as HTMLElement).scrollTop);
-	}
-
 	/** Open the item menu for the row (design D14): the Music list's
 	 * right-click, at the item's stable Service id. */
 	function rowMenu(event: MouseEvent, row: ShowsListRow): void {
-		event.preventDefault();
-		const itemId = rowSourceId(row);
-		if (itemId === null) {
-			return;
-		}
-		openLibraryRowMenu(itemId, event.clientX, event.clientY);
+		openRowMenuAt(event, rowSourceId(row));
 	}
-
-	// The scroller mirrors the state: a key that moved the cursor set the
-	// offset, and the element follows it. A user scroll already wrote the
-	// offset back, so this assignment is a no-op for it.
-	$effect(() => {
-		const el = listEl;
-		const top = $showsUi.scrollTop;
-		if (el !== undefined && el.scrollTop !== top) {
-			el.scrollTop = top;
-		}
-	});
 
 	// The Hero's episode cursor belongs to the selected row: a selection change
 	// starts it over, because the episodes it rested on belong to the previous
@@ -225,16 +174,6 @@
 		}
 		lastSelected = selected;
 		resetShowsEpisodeCursor();
-	});
-
-	onMount(() => {
-		measure();
-		const observer =
-			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-		if (listEl !== undefined) {
-			observer?.observe(listEl);
-		}
-		return () => observer?.disconnect();
 	});
 </script>
 
@@ -267,173 +206,168 @@
 		/>
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
-		<ol
-			bind:this={listEl}
-			class="min-h-0 flex-1"
-			style:overflow-y="auto"
-			style:list-style="none"
-			style:margin="0"
-			style:padding="8px 0 8px 8px"
-			data-library-shows-list=""
-			onscroll={onScroll}
-		>
-			<li style:height="{above}px" aria-hidden="true"></li>
-			{#each painted as row (row.id)}
-				<li>
+		<LibraryVirtualList
+		{rows}
+		scrollTop={$showsUi.scrollTop}
+		viewportHeight={$showsUi.viewportHeight}
+		attr="shows"
+		padding="8px 0 8px 8px"
+		onmeasure={measureShowsList}
+		onscroll={scrollShowsList}
+	>
+		{#snippet row(row)}
 					{#if row.kind === 'heading'}
-						<div
-							class="flex items-end font-mono"
-							style:height="{row.height}px"
-							style:padding="0 8px 2px"
+					<div
+						class="flex items-end font-mono"
+						style:height="{row.height}px"
+						style:padding="0 8px 2px"
+						style:font-size="11px"
+						style:color="var(--canvas-source)"
+						data-library-shows-letter={row.letter}
+					>
+						{row.letter}
+					</div>
+				{:else if row.kind === 'series' || row.kind === 'season'}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{row.height}px"
+						style:padding="0 8px"
+						style:padding-left={rowInset(row)}
+						style:gap="8px"
+						style:border="0"
+						style:border-radius="4px"
+						style:text-align="left"
+						style:font-size="13.5px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						aria-expanded={row.expandable ? row.open : undefined}
+						data-library-shows-row={row.kind}
+						data-library-shows-row-id={row.id}
+						data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
+						data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
+						data-library-shows-open={row.open ? '' : undefined}
+						onclick={() => pressShowsRow(row)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span
+							class="flex flex-none items-center justify-center"
+							style:width="18px"
+							style:color="var(--canvas-muted)"
+							data-library-shows-chevron={row.expandable ? '' : undefined}
+						>
+							{#if row.expandable}
+								<svg
+									width="10"
+									height="10"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="3"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+									style={chevronStyle(row.open)}><path d="m9 5 7 7-7 7" /></svg
+								>
+							{/if}
+						</span>
+						<span
+							class="min-w-0 flex-1 truncate"
+							style:color={rowNameColor(row)}
+							style:font-weight={row.kind === 'series' || isSelectedRow(row) ? 600 : 400}
+							>{row.title}</span
+						>
+					</button>
+				{:else if row.kind === 'episode'}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{row.height}px"
+						style:padding="0 8px"
+						style:padding-left={rowInset(row)}
+						style:gap="8px"
+						style:border="0"
+						style:border-radius="4px"
+						style:text-align="left"
+						style:font-size="13px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						data-library-shows-row="episode"
+						data-library-shows-row-id={row.id}
+						data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
+						data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
+						onclick={() => pressShowsRow(row)}
+						ondblclick={() => playShowsRow(row.sourceId)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span
+							class="flex-none font-mono tabular-nums"
 							style:font-size="11px"
-							style:color="var(--canvas-source)"
-							data-library-shows-letter={row.letter}
+							style:color="var(--canvas-ordinal)"
+							data-library-shows-episode-number="">{row.number}</span
 						>
-							{row.letter}
-						</div>
-					{:else if row.kind === 'series' || row.kind === 'season'}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{row.height}px"
-							style:padding="0 8px"
-							style:padding-left={rowInset(row)}
-							style:gap="8px"
-							style:border="0"
-							style:border-radius="4px"
-							style:text-align="left"
-							style:font-size="13.5px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							aria-expanded={row.expandable ? row.open : undefined}
-							data-library-shows-row={row.kind}
-							data-library-shows-row-id={row.id}
-							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
-							data-library-shows-open={row.open ? '' : undefined}
-							onclick={() => pressShowsRow(row)}
-							oncontextmenu={(event) => rowMenu(event, row)}
+						<span
+							class="min-w-0 flex-1 truncate"
+							style:color={rowNameColor(row)}
+							data-library-shows-title="">{row.title}</span
 						>
-							<span
-								class="flex flex-none items-center justify-center"
-								style:width="18px"
-								style:color="var(--canvas-muted)"
-								data-library-shows-chevron={row.expandable ? '' : undefined}
-							>
-								{#if row.expandable}
-									<svg
-										width="10"
-										height="10"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="3"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-										style={chevronStyle(row.open)}><path d="m9 5 7 7-7 7" /></svg
-									>
-								{/if}
-							</span>
-							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={rowNameColor(row)}
-								style:font-weight={row.kind === 'series' || isSelectedRow(row) ? 600 : 400}
-								>{row.title}</span
-							>
-						</button>
-					{:else if row.kind === 'episode'}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{row.height}px"
-							style:padding="0 8px"
-							style:padding-left={rowInset(row)}
-							style:gap="8px"
-							style:border="0"
-							style:border-radius="4px"
-							style:text-align="left"
-							style:font-size="13px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							data-library-shows-row="episode"
-							data-library-shows-row-id={row.id}
-							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
-							onclick={() => pressShowsRow(row)}
-							ondblclick={() => playShowsRow(row.sourceId)}
-							oncontextmenu={(event) => rowMenu(event, row)}
-						>
+						{#if row.duration !== ''}
 							<span
 								class="flex-none font-mono tabular-nums"
 								style:font-size="11px"
-								style:color="var(--canvas-ordinal)"
-								data-library-shows-episode-number="">{row.number}</span
+								style:color="var(--canvas-muted)"
+								data-library-shows-episode-duration="">{row.duration}</span
 							>
+						{/if}
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="relative flex w-full items-center overflow-hidden"
+						style:height="{row.height}px"
+						style:padding="0 12px"
+						style:gap="10px"
+						style:border="0"
+						style:border-radius="4px"
+						style:text-align="left"
+						style:font-size="13px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						data-library-shows-row="flat"
+						data-library-shows-row-id={row.id}
+						data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
+						data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
+						onclick={() => pressShowsRow(row)}
+						ondblclick={() => playShowsRow(row.row.id)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
 							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={rowNameColor(row)}
-								data-library-shows-title="">{row.title}</span
+								class="truncate"
+								style:color={canvasVar('text')}
+								data-library-shows-title="">{row.row.title}</span
 							>
-							{#if row.duration !== ''}
-								<span
-									class="flex-none font-mono tabular-nums"
-									style:font-size="11px"
-									style:color="var(--canvas-muted)"
-									data-library-shows-episode-duration="">{row.duration}</span
-								>
-							{/if}
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="relative flex w-full items-center overflow-hidden"
-							style:height="{row.height}px"
-							style:padding="0 12px"
-							style:gap="10px"
-							style:border="0"
-							style:border-radius="4px"
-							style:text-align="left"
-							style:font-size="13px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							data-library-shows-row="flat"
-							data-library-shows-row-id={row.id}
-							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
-							onclick={() => pressShowsRow(row)}
-							ondblclick={() => playShowsRow(row.row.id)}
-							oncontextmenu={(event) => rowMenu(event, row)}
-						>
-							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+							{#if row.row.subtitle !== null}
 								<span
 									class="truncate"
-									style:color={canvasVar('text')}
-									data-library-shows-title="">{row.row.title}</span
-								>
-								{#if row.row.subtitle !== null}
-									<span
-										class="truncate"
-										style:font-size="11px"
-										style:color="var(--canvas-muted)"
-										data-library-shows-subtitle="">{row.row.subtitle}</span
-									>
-								{/if}
-							</span>
-							{#if row.row.date !== null}
-								<span
-									class="flex-none tabular-nums"
 									style:font-size="11px"
 									style:color="var(--canvas-muted)"
-									data-library-shows-date="">{row.row.date}</span
+									data-library-shows-subtitle="">{row.row.subtitle}</span
 								>
 							{/if}
-						</button>
-					{/if}
-				</li>
-			{/each}
-			<li style:height="{below}px" aria-hidden="true"></li>
-		</ol>
+						</span>
+						{#if row.row.date !== null}
+							<span
+								class="flex-none tabular-nums"
+								style:font-size="11px"
+								style:color="var(--canvas-muted)"
+								data-library-shows-date="">{row.row.date}</span
+							>
+						{/if}
+					</button>
+				{/if}
+			{/snippet}
+	</LibraryVirtualList>
 		{#if showsSeriesMode(mode)}
 			<LibraryLetterRail letters={rail} {marked} jump={jumpShowsToLetter} />
 		{/if}

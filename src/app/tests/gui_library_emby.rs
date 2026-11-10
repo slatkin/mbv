@@ -29,6 +29,11 @@ const MOVIES_BODY: &str = r#"{"Items":[{"Id":"m-1","Name":"A Movie","Type":"Movi
 const VIDEO_BODY: &str =
     r#"{"Items":[{"Id":"vid-1","Name":"Clip","Type":"Video"}],"TotalRecordCount":1}"#;
 
+/// A Latest snapshot listing: the answer the New pill's `get_latest` fetch
+/// parses into its items — a bare JSON array — with the video's containing
+/// folder and its date added, the facts the New rows project.
+const LATEST_BODY: &str = r#"[{"Id":"vid-new","Name":"Fresh Clip","Type":"Video","ParentId":"folder-1","DateCreated":"2026-11-01T10:00:00.0000000Z"}]"#;
+
 /// A browse level over `items`, hanging off `parent_id`.
 fn level(parent_id: &str, title: &str, items: Vec<EmbyItem>) -> BrowseLevel {
     BrowseLevel {
@@ -208,7 +213,7 @@ fn setting_another_feed_group_loads_its_items_and_drops_a_stale_completion() {
         .push(level(FEED_ID, "YouTube", vec![folder]));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.gui_emby_set_feed_group(0, &FeedHomeVideoSelection::Folder("folder-1".into()));
+    app.gui_emby_set_feed_group(0, &GuiEmbyFeedGroup::Folder("folder-1".into()));
     // A completion for a group the shown selection is not: the stale-drop
     // rule drops it whatever order it arrives in.
     let _ = app.channels.lib_tx.send(LibEvent::Browse(
@@ -236,6 +241,106 @@ fn setting_another_feed_group_loads_its_items_and_drops_a_stale_completion() {
         "the shown group's own items landed; the stale completion's did not"
     );
     assert_eq!(state.fetching, None, "the live fetch retired its mark");
+}
+
+/// The feed-group pill row carries the New pill first (row 8.1, the TUI's
+/// own selector row): New leads, All follows, and each counted folder keeps
+/// its pill, with All selected while the default group view is active.
+#[test]
+fn the_feed_group_pill_row_carries_the_new_pill_first() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = FEED_ID.into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.config
+        .lock()
+        .unwrap()
+        .feed_view_libraries
+        .push("youtube".into());
+    let folder = folder_item("folder-1", "Channel 1");
+    app.libs[0]
+        .nav_stack
+        .push(level(FEED_ID, "YouTube", vec![folder]));
+    let mut state = FeedHomeVideoState::default();
+    state.folder_counts.insert("folder-1".into(), 1);
+    app.libs[0].feed_home_video = Some(state);
+
+    let projection = app.gui_emby_projection(0);
+
+    let names: Vec<&str> = projection
+        .pills
+        .iter()
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["New", "All", "Channel 1"],
+        "New leads the pill row"
+    );
+    assert!(
+        !projection.pills[0].selected && projection.pills[1].selected,
+        "All is the default selection while the group view is active"
+    );
+}
+
+/// Selecting the New pill fetches the Latest snapshot through the store's
+/// own fetch (row 8.1) and projects its rows with the programme line and the
+/// date-added gutter, the TUI New view's list.
+#[test]
+fn selecting_the_new_pill_fetches_the_latest_snapshot_and_projects_its_rows() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_repeated(200, LATEST_BODY, 2);
+    let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
+    app.config
+        .lock()
+        .unwrap()
+        .feed_view_libraries
+        .push("youtube".into());
+    let folder = folder_item("folder-1", "Channel 1");
+    app.libs[0]
+        .nav_stack
+        .push(level(FEED_ID, "YouTube", vec![folder]));
+    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+
+    app.gui_emby_set_feed_group(0, &crate::app::gui_library::GuiEmbyFeedGroup::Latest);
+    land(&mut app);
+
+    assert!(
+        matches!(
+            app.gui_emby_latest.get(&0),
+            Some(crate::app::gui_library::GuiEmbyLatestItems::Loaded(_))
+        ),
+        "the Latest snapshot landed in the store"
+    );
+    let projection = app.gui_emby_projection(0);
+    assert_eq!(
+        projection.collection_names,
+        vec!["New"],
+        "the location names the pill"
+    );
+    assert!(
+        projection.pills[0].selected,
+        "the New pill is the selection"
+    );
+    assert_eq!(
+        projection.rows[0].id, "vid-new",
+        "the list is the snapshot's rows"
+    );
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("Channel 1"),
+        "the row names the programme (root folder) the video sits in"
+    );
+    assert_eq!(
+        projection.rows[0].date.as_deref(),
+        Some("1 Nov"),
+        "the gutter is the date added, short, the TUI Latest row's gutter"
+    );
 }
 
 /// The select action stores the picked row and ignores a stale id (row 8.1):
@@ -412,11 +517,11 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     assert!(hero.art.is_none());
 }
 
-/// The feed-group mode's projection (row 8.1, contract b): the pills are All
-/// and each folder whose video count is positive, with the selection's pill
-/// the selected one, the selected group's items are the rows in the server's
-/// date order with the year gutter and no rail letter, and the mode's flag
-/// is set.
+/// The feed-group mode's projection (row 8.1, contract b): the pills are New,
+/// All, and each folder whose video count is positive, with the selection's
+/// pill the selected one, the selected group's items are the rows in the
+/// server's date order with the year gutter and no rail letter, and the
+/// mode's flag is set.
 #[test]
 fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -443,8 +548,10 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     let mut first = make_item("Old Clip", "Video");
     first.id = "vid-1".into();
     first.production_year = 2020;
+    first.parent_id = "folder-1".into();
     let mut second = make_item("New Clip", "Video");
     second.id = "vid-2".into();
+    second.parent_id = "folder-1".into();
     app.libs[0].feed_home_video = Some(FeedHomeVideoState {
         folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
         items: [(FeedHomeVideoSelection::All, vec![second, first])]
@@ -463,8 +570,8 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         .collect();
     assert_eq!(
         names,
-        ["All", "Channel 1"],
-        "the pills are All and each folder with items"
+        ["New", "All", "Channel 1"],
+        "the pills are New, All, and each folder with items"
     );
     let selected: Vec<&str> = projection
         .pills
@@ -492,6 +599,11 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         Some("2020"),
         "the year rides the feed row's gutter"
     );
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("Channel 1"),
+        "an All row names the programme (root folder) the video sits in"
+    );
     assert_eq!(projection.collection_names, vec!["All"]);
     assert_eq!(
         projection.selected.as_deref(),
@@ -515,6 +627,7 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
         0,
         crate::app::gui_library::GuiEmbyLibrarySelection {
             picked_row: Some("box-1".into()),
+            feed_latest: false,
         },
     );
 

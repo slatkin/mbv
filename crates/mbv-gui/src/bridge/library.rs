@@ -264,10 +264,12 @@ impl From<GuiShowsMode> for mbv::GuiShowsMode {
 }
 
 /// One feed-group pill of a feed-view Emby library (add-gui-library-panel
-/// design D12, row 8.1): `All`, or one root folder by its stable Service id.
+/// design D12, row 8.1): `New` (the destination Latest view), `All`, or one
+/// root folder by its stable Service id.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
 pub enum GuiEmbyFeedGroup {
+    Latest,
     All,
     Folder(String),
 }
@@ -335,6 +337,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => Self::EmbySetFeedGroup {
                 lib_idx,
                 group: match group {
+                    GuiEmbyFeedGroup::Latest => mbv::GuiEmbyFeedGroup::Latest,
                     GuiEmbyFeedGroup::All => mbv::GuiEmbyFeedGroup::All,
                     GuiEmbyFeedGroup::Folder(folder_id) => mbv::GuiEmbyFeedGroup::Folder(folder_id),
                 },

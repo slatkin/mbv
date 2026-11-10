@@ -18,17 +18,13 @@
 	// would toggle away from the mode it already shows.
 	import { Search } from '@lucide/svelte';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		summary: GuiQueueSummary;
 	}
 	const { summary }: Props = $props();
 
-	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
-	 * hexes that name no theme slot (U13). */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** The right-column switch's two modes in paint order. */
 	const MODES: { mode: GuiRightColumn; label: string }[] = [

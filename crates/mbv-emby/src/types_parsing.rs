@@ -330,6 +330,7 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         parent_index_number: raw["ParentIndexNumber"].as_i64().unwrap_or(0),
         unplayed_item_count: u32::try_from(ud["UnplayedItemCount"].as_u64().unwrap_or(0))
             .unwrap_or(u32::MAX),
+        parent_id: raw["ParentId"].as_str().unwrap_or("").to_string(),
         path: raw["Path"].as_str().unwrap_or("").to_string(),
         artist: raw["AlbumArtist"]
             .as_str()

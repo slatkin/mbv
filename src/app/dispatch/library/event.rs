@@ -70,6 +70,9 @@ impl App {
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
             LibEvent::GuiEmbyRootItems(event) => self.handle_gui_emby_root_items(event),
+            // The GUI Library's destination-Latest store owns this event (row
+            // 8.1); the TUI never starts one.
+            LibEvent::GuiEmbyLatestItems(event) => self.handle_gui_emby_latest_items(event),
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: the GUI's drain runs it, and the
             // shell drain joins only its projection work around the same

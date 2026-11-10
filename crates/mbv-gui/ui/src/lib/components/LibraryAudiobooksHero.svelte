@@ -16,8 +16,10 @@
 	// Play, and Add to queue (`a`), send the Audiobooks commands with the
 	// frame's selected book — the core owns the selection, so the actions name
 	// the book the frame painted and never a position.
+	
 	import { Play } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
 	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
@@ -47,11 +49,6 @@
 		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor)?.chapter ?? null,
 	);
 
-	/** The artwork box's dimensions per arm (design D12): the Home Hero's
-	 * 300 px box, with the portrait height the aspect gives. The cover art is
-	 * the book artwork policy's portrait. */
-	const ART_WIDTH = 300;
-	const ART_HEIGHT = { landscape: 169, square: 300, portrait: 450 } as const;
 
 	/** Send the book command for the frame's selected book (design D12, row
 	 * 9.1): the book the frame painted, never a position. */
@@ -90,120 +87,14 @@
 </script>
 
 {#if hero !== null}
-	{@const artHeight = ART_HEIGHT[hero.artShape]}
 	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-abs-hero="">
-		<section
-			class="flex items-start"
-			style:gap="28px"
-			aria-label={hero.title}
-			data-library-abs-hero-summary=""
-		>
-			<div
-				class="flex flex-none items-center justify-center"
-				style:width="{ART_WIDTH}px"
-				style:height="{artHeight}px"
-				style:background="var(--canvas-library-raise)"
-				style:border-radius="6px"
-				style:overflow="hidden"
-				data-library-abs-hero-art={hero.art?.kind ?? 'none'}
-			>
-				{#if hero.art !== null && hero.art.kind !== 'loading'}
-					<img class="h-full w-full object-cover" src={hero.art.detail} alt={hero.title} />
-				{:else}
-					<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-						>[No art · the window's placeholder]</span
-					>
-				{/if}
-			</div>
-			<div class="flex min-w-0 flex-1 flex-col" style:gap="14px" style:padding-top="8px">
-				<h2
-					style:margin="0"
-					style:font-size="26px"
-					style:font-weight="600"
-					style:letter-spacing="-0.01em"
-					style:color="var(--canvas-heading)"
-					data-library-abs-hero-title="">{hero.title}</h2
-				>
-				<div class="flex flex-col" style:gap="4px">
-					{#each hero.metaRows as meta, index (index)}
-						{#if index === hero.durationRow}
-							<span
-								class="font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-abs-hero-role="duration">{meta}</span
-							>
-						{:else if index === hero.progressRow}
-							<span
-								class="font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-accent)"
-								data-library-abs-hero-role="progress">{meta}</span
-							>
-						{:else}
-							<span
-								class="font-mono"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-abs-hero-role="meta">{meta}</span
-							>
-						{/if}
-					{/each}
-				</div>
-				{#if hero.overview !== null}
-					<!-- The catalog's description, which the TUI's Hero paints and
-					the GUI dropped before D15. -->
-					<p
-						style:margin="0"
-						style:font-size="13px"
-						style:line-height="1.5"
-						style:color="var(--canvas-muted)"
-						data-library-abs-hero-overview="">{hero.overview}</p
-					>
-				{/if}
-				<div class="relative flex flex-wrap items-center" style:gap="8px">
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 18px 0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-accent)"
-						style:border="0"
-						style:border-radius="22px"
-						style:color="var(--canvas-ink)"
-						style:font-size="14px"
-						style:font-weight="600"
-						style:cursor="pointer"
-						data-library-abs-hero-play=""
-						onclick={() => actBook('absPlay')}
-					>
-						<Play size={16} fill="var(--canvas-ink)" strokeWidth={0} />
-						Play
-					</button>
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-library-raise)"
-						style:border="1px solid var(--canvas-library-control)"
-						style:border-radius="22px"
-						style:color="var(--canvas-text)"
-						style:font-size="13px"
-						style:cursor="pointer"
-						data-library-abs-hero-add=""
-						onclick={() => actBook('absQueue')}
-					>
-						Add to queue
-						<span class="font-mono" style:font-size="11px" style:color="var(--canvas-muted)"
-							>a</span
-						>
-					</button>
-				</div>
-			</div>
-		</section>
+		<LibraryHeroSummary
+						attr="abs"
+			section="data-library-abs-hero-summary"
+			{hero}
+			onplay={() => actBook('absPlay')}
+			onqueue={() => actBook('absQueue')}
+		/>
 
 		{#if workspace !== null || audiobooks.workspaceLoading}
 			<!-- The book Hero's Workspace (design D12): the book's chapter rows, or

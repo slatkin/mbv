@@ -18,14 +18,11 @@
 	// The Hero's chapter cursor belongs to the selected book (the
 	// `audiobooks-workspace` contract): a selection change starts it over,
 	// because the chapters it rested on belong to the previous book.
-	import { onMount } from 'svelte';
 	import type { GuiAudiobooksFrame } from '$lib/bridge/types';
 	import {
 		buildAudiobooksRows,
 		audiobooksLetterRail,
-		audiobooksListWindow,
 		audiobooksRowLetter,
-		audiobooksRowsHeight,
 	} from '$lib/library/audiobooks-list';
 	import type { AudiobooksListRow } from '$lib/library/audiobooks-list';
 	import {
@@ -39,10 +36,12 @@
 		setAudiobooksFilter,
 	} from '$lib/library/audiobooks';
 	import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
-	import { openLibraryRowMenu } from '$lib/library/state';
+	import { openRowMenuAt } from '$lib/library/state';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import LibraryVirtualList from './LibraryVirtualList.svelte';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The carried Audiobooks content (row 9.1): the catalog's book rows. */
@@ -50,23 +49,9 @@
 	}
 	const { audiobooks }: Props = $props();
 
-	let listEl: HTMLElement | undefined = $state();
-
 	/** The painted rows (row 9.1): the book rows with their letter headings,
 	 * narrowed by the filter's text. */
 	const rows = $derived(buildAudiobooksRows(audiobooks.rows, $audiobooksUi.filter));
-
-	/** The rows in view: only these paint. */
-	const view = $derived(
-		audiobooksListWindow(rows, $audiobooksUi.scrollTop, $audiobooksUi.viewportHeight),
-	);
-	const painted = $derived(rows.slice(view.start, view.end));
-
-	/** The list's whole painted height, and the spacers that hold its scroll
-	 * range while only the rows in view paint. */
-	const total = $derived(audiobooksRowsHeight(rows));
-	const above = $derived(painted.length > 0 ? painted[0].top : 0);
-	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
 	/** The rail's A–Z letters over the painted rows (row 9.1). */
 	const rail = $derived(audiobooksLetterRail(rows));
@@ -77,17 +62,6 @@
 	/** The letter the rail marks: the one the cursor row belongs to. */
 	const marked = $derived(cursorRow === null ? null : audiobooksRowLetter(cursorRow));
 
-	/** The bottom edge of the last painted row: the below-spacer's pair. */
-	function lastBottom(): number {
-		const last = painted[painted.length - 1];
-		return last === undefined ? 0 : last.top + last.height;
-	}
-
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** The row's painted fill (row 9.1): the cursor row's focus fill, and the
 	 * core's selected book the raised fill while the cursor sits elsewhere —
@@ -102,39 +76,15 @@
 		return row.id === audiobooks.selected ? canvasVar('library-raise') : undefined;
 	}
 
-	/** Report the list's measured height (row 9.1): the rows in view follow
-	 * it. */
-	function measure(): void {
-		measureAudiobooksList(listEl?.clientHeight ?? 0);
+	/** Open the book's right-click menu (the row-menu command): the row's
+	 * stable id, which the core resolves for the shared menu (design D8, D15). */
+	function rowMenu(event: MouseEvent, row: { id: string }): void {
+		openRowMenuAt(event, row.id);
 	}
-
-	/** Report the list's native scroll offset, so the windowed paint follows a
-	 * user scroll. */
-	function onScroll(event: Event): void {
-		scrollAudiobooksList((event.currentTarget as HTMLElement).scrollTop);
-	}
-
-	// The scroller mirrors the state (row 9.1): a key that moved the cursor set
-	// the offset, and the element follows it. A user scroll already wrote the
-	// offset back, so this assignment is a no-op for it.
-	$effect(() => {
-		const el = listEl;
-		const top = $audiobooksUi.scrollTop;
-		if (el !== undefined && el.scrollTop !== top) {
-			el.scrollTop = top;
-		}
-	});
 
 	// The Hero's chapter cursor belongs to the selected book (row 9.1): a
 	// selection change starts it over, because the chapters it rested on belong
 	// to the previous book.
-	/** Open the book's right-click menu (the row-menu command): the row's
-	 * stable id, which the core resolves for the shared menu (design D8, D15). */
-	function rowMenu(event: MouseEvent, row: { id: string }): void {
-		event.preventDefault();
-		openLibraryRowMenu(row.id, event.clientX, event.clientY);
-	}
-
 	let lastSelected: string | null = null;
 	$effect(() => {
 		const selected = audiobooks.selected;
@@ -143,16 +93,6 @@
 		}
 		lastSelected = selected;
 		resetAbsChapterCursor();
-	});
-
-	onMount(() => {
-		measure();
-		const observer =
-			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-		if (listEl !== undefined) {
-			observer?.observe(listEl);
-		}
-		return () => observer?.disconnect();
 	});
 </script>
 
@@ -189,81 +129,76 @@
 		<LibraryListNotice text="No audiobooks" attr="data-library-abs-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
-		<ol
-			bind:this={listEl}
-			class="min-h-0 flex-1"
-			style:overflow-y="auto"
-			style:list-style="none"
-			style:margin="0"
-			style:padding="8px 0 8px 8px"
-			data-library-abs-list=""
-			onscroll={onScroll}
-		>
-			<li style:height="{above}px" aria-hidden="true"></li>
-			{#each painted as row (row.id)}
-				<li>
+		<LibraryVirtualList
+		{rows}
+		scrollTop={$audiobooksUi.scrollTop}
+		viewportHeight={$audiobooksUi.viewportHeight}
+		attr="abs"
+		padding="8px 0 8px 8px"
+		onmeasure={measureAudiobooksList}
+		onscroll={scrollAudiobooksList}
+	>
+		{#snippet row(row)}
 					{#if row.kind === 'heading'}
-						<div
-							class="flex items-end font-mono"
-							style:height="{row.height}px"
-							style:padding="0 8px 2px"
-							style:font-size="11px"
-							style:color="var(--canvas-source)"
-							data-library-abs-letter={row.letter}
-						>
-							{row.letter}
-						</div>
-					{:else}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{row.height}px"
-							style:padding="0 12px"
-							style:gap="10px"
-							style:border="0"
-							style:border-radius="4px"
-							style:text-align="left"
-							style:font-size="13px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							data-library-abs-row="book"
-							data-library-abs-row-id={row.id}
-							data-library-abs-cursor={row.id === $audiobooksUi.cursor ? '' : undefined}
-							data-library-abs-selected={row.id === audiobooks.selected ? '' : undefined}
-							onclick={() => pressAudiobooksRow(row)}
-							ondblclick={() => playAudiobooksRow(row.row.id)}
-							oncontextmenu={(event) => rowMenu(event, row)}
-						>
-							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+					<div
+						class="flex items-end font-mono"
+						style:height="{row.height}px"
+						style:padding="0 8px 2px"
+						style:font-size="11px"
+						style:color="var(--canvas-source)"
+						data-library-abs-letter={row.letter}
+					>
+						{row.letter}
+					</div>
+				{:else}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{row.height}px"
+						style:padding="0 12px"
+						style:gap="10px"
+						style:border="0"
+						style:border-radius="4px"
+						style:text-align="left"
+						style:font-size="13px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						data-library-abs-row="book"
+						data-library-abs-row-id={row.id}
+						data-library-abs-cursor={row.id === $audiobooksUi.cursor ? '' : undefined}
+						data-library-abs-selected={row.id === audiobooks.selected ? '' : undefined}
+						onclick={() => pressAudiobooksRow(row)}
+						ondblclick={() => playAudiobooksRow(row.row.id)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+							<span
+								class="truncate"
+								style:color={canvasVar('text')}
+								style:font-weight={row.id === audiobooks.selected ? 600 : 400}
+								data-library-abs-title="">{row.row.title}</span
+							>
+							{#if row.row.subtitle !== null}
 								<span
 									class="truncate"
-									style:color={canvasVar('text')}
-									style:font-weight={row.id === audiobooks.selected ? 600 : 400}
-									data-library-abs-title="">{row.row.title}</span
-								>
-								{#if row.row.subtitle !== null}
-									<span
-										class="truncate"
-										style:font-size="11px"
-										style:color="var(--canvas-muted)"
-										data-library-abs-subtitle="">{row.row.subtitle}</span
-									>
-								{/if}
-							</span>
-							{#if row.row.duration !== ''}
-								<span
-									class="flex-none tabular-nums"
 									style:font-size="11px"
 									style:color="var(--canvas-muted)"
-									data-library-abs-duration="">{row.row.duration}</span
+									data-library-abs-subtitle="">{row.row.subtitle}</span
 								>
 							{/if}
-						</button>
-					{/if}
-				</li>
-			{/each}
-			<li style:height="{below}px" aria-hidden="true"></li>
-		</ol>
+						</span>
+						{#if row.row.duration !== ''}
+							<span
+								class="flex-none tabular-nums"
+								style:font-size="11px"
+								style:color="var(--canvas-muted)"
+								data-library-abs-duration="">{row.row.duration}</span
+							>
+						{/if}
+					</button>
+				{/if}
+			{/snippet}
+	</LibraryVirtualList>
 		<LibraryLetterRail letters={rail} {marked} jump={jumpAudiobooksToLetter} />
 	</div>
 </div>

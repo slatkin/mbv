@@ -576,9 +576,13 @@ export interface GuiShowsEpisodeRow {
 	state: GuiHomeRowState;
 }
 
-/** The feed-group pill a press selects (design D12, row 8.1): `All`, or one
- * root folder by its stable Service id. */
-export type GuiEmbyFeedGroup = { kind: 'all' } | { kind: 'folder'; id: string };
+/** The feed-group pill a press selects (design D12, row 8.1): `New` (the
+ * destination Latest view), `All`, or one root folder by its stable Service
+ * id. */
+export type GuiEmbyFeedGroup =
+	| { kind: 'latest' }
+	| { kind: 'all' }
+	| { kind: 'folder'; id: string };
 
 /** The plain Emby-library destination's content (design D12, row 8.1),
  * present while a plain Emby library is the active destination: the

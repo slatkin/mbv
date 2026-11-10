@@ -8,24 +8,8 @@
 // is asserted without a layout, which jsdom does not have.
 
 import type { GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiLibraryArt } from '$lib/bridge/types';
-import type { ListWindow } from './list';
-import { filterMatch, listWindow, rowsHeight } from './list';
-
-/** The rows in view over the flat Home list (design D12): the shared list
- * window's own answer for the Home row heights. */
-export function homeListWindow(
-	rows: readonly HomeListRow[],
-	scrollTop: number,
-	viewportHeight: number,
-): ListWindow {
-	return listWindow(rows, scrollTop, viewportHeight);
-}
-
-/** The painted height of the flat Home list (design D12): the shared
- * height's own answer for the Home row heights. */
-export function homeRowsHeight(rows: readonly HomeListRow[]): number {
-	return rowsHeight(rows);
-}
+import { filterMatch, moveCursor } from './list';
+import type { ListMove } from './list';
 
 /** The section heading row's height in logical pixels: the letter heading
  * height's look, scaled to the section name. */
@@ -159,26 +143,8 @@ export function homeSelectableRows(rows: readonly HomeListRow[]): HomeListRow[] 
 export function moveHomeCursor(
 	rows: readonly HomeListRow[],
 	cursor: string | null,
-	move: 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end',
+	move: ListMove,
 	page = 1,
 ): string | null {
-	const items = homeSelectableRows(rows);
-	if (items.length === 0) {
-		return null;
-	}
-	const last = items.length - 1;
-	const at = items.findIndex((row) => row.id === cursor);
-	if (at < 0) {
-		return (move === 'up' || move === 'end' ? items[last] : items[0]).id;
-	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return items[Math.min(Math.max(to, 0), last)].id;
+	return moveCursor(homeSelectableRows(rows), cursor, move, page);
 }

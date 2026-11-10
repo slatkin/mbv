@@ -9,6 +9,7 @@
 	// `attr` names the destination's own attributes (`data-library-shows-hero-art`),
 	// so a destination's tests keep their hook.
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	/** The artwork box policy's shape, as every Hero's frames carry it. */
 	type HeroArtShape = 'landscape' | 'square' | 'portrait';
@@ -35,11 +36,6 @@
 	/** Whether the arm paints the TUI's full-width still. */
 	const band = $derived(shape === 'landscape');
 
-	/** A `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 </script>
 
 <div

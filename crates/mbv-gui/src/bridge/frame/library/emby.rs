@@ -45,11 +45,13 @@ pub struct GuiEmbyFrame {
     pub hero: Option<GuiEmbyHeroFrame>,
 }
 
-/// The feed-group pill a press selects (row 8.1): `All`, or one root folder
-/// by its stable Service id.
+/// The feed-group pill a press selects (row 8.1): `New` (the destination
+/// Latest view), `All`, or one root folder by its stable Service id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
 pub enum GuiEmbyFeedGroupFrame {
+    /// The New pill: the library's destination-Latest snapshot, newest first.
+    Latest,
     /// The All pill: the library root's own listing, newest first.
     All,
     /// One root folder that holds items, by its stable Service id.
@@ -59,6 +61,7 @@ pub enum GuiEmbyFeedGroupFrame {
 impl From<GuiEmbyFeedGroup> for GuiEmbyFeedGroupFrame {
     fn from(group: GuiEmbyFeedGroup) -> Self {
         match group {
+            GuiEmbyFeedGroup::Latest => Self::Latest,
             GuiEmbyFeedGroup::All => Self::All,
             GuiEmbyFeedGroup::Folder(folder_id) => Self::Folder(folder_id),
         }

@@ -373,6 +373,11 @@ pub enum LibEvent {
     /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
     /// root-list store starts one, so the TUI never receives it.
     GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
+    /// The GUI Library's destination-Latest store's fetch completed (row
+    /// 8.1): the New pill's snapshot lands in the store the way the root-list
+    /// completion lands in its store. Only the GUI Client's Latest store
+    /// starts one, so the TUI never starts or receives it.
+    GuiEmbyLatestItems(crate::app::gui_library::GuiEmbyLatestItemsEvent),
     Error(String),
 }
 

@@ -8,14 +8,9 @@
 // geometry is asserted without a layout, which jsdom does not have.
 
 import type { GuiEmbyFeedGroup, GuiEmbyRow } from '$lib/bridge/types';
-import type { ListWindow, RailLetter } from './list';
-import {
-	LETTER_ROW_HEIGHT,
-	RAIL_LETTERS,
-	filterMatch,
-	listWindow,
-	rowsHeight,
-} from './list';
+import type { RailLetter } from './list';
+import { LETTER_ROW_HEIGHT, RAIL_LETTERS, filterMatch, moveCursor } from './list';
+import type { ListMove } from './list';
 
 /** The letter heading row's height in logical pixels (design D12): the Music
  * list's letter heading, which the plain list reuses. */
@@ -44,20 +39,10 @@ export interface EmbyItemRow {
 	row: GuiEmbyRow;
 }
 
-/** The rows in view over the Emby list (row 8.1): the shared list window's own
- * answer for the Emby row heights. */
-export function embyListWindow(
-	rows: readonly EmbyListRow[],
-	scrollTop: number,
-	viewportHeight: number,
-): ListWindow {
-	return listWindow(rows, scrollTop, viewportHeight);
-}
-
-/** The painted height of the Emby list (row 8.1): the shared height's own
- * answer for the Emby row heights. */
-export function embyRowsHeight(rows: readonly EmbyListRow[]): number {
-	return rowsHeight(rows);
+/** The rows the cursor may rest on: every item row, never a heading (row
+ * 8.1). */
+export function embySelectableRows(rows: readonly EmbyListRow[]): EmbyItemRow[] {
+	return rows.filter((row): row is EmbyItemRow => row.kind === 'item');
 }
 
 /**
@@ -117,12 +102,6 @@ function flatEmbyRows(rows: readonly GuiEmbyRow[]): EmbyListRow[] {
 	}));
 }
 
-/** The rows the cursor may rest on: every item row, never a heading (row
- * 8.1). */
-export function embySelectableRows(rows: readonly EmbyListRow[]): EmbyItemRow[] {
-	return rows.filter((row): row is EmbyItemRow => row.kind === 'item');
-}
-
 /** The rail letter a painted row belongs to, or `null` on a heading and on the
  * letterless feed-group rows. */
 export function embyRowLetter(row: EmbyListRow): string | null {
@@ -142,28 +121,10 @@ export function embyRowLetter(row: EmbyListRow): string | null {
 export function moveEmbyCursor(
 	rows: readonly EmbyListRow[],
 	cursor: string | null,
-	move: 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end',
+	move: ListMove,
 	page = 1,
 ): string | null {
-	const items = embySelectableRows(rows);
-	if (items.length === 0) {
-		return null;
-	}
-	const last = items.length - 1;
-	const at = items.findIndex((row) => row.id === cursor);
-	if (at < 0) {
-		return (move === 'up' || move === 'end' ? items[last] : items[0]).id;
-	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return items[Math.min(Math.max(to, 0), last)].id;
+	return moveCursor(embySelectableRows(rows), cursor, move, page);
 }
 
 /** The A–Z rail over the painted rows (row 8.1, design D7): each letter with
@@ -183,5 +144,5 @@ export function embyLetterRail(rows: readonly EmbyListRow[]): RailLetter[] {
  * group's own identity, so the pill row and the keys agree on it without a row
  * position. */
 export function embyGroupKey(group: GuiEmbyFeedGroup): string {
-	return group.kind === 'all' ? 'all' : `folder:${group.id}`;
+	return group.kind === 'all' ? 'all' : group.kind === 'latest' ? 'latest' : `folder:${group.id}`;
 }

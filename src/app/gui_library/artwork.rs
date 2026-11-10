@@ -3,6 +3,9 @@
 //! The fetch is issued here, as the TUI's hero projection issues its own, so
 //! the window content never requests an image itself.
 
+use mbv_components::library_panel::content::{
+    ArtworkShape, ArtworkSource, painted_shape_for_pixels,
+};
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
@@ -105,6 +108,48 @@ impl App {
             types,
         );
         self.resolve_gui_home_art(&cache_key)
+    }
+
+    /// The Hero's art box: the declared policy arm, re-armed by the fetched
+    /// image's own pixels once the cache holds them — the rule the TUI's
+    /// [`mbv_components::library_panel::HeroArtwork::painted_shape`] applies
+    /// (design D5). A `Primary` chain that serves a landscape still (an
+    /// episode), or a `Thumb` chain that falls through to the portrait
+    /// poster, therefore paints the box its image needs instead of the box
+    /// its declaration named: without this the GUI painted a 16:9 still
+    /// inside a 3:4 box and a poster inside a 16:9 band, where the TUI
+    /// painted neither.
+    pub(in crate::app::gui_library) fn gui_hero_shape(
+        &self,
+        declared: ArtworkShape,
+        art: Option<&GuiLibraryArtwork>,
+    ) -> ArtworkShape {
+        let Some(GuiLibraryArtwork::Image { key, .. }) = art else {
+            return declared;
+        };
+        let Some(img) = self.images.image(key).and_then(|entry| entry.img.as_ref()) else {
+            return declared;
+        };
+        painted_shape_for_pixels(img.width(), img.height())
+    }
+
+    /// The Hero's artwork for the artwork policy's declared Emby source
+    /// (add-gui-library-panel design D12, D15): the one dispatch every
+    /// destination's Emby-backed Hero runs, so a source the design excludes
+    /// paints no art in every Hero.
+    pub(in crate::app::gui_library) fn gui_emby_hero_art(
+        &mut self,
+        source: Option<&ArtworkSource>,
+    ) -> Option<GuiLibraryArtwork> {
+        match source {
+            Some(ArtworkSource::Emby {
+                item_id,
+                series_id,
+                image_types,
+                cache_key,
+            }) => Some(self.gui_home_hero_artwork(cache_key, item_id, series_id, image_types)),
+            Some(ArtworkSource::AudiobookshelfCover { .. }) | None => None,
+        }
     }
 
     /// The Home Hero's artwork under the artwork policy's declared source

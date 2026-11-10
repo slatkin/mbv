@@ -369,7 +369,9 @@ impl App {
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
-            art_shape: artwork_shape(content.facts.artwork.shape),
+            art_shape: artwork_shape(
+                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
+            ),
             art,
         })
     }

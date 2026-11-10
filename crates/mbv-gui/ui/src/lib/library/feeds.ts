@@ -11,10 +11,10 @@
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { clampScrollTop, listWindow, moveCursor, scrollTopToShowCursor } from './list';
 import type { ListMove } from './list';
 import type { GuiFeedPill, GuiFeedsFrame } from '$lib/bridge/types';
-import { buildFeedsRows, moveFeedsCursor } from './feeds-list';
+import { buildFeedsRows } from './feeds-list';
 import type { FeedsItemRow } from './feeds-list';
 import { libraryContent, libraryUi } from './state';
 
@@ -90,7 +90,7 @@ function resolveFeedsCursor(ui: FeedsUiState): FeedsUiState {
 	const list = entryRows(ui.filter);
 	const cursor = list.some((row) => row.id === ui.cursor)
 		? ui.cursor
-		: moveFeedsCursor(list, null, 'home');
+		: moveCursor(list, null, 'home');
 	return {
 		...ui,
 		cursor,
@@ -167,7 +167,7 @@ export function moveFeedsListCursor(move: ListMove): void {
 	const list = entryRows();
 	const current = get(feedsUi);
 	const view = listWindow(list, current.scrollTop, current.viewportHeight);
-	const cursor = moveFeedsCursor(list, current.cursor, move, view.end - view.start);
+	const cursor = moveCursor(list, current.cursor, move, view.end - view.start);
 	if (cursor === current.cursor) {
 		return;
 	}

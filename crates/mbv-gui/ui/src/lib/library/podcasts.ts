@@ -10,10 +10,10 @@
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { clampScrollTop, listWindow, moveCursor, scrollTopToShowCursor } from './list';
 import type { ListMove } from './list';
 import type { GuiPodcastPill, GuiPodcastsFrame } from '$lib/bridge/types';
-import { buildPodcastsRows, movePodcastsCursor } from './podcasts-list';
+import { buildPodcastsRows } from './podcasts-list';
 import type { PodcastsItemRow } from './podcasts-list';
 import { libraryPodcasts, libraryUi } from './state';
 
@@ -88,7 +88,7 @@ function resolvePodcastsCursor(ui: PodcastsUiState): PodcastsUiState {
 	const list = episodeRows(ui.filter);
 	const cursor = list.some((row) => row.id === ui.cursor)
 		? ui.cursor
-		: movePodcastsCursor(list, null, 'home');
+		: moveCursor(list, null, 'home');
 	return {
 		...ui,
 		cursor,
@@ -169,7 +169,7 @@ export function movePodcastsListCursor(move: ListMove): void {
 	const list = episodeRows();
 	const current = get(podcastsUi);
 	const view = listWindow(list, current.scrollTop, current.viewportHeight);
-	const cursor = movePodcastsCursor(list, current.cursor, move, view.end - view.start);
+	const cursor = moveCursor(list, current.cursor, move, view.end - view.start);
 	if (cursor === current.cursor) {
 		return;
 	}

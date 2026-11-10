@@ -22,6 +22,11 @@ use crate::{test_core_with, test_emby_client};
 /// video is the item the switched group's rows carry.
 const LIBRARY_BODY: &str = r#"{"Items":[{"Id":"folder-1","Name":"Channel 1","Type":"Folder"},{"Id":"vid-1","Name":"Clip","Type":"Video"}],"TotalRecordCount":2}"#;
 
+/// A Latest snapshot listing, as the mock transport returns it: the bare
+/// JSON array `get_latest` parses, whose video sits in the listing's folder
+/// and carries the date added the New rows' gutter reads.
+const LATEST_BODY: &str = r#"[{"Id":"vid-new","Name":"Fresh Clip","Type":"Video","ParentId":"folder-1","DateCreated":"2026-11-01T10:00:00.0000000Z"}]"#;
+
 /// A movie row of a root-list store's loaded list.
 fn movie(id: &str, name: &str) -> EmbyItem {
     let mut item = mbv_emby_model::test_support::make_item(name, "Movie");
@@ -125,7 +130,7 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        |emby| emby.pills.len() == 2 && !emby.loading,
+        |emby| emby.pills.len() == 3 && !emby.loading,
         "the counted folder pill",
     );
 
@@ -154,5 +159,68 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
             |state| state.selection == FeedHomeVideoSelection::Folder("folder-1".into())
         ),
         "the feed state's selection is the command's folder"
+    );
+}
+
+/// An `embySetFeedGroup` New-pill press selects the Latest view and loads the
+/// snapshot into the next frame (row 8.1, the New pill's contract): the
+/// command triggers the store's own Latest fetch, whose items are the frame's
+/// rows with the New pill the selected one, and the rows carry the programme
+/// (root folder) the video sits in underneath the title.
+#[test]
+fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
+    let http = MockHttp::new();
+    // The Latest fetch answers a bare JSON array, the body `get_latest`
+    // parses; every other request this open path makes reads the listing.
+    http.respond_when("/Items/Latest", 200, LATEST_BODY);
+    http.respond_repeated(200, LIBRARY_BODY, 12);
+    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
+    let mut test = test_core_with(app);
+    test.core
+        .app_mut()
+        .seed_gui_feed_view_library_for_test(test_emby_client(&http));
+
+    pump_until_emby(
+        &mut test,
+        |emby| emby.pills.len() == 3 && !emby.loading,
+        "the counted folder pill",
+    );
+
+    send_library(
+        &mut test,
+        GuiLibraryCommand::EmbySetFeedGroup {
+            lib_idx: 0,
+            group: mbv_gui::bridge::library::GuiEmbyFeedGroup::Latest,
+        },
+    );
+    let new_view = std::cell::RefCell::new(None);
+    pump_until_emby(
+        &mut test,
+        |emby| {
+            let ready = emby
+                .pills
+                .iter()
+                .find(|pill| pill.selected)
+                .is_some_and(|pill| pill.name == "New")
+                && emby.rows.iter().any(|row| row.id == "vid-new");
+            if ready {
+                *new_view.borrow_mut() = Some(emby.clone());
+            }
+            ready
+        },
+        "the Latest snapshot's rows",
+    );
+    let emby = new_view
+        .into_inner()
+        .expect("the New view's frame carried its content");
+    assert_eq!(
+        emby.collection_names,
+        vec!["New".to_string()],
+        "the location names the New pill"
+    );
+    assert_eq!(
+        emby.rows[0].subtitle,
+        Some("Channel 1".to_string()),
+        "the row names the programme (root folder) the video sits in"
     );
 }

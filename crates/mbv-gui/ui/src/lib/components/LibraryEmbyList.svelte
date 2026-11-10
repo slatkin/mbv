@@ -19,14 +19,11 @@
 	// folder glyph, so the Emby list adds none and the row's own decoration (the
 	// folder's item count) carries the distinction, with the kind on
 	// `data-library-emby-row`.
-	import { onMount } from 'svelte';
 	import type { GuiEmbyFrame } from '$lib/bridge/types';
 	import {
 		buildEmbyRows,
 		embyLetterRail,
-		embyListWindow,
 		embyRowLetter,
-		embyRowsHeight,
 	} from '$lib/library/emby-list';
 	import type { EmbyListRow } from '$lib/library/emby-list';
 	import {
@@ -39,10 +36,12 @@
 		scrollEmbyList,
 		setEmbyFilter,
 	} from '$lib/library/emby';
-	import { openLibraryRowMenu } from '$lib/library/state';
+	import { openRowMenuAt } from '$lib/library/state';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
+	import LibraryVirtualList from './LibraryVirtualList.svelte';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The carried plain Emby-library content (row 8.1): the active mode's
@@ -50,8 +49,6 @@
 		emby: GuiEmbyFrame;
 	}
 	const { emby }: Props = $props();
-
-	let listEl: HTMLElement | undefined = $state();
 
 	/** The painted rows (row 8.1): the plain mode's rows with their headings, or
 	 * the feed-group mode's flat rows with no heading, narrowed by the
@@ -74,21 +71,8 @@
 	 * frame carries the item's entries and the panel paints the card at the
 	 * pointer. */
 	function rowMenu(event: MouseEvent, row: EmbyListRow): void {
-		event.preventDefault();
-		if (row.kind === 'item') {
-			openLibraryRowMenu(row.row.id, event.clientX, event.clientY);
-		}
+		openRowMenuAt(event, row.kind === 'item' ? row.row.id : null);
 	}
-
-	/** The rows in view: only these paint. */
-	const view = $derived(embyListWindow(rows, $embyUi.scrollTop, $embyUi.viewportHeight));
-	const painted = $derived(rows.slice(view.start, view.end));
-
-	/** The list's whole painted height, and the spacers that hold its scroll
-	 * range while only the rows in view paint. */
-	const total = $derived(embyRowsHeight(rows));
-	const above = $derived(painted.length > 0 ? painted[0].top : 0);
-	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
 	/** The rail's A–Z letters over the painted rows (row 8.1): the plain mode
 	 * paints it, and the date-ordered feed-group mode paints none. */
@@ -100,17 +84,6 @@
 	/** The letter the rail marks: the one the cursor row belongs to. */
 	const marked = $derived(cursorRow === null ? null : embyRowLetter(cursorRow));
 
-	/** The bottom edge of the last painted row: the below-spacer's pair. */
-	function lastBottom(): number {
-		const last = painted[painted.length - 1];
-		return last === undefined ? 0 : last.top + last.height;
-	}
-
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** The row's painted fill (row 8.1): the cursor row's focus fill, and the
 	 * core's selected row the raised fill while the cursor sits elsewhere — the
@@ -124,38 +97,6 @@
 		}
 		return row.id === emby.selected ? canvasVar('library-raise') : undefined;
 	}
-
-	/** Report the list's measured height (row 8.1): the rows in view follow it. */
-	function measure(): void {
-		measureEmbyList(listEl?.clientHeight ?? 0);
-	}
-
-	/** Report the list's native scroll offset, so the windowed paint follows a
-	 * user scroll. */
-	function onScroll(event: Event): void {
-		scrollEmbyList((event.currentTarget as HTMLElement).scrollTop);
-	}
-
-	// The scroller mirrors the state (row 8.1): a key that moved the cursor set
-	// the offset, and the element follows it. A user scroll already wrote the
-	// offset back, so this assignment is a no-op for it.
-	$effect(() => {
-		const el = listEl;
-		const top = $embyUi.scrollTop;
-		if (el !== undefined && el.scrollTop !== top) {
-			el.scrollTop = top;
-		}
-	});
-
-	onMount(() => {
-		measure();
-		const observer =
-			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-		if (listEl !== undefined) {
-			observer?.observe(listEl);
-		}
-		return () => observer?.disconnect();
-	});
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-emby-list-column="">
@@ -192,81 +133,76 @@
 		<LibraryListNotice text="No items" attr="data-library-emby-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
-		<ol
-			bind:this={listEl}
-			class="min-h-0 flex-1"
-			style:overflow-y="auto"
-			style:list-style="none"
-			style:margin="0"
-			style:padding="8px 0 8px 8px"
-			data-library-emby-list=""
-			onscroll={onScroll}
-		>
-			<li style:height="{above}px" aria-hidden="true"></li>
-			{#each painted as row (row.id)}
-				<li>
+		<LibraryVirtualList
+		{rows}
+		scrollTop={$embyUi.scrollTop}
+		viewportHeight={$embyUi.viewportHeight}
+		attr="emby"
+		padding="8px 0 8px 8px"
+		onmeasure={measureEmbyList}
+		onscroll={scrollEmbyList}
+	>
+		{#snippet row(row)}
 					{#if row.kind === 'heading'}
-						<div
-							class="flex items-end font-mono"
-							style:height="{row.height}px"
-							style:padding="0 8px 2px"
-							style:font-size="11px"
-							style:color="var(--canvas-source)"
-							data-library-emby-letter={row.letter}
-						>
-							{row.letter}
-						</div>
-					{:else}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{row.height}px"
-							style:padding="0 12px"
-							style:gap="10px"
-							style:border="0"
-							style:border-radius="4px"
-							style:text-align="left"
-							style:font-size="13px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							data-library-emby-row={row.row.kind}
-							data-library-emby-row-id={row.id}
-							data-library-emby-cursor={row.id === $embyUi.cursor ? '' : undefined}
-							data-library-emby-selected={row.id === emby.selected ? '' : undefined}
-							onclick={() => pressEmbyRow(row)}
-							ondblclick={() => playEmbyRow(row.row.id)}
-							oncontextmenu={(event) => rowMenu(event, row)}
-						>
-							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+					<div
+						class="flex items-end font-mono"
+						style:height="{row.height}px"
+						style:padding="0 8px 2px"
+						style:font-size="11px"
+						style:color="var(--canvas-source)"
+						data-library-emby-letter={row.letter}
+					>
+						{row.letter}
+					</div>
+				{:else}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{row.height}px"
+						style:padding="0 12px"
+						style:gap="10px"
+						style:border="0"
+						style:border-radius="4px"
+						style:text-align="left"
+						style:font-size="13px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						data-library-emby-row={row.row.kind}
+						data-library-emby-row-id={row.id}
+						data-library-emby-cursor={row.id === $embyUi.cursor ? '' : undefined}
+						data-library-emby-selected={row.id === emby.selected ? '' : undefined}
+						onclick={() => pressEmbyRow(row)}
+						ondblclick={() => playEmbyRow(row.row.id)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+							<span
+								class="truncate"
+								style:color={canvasVar('text')}
+								style:font-weight={row.id === emby.selected ? 600 : 400}
+								data-library-emby-title="">{row.row.title}</span
+							>
+							{#if row.row.subtitle !== null}
 								<span
 									class="truncate"
-									style:color={canvasVar('text')}
-									style:font-weight={row.id === emby.selected ? 600 : 400}
-									data-library-emby-title="">{row.row.title}</span
-								>
-								{#if row.row.subtitle !== null}
-									<span
-										class="truncate"
-										style:font-size="11px"
-										style:color="var(--canvas-muted)"
-										data-library-emby-subtitle="">{row.row.subtitle}</span
-									>
-								{/if}
-							</span>
-							{#if row.row.date !== null}
-								<span
-									class="flex-none tabular-nums"
 									style:font-size="11px"
 									style:color="var(--canvas-muted)"
-									data-library-emby-date="">{row.row.date}</span
+									data-library-emby-subtitle="">{row.row.subtitle}</span
 								>
 							{/if}
-						</button>
-					{/if}
-				</li>
-			{/each}
-			<li style:height="{below}px" aria-hidden="true"></li>
-		</ol>
+						</span>
+						{#if row.row.date !== null}
+							<span
+								class="flex-none tabular-nums"
+								style:font-size="11px"
+								style:color="var(--canvas-muted)"
+								data-library-emby-date="">{row.row.date}</span
+							>
+						{/if}
+					</button>
+				{/if}
+			{/snippet}
+	</LibraryVirtualList>
 		{#if !emby.feedGroup}
 			<LibraryLetterRail letters={rail} {marked} jump={jumpEmbyToLetter} />
 		{/if}

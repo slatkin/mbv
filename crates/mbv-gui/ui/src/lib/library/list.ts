@@ -250,26 +250,29 @@ export function rowsHeight(rows: readonly GeometryRow[]): number {
 export type ListMove = 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end';
 
 /**
- * The cursor row a movement leaves (design D7): the next, the previous, or a
- * page away selectable row, clamped to the list's ends. With no cursor on a
- * selectable row, Up and End start from the last row and every other movement
- * from the first, so one key press always lands the cursor. `page` is the rows
- * a page spans: the rows in view.
+ * The cursor row a movement leaves (design D7), over the rows the destination
+ * lets the cursor rest on: the next, the previous, or a page away row, clamped
+ * to the list's ends. With no cursor on a row, Up and End start from the last
+ * row and every other movement from the first, so one key press always lands
+ * the cursor. `page` is the rows a page spans: the rows in view.
+ *
+ * Every destination's list moves its cursor by this one rule (design D12), so
+ * the caller passes the rows it accepts and names nothing else: a tree's
+ * selectable rows, a flat list's whole model, a workspace's rows.
  */
-export function moveListCursor(
-	rows: readonly LibraryRow[],
+export function moveCursor<Row extends { readonly id: string }>(
+	rows: readonly Row[],
 	cursor: string | null,
 	move: ListMove,
 	page = 1,
 ): string | null {
-	const nodes = selectableRows(rows);
-	if (nodes.length === 0) {
+	if (rows.length === 0) {
 		return null;
 	}
-	const last = nodes.length - 1;
-	const at = nodes.findIndex((row) => row.id === cursor);
+	const last = rows.length - 1;
+	const at = rows.findIndex((row) => row.id === cursor);
 	if (at < 0) {
-		return (move === 'up' || move === 'end' ? nodes[last] : nodes[0]).id;
+		return (move === 'up' || move === 'end' ? rows[last] : rows[0]).id;
 	}
 	const step = Math.max(page, 1);
 	const to = {
@@ -280,7 +283,18 @@ export function moveListCursor(
 		home: 0,
 		end: last,
 	}[move];
-	return nodes[Math.min(Math.max(to, 0), last)].id;
+	return rows[Math.min(Math.max(to, 0), last)].id;
+}
+
+/** The canvas tree's cursor movement (design D7): the shared movement over the
+ * rows a letter heading does not occupy. */
+export function moveListCursor(
+	rows: readonly LibraryRow[],
+	cursor: string | null,
+	move: ListMove,
+	page = 1,
+): string | null {
+	return moveCursor(selectableRows(rows), cursor, move, page);
 }
 
 /** The half-open range of row indexes the viewport paints (design D7): the rows

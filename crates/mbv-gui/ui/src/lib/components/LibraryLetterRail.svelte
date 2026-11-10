@@ -8,6 +8,7 @@
 	// and the rail's letters are pointer targets only.
 	import type { RailLetter } from '$lib/library/list';
 	import { jumpToLetter } from '$lib/library/state';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The A–Z letters and the first row under each, from the painted
@@ -23,11 +24,6 @@
 	}
 	const { letters, marked, jump = jumpToLetter }: Props = $props();
 
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** A letter's text colour: the marked letter is the canvas's green, an
 	 * enabled one the muted text, and a disabled one the canvas's dimmest. */

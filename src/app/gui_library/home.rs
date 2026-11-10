@@ -8,7 +8,7 @@
 //! artwork. The projection reads `App` data only, so the TUI's own
 //! projections and paint do not change.
 
-use mbv_components::library_panel::content::{ArtworkShape, ArtworkSource};
+use mbv_components::library_panel::content::ArtworkShape;
 use mbv_components::library_panel::hero::hero_content_queue;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
@@ -345,20 +345,13 @@ impl App {
             .iter()
             .find_map(|item| (item.id() == selected).then_some(*item))?;
         let content = hero_content_queue(&item.item);
-        let art_shape = artwork_shape(content.facts.artwork.shape);
         // The artwork rides the artwork policy's declared source: an Emby
         // source is the fetched chain, and the Audiobookshelf covers and the
         // undeclared arms paint without art in Phase 2 (the USER-APPROVED
         // Home design).
-        let art = match &content.facts.artwork.source {
-            Some(ArtworkSource::Emby {
-                item_id,
-                series_id,
-                image_types,
-                cache_key,
-            }) => Some(self.gui_home_hero_artwork(cache_key, item_id, series_id, image_types)),
-            Some(_) | None => None,
-        };
+        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
+        let art_shape =
+            artwork_shape(self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()));
         Some(GuiHomeHero {
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),

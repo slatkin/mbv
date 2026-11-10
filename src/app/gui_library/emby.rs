@@ -12,6 +12,7 @@
 
 use mbv_emby_model::EmbyItem;
 
+use super::emby_projection::GuiEmbyFeedGroup;
 use crate::app::state::events::LibEvent;
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -29,6 +30,31 @@ pub(in crate::app) enum GuiEmbyRootItems {
     Failed,
 }
 
+/// One Emby library's destination-Latest snapshot in the store (row 8.1):
+/// the list the New pill paints, the GUI's own counterpart of the TUI
+/// shell's `tv_latest_snapshots`. A New-pill selection starts its fetch, a
+/// landed list lives for the session, and a failed list stays failed until
+/// the pill is selected again — a re-press is the retry, as the TUI's
+/// refresh is.
+#[derive(Clone, Debug, PartialEq)]
+pub(in crate::app) enum GuiEmbyLatestItems {
+    /// The Latest fetch is in flight.
+    Loading,
+    /// The snapshot's items, in the server's newest-first order.
+    Loaded(Vec<EmbyItem>),
+    /// The Latest fetch failed.
+    Failed,
+}
+
+/// The completion of one Emby library's Latest fetch, carried on the shared
+/// library event channel. Only the GUI Client's Latest store starts one, so
+/// the TUI never receives it.
+#[derive(Debug)]
+pub(in crate::app) struct GuiEmbyLatestItemsEvent {
+    pub(in crate::app) lib_idx: usize,
+    pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+}
+
 /// The completion of one plain Emby library's root-list fetch, carried on
 /// the shared library event channel. Only the GUI Client's root-list store
 /// starts one, so the TUI never receives it.
@@ -39,16 +65,22 @@ pub(in crate::app) struct GuiEmbyRootItemsEvent {
 }
 
 /// The GUI Library's plain Emby-library selection (row 8.1): per library,
-/// the row the Hero shows, by stable Service id. The feed-view library's
-/// selected group is not mirrored here: [`mbv_ui_model::feed::FeedHomeVideoState`]'s
+/// the row the Hero shows, by stable Service id, and whether the New pill is
+/// the selected one. The feed-view library's selected All-or-folder group is
+/// not mirrored here: [`mbv_ui_model::feed::FeedHomeVideoState`]'s
 /// `selection` on the library tab is the one store of that fact, and the
-/// set-feed-group action writes it through the TUI's own path. A stored row
-/// the active list no longer carries falls back to the list's first row in
-/// the projection, as every selection's stale arm does.
+/// set-feed-group action writes it through the TUI's own path. The New pill
+/// is the GUI's own view over the destination-Latest store, whose shared
+/// fetch the TUI runs in its shell; a stored row the active list no longer
+/// carries falls back to the list's first row in the projection, as every
+/// selection's stale arm does.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiEmbyLibrarySelection {
     /// The row the Hero shows. `None` before a select command names one.
     pub picked_row: Option<String>,
+    /// Whether the New pill is the selected one (row 8.1). `All` and a
+    /// folder pill clear it; selecting it again re-reads the Latest store.
+    pub feed_latest: bool,
 }
 
 impl App {
@@ -118,11 +150,25 @@ impl App {
     }
 
     /// Whether the active list can still name `item_id` (row 8.1): the
-    /// feed-view library's selected group's items, else the root-list store's
-    /// loaded list. A loading or not-yet-started list admits the pick, because
-    /// the list is what would name it stale; a failed list names nothing.
+    /// feed-view library's New pill's Latest items, else the selected group's
+    /// items, else the root-list store's loaded list. A loading or
+    /// not-yet-started list admits the pick, because the list is what would
+    /// name it stale; a failed list names nothing.
     fn gui_emby_row_known(&self, lib_idx: usize, item_id: &str) -> bool {
         if self.is_feed_home_video_library(lib_idx) {
+            if self
+                .gui_emby_libs
+                .get(&lib_idx)
+                .is_some_and(|sel| sel.feed_latest)
+            {
+                return match self.gui_emby_latest.get(&lib_idx) {
+                    Some(GuiEmbyLatestItems::Loaded(items)) => {
+                        items.iter().any(|item| item.id == item_id)
+                    }
+                    Some(GuiEmbyLatestItems::Failed) => false,
+                    Some(GuiEmbyLatestItems::Loading) | None => true,
+                };
+            }
             return self
                 .feed_home_video_selected_items(lib_idx)
                 .iter()
@@ -135,13 +181,15 @@ impl App {
         }
     }
 
-    /// Set the feed-view library's selected group (row 8.1): the TUI's own
-    /// selection path, so the session cache, the stale-drop, and the lazy
-    /// fetch behave as the TUI pill's press does. A `Folder` selection whose
-    /// folder the root listing does not hold is a stale frame's pick and
-    /// changes nothing; `All` always applies. A `lib_idx` that names no
+    /// Set the feed-view library's selected pill (row 8.1): the New pill
+    /// selects the GUI's own Latest view and triggers its lazy fetch, and
+    /// the All and folder pills clear it and run the TUI's own selection
+    /// path, so the session cache, the stale-drop, and the lazy fetch behave
+    /// as the TUI pill's press does. A `Folder` selection whose folder the
+    /// root listing does not hold is a stale frame's pick and changes
+    /// nothing; `All` and `New` always apply. A `lib_idx` that names no
     /// feed-view library is an ignored command.
-    pub fn gui_emby_set_feed_group(&mut self, lib_idx: usize, selection: &FeedHomeVideoSelection) {
+    pub fn gui_emby_set_feed_group(&mut self, lib_idx: usize, group: &GuiEmbyFeedGroup) {
         if !self.gui_emby_library(lib_idx) {
             Self::log_ignored_library_command(
                 "embySetFeedGroup",
@@ -156,35 +204,106 @@ impl App {
             );
             return;
         }
-        if let FeedHomeVideoSelection::Folder(folder_id) = selection {
-            let in_root = self.libs[lib_idx]
-                .nav_stack
-                .first()
-                .is_some_and(|root| root.items.iter().any(|item| &item.id == folder_id));
-            if !in_root {
-                Self::log_stale_library_item("embySetFeedGroup", folder_id);
-                return;
+        let entry = self.gui_emby_libs.entry(lib_idx).or_default();
+        entry.feed_latest = matches!(group, GuiEmbyFeedGroup::Latest);
+        match group {
+            GuiEmbyFeedGroup::Latest => self.ensure_gui_emby_latest_items(lib_idx),
+            GuiEmbyFeedGroup::All => {
+                self.apply_feed_home_video_group_selection(lib_idx, &FeedHomeVideoSelection::All);
+            }
+            GuiEmbyFeedGroup::Folder(folder_id) => {
+                let in_root = self.libs[lib_idx]
+                    .nav_stack
+                    .first()
+                    .is_some_and(|root| root.items.iter().any(|item| &item.id == folder_id));
+                if !in_root {
+                    Self::log_stale_library_item("embySetFeedGroup", folder_id);
+                    entry.feed_latest = false;
+                    return;
+                }
+                self.apply_feed_home_video_group_selection(
+                    lib_idx,
+                    &FeedHomeVideoSelection::Folder(folder_id.clone()),
+                );
             }
         }
-        self.apply_feed_home_video_group_selection(lib_idx, selection);
     }
 
     /// The shown-pass trigger the GUI frame path runs for the active plain
     /// Emby library destination (row 8.1), the App-side counterpart of the
     /// TUI projection pass's lazy-fetch arm: a feed-view library's shown
-    /// selection fetches when it is uncached and nothing is fetching it, and
-    /// a plain library's root list fetches when the store holds no list. A
-    /// `lib_idx` that names no plain Emby library is a no-op, so the frame
-    /// path can call it unguarded for its destination.
+    /// selection fetches when it is uncached and nothing is fetching it, its
+    /// New pill's Latest list fetches when the store holds none, and a plain
+    /// library's root list fetches when the store holds no list. A `lib_idx`
+    /// that names no plain Emby library is a no-op, so the frame path can
+    /// call it unguarded for its destination.
     pub fn ensure_gui_emby_selection(&mut self, lib_idx: usize) {
         if !self.gui_emby_library(lib_idx) {
             return;
         }
         if self.is_feed_home_video_library(lib_idx) {
-            self.ensure_feed_home_video_selection_loaded(lib_idx, false);
+            if self
+                .gui_emby_libs
+                .get(&lib_idx)
+                .is_some_and(|sel| sel.feed_latest)
+            {
+                self.ensure_gui_emby_latest_items(lib_idx);
+            } else {
+                self.ensure_feed_home_video_selection_loaded(lib_idx, false);
+            }
         } else {
             self.fetch_gui_emby_root_items(lib_idx);
         }
+    }
+
+    /// Start `lib_idx`'s Latest fetch when the store holds no list (row
+    /// 8.1): the New pill's lazy load, the TUI's own destination-Latest
+    /// trigger's shape (`spawn_destination_latest_snapshot`, which the TUI
+    /// runs from its shell). The fetch is the TUI's `get_latest` call with
+    /// the TUI's 30-item limit, and the completion lands in the store
+    /// outside `nav_stack`. A failed fetch is not retried here: it stays
+    /// failed until the pill is selected again, so a paint never re-issues
+    /// it.
+    fn ensure_gui_emby_latest_items(&mut self, lib_idx: usize) {
+        if self.gui_emby_latest.contains_key(&lib_idx) {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            // No Service client yet: leave the store empty; a later selection
+            // or shown pass retries.
+            return;
+        };
+        let library_id = self.libs[lib_idx].library.id.clone();
+        self.gui_emby_latest
+            .insert(lib_idx, GuiEmbyLatestItems::Loading);
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            let result = client.get_latest(&library_id, 30);
+            let _ = tx.send(LibEvent::GuiEmbyLatestItems(GuiEmbyLatestItemsEvent {
+                lib_idx,
+                result,
+            }));
+        });
+    }
+
+    /// Land one Emby library's Latest fetch (row 8.1): a loaded snapshot
+    /// replaces the loading mark, and a failure marks only that library.
+    pub(in crate::app) fn handle_gui_emby_latest_items(&mut self, event: GuiEmbyLatestItemsEvent) {
+        let GuiEmbyLatestItemsEvent { lib_idx, result } = event;
+        let state = match result {
+            Ok(items) => GuiEmbyLatestItems::Loaded(items),
+            Err(error) => {
+                tracing::info!(
+                    name: "gui_library.emby_latest.failed",
+                    target: "gui_library",
+                    library_index = lib_idx,
+                    error = %error,
+                    "the library's Latest snapshot failed to load"
+                );
+                GuiEmbyLatestItems::Failed
+            }
+        };
+        self.gui_emby_latest.insert(lib_idx, state);
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row
@@ -299,6 +418,19 @@ impl App {
         match self.gui_emby_roots.get(&lib_idx) {
             Some(GuiEmbyRootItems::Loaded(items)) => items.iter(),
             Some(GuiEmbyRootItems::Loading | GuiEmbyRootItems::Failed) | None => [].iter(),
+        }
+    }
+
+    /// The Latest items the GUI store loaded for `lib_idx` (row 8.1): the
+    /// list the New pill paints. Empty while the snapshot is loading or its
+    /// fetch failed.
+    pub(in crate::app) fn gui_stored_emby_latest_items(
+        &self,
+        lib_idx: usize,
+    ) -> impl Iterator<Item = &EmbyItem> {
+        match self.gui_emby_latest.get(&lib_idx) {
+            Some(GuiEmbyLatestItems::Loaded(items)) => items.iter(),
+            Some(GuiEmbyLatestItems::Loading | GuiEmbyLatestItems::Failed) | None => [].iter(),
         }
     }
 }

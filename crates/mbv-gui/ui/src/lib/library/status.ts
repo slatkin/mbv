@@ -41,14 +41,29 @@ function pickedName(music: GuiMusicFrame | null): string | null {
 	return hero.artist.trim() === '' ? hero.album.name : hero.artist;
 }
 
-/** The Shows location's last segment (design D10, D12): the title of the row
- * the core selected, which is the row the Hero shows. A frame whose selection
- * names no carried row leaves the segment out. */
-function showsSelectedTitle(shows: GuiShowsFrame | null): string | null {
-	if (shows === null || shows.selected === null) {
+/** The location line's last segment a destination's frame names (design D10,
+ * D12): the title of the row the core selected, which is the row the Hero
+ * shows. A frame whose selection names no carried row leaves the segment
+ * out. */
+function selectedTitle(
+	frame: {
+		selected: string | null;
+		rows: readonly { id: string; title: string }[];
+	} | null,
+): string | null {
+	if (frame === null || frame.selected === null) {
 		return null;
 	}
-	return shows.rows.find((row) => row.id === shows.selected)?.title ?? null;
+	return frame.rows.find((row) => row.id === frame.selected)?.title ?? null;
+}
+
+/** The location line's middle segment a pill row names (design D10, D12): the
+ * selected pill's own name. A frame with no selected pill leaves the segment
+ * out. */
+function selectedPill(
+	pills: readonly { selected: boolean; name: string }[],
+): string | null {
+	return pills.find((pill) => pill.selected)?.name ?? null;
 }
 
 /** The plain Emby-library location's middle segment (design D10, D12, row
@@ -59,63 +74,6 @@ function embySelectedGroup(emby: GuiEmbyFrame): string | null {
 		return null;
 	}
 	return emby.collectionNames[0] ?? null;
-}
-
-/** The plain Emby-library location's last segment (design D10, D12, row 8.1):
- * the title of the row the core selected, which is the row the Hero shows. A
- * frame whose selection names no carried row leaves the segment out. */
-function embySelectedTitle(emby: GuiEmbyFrame | null): string | null {
-	if (emby === null || emby.selected === null) {
-		return null;
-	}
-	return emby.rows.find((row) => row.id === emby.selected)?.title ?? null;
-}
-
-/** The Audiobooks location's last segment (design D10, D12, row 9.1): the
- * title of the book the core selected, which is the book the Hero shows. A
- * frame whose selection names no carried book leaves the segment out. */
-function audiobooksSelectedTitle(audiobooks: GuiAudiobooksFrame | null): string | null {
-	if (audiobooks === null || audiobooks.selected === null) {
-		return null;
-	}
-	return audiobooks.rows.find((row) => row.id === audiobooks.selected)?.title ?? null;
-}
-
-/** The Podcasts location's middle segment (design D10, D12, row 10.1): the
- * selected pill in the pill row — the merged `Latest` shelf's pill, or the
- * one show pill the list is scoped to. A frame with no selected pill leaves
- * the segment out. */
-function podcastsSelectedPill(podcasts: GuiPodcastsFrame): string | null {
-	return podcasts.pills.find((entry) => entry.selected)?.name ?? null;
-}
-
-/** The Podcasts location's last segment (design D10, D12, row 10.1): the
- * title of the episode the core selected, which is the episode the Hero
- * shows. A frame whose selection names no carried row leaves the segment
- * out. */
-function podcastsSelectedTitle(podcasts: GuiPodcastsFrame | null): string | null {
-	if (podcasts === null || podcasts.selected === null) {
-		return null;
-	}
-	return podcasts.rows.find((row) => row.id === podcasts.selected)?.title ?? null;
-}
-
-/** The Feeds location's middle segment (design D10, D12, row 11.1): the
- * selected pill in the pill row — the merged `Latest` pill, or the one
- * subscription pill the list is scoped to. A frame with no selected pill
- * leaves the segment out. */
-function feedsSelectedPill(feeds: GuiFeedsFrame): string | null {
-	return feeds.pills.find((entry) => entry.selected)?.name ?? null;
-}
-
-/** The Feeds location's last segment (design D10, D12, row 11.1): the title
- * of the entry the core selected, which is the entry the Hero shows. A frame
- * whose selection names no carried row leaves the segment out. */
-function feedsSelectedTitle(feeds: GuiFeedsFrame | null): string | null {
-	if (feeds === null || feeds.selected === null) {
-		return null;
-	}
-	return feeds.rows.find((row) => row.id === feeds.selected)?.title ?? null;
 }
 
 /** The location line's segments in canvas order. On Home the line reads
@@ -148,7 +106,7 @@ export function libraryLocationSegments(
 		);
 	}
 	if (shows !== null) {
-		return [destinationLabel(tabs, currentTab), ...shows.collectionNames, showsSelectedTitle(shows)].filter(
+		return [destinationLabel(tabs, currentTab), ...shows.collectionNames, selectedTitle(shows)].filter(
 			(segment): segment is string => segment !== null && segment.trim() !== '',
 		);
 	}
@@ -156,27 +114,27 @@ export function libraryLocationSegments(
 		return [
 			destinationLabel(tabs, currentTab),
 			embySelectedGroup(emby),
-			embySelectedTitle(emby),
+			selectedTitle(emby),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
 	if (audiobooks !== null) {
 		return [
 			destinationLabel(tabs, currentTab),
-			audiobooksSelectedTitle(audiobooks),
+			selectedTitle(audiobooks),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
 	if (podcasts !== null) {
 		return [
 			destinationLabel(tabs, currentTab),
-			podcastsSelectedPill(podcasts),
-			podcastsSelectedTitle(podcasts),
+			selectedPill(podcasts.pills),
+			selectedTitle(podcasts),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
 	if (feeds !== null) {
 		return [
 			destinationLabel(tabs, currentTab),
-			feedsSelectedPill(feeds),
-			feedsSelectedTitle(feeds),
+			selectedPill(feeds.pills),
+			selectedTitle(feeds),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
 	return [

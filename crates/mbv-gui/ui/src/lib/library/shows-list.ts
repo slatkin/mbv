@@ -16,16 +16,16 @@ import type {
 	GuiShowsRow,
 	GuiShowsSeries,
 } from '$lib/bridge/types';
-import type { ListWindow, RailLetter } from './list';
+import type { RailLetter } from './list';
 import {
 	LETTER_ROW_HEIGHT,
 	NODE_ROW_HEIGHT,
 	RAIL_LETTERS,
 	TRACK_ROW_HEIGHT,
 	filterMatch,
-	listWindow,
-	rowsHeight,
+	moveCursor,
 } from './list';
+import type { ListMove } from './list';
 
 /** The letter heading row's height in logical pixels: the Music list's letter
  * heading, which the All series list reuses. */
@@ -160,22 +160,6 @@ export function activeShowsMode(shows: GuiShowsFrame): GuiShowsMode {
  * premiere list. */
 export function showsSeriesMode(mode: GuiShowsMode): boolean {
 	return mode === 'all';
-}
-
-/** The rows in view over the Shows list: the shared list window's own answer
- * for the Shows row heights. */
-export function showsListWindow(
-	rows: readonly ShowsListRow[],
-	scrollTop: number,
-	viewportHeight: number,
-): ListWindow {
-	return listWindow(rows, scrollTop, viewportHeight);
-}
-
-/** The painted height of the Shows list: the shared height's own answer for
- * the Shows row heights. */
-export function showsRowsHeight(rows: readonly ShowsListRow[]): number {
-	return rowsHeight(rows);
 }
 
 /**
@@ -364,28 +348,10 @@ export function showsRowLetter(row: ShowsListRow): string | null {
 export function moveShowsCursor(
 	rows: readonly ShowsListRow[],
 	cursor: string | null,
-	move: 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end',
+	move: ListMove,
 	page = 1,
 ): string | null {
-	const items = showsSelectableRows(rows);
-	if (items.length === 0) {
-		return null;
-	}
-	const last = items.length - 1;
-	const at = items.findIndex((row) => row.id === cursor);
-	if (at < 0) {
-		return (move === 'up' || move === 'end' ? items[last] : items[0]).id;
-	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return items[Math.min(Math.max(to, 0), last)].id;
+	return moveCursor(showsSelectableRows(rows), cursor, move, page);
 }
 
 /** The A–Z rail over the painted rows (design D7, D14): each letter with the

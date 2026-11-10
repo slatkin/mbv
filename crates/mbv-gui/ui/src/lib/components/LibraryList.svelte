@@ -47,6 +47,7 @@
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The carried Music content: the union the list paints and the pills
@@ -161,11 +162,6 @@
 		openLibraryRowMenu(itemId, event.clientX, event.clientY);
 	}
 
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** Whether the row is the album the Hero shows. */
 	function isPicked(row: LibraryRow): boolean {

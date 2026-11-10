@@ -759,6 +759,17 @@ export function openLibraryRowMenu(itemId: string, x: number, y: number): void {
 	libraryUi.update((ui) => ({ ...ui, itemMenuOpen: false, rowMenu: { itemId, x, y } }));
 }
 
+/** Open a row's item menu from its right-click (design D8, D15): the row's own
+ * stable id, or nothing when the row names no item — a letter heading, a spacer,
+ * or a node the Service does not resolve. Every destination's list opens its
+ * menu through this one call, so the pointer rule cannot drift between tabs. */
+export function openRowMenuAt(event: MouseEvent, itemId: string | null): void {
+	event.preventDefault();
+	if (itemId !== null) {
+		openLibraryRowMenu(itemId, event.clientX, event.clientY);
+	}
+}
+
 /** Close the right-click item menu: a chosen entry closes it, and so do Esc,
  * a press outside it, and a scroll of the surface the row painted in. */
 export function closeLibraryRowMenu(): void {

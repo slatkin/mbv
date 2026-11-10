@@ -13,13 +13,10 @@
 	// keys' Enter plays the cursor row, and the press is the selection's half.
 	// The `/` filter field narrows the episodes to the titles that contain
 	// its text (design D7's filter rule).
-	import { onMount } from 'svelte';
 	import type { GuiPodcastsFrame } from '$lib/bridge/types';
 	import {
 		buildPodcastsRows,
 		PODCASTS_ROW_HEIGHT,
-		podcastsListWindow,
-		podcastsRowsHeight,
 	} from '$lib/library/podcasts-list';
 	import type { PodcastsItemRow } from '$lib/library/podcasts-list';
 	import {
@@ -31,9 +28,11 @@
 		scrollPodcastsList,
 		setPodcastsFilter,
 	} from '$lib/library/podcasts';
-	import { openLibraryRowMenu } from '$lib/library/state';
+	import { openRowMenuAt } from '$lib/library/state';
+	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
+	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
 		/** The carried Podcasts content (design D12, row 10.1): the active
@@ -41,8 +40,6 @@
 		podcasts: GuiPodcastsFrame;
 	}
 	const { podcasts }: Props = $props();
-
-	let listEl: HTMLElement | undefined = $state();
 
 	/** The header's selection label (design D15): the active pill's name, so the
 	 * column names the view it holds. */
@@ -56,8 +53,7 @@
 	/** Open the episode's right-click menu (the row-menu command): the row's
 	 * stable id, which the core resolves for the shared menu (design D8, D15). */
 	function rowMenu(event: MouseEvent, row: { id: string }): void {
-		event.preventDefault();
-		openLibraryRowMenu(row.id, event.clientX, event.clientY);
+		openRowMenuAt(event, row.id);
 	}
 
 	/** The painted rows of the flat list (row 10.1): the same model
@@ -65,27 +61,6 @@
 	 * the filter's text. */
 	const rows = $derived(buildPodcastsRows(podcasts.rows, $podcastsUi.filter));
 
-	/** The rows in view: only these paint. */
-	const view = $derived(podcastsListWindow(rows, $podcastsUi.scrollTop, $podcastsUi.viewportHeight));
-	const painted = $derived(rows.slice(view.start, view.end));
-
-	/** The list's whole painted height, and the spacers that hold its scroll
-	 * range while only the rows in view paint. */
-	const total = $derived(podcastsRowsHeight(rows));
-	const above = $derived(painted.length > 0 ? painted[0].top : 0);
-	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
-
-	/** The bottom edge of the last painted row: the below-spacer's pair. */
-	function lastBottom(): number {
-		const last = painted[painted.length - 1];
-		return last === undefined ? 0 : last.top + last.height;
-	}
-
-	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
-	 * hexes, which name no theme slot. */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** An episode row's title colour: the canvas's text tone, dimmed on a
 	 * played row (design D12), as a Home item row. */
@@ -108,39 +83,6 @@
 	function rowProgress(row: PodcastsItemRow): number | null {
 		return typeof row.row.state === 'object' ? row.row.state.active.progress : null;
 	}
-
-	/** Report the list's measured height (row 10.1): the rows in view follow
-	 * it. */
-	function measure(): void {
-		measurePodcastsList(listEl?.clientHeight ?? 0);
-	}
-
-	/** Report the list's native scroll offset, so the windowed paint follows a
-	 * user scroll. */
-	function onScroll(event: Event): void {
-		scrollPodcastsList((event.currentTarget as HTMLElement).scrollTop);
-	}
-
-	// The scroller mirrors the state (row 10.1): a key that moved the cursor
-	// set the offset, and the element follows it. A user scroll already wrote
-	// the offset back, so this assignment is a no-op for it.
-	$effect(() => {
-		const el = listEl;
-		const top = $podcastsUi.scrollTop;
-		if (el !== undefined && el.scrollTop !== top) {
-			el.scrollTop = top;
-		}
-	});
-
-	onMount(() => {
-		measure();
-		const observer =
-			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-		if (listEl !== undefined) {
-			observer?.observe(listEl);
-		}
-		return () => observer?.disconnect();
-	});
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-podcasts-list-column="">
@@ -175,19 +117,15 @@
 		<!-- The active view holds no episode (row 10.1): the TUI's empty slot. -->
 		<LibraryListNotice text="No episodes" attr="data-library-podcasts-empty" />
 	{/if}
-	<ol
-		bind:this={listEl}
-		class="min-h-0 flex-1"
-		style:overflow-y="auto"
-		style:list-style="none"
-		style:margin="0"
-		style:padding="8px 8px 8px 8px"
-		data-library-podcasts-list=""
-		onscroll={onScroll}
+	<LibraryVirtualList
+		{rows}
+		scrollTop={$podcastsUi.scrollTop}
+		viewportHeight={$podcastsUi.viewportHeight}
+		attr="podcasts"
+		onmeasure={measurePodcastsList}
+		onscroll={scrollPodcastsList}
 	>
-		<li style:height="{above}px" aria-hidden="true"></li>
-		{#each painted as row (row.id)}
-			<li>
+		{#snippet row(row)}
 				<button
 					type="button"
 					class="relative flex w-full items-center overflow-hidden"
@@ -245,8 +183,6 @@
 						></span>
 					{/if}
 				</button>
-			</li>
-		{/each}
-		<li style:height="{below}px" aria-hidden="true"></li>
-	</ol>
+		{/snippet}
+	</LibraryVirtualList>
 </div>

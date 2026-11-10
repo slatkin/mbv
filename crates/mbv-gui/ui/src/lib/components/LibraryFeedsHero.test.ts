@@ -63,17 +63,18 @@ function mount(facts: GuiFeedsHero | null = hero('square')): HTMLElement {
 }
 
 // A feed entry has no artwork source, so the box paints the placeholder in
-// every arm: the square box keeps the Music Hero's 300 px side and the
-// landscape box the 16:9 height (design D12, row 11.1).
+// every arm the shared artwork component reserves (design D15, row 11.1): the
+// square keeps the 300 px side, and the landscape fills the Hero content width
+// at 16:9.
 test.each([
-	['square', 300],
-	['landscape', 169],
-] as const)('a %s Hero places its placeholder artwork box at %s px high', (shape, height) => {
+	['square', '300px', '300px'],
+	['landscape', '100%', 'auto'],
+] as const)('a %s Hero places its placeholder artwork box at the shared arm', (shape, width, height) => {
 	const container = mount(hero(shape));
 	const box = container.querySelector('[data-library-feeds-hero-art]') as HTMLElement;
 
-	expect(box.style.width).toBe('300px');
-	expect(box.style.height).toBe(`${height}px`);
+	expect(box.style.width).toBe(width);
+	expect(box.style.height).toBe(height);
 	expect(box.textContent).toContain("the window's placeholder");
 });
 

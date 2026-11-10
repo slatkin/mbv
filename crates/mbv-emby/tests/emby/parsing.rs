@@ -9,6 +9,7 @@ use serde_json::json;
 fn parse_item_basic_fields() {
     let raw = json!({
         "Id": "abc", "Name": "Test", "Type": "Movie",
+        "ParentId": "folder1",
         "IsFolder": false, "MediaType": "Video",
         "RunTimeTicks": 36_000_000_000i64,
         "DateCreated": "2026-09-21T19:39:41.1234567Z",
@@ -22,6 +23,7 @@ fn parse_item_basic_fields() {
     assert_eq!(item.date_added, "2026-09-21T19:39:41.1234567Z");
     assert!(item.played);
     assert_eq!(item.playback_position_ticks, 5_000_000);
+    assert_eq!(item.parent_id, "folder1");
 }
 
 #[rstest]

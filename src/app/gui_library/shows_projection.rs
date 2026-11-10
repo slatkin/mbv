@@ -10,7 +10,6 @@
 //! `SortName`, seasons by `SortName` (the server order the detail fetch
 //! requests), episodes by `IndexNumber`.
 
-use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::{hero_content_emby, hero_content_series_with_episode};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
@@ -572,22 +571,16 @@ impl App {
         content: &mbv_components::library_panel::hero::HeroContentData,
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
-        let art = match &content.facts.artwork.source {
-            Some(ArtworkSource::Emby {
-                item_id,
-                series_id,
-                image_types,
-                cache_key,
-            }) => Some(self.gui_home_hero_artwork(cache_key, item_id, series_id, image_types)),
-            Some(_) | None => None,
-        };
+        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
         GuiShowsHero {
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
-            art_shape: artwork_shape(content.facts.artwork.shape),
+            art_shape: artwork_shape(
+                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
+            ),
             art,
             workspace,
         }

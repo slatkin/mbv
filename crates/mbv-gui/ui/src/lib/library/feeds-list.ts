@@ -7,8 +7,7 @@
 // layout, which jsdom does not have.
 
 import type { GuiFeedsRow } from '$lib/bridge/types';
-import type { ListWindow } from './list';
-import { filterMatch, listWindow, rowsHeight } from './list';
+import { filterMatch } from './list';
 
 /** The entry row's height in logical pixels (design D12): the room a
  * two-line entry title and the date gutter paint into, as a Shows flat row. */
@@ -30,21 +29,7 @@ export interface FeedsItemRow {
  * row. */
 export type FeedsListRow = FeedsItemRow;
 
-/** The rows in view over the Feeds list (design D12): the shared list
- * window's own answer for the Feeds row heights. */
-export function feedsListWindow(
-	rows: readonly FeedsListRow[],
-	scrollTop: number,
-	viewportHeight: number,
-): ListWindow {
-	return listWindow(rows, scrollTop, viewportHeight);
-}
-
-/** The painted height of the Feeds list (design D12): the shared height's
- * own answer for the Feeds row heights. */
-export function feedsRowsHeight(rows: readonly FeedsListRow[]): number {
-	return rowsHeight(rows);
-}
+/**
 
 /**
  * The painted rows of the Feeds list (design D12): the frame's entry rows at
@@ -61,37 +46,4 @@ export function buildFeedsRows(rows: readonly GuiFeedsRow[], filter = ''): Feeds
 		top: at * FEEDS_ROW_HEIGHT,
 		height: FEEDS_ROW_HEIGHT,
 	}));
-}
-
-/**
- * The cursor key a movement leaves (design D12): the next, the previous, or a
- * page away entry row, clamped to the list's ends. With no cursor on a row,
- * Up and End start from the last row and every other movement from the
- * first, so one key press always lands the cursor. `page` is the rows a page
- * spans: the rows in view.
- */
-export function moveFeedsCursor(
-	rows: readonly FeedsListRow[],
-	cursor: string | null,
-	move: 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end',
-	page = 1,
-): string | null {
-	if (rows.length === 0) {
-		return null;
-	}
-	const last = rows.length - 1;
-	const at = rows.findIndex((row) => row.id === cursor);
-	if (at < 0) {
-		return (move === 'up' || move === 'end' ? rows[last] : rows[0]).id;
-	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return rows[Math.min(Math.max(to, 0), last)].id;
 }

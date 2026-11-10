@@ -93,6 +93,7 @@ test('the feed-group rows carry no letter, so every rail letter is disabled', ()
 });
 
 test('a pill keys on its group, never on a row position', () => {
+	expect(embyGroupKey({ kind: 'latest' })).toBe('latest');
 	expect(embyGroupKey({ kind: 'all' })).toBe('all');
 	expect(embyGroupKey({ kind: 'folder', id: 'folder-1' })).toBe('folder:folder-1');
 });
