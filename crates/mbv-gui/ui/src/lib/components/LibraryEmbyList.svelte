@@ -193,7 +193,7 @@
 						</span>
 						{#if row.row.date !== null}
 							<span
-								class="flex-none tabular-nums"
+								class="flex-none font-mono tabular-nums"
 								style:font-size="11px"
 								style:color="var(--canvas-muted)"
 								data-library-emby-date="">{row.row.date}</span

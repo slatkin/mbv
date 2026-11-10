@@ -18,6 +18,7 @@
 	import {
 		buildHomeRows,
 		HOME_ITEM_ROW_HEIGHT,
+		homeRowKey,
 	} from '$lib/library/home-list';
 	import type { HomeListRow } from '$lib/library/home-list';
 	import {
@@ -63,10 +64,23 @@
 		return canvasVar('text');
 	}
 
-	/** An item row's painted fill: the cursor row's focus fill only. A
-	 * highlight marks focus, so the active row keeps its own paint. */
+	/** Whether the row is the core's selected one: the item the Hero
+	 * shows. */
+	function isSelectedRow(row: HomeListRow): boolean {
+		return (
+			row.kind === 'item' && home.selected !== null && row.id === homeRowKey(home.selected)
+		);
+	}
+
+	/** An item row's painted fill: the cursor row's focus fill, and the
+	 * core's selected row the raised fill while the cursor sits elsewhere —
+	 * the selection is what the Hero shows, so its row stays marked, as every
+	 * Library list's selected row is. */
 	function rowBackground(row: HomeListRow): string | undefined {
-		return row.kind === 'item' && row.id === $homeUi.cursor ? canvasVar('selected') : undefined;
+		if (row.kind === 'item' && row.id === $homeUi.cursor) {
+			return canvasVar('selected');
+		}
+		return isSelectedRow(row) ? canvasVar('library-raise') : undefined;
 	}
 
 	/** The resume percent an active item row paints, or `null`. */
@@ -138,6 +152,7 @@
 					data-library-home-row="item"
 					data-library-home-row-id={row.id}
 					data-library-home-cursor={row.id === $homeUi.cursor ? '' : undefined}
+					data-library-home-selected={isSelectedRow(row) ? '' : undefined}
 					onclick={() => pressHomeRow(row)}
 					ondblclick={() => playHomeRow(row.rowId)}
 					oncontextmenu={(event) => rowMenu(event, row)}
@@ -164,6 +179,7 @@
 						<span
 							class="truncate"
 							style:color={nameColor(row)}
+							style:font-weight={isSelectedRow(row) ? 600 : 400}
 							data-library-home-title="">{row.title}</span
 						>
 						{#if row.subtitle !== null}
@@ -177,7 +193,7 @@
 					</span>
 					{#if row.date !== null}
 						<span
-							class="flex-none tabular-nums"
+							class="flex-none font-mono tabular-nums"
 							style:font-size="11px"
 							style:color="var(--canvas-muted)"
 							data-library-home-date="">{row.date}</span

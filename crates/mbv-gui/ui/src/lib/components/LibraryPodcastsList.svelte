@@ -150,6 +150,7 @@
 						<span
 							class="truncate"
 							style:color={nameColor(row)}
+							style:font-weight={row.id === podcasts.selected ? 600 : 400}
 							data-library-podcasts-title="">{row.row.title}</span
 						>
 						{#if row.row.subtitle !== null}
@@ -163,7 +164,7 @@
 					</span>
 					{#if row.row.date !== null}
 						<span
-							class="flex-none tabular-nums"
+							class="flex-none font-mono tabular-nums"
 							style:font-size="11px"
 							style:color="var(--canvas-muted)"
 							data-library-podcasts-date="">{row.row.date}</span
