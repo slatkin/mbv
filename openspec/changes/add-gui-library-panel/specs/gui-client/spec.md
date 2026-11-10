@@ -400,7 +400,7 @@ The Queue panel's column width and the Wide list column's width that the user dr
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 
