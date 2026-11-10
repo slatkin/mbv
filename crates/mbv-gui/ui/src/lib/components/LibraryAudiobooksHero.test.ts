@@ -72,6 +72,7 @@ function hero(facts: Partial<GuiAudiobooksHero> = {}): GuiAudiobooksHero {
 		metaRows: ['Isaac Asimov', '9 h 51 m', '17%'],
 		durationRow: 1,
 		progressRow: 2,
+		overview: null,
 		artShape: 'portrait',
 		art: null,
 		workspace: { rows: CHAPTERS },

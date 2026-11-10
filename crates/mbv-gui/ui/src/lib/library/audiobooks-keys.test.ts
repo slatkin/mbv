@@ -132,6 +132,7 @@ const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 	metaRows: ['Bill Wyman', '4:32'],
 	durationRow: 0,
 	progressRow: null,
+	overview: null,
 	artShape: 'portrait',
 	art: null,
 	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },

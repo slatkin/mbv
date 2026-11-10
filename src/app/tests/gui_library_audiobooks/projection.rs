@@ -570,3 +570,42 @@ fn the_select_command_stores_the_pick() {
         "the select command stored the pick"
     );
 }
+
+/// The TUI's book Hero restores the catalog-only facts on top of the shared
+/// producer (design D15): `Read by <narrator>`, the published year, and the
+/// description overview. The GUI's Hero painted neither before D15 — the same
+/// class of deviation as the Shows Hero's wrong producer in D14.
+#[test]
+fn the_book_hero_restores_the_narrator_year_and_description() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app(
+        &[authored_book(
+            "book-a",
+            "Austen's End",
+            Some("Jane Austen"),
+            "austen",
+            7200.0,
+        )],
+        &[(1, 0.0, 1800.0, "Chapter One")],
+        &[],
+        None,
+    );
+    let book = &mut app.audiobookshelf_book_browse[0].books[0];
+    book.narrator = Some("Anna Fields".into());
+    book.published_year = Some("1999".into());
+    book.description = Some("A novel of manners. https://example.test/x".into());
+
+    let projection = app.gui_audiobooks_projection(0);
+
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(
+        hero.meta_rows,
+        vec!["Jane Austen", "30:00", "Read by Anna Fields", "1999"],
+        "the catalog's narrator and year ride the producer's rows"
+    );
+    assert_eq!(
+        hero.overview.as_deref(),
+        Some("A novel of manners."),
+        "the description rides as the overview, with its URL stripped"
+    );
+}

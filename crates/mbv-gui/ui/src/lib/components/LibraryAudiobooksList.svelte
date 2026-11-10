@@ -39,7 +39,9 @@
 		setAudiobooksFilter,
 	} from '$lib/library/audiobooks';
 	import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import { openLibraryRowMenu } from '$lib/library/state';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -126,6 +128,13 @@
 	// The Hero's chapter cursor belongs to the selected book (row 9.1): a
 	// selection change starts it over, because the chapters it rested on belong
 	// to the previous book.
+	/** Open the book's right-click menu (the row-menu command): the row's
+	 * stable id, which the core resolves for the shared menu (design D8, D15). */
+	function rowMenu(event: MouseEvent, row: { id: string }): void {
+		event.preventDefault();
+		openLibraryRowMenu(row.id, event.clientX, event.clientY);
+	}
+
 	let lastSelected: string | null = null;
 	$effect(() => {
 		const selected = audiobooks.selected;
@@ -148,9 +157,13 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-abs-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
-		<LibraryFilterField
-			value={$audiobooksUi.filter}
+	<!-- The Music list's header (design D15): the list names itself, `All` is the
+	whole catalog, and the `/` filter field narrows it. -->
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Audiobooks"
+			label="All"
+			filter={$audiobooksUi.filter}
 			placeholder="Filter books"
 			ariaLabel="Filter books"
 			oninput={setAudiobooksFilter}
@@ -160,30 +173,20 @@
 	{#if audiobooks.loading}
 		<!-- The book catalog has not landed yet (row 9.1): one placeholder line
 			holds the list's place. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-abs-loading=""
-		>
-			Loading…
-		</div>
+		<LibraryListNotice text="Loading…" attr="data-library-abs-loading" />
 	{/if}
 	{#if audiobooks.failed}
 		<!-- The catalog fetch failed (row 9.1): the failure line naming what
 			failed, and no row until the destination opens again. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-abs-failed=""
-		>
-			Couldn’t load this catalog.
-		</div>
+		<LibraryListNotice
+			text="Couldn’t load this catalog."
+			attr="data-library-abs-failed"
+		/>
+	{/if}
+	{#if !audiobooks.loading && !audiobooks.failed && audiobooks.rows.length === 0}
+		<!-- The catalog landed and holds no book (row 9.1): the TUI's empty
+			slot. -->
+		<LibraryListNotice text="No audiobooks" attr="data-library-abs-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<ol
@@ -229,6 +232,7 @@
 							data-library-abs-selected={row.id === audiobooks.selected ? '' : undefined}
 							onclick={() => pressAudiobooksRow(row)}
 							ondblclick={() => playAudiobooksRow(row.row.id)}
+							oncontextmenu={(event) => rowMenu(event, row)}
 						>
 							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
 								<span

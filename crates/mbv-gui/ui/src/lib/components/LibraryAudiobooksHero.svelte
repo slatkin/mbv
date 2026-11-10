@@ -150,6 +150,17 @@
 						{/if}
 					{/each}
 				</div>
+				{#if hero.overview !== null}
+					<!-- The catalog's description, which the TUI's Hero paints and
+					the GUI dropped before D15. -->
+					<p
+						style:margin="0"
+						style:font-size="13px"
+						style:line-height="1.5"
+						style:color="var(--canvas-muted)"
+						data-library-abs-hero-overview="">{hero.overview}</p
+					>
+				{/if}
 				<div class="relative flex flex-wrap items-center" style:gap="8px">
 					<button
 						type="button"

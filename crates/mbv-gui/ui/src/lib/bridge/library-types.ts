@@ -717,6 +717,9 @@ export interface GuiAudiobooksHero {
 	metaRows: string[];
 	durationRow: number | null;
 	progressRow: number | null;
+	/** The cleaned description, when the catalog record carries one: the
+	 * overview the TUI's Hero paints. */
+	overview: string | null;
 	/** The artwork box the Hero reserves: the book artwork policy's
 	 * portrait. */
 	artShape: 'landscape' | 'square' | 'portrait';

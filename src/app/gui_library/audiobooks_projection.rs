@@ -57,6 +57,9 @@ pub struct GuiAudiobooksHero {
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
     pub progress_row: Option<usize>,
+    /// The cleaned description, when the catalog record carries one: the
+    /// overview the TUI's Hero paints, which the GUI dropped before D15.
+    pub overview: Option<String>,
     /// The artwork box the Hero reserves: the book artwork policy's
     /// portrait.
     pub art_shape: GuiArtShape,
@@ -174,21 +177,48 @@ impl App {
         }
     }
 
-    /// The selected book's Hero (row 9.1): the shared `hero_content_abs_book`
-    /// producer's facts, the cover fetched through the Service-scoped book
-    /// cover chain — the same fetch the TUI's hero projection issues — and
-    /// the Workspace the book's detail holds.
+    /// The selected book's Hero (row 9.1): the TUI's own facts — the shared
+    /// book producer's title, duration, and progress rows, with the
+    /// catalog-only `Read by <narrator>` and published-year rows and the
+    /// description overview restored, exactly as `book_content`'s
+    /// `resolved_hero_data` builds them (design D15) — the cover fetched
+    /// through the Service-scoped book cover chain, and the Workspace the
+    /// book's detail holds.
     fn gui_abs_hero(
         &mut self,
         lib_idx: usize,
         book_id: &str,
         now_playing: Option<&WorkspaceNowPlaying>,
     ) -> Option<GuiAudiobooksHero> {
-        let book = self
-            .audiobookshelf_book_browse
-            .get(lib_idx)
-            .and_then(|state| audiobookshelf_book_item(state, book_id))?;
-        let content = hero_content_abs_book(&book);
+        let state = self.audiobookshelf_book_browse.get(lib_idx)?;
+        let book = audiobookshelf_book_item(state, book_id)?;
+        // The catalog's own record beside the queue item: the narrator, the
+        // published year, and the description ride only there.
+        let catalog = state
+            .books
+            .iter()
+            .find(|candidate| candidate.library_item_id == book_id);
+        let narrator = catalog
+            .and_then(|book| book.narrator.clone())
+            .filter(|value| !value.is_empty());
+        let year = catalog
+            .and_then(|book| book.published_year.clone())
+            .filter(|value| !value.is_empty());
+        let description = catalog.and_then(|book| book.description.clone());
+        // The shared book producer's facts, with the catalog-only rows the
+        // TUI's Hero restores: `Read by <narrator>`, the published year, and
+        // the description overview.
+        let mut content = hero_content_abs_book(&book);
+        if let Some(narrator) = narrator {
+            content.facts.meta_rows.push(format!("Read by {narrator}"));
+        }
+        if let Some(year) = year {
+            content.facts.meta_rows.push(year);
+        }
+        content.overview = description
+            .as_deref()
+            .map(mbv_ui_model::ui_util::clean_overview)
+            .filter(|overview| !overview.is_empty());
         let art = match &content.facts.artwork.source {
             Some(ArtworkSource::AudiobookshelfCover {
                 library_item_id,
@@ -202,6 +232,7 @@ impl App {
             meta_rows: content.facts.meta_rows.clone(),
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
+            overview: content.overview.clone(),
             art_shape: artwork_shape(content.facts.artwork.shape),
             art,
             workspace,

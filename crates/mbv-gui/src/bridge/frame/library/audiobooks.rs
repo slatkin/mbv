@@ -69,6 +69,9 @@ pub struct GuiAudiobooksHeroFrame {
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
     pub progress_row: Option<usize>,
+    /// The cleaned description, when the catalog record carries one: the
+    /// overview the TUI's Hero paints.
+    pub overview: Option<String>,
     /// The artwork box the Hero reserves: the book artwork policy's
     /// portrait.
     pub art_shape: GuiArtShapeFrame,
@@ -148,6 +151,7 @@ impl From<&GuiAudiobooksHero> for GuiAudiobooksHeroFrame {
             meta_rows: hero.meta_rows.clone(),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
+            overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiLibraryArt::from),
             workspace: hero

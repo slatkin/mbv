@@ -241,3 +241,12 @@ test('a selection change calls resetAbsChapterCursor', () => {
 
 	expect(resetMock).toHaveBeenCalledTimes(1);
 });
+
+// add-gui-library-panel design D15: the Audiobooks column carries the Music
+// list's header instead of opening with a bare filter field.
+test('the list paints the Audiobooks header', async () => {
+	const container = await mountList(CATALOG);
+
+	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Audiobooks');
+	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe('All');
+});
