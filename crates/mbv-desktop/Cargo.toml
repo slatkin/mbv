@@ -19,7 +19,7 @@ mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-images = { path = "../mbv-images" }
 mbv-queue = { path = "../mbv-queue" }
 tracing.workspace = true
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }
 

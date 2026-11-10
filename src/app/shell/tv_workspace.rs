@@ -49,8 +49,10 @@ impl Model {
             }
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
-            // directly without reading any owner cursor.
-            ShellRequest::TvEpisodeActivate { episode } => self.app.play_item(episode),
+            // directly without reading any owner cursor. The autoload policy
+            // still applies: with it on, the episode's season fills the
+            // queue, exactly as a played browse row's folder does.
+            ShellRequest::TvEpisodeActivate { episode } => self.app.play_tv_episode(episode),
             // A premiere notice is not media: open its series' Workspace.
             ShellRequest::TvOpenUpcomingSeries {
                 series_id,

@@ -135,3 +135,126 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
     // this stub owner is legacy, so the view keeps its last accepted state
     // and the optimistic replacement content is not asserted here.
 }
+
+/// The episode item ids and `start_idx` of the last `UnifiedQueueReplace` the
+/// owner received. Row 5.3 makes the owner's wire the queue's only
+/// observable content.
+fn last_replacement(
+    command_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) -> Option<(Vec<String>, Option<usize>)> {
+    command_rx
+        .try_iter()
+        .fold(None, |last, command| match command {
+            mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
+                slots, start_idx, ..
+            } => Some((
+                slots
+                    .into_iter()
+                    .map(|slot| slot.item.id().to_string())
+                    .collect(),
+                start_idx,
+            )),
+            _ => last,
+        })
+}
+
+fn tv_season(id: &str) -> EmbyItem {
+    let mut season = make_item(id, "Season");
+    season.id = id.into();
+    season.is_folder = true;
+    season
+}
+
+fn tv_episode(id: &str, name: &str, series_id: &str) -> EmbyItem {
+    let mut episode = make_item(name, "Episode");
+    episode.id = id.into();
+    episode.series_id = series_id.into();
+    episode
+}
+
+/// A TV-library app whose Emby calls reach `http` under the given autoload
+/// policy, with the cached series detail the TV Workspace renders from:
+/// the selected episode lives in `season-1`.
+fn tv_episode_app(
+    http: &MockHttp,
+    autoload: bool,
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut app, command_rx) =
+        crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    app.config.lock().unwrap().autoload = autoload;
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    app.series_detail_cache.insert(
+        "series-1".into(),
+        mbv_ui_model::browse::SeriesDetail {
+            seasons: vec![tv_season("season-1")],
+            episodes: std::collections::HashMap::from([(
+                "season-1".to_string(),
+                vec![
+                    tv_episode("episode-1", "Episode 1", "series-1"),
+                    tv_episode("episode-2", "Episode 2", "series-1"),
+                ],
+            )]),
+        },
+    );
+    (app, command_rx)
+}
+
+/// Regression: `TvEpisodeActivate` used to call `play_item` directly, so a TV
+/// Workspace episode Enter ignored `mpv.autoload` and queued one episode while
+/// a play from the generic browser queued its folder siblings. With autoload
+/// on, the episode's cached season fills the queue from that episode.
+#[test]
+fn tv_episode_play_queues_the_cached_season_when_autoload_is_on() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let (mut app, command_rx) = tv_episode_app(&http, true);
+    http.respond(
+        200,
+        r#"{"Items":[
+            {"Id":"episode-1","Name":"Episode 1","Type":"Episode","MediaType":"Video"},
+            {"Id":"episode-2","Name":"Episode 2","Type":"Episode","MediaType":"Video"}
+        ]}"#,
+    );
+
+    app.play_tv_episode(tv_episode("episode-2", "Episode 2", "series-1"));
+
+    assert_eq!(
+        last_replacement(&command_rx),
+        Some((
+            vec!["episode-1".to_string(), "episode-2".to_string()],
+            Some(1)
+        )),
+        "the activated episode's season fills the queue, starting at that episode"
+    );
+}
+
+/// The same activation under a disabled autoload policy queues the episode
+/// alone, so the policy alone decides the TV episode queue.
+#[test]
+fn tv_episode_play_queues_only_that_episode_when_autoload_is_off() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let (mut app, command_rx) = tv_episode_app(&http, false);
+
+    app.play_tv_episode(tv_episode("episode-2", "Episode 2", "series-1"));
+
+    assert_eq!(
+        last_replacement(&command_rx),
+        Some((vec!["episode-2".to_string()], Some(0))),
+        "autoload off plays the activated episode alone"
+    );
+}

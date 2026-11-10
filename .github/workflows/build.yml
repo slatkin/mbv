@@ -61,10 +61,14 @@ jobs:
           # toolchain comes from the pinned rust-toolchain.toml instead, so it
           # changes only when that pin is bumped deliberately. clang stays a
           # system package (native build-script tooling, not a cache-keyed
-          # compiler).
+          # compiler). `nodejs` is separate from `pnpm`: Arch's pnpm package is
+          # a standalone binary with no nodejs dependency, but the bin shims it
+          # generates (vite, vitest, ...) still `exec node`, so the `ui/`
+          # targets need the interpreter on PATH.
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ast-grep webkit2gtk-4.1 pnpm
+            zig wayland libxkbcommon fontconfig ast-grep webkit2gtk-4.1 \
+            nodejs pnpm
 
       - uses: actions/checkout@v7
 
@@ -292,9 +296,11 @@ jobs:
       contents: read
 
     steps:
-      # Same makedeps as `build`: check runs build scripts (pkg-config probes
-      # for mpv/pipewire/openssl), and checkout needs git for a real clone (see
-      # the comment on the matching step in `build`).
+      # Same makedeps as `build` (check runs build scripts with pkg-config
+      # probes for mpv/pipewire/openssl, webkit2gtk-4.1 for the mbv-gui
+      # compile, nodejs+pnpm for `make ui-build`; see the nodejs comment in
+      # `build`), and checkout needs git for a real clone (see the comment on
+      # the matching step in `build`).
       - name: Update system and install makedeps
         run: |
           pacman_retry() {
@@ -308,7 +314,8 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 pnpm
+            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 \
+            nodejs pnpm
 
       - uses: actions/checkout@v7
 
@@ -365,8 +372,9 @@ jobs:
 
     steps:
       # Same makedeps as `build` (pkg-config probes for mpv/pipewire/openssl,
-      # webkit2gtk-4.1 for the Tauri link, pnpm for the `ui/` targets), and
-      # checkout needs git for a real clone.
+      # webkit2gtk-4.1 for the Tauri link, nodejs+pnpm for the `ui/` targets;
+      # see the nodejs comment in `build`), and checkout needs git for a real
+      # clone.
       - name: Update system and install makedeps
         run: |
           pacman_retry() {
@@ -380,7 +388,8 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 pnpm
+            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 \
+            nodejs pnpm
 
       - uses: actions/checkout@v7
 
