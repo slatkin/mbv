@@ -481,9 +481,18 @@ what to save at exit. The window content changes it only by a command, and the
 frame carries it back, so the pill row paints the core's set. The panel uses
 no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
-recogniser or hit map. `LibraryPanel.svelte` paints `LibraryTopBar`,
-`LibraryPills`, `LibraryList` with `LibraryLetterRail`, `LibraryHero` with
-`LibraryTracklist`, and `LibraryStatusBar`, and the right-click item menu
+recogniser or hit map. `LibraryPanel.svelte` paints `LibraryTopBar` (the
+Home icon, one tab per Service library destination, and the Search field
+with its results dropdown), the destination's pill row (`LibraryPills` in
+Music; `LibraryShowsPills`, `LibraryEmbyPills`, `LibraryPodcastsPills`, and
+`LibraryFeedsPills` — a destination with no pills paints no row), the
+destination's list (`LibraryList` with `LibraryLetterRail` in Music;
+`LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
+`LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
+the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
+`LibraryHomeHero`, `LibraryShowsHero` with its Workspace,
+`LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
+`LibraryFeedsHero`), and `LibraryStatusBar`, and the right-click item menu
 (`QueueRowMenu` under the panel), which a right-press on a list row or a
 Hero tracklist row opens through the `rowMenu` command: the command names
 the row's stable Service id, the frame's `rowMenu` section carries the
@@ -512,8 +521,9 @@ re-arms the section (`LibraryFrames::rearm`,
 whole content.
 
 `search` is the Search section (design D12, row 12.1):
-`Option<GuiSearchFrame>`, present while the field holds a query or its rows,
-and `None` while the field is closed. It rides the section beside the
+`Option<GuiSearchFrame>`, present while the top bar's Search field — the
+field the `Ctrl+K` chord arms — holds a query or its rows, and `None`
+while it is closed. It rides the section beside the
 revision-gated `content`, never inside it, because Search is
 cross-destination: a result that lands between two content changes still
 reaches the window. `GuiSearchFrame`
@@ -522,10 +532,13 @@ answering), `loading`, `failed`, and `results`, whose rows carry `id` and
 `item_type` (the stable Service identity the `searchActivate` command sends
 back), `title`, and `subtitle` (empty when the item has none).
 
-`GuiLibraryContent` carries `tabs` (the presented destinations in catalog
-order, each a `GuiLibraryTabFrame` with a `position` and a `label`, Home at
-position 0), `current_tab` (the active tab's position, `None` for Home and for
-every destination the GUI does not present yet), `music`
+`GuiLibraryContent` carries `tabs` (one tab per Service library
+destination, plus the feed tab while subscriptions are configured, in
+catalog order, each a `GuiLibraryTabFrame` with a `position` and a
+`label`; Home is not a tab — the top bar's Home icon opens position 0),
+`current_tab` (the active tab's position; `None` for Home, whose icon
+marks itself current while `home` is present, and for an active
+destination no tab names), `music`
 (`Option<GuiMusicFrame>`, present while a Grouped Music library is active),
 `home` (`Option<GuiHomeFrame>`, present while Home is the active
 destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
@@ -858,9 +871,13 @@ no valid shape, or an entry the App's data no longer holds, logs and changes
 nothing.
 
 The Search commands carry no library index, because Search is
-cross-destination (row 12.1). `searchQuery` (`query`) stores the live query
-and starts the TUI's own search worker through
-`App::spawn_search_sidebar_query`, and an empty query clears the results.
+cross-destination (row 12.1), and their arms are the `gui_search_query`,
+`gui_search_activate`, and `gui_search_close` methods over the one
+`GuiSearchStore` (`src/app/gui_library/search.rs`). The field sends
+`searchQuery` (`query`) debounced while the user types: it stores the live
+query and starts the TUI's own search worker through
+`App::spawn_search_sidebar_query`, and an empty or blank query clears the
+results at once.
 `searchActivate` (`id`, `itemType`) — the command Enter and a press both send
 — navigates to the row's item through the TUI's own navigation and closes the
 results. `searchClose` clears them. No overlay request rides these commands,
@@ -904,20 +921,27 @@ before the forwarder (design D3). The order is:
    dialog) or prefix mode is armed, the key goes to the core.
    Both facts are in the frame. The Queue filter's text entry is the core's
    too, so every key is the core's while it holds the keyboard.
-2. While a text field of the panel holds the keyboard (the `/` filter), the
-   field takes the key. Esc closes it and Enter accepts it.
-3. While the Library panel shows, the window keys run: Tab and Shift+Tab move
+2. The `Ctrl+K` chord arms the Search field: wherever the Library panel
+   shows and its top bar mounts the field, the field takes the keyboard;
+   in Mini with Queue focus no top bar paints the field, so the chord
+   keeps its core effect there.
+3. While a text field of the panel holds the keyboard, the field takes the
+   key: the Search field first — its hold is DOM focus, Esc closes its
+   results, the arrow keys move the highlight, and Enter activates the
+   marked one — then the `/` filter, whose Esc closes it and Enter
+   accepts it.
+4. While the Library panel shows, the window keys run: Tab and Shift+Tab move
    the pane focus (the pill row, the list, the Hero, and across the panel
    boundary to the Queue panel), and `1` to `7` open the first to seventh
    destination tab after Home.
-4. While the Library panel has Panel focus, the Library keys run in the window
+5. While the Library panel has Panel focus, the Library keys run in the window
    content: `/` opens the list filter, Enter plays the item under the cursor
    or presses the focused control, `n` plays it next, `a` adds it to the
    queue, Space and Alt+Space toggle and solo a focused pill, the arrow, Page
    Up, Page Down, Home, and End keys move the cursor, Right and Left open or
    close a tree node or walk the pill row, and Esc closes the open filter,
    overlay, or menu.
-5. Every other key goes to the core's keyboard router. So Space plays or
+6. Every other key goes to the core's keyboard router. So Space plays or
    pauses while no pill has focus, `[` and `]` seek, and the GUI-only chords
    `z`, `q`, and `c` and every `[keys]` binding keep their effect.
 
@@ -979,14 +1003,16 @@ is open.
 
 The restore runs in two phases (`GuiLaunchRestore`,
 `CoreThread::restore_launch_location`). The first phase opens the saved
-destination once the catalog presents it — a saved destination the GUI does
-not present falls back to the first presented one — and applies the saved
-Panel focus over the Library focus the open takes, unless the user already
-took focus while the restore was pending. A start with no saved location — or
-one that fails to load — restores through the same path
-(`mbv_config::first_launch`): the first presented destination, Library Panel
-focus, and no saved collection choice, so the destination opens on its first
-group and the Library panel is reachable from the first launch. The
+destination once a presented one holds its identity — no destination takes
+its place: one the presented set does not hold opens nothing, and the
+phase keeps waiting while its parts can land, the Audiobookshelf catalog
+and the feed subscriptions — and applies the saved Panel focus over the
+Library focus the open takes, unless the user already took focus while the
+restore was pending. A start with no saved location — or one that fails
+to load — restores through the same path (`mbv_config::first_launch`):
+its Home destination resolves to the first presented one, with Library
+Panel focus and no saved collection choice, so the Library panel is
+reachable from the first launch. The
 second phase applies the saved
 collection choice once the destination's group list lands: the first saved
 group the library still holds is selected, and a saved group the library

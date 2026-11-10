@@ -187,7 +187,7 @@ The picks persist in the launch file beside each destination's selection (`GuiDe
 
 - [A window-content reload resets the Library's cursor, scroll, and open nodes] → The data selection survives in the core, so the destination, the pills, and the Hero's item stay.
 - [The Library keys are GUI keys that `[keys]` does not configure] → Accepted (ADR 0036). Every key the Library does not take still reaches the router and `[keys]`.
-- [A union of collections makes one fetch per selected group] → The store keeps each loaded group for the session.
+- [A union of selections makes one fetch per selected group] → The Music and Emby stores keep each loaded group's data per group for the session (D5, D12), and Podcasts and Feeds hold no union: their pills are single-select (D6).
 - [The shared bootstrap touches TUI startup code] → The TUI keeps its call order; its startup and lifecycle tests are the proof.
 - [The thresholds may feel wrong live] → They are front-end constants; the Music gate's live test checks them.
 
