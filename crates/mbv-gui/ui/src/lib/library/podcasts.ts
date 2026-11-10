@@ -56,7 +56,14 @@ export const podcastsUi = writable<PodcastsUiState>(initialPodcastsUi());
 /** The pill's stable key: the each-block's identity and the pill row's focus
  * key, over the pill object the frame carries (design D12). */
 export function podcastPillKey(pill: GuiPodcastPill): string {
-	return pill.kind === 'latest' ? 'latest' : `show:${pill.id}`;
+	switch (pill.kind) {
+		case 'latest':
+			return 'latest';
+		case 'state':
+			return `state:${pill.id}`;
+		case 'show':
+			return `show:${pill.id}`;
+	}
 }
 
 /** The painted rows of the carried Podcasts content (design D12). */

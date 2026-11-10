@@ -199,3 +199,24 @@ test('loading and failed facts paint their own lines', async () => {
 	expect(container.querySelector('[data-library-podcasts-failed]')).toBeTruthy();
 	expect(paintedRows(container)).toEqual([]);
 });
+
+// add-gui-library-panel design D15: the Podcasts column carries the Music list's
+// header, naming the active pill as the carried scope.
+test('the list paints the Podcasts header with the active pill as its label', async () => {
+	const container = await mountList([], {});
+
+	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Podcasts');
+	expect(container.querySelector('[data-library-podcasts-selection-label]')?.textContent).toBe(
+		'Latest',
+	);
+});
+
+// add-gui-library-panel row 10.1: an active view that holds no episode paints
+// the TUI's empty line instead of a blank column.
+test('a landed view with no episode paints the empty line', async () => {
+	const container = await mountList([], {});
+
+	expect(container.querySelector('[data-library-podcasts-empty]')?.textContent).toContain(
+		'No episodes',
+	);
+});

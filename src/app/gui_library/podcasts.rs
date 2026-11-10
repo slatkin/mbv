@@ -8,6 +8,7 @@
 //! TUI's own loaders run. The TUI never reads any of it.
 
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::podcasts_projection::GuiPodcastEpisodeId;
@@ -15,14 +16,18 @@ use super::podcasts_projection::GuiPodcastEpisodeId;
 use crate::app::App;
 
 /// The Podcasts destination's pills (row 10.1): the library's merged Latest
-/// view, or one show's episodes by that show's `library_item_id`. The pill
-/// row is single-select, as the TUI's one-valued `PillSelection` is.
+/// view, the TUI's three state pills, or one show's episodes by that show's
+/// `library_item_id`. The pill row is single-select, as the TUI's one-valued
+/// `PillSelection` is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum GuiPodcastPill {
     /// Every show's episodes, merged newest first with undated rows last:
     /// the TUI's default pill and the GUI's too.
     #[default]
     Latest,
+    /// A state pill: every listed show's episodes, filtered by play state —
+    /// the TUI's `PillSelection::State`.
+    State(AudiobookshelfEpisodeFilter),
     /// The merged view scoped to one show's episodes.
     Show(String),
 }
@@ -278,7 +283,7 @@ impl App {
     /// TUI's.
     fn commit_gui_podcast_show_scope(&mut self, lib_idx: usize, pill: &GuiPodcastPill) {
         let scope = match pill {
-            GuiPodcastPill::Latest => None,
+            GuiPodcastPill::Latest | GuiPodcastPill::State(_) => None,
             GuiPodcastPill::Show(show_id) => Some(show_id.clone()),
         };
         if let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx)

@@ -153,7 +153,11 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
         .iter()
         .map(|pill| pill.name.as_str())
         .collect();
-    assert_eq!(names, ["Latest", "Show A", "Show B"]);
+    assert_eq!(
+        names,
+        ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
+        "the pill row carries the TUI's state pills between Latest and the shows"
+    );
     assert_eq!(
         podcasts.selected.as_deref(),
         podcasts.rows.first().map(|row| row.id.as_str()),

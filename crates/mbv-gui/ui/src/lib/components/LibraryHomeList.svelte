@@ -155,7 +155,8 @@
 		<!-- The Home content has not landed yet (design D12): one placeholder
 		line holds the list's place, as the TUI's loading slot does. -->
 		<LibraryListNotice text="Loading…" attr="data-library-home-loading" />
-	{:else if home.rows.length === 0}
+	{/if}
+	{#if !home.loading && home.rows.length === 0}
 		<!-- Home holds nothing to play: one line says so, as the Music list's
 		empty line does. -->
 		<LibraryListNotice text="Nothing to play" attr="data-library-home-empty" />

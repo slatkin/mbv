@@ -463,11 +463,15 @@ fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
         .iter()
         .map(|pill| pill.name.as_str())
         .collect();
-    assert_eq!(names, ["Latest", "Show A", "Show B"]);
+    assert_eq!(
+        names,
+        ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
+        "the pill row carries the TUI's three state pills between Latest and the shows"
+    );
     let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
     assert_eq!(
         selected_pills,
-        [true, false, false],
+        [true, false, false, false, false, false],
         "Latest is the default pill"
     );
 
@@ -520,7 +524,40 @@ fn a_show_pill_scopes_the_rows_to_that_show() {
         "a show pill holds that show's episodes only"
     );
     let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
-    assert_eq!(selected_pills, [false, true, false]);
+    assert_eq!(
+        selected_pills,
+        [false, false, false, false, true, false],
+        "the show pill is the selected one of the four mode pills before it"
+    );
+}
+
+/// A state pill filters every listed show's episodes by play state (row 10.1):
+/// the TUI's `PillSelection::State`, which the GUI dropped before D15. The
+/// merged list keeps the date order of the episodes the state admits.
+#[test]
+fn a_state_pill_filters_the_merged_list_by_play_state() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    app.gui_podcast_set_pill(
+        1,
+        GuiPodcastPill::State(
+            mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played,
+        ),
+    );
+
+    let projection = app.gui_podcasts_projection(1);
+
+    assert!(
+        projection.rows.is_empty(),
+        "no episode of the fixture is finished, so the Played view holds no row"
+    );
+    let selected: Vec<&str> = projection
+        .pills
+        .iter()
+        .filter(|pill| pill.selected)
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(selected, ["Played"], "the state pill is the selected mode");
 }
 
 /// A show pill the published show list no longer carries falls back to Latest
@@ -548,7 +585,11 @@ fn a_stale_show_pill_falls_back_to_latest() {
         "the fallback view merges every listed show"
     );
     let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
-    assert_eq!(selected_pills, [true, false], "Latest paints as selected");
+    assert_eq!(
+        selected_pills,
+        [true, false, false, false, false],
+        "Latest paints as selected"
+    );
 }
 
 /// The rows carry the TUI podcast row's played state (row 10.1): a finished

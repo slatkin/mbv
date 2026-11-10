@@ -283,7 +283,14 @@ export type GuiLibraryCommand =
 /** One Podcasts pill (design D12, row 10.1): the library's merged Latest
  * view, or one show by its stable `library_item_id`. The pill row is
  * single-select; the state pills are dropped. */
-export type GuiPodcastPill = { kind: 'latest' } | { kind: 'show'; id: string };
+export type GuiPodcastPill =
+	| { kind: 'latest' }
+	| { kind: 'state'; id: GuiPodcastState }
+	| { kind: 'show'; id: string };
+
+/** One Podcasts state pill (design D12, row 10.1): the play state the view
+ * filters on, named as the TUI's `AudiobookshelfEpisodeFilter` names it. */
+export type GuiPodcastState = 'all' | 'unplayed' | 'played';
 
 /** The Music destination's content (design D5). */
 export interface GuiMusicFrame {

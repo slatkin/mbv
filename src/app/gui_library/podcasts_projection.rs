@@ -258,9 +258,9 @@ impl App {
         if stale { GuiPodcastPill::Latest } else { pill }
     }
 
-    /// The pill row (row 10.1): Latest first, then each listed show by title —
-    /// the order the show list already holds — with the effective pill
-    /// selected.
+    /// The pill row (row 10.1): Latest first, then the TUI's three state pills,
+    /// then each listed show by title — the order the show list already holds —
+    /// with the effective pill selected.
     fn gui_podcast_pills(
         &self,
         lib_idx: usize,
@@ -271,6 +271,13 @@ impl App {
             name: "Latest".to_string(),
             selected: matches!(pill, GuiPodcastPill::Latest),
         }];
+        pills.extend(AudiobookshelfEpisodeFilter::ALL.into_iter().map(|filter| {
+            GuiPodcastsPillOption {
+                pill: GuiPodcastPill::State(filter),
+                name: filter.label().to_string(),
+                selected: matches!(pill, GuiPodcastPill::State(stored) if *stored == filter),
+            }
+        }));
         let shows = self
             .audiobookshelf_browse
             .get(lib_idx)
@@ -300,6 +307,7 @@ impl App {
         };
         let episodes = match pill {
             GuiPodcastPill::Latest => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
+            GuiPodcastPill::State(filter) => state.visible_episodes(*filter),
             GuiPodcastPill::Show(show_id) => state
                 .detail_cache
                 .get(show_id)
@@ -309,7 +317,9 @@ impl App {
                 .unwrap_or_default(),
         };
         let fetching = match pill {
-            GuiPodcastPill::Latest => !state.detail_loading_ids.is_empty(),
+            GuiPodcastPill::Latest | GuiPodcastPill::State(_) => {
+                !state.detail_loading_ids.is_empty()
+            }
             GuiPodcastPill::Show(show_id) => state.detail_loading_ids.contains_key(show_id),
         };
         let rows = episodes

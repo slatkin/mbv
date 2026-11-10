@@ -31,7 +31,9 @@
 		scrollPodcastsList,
 		setPodcastsFilter,
 	} from '$lib/library/podcasts';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import { openLibraryRowMenu } from '$lib/library/state';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 
 	interface Props {
 		/** The carried Podcasts content (design D12, row 10.1): the active
@@ -41,6 +43,22 @@
 	const { podcasts }: Props = $props();
 
 	let listEl: HTMLElement | undefined = $state();
+
+	/** The header's selection label (design D15): the active pill's name, so the
+	 * column names the view it holds. */
+	const selectionLabel = $derived(
+		podcasts.pills.find((pill) => pill.selected)?.name ?? 'Latest',
+	);
+
+	/** The filter field's placeholder, naming the active view. */
+	const filterPlaceholder = $derived(`Filter ${selectionLabel}`);
+
+	/** Open the episode's right-click menu (the row-menu command): the row's
+	 * stable id, which the core resolves for the shared menu (design D8, D15). */
+	function rowMenu(event: MouseEvent, row: { id: string }): void {
+		event.preventDefault();
+		openLibraryRowMenu(row.id, event.clientX, event.clientY);
+	}
 
 	/** The painted rows of the flat list (row 10.1): the same model
 	 * `$lib/library/podcasts` builds from the carried content, narrowed by
@@ -126,10 +144,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-podcasts-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
-		<LibraryFilterField
-			value={$podcastsUi.filter}
-			placeholder="Filter episodes"
+	<!-- The Music list's header (design D15): the list names itself, the active
+	pill is the carried scope, and the `/` filter field narrows it. -->
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Podcasts"
+			label={selectionLabel}
+			labelAttr="data-library-podcasts-selection-label"
+			filter={$podcastsUi.filter}
+			placeholder={filterPlaceholder}
 			ariaLabel="Filter episodes"
 			oninput={setPodcastsFilter}
 			onaccept={acceptPodcastsFilter}
@@ -138,30 +161,19 @@
 	{#if podcasts.loading}
 		<!-- The active view's episodes have not landed yet (row 10.1): one
 			placeholder line holds the list's place. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-podcasts-loading=""
-		>
-			Loading…
-		</div>
+		<LibraryListNotice text="Loading…" attr="data-library-podcasts-loading" />
 	{/if}
 	{#if podcasts.failed}
 		<!-- The show catalog's fetch failed (row 10.1): the failure line, and no
 			row until the library opens again. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-podcasts-failed=""
-		>
-			Couldn’t load this library.
-		</div>
+		<LibraryListNotice
+			text="Couldn’t load this library."
+			attr="data-library-podcasts-failed"
+		/>
+	{/if}
+	{#if !podcasts.loading && !podcasts.failed && podcasts.rows.length === 0}
+		<!-- The active view holds no episode (row 10.1): the TUI's empty slot. -->
+		<LibraryListNotice text="No episodes" attr="data-library-podcasts-empty" />
 	{/if}
 	<ol
 		bind:this={listEl}
@@ -194,6 +206,7 @@
 					data-library-podcasts-selected={row.id === podcasts.selected ? '' : undefined}
 					onclick={() => pressPodcastsRow(row)}
 					ondblclick={() => playPodcastsRow(row.row.id)}
+					oncontextmenu={(event) => rowMenu(event, row)}
 				>
 					<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
 						<span

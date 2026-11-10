@@ -177,14 +177,16 @@
 		<!-- The active list has not landed yet (row 8.1): one placeholder line
 			holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-emby-loading" />
-	{:else if emby.failed}
+	{/if}
+	{#if emby.failed}
 		<!-- The plain mode's root-list fetch failed (row 8.1): the failure line
 			naming what failed, and no row until the library opens again. -->
 		<LibraryListNotice
 			text="Couldn’t load this library."
 			attr="data-library-emby-failed"
 		/>
-	{:else if emby.rows.length === 0}
+	{/if}
+	{#if !emby.loading && !emby.failed && emby.rows.length === 0}
 		<!-- The library landed and holds no item (row 8.1): one line says so,
 			as the Music list's empty line does. -->
 		<LibraryListNotice text="No items" attr="data-library-emby-empty" />

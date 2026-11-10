@@ -179,19 +179,54 @@ impl From<&mbv::GuiFeedPill> for GuiFeedPill {
 }
 
 /// One Podcasts pill (design D12, row 10.1): the library's merged Latest view,
-/// or one show by its stable `library_item_id`. The pill row is single-select,
-/// as the TUI's one-valued `PillSelection` is; the state pills are dropped.
+/// one of the TUI's three state pills, or one show by its stable
+/// `library_item_id`. The pill row is single-select, as the TUI's one-valued
+/// `PillSelection` is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
 pub enum GuiPodcastPill {
     Latest,
+    /// A state pill: the episode's play state the view filters on.
+    State(GuiPodcastState),
     Show(String),
+}
+
+/// One state pill (design D12, row 10.1), mirroring the TUI's
+/// `AudiobookshelfEpisodeFilter` by name on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiPodcastState {
+    All,
+    Unplayed,
+    Played,
+}
+
+impl From<GuiPodcastState> for mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter {
+    fn from(state: GuiPodcastState) -> Self {
+        match state {
+            GuiPodcastState::All => Self::All,
+            GuiPodcastState::Unplayed => Self::Unplayed,
+            GuiPodcastState::Played => Self::Played,
+        }
+    }
+}
+
+impl From<mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter> for GuiPodcastState {
+    fn from(state: mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter) -> Self {
+        use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+        match state {
+            AudiobookshelfEpisodeFilter::All => Self::All,
+            AudiobookshelfEpisodeFilter::Unplayed => Self::Unplayed,
+            AudiobookshelfEpisodeFilter::Played => Self::Played,
+        }
+    }
 }
 
 impl From<GuiPodcastPill> for mbv::GuiPodcastPill {
     fn from(pill: GuiPodcastPill) -> Self {
         match pill {
             GuiPodcastPill::Latest => Self::Latest,
+            GuiPodcastPill::State(state) => Self::State(state.into()),
             GuiPodcastPill::Show(show_id) => Self::Show(show_id),
         }
     }
@@ -201,6 +236,7 @@ impl From<&mbv::GuiPodcastPill> for GuiPodcastPill {
     fn from(pill: &mbv::GuiPodcastPill) -> Self {
         match pill {
             mbv::GuiPodcastPill::Latest => Self::Latest,
+            mbv::GuiPodcastPill::State(state) => Self::State((*state).into()),
             mbv::GuiPodcastPill::Show(show_id) => Self::Show(show_id.clone()),
         }
     }
