@@ -164,7 +164,6 @@
           status={frame.status}
           {arrangement}
           listWidth={widths.list}
-          heroWidth={widths.hero}
           libraryColumn={widths.libraryColumn}
         />
       {/if}
