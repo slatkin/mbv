@@ -339,7 +339,7 @@ One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill
 
 ### Requirement: The pill selection persists per destination
 
-Each destination SHALL keep its own selected pill while the GUI Client runs and across a restart of the GUI Client.
+Each destination SHALL keep its own selected pill while the GUI Client runs. A Grouped Music library's group pills SHALL also keep their selection across a restart of the GUI Client, through its launch location. The Podcasts and Feeds pill rows SHALL start on Latest at every launch and save no pill (design D12).
 
 #### Scenario: The user changes destination and returns
 
@@ -359,9 +359,15 @@ Each destination SHALL keep its own selected pill while the GUI Client runs and 
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens with the first group selected, as the TUI does
 
+#### Scenario: A Podcasts or Feeds pill starts on Latest
+
+- **GIVEN** the GUI Client quit with a show pill selected in Podcasts and a subscription pill selected in Feeds
+- **WHEN** the GUI Client starts again
+- **THEN** Podcasts opens on Latest and Feeds opens on Latest
+
 ### Requirement: Each collection pill keeps its last picked album
 
-Each collection pill SHALL keep the album its Hero last showed, while the GUI Client runs and across a restart of the GUI Client. A pill with no kept album, or whose kept album the selected collection no longer holds, SHALL show the first album in its list. The Hero SHALL therefore never be blank while the selected collection's albums are loaded.
+Each Music group pill SHALL keep the album its Hero last showed, while the GUI Client runs and across a restart of the GUI Client. A pill with no kept album, or whose kept album the selected collection no longer holds, SHALL show the first album in its list. The Hero SHALL therefore never be blank while the selected collection's albums are loaded.
 
 #### Scenario: A pill reopens on its own album
 
@@ -400,7 +406,7 @@ The Queue panel's column width and the Wide list column's width that the user dr
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each Grouped Music destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 

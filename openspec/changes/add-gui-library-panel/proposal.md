@@ -13,7 +13,7 @@ The GUI Client presents only the player panel. A user cannot browse a library or
 - **The Hero** shows the picked album with its artist header and its tracklist, and the actions Play, Play next (`n`), Add to queue (`a`), Shuffle artist, and More actions. Play next is a new core action: it admits the item after the active slot. More actions opens the item's menu.
 - **The top bar** shows the destination tabs and, with global search, the Search field (`Ctrl+K`).
 - **The Library Status bar** under the Library column shows the canvas key hints and the location (destination › selected collections › picked item). The prefix state and toasts replace the hints while active.
-- **The GUI keeps its own launch location**: the destination, the selected collections of each destination, and Panel focus, saved at orderly exit and restored at start. The GUI no longer reads the TUI launch state.
+- **The GUI keeps its own launch location**: the destination, the selected collection of each Grouped Music destination, and Panel focus, saved at orderly exit and restored at start. The Podcasts and Feeds pill rows save no pill and open on Latest. The GUI no longer reads the TUI launch state.
 - **The service bootstrap becomes a shared Client step**, so the GUI runs the same Service startup as the TUI and its Library has content. The TUI's startup order and behaviour do not change.
 - **Delivery has a gate.** Music lands first from end to end. A `/code-review` round and a user live-test round accept it before the other destinations and Search start.
 
