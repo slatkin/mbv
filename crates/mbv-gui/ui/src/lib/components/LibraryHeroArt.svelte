@@ -52,7 +52,7 @@
 	{#if art !== null && art.kind !== 'loading'}
 		<img class="h-full w-full object-cover" src={art.detail} alt={title} />
 	{:else}
-		<span class="font-mono" style:font-size="12px" style:color={canvasVar('muted')}
+		<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
 			>[No art · the window's placeholder]</span
 		>
 	{/if}

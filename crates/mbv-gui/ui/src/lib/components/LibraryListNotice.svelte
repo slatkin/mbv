@@ -19,7 +19,7 @@
 	class="flex flex-none items-center"
 	style:height="36px"
 	style:padding="0 16px"
-	style:font-size="13px"
+	style:font-size="14px"
 	style:color="var(--canvas-muted)"
 	{...{ [attr]: '' }}
 >

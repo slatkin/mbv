@@ -108,7 +108,7 @@
 				{#if workspace === null}
 					<span
 						class="font-mono"
-						style:font-size="12px"
+						style:font-size="13px"
 						style:color="var(--canvas-muted)"
 						data-library-abs-chapters-loading="">Loading chapters…</span
 					>
@@ -119,7 +119,7 @@
 						style:height="32px"
 						style:padding="0 8px"
 						style:border-bottom="1px solid var(--canvas-border)"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:letter-spacing="0.08em"
 						style:color="var(--canvas-muted)"
 					>
@@ -165,7 +165,7 @@
 										{/if}
 										<span
 											class="min-w-0 truncate"
-											style:font-size="14px"
+											style:font-size="13.5px"
 											style:color={nameColor(row)}>{row.title}</span
 										>
 									</span>

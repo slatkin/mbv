@@ -129,7 +129,7 @@
 					class="flex items-end"
 					style:height="{row.height}px"
 					style:padding="0 8px 4px"
-					style:font-size="13px"
+					style:font-size="14px"
 					style:font-weight="600"
 					style:color="var(--canvas-heading)"
 					data-library-home-heading={row.text}
@@ -146,7 +146,7 @@
 					style:border="0"
 					style:border-radius="4px"
 					style:text-align="left"
-					style:font-size="13px"
+					style:font-size="14px"
 					style:background={rowBackground(row)}
 					style:cursor="pointer"
 					data-library-home-row="item"
@@ -185,7 +185,7 @@
 						{#if row.subtitle !== null}
 							<span
 								class="truncate"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)"
 								data-library-home-subtitle="">{row.subtitle}</span
 							>
@@ -194,7 +194,7 @@
 					{#if row.date !== null}
 						<span
 							class="flex-none font-mono tabular-nums"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:color="var(--canvas-muted)"
 							data-library-home-date="">{row.date}</span
 						>

@@ -148,7 +148,7 @@
 						class="flex items-end font-mono"
 						style:height="{row.height}px"
 						style:padding="0 8px 2px"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-source)"
 						data-library-emby-letter={row.letter}
 					>
@@ -164,7 +164,7 @@
 						style:border="0"
 						style:border-radius="4px"
 						style:text-align="left"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:background={rowBackground(row)}
 						style:cursor="pointer"
 						data-library-emby-row={row.row.kind}
@@ -185,7 +185,7 @@
 							{#if row.row.subtitle !== null}
 								<span
 									class="truncate"
-									style:font-size="11px"
+									style:font-size="12px"
 									style:color="var(--canvas-muted)"
 									data-library-emby-subtitle="">{row.row.subtitle}</span
 								>
@@ -194,7 +194,7 @@
 						{#if row.row.date !== null}
 							<span
 								class="flex-none font-mono tabular-nums"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)"
 								data-library-emby-date="">{row.row.date}</span
 							>

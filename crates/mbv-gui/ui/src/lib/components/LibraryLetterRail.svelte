@@ -51,7 +51,7 @@
 			style:padding="0"
 			style:border="0"
 			style:border-radius="3px"
-			style:font-size="10px"
+			style:font-size="11px"
 			style:cursor={letter.rowId === null ? 'default' : 'pointer'}
 			style:background={letter.letter === marked ? canvasVar('selected') : 'transparent'}
 			style:color={letterColor(letter)}

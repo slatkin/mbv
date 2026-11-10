@@ -90,7 +90,7 @@
 		style:height="32px"
 		style:padding="0 8px"
 		style:border-bottom="1px solid var(--canvas-border)"
-		style:font-size="11px"
+		style:font-size="12px"
 		style:letter-spacing="0.08em"
 		style:color="var(--canvas-muted)"
 	>
@@ -115,7 +115,7 @@
 		>
 			<span
 				class="flex-none font-mono tabular-nums"
-				style:font-size="12px"
+				style:font-size="11px"
 				style:color="var(--canvas-ordinal)"
 			>
 				<span class="group-hover:hidden">{track.number}</span>
@@ -136,7 +136,7 @@
 				{/if}
 				<span
 					class="min-w-0 truncate"
-					style:font-size="14px"
+					style:font-size="13.5px"
 					style:color={rowColor(track)}>{track.name}</span
 				>
 			</span>

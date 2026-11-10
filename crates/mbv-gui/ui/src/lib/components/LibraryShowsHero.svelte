@@ -130,7 +130,7 @@
 							style:height="28px"
 							style:padding="0 12px"
 							style:border-radius="14px"
-							style:font-size="12px"
+							style:font-size="13px"
 							style:font-weight={season.selected ? 600 : 400}
 							style:border={season.selected
 								? '1px solid var(--canvas-source)'
@@ -149,7 +149,7 @@
 				{#if shows.workspaceLoading}
 					<span
 						class="font-mono"
-						style:font-size="12px"
+						style:font-size="13px"
 						style:color="var(--canvas-muted)"
 						data-library-shows-episodes-loading="">Loading episodes…</span
 					>
@@ -161,7 +161,7 @@
 							style:height="32px"
 							style:padding="0 8px"
 							style:border-bottom="1px solid var(--canvas-border)"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:letter-spacing="0.08em"
 							style:color="var(--canvas-muted)"
 						>
@@ -193,7 +193,7 @@
 								>
 									<span
 										class="flex-none font-mono tabular-nums"
-										style:font-size="12px"
+										style:font-size="11px"
 										style:color="var(--canvas-ordinal)"
 										data-library-shows-episode-number="">{episode.number}</span
 									>
@@ -212,7 +212,7 @@
 									>
 										<span
 											class="min-w-0 truncate"
-											style:font-size="14px"
+											style:font-size="13.5px"
 											style:color={nameColor(episode)}>{episode.name}</span
 										>
 									</button>

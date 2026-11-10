@@ -102,7 +102,7 @@
 			<div class="flex min-w-0 flex-col" style:gap="6px">
 				<span
 					class="font-mono"
-					style:font-size="11px"
+					style:font-size="12px"
 					style:letter-spacing="0.08em"
 					style:color="var(--canvas-muted)"
 					data-library-hero-kicker="">{heroKicker(hero)}</span
@@ -117,7 +117,7 @@
 				>
 				<span
 					class="font-mono"
-					style:font-size="12px"
+					style:font-size="13px"
 					style:color="var(--canvas-muted)"
 					data-library-hero-facts="">{artistFacts(hero)}</span
 				>
@@ -132,7 +132,7 @@
 				style:border="1px solid var(--canvas-library-control)"
 				style:border-radius="6px"
 				style:color="var(--canvas-text)"
-				style:font-size="13px"
+				style:font-size="14px"
 				style:cursor="pointer"
 				data-library-hero-shuffle=""
 				onclick={shuffleArtist}
@@ -166,7 +166,7 @@
 						alt={hero.album.name}
 					/>
 				{:else}
-					<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
+					<span class="font-mono" style:font-size="13px" style:color="var(--canvas-muted)"
 						>[Album art · Emby Primary]</span
 					>
 				{/if}
@@ -176,7 +176,7 @@
 					{#if hero.album.year !== ''}
 						<span
 							class="font-mono"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:letter-spacing="0.08em"
 							style:color="var(--canvas-muted)">{hero.album.year}</span
 						>
@@ -191,7 +191,7 @@
 					{#if albumFacts(hero) !== ''}
 						<span
 							class="font-mono"
-							style:font-size="12px"
+							style:font-size="13px"
 							style:color="var(--canvas-muted)"
 							data-library-hero-album-facts="">{albumFacts(hero)}</span
 						>
@@ -208,7 +208,7 @@
 						style:border="0"
 						style:border-radius="22px"
 						style:color="var(--canvas-ink)"
-						style:font-size="14px"
+						style:font-size="15px"
 						style:font-weight="600"
 						style:cursor="pointer"
 						data-library-hero-play=""
@@ -227,13 +227,13 @@
 						style:border="1px solid var(--canvas-library-control)"
 						style:border-radius="22px"
 						style:color="var(--canvas-text)"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:cursor="pointer"
 						data-library-hero-play-next=""
 						onclick={() => playNext(hero.album.albumId)}
 					>
 						Play next
-						<span class="font-mono" style:font-size="11px" style:color="var(--canvas-muted)"
+						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
 							>n</span
 						>
 					</button>
@@ -247,13 +247,13 @@
 						style:border="1px solid var(--canvas-library-control)"
 						style:border-radius="22px"
 						style:color="var(--canvas-text)"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:cursor="pointer"
 						data-library-hero-add=""
 						onclick={() => addToQueue(hero.album.albumId)}
 					>
 						Add to queue
-						<span class="font-mono" style:font-size="11px" style:color="var(--canvas-muted)"
+						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
 							>a</span
 						>
 					</button>

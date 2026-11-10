@@ -51,7 +51,7 @@
 <div class="flex flex-none flex-col" style:padding="14px 16px 10px" style:gap="10px">
 	<div class="flex items-baseline justify-between" style:gap="12px">
 		<span
-			style:font-size="13px"
+			style:font-size="14px"
 			style:font-weight="600"
 			style:color="var(--canvas-heading)"
 			data-library-list-title=""
@@ -59,7 +59,7 @@
 		>
 		<span
 			class="font-mono"
-			style:font-size="11px"
+			style:font-size="12px"
 			style:color="var(--canvas-muted)"
 			data-library-selection-label=""
 			{...labelAttrs}>{label}</span

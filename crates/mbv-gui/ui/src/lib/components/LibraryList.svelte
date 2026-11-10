@@ -279,7 +279,7 @@
 							class="flex items-end font-mono"
 							style:height="{LETTER_ROW_HEIGHT}px"
 							style:padding="0 8px 2px"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:color="var(--canvas-source)"
 							data-library-letter={row.letter}
 						>
@@ -295,7 +295,7 @@
 							style:border="0"
 							style:border-radius={isPicked(row) ? '4px' : '0'}
 							style:text-align="left"
-							style:font-size="13px"
+							style:font-size="14px"
 							style:background={rowBackground(row)}
 										style:cursor="pointer"
 										data-library-row={row.kind}
@@ -308,7 +308,7 @@
 										<span
 											class="flex flex-none items-center justify-end font-mono tabular-nums"
 											style:width="18px"
-											style:font-size="11px"
+											style:font-size="12px"
 											style:color="var(--canvas-ordinal)">{row.number}</span
 										>
 							<span
@@ -317,7 +317,7 @@
 							>
 							<span
 								class="flex-none font-mono tabular-nums"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)">{row.duration}</span
 							>
 						</button>
@@ -331,7 +331,7 @@
 							style:border="0"
 							style:border-radius={isPicked(row) ? '4px' : '0'}
 							style:text-align="left"
-							style:font-size="13.5px"
+							style:font-size="14.5px"
 							style:background={rowBackground(row)}
 							style:cursor="pointer"
 							aria-expanded={row.open}
@@ -362,7 +362,7 @@
 							{#if row.kind === 'album' && row.year !== ''}
 								<span
 									class="flex-none font-mono tabular-nums"
-									style:font-size="11px"
+									style:font-size="12px"
 									style:color="var(--canvas-muted)">{row.year}</span
 								>
 							{/if}

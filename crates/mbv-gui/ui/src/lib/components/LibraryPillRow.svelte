@@ -61,7 +61,7 @@
 			style:gap="5px"
 			style:padding="0 12px"
 			style:border-radius="16px"
-			style:font-size="13px"
+			style:font-size="14px"
 			style:font-weight={pill.selected ? 600 : 400}
 			style:border={pill.selected
 				? '1px solid var(--canvas-source)'

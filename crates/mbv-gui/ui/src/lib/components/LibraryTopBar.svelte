@@ -149,7 +149,7 @@
 			class="flex items-center uppercase"
 			style:height="56px"
 			style:padding="0 12px"
-			style:font-size="13px"
+			style:font-size="14px"
 			style:font-weight={current ? 700 : 500}
 			style:letter-spacing="0.06em"
 			style:color={current ? 'var(--canvas-heading)' : 'var(--canvas-muted)'}
@@ -192,7 +192,7 @@
 			style:border="1px solid var(--canvas-border)"
 			style:border-radius="6px"
 			style:color="var(--canvas-heading)"
-			style:font-size="13px"
+			style:font-size="14px"
 			style:outline="none"
 			placeholder="Search"
 			aria-label="Search"
@@ -212,7 +212,7 @@
 			style:right="6px"
 			style:top="50%"
 			style:transform="translateY(-50%)"
-			style:font-size="11px"
+			style:font-size="12px"
 			style:color="var(--canvas-muted)"
 			style:border="1px solid var(--canvas-border)"
 			style:border-radius="4px"
@@ -243,7 +243,7 @@
 					<div
 						class="font-mono"
 						style:padding="8px 10px"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-muted)"
 						data-library-search-loading=""
 					>
@@ -253,7 +253,7 @@
 					<div
 						class="font-mono"
 						style:padding="8px 10px"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-muted)"
 						data-library-search-failed=""
 					>
@@ -263,7 +263,7 @@
 					<div
 						class="font-mono"
 						style:padding="8px 10px"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-muted)"
 						data-library-search-empty=""
 					>
@@ -279,7 +279,7 @@
 							style:gap="8px"
 							style:border="0"
 							style:text-align="left"
-							style:font-size="13px"
+							style:font-size="14px"
 							style:background={rowBackground(row)}
 							style:cursor="pointer"
 							data-library-search-row={row.id}
@@ -293,7 +293,7 @@
 							>
 							<span
 								class="font-mono"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)"
 								style:max-width="45%"
 								style:flex="0 1 auto"

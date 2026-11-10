@@ -221,7 +221,7 @@
 						class="flex items-end font-mono"
 						style:height="{row.height}px"
 						style:padding="0 8px 2px"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-source)"
 						data-library-shows-letter={row.letter}
 					>
@@ -238,7 +238,7 @@
 						style:border="0"
 						style:border-radius="4px"
 						style:text-align="left"
-						style:font-size="13.5px"
+						style:font-size="14.5px"
 						style:background={rowBackground(row)}
 						style:cursor="pointer"
 						aria-expanded={row.expandable ? row.open : undefined}
@@ -289,7 +289,7 @@
 						style:border="0"
 						style:border-radius="4px"
 						style:text-align="left"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:background={rowBackground(row)}
 						style:cursor="pointer"
 						data-library-shows-row="episode"
@@ -302,7 +302,7 @@
 					>
 						<span
 							class="flex-none font-mono tabular-nums"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:color="var(--canvas-ordinal)"
 							data-library-shows-episode-number="">{row.number}</span
 						>
@@ -314,7 +314,7 @@
 						{#if row.duration !== ''}
 							<span
 								class="flex-none font-mono tabular-nums"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)"
 								data-library-shows-episode-duration="">{row.duration}</span
 							>
@@ -330,7 +330,7 @@
 						style:border="0"
 						style:border-radius="4px"
 						style:text-align="left"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:background={rowBackground(row)}
 						style:cursor="pointer"
 						data-library-shows-row="flat"
@@ -351,7 +351,7 @@
 							{#if row.row.subtitle !== null}
 								<span
 									class="truncate"
-									style:font-size="11px"
+									style:font-size="12px"
 									style:color="var(--canvas-muted)"
 									data-library-shows-subtitle="">{row.row.subtitle}</span
 								>
@@ -360,7 +360,7 @@
 						{#if row.row.date !== null}
 							<span
 								class="flex-none font-mono tabular-nums"
-								style:font-size="11px"
+								style:font-size="12px"
 								style:color="var(--canvas-muted)"
 								data-library-shows-date="">{row.row.date}</span
 							>

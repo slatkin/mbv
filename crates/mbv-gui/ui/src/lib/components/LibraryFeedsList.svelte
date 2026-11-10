@@ -106,7 +106,7 @@
 				style:border="0"
 				style:border-radius="4px"
 				style:text-align="left"
-				style:font-size="13px"
+				style:font-size="14px"
 				style:background={rowBackground(row)}
 				style:cursor="pointer"
 				data-library-feeds-row="entry"
@@ -126,7 +126,7 @@
 					{#if row.row.subtitle !== null}
 						<span
 							class="truncate"
-							style:font-size="11px"
+							style:font-size="12px"
 							style:color="var(--canvas-muted)"
 							data-library-feeds-subtitle="">{row.row.subtitle}</span
 						>
@@ -135,7 +135,7 @@
 				{#if row.row.date !== null}
 					<span
 						class="flex-none font-mono tabular-nums"
-						style:font-size="11px"
+						style:font-size="12px"
 						style:color="var(--canvas-muted)"
 						data-library-feeds-date="">{row.row.date}</span
 					>

@@ -108,7 +108,7 @@ GuiStatusBar,
 	class="flex flex-none items-center justify-between overflow-hidden font-mono whitespace-nowrap"
 	style:height="40px"
 	style:padding-inline="16px"
-	style:font-size="12px"
+	style:font-size="13px"
 	style:border-top="1px solid var(--canvas-border)"
 	style:background="var(--canvas-library-panel)"
 	data-library-status=""

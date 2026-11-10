@@ -53,7 +53,7 @@
 	style:border-radius="6px"
 	style:color="var(--canvas-muted)"
 >
-	<span class="font-mono" style:font-size="12px" style:color="var(--canvas-source)">/</span>
+	<span class="font-mono" style:font-size="13px" style:color="var(--canvas-source)">/</span>
 	<input
 		bind:this={filterEl}
 		type="text"
@@ -62,7 +62,7 @@
 		style:border="0"
 		style:outline="none"
 		style:color="var(--canvas-heading)"
-		style:font-size="13px"
+		style:font-size="14px"
 		{placeholder}
 		aria-label={ariaLabel}
 		{value}

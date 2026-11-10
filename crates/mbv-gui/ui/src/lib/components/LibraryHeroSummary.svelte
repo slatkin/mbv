@@ -87,21 +87,21 @@
 				{#if index === hero.durationRow}
 					<span
 						class="font-mono tabular-nums"
-						style:font-size="12px"
+						style:font-size="13px"
 						style:color="var(--canvas-muted)"
 						{...own('role', 'duration')}>{meta}</span
 					>
 				{:else if index === hero.progressRow}
 					<span
 						class="font-mono tabular-nums"
-						style:font-size="12px"
+						style:font-size="13px"
 						style:color="var(--canvas-accent)"
 						{...own('role', 'progress')}>{meta}</span
 					>
 				{:else}
 					<span
 						class="font-mono"
-						style:font-size="12px"
+						style:font-size="13px"
 						style:color="var(--canvas-muted)"
 						{...own('role', 'meta')}>{meta}</span
 					>
@@ -120,7 +120,7 @@
 					style:border="0"
 					style:border-radius="22px"
 					style:color="var(--canvas-ink)"
-					style:font-size="14px"
+					style:font-size="15px"
 					style:font-weight="600"
 					style:cursor="pointer"
 					{...own('play')}
@@ -140,13 +140,13 @@
 						style:border="1px solid var(--canvas-library-control)"
 						style:border-radius="22px"
 						style:color="var(--canvas-text)"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:cursor="pointer"
 						{...own('play-next')}
 						onclick={onplaynext}
 					>
 						Play next
-						<span class="font-mono" style:font-size="11px" style:color="var(--canvas-muted)"
+						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
 							>n</span
 						>
 					</button>
@@ -162,13 +162,13 @@
 						style:border="1px solid var(--canvas-library-control)"
 						style:border-radius="22px"
 						style:color="var(--canvas-text)"
-						style:font-size="13px"
+						style:font-size="14px"
 						style:cursor="pointer"
 						{...own('add')}
 						onclick={onqueue}
 					>
 						Add to queue
-						<span class="font-mono" style:font-size="11px" style:color="var(--canvas-muted)"
+						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
 							>a</span
 						>
 					</button>
@@ -179,7 +179,7 @@
 			<p
 				class="min-w-0"
 				style:margin="0"
-				style:font-size="13px"
+				style:font-size="14px"
 				style:line-height="1.5"
 				style:color="var(--canvas-muted)"
 				{...own('overview')}>{hero.overview}</p
