@@ -28,7 +28,7 @@ impl Debug for UserSecret {
 
 #[test]
 fn test() {
-    let key = "00000000-0000-0000-0000-000000000000";
+    let key = "552d3454-d0d5-445d-ab9f-ef2ae3a8896a";
     let secret = UserSecret(key.to_string());
     let rendered = format!("{:?}", secret);
 
