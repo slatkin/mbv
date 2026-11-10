@@ -83,6 +83,17 @@ test('a frame with nothing playing paints no title line', () => {
 	expect(queryByText(/Was playing:/)).toBeNull();
 });
 
+test('the affirmative choice paints the accent text token on the recessed fill', () => {
+	const { container } = render(DaemonLostOverlay, { daemonLost: daemonLost() });
+	const affirmative = container.querySelector<HTMLElement>('[data-daemon-lost-button="0"]');
+
+	// The dialog paints the confirm modal's pill look: accent text on the
+	// dim surface, never the picked row's fill token (the dark-on-green
+	// contrast bug this guards).
+	expect(affirmative?.style.color).toBe('var(--canvas-accent)');
+	expect(affirmative?.style.background).toBe('var(--canvas-well)');
+});
+
 test('a press on a choice forwards its press for the core to answer', async () => {
 	const { container } = render(DaemonLostOverlay, { daemonLost: daemonLost() });
 	const quit = container.querySelector<HTMLElement>('[data-daemon-lost-button="2"]');

@@ -50,7 +50,7 @@
 :root {
 	--canvas-border: #3d484d; /* the footer's top border */
 	--canvas-selected: #3d484d; /* the picked and hovered row's fill */
-	--canvas-well: #232a2e; /* the right-column switch's recessed track */
+	--canvas-well: #232a2e; /* the recessed dark fill: the right-column switch's track and the modal button pills */
 	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
 	--canvas-segment-active: #475258; /* the switch's active segment */
 	--canvas-ordinal: #7f897d; /* the row ordinal */

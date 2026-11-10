@@ -74,8 +74,9 @@
 					style:padding="4px 10px"
 					style:border-radius="4px"
 					style:font-size="12px"
+					style:background="var(--canvas-well)"
 					style:color={button.tone === 'affirmative'
-						? 'var(--canvas-selected)'
+						? 'var(--canvas-accent)'
 						: 'var(--canvas-destructive)'}
 				>
 					<span>{button.label}</span>
