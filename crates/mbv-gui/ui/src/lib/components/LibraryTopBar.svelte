@@ -113,7 +113,7 @@
 	style:gap="2px"
 	style:padding="0 12px 0 8px"
 	style:border-bottom="1px solid var(--canvas-border)"
-	style:background="var(--canvas-library-panel)"
+	style:background="var(--canvas-dim)"
 >
 	<!-- The canvas's Home icon, before the tabs (design D12): the current
 		destination marker follows the tabs' `aria-current` rule while the Home

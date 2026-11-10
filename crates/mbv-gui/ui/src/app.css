@@ -48,6 +48,7 @@
    queue, the row menu, the popovers, and the drag paint the canvas while
    `mbv-theme`'s slot table and the TUI's palette stay unchanged. */
 :root {
+	--canvas-dim: #1e2326; /* mbv-theme's BgDim slot: the Library top bar's and the collapsed queue rail's fill */
 	--canvas-border: #3d484d; /* the footer's top border */
 	--canvas-selected: #3d484d; /* the picked and hovered row's fill */
 	--canvas-well: #232a2e; /* the recessed dark fill: the right-column switch's track and the modal button pills */
@@ -81,7 +82,7 @@
 	   fill the Hero pane and the column paint, and the raised fill of the top
 	   bar and the list column. */
 	--canvas-library-column: #272e33; /* the Library column's body fill */
-	--canvas-library-panel: #2d353b; /* the Library's top bar and list column */
+	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
 	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
 	--canvas-library-control: #475258; /* the Hero's control border */
 	/* The canvas header's two lines over the 44 px filter control, between

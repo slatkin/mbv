@@ -110,7 +110,7 @@
 	style:gap="var(--mbv-cell-row)"
 	bind:this={railEl}
 	data-panel-state="rail"
-	style:background={playback.shown ? 'var(--mbv-queuePlaybackBand)' : undefined}
+	style:background="var(--canvas-dim)"
 >
 	<!-- The artwork with the played fraction as a ring around it: the track
 		circle in the progress-track role, the arc in the accent. -->

@@ -233,3 +233,14 @@ test('the collapse toggle renders the 72 px rail', async () => {
 		]),
 	);
 });
+
+test('the collapsed rail paints the dim canvas fill, the TUI BgDim slot', () => {
+	const { container } = render(Panel, {
+		frame: frame({ collapsed: true, queueFolded: false }),
+		container: TALL,
+		libraryVisible: false,
+	});
+
+	const rail = container.querySelector<HTMLElement>('[data-panel-state="rail"]');
+	expect(rail?.style.background).toBe('var(--canvas-dim)');
+});

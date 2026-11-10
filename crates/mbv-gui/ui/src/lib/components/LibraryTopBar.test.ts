@@ -48,6 +48,16 @@ test('paints one tab per presented destination and marks the current one', () =>
 	expect(tabs.map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page']);
 });
 
+test('the bar paints the dim canvas fill, the TUI BgDim slot', () => {
+	const { container } = render(LibraryTopBar, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+	});
+
+	const bar = container.querySelector<HTMLElement>('[data-library-region="topBar"]');
+	expect(bar?.style.background).toBe('var(--canvas-dim)');
+});
+
 test('a press opens the destination tab at its position', () => {
 	const { container } = render(LibraryTopBar, {
 		tabs: [
