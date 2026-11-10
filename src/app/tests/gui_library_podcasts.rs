@@ -338,9 +338,10 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
         panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     };
-    let opened = app
-        .open_gui_launch_destination(&saved)
-        .expect("the settled catalog resolves the saved library");
+    let opened = match app.open_gui_launch_destination(&saved) {
+        crate::app::GuiLaunchOpen::Opened(opened) => opened,
+        other => panic!("the settled catalog resolves the saved library: {other:?}"),
+    };
     assert_eq!(
         app.tab,
         TabSelection::AudiobookshelfLibrary(1),

@@ -41,17 +41,26 @@ impl App {
     /// destination whose identity matches. A location saved on Home — the
     /// state [`mbv_config::first_launch`] carries, so a start with no saved
     /// location and one whose file failed to load — opens the first presented
-    /// destination. Returns the opened destination's identity as the saved
-    /// file carries it; `None` means no presented destination holds the saved
-    /// identity: the catalog has not landed yet, or it settled without that
-    /// library, so the caller retries when a destination lands. Nothing opens
-    /// in that case, so a saved location never moves the user to a destination
-    /// it did not name. The caller applies the saved Panel focus after the
-    /// open, because opening a library takes Library focus.
-    pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> Option<TabIdentity> {
-        let position = self.presented_destination_position(&state.destination)?;
+    /// destination. [`GuiLaunchOpen::Opened`] carries the opened destination's
+    /// identity as the saved file carries it, and the caller applies the saved
+    /// Panel focus after the open, because opening a library takes Library
+    /// focus. [`GuiLaunchOpen::Retry`] means a catalog can still land, so the
+    /// caller retries on the drain that delivers one. [`GuiLaunchOpen::Unmatched`]
+    /// means a destination is presented and the saved identity's Service has
+    /// settled without it: nothing opens, so a saved location never moves the
+    /// user to a destination it did not name, and the caller finishes the
+    /// restore instead of waiting for a destination that never lands.
+    pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> GuiLaunchOpen {
+        let kind = match self.launch_destination(&state.destination) {
+            LaunchDestination::Pending => return GuiLaunchOpen::Retry,
+            LaunchDestination::Unmatched => return GuiLaunchOpen::Unmatched,
+            LaunchDestination::Open(kind) => kind,
+        };
+        let Some(position) = self.gui_destination_position(kind) else {
+            return GuiLaunchOpen::Unmatched;
+        };
         self.set_library_tab(position);
-        Some(self.gui_launch_destination())
+        GuiLaunchOpen::Opened(self.gui_launch_destination())
     }
 
     /// Apply the saved collection choices of the destination the first phase
@@ -235,51 +244,78 @@ impl App {
                 .any(|kind| self.gui_destination_position(*kind) == Some(position))
     }
 
-    /// The tab position of the destination a saved location names, resolved
-    /// against the destinations the GUI presents (design D9): the presented
-    /// destination whose identity matches, never a substitute for one it does
-    /// not hold, because every destination the GUI serves is presented now. A
-    /// location saved on Home — the state a start with no saved location
-    /// carries — opens the first presented destination. A saved
-    /// Audiobookshelf destination whose catalog has not settled yet resolves
-    /// to nothing, so the restore retries instead of giving up before the
-    /// catalog's arrival. A saved Feeds location resolves to the feed tab
-    /// while subscriptions are configured, and resolves to nothing when they
-    /// are not, so the restore keeps waiting for one.
-    fn presented_destination_position(&self, destination: &TabIdentity) -> Option<usize> {
-        let presented = self.presented_destinations();
-        // A start with no saved location opens the first presented
-        // destination (design D9's `first_launch`).
-        if *destination == TabIdentity::Home {
-            return self.gui_destination_position(presented.first().copied()?);
-        }
-        // The Feeds destination names no library: the saved identity matches
-        // the presented kind or nothing.
-        if *destination == TabIdentity::Feeds {
-            let feeds = presented
-                .iter()
-                .copied()
-                .find(|kind| matches!(kind, GuiDestinationKind::Feeds))?;
-            return self.gui_destination_position(feeds);
-        }
+    /// The presented destination a saved location names (design D9), or why
+    /// none opens: the presented destination whose identity matches, never a
+    /// substitute for one the presented set does not hold, because every
+    /// destination the GUI serves is presented now. A location saved on Home
+    /// names the first presented destination, since Home is the state a start
+    /// with no saved location carries.
+    ///
+    /// The restore waits only while a catalog can still land: the saved
+    /// identity's own Service still connecting, or no destination presented at
+    /// all. Once a destination is presented and the saved identity's Service
+    /// has settled, an identity the presented set does not hold is gone, and
+    /// the caller finishes the restore rather than waiting for it — a wait
+    /// that would leave the saved Panel focus unapplied and would move the tab
+    /// of a late-present destination under the user.
+    fn launch_destination(&self, destination: &TabIdentity) -> LaunchDestination {
         let saved = match destination {
             TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),
             TabIdentity::Home | TabIdentity::Feeds => None,
         };
-        if saved.is_some_and(|(kind, _)| kind == ServiceKind::Audiobookshelf)
-            && self.gui_abs_catalog_pending()
-        {
-            return None;
+        // A saved Service library whose Service can still publish its catalog
+        // waits, so a startup that has not finished is never read as a library
+        // the catalog lost.
+        if saved.is_some_and(|(kind, _)| self.launch_catalog_pending(kind)) {
+            return LaunchDestination::Pending;
         }
-        let kind = saved.and_then(|(saved_kind, library_id)| {
+        let presented = self.presented_destinations();
+        // Nothing is presented yet: no catalog has landed, so the restore
+        // waits for one, and the window stays interactive meanwhile.
+        if presented.is_empty() {
+            return LaunchDestination::Pending;
+        }
+        // A start with no saved location opens the first presented
+        // destination (design D9's `first_launch`).
+        if *destination == TabIdentity::Home {
+            return presented
+                .first()
+                .copied()
+                .map_or(LaunchDestination::Pending, LaunchDestination::Open);
+        }
+        // The Feeds destination names no library: the saved identity matches
+        // the presented kind or nothing, and the subscriptions land with the
+        // config, so its Service is never pending.
+        if *destination == TabIdentity::Feeds {
+            return presented
+                .iter()
+                .copied()
+                .find(|kind| matches!(kind, GuiDestinationKind::Feeds))
+                .map_or(LaunchDestination::Unmatched, LaunchDestination::Open);
+        }
+        let matched = saved.and_then(|(saved_kind, library_id)| {
             presented.iter().copied().find(|kind| {
                 kind.library_index().is_some_and(|lib_idx| {
                     self.gui_destination_library_id(saved_kind, lib_idx)
                         .is_some_and(|id| id == library_id)
                 })
             })
-        })?;
-        self.gui_destination_position(kind)
+        });
+        matched.map_or(LaunchDestination::Unmatched, LaunchDestination::Open)
+    }
+
+    /// Whether the Service `kind`'s catalog can still land (design D9): the
+    /// restore then retries instead of reading the saved identity as gone.
+    /// Emby publishes its libraries when its startup attempt completes, and
+    /// Audiobookshelf publishes them when its catalog fetch answers, so each
+    /// Service's own pending mark is the signal.
+    fn launch_catalog_pending(&self, kind: ServiceKind) -> bool {
+        match kind {
+            ServiceKind::Emby => {
+                self.emby_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
+            }
+            ServiceKind::Audiobookshelf => self.gui_abs_catalog_pending(),
+        }
     }
 
     /// The stable Service library id the presented destination `kind` names
@@ -329,6 +365,35 @@ impl App {
         }
         Some(level.items.iter().map(|group| group.id.clone()).collect())
     }
+}
+
+/// What the saved destination's first phase found (add-gui-library-panel
+/// design D9): the saved destination opened, a catalog can still land, or a
+/// settled catalog holds no such destination.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GuiLaunchOpen {
+    /// No destination is presented yet, or the saved identity's Service is
+    /// still connecting: the caller retries on the drain that delivers a
+    /// destination.
+    Retry,
+    /// The saved destination opened, and its saved collection sets apply to
+    /// this identity, as the saved file carries it.
+    Opened(TabIdentity),
+    /// A destination is presented and the saved identity's Service has
+    /// settled without it: nothing opens, so the saved location never moves
+    /// the user to a destination it did not name, and the caller finishes the
+    /// restore.
+    Unmatched,
+}
+
+/// A saved destination's resolution inside this module (design D9).
+enum LaunchDestination {
+    /// The presented destination to open.
+    Open(GuiDestinationKind),
+    /// A catalog can still land: the caller retries.
+    Pending,
+    /// The settled presented set holds no such destination.
+    Unmatched,
 }
 
 /// The saved identity of one Service library.

@@ -44,6 +44,7 @@ pub use self::home::{
     GuiHomeRowKind, GuiHomeRowState,
 };
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
+pub use self::launch::GuiLaunchOpen;
 pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,

@@ -27,7 +27,7 @@ pub use self::app::{
     GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiFeedEntryId,
     GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
     GuiFeedsSelection, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
-    GuiHomeRowKind, GuiHomeRowState, GuiInput, GuiLibraryArtwork, GuiLibraryCommand,
+    GuiHomeRowKind, GuiHomeRowState, GuiInput, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryCommand,
     GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum,
     GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal, GuiOverlayProjection, GuiPodcastEpisodeId, GuiPodcastPill, GuiPodcastsHero,

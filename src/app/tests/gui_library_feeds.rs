@@ -117,9 +117,10 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_pill() {
         collections: Vec::new(),
     };
 
-    let opened = app
-        .open_gui_launch_destination(&saved)
-        .expect("the feed tab resolves the saved Feeds destination");
+    let opened = match app.open_gui_launch_destination(&saved) {
+        crate::app::GuiLaunchOpen::Opened(opened) => opened,
+        other => panic!("the feed tab resolves the saved Feeds destination: {other:?}"),
+    };
 
     assert_eq!(
         app.tab,

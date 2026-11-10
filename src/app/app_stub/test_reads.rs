@@ -300,6 +300,17 @@ impl App {
         }
     }
 
+    /// Make the Audiobookshelf catalog still pending (add-gui-library-panel
+    /// design D9): the startup is running, so the saved launch location's
+    /// resolution must wait for the catalog it can still publish. A
+    /// launch-location test seeds the waiting window this way, because the
+    /// runtime's state is App-internal.
+    #[cfg(feature = "test")]
+    pub fn mark_gui_abs_catalog_pending_for_test(&mut self) {
+        self.audiobookshelf_runtime =
+            crate::app::state::service_runtime::AudiobookshelfRuntime::new(true);
+    }
+
     /// Seed one Audiobookshelf book library and one podcast library with
     /// their parallel browse states (add-gui-library-panel row 9.1): the
     /// catalog a landed Audiobookshelf startup leaves, with no books yet and

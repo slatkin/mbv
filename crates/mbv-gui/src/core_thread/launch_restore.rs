@@ -5,6 +5,7 @@
 //! the groups the library actually holds. The orderly exit's save runs from
 //! the core's run loop here too.
 
+use mbv::GuiLaunchOpen;
 use mbv_config::{LaunchPanelFocus, TabIdentity};
 use mbv_ui_model::settings::PanelFocus;
 
@@ -34,31 +35,38 @@ impl CoreThread {
     /// destination — a start with no saved location opens the first presented
     /// one, through [`mbv_config::GuiLaunchState::first_launch`] — once the
     /// catalog lands, then apply its saved collection sets once the
-    /// destination's group list lands, and set the saved Panel focus on both authorities. The collection sets apply only to the
-    /// destination the first phase opened; a mid-restore tab switch abandons
-    /// them. The saved Panel focus applies only while the user has not taken
-    /// focus in the pre-catalog window. Idempotent, so the catalog and library
-    /// drains call it whenever their content can complete a phase.
+    /// destination's group list lands, and set the saved Panel focus on both
+    /// authorities. The collection sets apply only to the destination the
+    /// first phase opened; a mid-restore tab switch abandons them. The saved
+    /// Panel focus applies only while the user has not taken focus in the
+    /// pre-catalog window. A saved destination the settled catalog no longer
+    /// holds opens nothing: the restore applies the saved Panel focus and
+    /// finishes, so a library that appears later cannot move the tab under the
+    /// user. Idempotent, so the catalog and library drains call it whenever
+    /// their content can complete a phase.
     pub(crate) fn restore_launch_location(&mut self) {
         let (state, destination) = match &self.launch_restore {
             GuiLaunchRestore::Done => return,
             GuiLaunchRestore::Destination(state) => {
-                let Some(destination) = self.app.open_gui_launch_destination(state) else {
-                    return;
+                let state = state.clone();
+                let destination = match self.app.open_gui_launch_destination(&state) {
+                    GuiLaunchOpen::Retry => return,
+                    GuiLaunchOpen::Opened(destination) => destination,
+                    GuiLaunchOpen::Unmatched => {
+                        // The saved destination is gone: the saved Panel focus
+                        // still applies, and the restore finishes so a late
+                        // destination never moves the tab.
+                        self.apply_launch_panel_focus(&state);
+                        self.launch_restore = GuiLaunchRestore::Done;
+                        return;
+                    }
                 };
                 // The open takes Library focus; the saved Panel focus applies
                 // over it on both authorities (design D9), unless the user
                 // already took focus while the restore was pending — then the
                 // taken focus stands.
-                if !self.launch_focus_taken {
-                    let saved_focus = match state.panel_focus {
-                        LaunchPanelFocus::Library => PanelFocus::Library,
-                        LaunchPanelFocus::Queue => PanelFocus::Queue,
-                    };
-                    self.app.set_gui_panel_focus(saved_focus);
-                    self.focus.set_panel_focus(saved_focus);
-                }
-                (state.clone(), destination)
+                self.apply_launch_panel_focus(&state);
+                (state, destination)
             }
             GuiLaunchRestore::Collections { state, destination } => {
                 (state.clone(), destination.clone())
@@ -90,6 +98,22 @@ impl CoreThread {
         if !matches!(self.launch_restore, GuiLaunchRestore::Done) {
             self.launch_focus_taken = true;
         }
+    }
+
+    /// Apply the saved Panel focus on both authorities (design D9): the App's
+    /// stored focus, which its key gates read, and the core's `FocusStack`,
+    /// which the frame paints. A focus the user took while the restore was
+    /// pending stands, so the save never replaces it.
+    fn apply_launch_panel_focus(&mut self, state: &mbv_config::GuiLaunchState) {
+        if self.launch_focus_taken {
+            return;
+        }
+        let saved_focus = match state.panel_focus {
+            LaunchPanelFocus::Library => PanelFocus::Library,
+            LaunchPanelFocus::Queue => PanelFocus::Queue,
+        };
+        self.app.set_gui_panel_focus(saved_focus);
+        self.focus.set_panel_focus(saved_focus);
     }
 
     /// Save the GUI's launch location (design D9): the destination, the

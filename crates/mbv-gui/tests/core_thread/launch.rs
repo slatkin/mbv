@@ -70,6 +70,16 @@ fn core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> Tes
     test_core_with(app)
 }
 
+/// A core thread like [`core_with_seeded_catalog`] whose queue holds one slot,
+/// so the saved Panel focus stays observable: an empty queue hides the Queue
+/// column and reports Library focus whatever the restore applied.
+fn queued_core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> TestCore {
+    let http = MockHttp::new();
+    let mut app = stub_app_with_queue(1);
+    build(&mut app, &http);
+    test_core_with(app)
+}
+
 /// Seed the grouped Music library without a Service client.
 fn seed_music(app: &mut mbv::App, _http: &MockHttp) {
     app.seed_gui_music_library_tab_for_test();
@@ -272,13 +282,14 @@ fn a_location_saved_on_shows_opens_shows() {
     );
 }
 
-/// A saved location names a destination the GUI no longer presents: a library
-/// the catalog lost restores nothing, and never another destination in its
-/// place (add-gui-library-panel design D9, row 13.1). The presented set holds
-/// the Music and Shows libraries, so the deleted fallback would have opened
-/// Music.
+/// A saved destination the settled catalog no longer holds opens nothing and
+/// still applies the saved Panel focus (add-gui-library-panel design D9, row
+/// 13.1): the presented set holds the Music and Shows libraries, so the saved
+/// identity matches none of them, the deleted fallback would have opened
+/// Music, and the restore still finishes instead of leaving the saved focus
+/// unapplied for the session.
 #[test]
-fn a_location_saved_on_a_library_the_catalog_lost_opens_no_other_destination() {
+fn a_saved_destination_the_catalog_lost_applies_the_saved_focus_and_opens_nothing() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -288,12 +299,102 @@ fn a_location_saved_on_a_library_the_catalog_lost_opens_no_other_destination() {
     })
     .unwrap();
 
-    let mut test = core_with_seeded_catalog(seed_music_and_shows);
+    let mut test = queued_core_with_seeded_catalog(seed_music_and_shows);
+
+    let app = test.core.app_mut();
+    let (tab, focus) = (app.tab_for_test(), app.gui_panel_focus());
+    assert_eq!(
+        tab,
+        TabSelection::Home,
+        "the saved destination opens no destination the location did not name"
+    );
+    assert_eq!(
+        focus,
+        PanelFocus::Library,
+        "the saved Panel focus applies even though no destination opened"
+    );
+    test.tx.send(CoreInput::Wake).unwrap();
+    assert!(test.core.step());
+    assert_eq!(
+        test.latest_frame()
+            .expect("the step emitted a frame")
+            .focus
+            .panel,
+        GuiPanel::Library,
+        "the saved focus reaches the frame too"
+    );
+}
+
+/// A destination that lands after the restore finished never moves the tab
+/// (add-gui-library-panel design D9, row 13.1): the presented set settles
+/// without the saved identity, so the restore is done, and the library the
+/// catalog publishes later does not become the active destination under the
+/// user.
+#[test]
+fn a_destination_presented_after_the_restore_finished_does_not_move_the_tab() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: library_identity("lib-gone"),
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    })
+    .unwrap();
+
+    let mut test = queued_core_with_seeded_catalog(seed_music_and_shows);
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::Home,
+        "the vanished identity opens nothing"
+    );
+
+    // The library the saved location named arrives after the restore finished.
+    test.core
+        .app_mut()
+        .push_gui_library_tab_for_test(EmbyItem::folder(
+            "lib-gone".into(),
+            "Gone".into(),
+            "music".into(),
+        ));
+    assert!(test.core.step());
 
     assert_eq!(
         test.core.app_mut().tab_for_test(),
         TabSelection::Home,
-        "the saved destination opens no destination the location did not name"
+        "a finished restore never moves the tab to a late destination"
+    );
+}
+
+/// A saved Audiobookshelf destination waits while its catalog can still land
+/// (add-gui-library-panel design D9, row 9.1, row 13.1): the Audiobookshelf
+/// libraries are published and the startup is still running, so the restore
+/// neither opens the destination nor applies the saved Panel focus yet.
+#[test]
+fn a_saved_audiobooks_destination_waits_while_the_catalog_is_pending() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: abs_identity("lib-abs-books"),
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    })
+    .unwrap();
+
+    let mut test = queued_core_with_seeded_catalog(|app, _http| {
+        app.seed_gui_abs_libraries_for_test();
+        app.mark_gui_abs_catalog_pending_for_test();
+    });
+
+    let app = test.core.app_mut();
+    assert_eq!(
+        app.tab_for_test(),
+        TabSelection::Home,
+        "a pending catalog is not a catalog the destination is gone from"
+    );
+    assert_eq!(
+        app.gui_panel_focus(),
+        PanelFocus::Queue,
+        "the restore applies no saved focus while it waits"
     );
 }
 
