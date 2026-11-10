@@ -1,15 +1,23 @@
 <script lang="ts">
 	// The Podcasts destination's episode pills (add-gui-library-panel design
-	// D12, row 10.1): Latest and one pill per show, single-select — the core's
-	// active pill is always one of them, so a press selects it and the list
-	// loads that view. The pills paint the core's carried choice, so the row
-	// and the list cannot disagree; a press sends the set-pill command with
-	// the pill object the frame carries (design D1). The keys' Space and
-	// Enter intent (design D3) becomes the same command. The row paints the
-	// canvas's pill form, as the Music, Shows, and Emby pills do.
-	import { roleVar } from '$lib/bridge/theme';
-	import type { GuiPodcastsFrame, GuiPodcastsPill } from '$lib/bridge/types';
-	import { podcastPillKey, applyPodcastsPillSelect, selectPodcastsPill, podcastsUi } from '$lib/library/podcasts';
+	// D12, row 10.1): the latest scope, the TUI's three state pills, and one
+	// pill per show, single-select — the core's active pill is always one of
+	// them, so a press selects it and the list loads that view. The pills paint
+	// the core's carried choice, so the row and the list cannot disagree; a
+	// press sends the set-pill command with the pill object the frame carries
+	// (design D1). The keys' Space and Enter intent (design D3) becomes the
+	// same command.
+	//
+	// The row itself is the shared `LibraryPillRow` (design D15), so the
+	// canvas's pill form has one owner.
+	import type { GuiPodcastsFrame } from '$lib/bridge/types';
+	import {
+		applyPodcastsPillSelect,
+		podcastPillKey,
+		selectPodcastsPill,
+		podcastsUi,
+	} from '$lib/library/podcasts';
+	import LibraryPillRow from './LibraryPillRow.svelte';
 
 	interface Props {
 		/** The carried Podcasts content: the pills and the library index the
@@ -18,6 +26,15 @@
 	}
 	const { podcasts }: Props = $props();
 
+	/** The pills the row paints, keyed by the pill's paint key. */
+	const pills = $derived(
+		podcasts.pills.map((pill) => ({
+			key: podcastPillKey(pill.pill),
+			name: pill.name,
+			selected: pill.selected,
+		})),
+	);
+
 	/** The key of the pill the keys' focus holds, or `null` while no pill has
 	 * it (design D6): the pill's paint key over the state's pill object. */
 	const focused = $derived(
@@ -25,8 +42,11 @@
 	);
 
 	/** Press a pill: select its view (row 10.1). */
-	function press(pill: GuiPodcastsPill): void {
-		selectPodcastsPill(podcasts.libIdx, pill.pill);
+	function press(key: string): void {
+		const pill = podcasts.pills.find((candidate) => podcastPillKey(candidate.pill) === key);
+		if (pill !== undefined) {
+			selectPodcastsPill(podcasts.libIdx, pill.pill);
+		}
 	}
 
 	// The keys' pill request becomes the command a press sends (row 10.1): the
@@ -38,41 +58,10 @@
 	});
 </script>
 
-<div
-	class="flex flex-none items-center overflow-hidden"
-	role="group"
-	aria-label="Podcasts views"
-	data-library-region="pills"
-	style:height="52px"
-	style:gap="6px"
-	style:padding="0 16px"
-	style:border-bottom="1px solid var(--canvas-border)"
->
-	{#each podcasts.pills as pill (podcastPillKey(pill.pill))}
-		{@const key = podcastPillKey(pill.pill)}
-		<button
-			type="button"
-			class="flex flex-none items-center whitespace-nowrap"
-			style:height="32px"
-			style:gap="5px"
-			style:padding="0 12px"
-			style:border-radius="16px"
-			style:font-size="13px"
-			style:font-weight={pill.selected ? 600 : 400}
-			style:border={pill.selected
-				? '1px solid var(--canvas-source)'
-				: '1px solid var(--canvas-border)'}
-			style:background={pill.selected ? 'var(--canvas-source)' : 'none'}
-			style:color={pill.selected ? 'var(--canvas-ink)' : 'var(--canvas-text)'}
-			style:outline={key === focused ? `2px solid ${roleVar('accentActive')}` : 'none'}
-			style:outline-offset="1px"
-			aria-pressed={pill.selected}
-			data-library-pill={key}
-			data-library-podcasts-pill={key}
-			data-library-pill-focused={key === focused ? '' : undefined}
-			onclick={() => press(pill)}
-		>
-			{pill.name}
-		</button>
-	{/each}
-</div>
+<LibraryPillRow
+	ariaLabel="Podcasts views"
+	{pills}
+	{focused}
+	pillAttr="podcasts"
+	onpress={press}
+/>

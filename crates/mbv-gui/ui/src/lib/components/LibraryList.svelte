@@ -44,7 +44,8 @@
 		scrollLibraryList,
 		setLibraryFilter,
 	} from '$lib/library/state';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -237,20 +238,11 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-list-column="">
-	<div class="flex flex-none flex-col" style:padding="14px 16px 10px" style:gap="10px">
-		<div class="flex items-baseline justify-between">
-			<span style:font-size="13px" style:font-weight="600" style:color="var(--canvas-heading)"
-				>Artists</span
-			>
-			<span
-				class="font-mono"
-				style:font-size="11px"
-				style:color="var(--canvas-muted)"
-				data-library-selection-label="">{selectionLabel}</span
-			>
-		</div>
-		<LibraryFilterField
-			value={$libraryUi.filter}
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Artists"
+			label={selectionLabel}
+			filter={$libraryUi.filter}
 			placeholder={filterPlaceholder}
 			ariaLabel="Filter artists"
 			oninput={setLibraryFilter}
@@ -260,44 +252,17 @@
 	{#if music.loading}
 		<!-- A selected group's album list has not landed yet (design D5): one
 			placeholder line holds the list's place. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-loading=""
-		>
-			Loading…
-		</div>
+		<LibraryListNotice text="Loading…" attr="data-library-loading" />
 	{/if}
 	{#if music.failure !== null}
 		<!-- The selected groups whose album list failed (design D5): the
 			frame's failure line names them. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-failure=""
-		>
-			{music.failure}
-		</div>
+		<LibraryListNotice text={music.failure} attr="data-library-failure" />
 	{/if}
 	{#if !music.loading && music.artists.length === 0}
 		<!-- The selected collections hold no artist (the spec's empty text):
 			the row area is empty, so one line says so. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-empty=""
-		>
-			No artists
-		</div>
+		<LibraryListNotice text="No artists" attr="data-library-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<ol

@@ -195,6 +195,19 @@ A live-test round showed that the first Shows design deviated from the TUI in ev
 - **The Hero and the rows carry the Music action set**: a right-click on a series, a season, or an episode row opens the item menu at that item's stable Service id, and the Workspace rows keep their hover Play next and Add to queue controls. A series has no whole-series Play: the TUI has no play path for a series, and the GUI does not invent one.
 - **The frame carries the tree**, not flat rows, as the Music section carries artists → albums → tracks: a series node holds its seasons, and a season holds its episodes or `None` while its load has not landed. Row identities stay stable Service ids.
 
+### D15. One base slot per Library control, and the rail stands in for letter buckets
+
+The live-test round that produced D14 showed a second failure beside the Shows slots: each destination had re-implemented the slots Music already owns. Five pill rows painted the same button, six lists painted their own header or none, and every Hero held its own artwork-box arithmetic, so a fix landed in one tab and missed four. The rule is now one base component per Library control, in `crates/mbv-gui/ui/src/lib/components/`:
+
+- **`LibraryPillRow`** owns the canvas's single-select pill form. Music's collections, Shows's modes, an Emby library's folders, Podcasts's views, and Feeds's views pass their carried pills, the key a press names, and the destination's own attribute suffix; none paints a button of its own.
+- **`LibraryListHeader`** owns the `Artists`-shaped header: the list's title, the carried selection's label beside it, and the `/` filter field under both, with the destination's own title and label attributes preserved.
+- **`LibraryListNotice`** owns the one-line loading, failure, and empty notice above a list's rows.
+- **The Hero's artwork arm** keeps its one rule: landscape fills the Hero content width at 16:9 above the title and meta block, and portrait and square keep the canvas's 300 px box beside the text. A destination that paints a Hero adopts that rule rather than restating it.
+
+A destination adds data and a command, never a control's look. A destination that needs a control the base lacks adds it to the base, so the next destination inherits it.
+
+**Letter buckets stay as the rail.** The TUI's letter-range pills (Movies `A–C` … `V–Z`, `#`; TV `A–I / J–R / S–Z`) and the Audiobookshelf surname buckets are replaced by the A–Z rail on every destination (D7, D12, D14). The user accepted the rail as the letter control after the Shows re-alignment, so no destination paints letter pills; the rail's finer letter grain does the same job without a second control beside it. A pill row therefore carries only the real modes: Shows `New`/`Upcoming`/`All`, an Emby feed-group `New`/`All`/folders, an Emby plain library `New`/`All`, and Podcasts `Latest` plus the three state pills plus each show.
+
 ## Risks / Trade-offs
 
 - [A window-content reload resets the Library's cursor, scroll, and open nodes] → The data selection survives in the core, so the destination, the pills, and the Hero's item stay.

@@ -40,8 +40,9 @@
 	} from '$lib/library/shows';
 	import { openLibraryRowMenu } from '$lib/library/state';
 	import { isPlayedEpisode, resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
-	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 
 	interface Props {
 		/** The carried Shows content (design D14): the tree or the flat rows. */
@@ -240,23 +241,13 @@
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-shows-list-column="">
 	<!-- The Music list's header (design D14): the title, the active mode as the
 	selection label, and the `/` filter field. -->
-	<div class="flex flex-none flex-col" style:padding="14px 16px 10px" style:gap="10px">
-		<div class="flex items-baseline justify-between" style:gap="12px">
-			<span
-				style:font-size="13px"
-				style:font-weight="600"
-				style:color="var(--canvas-heading)"
-				data-library-shows-list-title="">Series</span
-			>
-			<span
-				class="font-mono"
-				style:font-size="11px"
-				style:color="var(--canvas-muted)"
-				data-library-shows-selection-label="">{selectionLabel}</span
-			>
-		</div>
-		<LibraryFilterField
-			value={$showsUi.filter}
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Series"
+			titleAttr="data-library-shows-list-title"
+			label={selectionLabel}
+			labelAttr="data-library-shows-selection-label"
+			filter={$showsUi.filter}
 			placeholder={filterPlaceholder}
 			ariaLabel="Filter series"
 			oninput={setShowsFilter}
@@ -266,29 +257,14 @@
 	{#if shows.loading}
 		<!-- The active mode's list has not landed yet: one placeholder line
 		holds the list's place. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-shows-loading=""
-		>
-			Loading…
-		</div>
+		<LibraryListNotice text="Loading…" attr="data-library-shows-loading" />
 	{:else if shows.upcomingFailed}
 		<!-- The Upcoming mode's eager fetch failed (design D14): the TUI's line,
 		and the pill is the retry. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-shows-failed=""
-		>
-			Upcoming fetch failed — select the pill to retry
-		</div>
+		<LibraryListNotice
+			text="Upcoming fetch failed — select the pill to retry"
+			attr="data-library-shows-failed"
+		/>
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<ol
