@@ -40,7 +40,10 @@ test('both dividers start at their defaults', () => {
 	expect(widths.queue).toBe(400);
 	// The request made the list column 15 % wider than the canvas's index.
 	expect(LIBRARY_LIST_DEFAULT_WIDTH_PX).toBe(Math.round(LIBRARY_LIST_MIN_WIDTH_PX * 1.15));
-	expect(widths.list).toBe(LIBRARY_LIST_DEFAULT_WIDTH_PX);
+	// The Hero pane's 60 % cap binds at this width, so the list column paints
+	// the share the cap leaves rather than its default.
+	expect(widths.hero).toBe(Math.round(widths.libraryColumn * 0.6));
+	expect(widths.list).toBe(widths.libraryColumn - widths.hero - DIVIDER_WIDTH_PX);
 	// The divider between the columns takes its own width.
 	expect(widths.libraryColumn).toBe(1200 - DIVIDER_WIDTH_PX);
 });
@@ -56,15 +59,18 @@ test('the Queue column stays between its canvas width and the Library Mini thres
 	expect(panelWidths(container, expanded, get(draggedWidths)).queue).toBe(500);
 });
 
-test('the list column stays between the canvas index and the room the Hero leaves its minimum', () => {
+test('the list column stays between the Hero cap floor and the room the Hero leaves its minimum', () => {
+	// The Hero pane never exceeds its 60 % share, so the list's floor is the
+	// width that cap leaves: 1200 px less 720 px and the 6 px divider.
 	dragListWidth(100, 1200);
-	expect(get(draggedWidths).list).toBe(LIBRARY_LIST_MIN_WIDTH_PX);
+	expect(get(draggedWidths).list).toBe(474);
 
 	// 1200 px less the Hero's 320 px minimum and the 6 px divider.
 	dragListWidth(900, 1200);
 	expect(get(draggedWidths).list).toBe(874);
 
 	dragListWidth(500, 1200);
+	// The cap does not bind at this width, so the dragged width paints.
 	expect(panelWidths(container, expanded, get(draggedWidths)).list).toBe(500);
 });
 
@@ -102,7 +108,9 @@ test('a double-click returns each divider to its default', () => {
 
 	const widths = panelWidths(container, expanded, get(draggedWidths));
 	expect(widths.queue).toBe(400);
-	expect(widths.list).toBe(LIBRARY_LIST_DEFAULT_WIDTH_PX);
+	// The Hero cap still binds at the default, so the painted list width is
+	// the share the cap leaves.
+	expect(widths.list).toBe(widths.libraryColumn - widths.hero - DIVIDER_WIDTH_PX);
 });
 
 // The sticky widths (design D4): a drag is saved, a relaunch reads it back, and
@@ -110,13 +118,13 @@ test('a double-click returns each divider to its default', () => {
 test('a dragged width is saved and read back on the next start', () => {
 	localStorage.clear();
 
-	dragListWidth(420, 1400);
+	dragListWidth(600, 1400);
 
 	expect(JSON.parse(localStorage.getItem(PANEL_WIDTHS_STORAGE_KEY) ?? 'null')).toEqual({
 		queue: null,
-		list: 420,
+		list: 600,
 	});
-	expect(loadDraggedWidths()).toEqual({ queue: null, list: 420 });
+	expect(loadDraggedWidths()).toEqual({ queue: null, list: 600 });
 	resetListWidth();
 });
 

@@ -82,6 +82,7 @@ test('a press inside the panel sends the take-focus command', () => {
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 	const panel = container.querySelector('[data-library-panel]');
@@ -103,6 +104,7 @@ test('the panel paints the top bar and the pill row above the list region', () =
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 	const panel = container.querySelector('[data-library-panel]');
@@ -127,6 +129,7 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
@@ -150,6 +153,7 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -197,6 +201,7 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -233,6 +238,7 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
@@ -261,6 +267,7 @@ test('the Shows content mounts the mode pills, the Shows list, and the series He
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -286,6 +293,7 @@ test('the Upcoming Shows content paints no Hero', () => {
 		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 
@@ -343,6 +351,7 @@ test('the plain Emby content mounts the Emby list, rail, and Hero and none of th
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -367,6 +376,7 @@ test('the feed-group Emby content mounts its pill row and no rail', () => {
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -401,6 +411,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -431,6 +442,7 @@ test('the Hero-less Audiobooks content paints its list and no Hero', () => {
 		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 
@@ -464,6 +476,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
@@ -524,6 +537,7 @@ test('the Feeds content mounts the Feeds pills, list, and Hero and none of the o
 		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 
@@ -555,6 +569,7 @@ test('the Hero-less Feeds content paints its list and no Hero', () => {
 		status: idle,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 800,
 	});
 
@@ -651,6 +666,7 @@ test('the item menu paints on a destination that is not Music', () => {
 		},
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	heroWidth: 720,
 		libraryColumn: 1200,
 	});
 

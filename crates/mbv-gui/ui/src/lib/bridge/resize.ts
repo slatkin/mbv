@@ -30,6 +30,11 @@ export const LIBRARY_LIST_MIN_WIDTH_PX = 320;
  * the other away: the list column's own minimum. */
 export const HERO_MIN_WIDTH_PX = LIBRARY_LIST_MIN_WIDTH_PX;
 
+/** The Hero pane's widest share of the Library column: 60 %, so a wide window
+ * gives the freed width to the list column instead of stretching the Hero
+ * across it. */
+export const HERO_MAX_FRACTION = 0.6;
+
 /** A divider's painted width: the band between two columns takes this much of
  * the container, and the Library column the Queue column leaves is measured
  * without it, so the painted columns and the thresholds stay one geometry. */
@@ -102,16 +107,32 @@ export function clampQueueWidth(width: number, containerWidth: number): number {
 }
 
 /**
- * A list column width held between the canvas index and the room the Hero pane
- * leaves beside it at its minimum. A Library column too narrow for both panes
- * gives the list its minimum.
+ * A list column width held between the Hero cap's floor and the room the Hero
+ * pane leaves beside it at its minimum. The Hero pane never exceeds its 60 %
+ * share of the Library column, so the list column's floor is the width that
+ * cap leaves: a drag left of the cap boundary stops there, the way it stops at
+ * the canvas index. A Library column too narrow for both panes gives the list
+ * its minimum.
  */
 export function clampListWidth(width: number, libraryColumn: number): number {
-	const max = Math.max(
+	const heroMax = Math.round(libraryColumn * HERO_MAX_FRACTION);
+	const min = Math.max(
 		LIBRARY_LIST_MIN_WIDTH_PX,
+		Math.round(libraryColumn) - heroMax - DIVIDER_WIDTH_PX,
+	);
+	const max = Math.max(
+		min,
 		Math.round(libraryColumn) - HERO_MIN_WIDTH_PX - DIVIDER_WIDTH_PX,
 	);
-	return Math.min(Math.max(Math.round(width), LIBRARY_LIST_MIN_WIDTH_PX), max);
+	return Math.min(Math.max(Math.round(width), min), max);
+}
+
+/** The Wide Hero pane's painted width: its 60 % share of the Library column,
+ * or the room the list column leaves, whichever is narrower. The list column
+ * paints the remainder, so the three widths always fill the column. */
+export function heroPaneWidth(libraryColumn: number, listWidth: number): number {
+	const cap = Math.round(libraryColumn * HERO_MAX_FRACTION);
+	return Math.min(cap, Math.round(libraryColumn) - listWidth - DIVIDER_WIDTH_PX);
 }
 
 /** The widths the window paints, and the Library column the Queue column
@@ -121,6 +142,9 @@ export interface PanelWidths {
 	queue: number;
 	/** The list column's painted width, which only Wide paints. */
 	list: number;
+	/** The Wide Hero pane's painted width: at most its 60 % share of the
+	 * Library column. */
+	hero: number;
 	/** The Library column's width: the container minus the Queue column and
 	 * the divider between them. */
 	libraryColumn: number;
@@ -144,9 +168,14 @@ export function panelWidths(
 	// The collapsed rail paints no divider, so its 6 px stay in the column.
 	const divider = panel.collapsed ? 0 : DIVIDER_WIDTH_PX;
 	const libraryColumn = libraryColumnWidth(container, queue + divider);
+	const draggedList = clampListWidth(dragged.list ?? LIBRARY_LIST_DEFAULT_WIDTH_PX, libraryColumn);
+	const hero = heroPaneWidth(libraryColumn, draggedList);
 	return {
 		queue,
-		list: clampListWidth(dragged.list ?? LIBRARY_LIST_DEFAULT_WIDTH_PX, libraryColumn),
+		// The painted list width: the dragged width, or the share the Hero
+		// pane's cap leaves when the cap binds.
+		list: libraryColumn - hero - DIVIDER_WIDTH_PX,
+		hero,
 		libraryColumn,
 	};
 }

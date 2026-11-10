@@ -119,8 +119,11 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
 		/** The list column's painted width (design D4): the session's dragged
-		 * width, or its default. */
+		 * width, or the share the Hero pane's cap leaves when the cap binds. */
 		listWidth: number;
+		/** The Wide Hero pane's painted width (design D4): at most its 60 %
+		 * share of the Library column. */
+		heroWidth: number;
 		/** The Library column the list column sits in: the drag's clamp. */
 		libraryColumn: number;
 	}
@@ -139,6 +142,7 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		status,
 		arrangement,
 		listWidth,
+		heroWidth,
 		libraryColumn,
 	}: Props = $props();
 
@@ -258,10 +262,13 @@ type OverlayHero =
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
 			<!-- The Wide arrangement's Hero pane, to the left of the list as the
-				canvas orders it, with the active destination's Hero inside. -->
+				canvas orders it, with the active destination's Hero inside. The pane
+				paints its capped width: at most its 60 % share of the Library
+				column, the list column taking the remainder. -->
 			<div
 				data-library-region="hero"
-				class="flex min-h-0 min-w-0 flex-1 flex-col"
+				class="flex min-h-0 min-w-0 flex-none flex-col"
+				style:width="${heroWidth}px"
 				style:background="var(--canvas-library-column)"
 				style:overflow-y="auto"
 			>
