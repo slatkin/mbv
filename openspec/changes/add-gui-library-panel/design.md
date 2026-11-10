@@ -210,6 +210,14 @@ A destination adds data and a command, never a control's look. A destination tha
 
 **Letter buckets stay as the rail.** The TUI's letter-range pills (Movies `A–C` … `V–Z`, `#`; TV `A–I / J–R / S–Z`) and the Audiobookshelf surname buckets are replaced by the A–Z rail on every destination (D7, D12, D14). The user accepted the rail as the letter control after the Shows re-alignment, so no destination paints letter pills; the rail's finer letter grain does the same job without a second control beside it. A pill row therefore carries only the real modes: Shows `New`/`Upcoming`/`All`, an Emby feed-group `New`/`All`/folders, an Emby plain library `New`/`All`, and Podcasts `Latest` plus the three state pills plus each show.
 
+### D16. Every interactive control answers the pointer
+
+The GUI painted no hover at all: a pill, a tab, a row, a rail letter, and a Hero button looked the same whether the pointer was on them or not, while the canvas's own states (`--canvas-selected`, `--canvas-action`) covered only the picked row and the hover actions. The rule is now one stylesheet rule in `app.css` rather than a per-component style, so a control cannot be added without the hover:
+
+- **One veil, not one fill.** `--canvas-hover-veil` is the palette's foreground `#d3c6aa` at 14 % over whatever fill the control paints. The components set their fills inline (`style:background`), so a stylesheet fill would lose; an *inset box shadow* composites above that fill and below the label. A bare ghost button, a picked row, an accent Play button, and the filter field's frame each keep their own colour and still light up.
+- **The selectors are the interaction roles**, not a class: `button`, `[role='menuitem']`, `[role='tab']`, `[role='option']`, and the filter field's `label:has(> input:hover)`. Disabled controls keep the arrow and no veil.
+- **The seekbar is the one exception.** It answers the pointer with the trickplay tile preview, and a veil over its 60 px box would tint the elapsed and remaining labels with it.
+
 ## Risks / Trade-offs
 
 - [A window-content reload resets the Library's cursor, scroll, and open nodes] → The data selection survives in the core, so the destination, the pills, and the Hero's item stay.
