@@ -69,7 +69,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 12. Search
 
-- [ ] 12.1 Add the Search field to the top bar with `Ctrl+K`, the search command, and its results (design D12): the core runs `App::spawn_search_sidebar_query`, the GUI tick host runs `drain_search_results` in place of its no-op, and a result activates through `App::activate_search_result`. Verify: a core-thread test sends a query with a mocked result and finds it in the next frame, then activates it and finds its destination active; vitest that `Ctrl+K` focuses the field and Esc closes the results.
+- [x] 12.1 Add the Search field to the top bar with `Ctrl+K`, the search command, and its results (design D12): the core runs `App::spawn_search_sidebar_query`, the GUI tick host runs `drain_search_results` in place of its no-op, and a result activates through `App::activate_search_result`. Verify: a core-thread test sends a query with a mocked result and finds it in the next frame, then activates it and finds its destination active; vitest that `Ctrl+K` focuses the field and Esc closes the results.
 
 ## 13. Phase 2 docs and checks
 
