@@ -11,7 +11,8 @@
 	// state and reports the two facts only the DOM holds. A press selects the
 	// entry the Hero shows, and a double-click plays it (design D12): the
 	// keys' Enter plays the cursor row, and the press is the selection's half.
-	// Feeds has no filter in Phase 2, so the list paints no filter field.
+	// The `/` filter field narrows the entries to the titles that contain
+	// its text (design D7's filter rule).
 	import { onMount } from 'svelte';
 	import type { GuiFeedsFrame } from '$lib/bridge/types';
 	import {
@@ -22,12 +23,15 @@
 	} from '$lib/library/feeds-list';
 	import type { FeedsItemRow } from '$lib/library/feeds-list';
 	import {
+		acceptFeedsFilter,
 		measureFeedsList,
 		playFeedsRow,
 		pressFeedsRow,
 		feedsUi,
 		scrollFeedsList,
+		setFeedsFilter,
 	} from '$lib/library/feeds';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 
 	interface Props {
 		/** The carried Feeds content (design D12, row 11.1): the active pill's
@@ -39,8 +43,9 @@
 	let listEl: HTMLElement | undefined = $state();
 
 	/** The painted rows of the flat list (row 11.1): the same model
-	 * `$lib/library/feeds` builds from the carried content. */
-	const rows = $derived(buildFeedsRows(feeds.rows));
+	 * `$lib/library/feeds` builds from the carried content, narrowed by the
+	 * filter's text. */
+	const rows = $derived(buildFeedsRows(feeds.rows, $feedsUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(feedsListWindow(rows, $feedsUi.scrollTop, $feedsUi.viewportHeight));
@@ -120,6 +125,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-feeds-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$feedsUi.filter}
+			placeholder="Filter entries"
+			ariaLabel="Filter entries"
+			oninput={setFeedsFilter}
+			onaccept={acceptFeedsFilter}
+		/>
+	</div>
 	{#if feeds.loading}
 		<!-- The tab's fetch results have not landed yet (row 11.1): one
 			placeholder line holds the list's place. -->

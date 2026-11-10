@@ -6,15 +6,15 @@
 // book list, or the Hero's chapter Workspace.
 //
 // Everything else matches the Emby router: the movements and Enter never reach
-// the core, Esc's overlay and menu handling runs before this, Audiobooks paints
-// no filter and no pill row in Phase 2, and Space stays the core's play and
-// pause. A book has no play-next: `n` is consumed and does nothing, and `a`
-// sends the queue command.
+// the core, Esc's overlay and menu handling runs before this, `/` opens the
+// list's filter, and Space stays the core's play and pause — Audiobooks paints
+// no pill row. A book has no play-next: `n` is consumed and does nothing, and
+// `a` sends the queue command.
 
 import type { KeyOutcome } from '$lib/bridge/input';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryAudiobooks } from './state';
+import { libraryAudiobooks, openLibraryFilter } from './state';
 import {
 	audiobooksCursorRow,
 	moveAudiobooksListCursor,
@@ -47,10 +47,10 @@ export function routeAudiobooksPanelKey(event: KeyboardEvent, ui: LibraryUiState
 	if (audiobooks === null) {
 		return 'core';
 	}
-	// Audiobooks paints no filter in Phase 2 (row 9.1): `/` keeps its core
-	// effect, as it does on Home, Shows, and Emby.
-	if (event.key === '/') {
-		return 'core';
+	// `/` opens the list's filter (design D3, D7): the rail's keyboard path.
+	if (event.key === '/' && bare(event)) {
+		openLibraryFilter();
+		return 'handled';
 	}
 	// No pill row rides on the destination, so no Space is a pill select:
 	// Space stays the core's play and pause.

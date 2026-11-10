@@ -8,7 +8,7 @@
 
 import type { GuiPodcastsRow } from '$lib/bridge/types';
 import type { ListWindow } from './list';
-import { listWindow, rowsHeight } from './list';
+import { filterMatch, listWindow, rowsHeight } from './list';
 
 /** The episode row's height in logical pixels (design D12): the room a
  * two-line episode title and the date gutter paint into, as a Shows flat
@@ -50,12 +50,16 @@ export function podcastsRowsHeight(rows: readonly PodcastsListRow[]): number {
 /**
  * The painted rows of the Podcasts list (design D12): the frame's episode
  * rows at one height, with no heading and no letter, in the core's order —
- * the latest pill's merged newest-first order, or a show's own episodes.
- * Every row carries its top edge and height, so the list paints a window of
- * rows over native scroll.
+ * the latest pill's merged newest-first order, or a show's own episodes. The
+ * filter narrows the rows to the titles that contain its text, without case
+ * (design D7's filter rule). Every row carries its top edge and height, so
+ * the list paints a window of rows over native scroll.
  */
-export function buildPodcastsRows(rows: readonly GuiPodcastsRow[]): PodcastsListRow[] {
-	return rows.map((row, at) => ({
+export function buildPodcastsRows(
+	rows: readonly GuiPodcastsRow[],
+	filter = '',
+): PodcastsListRow[] {
+	return rows.filter((row) => filterMatch(row.title, filter)).map((row, at) => ({
 		id: row.id,
 		row,
 		top: at * PODCASTS_ROW_HEIGHT,

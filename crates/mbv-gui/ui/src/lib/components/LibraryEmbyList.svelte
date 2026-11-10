@@ -11,8 +11,9 @@
 	// and reports the two facts only the DOM holds. A press selects the row the
 	// Hero shows, a double-click plays it, and the keys' Enter plays the row
 	// under the cursor — every row is playable, because the core's folder-play
-	// rule expands a folder or a boxset row. The list paints no filter field in
-	// Phase 2, so `/` stays the core's key, as on Home and Shows.
+	// rule expands a folder or a boxset row. The `/` filter field narrows the
+	// rows to the titles that contain its text, the rail's keyboard path in
+	// the plain mode (design D7).
 	//
 	// A collection row paints its title only: the Music and Home lists paint no
 	// folder glyph, so the Emby list adds none and the row's own decoration (the
@@ -29,13 +30,16 @@
 	} from '$lib/library/emby-list';
 	import type { EmbyListRow } from '$lib/library/emby-list';
 	import {
+		acceptEmbyFilter,
 		embyUi,
 		jumpEmbyToLetter,
 		measureEmbyList,
 		playEmbyRow,
 		pressEmbyRow,
 		scrollEmbyList,
+		setEmbyFilter,
 	} from '$lib/library/emby';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -48,8 +52,9 @@
 	let listEl: HTMLElement | undefined = $state();
 
 	/** The painted rows (row 8.1): the plain mode's rows with their headings, or
-	 * the feed-group mode's flat rows with no heading. */
-	const rows = $derived(buildEmbyRows(emby.rows, emby.feedGroup));
+	 * the feed-group mode's flat rows with no heading, narrowed by the
+	 * filter's text. */
+	const rows = $derived(buildEmbyRows(emby.rows, emby.feedGroup, $embyUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(embyListWindow(rows, $embyUi.scrollTop, $embyUi.viewportHeight));
@@ -130,6 +135,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-emby-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$embyUi.filter}
+			placeholder="Filter items"
+			ariaLabel="Filter items"
+			oninput={setEmbyFilter}
+			onaccept={acceptEmbyFilter}
+		/>
+	</div>
 	{#if emby.loading}
 		<!-- The active list has not landed yet (row 8.1): one placeholder line
 			holds the list's place. -->

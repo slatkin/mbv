@@ -25,19 +25,23 @@ export interface HomeUiState {
 	/** The list's measured viewport height in pixels: `0` until the list
 	 * measures, and then the rows that paint are the rows in view. */
 	viewportHeight: number;
+	/** The `/` filter's text: the list paints only the item rows whose title
+	 * contains it, without case (design D7's filter rule). */
+	filter: string;
 }
 
 /** The state a freshly mounted Home list starts with. */
 export function initialHomeUi(): HomeUiState {
-	return { cursor: null, scrollTop: 0, viewportHeight: 0 };
+	return { cursor: null, scrollTop: 0, viewportHeight: 0, filter: '' };
 }
 
 /** The Home list's interaction state. */
 export const homeUi = writable<HomeUiState>(initialHomeUi());
 
-/** The painted rows of the carried Home content (design D12). */
-function homeRows(): HomeListRow[] {
-	return buildHomeRows(libraryHome()?.rows ?? []);
+/** The painted rows of the carried Home content (design D12), narrowed by the
+ * state's filter text. */
+function homeRows(filter = get(homeUi).filter): HomeListRow[] {
+	return buildHomeRows(libraryHome()?.rows ?? [], filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -51,6 +55,53 @@ function cursorRow(list: HomeListRow[], cursor: string | null): HomeListRow | nu
 export function homeCursorRowId(): GuiHomeRowId | null {
 	const row = cursorRow(homeRows(), get(homeUi).cursor);
 	return row !== null && row.kind === 'item' ? row.rowId : null;
+}
+
+/** The state once the painted rows may have narrowed (design D12): the
+ * cursor keeps its row while that row still paints, and falls to the first
+ * item row otherwise, with the scroll offset showing it — the Music filter's
+ * own resolve (design D7). */
+function resolveHomeCursor(ui: HomeUiState): HomeUiState {
+	const list = homeRows(ui.filter);
+	const cursor = list.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveHomeCursor(list, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** Narrow the list to the titles that contain `filter`, without case (design
+ * D7's filter rule): the cursor follows the rows, and its settle selects the
+ * row it rests on, as a cursor move does. */
+export function setHomeFilter(filter: string): void {
+	const before = get(homeUi).cursor;
+	homeUi.update((ui) => resolveHomeCursor({ ...ui, filter }));
+	const after = get(homeUi).cursor;
+	if (after !== before) {
+		settleSelection(cursorRow(homeRows(), after));
+	}
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor follows the widened rows,
+ * and its settle selects the row it rests on. */
+export function closeHomeFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	const before = get(homeUi).cursor;
+	homeUi.update((ui) => resolveHomeCursor({ ...ui, filter: '' }));
+	const after = get(homeUi).cursor;
+	if (after !== before) {
+		settleSelection(cursorRow(homeRows(), after));
+	}
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the
+ * text (design D3, step 2). */
+export function acceptHomeFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 }
 
 /** Select the row (design D12): the select command the core stores, whose

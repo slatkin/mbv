@@ -221,15 +221,30 @@ test('Space on a focused Shows pill asks for its mode and sends no key', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('the Shows list takes no filter key, so / reaches the core', () => {
+// `/` opens the list's filter under Library focus (design D3, D7): the
+// rail's keyboard path, and the Queue filter never sees the key.
+test('/ opens the Shows filter and sends no key', () => {
 	carryShows(showsContent('latest', SHOWS_EPISODES), 'list', 'e1');
 
 	press('/');
 
+	expect(get(libraryUi).filterOpen).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc closes the open filter (design D3, step 2): its text goes with it,
+// and the close runs the Shows list's own resolve, not another
+// destination's.
+test('Esc closes the Shows filter and drops its text', () => {
+	carryShows(showsContent('latest', SHOWS_EPISODES), 'list', 'e1');
+	showsUi.set({ ...initialShowsUi(), filter: 'e1' });
+	libraryUi.set({ ...initialLibraryUi(), filterOpen: true });
+
+	press('Escape');
+
 	expect(get(libraryUi).filterOpen).toBe(false);
-	expect(invokeMock).toHaveBeenCalledWith('key', {
-		event: expect.objectContaining({ key: '/' }),
-	});
+	expect(get(showsUi).filter).toBe('');
+	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 // The pane walk skips the Hero the Upcoming mode does not paint (design D12):

@@ -11,7 +11,8 @@
 	// state and reports the two facts only the DOM holds. A press selects the
 	// episode the Hero shows, and a double-click plays it (design D12): the
 	// keys' Enter plays the cursor row, and the press is the selection's half.
-	// Podcasts has no filter in Phase 2, so the list paints no filter field.
+	// The `/` filter field narrows the episodes to the titles that contain
+	// its text (design D7's filter rule).
 	import { onMount } from 'svelte';
 	import type { GuiPodcastsFrame } from '$lib/bridge/types';
 	import {
@@ -22,12 +23,15 @@
 	} from '$lib/library/podcasts-list';
 	import type { PodcastsItemRow } from '$lib/library/podcasts-list';
 	import {
+		acceptPodcastsFilter,
 		measurePodcastsList,
 		playPodcastsRow,
 		pressPodcastsRow,
 		podcastsUi,
 		scrollPodcastsList,
+		setPodcastsFilter,
 	} from '$lib/library/podcasts';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 
 	interface Props {
 		/** The carried Podcasts content (design D12, row 10.1): the active
@@ -39,8 +43,9 @@
 	let listEl: HTMLElement | undefined = $state();
 
 	/** The painted rows of the flat list (row 10.1): the same model
-	 * `$lib/library/podcasts` builds from the carried content. */
-	const rows = $derived(buildPodcastsRows(podcasts.rows));
+	 * `$lib/library/podcasts` builds from the carried content, narrowed by
+	 * the filter's text. */
+	const rows = $derived(buildPodcastsRows(podcasts.rows, $podcastsUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(podcastsListWindow(rows, $podcastsUi.scrollTop, $podcastsUi.viewportHeight));
@@ -121,6 +126,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-podcasts-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$podcastsUi.filter}
+			placeholder="Filter episodes"
+			ariaLabel="Filter episodes"
+			oninput={setPodcastsFilter}
+			onaccept={acceptPodcastsFilter}
+		/>
+	</div>
 	{#if podcasts.loading}
 		<!-- The active view's episodes have not landed yet (row 10.1): one
 			placeholder line holds the list's place. -->

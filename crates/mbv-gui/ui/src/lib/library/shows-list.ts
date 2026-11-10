@@ -14,6 +14,7 @@ import {
 	LETTER_ROW_HEIGHT,
 	NODE_ROW_HEIGHT,
 	RAIL_LETTERS,
+	filterMatch,
 	listWindow,
 	rowsHeight,
 } from './list';
@@ -79,14 +80,18 @@ export function showsRowsHeight(rows: readonly ShowsListRow[]): number {
  * series rows in the server's sort order, each under the letter heading of
  * its rail letter — the Music list's heading rule, one heading per letter —
  * and in the Latest and Upcoming modes the flat rows with no heading at all.
- * Every row carries its top edge and height, so the list paints a window of
- * rows over native scroll.
+ * The filter narrows the rows to the titles that contain its text, without
+ * case, and a heading paints only above a kept row (design D7's filter rule,
+ * the rail's keyboard path). Every row carries its top edge and height, so
+ * the list paints a window of rows over native scroll.
  */
 export function buildShowsRows(
 	rows: readonly GuiShowsRow[],
 	mode: GuiShowsMode,
+	filter = '',
 ): ShowsListRow[] {
-	return showsSeriesMode(mode) ? seriesShowsRows(rows) : flatShowsRows(rows);
+	const kept = rows.filter((row) => filterMatch(row.title, filter));
+	return showsSeriesMode(mode) ? seriesShowsRows(kept) : flatShowsRows(kept);
 }
 
 /** The All series mode's rows: each series under the letter heading of its

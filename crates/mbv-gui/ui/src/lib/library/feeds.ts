@@ -5,8 +5,8 @@
 // `pills` and `selected`), so nothing here mirrors them: a press sends the
 // select command, and the frame carries the choice back. The row model is
 // `$lib/library/feeds-list`'s; the panel's pane focus and the Hero overlay
-// stay in `./state`'s shared store. There is no filter in Phase 2 and no
-// play-next: `n` is consumed and does nothing. A Client holds one feed tab,
+// stay in `./state`'s shared store. There is no play-next: `n` is consumed
+// and does nothing. A Client holds one feed tab,
 // so no library index rides the commands.
 
 import { get, writable } from 'svelte/store';
@@ -42,11 +42,21 @@ export interface FeedsUiState {
 	/** The pill selection the keys asked for: Space and Enter select the
 	 * focused pill, and the pill row turns it into the set-pill command. */
 	pillSelect: GuiFeedPill | null;
+	/** The `/` filter's text: the list paints only the entries whose title
+	 * contains it, without case (design D7's filter rule). */
+	filter: string;
 }
 
 /** The state a freshly mounted Feeds list starts with. */
 export function initialFeedsUi(): FeedsUiState {
-	return { cursor: null, scrollTop: 0, viewportHeight: 0, focusedPill: null, pillSelect: null };
+	return {
+		cursor: null,
+		scrollTop: 0,
+		viewportHeight: 0,
+		focusedPill: null,
+		pillSelect: null,
+		filter: '',
+	};
 }
 
 /** The Feeds list's interaction state. */
@@ -59,9 +69,9 @@ export function feedsPillKey(pill: GuiFeedPill): string {
 }
 
 /** The painted rows of the carried Feeds content (design D12). */
-function entryRows(): FeedsItemRow[] {
+function entryRows(filter = get(feedsUi).filter): FeedsItemRow[] {
 	const feeds = libraryFeeds();
-	return feeds === null ? [] : buildFeedsRows(feeds.rows);
+	return feeds === null ? [] : buildFeedsRows(feeds.rows, filter);
 }
 
 /** The row the Feeds cursor rests on, or `null` while no painted row carries
@@ -70,6 +80,41 @@ export function feedsCursorRow(): FeedsItemRow | null {
 	const cursor = get(feedsUi).cursor;
 	const row = entryRows().find((candidate) => candidate.id === cursor);
 	return row ?? null;
+}
+
+/** The state once the painted rows may have narrowed (design D12): the
+ * cursor keeps its row while that row still paints, and falls to the first
+ * painted row otherwise, with the scroll offset showing it — the Music
+ * filter's own resolve (design D7). */
+function resolveFeedsCursor(ui: FeedsUiState): FeedsUiState {
+	const list = entryRows(ui.filter);
+	const cursor = list.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveFeedsCursor(list, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** Narrow the list to the titles that contain `filter`, without case (design
+ * D7's filter rule): the cursor follows the rows. */
+export function setFeedsFilter(filter: string): void {
+	feedsUi.update((ui) => resolveFeedsCursor({ ...ui, filter }));
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
+export function closeFeedsFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	feedsUi.update((ui) => resolveFeedsCursor({ ...ui, filter: '' }));
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the
+ * text (design D3, step 2). */
+export function acceptFeedsFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 }
 
 /** Select the row (design D12): the select command the core stores, whose

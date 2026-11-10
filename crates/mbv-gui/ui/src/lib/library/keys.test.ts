@@ -658,17 +658,34 @@ test('Down on Home moves the cursor and selects the row it settles on', () => {
 	});
 });
 
-// No filter in Phase 2 (row 6.2): the Library does not take `/` on Home, so
-// the Queue filter's key reaches the core.
-test('the filter key is not taken on Home', () => {
+// `/` opens the Home list's filter under Library focus (design D3, D7):
+// the rail's keyboard path, and the Queue filter never sees the key.
+test('/ opens the Home filter and sends no key', () => {
 	carryHome();
 
 	press('/');
 
-	expect(get(libraryUi).filterOpen).toBe(false);
-	expect(invokeMock).toHaveBeenCalledWith('key', {
-		event: expect.objectContaining({ key: '/' }),
+	expect(get(libraryUi).filterOpen).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc closes the open filter (design D3, step 2): its text goes with it,
+// and the close runs the Home list's own resolve.
+test('Esc closes the Home filter and drops its text', () => {
+	carryHome();
+	homeUi.set({
+		...initialHomeUi(),
+		filter: 'row',
+		cursor: homeRowKey(CONTINUED_ROW.id),
 	});
+	libraryUi.set({ ...initialLibraryUi(), filterOpen: true });
+	invokeMock.mockClear();
+
+	press('Escape');
+
+	expect(get(libraryUi).filterOpen).toBe(false);
+	expect(get(homeUi).filter).toBe('');
+	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 // The pane walk skips the panes Home does not paint (design D12): no pill row,

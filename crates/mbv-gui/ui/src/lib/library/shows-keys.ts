@@ -6,15 +6,15 @@
 // Hero's Workspace.
 //
 // Everything else matches the Music router: the movements and Enter never reach
-// the core, Esc's overlay and menu handling runs before this, Shows paints no
-// filter in Phase 2, and Space with no focused pill stays the core's play and
+// the core, Esc's overlay and menu handling runs before this, `/` opens the
+// list's filter, and Space with no focused pill stays the core's play and
 // pause.
 
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiShowsFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryShows } from './state';
+import { libraryShows, openLibraryFilter } from './state';
 import {
 	focusedShowsPill,
 	moveShowsListCursor,
@@ -53,10 +53,10 @@ export function routeShowsPanelKey(event: KeyboardEvent, ui: LibraryUiState): Ke
 	if (shows === null) {
 		return 'core';
 	}
-	// Shows paints no filter in Phase 2 (row 7.1): `/` keeps its core effect,
-	// as it does on Home.
-	if (event.key === '/') {
-		return 'core';
+	// `/` opens the list's filter (design D3, D7): the rail's keyboard path.
+	if (event.key === '/' && bare(event)) {
+		openLibraryFilter();
+		return 'handled';
 	}
 	// Space selects the focused pill (design D6). With no pill focused, it is
 	// the core's: Space plays and pauses.

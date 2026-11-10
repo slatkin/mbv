@@ -124,11 +124,11 @@ pub enum GuiLibraryCommand {
     /// Home flat list's play path, whose resume behaviour the row's
     /// Continue Watching membership decides.
     HomePlay { row: home::GuiHomeRowId },
-    /// Enqueue a Home row after the active slot (design D12): `n` on the
-    /// row, carried as its own command for the front end's label, resolved
-    /// through the same Home enqueue path as the add — the Owner owns the
-    /// queue, and the Home rows have no library the play-next admission
-    /// resolves against.
+    /// Enqueue a Home row (design D12): `n` on the row, carried as its own
+    /// command for the front end's Play next label, resolved through the
+    /// same Home enqueue path as the add — the Owner owns the queue, and the
+    /// Home rows have no library the play-next admission resolves against,
+    /// so the row tail-appends like `a`.
     HomePlayNext { row: home::GuiHomeRowId },
     /// Enqueue a Home row (design D12): `a` on the row, through the Home
     /// flat list's enqueue path.
@@ -156,7 +156,6 @@ pub enum GuiLibraryCommand {
     /// Play a Shows episode next (design D12): the shared play-next
     /// admission, so the episode enters directly after the active slot.
     ShowsPlayNext { lib_idx: usize, item_id: String },
-    /// Play a Shows episode to the queue's front...
     /// Add a Shows episode to the queue (design D12): the shared add path.
     ShowsQueue { lib_idx: usize, item_id: String },
     /// Select a plain Emby-library row (design D12, row 8.1): the row the

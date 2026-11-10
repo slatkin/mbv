@@ -3,8 +3,9 @@
 	// Home design): the flat list in the Music list slot — the two sections'
 	// heading rows (`Continue watching`, `Recently added`), the item rows with
 	// their date gutter and their art thumb when the row carries art, and the
-	// playing state's styling. No header line, no filter field, and no letter
-	// rail: Home paints none of them.
+	// playing state's styling, and the `/` filter field that narrows the item
+	// rows to the titles that contain its text (design D7's filter rule). No
+	// letter rail: Home paints none.
 	//
 	// The rows paint at the fixed heights of `$lib/library/home-list` over
 	// native scroll, and only the rows in view paint, so a long list stays
@@ -23,12 +24,15 @@
 	} from '$lib/library/home-list';
 	import type { HomeListRow } from '$lib/library/home-list';
 	import {
+		acceptHomeFilter,
 		homeUi,
 		measureHomeList,
 		playHomeRow,
 		pressHomeRow,
 		scrollHomeList,
+		setHomeFilter,
 	} from '$lib/library/home';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 
 	interface Props {
 		/** The carried Home content (design D12): the flat list's rows. */
@@ -39,8 +43,9 @@
 	let listEl: HTMLElement | undefined = $state();
 
 	/** The painted rows of the flat list (design D12): the same model
-	 * `$lib/library/home` builds from the carried content. */
-	const rows = $derived(buildHomeRows(home.rows));
+	 * `$lib/library/home` builds from the carried content, narrowed by the
+	 * filter's text. */
+	const rows = $derived(buildHomeRows(home.rows, $homeUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(homeListWindow(rows, $homeUi.scrollTop, $homeUi.viewportHeight));
@@ -121,6 +126,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-home-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$homeUi.filter}
+			placeholder="Filter"
+			ariaLabel="Filter home"
+			oninput={setHomeFilter}
+			onaccept={acceptHomeFilter}
+		/>
+	</div>
 	<ol
 		bind:this={listEl}
 		class="min-h-0 flex-1"

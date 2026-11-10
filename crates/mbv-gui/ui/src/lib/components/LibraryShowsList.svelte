@@ -6,12 +6,13 @@
 	// `$lib/library/shows-list` over native scroll, and only the rows in view
 	// paint, so a long series list stays fast.
 	//
-	// The cursor, the scroll offset, and the viewport are the window content's
-	// own in `$lib/library/shows` (design D1); this component paints that state
-	// and reports the two facts only the DOM holds. A press selects the row the
-	// Hero shows, a double-click on a flat row plays it, and the keys' Enter
-	// selects a series and plays a flat row. Shows has no filter in Phase 2, so
-	// the list paints no filter field: `/` stays the core's key, as on Home.
+	// The cursor, the scroll offset, the viewport, and the filter text are the
+	// window content's own in `$lib/library/shows` (design D1); this component
+	// paints that state and reports the two facts only the DOM holds. A press
+	// selects the row the Hero shows, a double-click on a flat row plays it,
+	// and the keys' Enter selects a series and plays a flat row. The `/`
+	// filter field narrows the rows to the titles that contain its text, the
+	// rail's keyboard path in the All series mode (design D7).
 	import { onMount } from 'svelte';
 	import type { GuiShowsFrame } from '$lib/bridge/types';
 	import {
@@ -25,14 +26,17 @@
 	} from '$lib/library/shows-list';
 	import type { ShowsListRow } from '$lib/library/shows-list';
 	import {
+		acceptShowsFilter,
 		jumpShowsToLetter,
 		measureShowsList,
 		playShowsRow,
 		pressShowsRow,
 		scrollShowsList,
+		setShowsFilter,
 		showsUi,
 	} from '$lib/library/shows';
 	import { resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -47,8 +51,8 @@
 	const mode = $derived(activeShowsMode(shows));
 
 	/** The painted rows (design D12): the series rows with their headings, or
-	 * the flat rows with no heading. */
-	const rows = $derived(buildShowsRows(shows.rows, mode));
+	 * the flat rows with no heading, narrowed by the filter's text. */
+	const rows = $derived(buildShowsRows(shows.rows, mode, $showsUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(showsListWindow(rows, $showsUi.scrollTop, $showsUi.viewportHeight));
@@ -143,6 +147,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-shows-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$showsUi.filter}
+			placeholder="Filter shows"
+			ariaLabel="Filter shows"
+			oninput={setShowsFilter}
+			onaccept={acceptShowsFilter}
+		/>
+	</div>
 	{#if shows.loading}
 		<!-- The active mode's list has not landed yet (design D12): one
 			placeholder line holds the list's place. -->

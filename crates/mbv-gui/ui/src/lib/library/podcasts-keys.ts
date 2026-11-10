@@ -7,17 +7,16 @@
 // cursor.
 //
 // Everything else matches the Shows and Emby routers: the movements and Enter
-// never reach the core, Esc's overlay and menu handling runs before this,
-// Podcasts paints no filter in Phase 2, and Space with no focused pill stays
-// the core's play and pause. There is no play-next on the destination: `n` is
-// consumed wherever it lands and sends no command, and `a` sends the queue
-// command.
+// never reach the core, Esc's overlay and menu handling runs before this, `/`
+// opens the list's filter, and Space with no focused pill stays the core's
+// play and pause. There is no play-next on the destination: `n` is consumed
+// wherever it lands and sends no command, and `a` sends the queue command.
 
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiPodcastsFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryPodcasts } from './state';
+import { libraryPodcasts, openLibraryFilter } from './state';
 import {
 	focusedPodcastsPill,
 	movePodcastsListCursor,
@@ -48,10 +47,11 @@ export function routePodcastsPanelKey(event: KeyboardEvent, ui: LibraryUiState):
 	if (podcasts === null) {
 		return 'core';
 	}
-	// Podcasts paints no filter in Phase 2 (row 10.1): `/` keeps its core
-	// effect, as it does on Home, Shows, Emby, and Audiobooks.
-	if (event.key === '/') {
-		return 'core';
+	// `/` opens the list's filter (design D3, D7): the episode list narrows to
+	// the titles that contain the text.
+	if (event.key === '/' && bare(event)) {
+		openLibraryFilter();
+		return 'handled';
 	}
 	// Space selects the focused pill (design D6). With no pill focused, it is
 	// the core's: Space plays and pauses.

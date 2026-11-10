@@ -39,6 +39,10 @@ export interface EmbyUiState {
 	/** The group the keys asked for: Space and Enter select the focused pill,
 	 * and the pill row turns it into the set-feed-group command. */
 	pillSelect: GuiEmbyFeedGroup | null;
+	/** The `/` filter's text: the list paints only the rows whose title
+	 * contains it, without case (design D7's filter rule, the rail's keyboard
+	 * path). */
+	filter: string;
 }
 
 /** The state a freshly mounted Emby list starts with. */
@@ -49,6 +53,7 @@ export function initialEmbyUi(): EmbyUiState {
 		viewportHeight: 0,
 		focusedPill: null,
 		pillSelect: null,
+		filter: '',
 	};
 }
 
@@ -57,9 +62,9 @@ export const embyUi = writable<EmbyUiState>(initialEmbyUi());
 
 /** The painted rows of the carried Emby content (row 8.1): the plain mode's
  * rows under their letter headings, or the feed-group mode's flat rows. */
-function embyRows(): EmbyListRow[] {
+function embyRows(filter = get(embyUi).filter): EmbyListRow[] {
 	const emby = libraryEmby();
-	return emby === null ? [] : buildEmbyRows(emby.rows, emby.feedGroup);
+	return emby === null ? [] : buildEmbyRows(emby.rows, emby.feedGroup, filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -72,6 +77,41 @@ function cursorRow(list: readonly EmbyListRow[], cursor: string | null): EmbyIte
  * play the row, play it next, or queue it. */
 export function embyCursorRow(): EmbyItemRow | null {
 	return cursorRow(embyRows(), get(embyUi).cursor);
+}
+
+/** The state once the painted rows may have narrowed (row 8.1): the cursor
+ * keeps its row while that row still paints, and falls to the first painted
+ * row otherwise, with the scroll offset showing it — the Music filter's own
+ * resolve (design D7). */
+function resolveEmbyCursor(ui: EmbyUiState): EmbyUiState {
+	const list = embyRows(ui.filter);
+	const cursor = list.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveEmbyCursor(list, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** Narrow the list to the titles that contain `filter`, without case (design
+ * D7's filter rule): the cursor follows the rows. */
+export function setEmbyFilter(filter: string): void {
+	embyUi.update((ui) => resolveEmbyCursor({ ...ui, filter }));
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
+export function closeEmbyFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	embyUi.update((ui) => resolveEmbyCursor({ ...ui, filter: '' }));
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the
+ * text (design D3, step 2). */
+export function acceptEmbyFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 }
 
 /** Select the row (row 8.1): the select command the core stores, whose frame

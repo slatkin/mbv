@@ -9,7 +9,7 @@
 
 import type { GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiLibraryArt } from '$lib/bridge/types';
 import type { ListWindow } from './list';
-import { listWindow, rowsHeight } from './list';
+import { filterMatch, listWindow, rowsHeight } from './list';
 
 /** The rows in view over the flat Home list (design D12): the shared list
  * window's own answer for the Home row heights. */
@@ -79,11 +79,22 @@ function homeContentValue(value: string | object): string {
  * The painted rows of the flat Home list (design D12): the carried rows
  * sequence — a heading only above its rows, an empty section absent, and the
  * spacer only between two non-empty sections — with each row's top edge and
- * height, so the list paints a window of rows over native scroll.
+ * height, so the list paints a window of rows over native scroll. The filter
+ * narrows the item rows to the titles that contain its text, without case
+ * (design D7's filter rule): a heading stays only above a kept row, and the
+ * spacer only between two sections that both kept rows.
  */
-export function buildHomeRows(rows: readonly GuiHomeRow[]): HomeListRow[] {
+export function buildHomeRows(rows: readonly GuiHomeRow[], filter = ''): HomeListRow[] {
 	const built: HomeListRow[] = [];
 	let top = 0;
+	/** The heading that opens the current section, until its first kept row
+	 * emits it. */
+	let heading: string | null = null;
+	/** Whether the section before a carried spacer kept a row: the spacer
+	 * paints only when the next section keeps one too. */
+	let spacerPending = false;
+	/** Whether a section already emitted a row: the spacer marks a join. */
+	let emitted = false;
 
 	function push<Row extends Omit<HomeListRow, 'top' | 'height'>>(row: Row, height: number): void {
 		built.push({ ...row, top, height } as HomeListRow);
@@ -92,10 +103,28 @@ export function buildHomeRows(rows: readonly GuiHomeRow[]): HomeListRow[] {
 
 	for (const row of rows) {
 		if (row.row === 'heading') {
-			push({ kind: 'heading', id: `home-heading:${row.text}`, text: row.text }, HOME_HEADING_ROW_HEIGHT);
+			heading = row.text;
 		} else if (row.row === 'spacer') {
-			push({ kind: 'spacer', id: `home-spacer:${top}` }, HOME_SPACER_ROW_HEIGHT);
+			spacerPending = emitted;
 		} else {
+			if (!filterMatch(row.title, filter)) {
+				continue;
+			}
+			if (heading !== null) {
+				if (emitted && spacerPending) {
+					push(
+						{ kind: 'spacer', id: `home-spacer:${top}` },
+						HOME_SPACER_ROW_HEIGHT,
+					);
+				}
+				push(
+					{ kind: 'heading', id: `home-heading:${heading}`, text: heading },
+					HOME_HEADING_ROW_HEIGHT,
+				);
+				heading = null;
+				spacerPending = false;
+			}
+			emitted = true;
 			push(
 				{
 					kind: 'item',

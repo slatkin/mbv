@@ -38,6 +38,10 @@ export interface ShowsUiState {
 	/** The mode selection the keys asked for: Space and Enter select the
 	 * focused pill, and the pill row turns it into the set-mode command. */
 	pillSelect: GuiShowsMode | null;
+	/** The `/` filter's text: the list paints only the rows whose title
+	 * contains it, without case (design D7's filter rule, the rail's keyboard
+	 * path). */
+	filter: string;
 }
 
 /** The state a freshly mounted Shows list starts with. */
@@ -48,16 +52,18 @@ export function initialShowsUi(): ShowsUiState {
 		viewportHeight: 0,
 		focusedPill: null,
 		pillSelect: null,
+		filter: '',
 	};
 }
 
 /** The Shows list's interaction state. */
 export const showsUi = writable<ShowsUiState>(initialShowsUi());
 
-/** The painted rows of the carried Shows content (design D12). */
-function showsRows(): ShowsListRow[] {
+/** The painted rows of the carried Shows content (design D12), narrowed by
+ * the state's filter text. */
+function showsRows(filter = get(showsUi).filter): ShowsListRow[] {
 	const shows = libraryShows();
-	return shows === null ? [] : buildShowsRows(shows.rows, activeShowsMode(shows));
+	return shows === null ? [] : buildShowsRows(shows.rows, activeShowsMode(shows), filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -72,10 +78,45 @@ export function showsCursorRow(): ShowsItemRow | null {
 	return cursorRow(showsRows(), get(showsUi).cursor);
 }
 
+/** The state once the painted rows may have narrowed (design D12): the
+ * cursor keeps its row while that row still paints, and falls to the first
+ * painted row otherwise, with the scroll offset showing it — the Music
+ * filter's own resolve (design D7). */
+function resolveShowsCursor(ui: ShowsUiState): ShowsUiState {
+	const list = showsRows(ui.filter);
+	const cursor = list.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveShowsCursor(list, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** Narrow the list to the titles that contain `filter`, without case (design
+ * D7's filter rule): the cursor follows the rows. */
+export function setShowsFilter(filter: string): void {
+	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter }));
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
+export function closeShowsFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter: '' }));
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the
+ * text (design D3, step 2). */
+export function acceptShowsFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+}
+
 /** Select the row (design D12): the select command the core stores, whose
  * frame paints the Hero. A select repaints the Narrow arrangement's Hero
- * overlay and closes an open menu, because the facts they paint belong to the
- * previous row, as a Music pick's do. */
+ * overlay and closes an open menu, because the facts they paint belong to
+ * the previous row, as a Music pick's do. */
 export function selectShowsRow(row: ShowsListRow): void {
 	const shows = libraryShows();
 	if (shows === null || row.kind === 'heading') {

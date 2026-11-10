@@ -12,8 +12,8 @@
 	// state and reports the two facts only the DOM holds. A press selects the
 	// book the Hero shows, and a double-click plays it from its saved position —
 	// the same play command the keys' Enter sends. A book has no play-next: `n`
-	// is consumed and does nothing. Audiobooks paints no filter field in Phase
-	// 2, so `/` stays the core's key, as on Home and Shows.
+	// is consumed and does nothing. The `/` filter field narrows the books to
+	// the titles that contain its text, the rail's keyboard path (design D7).
 	//
 	// The Hero's chapter cursor belongs to the selected book (the
 	// `audiobooks-workspace` contract): a selection change starts it over,
@@ -29,14 +29,17 @@
 	} from '$lib/library/audiobooks-list';
 	import type { AudiobooksListRow } from '$lib/library/audiobooks-list';
 	import {
+		acceptAudiobooksFilter,
 		audiobooksUi,
 		jumpAudiobooksToLetter,
 		measureAudiobooksList,
 		playAudiobooksRow,
 		pressAudiobooksRow,
 		scrollAudiobooksList,
+		setAudiobooksFilter,
 	} from '$lib/library/audiobooks';
 	import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -47,8 +50,9 @@
 
 	let listEl: HTMLElement | undefined = $state();
 
-	/** The painted rows (row 9.1): the book rows with their letter headings. */
-	const rows = $derived(buildAudiobooksRows(audiobooks.rows));
+	/** The painted rows (row 9.1): the book rows with their letter headings,
+	 * narrowed by the filter's text. */
+	const rows = $derived(buildAudiobooksRows(audiobooks.rows, $audiobooksUi.filter));
 
 	/** The rows in view: only these paint. */
 	const view = $derived(
@@ -144,6 +148,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-abs-list-column="">
+	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+		<LibraryFilterField
+			value={$audiobooksUi.filter}
+			placeholder="Filter books"
+			ariaLabel="Filter books"
+			oninput={setAudiobooksFilter}
+			onaccept={acceptAudiobooksFilter}
+		/>
+	</div>
 	{#if audiobooks.loading}
 		<!-- The book catalog has not landed yet (row 9.1): one placeholder line
 			holds the list's place. -->

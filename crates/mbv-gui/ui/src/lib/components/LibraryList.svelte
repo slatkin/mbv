@@ -38,13 +38,13 @@
 		playLibraryTrack,
 		libraryUi,
 		measureLibraryList,
-		openLibraryFilter,
 		openLibraryRowMenu,
 		pressLibraryRow,
 		revealPickedAlbum,
 		scrollLibraryList,
 		setLibraryFilter,
 	} from '$lib/library/state';
+	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
@@ -55,7 +55,6 @@
 	const { music }: Props = $props();
 
 	let listEl: HTMLElement | undefined = $state();
-	let filterEl: HTMLInputElement | undefined = $state();
 
 	/** The album the list last revealed. A pick reveals once, so a later frame
 	 * carrying the same pick does not move the cursor again. */
@@ -226,22 +225,6 @@
 		}
 	});
 
-	// The filter field owns its focus (design D3, step 2): it takes the keyboard
-	// while the filter is open and gives it back when the filter closes.
-	$effect(() => {
-		const open = $libraryUi.filterOpen;
-		const el = filterEl;
-		if (el === undefined) {
-			return;
-		}
-		if (open && document.activeElement !== el) {
-			el.focus();
-		}
-		if (!open && document.activeElement === el) {
-			el.blur();
-		}
-	});
-
 	onMount(() => {
 		measure();
 		const observer =
@@ -266,36 +249,56 @@
 				data-library-selection-label="">{selectionLabel}</span
 			>
 		</div>
-		<label
-			class="flex items-center"
-			style:height="32px"
-			style:padding="0 10px"
-			style:gap="8px"
-			style:background="var(--canvas-library-column)"
-			style:border="1px solid var(--canvas-border)"
-			style:border-radius="6px"
-			style:color="var(--canvas-muted)"
-		>
-			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-source)">/</span>
-			<input
-				bind:this={filterEl}
-				type="text"
-				class="min-w-0 flex-1"
-				style:background="none"
-				style:border="0"
-				style:outline="none"
-				style:color="var(--canvas-heading)"
-				style:font-size="13px"
-				placeholder={filterPlaceholder}
-				aria-label="Filter artists"
-				value={$libraryUi.filter}
-				data-library-filter=""
-				onfocus={() => openLibraryFilter()}
-				onblur={() => acceptLibraryFilter()}
-				oninput={(event) => setLibraryFilter(event.currentTarget.value)}
-			/>
-		</label>
+		<LibraryFilterField
+			value={$libraryUi.filter}
+			placeholder={filterPlaceholder}
+			ariaLabel="Filter artists"
+			oninput={setLibraryFilter}
+			onaccept={acceptLibraryFilter}
+		/>
 	</div>
+	{#if music.loading}
+		<!-- A selected group's album list has not landed yet (design D5): one
+			placeholder line holds the list's place. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-loading=""
+		>
+			Loading…
+		</div>
+	{/if}
+	{#if music.failure !== null}
+		<!-- The selected groups whose album list failed (design D5): the
+			frame's failure line names them. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-failure=""
+		>
+			{music.failure}
+		</div>
+	{/if}
+	{#if !music.loading && music.artists.length === 0}
+		<!-- The selected collections hold no artist (the spec's empty text):
+			the row area is empty, so one line says so. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-empty=""
+		>
+			No artists
+		</div>
+	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<ol
 			bind:this={listEl}

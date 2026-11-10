@@ -186,7 +186,7 @@
 			type="text"
 			class="w-full"
 			style:height="34px"
-			style:padding="0 10px"
+			style:padding="0 50px 0 10px"
 			style:box-sizing="border-box"
 			style:background="var(--canvas-library-column)"
 			style:border="1px solid var(--canvas-border)"
@@ -202,6 +202,24 @@
 			onblur={() => blurSearchField()}
 			oninput={(event) => setSearchQuery(event.currentTarget.value)}
 		/>
+		<!-- The chord's hint inside the field (the spec's "a Search field with
+			the hint `Ctrl K`", the canvas's bordered chip): a pointer passes
+			through it to the field. -->
+		<span
+			class="font-mono"
+			aria-hidden="true"
+			style:position="absolute"
+			style:right="6px"
+			style:top="50%"
+			style:transform="translateY(-50%)"
+			style:font-size="11px"
+			style:color="var(--canvas-muted)"
+			style:border="1px solid var(--canvas-border)"
+			style:border-radius="4px"
+			style:padding="1px 5px"
+			style:pointer-events="none"
+			data-library-search-hint="">Ctrl K</span
+		>
 		{#if search}
 			<!-- The results dropdown, in the list-row look (row 12.1): the rows
 				under the field while the frame carries them, and the loading and

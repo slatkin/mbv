@@ -98,6 +98,15 @@ export function trackRowId(trackId: string): string {
 	return `track:${trackId}`;
 }
 
+/** Whether a row name survives the filter (design D7, D12): the name contains
+ * the filter's text, without case, and an empty filter keeps every name. The
+ * same rule narrows every Library destination's list — the canvas tree's, and
+ * the flat and headed lists of the other destinations. */
+export function filterMatch(name: string, filter: string): boolean {
+	const needle = filter.trim().toLowerCase();
+	return needle === '' || name.toLowerCase().includes(needle);
+}
+
 /** The input the row model builds from: the carried union, the open nodes, and
  * the filter text. */
 export interface LibraryTree {

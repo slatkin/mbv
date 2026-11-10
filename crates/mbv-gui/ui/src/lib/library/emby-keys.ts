@@ -6,15 +6,15 @@
 // pills, the list, or the Hero — which carries no Workspace and no cursor.
 //
 // Everything else matches the Music router: the movements and Enter never reach
-// the core, Esc's overlay and menu handling runs before this, the Emby library
-// paints no filter in Phase 2, and Space with no focused pill stays the core's
-// play and pause.
+// the core, Esc's overlay and menu handling runs before this, `/` opens the
+// list's filter, and Space with no focused pill stays the core's play and
+// pause.
 
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiEmbyFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryEmby } from './state';
+import { libraryEmby, openLibraryFilter } from './state';
 import {
 	embyCursorRow,
 	focusedEmbyPill,
@@ -46,10 +46,11 @@ export function routeEmbyPanelKey(event: KeyboardEvent, ui: LibraryUiState): Key
 	if (emby === null) {
 		return 'core';
 	}
-	// The Emby library paints no filter in Phase 2 (row 8.1): `/` keeps its core
-	// effect, as it does on Home and Shows.
-	if (event.key === '/') {
-		return 'core';
+	// `/` opens the list's filter (design D3, D7): the rail's keyboard path on
+	// the plain list, and the same narrowing on the feed-group list.
+	if (event.key === '/' && bare(event)) {
+		openLibraryFilter();
+		return 'handled';
 	}
 	// Space selects the focused pill (design D6). With no pill focused — and in
 	// plain mode, which paints none — it is the core's: Space plays and pauses.

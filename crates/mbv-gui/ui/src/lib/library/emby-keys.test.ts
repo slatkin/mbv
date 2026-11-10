@@ -224,15 +224,31 @@ test('Space on a focused feed-group pill asks for its group and sends no key', (
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('the Emby list takes no filter key, so / reaches the core', () => {
+// `/` opens the list's filter under Library focus (design D3, D7): the
+// rail's keyboard path on the plain list, and the Queue filter never sees
+// the key.
+test('/ opens the Emby filter and sends no key', () => {
 	carryEmby(embyContent(false, MOVIES), 'list', 'm1');
 
 	press('/');
 
+	expect(get(libraryUi).filterOpen).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc closes the open filter (design D3, step 2): its text goes with it,
+// and the close runs the Emby list's own resolve, not another
+// destination's.
+test('Esc closes the Emby filter and drops its text', () => {
+	carryEmby(embyContent(false, MOVIES), 'list', 'm1');
+	embyUi.set({ ...initialEmbyUi(), filter: 'm1' });
+	libraryUi.set({ ...initialLibraryUi(), filterOpen: true });
+
+	press('Escape');
+
 	expect(get(libraryUi).filterOpen).toBe(false);
-	expect(invokeMock).toHaveBeenCalledWith('key', {
-		event: expect.objectContaining({ key: '/' }),
-	});
+	expect(get(embyUi).filter).toBe('');
+	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 // The pane walk skips the panes the Emby frame does not paint (row 8.1): a

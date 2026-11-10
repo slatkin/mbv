@@ -6,7 +6,7 @@
 // choice back. The row model is `$lib/library/audiobooks-list`'s; the Hero's
 // chapter cursor belongs to the Hero (`$lib/library/audiobooks-workspace`),
 // and the panel's pane focus and the Hero overlay stay in `./state`'s shared
-// store. There is no pill row on the destination and no filter in Phase 2.
+// store. There is no pill row on the destination.
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
@@ -30,20 +30,24 @@ export interface AudiobooksUiState {
 	/** The list's measured viewport height in pixels: `0` until the list
 	 * measures, and then the rows that paint are the rows in view. */
 	viewportHeight: number;
+	/** The `/` filter's text: the list paints only the books whose title
+	 * contains it, without case (design D7's filter rule, the rail's keyboard
+	 * path). */
+	filter: string;
 }
 
 /** The state a freshly mounted book list starts with. */
 export function initialAudiobooksUi(): AudiobooksUiState {
-	return { cursor: null, scrollTop: 0, viewportHeight: 0 };
+	return { cursor: null, scrollTop: 0, viewportHeight: 0, filter: '' };
 }
 
 /** The book list's interaction state. */
 export const audiobooksUi = writable<AudiobooksUiState>(initialAudiobooksUi());
 
 /** The painted rows of the carried book content (row 9.1). */
-function bookRows(): AudiobooksListRow[] {
+function bookRows(filter = get(audiobooksUi).filter): AudiobooksListRow[] {
 	const audiobooks = libraryAudiobooks();
-	return audiobooks === null ? [] : buildAudiobooksRows(audiobooks.rows);
+	return audiobooks === null ? [] : buildAudiobooksRows(audiobooks.rows, filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -59,6 +63,41 @@ function cursorRow(
  * play the book or queue it. */
 export function audiobooksCursorRow(): AudiobooksItemRow | null {
 	return cursorRow(bookRows(), get(audiobooksUi).cursor);
+}
+
+/** The state once the painted rows may have narrowed (row 9.1): the cursor
+ * keeps its row while that row still paints, and falls to the first painted
+ * row otherwise, with the scroll offset showing it — the Music filter's own
+ * resolve (design D7). */
+function resolveAudiobooksCursor(ui: AudiobooksUiState): AudiobooksUiState {
+	const list = bookRows(ui.filter);
+	const cursor = list.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveAudiobooksCursor(list, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** Narrow the list to the titles that contain `filter`, without case (design
+ * D7's filter rule): the cursor follows the rows. */
+export function setAudiobooksFilter(filter: string): void {
+	audiobooksUi.update((ui) => resolveAudiobooksCursor({ ...ui, filter }));
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
+export function closeAudiobooksFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	audiobooksUi.update((ui) => resolveAudiobooksCursor({ ...ui, filter: '' }));
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the
+ * text (design D3, step 2). */
+export function acceptAudiobooksFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 }
 
 /** Select the book (row 9.1): the select command the core stores, whose frame

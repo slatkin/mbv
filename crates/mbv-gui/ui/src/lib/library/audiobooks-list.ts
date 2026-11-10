@@ -11,7 +11,13 @@
 
 import type { GuiAudiobooksRow } from '$lib/bridge/types';
 import type { ListWindow, RailLetter } from './list';
-import { LETTER_ROW_HEIGHT, RAIL_LETTERS, listWindow, rowsHeight } from './list';
+import {
+	LETTER_ROW_HEIGHT,
+	RAIL_LETTERS,
+	filterMatch,
+	listWindow,
+	rowsHeight,
+} from './list';
 
 /** The letter heading row's height in logical pixels (design D12, row 9.1):
  * the Music list's letter heading, which the book list reuses. */
@@ -57,15 +63,20 @@ export function audiobooksRowsHeight(rows: readonly AudiobooksListRow[]): number
 /**
  * The painted rows of the book list (design D12, row 9.1): the catalog's book
  * rows in the TUI's sort — author sort key, then title — each under the letter
- * heading of its rail letter, one heading per run of the same letter. Every
- * row carries its top edge and height, so the list paints a window of rows
- * over native scroll.
+ * heading of its rail letter, one heading per run of the same letter. The
+ * filter narrows the rows to the titles that contain its text, without case,
+ * and a heading paints only above a kept row (design D7's filter rule, the
+ * rail's keyboard path). Every row carries its top edge and height, so the
+ * list paints a window of rows over native scroll.
  */
-export function buildAudiobooksRows(rows: readonly GuiAudiobooksRow[]): AudiobooksListRow[] {
+export function buildAudiobooksRows(
+	rows: readonly GuiAudiobooksRow[],
+	filter = '',
+): AudiobooksListRow[] {
 	const built: AudiobooksListRow[] = [];
 	let top = 0;
 	let heading: string | null = null;
-	for (const row of rows) {
+	for (const row of rows.filter((candidate) => filterMatch(candidate.title, filter))) {
 		const letter = row.sortLetter;
 		if (letter !== heading) {
 			heading = letter;

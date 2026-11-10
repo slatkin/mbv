@@ -9,7 +9,13 @@
 
 import type { GuiEmbyFeedGroup, GuiEmbyRow } from '$lib/bridge/types';
 import type { ListWindow, RailLetter } from './list';
-import { LETTER_ROW_HEIGHT, RAIL_LETTERS, listWindow, rowsHeight } from './list';
+import {
+	LETTER_ROW_HEIGHT,
+	RAIL_LETTERS,
+	filterMatch,
+	listWindow,
+	rowsHeight,
+} from './list';
 
 /** The letter heading row's height in logical pixels (design D12): the Music
  * list's letter heading, which the plain list reuses. */
@@ -59,14 +65,19 @@ export function embyRowsHeight(rows: readonly EmbyListRow[]): number {
  * name-sorted rows, each under the letter heading of its rail letter — the
  * Music list's heading rule, one heading per run of the same letter — and in
  * feed-group mode the flat rows in the server's date order with no heading at
- * all, because that list carries no rail. Every row carries its top edge and
- * height, so the list paints a window of rows over native scroll.
+ * all, because that list carries no rail. The filter narrows the rows to the
+ * titles that contain its text, without case, and a heading paints only above
+ * a kept row (design D7's filter rule, the rail's keyboard path). Every row
+ * carries its top edge and height, so the list paints a window of rows over
+ * native scroll.
  */
 export function buildEmbyRows(
 	rows: readonly GuiEmbyRow[],
 	feedGroup: boolean,
+	filter = '',
 ): EmbyListRow[] {
-	return feedGroup ? flatEmbyRows(rows) : headingEmbyRows(rows);
+	const kept = rows.filter((row) => filterMatch(row.title, filter));
+	return feedGroup ? flatEmbyRows(kept) : headingEmbyRows(kept);
 }
 
 /** The plain mode's rows: each row under the letter heading of its rail

@@ -40,6 +40,8 @@ import {
 } from './state';
 import type { LibraryUiState } from './state';
 import {
+	acceptHomeFilter,
+	closeHomeFilter,
 	homeCursorRowId,
 	moveHomeListCursor,
 	playHomeRow,
@@ -47,11 +49,15 @@ import {
 	queueHomeRow,
 } from './home';
 import { routeShowsPanelKey } from './shows-keys';
+import { acceptShowsFilter, closeShowsFilter } from './shows';
 import { routeEmbyPanelKey } from './emby-keys';
+import { acceptEmbyFilter, closeEmbyFilter } from './emby';
 import { routeAudiobooksPanelKey } from './audiobooks-keys';
+import { acceptAudiobooksFilter, closeAudiobooksFilter } from './audiobooks';
 import { routePodcastsPanelKey } from './podcasts-keys';
+import { acceptPodcastsFilter, closePodcastsFilter } from './podcasts';
 import { routeFeedsPanelKey } from './feeds-keys';
-import { libraryFeeds } from './feeds';
+import { acceptFeedsFilter, closeFeedsFilter, libraryFeeds } from './feeds';
 import {
 	activateSearchHighlight,
 	closeLibrarySearch,
@@ -144,14 +150,76 @@ function movePillFocus(step: number): void {
 	}
 }
 
+/** Close the active destination's filter with Esc (design D3, step 2): the
+ * open field is the one list's own, so its close and accept run the
+ * destination's own resolve, in the same order `routePanelKey` hands keys
+ * over. */
+function closeActiveFilter(): void {
+	if (libraryHome() !== null) {
+		closeHomeFilter();
+		return;
+	}
+	if (libraryShows() !== null) {
+		closeShowsFilter();
+		return;
+	}
+	if (libraryEmby() !== null) {
+		closeEmbyFilter();
+		return;
+	}
+	if (libraryAudiobooks() !== null) {
+		closeAudiobooksFilter();
+		return;
+	}
+	if (libraryPodcasts() !== null) {
+		closePodcastsFilter();
+		return;
+	}
+	if (libraryFeeds() !== null) {
+		closeFeedsFilter();
+		return;
+	}
+	closeLibraryFilter();
+}
+
+/** Accept the active destination's filter with Enter (design D3, step 2):
+ * the field closes and the list keeps its text. */
+function acceptActiveFilter(): void {
+	if (libraryHome() !== null) {
+		acceptHomeFilter();
+		return;
+	}
+	if (libraryShows() !== null) {
+		acceptShowsFilter();
+		return;
+	}
+	if (libraryEmby() !== null) {
+		acceptEmbyFilter();
+		return;
+	}
+	if (libraryAudiobooks() !== null) {
+		acceptAudiobooksFilter();
+		return;
+	}
+	if (libraryPodcasts() !== null) {
+		acceptPodcastsFilter();
+		return;
+	}
+	if (libraryFeeds() !== null) {
+		acceptFeedsFilter();
+		return;
+	}
+	acceptLibraryFilter();
+}
+
 /** Route a key while the filter field holds the keyboard (design D3, step 2). */
 function routeFilterKey(event: KeyboardEvent): KeyOutcome {
 	if (event.key === 'Escape') {
-		closeLibraryFilter();
+		closeActiveFilter();
 		return 'handled';
 	}
 	if (event.key === 'Enter') {
-		acceptLibraryFilter();
+		acceptActiveFilter();
 		return 'handled';
 	}
 	// The field takes the rest: the browser types the key, and the core gets
@@ -369,9 +437,13 @@ function routeSearchKey(event: KeyboardEvent, search: GuiSearchFrame): KeyOutcom
  * tree's Right and Left have no node to open, so they change nothing but
  * still never reach the core. */
 function routeHomePanelKey(event: KeyboardEvent): KeyOutcome {
-	if (event.key === '/' || event.key === ' ') {
-		// No filter and no pill row on Home (row 6.2): the key keeps its core
-		// effect, as it does under Queue focus.
+	if (event.key === '/' && bare(event)) {
+		openLibraryFilter();
+		return 'handled';
+	}
+	if (event.key === ' ') {
+		// No pill row on Home (row 6.2): Space keeps its core effect, as it
+		// does under Queue focus.
 		return 'core';
 	}
 	if (!bare(event)) {

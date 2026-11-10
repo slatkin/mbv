@@ -188,15 +188,31 @@ test('n on the list pane does nothing and is handled', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('Audiobooks takes no filter key, so / reaches the core', () => {
+// `/` opens the list's filter under Library focus (design D3, D7): the
+// rail's keyboard path on the plain list, and the Queue filter never sees
+// the key.
+test('/ opens the Audiobooks filter and sends no key', () => {
 	carry('list', 'b1');
 
 	press('/');
 
+	expect(get(libraryUi).filterOpen).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc closes the open filter (design D3, step 2): its text goes with it,
+// and the close runs the Audiobooks list's own resolve, not another
+// destination's.
+test('Esc closes the Audiobooks filter and drops its text', () => {
+	carry('list');
+	audiobooksUi.set({ ...initialAudiobooksUi(), filter: 'b1' });
+	libraryUi.set({ ...initialLibraryUi(), filterOpen: true });
+
+	press('Escape');
+
 	expect(get(libraryUi).filterOpen).toBe(false);
-	expect(invokeMock).toHaveBeenCalledWith('key', {
-		event: expect.objectContaining({ key: '/' }),
-	});
+	expect(get(audiobooksUi).filter).toBe('');
+	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 // The Hero pane's keys act through the Workspace's own contract functions

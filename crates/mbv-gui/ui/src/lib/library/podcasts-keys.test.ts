@@ -233,15 +233,31 @@ test('Enter on a focused pill asks for its selection', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('/ keeps its core effect, so the filter field never opens', () => {
+// `/` opens the list's filter under Library focus (design D3, D7): the
+// rail's keyboard path on the plain list, and the Queue filter never sees
+// the key.
+test('/ opens the Podcasts filter and sends no key', () => {
 	carryPodcasts(podcastsContent('latest', EPISODES), 'list', 'e1:ep1');
 
 	press('/');
 
+	expect(get(libraryUi).filterOpen).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc closes the open filter (design D3, step 2): its text goes with it,
+// and the close runs the Podcasts list's own resolve, not another
+// destination's.
+test('Esc closes the Podcasts filter and drops its text', () => {
+	carryPodcasts(podcastsContent('latest', EPISODES), 'list', 'e1:ep1');
+	podcastsUi.set({ ...initialPodcastsUi(), filter: 'ep1' });
+	libraryUi.set({ ...initialLibraryUi(), filterOpen: true });
+
+	press('Escape');
+
 	expect(get(libraryUi).filterOpen).toBe(false);
-	expect(invokeMock).toHaveBeenCalledWith('key', {
-		event: expect.objectContaining({ key: '/' }),
-	});
+	expect(get(podcastsUi).filter).toBe('');
+	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 test('a in the Hero pane queues the frame\'s selected episode', () => {
