@@ -18,6 +18,7 @@ mod launch;
 mod podcasts;
 mod podcasts_projection;
 mod projection;
+mod search;
 mod shows;
 mod store;
 mod tabs;
@@ -52,6 +53,8 @@ pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
+pub(in crate::app) use self::search::GuiSearchStore;
+pub use self::search::{GuiSearchProjection, GuiSearchRow};
 pub use self::shows::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
     GuiShowsSeasonPill, GuiShowsWorkspace,

@@ -9,7 +9,8 @@ pub struct SearchSidebar {
     pub last_drain_error: Option<String>,
 }
 
-fn is_navigable_type(item_type: &str) -> bool {
+#[must_use]
+pub fn is_navigable_type(item_type: &str) -> bool {
     matches!(
         item_type,
         "Series" | "Episode" | "Season" | "Movie" | "Audio" | "MusicAlbum" | "MusicArtist"

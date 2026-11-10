@@ -297,6 +297,13 @@ pub struct App {
     /// one store holds it. The TUI's feed group and Watched filter stay the
     /// TUI owner's, and the TUI never reads this store.
     pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
+    /// The GUI Library's Search store (add-gui-library-panel design D12, row
+    /// 12.1): the live query, whether its result is still out, whether it
+    /// failed, and the result rows. The GUI mounts no search component, so the
+    /// GUI tick host drains the App's search channel into this store through
+    /// `App::drain_gui_search_results`. The TUI keeps its own drain into the
+    /// mounted `SearchSidebarComponent`, and it never reads this store.
+    pub(in crate::app) gui_search: crate::app::gui_library::GuiSearchStore,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

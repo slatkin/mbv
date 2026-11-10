@@ -11,6 +11,10 @@ use super::App;
 /// child module so this file stays within its line ceiling.
 mod gui_feeds;
 
+/// The GUI Search data path's test seam (row 12.1) sits in its own child
+/// module for the same reason.
+mod search;
+
 #[cfg(feature = "test")]
 use std::sync::{Arc, Mutex};
 

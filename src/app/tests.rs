@@ -19,6 +19,7 @@ mod gui_library_emby;
 mod gui_library_feeds;
 mod gui_library_home;
 mod gui_library_podcasts;
+mod gui_library_search;
 mod gui_library_shows;
 mod gui_library_tv;
 mod home_latest;
