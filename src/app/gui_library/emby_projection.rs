@@ -8,6 +8,7 @@
 //! gutter, `crates/mbv-components/src/emby_library_content.rs`), so the two
 //! Clients cannot drift, and the projection reads `App` data only.
 
+use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::QueueItem;
@@ -162,11 +163,43 @@ impl App {
         if !self.gui_emby_library(lib_idx) {
             return GuiEmbyProjection::default();
         }
-        if self.is_feed_home_video_library(lib_idx) {
+        let projection = if self.is_feed_home_video_library(lib_idx) {
             self.gui_emby_feed_projection(lib_idx)
         } else {
             self.gui_emby_plain_projection(lib_idx)
+        };
+        self.warm_gui_emby_hero_neighbours(lib_idx, &projection);
+        projection
+    }
+
+    /// Warm the Hero artwork of the rows neighbouring the picked one in the
+    /// active list's order, through the shared navigation-idle gate (the TUI's
+    /// cursor-neighbour rule, `App::fetch_nearby_movie_posters`, on the keys
+    /// this Client's Hero paints instead of the list's). The pick's own art is
+    /// the Hero's fetch, so the picked row is never warmed here.
+    fn warm_gui_emby_hero_neighbours(&mut self, lib_idx: usize, projection: &GuiEmbyProjection) {
+        let Some(picked) = projection.selected.as_deref() else {
+            return;
+        };
+        let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+        let Some(picked_index) = ids.iter().position(|id| *id == picked) else {
+            return;
+        };
+        self.warm_gui_hero_neighbours(&ids, picked_index, |app, id| {
+            app.gui_emby_hero_source(lib_idx, id)
+        });
+    }
+
+    /// The artwork source the Hero paints for `item_id`: the shared Emby hero
+    /// producer's policy source, and `None` for a row the Hero gate excludes —
+    /// a folder, or a non-`Movie` in a Movies library — or an id this App no
+    /// longer holds.
+    fn gui_emby_hero_source(&self, lib_idx: usize, item_id: &str) -> Option<ArtworkSource> {
+        let item = self.gui_emby_item(lib_idx, item_id)?;
+        if !self.gui_emby_hero_item(lib_idx, &item) {
+            return None;
         }
+        hero_content_emby(&item).facts.artwork.source
     }
 
     /// The library's display name (row 8.1): the list header's title.

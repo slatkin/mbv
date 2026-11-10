@@ -146,7 +146,18 @@ impl App {
             Self::log_stale_library_item("embySelect", item_id);
             return;
         }
+        let unchanged = self
+            .gui_emby_libs
+            .get(&lib_idx)
+            .and_then(|selection| selection.picked_row.as_deref())
+            == Some(item_id);
+        if unchanged {
+            return;
+        }
         self.gui_emby_libs.entry(lib_idx).or_default().picked_row = Some(item_id.to_string());
+        // A pick move is library navigation: it closes the image warm gate, so
+        // fast arrow traffic warms no neighbour art (the TUI's own rule).
+        self.stamp_navigation();
     }
 
     /// Whether the active list can still name `item_id` (row 8.1): the

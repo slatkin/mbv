@@ -223,7 +223,7 @@ fn one_failing_group_keeps_the_other_groups_albums() {
 #[test]
 fn the_selected_group_alone_fills_the_list() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let app = app_with_stored_groups(
+    let mut app = app_with_stored_groups(
         vec![stored_album(
             "alb-ill",
             "Licensed to Ill",
@@ -323,7 +323,7 @@ fn the_first_group_is_selected_when_no_choice_is_stored() {
 }
 
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).
-fn hero_album_id(app: &App) -> Option<String> {
+fn hero_album_id(app: &mut App) -> Option<String> {
     app.gui_music_projection(0)
         .hero
         .map(|hero| hero.album.album_id)
@@ -334,7 +334,7 @@ fn hero_album_id(app: &App) -> Option<String> {
 #[test]
 fn a_group_with_no_pick_heroes_its_first_album() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let app = app_with_stored_groups(
+    let mut app = app_with_stored_groups(
         vec![
             stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
             stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
@@ -345,7 +345,7 @@ fn a_group_with_no_pick_heroes_its_first_album() {
         .album_id
         .clone();
 
-    assert_eq!(hero_album_id(&app), Some(first));
+    assert_eq!(hero_album_id(&mut app), Some(first));
 }
 
 /// Each pill keeps its own last picked album: a pick on one group survives a
@@ -371,10 +371,100 @@ fn each_pill_reopens_on_its_own_last_pick() {
     });
 
     select_group(&mut app, SOUL);
-    assert_eq!(hero_album_id(&app), Some("alb-3ft".to_string()));
+    assert_eq!(hero_album_id(&mut app), Some("alb-3ft".to_string()));
 
     select_group(&mut app, HIPHOP);
-    assert_eq!(hero_album_id(&app), Some("alb-paul".to_string()));
+    assert_eq!(hero_album_id(&mut app), Some("alb-paul".to_string()));
+}
+
+/// A stub `App` whose Music store holds `albums` and whose Emby runtime holds
+/// no client: a warm's fetch reservation stays visible, and no fetch leaves
+/// the process.
+fn app_with_warm_albums(albums: Vec<mbv_emby_model::EmbyItem>) -> App {
+    let mut app = app_with_stored_groups(albums, Vec::new());
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
+    app.images
+        .configure_protocol(Some("kitty".to_string()), true);
+    app
+}
+
+/// Six albums of one artist, named so the projection's sort order is the
+/// declared `alb-0` .. `alb-5` order.
+fn six_warm_albums() -> Vec<mbv_emby_model::EmbyItem> {
+    (0..6)
+        .map(|index| {
+            stored_album(
+                &format!("alb-{index}"),
+                &format!("Album {index}"),
+                "Beastie Boys",
+                1986,
+            )
+        })
+        .collect()
+}
+
+/// The albums neighbouring the pick are warmed, one behind and three ahead:
+/// the TUI's grouped-Music neighbour window
+/// (`openspec/specs/music-library-hero/spec.md`) over this Client's
+/// projection. The pick itself is the Hero's own fetch.
+#[test]
+fn the_picked_albums_neighbours_are_warmed() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_warm_albums(six_warm_albums());
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-3".into(),
+    });
+    // The pick's own move closed the warm gate; the next idle pass opens it.
+    app.last_nav_at = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(1))
+        .unwrap();
+
+    let projection = app.gui_music_projection(0);
+
+    assert_eq!(
+        projection
+            .hero
+            .as_ref()
+            .map(|hero| hero.album.album_id.as_str()),
+        Some("alb-3"),
+        "alb-3 is the picked album"
+    );
+    let warmed: Vec<String> = (0..6)
+        .map(|index| format!("alb-{index}:P"))
+        .filter(|key| app.images.is_loading(key))
+        .collect();
+    assert_eq!(
+        warmed,
+        ["alb-2:P", "alb-4:P", "alb-5:P"],
+        "one behind and three ahead warm; the pick and the two behind do not"
+    );
+}
+
+/// A pick move warms nothing: it stamps navigation, so the neighbours wait for
+/// the idle window and fast arrow traffic issues no fetch (the TUI's idle
+/// gate).
+#[test]
+fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_warm_albums(six_warm_albums());
+    app.last_nav_at = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(1))
+        .unwrap();
+
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-3".into(),
+    });
+    let projection = app.gui_music_projection(0);
+
+    assert!(projection.hero.is_some(), "the pick still heroes its album");
+    let warmed: Vec<String> = (0..6)
+        .map(|index| format!("alb-{index}:P"))
+        .filter(|key| app.images.is_loading(key))
+        .collect();
+    assert!(
+        warmed.is_empty(),
+        "a pick move closes the gate, so no neighbour art warms: {warmed:?}"
+    );
 }
 
 /// The Hero's facts for the picked album: the artist header, the album block,

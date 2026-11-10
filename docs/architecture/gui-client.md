@@ -788,6 +788,19 @@ is the cached artwork's display encode or the bundled placeholder as a
 `data:` URL, or `Loading`. The window fetches no Library image: every byte is
 the core's image cache.
 
+The core warms that cache around the pick. Each destination's projection ends
+with `App::warm_gui_hero_neighbours`
+(`src/app/gui_library/artwork.rs`): it fetches the Hero art of the entries
+neighbouring the picked one in the painted order — one behind and three ahead,
+never the picked entry, whose art the Hero's own fetch covers — on the sources
+the same producers the Hero reads declare (`music_album_source`, the Emby
+policy, the Shows `Primary` poster). The window keeps the TUI's navigation-idle
+gate, so fast arrow traffic warms nothing, and the three select commands
+(`showDetail`, `embySelect`, `showsSelect`) stamp navigation on a real pick
+move. The Music window is the TUI's own rule
+(`openspec/specs/music-library-hero/spec.md`). An Audiobookshelf or Podcasts
+Hero keeps its Service-scoped cover key and is not warmed.
+
 ### The `library` command
 
 `library(GuiLibraryCommand)` is the fourth bridge command (`src/main.rs`). It

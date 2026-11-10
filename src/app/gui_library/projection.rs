@@ -161,20 +161,48 @@ impl App {
     /// artists with their albums and cached tracklists, and the Hero's facts
     /// for the picked album.
     #[must_use]
-    pub fn gui_music_projection(&self, lib_idx: usize) -> GuiMusicProjection {
+    pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
         let pills = self.gui_music_pills(lib_idx);
         let collection_names = selected_collection_names(&pills);
         let union = self.gui_music_union(lib_idx, &pills);
         let artists = self.gui_music_artists(&union);
         let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
-        GuiMusicProjection {
+        let projection = GuiMusicProjection {
             pills,
             collection_names,
             loading: union.loading,
             failure: failure_line(&union.failed),
             artists,
             hero,
-        }
+        };
+        self.warm_gui_music_hero_neighbours(&projection);
+        projection
+    }
+
+    /// Warm the Hero artwork of the album leaves neighbouring the picked one
+    /// in the painted tree order (artists in order, each artist's albums in
+    /// order): the TUI's grouped-Music neighbour window over the GUI's own
+    /// projection, through the shared navigation-idle gate. The pick's own art
+    /// is the frame's fetch, so the picked album is never warmed here.
+    fn warm_gui_music_hero_neighbours(&mut self, projection: &GuiMusicProjection) {
+        let Some(picked) = projection.hero.as_ref() else {
+            return;
+        };
+        let albums: Vec<&str> = projection
+            .artists
+            .iter()
+            .flat_map(|artist| &artist.albums)
+            .map(|album| album.album_id.as_str())
+            .collect();
+        let Some(picked_index) = albums
+            .iter()
+            .position(|album_id| *album_id == picked.album.album_id)
+        else {
+            return;
+        };
+        self.warm_gui_hero_neighbours(&albums, picked_index, |_app, album_id| {
+            Some(super::artwork::music_album_source(album_id))
+        });
     }
 
     /// The Grouped Music library's group pills in the group level's order

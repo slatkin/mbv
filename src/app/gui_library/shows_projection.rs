@@ -10,10 +10,8 @@
 //! `SortName`, seasons by `SortName` (the server order the detail fetch
 //! requests), episodes by `IndexNumber`.
 
-use mbv_components::library_panel::content::{ArtworkShape, ArtworkSource};
-use mbv_components::library_panel::hero::{
-    HeroContentData, hero_content_emby, hero_content_series_with_episode,
-};
+mod hero;
+
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::components::home_video::format_release_date;
@@ -22,7 +20,7 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, fmt_publish_date_short};
 
 use super::GuiLibraryArtwork;
-use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape, media_row_state};
+use super::home::{GuiArtShape, GuiHomeRowState, media_row_state};
 use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
@@ -268,34 +266,6 @@ pub struct GuiShowsProjection {
     pub hero: Option<GuiShowsHero>,
 }
 
-/// The Shows Hero's artwork: the item's `Primary` image, as the Music Hero
-/// paints its album's, instead of the artwork policy's landscape chain. A
-/// series keeps its `:ser:` cache key family under the `Primary` chain and
-/// declares the portrait arm its poster paints; an episode's `Primary` is its
-/// landscape still, so it keeps the policy's declared arm. A Hero with no
-/// declared source keeps none, so the placeholder paints, and the fetched
-/// image re-arms the shape by its own pixels either way.
-fn primary_poster(mut content: HeroContentData, series: bool) -> HeroContentData {
-    if let Some(ArtworkSource::Emby {
-        item_id,
-        image_types,
-        cache_key,
-        ..
-    }) = content.facts.artwork.source.as_mut()
-    {
-        *image_types = vec!["Primary".to_owned()];
-        *cache_key = if series {
-            mbv_images::series_image_cache_key(item_id, &["Primary"])
-        } else {
-            format!("{item_id}:Primary")
-        };
-        if series {
-            content.facts.artwork.shape = ArtworkShape::Portrait;
-        }
-    }
-    content
-}
-
 impl App {
     /// The active destination's Shows library index (design D12): the
     /// destination whose Shows content the GUI Library panel paints. `None`
@@ -341,7 +311,7 @@ impl App {
             }
             _ => false,
         };
-        GuiShowsProjection {
+        let projection = GuiShowsProjection {
             pills,
             collection_names,
             loading,
@@ -351,7 +321,9 @@ impl App {
             rows,
             selected,
             hero,
-        }
+        };
+        self.warm_gui_shows_hero_neighbours(lib_idx, mode, &projection);
+        projection
     }
 
     /// The All series mode's tree (design D14): every root-level series with
@@ -534,149 +506,8 @@ impl App {
     }
 
     /// The Shows library's selection, as the TUI's empty selection reads.
-    fn gui_shows_selection(&self, lib_idx: usize) -> GuiTvShowsSelection {
+    pub(super) fn gui_shows_selection(&self, lib_idx: usize) -> GuiTvShowsSelection {
         self.gui_tv_shows.get(&lib_idx).cloned().unwrap_or_default()
-    }
-
-    /// The selected row's Hero (design D12): the All series mode's series
-    /// Hero — the shared Emby hero producer's facts, the artwork policy's
-    /// landscape chain, and the Workspace the series detail holds — or the
-    /// Latest mode's episode Hero. The Upcoming mode projects no Hero at
-    /// all.
-    fn gui_shows_hero(
-        &mut self,
-        lib_idx: usize,
-        mode: GuiShowsMode,
-        selected: &str,
-    ) -> Option<GuiShowsHero> {
-        match mode {
-            GuiShowsMode::Upcoming => None,
-            GuiShowsMode::All => {
-                let series = self.gui_shows_item(lib_idx, selected)?;
-                let seasons = self
-                    .series_detail_cache
-                    .get(selected)
-                    .map(|detail| detail.seasons.len());
-                let workspace = self.gui_shows_workspace(lib_idx, selected);
-                Some(self.gui_shows_series_hero_facts(&series, seasons, workspace))
-            }
-            GuiShowsMode::Latest => {
-                let episode = self.gui_shows_item(lib_idx, selected)?;
-                Some(self.gui_shows_hero_facts(&episode, None))
-            }
-        }
-    }
-
-    /// The shared Emby hero producer's facts for one item, with its artwork
-    /// fetched through the image cache at the artwork policy's declared
-    /// chain — the same facts and fetch the TUI's hero paints.
-    fn gui_shows_hero_facts(
-        &mut self,
-        item: &EmbyItem,
-        workspace: Option<GuiShowsWorkspace>,
-    ) -> GuiShowsHero {
-        let content = primary_poster(hero_content_emby(item), false);
-        self.gui_shows_hero_from(&content, workspace)
-    }
-
-    /// The TUI series producer's facts for one series (design D14): the genre,
-    /// the show's year range (else the release date), the season count, and
-    /// the network, with no duration row while the Workspace has no focus —
-    /// `hero_content_series_with_episode`, the producer the TUI's series Hero
-    /// paints. The season count comes from the cached detail, so the row
-    /// appears as soon as the detail lands.
-    fn gui_shows_series_hero_facts(
-        &mut self,
-        series: &EmbyItem,
-        seasons: Option<usize>,
-        workspace: Option<GuiShowsWorkspace>,
-    ) -> GuiShowsHero {
-        let content = primary_poster(
-            hero_content_series_with_episode(series, None, false, seasons),
-            true,
-        );
-        self.gui_shows_hero_from(&content, workspace)
-    }
-
-    /// One hero's facts from a shared producer's output, with its artwork
-    /// fetched through the image cache at the producer's declared chain.
-    fn gui_shows_hero_from(
-        &mut self,
-        content: &HeroContentData,
-        workspace: Option<GuiShowsWorkspace>,
-    ) -> GuiShowsHero {
-        let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
-        GuiShowsHero {
-            title: content.facts.title.clone(),
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
-            progress_row: content.facts.progress_row,
-            overview: content.overview.clone(),
-            art_shape: artwork_shape(
-                self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
-            ),
-            art,
-            workspace,
-        }
-    }
-
-    /// A series Hero's Workspace (design D12): the detail's season pills and
-    /// the selected season's episodes. `None` while the series detail has
-    /// not landed — the projection's `workspace_loading` names that load.
-    fn gui_shows_workspace(&self, lib_idx: usize, series_id: &str) -> Option<GuiShowsWorkspace> {
-        let detail = self.series_detail_cache.get(series_id)?;
-        let selected_season = self.gui_shows_selected_season(lib_idx, series_id)?;
-        let rows = detail
-            .episodes
-            .get(&selected_season)
-            .map(|episodes| {
-                episodes
-                    .iter()
-                    .enumerate()
-                    .map(|(position, episode)| episode_row(episode, position))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let seasons = detail
-            .seasons
-            .iter()
-            .map(|season| GuiShowsSeasonPill {
-                season_id: season.id.clone(),
-                name: season.name.clone(),
-                selected: selected_season == season.id,
-            })
-            .collect();
-        Some(GuiShowsWorkspace {
-            seasons,
-            selected_season: Some(selected_season),
-            episodes: rows,
-        })
-    }
-
-    /// The season whose episodes the Workspace shows (design D12): the
-    /// stored choice while the detail holds it, else the first season — the
-    /// season pills start on the first season and are not kept across a
-    /// series change. `None` while the detail holds no season.
-    fn gui_shows_selected_season(&self, lib_idx: usize, series_id: &str) -> Option<String> {
-        let detail = self.series_detail_cache.get(series_id)?;
-        let stored = self.gui_shows_selection(lib_idx).season_id;
-        stored
-            .filter(|stored| detail.seasons.iter().any(|season| &season.id == stored))
-            .or_else(|| detail.seasons.first().map(|season| season.id.clone()))
-    }
-
-    /// Whether the Workspace's loads have not landed yet (design D12): the
-    /// selected series' detail fetch, or the selected season's episodes
-    /// fetch — the in-flight marks the shared fetch helpers keep.
-    fn gui_shows_workspace_loading(&self, lib_idx: usize, series_id: &str) -> bool {
-        if self.series_detail_loading.contains(series_id) {
-            return true;
-        }
-        self.gui_shows_selected_season(lib_idx, series_id)
-            .is_some_and(|season_id| {
-                self.series_season_loading
-                    .contains(&(series_id.to_string(), season_id))
-            })
     }
 
     /// The Emby item a Shows play command names (design D12): the root
@@ -763,7 +594,7 @@ fn premiere_number_label(premiere: &mbv_emby_model::UpcomingPremiere) -> String 
 /// (design D14): the number, the name, the runtime, and the played/progress
 /// state the TUI's episode rows carry
 /// (`crates/mbv-components/src/tv_content/episode_rows.rs`).
-fn episode_row(episode: &EmbyItem, position: usize) -> GuiShowsEpisodeRow {
+pub(super) fn episode_row(episode: &EmbyItem, position: usize) -> GuiShowsEpisodeRow {
     GuiShowsEpisodeRow {
         episode_id: episode.id.clone(),
         number: episode_number(episode, position),

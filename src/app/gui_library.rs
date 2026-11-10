@@ -584,13 +584,21 @@ impl App {
     /// id the current Service data does not hold leaves the Hero's item as it
     /// was, because the frame that carried the id is stale.
     fn show_gui_library_detail(&mut self, item_id: &str) {
-        if let Some((lib_idx, item)) = self.gui_library_item(item_id) {
-            if let Some(group_id) = self.gui_selected_group(lib_idx) {
-                self.gui_library_picks.insert((lib_idx, group_id), item.id);
-            }
-        } else {
+        let Some((lib_idx, item)) = self.gui_library_item(item_id) else {
             Self::log_stale_library_item("showDetail", item_id);
+            return;
+        };
+        let Some(group_id) = self.gui_selected_group(lib_idx) else {
+            return;
+        };
+        let key = (lib_idx, group_id);
+        if self.gui_library_picks.get(&key) == Some(&item.id) {
+            return;
         }
+        self.gui_library_picks.insert(key, item.id);
+        // A pick move is library navigation: it closes the image warm gate, so
+        // fast arrow traffic warms no neighbour art (the TUI's own rule).
+        self.stamp_navigation();
     }
 
     /// Open an album node (design D5, D7): the shared album-track fetch fills

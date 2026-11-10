@@ -1,7 +1,8 @@
 //! The GUI Library Hero's artwork (add-gui-library-panel design D5): the
-//! picked album's art from the image cache, display-encoded for the window.
-//! The fetch is issued here, as the TUI's hero projection issues its own, so
-//! the window content never requests an image itself.
+//! picked item's art from the image cache, display-encoded for the window,
+//! and the neighbour warm that fills the cache around the pick. The fetches
+//! are issued here, as the TUI's hero projection issues its own, so the window
+//! content never requests an image itself.
 
 use mbv_components::library_panel::content::{
     ArtworkShape, ArtworkSource, painted_shape_for_pixels,
@@ -11,6 +12,46 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
 use super::super::queue_card_artwork::{encode_for_display, encode_jpeg};
 use crate::app::App;
+
+/// The neighbour warm window's bounds (the TUI's grouped-Music rule,
+/// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked
+/// one and three ahead of it, never the picked entry itself.
+const HERO_WARM_BEHIND: usize = 1;
+const HERO_WARM_AHEAD: usize = 3;
+
+/// The Music Hero's artwork source for `album_id`: the shared album chain
+/// under the album's `{id}:P` key, as the shared hero policy's album arm
+/// declares it (`music_album_artwork`,
+/// `crates/mbv-components/src/library_panel/hero.rs`). One derivation for the
+/// Hero's own fetch and the neighbour warm, so a warmed entry is the entry
+/// the Hero reads.
+pub(super) fn music_album_source(album_id: &str) -> ArtworkSource {
+    ArtworkSource::Emby {
+        item_id: album_id.to_owned(),
+        series_id: String::new(),
+        image_types: MUSIC_ALBUM_IMAGE_TYPES
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        cache_key: mbv_images::emby_card_cache_key(album_id, ""),
+    }
+}
+
+/// The Emby-side fetch parts of a Hero source — `(cache_key, item_id,
+/// series_id, image_types)` — or `None` for a source this Client's Emby fetch
+/// path does not cover, such as a Service-scoped Audiobookshelf cover. One
+/// rule for every caller that turns a Hero's declared source into a fetch.
+fn emby_fetch_parts(source: ArtworkSource) -> Option<(String, String, String, Vec<String>)> {
+    match source {
+        ArtworkSource::Emby {
+            item_id,
+            series_id,
+            image_types,
+            cache_key,
+        } => Some((cache_key, item_id, series_id, image_types)),
+        ArtworkSource::AudiobookshelfCover { .. } => None,
+    }
+}
 
 /// What the Library Hero paints as its square artwork (design D5).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,6 +65,42 @@ pub enum GuiLibraryArtwork {
 }
 
 impl App {
+    /// Pre-warm the Hero artwork of the entries neighbouring the picked one in
+    /// the painted order: the warm window is the TUI's grouped-Music rule
+    /// (`App::prefetch_neighbour_album_art`) over this Client's own
+    /// projections — one entry behind, three ahead, never the picked entry,
+    /// whose art the Hero's own fetch covers. `ids` is the visible order's
+    /// identity per entry, `picked` is the picked entry's index in it, and
+    /// `source_of` derives an entry's Hero source from the same producer the
+    /// Hero's own fetch reads. Every fetch runs through the shared
+    /// navigation-idle gate, so fast navigation warms nothing, and only an
+    /// Emby-chained source warms: a Service-scoped Audiobookshelf cover has no
+    /// key this path fetches.
+    pub(in crate::app::gui_library) fn warm_gui_hero_neighbours(
+        &mut self,
+        ids: &[&str],
+        picked: usize,
+        source_of: impl Fn(&Self, &str) -> Option<ArtworkSource>,
+    ) {
+        if !self.images.images_enabled() || picked >= ids.len() {
+            return;
+        }
+        let start = picked.saturating_sub(HERO_WARM_BEHIND);
+        let end = (picked + HERO_WARM_AHEAD + 1).min(ids.len());
+        for (offset, id) in ids[start..end].iter().enumerate() {
+            if start + offset == picked {
+                continue;
+            }
+            let Some((cache_key, item_id, series_id, image_types)) =
+                source_of(self, id).and_then(emby_fetch_parts)
+            else {
+                continue;
+            };
+            let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
+            self.fetch_list_card_image_when_idle(cache_key, item_id, series_id, &types);
+        }
+    }
+
     /// The Hero display encode's long side: the artwork encodes to cover
     /// this box at the Hero's painted aspect, from the full-size source —
     /// the TUI's `cover_fill_hero_box` rule at the Hero pane's painted sizes
@@ -72,16 +149,16 @@ impl App {
     /// presentation, as [`App::queue_card_artwork`] does for the visual slot.
     #[must_use]
     pub fn gui_library_artwork(&mut self, album_id: &str) -> GuiLibraryArtwork {
-        let cache_key = mbv_images::emby_card_cache_key(album_id, "");
         if album_id.is_empty() || !self.images.images_enabled() {
             return GuiLibraryArtwork::Placeholder;
         }
-        self.fetch_card_image(
-            cache_key.clone(),
-            album_id.to_string(),
-            String::new(),
-            MUSIC_ALBUM_IMAGE_TYPES,
-        );
+        let Some((cache_key, item_id, series_id, image_types)) =
+            emby_fetch_parts(music_album_source(album_id))
+        else {
+            return GuiLibraryArtwork::Placeholder;
+        };
+        let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
+        self.fetch_card_image(cache_key.clone(), item_id, series_id, &types);
         if self
             .images
             .image(&cache_key)

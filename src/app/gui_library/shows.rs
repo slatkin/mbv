@@ -29,13 +29,35 @@ impl App {
             return;
         };
         match gui_shows_mode_of(&tv_mode) {
-            GuiShowsMode::All => self.gui_tv_select_series(lib_idx, row),
-            GuiShowsMode::Latest | GuiShowsMode::Upcoming => {
-                if self.gui_shows_flat_row_exists(lib_idx, row) {
-                    self.gui_tv_shows.entry(lib_idx).or_default().flat_row = Some(row.to_string());
-                } else {
-                    Self::log_stale_library_item("showsSelect", row);
+            GuiShowsMode::All => {
+                let unchanged = self
+                    .gui_tv_shows
+                    .get(&lib_idx)
+                    .and_then(|selection| selection.series_id.as_deref())
+                    == Some(row);
+                if !unchanged {
+                    // A pick move is library navigation: it closes the image
+                    // warm gate, so fast arrow traffic warms no neighbour art
+                    // (the TUI's own rule).
+                    self.stamp_navigation();
                 }
+                self.gui_tv_select_series(lib_idx, row);
+            }
+            GuiShowsMode::Latest | GuiShowsMode::Upcoming => {
+                if !self.gui_shows_flat_row_exists(lib_idx, row) {
+                    Self::log_stale_library_item("showsSelect", row);
+                    return;
+                }
+                let unchanged = self
+                    .gui_tv_shows
+                    .get(&lib_idx)
+                    .and_then(|selection| selection.flat_row.as_deref())
+                    == Some(row);
+                if unchanged {
+                    return;
+                }
+                self.gui_tv_shows.entry(lib_idx).or_default().flat_row = Some(row.to_string());
+                self.stamp_navigation();
             }
         }
     }
