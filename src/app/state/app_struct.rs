@@ -364,6 +364,13 @@ pub struct App {
     /// art re-encodes once per key, as the visual slot's does, so a frame
     /// between artwork changes stays encode-free. The TUI never reads it.
     pub(in crate::app) gui_home_art_encoded: std::collections::HashMap<String, Vec<u8>>,
+    /// The Hero sources' display encodes (add-gui-library-panel design D12),
+    /// keyed by the cache key each encodes: the Hero's art re-encodes once
+    /// per key from the full-size source, cover-cropped to the Hero box's
+    /// aspect — the TUI's crop-vs-plain rule, so one cache entry can carry
+    /// the Hero's crop (this map) or a row's plain encode
+    /// (`gui_home_art_encoded`), never both. The TUI never reads it.
+    pub(in crate::app) gui_hero_art_encoded: std::collections::HashMap<String, Vec<u8>>,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
