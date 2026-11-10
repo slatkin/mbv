@@ -44,7 +44,7 @@ function hero(artShape: GuiHomeHero['artShape'] = 'landscape'): GuiHomeHero {
 
 /** The carried Home content with the hero picked. */
 function home(facts: GuiHomeHero): GuiHomeFrame {
-	return { rows: [], selected: SELECTED, hero: facts };
+	return { loading: false, rows: [], selected: SELECTED, hero: facts };
 }
 
 /** Render the Hero for the carried content. */
@@ -67,19 +67,26 @@ test('the Hero paints the title, the meta rows, and the overview, and no Workspa
 	expect(container.querySelector('[data-library-tracklist]')).toBeNull();
 });
 
-// The artwork box reserves the arm the frame declares (design D12): the
-// landscape box keeps the 16:9 height, the square keeps the Music Hero's
-// 300 px side, the portrait the tall box.
+// The artwork box reserves the arm the frame declares (design D15): a square or
+// portrait cover keeps the Music Hero's 300 px box at the aspect's height, and a
+// landscape still fills the Hero content width at 16:9, as the TUI's hero does.
 test.each([
-	['landscape', 169],
 	['square', 300],
 	['portrait', 450],
-] as const)('a %s hero places its artwork box at %s px high', (shape, height) => {
+] as const)('a %s hero places its artwork box at 300 px by %s px', (shape, height) => {
 	const container = mountHero(hero(shape));
 	const box = container.querySelector('[data-library-home-hero-art]') as HTMLElement;
 
 	expect(box.style.width).toBe('300px');
 	expect(box.style.height).toBe(`${height}px`);
+});
+
+test('a landscape hero fills the content width at 16:9 instead of the 300 px box', () => {
+	const container = mountHero(hero('landscape'));
+	const box = container.querySelector('[data-library-home-hero-art]') as HTMLElement;
+
+	expect(box.style.width).toBe('100%');
+	expect(box.style.aspectRatio).toBe('16 / 9');
 });
 
 test('Play sends the play command for the selected row', async () => {

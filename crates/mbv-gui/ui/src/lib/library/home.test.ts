@@ -67,7 +67,7 @@ function content(): GuiLibraryContent {
 		podcasts: null,
 		feeds: null,
 		rowMenu: null,
-		home: {
+		home: { loading: false,
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },
 				CONTINUED,

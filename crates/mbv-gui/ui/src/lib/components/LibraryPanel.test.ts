@@ -168,7 +168,7 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
-		home: {
+		home: { loading: false,
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },
 				{
@@ -216,7 +216,7 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
-		home: {
+		home: { loading: false,
 			rows: [],
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {

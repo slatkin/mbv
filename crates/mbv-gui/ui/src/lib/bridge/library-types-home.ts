@@ -34,6 +34,9 @@ export type GuiHomeContentId =
  * and no Workspace ride here; the top bar marks the Home icon current
  * exactly while this field is present. */
 export interface GuiHomeFrame {
+	/** Whether the Home content's first fetch has not landed yet: the list
+	 * paints its loading line. */
+	loading: boolean;
 	/** The flat list's rows in paint order (design D12): the two sections'
 	 * heading rows and item rows, with the spacer between two non-empty
 	 * sections. */

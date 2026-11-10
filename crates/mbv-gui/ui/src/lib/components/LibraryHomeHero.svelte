@@ -11,6 +11,7 @@
 	// actions name the row the frame painted and never a position.
 	import { Play } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import LibraryHeroArt from './LibraryHeroArt.svelte';
 	import type { GuiHomeFrame } from '$lib/bridge/types';
 
 	interface Props {
@@ -22,12 +23,6 @@
 
 	/** The Hero's facts, present exactly while the pane paints. */
 	const hero = $derived(home.hero);
-
-	/** The artwork box's dimensions per arm (design D12): the Music Hero's
-	 * 300 px side where the square fits, and the landscape and portrait
-	 * boxes the aspect gives. */
-	const ART_WIDTH = 300;
-	const ART_HEIGHT = { landscape: 169, square: 300, portrait: 450 } as const;
 
 	/** Send a Home command for `row` when an action has one (design D12): the
 	 * frame's selected row, never a position. */
@@ -42,31 +37,17 @@
 </script>
 
 {#if hero !== null}
-	{@const artHeight = ART_HEIGHT[hero.artShape]}
 	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-hero="">
 		<section
-			class="flex items-start"
-			style:gap="28px"
+			class={hero.artShape === 'landscape' ? 'flex flex-col' : 'flex items-start'}
+			style:gap={hero.artShape === 'landscape' ? '18px' : '28px'}
 			aria-label={hero.title}
 			data-library-home-hero=""
 		>
-			<div
-				class="flex flex-none items-center justify-center"
-				style:width="{ART_WIDTH}px"
-				style:height="{artHeight}px"
-				style:background="var(--canvas-library-raise)"
-				style:border-radius="6px"
-				style:overflow="hidden"
-				data-library-home-hero-art={hero.art?.kind ?? 'none'}
-			>
-				{#if hero.art !== null && hero.art.kind !== 'loading'}
-					<img class="h-full w-full object-cover" src={hero.art.detail} alt={hero.title} />
-				{:else}
-					<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-						>[No art · the window's placeholder]</span
-					>
-				{/if}
-			</div>
+			<!-- The artwork arm every Hero shares (design D15): the 300 px box for a
+			portrait or square cover, and the TUI's full-width 16:9 still for a
+			landscape one. -->
+			<LibraryHeroArt shape={hero.artShape} art={hero.art} title={hero.title} attr="home" />
 			<div class="flex min-w-0 flex-1 flex-col" style:gap="14px" style:padding-top="8px">
 				<h2
 					style:margin="0"

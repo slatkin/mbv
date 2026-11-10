@@ -475,6 +475,9 @@ impl From<&GuiLibraryArtwork> for GuiLibraryArt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiHomeFrame {
+    /// Whether the Home content's first fetch has not landed yet: the list
+    /// paints its loading line.
+    pub loading: bool,
     /// The flat list's rows in paint order: the two sections' heading rows
     /// and item rows, with the sections and the spacer the projection
     /// builds (a heading only above its rows, empty sections omitted, the
@@ -606,6 +609,7 @@ impl GuiHomeFrame {
     /// selection, and the Hero's facts beside their artwork.
     pub(crate) fn from_projection(projection: &GuiHomeProjection) -> Self {
         Self {
+            loading: projection.loading,
             rows: projection.rows.iter().map(GuiHomeRowFrame::from).collect(),
             selected: projection.selected.as_ref().map(GuiHomeRowIdFrame::from),
             hero: projection.hero.as_ref().map(GuiHomeHeroFrame::from),

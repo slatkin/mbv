@@ -170,6 +170,10 @@ pub enum GuiHomeRow {
 /// selected row's Hero facts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiHomeProjection {
+    /// Whether the Home content's first fetch has not landed yet: the list
+    /// paints its loading line, as the TUI's own `ListSlot::Empty` does while
+    /// its source is still loading.
+    pub loading: bool,
     /// The flat list's rows in paint order: the `Continue watching` heading
     /// row and item rows, then the `Recently added` heading row and item
     /// rows. A heading only paints above its rows, a section with no rows is
@@ -283,6 +287,7 @@ impl App {
             rows.extend(recent_rows.iter().map(GuiHomeItem::flat_row));
         }
         GuiHomeProjection {
+            loading: self.home_content.loading,
             rows,
             selected,
             hero,

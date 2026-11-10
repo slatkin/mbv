@@ -68,7 +68,7 @@ beforeEach(() => {
 /** The two sections' item rows: the Emby row with art and a resume percent,
  * the Feed row without art, and the played row between them. */
 function homeFrame(): GuiHomeFrame {
-	return {
+	return { loading: false,
 		rows: [
 			{ row: 'heading', text: 'Continue watching' },
 			{
@@ -219,4 +219,45 @@ test('the active row paints its resume percent and the played row none', async (
 			`[data-library-home-row-id="${homeRowKey({ kind: 'continue', id: 'e2' })}"] [data-library-home-progress]`,
 		),
 	).toBeNull();
+});
+
+// add-gui-library-panel design D15: the Home column carries the Music list's
+// header instead of opening with a bare filter field.
+test('the list paints the Home header', async () => {
+	const container = await mountList();
+
+	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Home');
+	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe('All');
+});
+
+// add-gui-library-panel design D12: Home holds nothing while its content has not
+// landed, and nothing at all when both sections are empty — each says so in one
+// line rather than painting a blank column.
+test('a loading Home paints the loading line', async () => {
+	const home = { ...homeFrame(), loading: true, rows: [] };
+	const { container } = render(LibraryHomeList, { home });
+
+	expect(container.querySelector('[data-library-home-loading]')).toBeTruthy();
+});
+
+test('an empty Home paints the empty line', async () => {
+	const home = { ...homeFrame(), rows: [] };
+	const { container } = render(LibraryHomeList, { home });
+
+	expect(container.querySelector('[data-library-home-empty]')?.textContent).toContain(
+		'Nothing to play',
+	);
+});
+
+// add-gui-library-panel design D8: a right-click opens the item menu for the
+// row's stable id, which the core resolves and the panel paints (D15).
+test('a right-click on a row sends the row-menu command with its id', async () => {
+	const container = await mountList(300);
+	const row = container.querySelector('[data-library-home-row-id="home-continue:e1"]') as HTMLElement;
+
+	await fireEvent.contextMenu(row, { clientX: 5, clientY: 6 });
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'rowMenu', itemId: 'e1' },
+	});
 });

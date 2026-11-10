@@ -215,7 +215,7 @@ test('the location reads the Feeds destination, the selected pill, and the selec
 // selected row's Hero title (design D10, D12).
 test('the location reads Home and the Home Hero title', () => {
 	expect(
-		libraryLocation(TABS, null, null, {
+		libraryLocation(TABS, null, null, { loading: false,
 			rows: [],
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {

@@ -32,7 +32,9 @@
 		scrollHomeList,
 		setHomeFilter,
 	} from '$lib/library/home';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import { openLibraryRowMenu } from '$lib/library/state';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 
 	interface Props {
 		/** The carried Home content (design D12): the flat list's rows. */
@@ -41,6 +43,16 @@
 	const { home }: Props = $props();
 
 	let listEl: HTMLElement | undefined = $state();
+
+	/** Open the item's right-click menu (the row-menu command): the row's own
+	 * stable id, whose item the core resolves for the shared menu (design D8,
+	 * D15). */
+	function rowMenu(event: MouseEvent, row: HomeListRow): void {
+		event.preventDefault();
+		if (row.kind === 'item') {
+			openLibraryRowMenu(String(row.rowId.id), event.clientX, event.clientY);
+		}
+	}
 
 	/** The painted rows of the flat list (design D12): the same model
 	 * `$lib/library/home` builds from the carried content, narrowed by the
@@ -126,15 +138,28 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-home-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
-		<LibraryFilterField
-			value={$homeUi.filter}
-			placeholder="Filter"
+	<!-- The Music list's header (design D15): the list names itself, the
+	carried list is the whole destination, and the `/` filter field narrows it. -->
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Home"
+			label="All"
+			filter={$homeUi.filter}
+			placeholder="Filter home"
 			ariaLabel="Filter home"
 			oninput={setHomeFilter}
 			onaccept={acceptHomeFilter}
 		/>
 	</div>
+	{#if home.loading}
+		<!-- The Home content has not landed yet (design D12): one placeholder
+		line holds the list's place, as the TUI's loading slot does. -->
+		<LibraryListNotice text="Loading…" attr="data-library-home-loading" />
+	{:else if home.rows.length === 0}
+		<!-- Home holds nothing to play: one line says so, as the Music list's
+		empty line does. -->
+		<LibraryListNotice text="Nothing to play" attr="data-library-home-empty" />
+	{/if}
 	<ol
 		bind:this={listEl}
 		class="min-h-0 flex-1"
@@ -178,6 +203,7 @@
 						data-library-home-cursor={row.id === $homeUi.cursor ? '' : undefined}
 						onclick={() => pressHomeRow(row)}
 						ondblclick={() => playHomeRow(row.rowId)}
+						oncontextmenu={(event) => rowMenu(event, row)}
 					>
 						{#if row.art !== null}
 							<!-- The row's card art (design D12): the frame's data URL, or
