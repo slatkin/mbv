@@ -33,7 +33,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
-		library: { revision: 1, content: null },
+		library: { revision: 1, search: null, content: null },
 	};
 }
 
@@ -141,7 +141,7 @@ function carryFeeds(
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, content });
+	carryLibraryContent({ revision: 1, search: null, content });
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	feedsUi.set({ ...initialFeedsUi(), cursor });
 }
@@ -218,7 +218,7 @@ test('the pill walk keeps its place when the frame re-carries equal pills', () =
 	feedsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'subscription', id: 'https://sub.one' } }));
 
 	// A new frame: structurally equal pills, all fresh objects.
-	carryLibraryContent({ revision: 2, content: feedsContent('subscription', ENTRIES) });
+	carryLibraryContent({ revision: 2, search: null, content: feedsContent('subscription', ENTRIES) });
 
 	press('ArrowRight');
 

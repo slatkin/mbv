@@ -83,7 +83,7 @@ function content(): GuiLibraryContent {
 /** Carry the Home content, so the panel's presence fact holds and the row
  * model has its rows (design D2, D12). */
 function carry(): void {
-	carryLibraryContent({ revision: 1, content: content() });
+	carryLibraryContent({ revision: 1, search: null, content: content() });
 }
 
 test('a cursor move that settles on a row selects it by its opaque id', () => {

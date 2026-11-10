@@ -9,7 +9,7 @@
 import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiFrame, GuiLibraryTab, GuiPanel } from '$lib/bridge/types';
+import type { GuiFrame, GuiLibraryTab, GuiPanel, GuiSearchFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import {
 	acceptLibraryFilter,
@@ -52,6 +52,14 @@ import { routeAudiobooksPanelKey } from './audiobooks-keys';
 import { routePodcastsPanelKey } from './podcasts-keys';
 import { routeFeedsPanelKey } from './feeds-keys';
 import { libraryFeeds } from './feeds';
+import {
+	activateSearchHighlight,
+	closeLibrarySearch,
+	focusLibrarySearch,
+	moveSearchHighlight,
+	searchFieldFocused,
+	searchResultsOf,
+} from './search';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -314,6 +322,33 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	return 'core';
 }
 
+/** Route a key while the Search field holds the keyboard (design D3, step 2,
+ * row 12.1): Esc closes the field and the results, the arrows move the
+ * highlighted result, Enter activates it, and every other key is the field's
+ * typing — the `text` answer lets the browser type it and never forwards it
+ * to the core. With no results held, the arrows and Enter still never reach
+ * the core: they would move the caret and submit nothing, and the core gets
+ * none. */
+function routeSearchKey(event: KeyboardEvent, search: GuiSearchFrame): KeyOutcome {
+	if (event.key === 'Escape') {
+		closeLibrarySearch();
+		return 'handled';
+	}
+	if (event.key === 'ArrowDown') {
+		moveSearchHighlight(1, search);
+		return 'handled';
+	}
+	if (event.key === 'ArrowUp') {
+		moveSearchHighlight(-1, search);
+		return 'handled';
+	}
+	if (event.key === 'Enter') {
+		activateSearchHighlight(search);
+		return 'handled';
+	}
+	return 'text';
+}
+
 /** Route a key to the Home keys (design D12): the Home cursor owns the
  * movement keys wherever the pane focus sits, Enter plays the row it rests
  * on, and `n` and `a` enqueue from it. There is no filter and no pill row on
@@ -393,7 +428,27 @@ export function routeLibraryKey(
 	if (frame.summary.filterActive) {
 		return 'core';
 	}
-	// (2) An open text field of the panel takes the keys.
+	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
+	// the keyboard wherever the Library panel shows, before the open-field
+	// checks — even while the filter holds it, where the DOM focus move closes
+	// the filter the way any other focus move does.
+	if (
+		event.ctrlKey &&
+		!event.metaKey &&
+		!event.altKey &&
+		!event.shiftKey &&
+		(event.key === 'k' || event.key === 'K')
+	) {
+		focusLibrarySearch();
+		return 'handled';
+	}
+	// (2) An open text field of the panel takes the keys. The Search field
+	// routes first: its hold on the keyboard is DOM focus, which no panel key
+	// runs while it types (the key-leak rule), and the field's typing is the
+	// `text` answer the forwarder lets through (design D3, step 2, row 12.1).
+	if (searchFieldFocused()) {
+		return routeSearchKey(event, searchResultsOf(frame.library?.search ?? null));
+	}
 	const ui = get(libraryUi);
 	if (ui.filterOpen) {
 		return routeFilterKey(event);

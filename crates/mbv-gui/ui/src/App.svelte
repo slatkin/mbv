@@ -108,6 +108,7 @@
     {@const audiobooks = content?.audiobooks ?? null}
     {@const podcasts = content?.podcasts ?? null}
     {@const feeds = content?.feeds ?? null}
+    {@const search = frame.library?.search ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
     <!-- The Library panel's one presence fact (design D2, D10, D12): the
       frame carries the Library section and the window holds the active
@@ -156,6 +157,7 @@
           {audiobooks}
           {podcasts}
           {feeds}
+          {search}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
           status={frame.status}

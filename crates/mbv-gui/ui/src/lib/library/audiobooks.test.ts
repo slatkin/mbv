@@ -59,7 +59,7 @@ function carry(selected: string | null = 'b1', cursor: string | null = null): vo
 		podcasts: null,
 		feeds: null,
 	};
-	carryLibraryContent({ revision: 1, content });
+	carryLibraryContent({ revision: 1, search: null, content });
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
 

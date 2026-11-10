@@ -73,7 +73,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	podcastsUi.set(initialPodcastsUi());
-	carryLibraryContent({ revision: 1, content: null });
+	carryLibraryContent({ revision: 1, search: null, content: null });
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -88,6 +88,7 @@ async function mountList(
 	const podcasts = frame(rows, facts);
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: {
 			tabs: [],
 			currentTab: 2,

@@ -59,7 +59,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	homeUi.set(initialHomeUi());
-	carryLibraryContent({ revision: 1, content: carriedContent() });
+	carryLibraryContent({ revision: 1, search: null, content: carriedContent() });
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });

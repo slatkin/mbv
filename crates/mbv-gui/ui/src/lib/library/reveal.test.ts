@@ -79,7 +79,7 @@ function content(): GuiLibraryContent {
 }
 
 test('a reveal scrolls the picked album row into view once the list is measured', () => {
-	carryLibraryContent({ revision: 1, content: content() });
+	carryLibraryContent({ revision: 1, search: null, content: content() });
 
 	revealPickedAlbum(music());
 	measureLibraryList(40);

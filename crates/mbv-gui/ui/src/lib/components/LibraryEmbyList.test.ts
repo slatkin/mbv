@@ -80,7 +80,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
-	carryLibraryContent({ revision: 1, content: null });
+	carryLibraryContent({ revision: 1, search: null, content: null });
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -95,6 +95,7 @@ async function mountList(
 	const emby = embyFrame(feedGroup, rows);
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
 	});
 	const { container } = render(LibraryEmbyList, { emby });
@@ -195,6 +196,7 @@ test('a list that has not landed paints the loading line', async () => {
 	const emby = { ...embyFrame(false, []), loading: true };
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
 	});
 
@@ -207,6 +209,7 @@ test('a failed plain-mode fetch paints the failure line', async () => {
 	const emby = { ...embyFrame(false, []), failed: true };
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
 	});
 

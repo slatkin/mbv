@@ -151,6 +151,7 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 				? null
 				: {
 						revision: 1,
+						search: null,
 						content: {
 							tabs: [{ position: 1, label: 'Music' }],
 							currentTab: 1,
@@ -412,7 +413,7 @@ test('dragging the Queue divider resizes the column and a double-click resets it
 // destinations.
 test('the Emby content mounts the Library panel with the Emby painters', async () => {
 	const slice = frame('library', null);
-	slice.library = { revision: 1, content: embyContent() };
+	slice.library = { revision: 1, search: null, content: embyContent() };
 	const { container } = await mount({ width: 1600, height: 900 }, slice);
 
 	const panel = container.querySelector('[data-library-panel]');
@@ -432,7 +433,7 @@ test('the Emby content mounts the Library panel with the Emby painters', async (
 // none of the other destinations' painters.
 test('the Podcasts content mounts the Library panel with the Podcasts painters', async () => {
 	const slice = frame('library', null);
-	slice.library = { revision: 1, content: podcastsContent() };
+	slice.library = { revision: 1, search: null, content: podcastsContent() };
 	const { container } = await mount({ width: 1600, height: 900 }, slice);
 
 	const panel = container.querySelector('[data-library-panel]');
@@ -454,7 +455,7 @@ test('the Podcasts content mounts the Library panel with the Podcasts painters',
 // of the other destinations' painters.
 test('the Feeds content mounts the Library panel with the Feeds painters', async () => {
 	const slice = frame('library', null);
-	slice.library = { revision: 1, content: feedsContent() };
+	slice.library = { revision: 1, search: null, content: feedsContent() };
 	const { container } = await mount({ width: 1600, height: 900 }, slice);
 
 	const panel = container.querySelector('[data-library-panel]');

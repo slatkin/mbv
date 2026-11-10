@@ -91,7 +91,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
-	carryLibraryContent({ revision: 1, content: null });
+	carryLibraryContent({ revision: 1, search: null, content: null });
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -106,6 +106,7 @@ async function mountList(
 	const shows = showsFrame(mode, rows);
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null },
 	});
 	const { container } = render(LibraryShowsList, { shows });

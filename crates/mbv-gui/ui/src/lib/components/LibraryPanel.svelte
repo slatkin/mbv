@@ -37,6 +37,7 @@ GuiHomeFrame,
 GuiLibraryTab,
 GuiMusicFrame,
 GuiPodcastsFrame,
+GuiSearchFrame,
 GuiShowsFrame,
 GuiStatusBar,
 } from '$lib/bridge/types';
@@ -103,6 +104,10 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		 * the active pill's date-gutter list, and the selected entry's Hero
 		 * with no Workspace; `null` while another destination is active. */
 		feeds?: GuiFeedsFrame | null;
+		/** The carried Search facts (design D12, row 12.1): the results dropdown
+		 * the top bar paints under its field; `null` while the section is
+		 * closed. */
+		search?: GuiSearchFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -124,6 +129,7 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		audiobooks = null,
 		podcasts = null,
 		feeds = null,
+		search = null,
 		status,
 		arrangement,
 		listWidth,
@@ -220,7 +226,7 @@ type OverlayHero =
 	data-library-panel=""
 	data-library-arrangement={arrangement}
 >
-	<LibraryTopBar {tabs} {currentTab} homeActive={home !== null} />
+	<LibraryTopBar {tabs} {currentTab} {search} homeActive={home !== null} />
 	{#if music !== null}
 		<!-- The Music destination's pills (design D6): Home paints none
 			(design D12), so the row is absent on it, not collapsed. -->

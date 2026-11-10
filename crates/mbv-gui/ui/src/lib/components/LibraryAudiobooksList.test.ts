@@ -71,7 +71,7 @@ beforeEach(() => {
 	resetMock.mockClear();
 	audiobooksUi.set(initialAudiobooksUi());
 	libraryUi.set(initialLibraryUi());
-	carryLibraryContent({ revision: 1, content: null });
+	carryLibraryContent({ revision: 1, search: null, content: null });
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -85,6 +85,7 @@ async function mountList(
 ): Promise<HTMLElement> {
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: {
 			tabs: [],
 			currentTab: 4,
@@ -187,6 +188,7 @@ test('loading and failed paint their placeholder lines', () => {
 
 		carryLibraryContent({
 			revision: 1,
+			search: null,
 			content: {
 				tabs: [],
 				currentTab: 4,
@@ -219,6 +221,7 @@ test('loading and failed paint their placeholder lines', () => {
 test('a selection change calls resetAbsChapterCursor', () => {
 	carryLibraryContent({
 		revision: 1,
+		search: null,
 		content: {
 			tabs: [],
 			currentTab: 4,

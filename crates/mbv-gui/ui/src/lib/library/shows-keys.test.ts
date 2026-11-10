@@ -41,7 +41,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
-		library: { revision: 1, content: null },
+		library: { revision: 1, search: null, content: null },
 	};
 }
 
@@ -143,7 +143,7 @@ function carryShows(
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, content });
+	carryLibraryContent({ revision: 1, search: null, content });
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	showsUi.set({ ...initialShowsUi(), cursor });
 }

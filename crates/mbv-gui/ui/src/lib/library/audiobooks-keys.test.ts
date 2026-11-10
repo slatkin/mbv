@@ -54,7 +54,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
-		library: { revision: 1, content: null },
+		library: { revision: 1, search: null, content: null },
 	};
 }
 
@@ -139,7 +139,7 @@ const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 /** Carry the content, focus the pane, and paint the list's cursor. */
 function carry(pane: LibraryPane, cursor: string | null = null): void {
 	const carried = content(pane === 'hero' ? AUIB_HERO : heroFor(pane));
-	carryLibraryContent({ revision: 1, content: carried });
+	carryLibraryContent({ revision: 1, search: null, content: carried });
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
@@ -245,7 +245,7 @@ test('the list pane and a hero-less Hero pane consume every Library key', () => 
 	carry('list');
 	const list = LIBRARY_KEYS.map((key) => routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
-	carryLibraryContent({ revision: 1, content: content(null) });
+	carryLibraryContent({ revision: 1, search: null, content: content(null) });
 	const hero = LIBRARY_KEYS.map((key) =>
 		routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()),
 	);
@@ -279,7 +279,7 @@ test('Tab past the list without a Hero takes Queue Panel focus', () => {
 
 test('Tab walks from the list into the Hero', () => {
 	carry('list');
-	carryLibraryContent({ revision: 1, content: content(AUIB_HERO) });
+	carryLibraryContent({ revision: 1, search: null, content: content(AUIB_HERO) });
 
 	press('Tab');
 
