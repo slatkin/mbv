@@ -73,5 +73,5 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 13. Phase 2 docs and checks
 
-- [ ] 13.1 Delete the saved-destination fallback and its test now that every destination is presented (design D9), and update the guide for the Phase 2 destinations and Search. Verify: the restore nextest for a location saved on Shows finds Shows active.
-- [ ] 13.2 Run the gates from 5.2. Verify: all green.
+- [x] 13.1 Delete the saved-destination fallback and its test now that every destination is presented (design D9), and update the guide for the Phase 2 destinations and Search. Verify: the restore nextest for a location saved on Shows finds Shows active.
+- [x] 13.2 Run the gates from 5.2. Verify: all green.
