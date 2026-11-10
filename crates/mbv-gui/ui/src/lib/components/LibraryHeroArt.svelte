@@ -21,10 +21,24 @@
 		art: GuiLibraryArt | null;
 		/** The item's title: the image's alternative text. */
 		title: string;
-		/** The destination's own attribute prefix, as in `shows` or `emby`. */
+		/** The destination's own attribute prefix, as in `shows` or `emby`;
+		 * empty for Music, whose attributes are `data-library-hero-*`. */
 		attr: string;
+		/** The box's text while no art is carried. */
+		placeholder?: string;
 	}
-	const { shape, art, title, attr }: Props = $props();
+	const {
+		shape,
+		art,
+		title,
+		attr,
+		placeholder = "[No art · the window's placeholder]",
+	}: Props = $props();
+
+	/** The destination's attribute name for one part of the art box. */
+	function own(name: string): string {
+		return attr === '' ? `data-library-hero-${name}` : `data-library-${attr}-hero-${name}`;
+	}
 
 	/** The canvas's box width: the Music Hero's 300 px side, which the
 	 * portrait and square arms keep. */
@@ -46,14 +60,14 @@
 	style:background={canvasVar('library-raise')}
 	style:border-radius="6px"
 	style:overflow="hidden"
-	{...{ [`data-library-${attr}-hero-art`]: art?.kind ?? 'none' }}
-	{...{ [`data-library-${attr}-hero-art-shape`]: shape }}
+	{...{ [own('art')]: art?.kind ?? 'none' }}
+	{...{ [own('art-shape')]: shape }}
 >
 	{#if art !== null && art.kind !== 'loading'}
 		<img class="h-full w-full object-cover" src={art.detail} alt={title} />
 	{:else}
 		<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
-			>[No art · the window's placeholder]</span
+			>{placeholder}</span
 		>
 	{/if}
 </div>

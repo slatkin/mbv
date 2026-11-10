@@ -2,7 +2,7 @@
 //! which supersedes D12's first Shows design): the three view-mode pills, the
 //! active mode's rows — the series tree with its rail letters, or the flat
 //! Latest and Upcoming episode lists — the selected row, and the Hero. A
-//! series' Hero is the landscape art, the TUI series producer's facts, its
+//! series' Hero is the Primary poster, the TUI series producer's facts, its
 //! season pills, and its Workspace episodes; the Latest mode's Hero is the
 //! selected episode's facts; the Upcoming mode paints no Hero at all. The
 //! projection reads `App` data only, so the TUI's own projections and paint
@@ -10,7 +10,10 @@
 //! `SortName`, seasons by `SortName` (the server order the detail fetch
 //! requests), episodes by `IndexNumber`.
 
-use mbv_components::library_panel::hero::{hero_content_emby, hero_content_series_with_episode};
+use mbv_components::library_panel::content::{ArtworkShape, ArtworkSource};
+use mbv_components::library_panel::hero::{
+    HeroContentData, hero_content_emby, hero_content_series_with_episode,
+};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::components::home_video::format_release_date;
@@ -263,6 +266,34 @@ pub struct GuiShowsProjection {
     /// The selected row's Hero facts; `None` in the Upcoming mode and while
     /// no row is selected.
     pub hero: Option<GuiShowsHero>,
+}
+
+/// The Shows Hero's artwork: the item's `Primary` image, as the Music Hero
+/// paints its album's, instead of the artwork policy's landscape chain. A
+/// series keeps its `:ser:` cache key family under the `Primary` chain and
+/// declares the portrait arm its poster paints; an episode's `Primary` is its
+/// landscape still, so it keeps the policy's declared arm. A Hero with no
+/// declared source keeps none, so the placeholder paints, and the fetched
+/// image re-arms the shape by its own pixels either way.
+fn primary_poster(mut content: HeroContentData, series: bool) -> HeroContentData {
+    if let Some(ArtworkSource::Emby {
+        item_id,
+        image_types,
+        cache_key,
+        ..
+    }) = content.facts.artwork.source.as_mut()
+    {
+        *image_types = vec!["Primary".to_owned()];
+        *cache_key = if series {
+            mbv_images::series_image_cache_key(item_id, &["Primary"])
+        } else {
+            format!("{item_id}:Primary")
+        };
+        if series {
+            content.facts.artwork.shape = ArtworkShape::Portrait;
+        }
+    }
+    content
 }
 
 impl App {
@@ -544,7 +575,7 @@ impl App {
         item: &EmbyItem,
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
-        let content = hero_content_emby(item);
+        let content = primary_poster(hero_content_emby(item), false);
         self.gui_shows_hero_from(&content, workspace)
     }
 
@@ -560,7 +591,10 @@ impl App {
         seasons: Option<usize>,
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
-        let content = hero_content_series_with_episode(series, None, false, seasons);
+        let content = primary_poster(
+            hero_content_series_with_episode(series, None, false, seasons),
+            true,
+        );
         self.gui_shows_hero_from(&content, workspace)
     }
 
@@ -568,7 +602,7 @@ impl App {
     /// fetched through the image cache at the producer's declared chain.
     fn gui_shows_hero_from(
         &mut self,
-        content: &mbv_components::library_panel::hero::HeroContentData,
+        content: &HeroContentData,
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
         let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());

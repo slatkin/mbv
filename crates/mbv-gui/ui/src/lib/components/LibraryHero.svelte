@@ -27,6 +27,7 @@
 		libraryUi,
 		openLibraryItemMenu,
 	} from '$lib/library/state';
+	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryTracklist from './LibraryTracklist.svelte';
 	import QueueRowMenu from './QueueRowMenu.svelte';
 
@@ -89,211 +90,136 @@
 	}
 </script>
 
+{#snippet shuffle()}
+	<button
+		type="button"
+		class="flex flex-none items-center"
+		style:height="40px"
+		style:padding="0 14px"
+		style:gap="8px"
+		style:background="none"
+		style:border="1px solid var(--canvas-library-control)"
+		style:border-radius="6px"
+		style:color="var(--canvas-text)"
+		style:font-size="14px"
+		style:cursor="pointer"
+		data-library-hero-shuffle=""
+		onclick={shuffleArtist}
+	>
+		<Shuffle size={15} />
+		Shuffle artist
+	</button>
+{/snippet}
+
 {#if hero !== null}
-	<div class="flex flex-col" style:padding="28px 32px" style:gap="28px" data-library-hero="">
-		<!-- The artist header: the artist, the selected collections, the album
-			count, and the track count once the artist's tracklists have loaded. -->
-		<div
-			class="flex items-end justify-between"
-			style:gap="24px"
-			style:padding-bottom="20px"
-			style:border-bottom="1px solid var(--canvas-border)"
+	{#snippet actions()}
+		<button
+			type="button"
+			class="flex items-center"
+			style:height="44px"
+			style:padding="0 18px 0 14px"
+			style:gap="8px"
+			style:background="var(--canvas-accent)"
+			style:border="0"
+			style:border-radius="22px"
+			style:color="var(--canvas-ink)"
+			style:font-size="15px"
+			style:font-weight="600"
+			style:cursor="pointer"
+			data-library-hero-play=""
+			onclick={() => play(hero.album.albumId)}
 		>
-			<div class="flex min-w-0 flex-col" style:gap="6px">
-				<span
-					class="font-mono"
-					style:font-size="12px"
-					style:letter-spacing="0.08em"
-					style:color="var(--canvas-muted)"
-					data-library-hero-kicker="">{heroKicker(hero)}</span
-				>
-				<h1
-					style:margin="0"
-					style:font-size="32px"
-					style:font-weight="600"
-					style:letter-spacing="-0.01em"
-					style:color="var(--canvas-heading)"
-					data-library-hero-artist="">{hero.artist}</h1
-				>
-				<span
-					class="font-mono"
-					style:font-size="13px"
-					style:color="var(--canvas-muted)"
-					data-library-hero-facts="">{artistFacts(hero)}</span
-				>
-			</div>
+			<Play size={16} fill="var(--canvas-ink)" strokeWidth={0} />
+			Play
+		</button>
+		<button
+			type="button"
+			class="flex items-center"
+			style:height="44px"
+			style:padding="0 14px"
+			style:gap="8px"
+			style:background="var(--canvas-library-raise)"
+			style:border="1px solid var(--canvas-library-control)"
+			style:border-radius="22px"
+			style:color="var(--canvas-text)"
+			style:font-size="14px"
+			style:cursor="pointer"
+			data-library-hero-play-next=""
+			onclick={() => playNext(hero.album.albumId)}
+		>
+			Play next
+			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)">n</span>
+		</button>
+		<button
+			type="button"
+			class="flex items-center"
+			style:height="44px"
+			style:padding="0 14px"
+			style:gap="8px"
+			style:background="var(--canvas-library-raise)"
+			style:border="1px solid var(--canvas-library-control)"
+			style:border-radius="22px"
+			style:color="var(--canvas-text)"
+			style:font-size="14px"
+			style:cursor="pointer"
+			data-library-hero-add=""
+			onclick={() => addToQueue(hero.album.albumId)}
+		>
+			Add to queue
+			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)">a</span>
+		</button>
+		{#if menu.length > 0}
+			<!-- The picked item's More actions: the dropped entries are the ones the
+			Hero's own buttons already send, so an album whose menu left empty paints
+			no control at all. -->
 			<button
 				type="button"
-				class="flex flex-none items-center"
-				style:height="40px"
-				style:padding="0 14px"
-				style:gap="8px"
+				class="flex items-center justify-center"
+				style:width="44px"
+				style:height="44px"
 				style:background="none"
-				style:border="1px solid var(--canvas-library-control)"
-				style:border-radius="6px"
-				style:color="var(--canvas-text)"
-				style:font-size="14px"
+				style:border="0"
+				style:color="var(--canvas-muted)"
 				style:cursor="pointer"
-				data-library-hero-shuffle=""
-				onclick={shuffleArtist}
+				aria-label="More album actions"
+				aria-expanded={$libraryUi.itemMenuOpen}
+				data-library-hero-more=""
+				onclick={openLibraryItemMenu}
 			>
-				<Shuffle size={15} />
-				Shuffle artist
+				<Ellipsis size={16} />
 			</button>
-		</div>
+		{/if}
+		{#if $libraryUi.itemMenuOpen && menu.length > 0}
+			<!-- The picked item's menu in the row-menu face (`QueueRowMenu`), dropped
+			under the actions row as the canvas places a menu under its anchor. A
+			press runs the entry the core built. -->
+			<QueueRowMenu
+				cursor={-1}
+				entries={menu}
+				top="52px"
+				right="0"
+				onSelect={(index) => runMenuEntry(hero.album.albumId, index)}
+			/>
+		{/if}
+	{/snippet}
 
-		<!-- The album block: the square artwork and the picked album's facts
-			with its controls. -->
-		<section
-			class="flex items-start"
-			style:gap="32px"
-			aria-label={hero.album.name}
-			data-library-hero-album=""
-		>
-			<div
-				class="flex flex-none items-center justify-center"
-				style:width="300px"
-				style:height="300px"
-				style:background="var(--canvas-library-raise)"
-				style:border-radius="6px"
-				style:overflow="hidden"
-				data-library-hero-art={music.art?.kind ?? 'none'}
-			>
-				{#if music.art !== null && music.art.kind !== 'loading'}
-					<img
-						class="h-full w-full object-cover"
-						src={music.art.detail}
-						alt={hero.album.name}
-					/>
-				{:else}
-					<span class="font-mono" style:font-size="13px" style:color="var(--canvas-muted)"
-						>[Album art · Emby Primary]</span
-					>
-				{/if}
-			</div>
-			<div class="flex min-w-0 flex-1 flex-col" style:gap="18px" style:padding-top="8px">
-				<div class="flex flex-col" style:gap="6px">
-					{#if hero.album.year !== ''}
-						<span
-							class="font-mono"
-							style:font-size="12px"
-							style:letter-spacing="0.08em"
-							style:color="var(--canvas-muted)">{hero.album.year}</span
-						>
-					{/if}
-					<h2
-						style:margin="0"
-						style:font-size="24px"
-						style:font-weight="600"
-						style:color="var(--canvas-heading)"
-						data-library-hero-album-name="">{hero.album.name}</h2
-					>
-					{#if albumFacts(hero) !== ''}
-						<span
-							class="font-mono"
-							style:font-size="13px"
-							style:color="var(--canvas-muted)"
-							data-library-hero-album-facts="">{albumFacts(hero)}</span
-						>
-					{/if}
-				</div>
-				<div class="relative flex flex-wrap items-center" style:gap="8px">
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 18px 0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-accent)"
-						style:border="0"
-						style:border-radius="22px"
-						style:color="var(--canvas-ink)"
-						style:font-size="15px"
-						style:font-weight="600"
-						style:cursor="pointer"
-						data-library-hero-play=""
-						onclick={() => play(hero.album.albumId)}
-					>
-						<Play size={16} fill="var(--canvas-ink)" strokeWidth={0} />
-						Play
-					</button>
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-library-raise)"
-						style:border="1px solid var(--canvas-library-control)"
-						style:border-radius="22px"
-						style:color="var(--canvas-text)"
-						style:font-size="14px"
-						style:cursor="pointer"
-						data-library-hero-play-next=""
-						onclick={() => playNext(hero.album.albumId)}
-					>
-						Play next
-						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-							>n</span
-						>
-					</button>
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-library-raise)"
-						style:border="1px solid var(--canvas-library-control)"
-						style:border-radius="22px"
-						style:color="var(--canvas-text)"
-						style:font-size="14px"
-						style:cursor="pointer"
-						data-library-hero-add=""
-						onclick={() => addToQueue(hero.album.albumId)}
-					>
-						Add to queue
-						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-							>a</span
-						>
-					</button>
-					{#if menu.length > 0}
-						<!-- The picked item's More actions: the dropped entries are the
-						ones the Hero's own buttons already send, so an album whose menu
-						left empty paints no control at all. -->
-						<button
-							type="button"
-							class="flex items-center justify-center"
-							style:width="44px"
-							style:height="44px"
-							style:background="none"
-							style:border="0"
-							style:color="var(--canvas-muted)"
-							style:cursor="pointer"
-							aria-label="More album actions"
-							aria-expanded={$libraryUi.itemMenuOpen}
-							data-library-hero-more=""
-							onclick={openLibraryItemMenu}
-						>
-							<Ellipsis size={16} />
-						</button>
-					{/if}
-					{#if $libraryUi.itemMenuOpen && menu.length > 0}
-						<!-- The picked item's menu in the row-menu face (`QueueRowMenu`),
-							dropped under the actions row as the canvas places a menu under
-							its anchor. A press runs the entry the core built. -->
-						<QueueRowMenu
-							cursor={-1}
-							entries={menu}
-							top="52px"
-							right="0"
-							onSelect={(index) => runMenuEntry(hero.album.albumId, index)}
-						/>
-					{/if}
-				</div>
-			</div>
-		</section>
-
+	<LibraryHeroFrame
+		attr=""
+		root="data-library-hero"
+		header={{ kicker: heroKicker(hero), title: hero.artist, facts: artistFacts(hero) }}
+		headerAction={shuffle}
+		block={{
+			label: hero.album.name,
+			eyebrow: hero.album.year,
+			name: hero.album.name,
+			facts: albumFacts(hero),
+		}}
+		artShape="square"
+		art={music.art}
+		artTitle={hero.album.name}
+		artPlaceholder="[Album art · Emby Primary]"
+		{actions}
+	>
 		<LibraryTracklist {hero} playingTrackId={music.playingTrackId} />
-	</div>
+	</LibraryHeroFrame>
 {/if}

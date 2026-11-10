@@ -114,15 +114,24 @@ test('a landscape Hero fills the Hero content width at 16:9', () => {
 	expect(box.style.height).toBe('auto');
 });
 
-test('the Hero paints its title, its meta rows, and its overview', () => {
-	const container = mount(hero({ durationRow: 1 }));
+test("the Hero paints the series in the header band and the series' detail beside its poster", () => {
+	const container = mount();
 
+	expect(container.querySelector('[data-library-shows-hero-kicker]')?.textContent).toBe('series');
 	expect(container.querySelector('[data-library-shows-hero-title]')?.textContent).toBe(
 		'Better Call Saul',
 	);
-	const meta = [...container.querySelectorAll('[data-library-shows-hero-role]')];
-	expect(meta.map((row) => row.textContent)).toEqual(['TV Series', '5 seasons']);
-	expect(meta[1]?.getAttribute('data-library-shows-hero-role')).toBe('duration');
+	expect(container.querySelector('[data-library-shows-hero-facts]')?.textContent).toBe(
+		'TV Series · 5 seasons',
+	);
+	// The detail block is the Music album block's twin: the selected season
+	// where Music paints the album, and the series' overview under it.
+	expect(container.querySelector('[data-library-shows-hero-block-name]')?.textContent).toBe(
+		'Season 1',
+	);
+	expect(container.querySelector('[data-library-shows-hero-block-facts]')?.textContent).toBe(
+		'2 episodes',
+	);
 	expect(container.querySelector('[data-library-shows-hero-overview]')?.textContent).toBe(
 		'A lawyer turns to the wrong clients.',
 	);
@@ -153,6 +162,7 @@ test("the Workspace paints the selected season's episodes", () => {
 test("the Latest mode's Hero paints its facts and no Workspace", () => {
 	const container = mount(hero({ workspace: null }));
 
+	expect(container.querySelector('[data-library-shows-hero-kicker]')?.textContent).toBe('episode');
 	expect(container.querySelector('[data-library-shows-hero-title]')?.textContent).toBe(
 		'Better Call Saul',
 	);
