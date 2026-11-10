@@ -65,6 +65,12 @@ export interface GuiLibraryContent {
 	 * (design D12, row 11.1); `null` while any other destination is active. A
 	 * Client holds one feed tab, so no library index names it. */
 	feeds: GuiFeedsFrame | null;
+	/** The right-click item menu the window content last opened (the row-menu
+	 * command), whichever destination's row named it (design D8, D15): the
+	 * item with the TUI menu builder's entries for it. `null` while no
+	 * right-click has named an item. It rides the content, not a destination's
+	 * section, because every destination's rows open the same menu. */
+	rowMenu: GuiLibraryRowMenu | null;
 }
 
 /** One destination tab of the top bar (design D2). */
@@ -306,16 +312,12 @@ export interface GuiMusicFrame {
 	 * row and a list track row paint what the Queue's active slot paints.
 	 * `null` while idle or while the active slot holds no Emby item. */
 	playingTrackId: string | null;
-	/** The right-click item menu the window content last opened (the
-	 * row-menu command): the item it named with the TUI menu builder's full
-	 * entries for it. `null` while no right-click has named an item. */
-	rowMenu: GuiMusicRowMenu | null;
 }
 
 /** The Library's right-click item menu (the row-menu command): the item the
  * entries are about, and the TUI menu builder's entries in the builder's
  * order. The core keeps the action, so a chosen entry sends only its index. */
-export interface GuiMusicRowMenu {
+export interface GuiLibraryRowMenu {
 	/** The item's stable Service id the command named. */
 	itemId: string;
 	/** The TUI menu builder's entries for the item. */

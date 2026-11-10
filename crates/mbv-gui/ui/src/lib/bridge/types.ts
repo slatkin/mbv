@@ -32,7 +32,7 @@ export type {
 	GuiMusicHero,
 	GuiMusicMenuEntryFrame,
 	GuiMusicPill,
-	GuiMusicRowMenu,
+	GuiLibraryRowMenu,
 	GuiMusicTrack,
 	GuiMusicTrackTotal,
 	GuiPodcastPill,

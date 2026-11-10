@@ -108,7 +108,6 @@ function content(
 			hero,
 			art: null,
 			playingTrackId: null,
-			rowMenu: null,
 		},
 		home: null,
 		shows: null,
@@ -116,6 +115,7 @@ function content(
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 
@@ -593,6 +593,7 @@ function homeContent(): GuiLibraryContent {
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 		home: {
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },

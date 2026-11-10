@@ -127,7 +127,7 @@ async function mountList(
 	carryLibraryContent({
 		revision: 1,
 		search: null,
-		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null },
+		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
 	});
 	const { container } = render(LibraryShowsList, { shows });
 	const list = container.querySelector<HTMLElement>('[data-library-shows-list]');

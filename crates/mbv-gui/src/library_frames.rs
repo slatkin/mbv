@@ -12,8 +12,8 @@ use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryArt,
-    GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame,
-    GuiSearchFrame, GuiShowsFrame,
+    GuiLibraryContent, GuiLibraryFrame, GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicFrame,
+    GuiPodcastsFrame, GuiSearchFrame, GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -211,6 +211,9 @@ impl DestinationSections {
 /// above computes the section, so the gate and the content cannot disagree.
 fn content(app: &mut App, sections: DestinationSections) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
+    // The right-click item menu is the Library's, not one destination's (design
+    // D8, D15): a row of any destination opens it, so it rides the content.
+    let row_menu = app.gui_library_row_menu();
     GuiLibraryContent {
         tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
         current_tab: current,
@@ -221,6 +224,7 @@ fn content(app: &mut App, sections: DestinationSections) -> GuiLibraryContent {
         audiobooks: sections.audiobooks,
         podcasts: sections.podcasts,
         feeds: sections.feeds,
+        row_menu: row_menu.as_ref().map(GuiLibraryRowMenuFrame::from),
     }
 }
 
@@ -240,16 +244,8 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
-    let row_menu = app.gui_library_row_menu();
     let playing_track_id = app.gui_playing_track_id();
-    GuiMusicFrame::from_projection(
-        lib_idx,
-        &projection,
-        art,
-        &menu,
-        row_menu.as_ref(),
-        playing_track_id,
-    )
+    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu, playing_track_id)
 }
 
 /// The Home destination's content (design D12, the USER-APPROVED GUI Home

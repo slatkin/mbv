@@ -52,7 +52,6 @@ function music(): GuiMusicFrame {
 		hero: null,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 
@@ -80,6 +79,7 @@ test('a press inside the panel sends the take-focus command', () => {
 		currentTab: 1,
 		music: music(),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -100,6 +100,7 @@ test('the panel paints the top bar and the pill row above the list region', () =
 		currentTab: 1,
 		music: music(),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -123,6 +124,7 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
 		status: idle,
+		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -145,6 +147,7 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -191,6 +194,7 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 			},
 		},
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -226,6 +230,7 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 			},
 		},
 		status: idle,
+		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -253,6 +258,7 @@ test('the Shows content mounts the mode pills, the Shows list, and the series He
 		home: null,
 		shows: shows('all'),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -277,6 +283,7 @@ test('the Upcoming Shows content paints no Hero', () => {
 		home: null,
 		shows: shows('upcoming'),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -333,6 +340,7 @@ test('the plain Emby content mounts the Emby list, rail, and Hero and none of th
 		shows: null,
 		emby: emby(false),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -356,6 +364,7 @@ test('the feed-group Emby content mounts its pill row and no rail', () => {
 		music: null,
 		emby: emby(true),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -388,6 +397,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 			workspace: null,
 		}),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -417,6 +427,7 @@ test('the Hero-less Audiobooks content paints its list and no Hero', () => {
 		emby: null,
 		audiobooks: audiobooks(null),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -448,6 +459,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
 		}),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -507,6 +519,7 @@ test('the Feeds content mounts the Feeds pills, list, and Hero and none of the o
 			artShape: 'square',
 		}),
 		status: idle,
+		rowMenu: null,
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -536,6 +549,7 @@ test('the Hero-less Feeds content paints its list and no Hero', () => {
 		audiobooks: null,
 		podcasts: null,
 		feeds: feeds(null),
+		rowMenu: null,
 		status: idle,
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
@@ -611,3 +625,32 @@ function emby(feedGroup: boolean): GuiEmbyFrame {
 		},
 	};
 }
+
+// add-gui-library-panel design D8, D15: the right-click item menu is the
+// Library's, not one destination's. The row menu rides the content, so a Shows
+// row's menu paints while Music carries no content — before D15 the panel read
+// the menu off the Music frame, so every other destination's right-click opened
+// nothing.
+test('the item menu paints on a destination that is not Music', () => {
+	libraryUi.update((ui) => ({
+		...ui,
+		rowMenu: { itemId: 's1', x: 40, y: 60 },
+	}));
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 2, label: 'Shows' }],
+		currentTab: 2,
+		music: null,
+		shows: shows('all'),
+		status: idle,
+		rowMenu: {
+			itemId: 's1',
+			entries: [{ label: 'Play', keyHint: null, index: 0 }],
+		},
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-row-menu]')).toBeTruthy();
+	expect(container.querySelector('[data-menu-entry="0"]')?.textContent).toContain('Play');
+});

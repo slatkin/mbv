@@ -100,6 +100,13 @@ pub struct GuiLibraryContent {
     /// row 8.1, the USER-APPROVED GUI Emby-library design); `None` while any
     /// other destination is active.
     pub emby: Option<GuiEmbyFrame>,
+    /// The right-click item menu the window content last opened (the row-menu
+    /// command), whichever destination's row it named (design D8, D15): the
+    /// item it named with the TUI menu builder's full entries for it. `None`
+    /// while no right-click has named an item. It rides the content, not a
+    /// destination's section, because every destination's rows open the same
+    /// menu.
+    pub row_menu: Option<GuiLibraryRowMenuFrame>,
     /// The Audiobooks destination's content while an Audiobookshelf book
     /// library is the active destination (add-gui-library-panel design D12,
     /// row 9.1); `None` while any other destination is active.
@@ -166,10 +173,6 @@ pub struct GuiMusicFrame {
     /// active slot paints. `None` while idle or while the active slot holds no
     /// Emby item.
     pub playing_track_id: Option<String>,
-    /// The right-click item menu the window content last opened (the row-menu
-    /// command): the item it named with the TUI menu builder's full entries for
-    /// it. `None` while no right-click has named an item.
-    pub row_menu: Option<GuiMusicRowMenu>,
 }
 
 /// The Library's right-click item menu (the row-menu command): the item the
@@ -177,7 +180,7 @@ pub struct GuiMusicFrame {
 /// order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiMusicRowMenu {
+pub struct GuiLibraryRowMenuFrame {
     /// The item's stable Service id the command named.
     pub item_id: String,
     /// The TUI menu builder's entries for the item.
@@ -324,7 +327,6 @@ impl GuiMusicFrame {
         projection: &GuiMusicProjection,
         art: Option<GuiLibraryArt>,
         menu: &[GuiLibraryMenuItem],
-        row_menu: Option<&mbv::GuiLibraryRowMenu>,
         playing_track_id: Option<String>,
     ) -> Self {
         let hero = projection.hero.as_ref().map(|hero| {
@@ -356,12 +358,11 @@ impl GuiMusicFrame {
             art,
             hero,
             playing_track_id,
-            row_menu: row_menu.map(GuiMusicRowMenu::from),
         }
     }
 }
 
-impl From<&mbv::GuiLibraryRowMenu> for GuiMusicRowMenu {
+impl From<&mbv::GuiLibraryRowMenu> for GuiLibraryRowMenuFrame {
     fn from(menu: &mbv::GuiLibraryRowMenu) -> Self {
         Self {
             item_id: menu.item_id.clone(),

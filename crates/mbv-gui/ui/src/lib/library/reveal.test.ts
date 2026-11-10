@@ -60,7 +60,6 @@ function music(): GuiMusicFrame {
 		hero: HERO,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 
@@ -75,6 +74,7 @@ function content(): GuiLibraryContent {
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 

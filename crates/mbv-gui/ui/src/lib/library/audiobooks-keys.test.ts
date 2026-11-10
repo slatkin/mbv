@@ -122,6 +122,7 @@ function content(hero: GuiAudiobooksFrame['hero']): GuiLibraryContent {
 		audiobooks: { ...AUIB_FRAME, hero },
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 

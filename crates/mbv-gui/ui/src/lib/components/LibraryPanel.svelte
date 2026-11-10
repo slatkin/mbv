@@ -27,6 +27,7 @@
 	// D3). The panel also reports the arrangement it paints, so the router
 	// closes an overlay only where one actually paints.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
+	import type { GuiLibraryRowMenu } from '$lib/bridge/types';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
 import type {
@@ -108,6 +109,10 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		 * the top bar paints under its field; `null` while the section is
 		 * closed. */
 		search?: GuiSearchFrame | null;
+		/** The right-click item menu the window content last opened (design
+		 * D8, D15), whichever destination's row named it; `null` while no
+		 * right-click has named an item. */
+		rowMenu: GuiLibraryRowMenu | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -130,6 +135,7 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		podcasts = null,
 		feeds = null,
 		search = null,
+		rowMenu,
 		status,
 		arrangement,
 		listWidth,
@@ -400,17 +406,16 @@ type OverlayHero =
 		{status}
 	/>
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
-		card at the pointer position, painted only while the Music frame carries
-		the item's own entries. A press runs the entry the core built, resolved by
-		that item's stable id. Home's rows name no Music item, so the menu paints
-		only under Music. -->
-	{#if music !== null && $libraryUi.rowMenu !== null}
-		{@const carried = music.rowMenu}
-		{#if carried?.itemId === $libraryUi.rowMenu.itemId && carried.entries.length > 0}
+		card at the pointer position, painted while the content carries the
+		named item's entries. It belongs to the Library, not to one destination
+		(design D15), so a row of any destination opens it. A press runs the
+		entry the core built, resolved by that item's stable id. -->
+	{#if rowMenu !== null && $libraryUi.rowMenu !== null}
+		{#if rowMenu.itemId === $libraryUi.rowMenu.itemId && rowMenu.entries.length > 0}
 			<div class="fixed" style:left="0" style:top="0" style:width="0" style:height="0">
 				<QueueRowMenu
 					cursor={-1}
-					entries={carried.entries}
+					entries={rowMenu.entries}
 					top="{$libraryUi.rowMenu.y}px"
 					left="{$libraryUi.rowMenu.x}px"
 					onSelect={runLibraryRowMenuEntry}

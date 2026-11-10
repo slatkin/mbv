@@ -131,6 +131,7 @@ function feedsContent(
 			selected,
 			hero,
 		},
+		rowMenu: null,
 		shows: null,
 	};
 }

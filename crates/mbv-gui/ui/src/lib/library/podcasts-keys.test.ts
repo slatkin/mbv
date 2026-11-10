@@ -132,6 +132,7 @@ function podcastsContent(
 			hero,
 		},
 		feeds: null,
+		rowMenu: null,
 		shows: null,
 	};
 }

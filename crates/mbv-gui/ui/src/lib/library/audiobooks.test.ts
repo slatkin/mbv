@@ -58,6 +58,7 @@ function carry(selected: string | null = 'b1', cursor: string | null = null): vo
 		audiobooks: frame(selected),
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 	carryLibraryContent({ revision: 1, search: null, content });
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });

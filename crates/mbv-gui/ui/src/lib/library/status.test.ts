@@ -52,7 +52,6 @@ function music(picked: GuiMusicHero | null): GuiMusicFrame {
 		hero: picked,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 

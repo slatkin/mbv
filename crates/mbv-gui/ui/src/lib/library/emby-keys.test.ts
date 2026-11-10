@@ -146,6 +146,7 @@ function embyContent(
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 

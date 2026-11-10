@@ -95,6 +95,7 @@ async function mountList(
 			audiobooks: null,
 			podcasts: null,
 			feeds,
+			rowMenu: null,
 			shows: null,
 		},
 	});

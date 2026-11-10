@@ -72,7 +72,6 @@ function content(): GuiLibraryContent {
 			hero: null,
 			art: null,
 			playingTrackId: null,
-			rowMenu: null,
 		},
 		home: null,
 		shows: null,
@@ -80,6 +79,7 @@ function content(): GuiLibraryContent {
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 

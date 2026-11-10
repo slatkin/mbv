@@ -69,7 +69,6 @@ function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
 		hero,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 
@@ -162,6 +161,7 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 							audiobooks: null,
 							podcasts: null,
 							feeds: null,
+							rowMenu: null,
 						},
 					},
 		theme: null,
@@ -285,7 +285,7 @@ test('a frame without the Library section paints only the Queue panel', async ()
 	const { container } = await mount(
 		{ width: 700, height: 900 },
 		frame('library', null),
-		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null },
+		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
 	);
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
@@ -476,6 +476,7 @@ test('the Feeds content mounts the Library panel with the Feeds painters', async
  * Hero (design D12, row 11.1). */
 function feedsContent(): GuiLibraryContent {
 	return {
+		rowMenu: null,
 		tabs: [{ position: 5, label: 'Feeds' }],
 		currentTab: 5,
 		music: null,
@@ -558,6 +559,7 @@ function podcastsContent(): GuiLibraryContent {
 			},
 		},
 		feeds: null,
+		rowMenu: null,
 	};
 }
 
@@ -601,5 +603,6 @@ function embyContent(): GuiLibraryContent {
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }

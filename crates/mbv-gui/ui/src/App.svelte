@@ -158,6 +158,7 @@
           {podcasts}
           {feeds}
           {search}
+          rowMenu={content?.rowMenu ?? null}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
           status={frame.status}

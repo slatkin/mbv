@@ -52,6 +52,7 @@ function carriedContent(): GuiLibraryContent {
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 	};
 }
 

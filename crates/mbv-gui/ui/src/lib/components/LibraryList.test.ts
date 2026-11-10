@@ -81,7 +81,6 @@ function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
 		hero: null,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 

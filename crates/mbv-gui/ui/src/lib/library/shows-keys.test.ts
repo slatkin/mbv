@@ -121,6 +121,7 @@ function showsContent(
 		audiobooks: null,
 		podcasts: null,
 		feeds: null,
+		rowMenu: null,
 		shows: {
 			libIdx: 0,
 			pills: showsPills(mode),

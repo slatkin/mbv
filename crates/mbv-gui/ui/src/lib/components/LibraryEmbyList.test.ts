@@ -96,7 +96,7 @@ async function mountList(
 	carryLibraryContent({
 		revision: 1,
 		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
+		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
 	});
 	const { container } = render(LibraryEmbyList, { emby });
 	const list = container.querySelector<HTMLElement>('[data-library-emby-list]');
@@ -197,7 +197,7 @@ test('a list that has not landed paints the loading line', async () => {
 	carryLibraryContent({
 		revision: 1,
 		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
+		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
 	});
 
 	const { container } = render(LibraryEmbyList, { emby });
@@ -210,7 +210,7 @@ test('a failed plain-mode fetch paints the failure line', async () => {
 	carryLibraryContent({
 		revision: 1,
 		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null },
+		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
 	});
 
 	const { container } = render(LibraryEmbyList, { emby });

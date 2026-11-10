@@ -88,8 +88,7 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
 
     let row_menu = library_of(frame)
         .content
-        .and_then(|content| content.music)
-        .and_then(|music| music.row_menu)
+        .and_then(|content| content.row_menu)
         .expect("the right-clicked item has a menu");
     assert_eq!(row_menu.item_id, "alb-ill");
     let labels: Vec<&str> = row_menu
@@ -118,8 +117,7 @@ fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
     assert!(
         library_of(frame)
             .content
-            .and_then(|content| content.music)
-            .and_then(|music| music.row_menu)
+            .and_then(|content| content.row_menu)
             .is_none(),
         "a stale right-click carries no menu"
     );

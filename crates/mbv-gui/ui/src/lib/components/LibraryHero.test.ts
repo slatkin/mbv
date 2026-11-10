@@ -72,7 +72,6 @@ function music(facts: GuiMusicHero): GuiMusicFrame {
 		hero: facts,
 		art: null,
 		playingTrackId: null,
-		rowMenu: null,
 	};
 }
 
