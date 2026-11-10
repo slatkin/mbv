@@ -511,6 +511,17 @@ re-arms the section (`LibraryFrames::rearm`,
 `crates/mbv-gui/src/library_frames.rs`), so the next frame re-carries the
 whole content.
 
+`search` is the Search section (design D12, row 12.1):
+`Option<GuiSearchFrame>`, present while the field holds a query or its rows,
+and `None` while the field is closed. It rides the section beside the
+revision-gated `content`, never inside it, because Search is
+cross-destination: a result that lands between two content changes still
+reaches the window. `GuiSearchFrame`
+(`src/bridge/frame/library/search.rs`) carries `query` (the query the core is
+answering), `loading`, `failed`, and `results`, whose rows carry `id` and
+`item_type` (the stable Service identity the `searchActivate` command sends
+back), `title`, and `subtitle` (empty when the item has none).
+
 `GuiLibraryContent` carries `tabs` (the presented destinations in catalog
 order, each a `GuiLibraryTabFrame` with a `position` and a `label`, Home at
 position 0), `current_tab` (the active tab's position, `None` for Home and for
@@ -845,6 +856,19 @@ does nothing for feed entries, because the TUI has no feed play-next producer.
 The Owner owns the queue, so no Feeds command mutates it directly. A row id of
 no valid shape, or an entry the App's data no longer holds, logs and changes
 nothing.
+
+The Search commands carry no library index, because Search is
+cross-destination (row 12.1). `searchQuery` (`query`) stores the live query
+and starts the TUI's own search worker through
+`App::spawn_search_sidebar_query`, and an empty query clears the results.
+`searchActivate` (`id`, `itemType`) — the command Enter and a press both send
+— navigates to the row's item through the TUI's own navigation and closes the
+results. `searchClose` clears them. No overlay request rides these commands,
+because the GUI fronts its own results. The GUI mounts no search component,
+so the core thread's tick host runs `App::drain_gui_search_results` in place
+of its no-op, and the frame carries the store that drain fills; the TUI's own
+drain and its component do not change. A row the store no longer holds logs
+and changes nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
