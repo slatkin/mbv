@@ -1,18 +1,21 @@
 <script lang="ts">
-	// The Shows list (add-gui-library-panel design D12, row 7.1): the All series
-	// mode's series rows under their letter headings, with the A–Z letter rail
-	// beside them, and the Latest and Upcoming modes' flat rows with their date
-	// gutter and no rail. The rows paint at the fixed heights of
+	// The Shows list (add-gui-library-panel design D14): the Music tree over
+	// the TUI's TV node kinds — series nodes, their seasons, and each season's
+	// episodes — under the letter headings of the first series of each letter,
+	// with the A–Z rail beside them, and the Latest and Upcoming modes' flat
+	// rows with their date gutter and no rail. The list header is the Music
+	// list's: the `Series` title, the active mode as the selection label, and
+	// the `/` filter field. The rows paint at the fixed heights of
 	// `$lib/library/shows-list` over native scroll, and only the rows in view
 	// paint, so a long series list stays fast.
 	//
-	// The cursor, the scroll offset, the viewport, and the filter text are the
-	// window content's own in `$lib/library/shows` (design D1); this component
-	// paints that state and reports the two facts only the DOM holds. A press
-	// selects the row the Hero shows, a double-click on a flat row plays it,
-	// and the keys' Enter selects a series and plays a flat row. The `/`
-	// filter field narrows the rows to the titles that contain its text, the
-	// rail's keyboard path in the All series mode (design D7).
+	// The cursor, the open and closed nodes, the scroll offset, the viewport,
+	// and the filter text are the window content's own in `$lib/library/shows`
+	// (design D1); this component paints that state and reports the two facts
+	// only the DOM holds. A press on a node opens or closes it and selects it
+	// for the Hero, a press on a leaf or a flat row selects it, a double-click
+	// on an episode plays it, and a right-click opens the item menu, as the
+	// Music list's rows do.
 	import { onMount } from 'svelte';
 	import type { GuiShowsFrame } from '$lib/bridge/types';
 	import {
@@ -35,24 +38,30 @@
 		setShowsFilter,
 		showsUi,
 	} from '$lib/library/shows';
-	import { resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
+	import { openLibraryRowMenu } from '$lib/library/state';
+	import { isPlayedEpisode, resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
 	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 	interface Props {
-		/** The carried Shows content (design D12): the active mode's rows. */
+		/** The carried Shows content (design D14): the tree or the flat rows. */
 		shows: GuiShowsFrame;
 	}
 	const { shows }: Props = $props();
 
 	let listEl: HTMLElement | undefined = $state();
 
-	/** The active view mode (design D12): the pill the core marked. */
+	/** The active view mode: the pill the core marked. */
 	const mode = $derived(activeShowsMode(shows));
 
-	/** The painted rows (design D12): the series rows with their headings, or
-	 * the flat rows with no heading, narrowed by the filter's text. */
-	const rows = $derived(buildShowsRows(shows.rows, mode, $showsUi.filter));
+	/** The painted rows (design D14): the tree in the All mode, the flat rows
+	 * in the Latest and Upcoming modes, narrowed by the filter's text. */
+	const rows = $derived(
+		buildShowsRows(shows, mode, $showsUi.filter, {
+			open: $showsUi.open,
+			closed: $showsUi.closed,
+		}),
+	);
 
 	/** The rows in view: only these paint. */
 	const view = $derived(showsListWindow(rows, $showsUi.scrollTop, $showsUi.viewportHeight));
@@ -64,8 +73,8 @@
 	const above = $derived(painted.length > 0 ? painted[0].top : 0);
 	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
-	/** The rail's A–Z letters over the painted rows (design D12): the All
-	 * series mode paints it, and the flat modes paint none. */
+	/** The rail's A–Z letters over the painted rows: the All series mode paints
+	 * it, and the flat modes paint none. */
 	const rail = $derived(showsLetterRail(rows));
 
 	/** The row the cursor rests on, or `null` while none carries it. */
@@ -73,6 +82,18 @@
 
 	/** The letter the rail marks: the one the cursor row belongs to. */
 	const marked = $derived(cursorRow === null ? null : showsRowLetter(cursorRow));
+
+	/** The header's right line, in the Music list's shape: the active mode and
+	 * its sort rule. The All mode is sorted by name, the flat modes by date. */
+	const selectionLabel = $derived(
+		mode === 'all'
+			? `${shows.collectionNames[0] ?? 'All'} · sort name`
+			: (shows.collectionNames[0] ?? 'All'),
+	);
+
+	/** The filter field's placeholder, naming the selection as the Music list
+	 * does. */
+	const filterPlaceholder = $derived(`Filter ${shows.collectionNames[0] ?? 'shows'}`);
 
 	/** The bottom edge of the last painted row: the below-spacer's pair. */
 	function lastBottom(): number {
@@ -86,7 +107,22 @@
 		return `var(--canvas-${name})`;
 	}
 
-	/** The row's painted fill (design D12): the cursor row's focus fill, and
+	/** The stable Service id a row names, or `null` on a heading: the item the
+	 * menu and the double-click act on. */
+	function rowSourceId(row: ShowsListRow): string | null {
+		if (row.kind === 'heading') {
+			return null;
+		}
+		return row.kind === 'flat' ? row.row.id : row.sourceId;
+	}
+
+	/** Whether the row is the core's selected one: the series the Hero shows,
+	 * or the flat row it shows. */
+	function isSelectedRow(row: ShowsListRow): boolean {
+		return shows.selected !== null && rowSourceId(row) === shows.selected;
+	}
+
+	/** The row's painted fill (design D14): the cursor row's focus fill, and
 	 * the core's selected row the raised fill while the cursor sits elsewhere —
 	 * the selection is what the Hero shows, so its row stays marked. */
 	function rowBackground(row: ShowsListRow): string | undefined {
@@ -96,11 +132,55 @@
 		if (row.id === $showsUi.cursor) {
 			return canvasVar('selected');
 		}
-		return row.id === shows.selected ? canvasVar('library-raise') : undefined;
+		return isSelectedRow(row) ? canvasVar('library-raise') : undefined;
 	}
 
-	/** Report the list's measured height (design D12): the rows in view follow
-	 * it. */
+	/** The row's indentation: the Music tree's depths — the series at the list's
+	 * own inset, the season under it, the episode under the season. */
+	function rowInset(row: ShowsListRow): string {
+		switch (row.kind) {
+			case 'series':
+			case 'flat':
+				return '4px';
+			case 'season':
+				return '22px';
+			case 'episode':
+				return '40px';
+			default:
+				return '8px';
+		}
+	}
+
+	/** The row's name colour: the canvas's text tone, dimmed once an episode is
+	 * played, as the Workspace's rows are. */
+	function rowNameColor(row: ShowsListRow): string {
+		if (row.kind === 'episode') {
+			return episodePlayed(row.id) ? canvasVar('muted') : canvasVar('text');
+		}
+		return canvasVar('text');
+	}
+
+	/** Whether an episode leaf names a played episode: its Workspace row carries
+	 * the shared media state. */
+	function episodePlayed(rowId: string): boolean {
+		const episodeId = rowId.slice('shows-episode:'.length);
+		for (const series of shows.series) {
+			for (const season of series.seasons) {
+				const episode = season.episodes?.find((row) => row.episodeId === episodeId);
+				if (episode !== undefined) {
+					return isPlayedEpisode(episode.state);
+				}
+			}
+		}
+		return false;
+	}
+
+	/** The chevron's rotation: the open node's caret points down. */
+	function chevronStyle(open: boolean): string {
+		return `transform: rotate(${open ? 90 : 0}deg);`;
+	}
+
+	/** Report the list's measured height: the rows in view follow it. */
 	function measure(): void {
 		measureShowsList(listEl?.clientHeight ?? 0);
 	}
@@ -111,9 +191,20 @@
 		scrollShowsList((event.currentTarget as HTMLElement).scrollTop);
 	}
 
-	// The scroller mirrors the state (design D12): a key that moved the cursor
-	// set the offset, and the element follows it. A user scroll already wrote
-	// the offset back, so this assignment is a no-op for it.
+	/** Open the item menu for the row (design D14): the Music list's
+	 * right-click, at the item's stable Service id. */
+	function rowMenu(event: MouseEvent, row: ShowsListRow): void {
+		event.preventDefault();
+		const itemId = rowSourceId(row);
+		if (itemId === null) {
+			return;
+		}
+		openLibraryRowMenu(itemId, event.clientX, event.clientY);
+	}
+
+	// The scroller mirrors the state: a key that moved the cursor set the
+	// offset, and the element follows it. A user scroll already wrote the
+	// offset back, so this assignment is a no-op for it.
 	$effect(() => {
 		const el = listEl;
 		const top = $showsUi.scrollTop;
@@ -122,9 +213,9 @@
 		}
 	});
 
-	// The Hero's episode cursor belongs to the selected row (row 7.1): a
-	// selection change starts it over, because the episodes it rested on belong
-	// to the previous series.
+	// The Hero's episode cursor belongs to the selected row: a selection change
+	// starts it over, because the episodes it rested on belong to the previous
+	// series.
 	let lastSelected: string | null = null;
 	$effect(() => {
 		const selected = shows.selected;
@@ -147,18 +238,34 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-shows-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
+	<!-- The Music list's header (design D14): the title, the active mode as the
+	selection label, and the `/` filter field. -->
+	<div class="flex flex-none flex-col" style:padding="14px 16px 10px" style:gap="10px">
+		<div class="flex items-baseline justify-between" style:gap="12px">
+			<span
+				style:font-size="13px"
+				style:font-weight="600"
+				style:color="var(--canvas-heading)"
+				data-library-shows-list-title="">Series</span
+			>
+			<span
+				class="font-mono"
+				style:font-size="11px"
+				style:color="var(--canvas-muted)"
+				data-library-shows-selection-label="">{selectionLabel}</span
+			>
+		</div>
 		<LibraryFilterField
 			value={$showsUi.filter}
-			placeholder="Filter shows"
-			ariaLabel="Filter shows"
+			placeholder={filterPlaceholder}
+			ariaLabel="Filter series"
 			oninput={setShowsFilter}
 			onaccept={acceptShowsFilter}
 		/>
 	</div>
 	{#if shows.loading}
-		<!-- The active mode's list has not landed yet (design D12): one
-			placeholder line holds the list's place. -->
+		<!-- The active mode's list has not landed yet: one placeholder line
+		holds the list's place. -->
 		<div
 			class="flex flex-none items-center"
 			style:height="36px"
@@ -168,6 +275,19 @@
 			data-library-shows-loading=""
 		>
 			Loading…
+		</div>
+	{:else if shows.upcomingFailed}
+		<!-- The Upcoming mode's eager fetch failed (design D14): the TUI's line,
+		and the pill is the retry. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-shows-failed=""
+		>
+			Upcoming fetch failed — select the pill to retry
 		</div>
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
@@ -195,30 +315,98 @@
 						>
 							{row.letter}
 						</div>
-					{:else if row.kind === 'series'}
+					{:else if row.kind === 'series' || row.kind === 'season'}
 						<button
 							type="button"
 							class="flex w-full items-center overflow-hidden"
 							style:height="{row.height}px"
 							style:padding="0 8px"
+							style:padding-left={rowInset(row)}
 							style:gap="8px"
 							style:border="0"
-							style:border-radius={row.id === shows.selected ? '4px' : '0'}
+							style:border-radius="4px"
 							style:text-align="left"
 							style:font-size="13.5px"
 							style:background={rowBackground(row)}
 							style:cursor="pointer"
-							data-library-shows-row="series"
+							aria-expanded={row.expandable ? row.open : undefined}
+							data-library-shows-row={row.kind}
 							data-library-shows-row-id={row.id}
 							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-							data-library-shows-selected={row.id === shows.selected ? '' : undefined}
+							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
+							data-library-shows-open={row.open ? '' : undefined}
 							onclick={() => pressShowsRow(row)}
+							oncontextmenu={(event) => rowMenu(event, row)}
 						>
 							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={canvasVar('text')}
-								style:font-weight={row.id === shows.selected ? 600 : 400}>{row.row.title}</span
+								class="flex flex-none items-center justify-center"
+								style:width="18px"
+								style:color="var(--canvas-muted)"
+								data-library-shows-chevron={row.expandable ? '' : undefined}
 							>
+								{#if row.expandable}
+									<svg
+										width="10"
+										height="10"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										aria-hidden="true"
+										style={chevronStyle(row.open)}><path d="m9 5 7 7-7 7" /></svg
+									>
+								{/if}
+							</span>
+							<span
+								class="min-w-0 flex-1 truncate"
+								style:color={rowNameColor(row)}
+								style:font-weight={row.kind === 'series' || isSelectedRow(row) ? 600 : 400}
+								>{row.title}</span
+							>
+						</button>
+					{:else if row.kind === 'episode'}
+						<button
+							type="button"
+							class="flex w-full items-center overflow-hidden"
+							style:height="{row.height}px"
+							style:padding="0 8px"
+							style:padding-left={rowInset(row)}
+							style:gap="8px"
+							style:border="0"
+							style:border-radius="4px"
+							style:text-align="left"
+							style:font-size="13px"
+							style:background={rowBackground(row)}
+							style:cursor="pointer"
+							data-library-shows-row="episode"
+							data-library-shows-row-id={row.id}
+							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
+							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
+							onclick={() => pressShowsRow(row)}
+							ondblclick={() => playShowsRow(row.sourceId)}
+							oncontextmenu={(event) => rowMenu(event, row)}
+						>
+							<span
+								class="flex-none font-mono tabular-nums"
+								style:font-size="11px"
+								style:color="var(--canvas-ordinal)"
+								data-library-shows-episode-number="">{row.number}</span
+							>
+							<span
+								class="min-w-0 flex-1 truncate"
+								style:color={rowNameColor(row)}
+								data-library-shows-title="">{row.title}</span
+							>
+							{#if row.duration !== ''}
+								<span
+									class="flex-none font-mono tabular-nums"
+									style:font-size="11px"
+									style:color="var(--canvas-muted)"
+									data-library-shows-episode-duration="">{row.duration}</span
+								>
+							{/if}
 						</button>
 					{:else}
 						<button
@@ -236,9 +424,10 @@
 							data-library-shows-row="flat"
 							data-library-shows-row-id={row.id}
 							data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-							data-library-shows-selected={row.id === shows.selected ? '' : undefined}
+							data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
 							onclick={() => pressShowsRow(row)}
 							ondblclick={() => playShowsRow(row.row.id)}
+							oncontextmenu={(event) => rowMenu(event, row)}
 						>
 							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
 								<span

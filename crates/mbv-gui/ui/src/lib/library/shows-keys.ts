@@ -1,14 +1,15 @@
-// The Shows destination's key routing (add-gui-library-panel design D3, D12,
-// row 7.1): the Library keys while a Shows library is active. `./keys` stays
-// the panel's one routing site and hands a Shows key here after the window keys
-// and the open-field checks, so this module never installs a router. The pane
-// focus decides the control a key acts on: the mode pills, the list, or the
+// The Shows destination's key routing (add-gui-library-panel design D3, D14):
+// the Library keys while a Shows library is active. `./keys` stays the panel's
+// one routing site and hands a Shows key here after the window keys and the
+// open-field checks, so this module never installs a router. The pane focus
+// decides the control a key acts on: the mode pills, the tree list, or the
 // Hero's Workspace.
 //
 // Everything else matches the Music router: the movements and Enter never reach
-// the core, Esc's overlay and menu handling runs before this, `/` opens the
-// list's filter, and Space with no focused pill stays the core's play and
-// pause.
+// the core, Right and Left open and close the tree node under the cursor (the
+// tree meaning design D3 gives them), Esc's overlay and menu handling runs
+// before this, `/` opens the list's filter, and Space with no focused pill
+// stays the core's play and pause.
 
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiShowsFrame } from '$lib/bridge/types';
@@ -16,16 +17,21 @@ import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
 import { libraryShows, openLibraryFilter } from './state';
 import {
+	closeShowsNode,
 	focusedShowsPill,
 	moveShowsListCursor,
 	moveShowsPillFocus,
+	openShowsNode,
 	playShowsRow,
 	playShowsRowNext,
 	queueShowsRow,
 	requestShowsPillSelect,
 	selectShowsRow,
 	showsCursorRow,
+	showsNodeOpen,
+	toggleShowsNode,
 } from './shows';
+import { isShowsNodeRow } from './shows-list';
 import type { ShowsListRow } from './shows-list';
 import {
 	moveShowsEpisodeCursor,
@@ -128,14 +134,23 @@ function routePillKey(event: KeyboardEvent, shows: GuiShowsFrame): KeyOutcome {
 	return 'core';
 }
 
-/** Route a key to the list's cursor (design D12): the arrows, Page Up, Page
- * Down, Home, and End move the cursor, and Enter selects the series row it
- * rests on or plays the flat row. `n` and `a` act on a flat row only, because a
- * series row is not playable. */
+/** Route a key to the tree list's cursor (design D14): the arrows, Page Up,
+ * Page Down, Home, and End move the cursor, Right opens the node under the
+ * cursor, Left closes it, and Enter toggles a node or plays an episode leaf.
+ * `n` and `a` act on an episode or a flat row, because a series and a season
+ * are not playable. */
 function routeListKey(event: KeyboardEvent): KeyOutcome {
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
 		moveShowsListCursor(move);
+		return 'handled';
+	}
+	if (event.key === 'ArrowRight') {
+		openCursorNode();
+		return 'handled';
+	}
+	if (event.key === 'ArrowLeft') {
+		closeCursorNode();
 		return 'handled';
 	}
 	if (event.key === 'Enter') {
@@ -149,31 +164,59 @@ function routeListKey(event: KeyboardEvent): KeyOutcome {
 	return LIST_AND_HERO_KEYS.has(event.key) ? 'handled' : 'core';
 }
 
-/** Enter on the cursor row (design D12): a series row selects, and a flat row
- * plays. A cursor on no row sends nothing. */
+/** Right on the cursor row (design D14): a node opens. A leaf has no children,
+ * so the key changes nothing. */
+function openCursorNode(): void {
+	const row = showsCursorRow();
+	if (isShowsNodeRow(row)) {
+		openShowsNode(row);
+	}
+}
+
+/** Left on the cursor row (design D14): an open node closes. A closed node and
+ * a leaf change nothing. */
+function closeCursorNode(): void {
+	const row = showsCursorRow();
+	if (isShowsNodeRow(row) && showsNodeOpen(row)) {
+		closeShowsNode(row);
+	}
+}
+
+/** Enter on the cursor row (design D14): a series or season node toggles and
+ * selects, and an episode leaf or a flat row plays. A cursor on no row sends
+ * nothing. */
 function routeListEnter(): void {
 	const row = showsCursorRow();
 	if (row === null) {
 		return;
 	}
-	if (row.kind === 'series') {
+	if (isShowsNodeRow(row)) {
+		toggleShowsNode(row);
 		selectShowsRow(row);
 		return;
 	}
-	playShowsRow(row.row.id);
+	if (row.kind === 'flat') {
+		playShowsRow(row.row.id);
+		return;
+	}
+	playShowsRow(row.sourceId);
 }
 
-/** Route `n` and `a` to a flat row's episode (design D12): play next and add to
- * queue. A series row is not playable, so its key sends no command. */
+/** Route `n` and `a` to a playable row (design D14): an episode leaf or a flat
+ * row. A series or a season is not playable, so its key sends no command. */
 function routeListItemKey(event: KeyboardEvent, row: ShowsListRow | null): void {
-	if (row === null || row.kind !== 'flat') {
+	if (row === null || row.kind === 'heading') {
 		return;
 	}
+	if (row.kind === 'series' || row.kind === 'season') {
+		return;
+	}
+	const id = row.kind === 'flat' ? row.row.id : row.sourceId;
 	if (event.key === 'n') {
-		playShowsRowNext(row.row.id);
+		playShowsRowNext(id);
 		return;
 	}
-	queueShowsRow(row.row.id);
+	queueShowsRow(id);
 }
 
 /** Route a key to the Hero's Workspace (design D12): the movement keys move the

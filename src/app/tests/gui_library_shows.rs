@@ -1,10 +1,11 @@
 //! Tests of the GUI Library's Shows projection (add-gui-library-panel
-//! design D12, row 7.1, the USER-APPROVED GUI Shows design): the All series
-//! mode's series rows with their rail letters and the series Hero's season
-//! pills and Workspace, the flat Latest mode's rows and episode Hero, the
-//! Upcoming mode's premiere rows with no Hero, and the stale selection's
-//! first-row fallback. The projection reads the seeded `App` data alone, so
-//! no Service, worker, or mock transport runs.
+//! design D14, which supersedes D12's first Shows design): the All series
+//! mode's tree — the series nodes with their rail letters, their seasons, and
+//! each season's episodes or `None` while unloaded — the series Hero from the
+//! TUI's series producer with its season pills and Workspace, the flat Latest
+//! mode's rows and episode Hero, the Upcoming mode's premiere rows with no
+//! Hero, and the stale selection's first-row fallback. The projection reads
+//! the seeded `App` data alone, so no Service, worker, or mock transport runs.
 
 use super::*;
 use crate::config::TestStateDirGuard;
@@ -68,17 +69,16 @@ fn shows_app(mode: TvContentMode, items: Vec<EmbyItem>) -> App {
     app
 }
 
-/// The All series mode's rows, letters, default selection, and series Hero
-/// (row 7.1, contract a): the rows are the root level's series in the
-/// server's `SortName` order, each with its rail letter over the sort name,
-/// the first row is the Hero default, and the Hero is the landscape art with
-/// the season pills on the first season and the Workspace's episode rows
-/// with their played/progress states.
-#[test]
-fn the_series_mode_projects_rows_letters_and_the_series_hero() {
-    let _guard = TestStateDirGuard::new();
+/// The All series mode's fixture (design D14): two root series, the first
+/// with a cached detail whose first season has loaded episodes and whose
+/// second season has not, and a selected series in the App's Shows selection.
+fn series_tree_app() -> App {
     let mut first = series_item("series-a", "Alfred", "Alfred");
     first.image_tags.thumb = "tag".into();
+    first.genres = vec!["Drama".into()];
+    first.production_year = 2013;
+    first.end_year = 2022;
+    first.studios = vec!["FX".into()];
     let second = series_item("series-b", "Bridgerton", "Bridgerton");
     let mut app = shows_app(TvContentMode::All, vec![first, second]);
     let mut played = make_item("Pilot", "Episode");
@@ -92,36 +92,101 @@ fn the_series_mode_projects_rows_letters_and_the_series_hero() {
     resumed.runtime_ticks = 1200 * mbv_emby_model::TICKS_PER_SECOND;
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
+    let mut later = make_item("Season 2", "Season");
+    later.id = "season-2".into();
     let detail = SeriesDetail {
-        seasons: vec![season],
+        seasons: vec![season, later],
         episodes: [("season-1".to_string(), vec![played, resumed])]
             .into_iter()
             .collect(),
     };
     app.series_detail_cache
         .insert("series-a".to_string(), detail);
+    app
+}
+
+/// The All series mode's tree (design D14): the nodes are the root level's
+/// series in the server's `SortName` order, each with its rail letter over the
+/// sort name and its seasons from the cached detail — the loaded season's
+/// episode rows and `None` for a season whose load has not landed — and the
+/// first series is the Hero default.
+#[test]
+fn the_series_mode_projects_the_tree() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = series_tree_app();
 
     let projection = app.gui_shows_projection(0);
 
-    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert!(
+        projection.rows.is_empty(),
+        "the All series mode's list is the tree, not the flat rows"
+    );
+    let ids: Vec<&str> = projection
+        .series
+        .iter()
+        .map(|node| node.id.as_str())
+        .collect();
     assert_eq!(
         ids,
         ["series-a", "series-b"],
-        "the rows are the root series"
+        "the tree's nodes are the root series"
     );
     let letters: Vec<char> = projection
-        .rows
+        .series
         .iter()
-        .filter_map(|row| row.sort_letter)
+        .map(|node| node.sort_letter)
         .collect();
     assert_eq!(letters, ['A', 'B'], "the rail letters read the sort names");
     assert_eq!(
         projection.selected.as_deref(),
         Some("series-a"),
-        "the first series row is the Hero default"
+        "the first series node is the Hero default"
     );
+    let tree = &projection.series[0];
+    assert!(tree.expandable, "a series with a season is expandable");
+    let seasons: Vec<&str> = tree
+        .seasons
+        .iter()
+        .map(|season| season.id.as_str())
+        .collect();
+    assert_eq!(seasons, ["season-1", "season-2"]);
+    assert_eq!(
+        tree.seasons[0].episodes.as_ref().map(Vec::len),
+        Some(2),
+        "the loaded season carries its episode rows"
+    );
+    assert!(
+        tree.seasons[1].episodes.is_none(),
+        "an unloaded season carries None, so its open asks for the load"
+    );
+    assert!(
+        projection.series[1].seasons.is_empty() && projection.series[1].expandable,
+        "a series without a cached detail paints closed and expandable"
+    );
+}
+
+/// The series Hero comes from the TUI's series producer (design D14): the
+/// genre, the show's year range, the season count, and the network, with no
+/// duration row while the Workspace has no focus — and the Workspace holds the
+/// season pills on the first season with the episodes' played/progress states.
+#[test]
+fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = series_tree_app();
+
+    let projection = app.gui_shows_projection(0);
+
     let hero = projection.hero.expect("the series Hero paints");
     assert_eq!(hero.title, "Alfred");
+    assert_eq!(
+        hero.meta_rows,
+        vec!["DRAMA", "2013 - 2022", "2 Seasons", "FX"],
+        "the Hero carries the TUI series producer's rows"
+    );
+    assert_eq!(
+        hero.duration_row, None,
+        "the unfocused Workspace leaves the series without a duration row"
+    );
     assert_eq!(
         hero.art_shape,
         crate::app::gui_library::GuiArtShape::Landscape,
@@ -136,7 +201,7 @@ fn the_series_mode_projects_rows_letters_and_the_series_hero() {
         Some("season-1"),
         "the season pills start on the first season"
     );
-    assert_eq!(workspace.seasons.len(), 1);
+    assert_eq!(workspace.seasons.len(), 2);
     assert!(workspace.seasons[0].selected);
     let states: Vec<crate::app::gui_library::GuiHomeRowState> = workspace
         .episodes

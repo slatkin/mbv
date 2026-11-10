@@ -10,7 +10,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiShowsFrame, GuiShowsMode, GuiShowsPill, GuiShowsRow } from '$lib/bridge/types';
+import type {
+	GuiShowsFrame,
+	GuiShowsMode,
+	GuiShowsPill,
+	GuiShowsRow,
+	GuiShowsSeries,
+} from '$lib/bridge/types';
 import { showsUi, initialShowsUi } from '$lib/library/shows';
 import { carryLibraryContent } from '$lib/library/state';
 import LibraryShowsList from './LibraryShowsList.svelte';
@@ -48,25 +54,38 @@ function pills(mode: GuiShowsMode): GuiShowsPill[] {
 	];
 }
 
-/** The carried Shows content in `mode` over `rows` (design D12). */
-function showsFrame(mode: GuiShowsMode, rows: GuiShowsRow[]): GuiShowsFrame {
+/** The carried Shows content in `mode` over `rows` and `tree` (design D14). */
+function showsFrame(
+	mode: GuiShowsMode,
+	rows: GuiShowsRow[],
+	tree: GuiShowsSeries[] = [],
+): GuiShowsFrame {
 	return {
 		libIdx: 0,
 		pills: pills(mode),
 		collectionNames: [mode],
 		loading: false,
 		workspaceLoading: false,
+		series: tree,
+		upcomingFailed: false,
 		rows,
 		selected: rows[0]?.id ?? null,
 		hero: null,
 	};
 }
 
-/** The All series mode's rows: two `A` series and one `B` series. */
-const SERIES: GuiShowsRow[] = [
-	{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' },
-	{ id: 's2', title: 'The Bear', subtitle: null, date: null, sortLetter: 'A' },
-	{ id: 's3', title: 'Better Call Saul', subtitle: null, date: null, sortLetter: 'B' },
+/** The All series mode's tree (design D14): Atlanta with one season, then
+ * Better Call Saul under a second heading. Atlanta's season has no episodes
+ * yet, so its open asks the core for them. */
+const TREE: GuiShowsSeries[] = [
+	{
+		id: 's1',
+		title: 'Atlanta',
+		sortLetter: 'A',
+		expandable: true,
+		seasons: [{ id: 'se1', name: 'Season 1', episodes: null }],
+	},
+	{ id: 's3', title: 'Better Call Saul', sortLetter: 'B', expandable: true, seasons: [] },
 ];
 
 /** The Latest mode's rows: the flat newest episodes with their dates. */
@@ -102,8 +121,9 @@ async function mountList(
 	mode: GuiShowsMode,
 	rows: GuiShowsRow[],
 	viewportHeight = 300,
+	tree: GuiShowsSeries[] = [],
 ): Promise<HTMLElement> {
-	const shows = showsFrame(mode, rows);
+	const shows = showsFrame(mode, rows, tree);
 	carryLibraryContent({
 		revision: 1,
 		search: null,
@@ -127,15 +147,15 @@ function paintedRows(container: HTMLElement): (string | null)[] {
 // The All series mode paints the letter headings and the A–Z rail beside the
 // list (design D12): a press on an enabled letter moves the cursor to that
 // letter's first series row.
-test('the All series mode paints letter headings, its rows, and the rail a press moves the cursor with', async () => {
-	const container = await mountList('all', SERIES);
+test('the All series mode paints letter headings, its tree, and the rail a press moves the cursor with', async () => {
+	const container = await mountList('all', [], 300, TREE);
 
 	expect(
 		[...container.querySelectorAll('[data-library-shows-letter]')].map((el) =>
 			el.getAttribute('data-library-shows-letter'),
 		),
 	).toEqual(['A', 'B']);
-	expect(paintedRows(container)).toEqual(['s1', 's2', 's3']);
+	expect(paintedRows(container)).toEqual(['shows-series:s1', 'shows-series:s3']);
 
 	await fireEvent.click(
 		container.querySelector('[data-library-rail-letter="B"]') as HTMLElement,
@@ -144,9 +164,29 @@ test('the All series mode paints letter headings, its rows, and the rail a press
 
 	expect(
 		container
-			.querySelector('[data-library-shows-row-id="s3"]')
+			.querySelector('[data-library-shows-row-id="shows-series:s3"]')
 			?.getAttribute('data-library-shows-cursor'),
 	).toBe('');
+});
+
+// A press on a series node opens it (design D14): its seasons paint under it,
+// and the press still selects the series for the Hero.
+test('a press on a series node opens it and selects it', async () => {
+	const container = await mountList('all', [], 300, TREE);
+
+	await fireEvent.click(
+		container.querySelector('[data-library-shows-row-id="shows-series:s1"]') as HTMLElement,
+	);
+	await tick();
+
+	expect(paintedRows(container)).toEqual([
+		'shows-series:s1',
+		'shows-season:s1:se1',
+		'shows-series:s3',
+	]);
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showsSelect', libIdx: 0, row: 's1' },
+	});
 });
 
 // The Latest and Upcoming modes paint the flat rows with their date gutter and
@@ -164,14 +204,14 @@ test('the flat modes paint the date gutter and no rail', async () => {
 });
 
 test('a press sends the select command with the row id', async () => {
-	const container = await mountList('all', SERIES);
+	const container = await mountList('all', [], 300, TREE);
 
 	await fireEvent.click(
-		container.querySelector('[data-library-shows-row-id="s2"]') as HTMLElement,
+		container.querySelector('[data-library-shows-row-id="shows-series:s3"]') as HTMLElement,
 	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'showsSelect', libIdx: 0, row: 's2' },
+		command: { command: 'showsSelect', libIdx: 0, row: 's3' },
 	});
 });
 

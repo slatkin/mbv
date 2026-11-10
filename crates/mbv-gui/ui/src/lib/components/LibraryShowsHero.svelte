@@ -47,8 +47,9 @@
 		resolveShowsEpisodeCursor(workspace, $showsWorkspace.cursor)?.episodeId ?? null,
 	);
 
-	/** The artwork box's dimensions per arm (design D12): the Home Hero's
-	 * 300 px box, with the landscape and portrait heights the aspect gives. */
+	// The Hero's artwork box for the arms that sit beside the text (design
+	// D14): the canvas's 300 px box. The landscape arm takes the Hero content
+	// width at 16:9 instead, above the text, as the TUI's hero does.
 	const ART_WIDTH = 300;
 	const ART_HEIGHT = { landscape: 169, square: 300, portrait: 450 } as const;
 
@@ -98,21 +99,35 @@
 
 {#if hero !== null}
 	{@const artHeight = ART_HEIGHT[hero.artShape]}
-	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-shows-hero="">
+	<!-- The Hero pane scrolls: with the landscape arm's full-width still above the
+	facts, a short pane would push the Workspace out of reach (design D14). -->
+	<div
+		class="flex flex-col"
+		style:padding="28px 32px"
+		style:gap="20px"
+		style:overflow-y="auto"
+		data-library-shows-hero=""
+	>
+		<!-- The landscape arm takes the TUI's layout: the 16:9 still fills the
+		Hero content width above the title and meta block, because a 16:9 frame
+		shrunk into the canvas's 300 px square box is not the TUI's hero. The
+		portrait and square arms keep the canvas's box beside the text. -->
 		<section
-			class="flex items-start"
-			style:gap="28px"
+			class={hero.artShape === 'landscape' ? 'flex flex-col' : 'flex items-start'}
+			style:gap={hero.artShape === 'landscape' ? '18px' : '28px'}
 			aria-label={hero.title}
 			data-library-shows-hero-summary=""
 		>
 			<div
 				class="flex flex-none items-center justify-center"
-				style:width="{ART_WIDTH}px"
-				style:height="{artHeight}px"
+				style:width={hero.artShape === 'landscape' ? '100%' : `${ART_WIDTH}px`}
+				style:height={hero.artShape === 'landscape' ? 'auto' : `${artHeight}px`}
+				style:aspect-ratio={hero.artShape === 'landscape' ? '16 / 9' : undefined}
 				style:background="var(--canvas-library-raise)"
 				style:border-radius="6px"
 				style:overflow="hidden"
 				data-library-shows-hero-art={hero.art?.kind ?? 'none'}
+				data-library-shows-hero-art-shape={hero.artShape}
 			>
 				{#if hero.art !== null && hero.art.kind !== 'loading'}
 					<img class="h-full w-full object-cover" src={hero.art.detail} alt={hero.title} />
@@ -122,7 +137,11 @@
 					>
 				{/if}
 			</div>
-			<div class="flex min-w-0 flex-1 flex-col" style:gap="14px" style:padding-top="8px">
+			<div
+				class="flex min-w-0 flex-1 flex-col"
+				style:gap="14px"
+				style:padding-top={hero.artShape === 'landscape' ? '0' : '8px'}
+			>
 				<h2
 					style:margin="0"
 					style:font-size="26px"

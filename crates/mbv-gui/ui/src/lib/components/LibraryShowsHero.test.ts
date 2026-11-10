@@ -70,6 +70,8 @@ function shows(facts: GuiShowsHero | null): GuiShowsFrame {
 		collectionNames: ['All series'],
 		loading: false,
 		workspaceLoading: false,
+		series: [],
+		upcomingFailed: false,
 		rows: [],
 		selected: 'series1',
 		hero: facts,
@@ -88,11 +90,11 @@ function episodeRow(container: HTMLElement, episodeId: string): HTMLElement {
 	) as HTMLElement;
 }
 
-// The artwork box reserves the arm the frame declares (design D12): the
-// series' landscape box keeps the 16:9 height, the square the Music Hero's
-// 300 px side, and the portrait the tall box.
+// The artwork box reserves the arm the frame declares (design D14): the
+// landscape arm is the TUI's — the still fills the Hero content width at 16:9
+// above the facts — while the square and portrait arms keep the canvas's
+// 300 px box beside the text.
 test.each([
-	['landscape', 169],
 	['square', 300],
 	['portrait', 450],
 ] as const)('a %s Hero places its artwork box at %s px high', (shape, height) => {
@@ -101,6 +103,15 @@ test.each([
 
 	expect(box.style.width).toBe('300px');
 	expect(box.style.height).toBe(`${height}px`);
+});
+
+test('a landscape Hero fills the Hero content width at 16:9', () => {
+	const container = mount(hero({ artShape: 'landscape' }));
+	const box = container.querySelector('[data-library-shows-hero-art]') as HTMLElement;
+
+	expect(box.style.width).toBe('100%');
+	expect(box.style.aspectRatio).toBe('16 / 9');
+	expect(box.style.height).toBe('auto');
 });
 
 test('the Hero paints its title, its meta rows, and its overview', () => {

@@ -20,6 +20,7 @@ mod podcasts_projection;
 mod projection;
 mod search;
 mod shows;
+mod shows_projection;
 mod store;
 mod tabs;
 mod tv;
@@ -56,9 +57,9 @@ pub use self::projection::{
 };
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
-pub use self::shows::{
+pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonPill, GuiShowsWorkspace,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
@@ -138,7 +139,7 @@ pub enum GuiLibraryCommand {
     /// load. A `lib_idx` that names no Shows library changes nothing.
     ShowsSetMode {
         lib_idx: usize,
-        mode: shows::GuiShowsMode,
+        mode: shows_projection::GuiShowsMode,
     },
     /// Select a Shows row (design D12): the row the Hero shows — the All
     /// series mode's series (whose select runs the series-detail load), or a
@@ -722,6 +723,11 @@ impl App {
             if let Some(item) = stored.or_else(emby_root).or_else(browsed) {
                 return Some((lib_idx, item.clone()));
             }
+            // A series tree row names a season or an episode, which only the
+            // cached series details hold (design D14).
+            if let Some(item) = self.gui_shows_tree_item(item_id) {
+                return Some((lib_idx, item));
+            }
         }
         // A tracklist row names a track of the picked album, and only an
         // Emby library tab holds one.
@@ -731,6 +737,19 @@ impl App {
             .flatten()
             .find(|track| track.id == item_id)
             .map(|track| (track_lib, track.clone()))
+    }
+
+    /// The season or episode a Shows tree row names (design D14): the cached
+    /// series details hold both.
+    fn gui_shows_tree_item(&self, item_id: &str) -> Option<EmbyItem> {
+        self.series_detail_cache.values().find_map(|detail| {
+            detail
+                .seasons
+                .iter()
+                .chain(detail.episodes.values().flatten())
+                .find(|item| item.id == item_id)
+                .cloned()
+        })
     }
 
     /// The albums the GUI store loaded for `lib_idx`'s selected groups.

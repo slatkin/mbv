@@ -18,6 +18,7 @@ import type {
 	GuiShowsMode,
 	GuiShowsPill,
 	GuiShowsRow,
+	GuiShowsSeries,
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
@@ -65,6 +66,27 @@ const SHOWS_SERIES: GuiShowsRow[] = [
 	{ id: 's2', title: 'The Bear', subtitle: null, date: null, sortLetter: 'B' },
 ];
 
+/** The All series mode's tree (design D14): one series with a season whose
+ * episodes have landed, and one with none. */
+const SHOWS_TREE: GuiShowsSeries[] = [
+	{
+		id: 's1',
+		title: 'Atlanta',
+		sortLetter: 'A',
+		expandable: true,
+		seasons: [
+			{
+				id: 'se1',
+				name: 'Season 1',
+				episodes: [
+					{ episodeId: 'ep1', number: 1, name: 'The Big Bang', duration: '24:00', state: 'ordinary' },
+				],
+			},
+		],
+	},
+	{ id: 's2', title: 'The Bear', sortLetter: 'B', expandable: true, seasons: [] },
+];
+
 /** The flat newest-episode rows the Latest mode paints. */
 const SHOWS_EPISODES: GuiShowsRow[] = [
 	{ id: 'e1', title: 'Atlanta', subtitle: 'S3E4 · Sabrosito', date: '12 May', sortLetter: null },
@@ -105,6 +127,8 @@ function showsContent(
 			collectionNames: [mode],
 			loading: false,
 			workspaceLoading: false,
+			series: mode === 'all' ? SHOWS_TREE : [],
+			upcomingFailed: false,
 			rows,
 			selected: rows[0]?.id ?? null,
 			hero,
@@ -149,7 +173,7 @@ function carryShows(
 }
 
 test('Enter on a series row selects it for the Hero', () => {
-	carryShows(showsContent('all', SHOWS_SERIES), 'list', 's1');
+	carryShows(showsContent('all', SHOWS_SERIES), 'list', 'shows-series:s1');
 
 	press('Enter');
 
@@ -171,7 +195,7 @@ test('Enter on a flat row plays the episode', () => {
 // A series row is not playable (row 7.1): its `n` and `a` send nothing, so the
 // keys never act on a row the core refuses.
 test('n and a on a series row send nothing', () => {
-	carryShows(showsContent('all', SHOWS_SERIES), 'list', 's1');
+	carryShows(showsContent('all', SHOWS_SERIES), 'list', 'shows-series:s1');
 
 	press('n');
 	press('a');
@@ -198,7 +222,8 @@ test('a movement key moves the Shows cursor and sends no key', () => {
 
 	press('ArrowDown');
 
-	expect(showsCursorRow()?.row.id).toBe('e2');
+	const row = showsCursorRow();
+	expect(row?.kind === 'flat' ? row.row.id : null).toBe('e2');
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 

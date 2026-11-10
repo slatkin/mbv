@@ -587,39 +587,59 @@ item.
 `GuiShowsFrame` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
 Shows library index the Shows commands name), `pills`, `collection_names`
 (the active mode's name, which the Library Status bar's location reads),
-`loading`, `workspace_loading`, `rows`, `selected`, and `hero`. The pill row
-is single-select and holds the design's three modes in order — `latest`,
-`upcoming`, and `all`, labelled Latest, Upcoming, and All series — each with
-`mode`, `name`, `selected`, and `collection` (`false`: the TUI's letter-range
-buckets are not pills here, because the All series list's letter rail
-replaces them). A row carries `id`, `title`, `subtitle`, `date`, and
-`sort_letter`: in the All series mode the rows are the library's series in
-the server's `SortName` order, each with its rail letter over the
-article-stripped sort name; in Latest they are the newest episodes, with the
-show's name as `title`, the episode's own name as `subtitle`, and the
-provider date in `date`; in Upcoming they are the snapshot's premieres, with
-the series' name as `title`, the season/episode label and the episode's name
-as `subtitle`, and the premiere date in `date`. Both flat lists are
-date-sorted and carry no `sort_letter`. `selected` carries the core's
-selected row as the frame painted it — the series id in All series, the
-episode id or the premiere's stable key in the flat modes — with the first
-row as the default, so the Hero paints as soon as a list lands, and a stored
-id the list no longer carries falls back to that first row.
+`loading`, `workspace_loading`, `series`, `upcoming_failed`, `rows`,
+`selected`, and `hero` (design D14). The pill row is single-select and holds
+the TUI's three modes in order — `latest`, `upcoming`, and `all`, labelled
+New, Upcoming, and All — each with `mode`, `name`, `selected`, and
+`collection` (`false`: the TUI's letter-range buckets are not pills here,
+because the All mode's letter rail replaces them).
+
+The All mode's list is the Music tree over the TUI's TV node kinds, and the
+frame carries it as `series`: each node holds `id`, `title`, `sort_letter`,
+`expandable`, and its `seasons`; each season holds `id`, `name`, and
+`episodes`, which are `null` until that season's load lands, so an open
+season asks the core for them. The window content owns the open and closed
+node keys, exactly as the Music tree's does, and builds the painted rows at
+the Music heights: series and seasons on the node row, episodes on the track
+row, the letter heading above the first series of each letter, and the
+`Series` header with the mode as the selection label and the `/` filter
+field. A series whose detail has not landed paints closed and expandable.
+`rows` carries the flat Latest and Upcoming lists only, each row with `id`,
+`title`, `subtitle`, `date`, and `sort_letter`: Latest holds the newest
+episodes, with the show's name as `title`, the episode's own name as
+`subtitle`, and the provider date in `date`; Upcoming holds the snapshot's
+premieres, with the series' name as `title`, the season/episode label and the
+episode's name as `subtitle`, and the premiere date in `date`. Both flat
+lists are date-sorted and carry no `sort_letter`; `upcoming_failed` carries
+the eager fetch's final failure, which the list names with the pill as the
+retry. `selected` carries the core's selected row as the frame painted it —
+the series id in All, the episode id or the premiere's stable key in the flat
+modes — with the first node as the default, so the Hero paints as soon as a
+list lands, and a stored id the list no longer carries falls back to that
+first node. The All mode's `hero` is present exactly while a series is
+selected; `ensure_gui_shows_workspace` loads the selected series' detail and
+its selected season's episodes on the frame path, so the Workspace paints
+without a season press.
 
 `hero` is the selected row's Hero and is absent in Upcoming, which paints
-none. In All series it carries the shared Emby hero producer's facts —
-`title`, `meta_rows` with `duration_row` and `progress_row`, `overview`,
-`art_shape` at the artwork policy's landscape arm, and `art` — plus
-`workspace`: the detail's season pills (`season_id`, `name`, `selected`),
-`selected_season` (the stored choice while the detail still holds it, else
-the first season, because the pills start on the first season and are never
-kept across a series change), and that season's `episodes`. A Workspace
-episode row carries `episode_id`, `number`, `name`, `duration`, and `state`
-(the shared row state the Home rows carry), and a season whose episodes have
-not landed yet is empty while `workspace_loading` is `true`. In Latest the
-Hero is the selected episode's same facts with no `workspace`. A click or a
-double-click on a Workspace episode sends that episode's `episode_id` with
-`showsPlay`.
+none. In All series it carries the TUI series producer's facts —
+`hero_content_series_with_episode`'s genre, year range (else the release
+date), season count, and network rows, no duration row while the Workspace
+has no focus, and the artwork policy's landscape arm — plus `workspace`: the
+detail's season pills (`season_id`, `name`, `selected`), `selected_season`
+(the stored choice while the detail still holds it, else the first season,
+because the pills start on the first season and are never kept across a
+series change), and that season's `episodes`. The Workspace-focus overlay
+that swaps the facts for the selected episode's is recorded in D14 as a
+follow-up and is not carried. A Workspace episode row carries `episode_id`,
+`number`, `name`, `duration`, and `state` (the shared row state the Home rows
+carry). In Latest the Hero is the selected episode's facts from
+`hero_content_emby` with no `workspace`. The landscape arm paints the still
+at the Hero content width at 16:9 above the facts, as the TUI does; the
+portrait and square arms keep the canvas's 300 px box beside the text. A
+click or a double-click on a Workspace episode sends that episode's
+`episode_id` with `showsPlay`, and a right-press on a tree row opens the item
+menu at that row's stable Service id.
 
 `GuiEmbyFrame` (`src/bridge/frame/library/emby.rs`) carries `lib_idx` (the
 plain Emby-library index the Emby commands name), `pills`,

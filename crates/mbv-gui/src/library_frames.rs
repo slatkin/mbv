@@ -261,12 +261,14 @@ fn home_frame(app: &mut App) -> GuiHomeFrame {
     GuiHomeFrame::from_projection(&projection)
 }
 
-/// The Shows destination's content (design D12, the USER-APPROVED GUI Shows
-/// design): the mode pills, the active mode's rows, the selected row, and
-/// its Hero, fetched and built here per frame so an unchanged frame's
-/// revision carries nothing (the memo's content compare).
+/// The Shows destination's content (design D14): the mode pills, the active
+/// mode's rows — the All series tree or the flat lists — the selected row,
+/// and its Hero, fetched and built here per frame so an unchanged frame's
+/// revision carries nothing (the memo's content compare). The ensure loads
+/// the selected series' detail **and its selected season's episodes**, so the
+/// Hero's Workspace paints on arrival.
 fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
-    app.ensure_gui_shows_detail(lib_idx);
+    app.ensure_gui_shows_workspace(lib_idx);
     let projection = app.gui_shows_projection(lib_idx);
     GuiShowsFrame::from_projection(lib_idx, &projection)
 }

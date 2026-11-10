@@ -169,7 +169,7 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "the frame names the library the commands carry"
     );
     let names: Vec<&str> = shows.pills.iter().map(|pill| pill.name.as_str()).collect();
-    assert_eq!(names, ["Latest", "Upcoming", "All series"]);
+    assert_eq!(names, ["New", "Upcoming", "All"]);
     let selected: Vec<&str> = shows
         .pills
         .iter()
@@ -178,7 +178,7 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         .collect();
     assert_eq!(
         selected,
-        ["Latest"],
+        ["New"],
         "one mode pill is selected, the resolved default"
     );
     assert!(
@@ -213,7 +213,7 @@ fn pump_until_series_hero(test: &mut TestCore, series: &str, title: &str) {
     pump_until_shows(
         test,
         |shows| {
-            shows.rows.len() == 2
+            shows.series.len() == 2
                 && shows.selected.as_deref() == Some(series)
                 && shows.hero.as_ref().is_some_and(|hero| hero.title == title)
         },

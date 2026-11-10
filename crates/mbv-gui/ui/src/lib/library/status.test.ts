@@ -244,6 +244,8 @@ test('the location reads the Shows destination, the view mode, and the selected 
 		collectionNames: ['All series'],
 		loading: false,
 		workspaceLoading: false,
+		series: [],
+		upcomingFailed: false,
 		rows: [
 			{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' },
 			{ id: 's2', title: 'The Bear', subtitle: null, date: null, sortLetter: 'B' },

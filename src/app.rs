@@ -53,7 +53,8 @@ pub use self::gui_library::{
 pub use self::gui_library::{
     GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
     GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
-    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonPill, GuiShowsWorkspace,
+    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries,
+    GuiShowsWorkspace,
 };
 pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,

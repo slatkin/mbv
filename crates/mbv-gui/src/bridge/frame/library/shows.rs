@@ -1,12 +1,13 @@
-//! The Shows section of the Library frame (add-gui-library-panel design D12,
-//! the USER-APPROVED GUI Shows design): the view-mode pills, the active
-//! mode's rows, the core's selected row, and the Hero with its series
+//! The Shows section of the Library frame (add-gui-library-panel design D14,
+//! which supersedes D12's first Shows design): the view-mode pills, the
+//! active mode's rows — the All series mode's tree, or the flat Latest and
+//! Upcoming lists — the core's selected row, and the Hero with its series
 //! Workspace. A command names a row, a season, or an episode by the stable
 //! Service id the frame carries, never by position.
 
 use mbv::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonPill, GuiShowsWorkspace,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
 use serde::Serialize;
 
@@ -32,7 +33,15 @@ pub struct GuiShowsFrame {
     /// Whether the selected series' detail or the selected season's episodes
     /// fetch has not landed yet (the All series mode only).
     pub workspace_loading: bool,
-    /// The active mode's rows in the list's order.
+    /// The All series mode's tree (design D14): the series nodes with their
+    /// seasons and loaded episodes. Empty in the flat modes, whose list the
+    /// `rows` carry.
+    pub series: Vec<GuiShowsSeriesFrame>,
+    /// Whether the Upcoming mode's eager fetch failed after all its retries:
+    /// the list paints the TUI's failure line and the pill is the retry.
+    pub upcoming_failed: bool,
+    /// The active mode's rows in the list's order (the flat Latest and
+    /// Upcoming lists).
     pub rows: Vec<GuiShowsRowFrame>,
     /// The core's selected row (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first row is the Hero default.
@@ -77,6 +86,42 @@ pub struct GuiShowsPillFrame {
     /// Whether the pill is a collection pill (multi-select) rather than a
     /// single-select one. Every Shows pill is single-select (design D12).
     pub collection: bool,
+}
+
+/// One series node of the All series tree (design D14), the Music artist
+/// node's counterpart: the series row, its rail letter, and its seasons.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiShowsSeriesFrame {
+    /// The series' stable Service id: the select command names it, and the
+    /// row's each-block key reads it.
+    pub id: String,
+    /// The series' display name, the row's label.
+    pub title: String,
+    /// The row's rail letter, or `#`.
+    pub sort_letter: char,
+    /// Whether the node opens. A series whose detail has not landed counts as
+    /// expandable; its open asks the core to load the detail.
+    pub expandable: bool,
+    /// The series' seasons in the detail's order; empty while the detail has
+    /// not landed.
+    pub seasons: Vec<GuiShowsSeasonFrame>,
+}
+
+/// One season node under a series (design D14), the Music album node's
+/// counterpart: the season row and its episodes, or `null` while that
+/// season's episode load has not landed — an open season then asks the core to
+/// load them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiShowsSeasonFrame {
+    /// The season's stable Service id: the select-season command names it.
+    pub id: String,
+    /// The season's display name.
+    pub name: String,
+    /// The season's episodes in their fetch order; `null` until the load
+    /// lands.
+    pub episodes: Option<Vec<GuiShowsEpisodeRowFrame>>,
 }
 
 /// One row of the Shows list (design D12): a series row in the All series
@@ -183,9 +228,44 @@ impl GuiShowsFrame {
             collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             workspace_loading: projection.workspace_loading,
+            series: projection
+                .series
+                .iter()
+                .map(GuiShowsSeriesFrame::from)
+                .collect(),
+            upcoming_failed: projection.upcoming_failed,
             rows: projection.rows.iter().map(GuiShowsRowFrame::from).collect(),
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiShowsHeroFrame::from),
+        }
+    }
+}
+
+impl From<&GuiShowsSeries> for GuiShowsSeriesFrame {
+    fn from(series: &GuiShowsSeries) -> Self {
+        Self {
+            id: series.id.clone(),
+            title: series.title.clone(),
+            sort_letter: series.sort_letter,
+            expandable: series.expandable,
+            seasons: series
+                .seasons
+                .iter()
+                .map(GuiShowsSeasonFrame::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<&GuiShowsSeasonNode> for GuiShowsSeasonFrame {
+    fn from(season: &GuiShowsSeasonNode) -> Self {
+        Self {
+            id: season.id.clone(),
+            name: season.name.clone(),
+            episodes: season
+                .episodes
+                .as_ref()
+                .map(|episodes| episodes.iter().map(GuiShowsEpisodeRowFrame::from).collect()),
         }
     }
 }

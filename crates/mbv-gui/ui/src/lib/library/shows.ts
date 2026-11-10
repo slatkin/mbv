@@ -1,12 +1,12 @@
 // The Shows destination's interaction state (add-gui-library-panel design D1,
-// D12, row 7.1): what the window content owns and the core never reads — the
-// cursor, the scroll offset, the measured viewport, and the pill row's focus.
-// The core owns the view mode and the selection (the frame's `pills` and
-// `selected`), so nothing here mirrors them: a press and an Enter send the
-// select command, and the frame carries the selection back. The row model is
-// `$lib/library/shows-list`'s; the Hero's episode cursor belongs to the Hero
-// (`$lib/library/shows-workspace`), and the panel's pane focus and the Hero
-// overlay stay in `./state`'s shared store.
+// D14): what the window content owns and the core never reads — the cursor,
+// the tree's open and closed nodes, the scroll offset, the measured viewport,
+// and the pill row's focus. The core owns the view mode and the selection (the
+// frame's `pills` and `selected`), so nothing here mirrors them: a press and
+// an Enter send the select command, and the frame carries the selection back.
+// The row model is `$lib/library/shows-list`'s; the Hero's episode cursor
+// belongs to the Hero (`$lib/library/shows-workspace`), and the panel's pane
+// focus and the Hero overlay stay in `./state`'s shared store.
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
@@ -17,10 +17,11 @@ import { libraryShows, libraryUi } from './state';
 import {
 	activeShowsMode,
 	buildShowsRows,
+	isShowsNodeRow,
 	moveShowsCursor,
 	showsLetterRail,
 } from './shows-list';
-import type { ShowsItemRow, ShowsListRow } from './shows-list';
+import type { ShowsItemRow, ShowsListRow, ShowsNodeRow } from './shows-list';
 
 /** The Shows list's interaction state. */
 export interface ShowsUiState {
@@ -42,6 +43,13 @@ export interface ShowsUiState {
 	 * contains it, without case (design D7's filter rule, the rail's keyboard
 	 * path). */
 	filter: string;
+	/** The tree's open node keys (design D14): the series and season rows the
+	 * user opened, the Music tree's rule. */
+	open: string[];
+	/** The node keys the user closed while the filter narrows the rows: they
+	 * override the filter's auto-open, so a press still closes a node under a
+	 * filter (the Music tree's `closed` rule). */
+	closed: string[];
 }
 
 /** The state a freshly mounted Shows list starts with. */
@@ -53,17 +61,26 @@ export function initialShowsUi(): ShowsUiState {
 		focusedPill: null,
 		pillSelect: null,
 		filter: '',
+		open: [],
+		closed: [],
 	};
 }
 
 /** The Shows list's interaction state. */
 export const showsUi = writable<ShowsUiState>(initialShowsUi());
 
-/** The painted rows of the carried Shows content (design D12), narrowed by
+/** The painted rows of the carried Shows content (design D14), narrowed by
  * the state's filter text. */
 function showsRows(filter = get(showsUi).filter): ShowsListRow[] {
 	const shows = libraryShows();
-	return shows === null ? [] : buildShowsRows(shows.rows, activeShowsMode(shows), filter);
+	if (shows === null) {
+		return [];
+	}
+	const ui = get(showsUi);
+	return buildShowsRows(shows, activeShowsMode(shows), filter, {
+		open: ui.open,
+		closed: ui.closed,
+	});
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -113,16 +130,35 @@ export function acceptShowsFilter(): void {
 	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 }
 
-/** Select the row (design D12): the select command the core stores, whose
- * frame paints the Hero. A select repaints the Narrow arrangement's Hero
- * overlay and closes an open menu, because the facts they paint belong to
- * the previous row, as a Music pick's do. */
+/** Select the row (design D14): a series sends the series select (the core
+ * loads its detail), a season sends the season select (the core loads its
+ * episodes), and a flat row sends the flat select — the command whose stored
+ * value the Hero paints. An episode leaf changes nothing in the core: the
+ * series Hero owns the Workspace's cursor. A select repaints the Narrow
+ * arrangement's Hero overlay and closes an open menu, because the facts they
+ * paint belong to the previous row, as a Music pick's do. */
 export function selectShowsRow(row: ShowsListRow): void {
 	const shows = libraryShows();
 	if (shows === null || row.kind === 'heading') {
 		return;
 	}
-	void sendLibraryCommand({ command: 'showsSelect', libIdx: shows.libIdx, row: row.row.id });
+	switch (row.kind) {
+		case 'series':
+			void sendLibraryCommand({ command: 'showsSelect', libIdx: shows.libIdx, row: row.sourceId });
+			break;
+		case 'season':
+			void sendLibraryCommand({
+				command: 'showsSelectSeason',
+				libIdx: shows.libIdx,
+				seasonId: row.sourceId,
+			});
+			break;
+		case 'flat':
+			void sendLibraryCommand({ command: 'showsSelect', libIdx: shows.libIdx, row: row.row.id });
+			break;
+		case 'episode':
+			return;
+	}
 	libraryUi.update((ui) => ({
 		...ui,
 		heroDismissed: false,
@@ -131,10 +167,53 @@ export function selectShowsRow(row: ShowsListRow): void {
 	}));
 }
 
-/** Press a Shows row (design D12): the press selects the row the Hero shows,
- * as a Home press does. A heading names no row, so its press changes
- * nothing. */
+/** Whether the state has the node open (design D14). */
+export function showsNodeOpen(row: ShowsNodeRow): boolean {
+	const ui = get(showsUi);
+	return ui.open.includes(row.id) && !ui.closed.includes(row.id);
+}
+
+/** Open a node (design D14): the row paints its children, and a series or a
+ * season whose children have not landed asks the core for them through the
+ * select the press already sends. */
+export function openShowsNode(row: ShowsNodeRow): void {
+	showsUi.update((ui) => ({
+		...ui,
+		open: ui.open.includes(row.id) ? ui.open : [...ui.open, row.id],
+		closed: ui.closed.filter((id) => id !== row.id),
+	}));
+}
+
+/** Close a node (design D14). */
+export function closeShowsNode(row: ShowsNodeRow): void {
+	showsUi.update((ui) => ({
+		...ui,
+		open: ui.open.filter((id) => id !== row.id),
+		closed: ui.closed.includes(row.id) ? ui.closed : [...ui.closed, row.id],
+	}));
+}
+
+/** Toggle a node (design D14): the press and the keys' Right/Left run this.
+ * The children follow the toggle, and the node's select still runs, so the
+ * Hero and the Workspace show the node the user is looking at. */
+export function toggleShowsNode(row: ShowsNodeRow): void {
+	if (showsNodeOpen(row)) {
+		closeShowsNode(row);
+	} else {
+		openShowsNode(row);
+	}
+}
+
+/** Press a Shows row (design D14): a node toggles and selects, a flat row
+ * selects, and an episode leaf only moves the cursor. A heading names no row,
+ * so its press changes nothing. */
 export function pressShowsRow(row: ShowsListRow): void {
+	if (row.kind === 'heading') {
+		return;
+	}
+	if (isShowsNodeRow(row)) {
+		toggleShowsNode(row);
+	}
 	selectShowsRow(row);
 }
 

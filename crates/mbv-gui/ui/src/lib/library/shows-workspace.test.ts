@@ -72,6 +72,8 @@ function shows(
 		collectionNames: ['All series'],
 		loading: false,
 		workspaceLoading: false,
+		series: [],
+		upcomingFailed: false,
 		rows: [],
 		selected: 'series1',
 		hero,

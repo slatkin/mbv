@@ -186,6 +186,53 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
     assert_eq!(app.gui_tv_shows[&0].season_id.as_deref(), Some("season-2"));
 }
 
+/// The frame path's ensure loads the selected series' first season without a
+/// select (design D14): D12's chain landed the detail and stopped there, so
+/// the first season was selected but never fetched and the Hero's Workspace
+/// painted empty. `ensure_gui_shows_workspace` starts the season load the
+/// cached detail already makes possible, and a later frame reads the episodes.
+#[test]
+fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"ep-1a","Name":"Episode one","Type":"Episode"}],"TotalRecordCount":1}"#,
+    );
+    let mut app = tv_app(&http);
+    app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    app.gui_tv_shows.insert(
+        0,
+        crate::app::gui_library::GuiTvShowsSelection {
+            mode: Some(TvContentMode::All),
+            series_id: Some("series-a".into()),
+            ..Default::default()
+        },
+    );
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    app.series_detail_cache.insert(
+        "series-a".into(),
+        SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    app.ensure_gui_shows_workspace(0);
+    land(&mut app);
+
+    let episodes = &app.series_detail_cache["series-a"].episodes["season-1"];
+    assert_eq!(
+        episodes
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["ep-1a"],
+        "the Workspace's first season loads without a season select"
+    );
+}
+
 /// The Latest mode lands its rows on the App (row 7.1, contract c): the
 /// mode's own fetch (`get_latest_episodes`) replaces the root level, whose
 /// fetch fields the spawn aligned first so the completion is not stale.

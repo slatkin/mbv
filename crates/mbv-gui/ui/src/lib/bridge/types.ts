@@ -61,7 +61,9 @@ export type {
 	GuiShowsMode,
 	GuiShowsPill,
 	GuiShowsRow,
+	GuiShowsSeasonNode,
 	GuiShowsSeasonPill,
+	GuiShowsSeries,
 	GuiShowsWorkspace,
 } from './library-types';
 

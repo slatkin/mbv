@@ -300,6 +300,8 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 		collectionNames: [mode],
 		loading: false,
 		workspaceLoading: false,
+		series: [],
+		upcomingFailed: false,
 		rows: [{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' }],
 		selected: 's1',
 		hero:

@@ -34,6 +34,8 @@ function showsFrame(): GuiShowsFrame {
 		collectionNames: ['All series'],
 		loading: false,
 		workspaceLoading: false,
+		series: [],
+		upcomingFailed: false,
 		rows: [],
 		selected: null,
 		hero: null,

@@ -417,9 +417,10 @@ export type GuiLibraryArt =
  * list's letter rail replaces them. */
 export type GuiShowsMode = 'latest' | 'upcoming' | 'all';
 
-/** The Shows destination's content (design D12, row 7.1), present while a
- * Shows library is the active destination: the view-mode pills, the active
- * mode's rows, the core's selected row, and its Hero. */
+/** The Shows destination's content (design D14), present while a Shows
+ * library is the active destination: the view-mode pills, the active mode's
+ * rows — the All mode's tree or the flat lists — the core's selected row, and
+ * its Hero. */
 export interface GuiShowsFrame {
 	/** The Shows library index the Shows commands name (design D2, D12). */
 	libIdx: number;
@@ -433,7 +434,13 @@ export interface GuiShowsFrame {
 	/** Whether the selected series' detail or the selected season's episodes
 	 * fetch has not landed yet (the All series mode only). */
 	workspaceLoading: boolean;
-	/** The active mode's rows in the list's order. */
+	/** The All series mode's tree (design D14): the series nodes with their
+	 * seasons and loaded episodes. Empty in the flat modes. */
+	series: GuiShowsSeries[];
+	/** Whether the Upcoming mode's eager fetch failed after all its retries:
+	 * the list paints the failure line and the pill is the retry. */
+	upcomingFailed: boolean;
+	/** The active mode's rows in the list's order (the flat lists). */
 	rows: GuiShowsRow[];
 	/** The core's selected row (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first row is the Hero default. */
@@ -441,6 +448,35 @@ export interface GuiShowsFrame {
 	/** The selected row's Hero facts; `null` in the Upcoming mode and while
 	 * no row is selected. */
 	hero: GuiShowsHero | null;
+}
+
+/** One series node of the All series tree (design D14), the Music artist
+ * node's counterpart: the series row, its rail letter, and its seasons. */
+export interface GuiShowsSeries {
+	/** The series' stable Service id: the select command names it. */
+	id: string;
+	/** The series' display name, the row's label. */
+	title: string;
+	/** The row's rail letter, or `#`. */
+	sortLetter: string;
+	/** Whether the node opens. A series whose detail has not landed counts as
+	 * expandable; its open asks the core to load the detail. */
+	expandable: boolean;
+	/** The series' seasons in the detail's order; empty while the detail has
+	 * not landed. */
+	seasons: GuiShowsSeasonNode[];
+}
+
+/** One season node under a series (design D14), the Music album node's
+ * counterpart: the season row and its episodes, or `null` while that
+ * season's episode load has not landed. */
+export interface GuiShowsSeasonNode {
+	/** The season's stable Service id: the select-season command names it. */
+	id: string;
+	name: string;
+	/** The season's episodes in their fetch order; `null` until the load
+	 * lands, which an open season asks for. */
+	episodes: GuiShowsEpisodeRow[] | null;
 }
 
 /** One view-mode pill of the Shows destination (design D12):
