@@ -434,6 +434,15 @@ pub struct App {
     /// `apply_route_for_playback`), but enqueuing into the existing queue
     /// must match it or be rejected (see `enqueue_route_conflict`).
     pub(in crate::app) active_route: Option<String>,
+    /// Whether this run itself left a restore-able remote target by an
+    /// explicit user action (a Direct remote detach, or a confirmed local
+    /// fall-through), and has not attached a new target since. Teardown
+    /// clears the saved auto-reconnect record only when this is set: an
+    /// exit that merely had no remote at the moment -- a Client that never
+    /// touched the connection this run, a failed or never-attempted launch
+    /// restore, a mid-run daemon death -- must not erase the record
+    /// another Client saved.
+    pub(in crate::app) left_remote_this_run: bool,
     /// Per-item cache of ancestor-lookup library-route resolution for
     /// cross-library aggregate views (Continue Watching/Next Up,
     /// Favorites), keyed by item id. `Some(name)` = resolved to that

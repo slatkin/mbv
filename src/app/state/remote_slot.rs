@@ -114,6 +114,11 @@ impl App {
 
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.direct_remote_connected {
+            // The user explicitly left this Client's held remote target, so
+            // teardown may clear the saved auto-reconnect record (a Client
+            // that never touched the connection must not) — see
+            // `left_remote_this_run`.
+            self.left_remote_this_run = true;
             // A disconnect cancels the pending transfer without a report
             // (queue-handoff-and-take design D2): both owners keep what they
             // play, and the source keeps playing.

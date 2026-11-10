@@ -77,6 +77,9 @@ impl App {
             return;
         }
         self.direct_remote_connected = true;
+        // A new restore-able target is held again: a prior explicit leave no
+        // longer applies (the `left_remote_this_run` window to the next one).
+        self.left_remote_this_run = false;
         self.direct_remote_label = {
             let name = sess.device_name.trim();
             (!name.is_empty()).then(|| name.to_string())
@@ -124,6 +127,9 @@ impl App {
         self.direct_remote_connected = false;
         self.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());
+        // A new restore-able target is held again: a prior explicit leave no
+        // longer applies (the `left_remote_this_run` window to the next one).
+        self.left_remote_this_run = false;
         self.next_up_item = None;
         tracing::info!(name: "library_route.playback_route.switched", target: "library_route", previous_route = ?previous_route, next_route = %library_name, "playback route switched");
         self.flash(
@@ -236,6 +242,12 @@ impl App {
         let Some(action) = self.queue_deferrals.take_confirmed_local_play() else {
             return;
         };
+        // The user explicitly confirmed playing locally, leaving whatever
+        // restore-able remote target this Client held: teardown may then
+        // clear the saved auto-reconnect record (see `left_remote_this_run`).
+        if self.direct_remote_connected || self.active_route.is_some() {
+            self.left_remote_this_run = true;
+        }
         let prepared = match self.prepare_local_player() {
             Ok(prepared) => prepared,
             Err(error) => {

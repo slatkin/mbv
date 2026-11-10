@@ -259,6 +259,7 @@ impl App {
             direct_remote_session_id: None,
             suspended_local: None,
             active_route: None,
+            left_remote_this_run: false,
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             prefix_armed: false,

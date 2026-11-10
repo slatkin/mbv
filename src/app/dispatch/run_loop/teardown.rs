@@ -188,6 +188,13 @@ impl App {
     /// at all when the feature is off. A mid-session remote swap repoints
     /// `player_endpoint` but must not change what is saved here, so the gate
     /// reads only the config setting.
+    ///
+    /// A `None` target clears the saved record only when this run itself left
+    /// a remote by an explicit user action (`left_remote_this_run`): every
+    /// other local-at-exit shape -- a Client that never touched the
+    /// connection this run, a failed or never-attempted launch restore, a
+    /// mid-run daemon death -- only says "no remote held at this moment" and
+    /// keeps the record another Client saved.
     fn persist_auto_reconnect_target_on_teardown(&mut self) {
         if self.config.lock().unwrap().auto_reconnect {
             self.persist_auto_reconnect_target();
@@ -199,8 +206,23 @@ impl App {
     /// The persist path of `persist_auto_reconnect_target_on_teardown`.
     fn persist_auto_reconnect_target(&mut self) {
         let last = self.current_auto_reconnect_target();
-        tracing::info!(name: "auto_reconnect.target_persist.decided", target: "auto_reconnect", target_state = ?last, "auto-reconnect persistence decision made");
-        match mbv_config::save_last_remote_connection(last.as_ref()) {
+        tracing::info!(name: "auto_reconnect.target_persist.decided", target: "auto_reconnect", target_state = ?last, left_remote_this_run = self.left_remote_this_run, "auto-reconnect persistence decision made");
+        let outcome = match last {
+            Some(last) => mbv_config::save_last_remote_connection(Some(&last)),
+            // A clear applies only when this run itself left the remote it
+            // held by an explicit user action (`left_remote_this_run`). An
+            // exit that merely had no remote at the moment -- a Client
+            // attached to the local Owner that never touched the connection,
+            // a failed or never-attempted launch restore, a Client that
+            // launched local-only, a mid-run daemon death -- must not erase
+            // the record another Client saved (#issue-local-exit-erase).
+            None if self.left_remote_this_run => mbv_config::save_last_remote_connection(None),
+            None => {
+                tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "no_remote_left_this_run", "no remote left this run; keeping the saved target");
+                return;
+            }
+        };
+        match outcome {
             Ok(()) => {
                 tracing::info!(name: "auto_reconnect.target_persist.succeeded", target: "auto_reconnect", "auto-reconnect state persistence succeeded");
             }
