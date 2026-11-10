@@ -5,8 +5,8 @@
 //! The GUI keeps its own file ([`mbv_config::save_gui_launch_state`]): the TUI
 //! launch state never moves this Client's tab or Panel focus, and this file
 //! never holds a TUI launch location. Identities are stable Service ids, so a
-//! resolution that finds no match falls back instead of opening a stale
-//! position.
+//! resolution that finds no match opens nothing instead of a stale position
+//! or another destination the saved location did not name.
 
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
@@ -38,12 +38,16 @@ impl App {
     }
 
     /// Open the destination a saved location names (design D9): the presented
-    /// destination whose identity matches, or the first presented one while
-    /// the GUI presents only some destinations. Returns the opened
-    /// destination's identity as the saved file carries it; `None` means the
-    /// catalog holds none yet and the caller retries when one lands. The
-    /// caller applies the saved Panel focus after the open, because opening a
-    /// library takes Library focus.
+    /// destination whose identity matches. A location saved on Home — the
+    /// state [`mbv_config::first_launch`] carries, so a start with no saved
+    /// location and one whose file failed to load — opens the first presented
+    /// destination. Returns the opened destination's identity as the saved
+    /// file carries it; `None` means no presented destination holds the saved
+    /// identity: the catalog has not landed yet, or it settled without that
+    /// library, so the caller retries when a destination lands. Nothing opens
+    /// in that case, so a saved location never moves the user to a destination
+    /// it did not name. The caller applies the saved Panel focus after the
+    /// open, because opening a library takes Library focus.
     pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> Option<TabIdentity> {
         let position = self.presented_destination_position(&state.destination)?;
         self.set_library_tab(position);
@@ -175,9 +179,9 @@ impl App {
     /// Audiobookshelf libraries — the book libraries' Audiobooks destination
     /// (row 9.1) and the podcast libraries' Podcasts destination (row 10.1) —
     /// and the Feeds tab when subscriptions are configured (row 11.1), as the
-    /// destination-kind enum names them. The restore's fallback and the
-    /// frame's destination tabs (`gui_library_tabs`) read this one list, so
-    /// they cannot disagree about the presented set.
+    /// destination-kind enum names them. The launch restore's resolution and
+    /// the frame's destination tabs (`gui_library_tabs`) read this one list,
+    /// so they cannot disagree about the presented set.
     pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
         let mut presented: Vec<GuiDestinationKind> = (0..self.libs.len())
             .map(|lib_idx| {
@@ -232,25 +236,31 @@ impl App {
     }
 
     /// The tab position of the destination a saved location names, resolved
-    /// against the destinations the GUI presents (design D9): the matching
-    /// presented library, else the first presented one. A saved
+    /// against the destinations the GUI presents (design D9): the presented
+    /// destination whose identity matches, never a substitute for one it does
+    /// not hold, because every destination the GUI serves is presented now. A
+    /// location saved on Home — the state a start with no saved location
+    /// carries — opens the first presented destination. A saved
     /// Audiobookshelf destination whose catalog has not settled yet resolves
-    /// to nothing, so the restore retries instead of opening a fallback the
-    /// catalog's arrival would contradict. A saved Feeds location resolves to
-    /// the feed tab while subscriptions are configured, and falls back like
-    /// every other unpresented destination when they are not. The GUI
-    /// presents the Grouped Music and Shows libraries, so every other saved
-    /// destination falls back to the first of them.
+    /// to nothing, so the restore retries instead of giving up before the
+    /// catalog's arrival. A saved Feeds location resolves to the feed tab
+    /// while subscriptions are configured, and resolves to nothing when they
+    /// are not, so the restore keeps waiting for one.
     fn presented_destination_position(&self, destination: &TabIdentity) -> Option<usize> {
         let presented = self.presented_destinations();
+        // A start with no saved location opens the first presented
+        // destination (design D9's `first_launch`).
+        if *destination == TabIdentity::Home {
+            return self.gui_destination_position(presented.first().copied()?);
+        }
         // The Feeds destination names no library: the saved identity matches
         // the presented kind or nothing.
         if *destination == TabIdentity::Feeds {
             let feeds = presented
                 .iter()
                 .copied()
-                .find(|kind| matches!(kind, GuiDestinationKind::Feeds));
-            return self.gui_destination_position(feeds.or_else(|| presented.first().copied())?);
+                .find(|kind| matches!(kind, GuiDestinationKind::Feeds))?;
+            return self.gui_destination_position(feeds);
         }
         let saved = match destination {
             TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),
@@ -261,16 +271,14 @@ impl App {
         {
             return None;
         }
-        let kind = saved
-            .and_then(|(saved_kind, library_id)| {
-                presented.iter().copied().find(|kind| {
-                    kind.library_index().is_some_and(|lib_idx| {
-                        self.gui_destination_library_id(saved_kind, lib_idx)
-                            .is_some_and(|id| id == library_id)
-                    })
+        let kind = saved.and_then(|(saved_kind, library_id)| {
+            presented.iter().copied().find(|kind| {
+                kind.library_index().is_some_and(|lib_idx| {
+                    self.gui_destination_library_id(saved_kind, lib_idx)
+                        .is_some_and(|id| id == library_id)
                 })
             })
-            .or_else(|| presented.first().copied())?;
+        })?;
         self.gui_destination_position(kind)
     }
 

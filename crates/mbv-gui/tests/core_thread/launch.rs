@@ -25,8 +25,8 @@ use crate::{TestCore, test_core_with, test_emby_client};
 /// The library id and name the seeded Music tab holds.
 const MUSIC_LIBRARY: (&str, &str) = ("lib-music", "Music");
 
-/// The id of a Shows library tab the GUI does not present (Phase 1 presents
-/// the Grouped Music libraries only).
+/// The id of a Shows library tab the GUI presents as its own destination
+/// (row 7.1).
 const SHOWS_LIBRARY: (&str, &str) = ("lib-shows", "Shows");
 
 /// The id and name of a plain Emby (Movies) library the GUI presents (row
@@ -75,8 +75,8 @@ fn seed_music(app: &mut mbv::App, _http: &MockHttp) {
     app.seed_gui_music_library_tab_for_test();
 }
 
-/// Seed the grouped Music library and one Shows library the GUI does not
-/// present, and leave Home active.
+/// Seed the grouped Music library and one Shows library the GUI presents, and
+/// leave Home active.
 fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
     seed_music(app, http);
     app.push_gui_library_tab_for_test(EmbyItem::folder(
@@ -231,10 +231,10 @@ fn a_fresh_launch_opens_the_first_presented_destination() {
     );
 }
 
-/// A location saved on Shows opens Shows (add-gui-library-panel design D9,
-/// row 7.1): the GUI presents the Shows destinations now, so the matching
-/// presented library opens — the saved-destination fallback stays only for a
-/// destination the GUI still does not present (row 13.1 owns its deletion).
+/// A location saved on Shows opens Shows and leaves it the active destination
+/// (add-gui-library-panel design D9, row 7.1, row 13.1): the GUI presents the
+/// Shows destinations now, so the matching presented library opens and no
+/// saved-destination fallback exists to take another destination.
 #[test]
 fn a_location_saved_on_shows_opens_shows() {
     let _guard = TestStateDirGuard::new();
@@ -262,6 +262,38 @@ fn a_location_saved_on_shows_opens_shows() {
         app.tab_for_test(),
         TabSelection::EmbyLibrary(shows_index),
         "the saved Shows destination restored"
+    );
+    assert_eq!(
+        app.gui_active_destination(),
+        Some(mbv::GuiDestinationKind::Shows {
+            lib_idx: shows_index
+        }),
+        "the restored destination is the active one"
+    );
+}
+
+/// A saved location names a destination the GUI no longer presents: a library
+/// the catalog lost restores nothing, and never another destination in its
+/// place (add-gui-library-panel design D9, row 13.1). The presented set holds
+/// the Music and Shows libraries, so the deleted fallback would have opened
+/// Music.
+#[test]
+fn a_location_saved_on_a_library_the_catalog_lost_opens_no_other_destination() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: library_identity("lib-gone"),
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    })
+    .unwrap();
+
+    let mut test = core_with_seeded_catalog(seed_music_and_shows);
+
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::Home,
+        "the saved destination opens no destination the location did not name"
     );
 }
 
@@ -318,8 +350,7 @@ fn seed_abs(app: &mut mbv::App, _http: &MockHttp) {
 /// (add-gui-library-panel design D9, row 9.1): the Audiobooks destinations
 /// join the presented set, so the matching presented library restores through
 /// the same first phase, whose resolution waits for the Audiobookshelf
-/// catalog to settle instead of opening a fallback the catalog's arrival
-/// would contradict.
+/// catalog to settle instead of giving up while it can still land.
 #[test]
 fn a_location_saved_on_audiobooks_opens_it() {
     let _guard = TestStateDirGuard::new();

@@ -1,7 +1,7 @@
 //! The GUI Library's destination tabs (add-gui-library-panel design D2): the
 //! destinations the GUI presents and the active one among them, as the top
 //! bar paints them. Phase 1 presents the Grouped Music libraries, and row
-//! 7.1 adds the Shows destinations; the launch restore's fallback reads the
+//! 7.1 adds the Shows destinations; the launch restore resolves against the
 //! same presented list, so the top bar, the restore, and the content
 //! projection agree on one set of destinations.
 
