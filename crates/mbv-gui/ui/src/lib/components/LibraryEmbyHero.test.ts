@@ -43,6 +43,7 @@ function hero(artShape: GuiEmbyHero['artShape'] = 'landscape'): GuiEmbyHero {
 function emby(facts: GuiEmbyHero | null): GuiEmbyFrame {
 	return {
 		libIdx: LIB_IDX,
+		libraryName: 'Movies',
 		pills: [],
 		collectionNames: [],
 		feedGroup: false,
@@ -59,19 +60,28 @@ function mount(facts: GuiEmbyHero | null = hero()): HTMLElement {
 	return render(LibraryEmbyHero, { emby: emby(facts) }).container;
 }
 
-// The artwork box reserves the arm the frame declares (design D12): the
-// landscape box keeps the 16:9 height, the square the Music Hero's 300 px
-// side, and the portrait the tall box.
+// The artwork box reserves the arm the frame declares (design D15): a portrait
+// or square cover keeps the Music Hero's 300 px box at the aspect's height, and
+// a landscape still fills the Hero content width at 16:9, as the TUI's hero
+// does — a 16:9 still shrunk into the square box is not the TUI's hero.
 test.each([
-	['landscape', 169],
 	['square', 300],
 	['portrait', 450],
-] as const)('a %s Hero places its artwork box at %s px high', (shape, height) => {
+] as const)('a %s Hero places its artwork box at 300 px by %s px', (shape, height) => {
 	const container = mount(hero(shape));
 	const box = container.querySelector('[data-library-emby-hero-art]') as HTMLElement;
 
 	expect(box.style.width).toBe('300px');
 	expect(box.style.height).toBe(`${height}px`);
+});
+
+test('a landscape Hero fills the content width at 16:9 instead of the 300 px box', () => {
+	const container = mount(hero('landscape'));
+	const box = container.querySelector('[data-library-emby-hero-art]') as HTMLElement;
+
+	expect(box.style.width).toBe('100%');
+	expect(box.style.aspectRatio).toBe('16 / 9');
+	expect(box.style.height).toBe('auto');
 });
 
 test('the Hero paints its title, its meta rows with their roles, and its overview', () => {

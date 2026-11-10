@@ -105,6 +105,7 @@ test('an armed prefix replaces the hints and keeps the location', () => {
 test('the bar paints the plain Emby location for the carried content', () => {
 	const emby: GuiEmbyFrame = {
 		libIdx: 2,
+		libraryName: 'Movies',
 		pills: [],
 		collectionNames: [],
 		feedGroup: false,

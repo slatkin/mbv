@@ -580,6 +580,9 @@ export type GuiEmbyFeedGroup = { kind: 'all' } | { kind: 'folder'; id: string };
 export interface GuiEmbyFrame {
 	/** The plain Emby-library index the Emby commands name (design D2). */
 	libIdx: number;
+	/** The library's display name: the list header's title, so the column
+	 * names the library it holds. */
+	libraryName: string;
 	/** The feed-group mode's pills in pill order; empty in plain mode,
 	 * whose letter rail replaces the TUI's pill row. */
 	pills: GuiEmbyPill[];

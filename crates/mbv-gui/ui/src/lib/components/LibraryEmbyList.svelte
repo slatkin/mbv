@@ -39,8 +39,10 @@
 		scrollEmbyList,
 		setEmbyFilter,
 	} from '$lib/library/emby';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import { openLibraryRowMenu } from '$lib/library/state';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import LibraryListHeader from './LibraryListHeader.svelte';
+	import LibraryListNotice from './LibraryListNotice.svelte';
 
 	interface Props {
 		/** The carried plain Emby-library content (row 8.1): the active mode's
@@ -55,6 +57,28 @@
 	 * the feed-group mode's flat rows with no heading, narrowed by the
 	 * filter's text. */
 	const rows = $derived(buildEmbyRows(emby.rows, emby.feedGroup, $embyUi.filter));
+
+	/** The header's selection label (design D15): the feed-group mode's
+	 * selected group, and `All` for a plain library, whose list is the whole
+	 * library — the Music header's own rule. */
+	const selectionLabel = $derived(
+		emby.collectionNames.length > 0 ? emby.collectionNames.join(' + ') : 'All',
+	);
+
+	/** The filter field's placeholder, naming the selection it narrows. */
+	const filterPlaceholder = $derived(
+		emby.collectionNames.length > 0 ? `Filter ${emby.collectionNames.join(' + ')}` : 'Filter',
+	);
+
+	/** Open the row's right-click item menu (the row-menu command): the next
+	 * frame carries the item's entries and the panel paints the card at the
+	 * pointer. */
+	function rowMenu(event: MouseEvent, row: EmbyListRow): void {
+		event.preventDefault();
+		if (row.kind === 'item') {
+			openLibraryRowMenu(row.row.id, event.clientX, event.clientY);
+		}
+	}
 
 	/** The rows in view: only these paint. */
 	const view = $derived(embyListWindow(rows, $embyUi.scrollTop, $embyUi.viewportHeight));
@@ -135,10 +159,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-emby-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
-		<LibraryFilterField
-			value={$embyUi.filter}
-			placeholder="Filter items"
+	<!-- The Music list's header (design D15): the library's name, the carried
+	selection's label, and the `/` filter field. -->
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title={emby.libraryName}
+			label={selectionLabel}
+			labelAttr="data-library-emby-selection-label"
+			filter={$embyUi.filter}
+			placeholder={filterPlaceholder}
 			ariaLabel="Filter items"
 			oninput={setEmbyFilter}
 			onaccept={acceptEmbyFilter}
@@ -147,30 +176,18 @@
 	{#if emby.loading}
 		<!-- The active list has not landed yet (row 8.1): one placeholder line
 			holds the list's place. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-emby-loading=""
-		>
-			Loading…
-		</div>
-	{/if}
-	{#if emby.failed}
+		<LibraryListNotice text="Loading…" attr="data-library-emby-loading" />
+	{:else if emby.failed}
 		<!-- The plain mode's root-list fetch failed (row 8.1): the failure line
 			naming what failed, and no row until the library opens again. -->
-		<div
-			class="flex flex-none items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="13px"
-			style:color="var(--canvas-muted)"
-			data-library-emby-failed=""
-		>
-			Couldn’t load this library.
-		</div>
+		<LibraryListNotice
+			text="Couldn’t load this library."
+			attr="data-library-emby-failed"
+		/>
+	{:else if emby.rows.length === 0}
+		<!-- The library landed and holds no item (row 8.1): one line says so,
+			as the Music list's empty line does. -->
+		<LibraryListNotice text="No items" attr="data-library-emby-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<ol
@@ -216,6 +233,7 @@
 							data-library-emby-selected={row.id === emby.selected ? '' : undefined}
 							onclick={() => pressEmbyRow(row)}
 							ondblclick={() => playEmbyRow(row.row.id)}
+							oncontextmenu={(event) => rowMenu(event, row)}
 						>
 							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
 								<span

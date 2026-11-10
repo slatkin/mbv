@@ -114,6 +114,7 @@ function embyContent(
 ): GuiLibraryContent {
 	const emby: GuiEmbyFrame = {
 		libIdx: 3,
+		libraryName: 'Movies',
 		pills: feedGroup
 			? [
 					{ group: { kind: 'all' }, name: 'All', selected: true, collection: false },

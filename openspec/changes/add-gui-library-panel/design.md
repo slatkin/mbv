@@ -206,6 +206,8 @@ The live-test round that produced D14 showed a second failure beside the Shows s
 
 A destination adds data and a command, never a control's look. A destination that needs a control the base lacks adds it to the base, so the next destination inherits it.
 
+**The TUI's `New` pill stays off the Emby tabs.** The TUI paints `New` first in an Emby library's selector row, but that scope reads `latest_items` from the shell's per-library latest snapshot, and only a TV library's Latest root fills that snapshot (`src/app/shell/emby_library_content.rs:191`, `src/app/dispatch/library/browse/tv.rs`). A plain Movies library therefore paints `New` over an empty list today. The GUI paints no control whose list it cannot fill, so an Emby library's pill row keeps its real modes — a feed-group library's `All` and its folders — and records `New` as a TUI gap rather than a GUI loss.
+
 **Letter buckets stay as the rail.** The TUI's letter-range pills (Movies `A–C` … `V–Z`, `#`; TV `A–I / J–R / S–Z`) and the Audiobookshelf surname buckets are replaced by the A–Z rail on every destination (D7, D12, D14). The user accepted the rail as the letter control after the Shows re-alignment, so no destination paints letter pills; the rail's finer letter grain does the same job without a second control beside it. A pill row therefore carries only the real modes: Shows `New`/`Upcoming`/`All`, an Emby feed-group `New`/`All`/folders, an Emby plain library `New`/`All`, and Podcasts `Latest` plus the three state pills plus each show.
 
 ## Risks / Trade-offs

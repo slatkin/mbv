@@ -55,6 +55,7 @@ const FEED: GuiEmbyRow[] = [
 function embyFrame(feedGroup: boolean, rows: GuiEmbyRow[]): GuiEmbyFrame {
 	return {
 		libIdx: 3,
+		libraryName: 'Movies',
 		pills: feedGroup
 			? [
 					{ group: { kind: 'all' }, name: 'All', selected: true, collection: false },
@@ -216,4 +217,49 @@ test('a failed plain-mode fetch paints the failure line', async () => {
 	const { container } = render(LibraryEmbyList, { emby });
 
 	expect(container.querySelector('[data-library-emby-failed]')).toBeTruthy();
+});
+
+// add-gui-library-panel design D15: the list column carries the Music list's
+// header — the library's name, the carried selection's label, and the `/`
+// field — so the plain Emby destination stopped opening with a bare filter.
+test('the list paints the library header with the selection label', async () => {
+	const emby = embyFrame(false, MOVIES);
+	carryLibraryContent({
+		revision: 1,
+		search: null,
+		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
+	});
+
+	const { container } = render(LibraryEmbyList, { emby });
+
+	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Movies');
+	expect(container.querySelector('[data-library-emby-selection-label]')?.textContent).toBe('All');
+});
+
+// add-gui-library-panel row 8.1: a library that landed empty says so, as the
+// Music list's `No artists` line does, instead of painting a blank column.
+test('a landed library with no row paints the empty line', async () => {
+	const emby = embyFrame(false, []);
+	carryLibraryContent({
+		revision: 1,
+		search: null,
+		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
+	});
+
+	const { container } = render(LibraryEmbyList, { emby });
+
+	expect(container.querySelector('[data-library-emby-empty]')?.textContent).toContain('No items');
+});
+
+// add-gui-library-panel design D8: a right-click opens the item menu for the
+// row's stable id, which the panel paints (D15).
+test('a right-click on a row sends the row-menu command with its id', async () => {
+	const container = await mountList(false, MOVIES);
+	const row = container.querySelector('[data-library-emby-row-id="m2"]') as HTMLElement;
+
+	await fireEvent.contextMenu(row, { clientX: 12, clientY: 34 });
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'rowMenu', itemId: 'm2' },
+	});
 });

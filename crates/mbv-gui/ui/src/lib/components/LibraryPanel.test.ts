@@ -596,6 +596,7 @@ function feeds(hero: GuiFeedsFrame['hero']): GuiFeedsFrame {
 function emby(feedGroup: boolean): GuiEmbyFrame {
 	return {
 		libIdx: 3,
+		libraryName: 'Movies',
 		pills: feedGroup
 			? [{ group: { kind: 'all' }, name: 'All', selected: true, collection: false }]
 			: [],

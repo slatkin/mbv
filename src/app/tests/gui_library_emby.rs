@@ -500,3 +500,33 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     );
     assert!(projection.hero.is_some(), "the Hero paints");
 }
+
+/// The TUI's Hero gate (row 8.1, design D15): a row that is a folder paints no
+/// Hero, because the Hero describes an item and a folder is a container, and a
+/// Movies library admits only a `Movie`, so a `BoxSet` row paints none either.
+/// `hero_item` is the TUI's own rule.
+#[test]
+fn a_folder_or_a_boxset_row_paints_no_hero() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut boxset = make_item("Boxset", "BoxSet");
+    boxset.id = "box-1".into();
+    let mut app = plain_movies_app(vec![boxset]);
+    app.gui_emby_libs.insert(
+        0,
+        crate::app::gui_library::GuiEmbyLibrarySelection {
+            picked_row: Some("box-1".into()),
+        },
+    );
+
+    let projection = app.gui_emby_projection(0);
+
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some("box-1"),
+        "the row is still the selection"
+    );
+    assert!(
+        projection.hero.is_none(),
+        "a BoxSet row names a container, so the Hero paints nothing"
+    );
+}

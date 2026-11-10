@@ -82,6 +82,7 @@ test('an unpicked item leaves the location without its last segment', () => {
 test('the location reads the plain Emby destination and the selected row', () => {
 	const emby: GuiEmbyFrame = {
 		libIdx: 2,
+		libraryName: 'Movies',
 		pills: [],
 		collectionNames: [],
 		feedGroup: false,
@@ -105,6 +106,7 @@ test('the location reads the plain Emby destination and the selected row', () =>
 test('the location reads the feed pill name in feed-group mode', () => {
 	const emby: GuiEmbyFrame = {
 		libIdx: 2,
+		libraryName: 'Movies',
 		pills: [
 			{ group: { kind: 'all' }, name: 'All', selected: false, collection: false },
 			{ group: { kind: 'folder', id: 'f1' }, name: 'Home videos', selected: true, collection: false },

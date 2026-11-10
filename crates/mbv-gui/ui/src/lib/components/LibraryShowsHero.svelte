@@ -27,6 +27,7 @@
 		resolveShowsEpisodeCursor,
 		showsWorkspace,
 	} from '$lib/library/shows-workspace';
+	import LibraryHeroArt from './LibraryHeroArt.svelte';
 
 	interface Props {
 		/** The carried Shows content (design D12): the selected row's Hero, its
@@ -46,12 +47,6 @@
 	const cursorEpisode = $derived(
 		resolveShowsEpisodeCursor(workspace, $showsWorkspace.cursor)?.episodeId ?? null,
 	);
-
-	// The Hero's artwork box for the arms that sit beside the text (design
-	// D14): the canvas's 300 px box. The landscape arm takes the Hero content
-	// width at 16:9 instead, above the text, as the TUI's hero does.
-	const ART_WIDTH = 300;
-	const ART_HEIGHT = { landscape: 169, square: 300, portrait: 450 } as const;
 
 	/** Select a season (design D12): the select-season command the core
 	 * answers with that season's episodes. */
@@ -98,7 +93,6 @@
 </script>
 
 {#if hero !== null}
-	{@const artHeight = ART_HEIGHT[hero.artShape]}
 	<!-- The Hero pane scrolls: with the landscape arm's full-width still above the
 	facts, a short pane would push the Workspace out of reach (design D14). -->
 	<div
@@ -118,25 +112,10 @@
 			aria-label={hero.title}
 			data-library-shows-hero-summary=""
 		>
-			<div
-				class="flex flex-none items-center justify-center"
-				style:width={hero.artShape === 'landscape' ? '100%' : `${ART_WIDTH}px`}
-				style:height={hero.artShape === 'landscape' ? 'auto' : `${artHeight}px`}
-				style:aspect-ratio={hero.artShape === 'landscape' ? '16 / 9' : undefined}
-				style:background="var(--canvas-library-raise)"
-				style:border-radius="6px"
-				style:overflow="hidden"
-				data-library-shows-hero-art={hero.art?.kind ?? 'none'}
-				data-library-shows-hero-art-shape={hero.artShape}
-			>
-				{#if hero.art !== null && hero.art.kind !== 'loading'}
-					<img class="h-full w-full object-cover" src={hero.art.detail} alt={hero.title} />
-				{:else}
-					<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-						>[No art · the window's placeholder]</span
-					>
-				{/if}
-			</div>
+			<!-- The artwork arm every Hero shares (design D15): the 300 px box for a
+			portrait or square cover, and the TUI's full-width 16:9 still for a
+			landscape one. -->
+			<LibraryHeroArt shape={hero.artShape} art={hero.art} title={hero.title} attr="shows" />
 			<div
 				class="flex min-w-0 flex-1 flex-col"
 				style:gap="14px"

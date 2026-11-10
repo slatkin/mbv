@@ -28,6 +28,7 @@ beforeEach(() => {
 function embyFrame(): GuiEmbyFrame {
 	return {
 		libIdx: 3,
+		libraryName: 'Movies',
 		pills: [
 			{ group: { kind: 'all' }, name: 'All', selected: true, collection: false },
 			{

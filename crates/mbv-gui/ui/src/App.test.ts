@@ -574,6 +574,7 @@ function embyContent(): GuiLibraryContent {
 		shows: null,
 		emby: {
 			libIdx: 3,
+			libraryName: 'Movies',
 			pills: [],
 			collectionNames: [],
 			feedGroup: false,

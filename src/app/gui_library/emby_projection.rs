@@ -117,6 +117,9 @@ pub struct GuiEmbyHero {
 /// selected row, and its Hero.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiEmbyProjection {
+    /// The library's display name: the list header's title, so the column
+    /// names the library it holds as the TUI's panel header does.
+    pub library_name: String,
     /// The feed-group mode's pills in pill order — All, then each counted
     /// folder in listing order. Empty in plain mode, whose rail replaces the
     /// TUI's letter-range pill row.
@@ -162,12 +165,19 @@ impl App {
         if !self.gui_emby_library(lib_idx) {
             return GuiEmbyProjection::default();
         }
-        let feed_group = self.is_feed_home_video_library(lib_idx);
-        if feed_group {
+        if self.is_feed_home_video_library(lib_idx) {
             self.gui_emby_feed_projection(lib_idx)
         } else {
             self.gui_emby_plain_projection(lib_idx)
         }
+    }
+
+    /// The library's display name (row 8.1): the list header's title.
+    fn gui_emby_library_name(&self, lib_idx: usize) -> String {
+        self.libs
+            .get(lib_idx)
+            .map(|lib| lib.library.name.clone())
+            .unwrap_or_default()
     }
 
     /// The plain mode's projection (row 8.1): the root-list store's rows in
@@ -184,8 +194,10 @@ impl App {
         let hero = selected
             .as_ref()
             .and_then(|selected| self.gui_emby_item(lib_idx, selected))
+            .filter(|item| self.gui_emby_hero_item(lib_idx, item))
             .map(|item| self.gui_emby_hero(&item));
         GuiEmbyProjection {
+            library_name: self.gui_emby_library_name(lib_idx),
             pills: Vec::new(),
             collection_names: Vec::new(),
             feed_group: false,
@@ -229,8 +241,10 @@ impl App {
         let hero = selected
             .as_ref()
             .and_then(|selected| self.gui_emby_item(lib_idx, selected))
+            .filter(|item| self.gui_emby_hero_item(lib_idx, item))
             .map(|item| self.gui_emby_hero(&item));
         GuiEmbyProjection {
+            library_name: self.gui_emby_library_name(lib_idx),
             pills,
             collection_names,
             feed_group: true,
@@ -295,6 +309,22 @@ impl App {
         self.gui_stored_emby_root_items(lib_idx)
             .find(|item| item.id == item_id)
             .cloned()
+    }
+
+    /// Whether the selected row paints a Hero (row 8.1): the TUI's own gate
+    /// (`hero_item`, `crates/mbv-components/src/emby_library_content.rs`). A
+    /// folder paints none, because the Hero describes an item and a folder is
+    /// a container; a Movies library additionally admits only a `Movie`, so a
+    /// `BoxSet` row — a collection — paints no Hero either.
+    fn gui_emby_hero_item(&self, lib_idx: usize, item: &EmbyItem) -> bool {
+        if item.is_folder {
+            return false;
+        }
+        let movies = self
+            .libs
+            .get(lib_idx)
+            .is_some_and(|lib| lib.library.collection_type == "movies");
+        !movies || item.item_type == "Movie"
     }
 
     /// The selected row's Hero facts (row 8.1): the shared Emby hero
