@@ -8,9 +8,9 @@
 //! sender, the Owner-command readers, and the frame readers) and declares one
 //! child module per test family: the destination and its focus handoff
 //! (`destination`), the stored selection and detail (`selection`), the queue
-//! commands (`playback`), the item menus (`menu`), and the frame's content
-//! (`frame`). The child files resolve under `tests/core_thread/library/` (one
-//! binary per crate; no `mod.rs`).
+//! commands (`playback`), the item menus (`menu`), the Search field
+//! (`search`), and the frame's content (`frame`). The child files resolve
+//! under `tests/core_thread/library/` (one binary per crate; no `mod.rs`).
 
 use std::sync::mpsc::Receiver;
 
@@ -33,6 +33,7 @@ mod frame;
 mod menu;
 mod playback;
 mod podcasts;
+mod search;
 mod selection;
 mod shows;
 

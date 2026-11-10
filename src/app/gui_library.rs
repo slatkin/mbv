@@ -240,6 +240,16 @@ pub enum GuiLibraryCommand {
     /// Add a Feeds entry to the queue (design D12, row 11.1): the TUI's
     /// enqueue path.
     FeedsQueue { item_id: String },
+    /// Send the Search field's query (design D12, row 12.1): the TUI's own
+    /// search worker answers it, and the Client's tick host drains the result
+    /// into the store the frame carries. An empty query clears the results.
+    SearchQuery { query: String },
+    /// Activate a Search result (design D12, row 12.1): Enter or a press on
+    /// the row. The id and type pair is the row's stable Service identity, so
+    /// a stale frame's row navigates nowhere.
+    SearchActivate { id: String, item_type: String },
+    /// Close the Search results (design D12, row 12.1): Esc in the field.
+    SearchClose,
 }
 
 /// The command's row identity for a stale-frame log: a play or enqueue
@@ -357,6 +367,11 @@ impl App {
             | GuiLibraryCommand::FeedsQueue { .. }) => {
                 self.apply_gui_feeds_command(command);
             }
+            // The Search field's commands (design D12, row 12.1): the field
+            // is cross-destination, so no library index rides them.
+            command @ (GuiLibraryCommand::SearchQuery { .. }
+            | GuiLibraryCommand::SearchActivate { .. }
+            | GuiLibraryCommand::SearchClose) => self.apply_gui_search_command(command),
         }
     }
 
@@ -426,6 +441,25 @@ impl App {
             other => Self::log_ignored_library_command(
                 "feeds",
                 format_args!("{other:?} is no Feeds destination command"),
+            ),
+        }
+    }
+
+    /// Apply one of the Search field's commands (design D12, row 12.1): the
+    /// query the typing sends, the row an Enter or a press activates, and the
+    /// close. The caller routes only these variants here, so the trailing arm
+    /// is the group's own no-op for a routing mistake — it logs and changes
+    /// nothing rather than dropping the request silently.
+    fn apply_gui_search_command(&mut self, command: GuiLibraryCommand) {
+        match command {
+            GuiLibraryCommand::SearchQuery { query } => self.gui_search_query(query),
+            GuiLibraryCommand::SearchActivate { id, item_type } => {
+                self.gui_search_activate(id, item_type);
+            }
+            GuiLibraryCommand::SearchClose => self.gui_search_close(),
+            other => Self::log_ignored_library_command(
+                "search",
+                format_args!("{other:?} is no Search command"),
             ),
         }
     }

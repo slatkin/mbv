@@ -100,9 +100,12 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_search_results(&mut self) -> bool {
-        // The GUI mounts no search surface, so nothing sends on the search
-        // channel for this Client.
-        false
+        // The GUI mounts no search surface, so no component receives the
+        // search worker's result (add-gui-library-panel design D12, row 12.1).
+        // The top bar's own field reads the App store this App-side drain
+        // fills, and the frame carries it; a landed result reports changed so
+        // the next frame paints it.
+        self.app.drain_gui_search_results()
     }
 
     fn tick_search_clock(&mut self, _now: Instant) -> Option<Msg> {

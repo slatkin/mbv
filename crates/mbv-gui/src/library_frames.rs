@@ -13,7 +13,7 @@ use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 use crate::bridge::frame::library::{
     GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryArt,
     GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame,
-    GuiShowsFrame,
+    GuiSearchFrame, GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -99,6 +99,10 @@ impl LibraryFrames {
             self.sent = None;
             return None;
         }
+        // The Search section rides the frame, not the content (row 12.1): a
+        // landed result reaches the window whichever content revision the
+        // frame carries, and a closed field rides as `None`.
+        let search = GuiSearchFrame::carried(&app.gui_search_projection());
         let content = content(app, sections);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
@@ -115,6 +119,7 @@ impl LibraryFrames {
         Some(GuiLibraryFrame {
             revision: self.revision,
             content: carried.then(|| Box::new(content)),
+            search,
         })
     }
 

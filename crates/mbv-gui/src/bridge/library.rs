@@ -139,6 +139,15 @@ pub enum GuiLibraryCommand {
     FeedsPlay { item_id: String },
     /// Add a Feeds entry to the queue (row 11.1).
     FeedsQueue { item_id: String },
+    /// Send the Search field's query (add-gui-library-panel design D12, row
+    /// 12.1): the field's typing sends one, and an empty query clears the
+    /// results. Cross-destination, so no library index rides it.
+    SearchQuery { query: String },
+    /// Activate a Search result (row 12.1): Enter or a press on the row. The
+    /// id and type pair is the row's stable Service identity.
+    SearchActivate { id: String, item_type: String },
+    /// Close the Search results (row 12.1): the Esc in the field.
+    SearchClose,
 }
 
 /// One Feeds pill (add-gui-library-panel design D12, row 11.1): the merged
@@ -332,6 +341,11 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },
             GuiLibraryCommand::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
             GuiLibraryCommand::FeedsQueue { item_id } => Self::FeedsQueue { item_id },
+            GuiLibraryCommand::SearchQuery { query } => Self::SearchQuery { query },
+            GuiLibraryCommand::SearchActivate { id, item_type } => {
+                Self::SearchActivate { id, item_type }
+            }
+            GuiLibraryCommand::SearchClose => Self::SearchClose,
         }
     }
 }

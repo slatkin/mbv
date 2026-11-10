@@ -25,6 +25,7 @@ mod audiobooks;
 mod emby;
 mod feeds;
 mod podcasts;
+mod search;
 mod shows;
 
 pub use self::audiobooks::{
@@ -39,6 +40,7 @@ pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame, GuiFeedsPillFrame, GuiFe
 pub use self::podcasts::{
     GuiPodcastsFrame, GuiPodcastsHeroFrame, GuiPodcastsPillFrame, GuiPodcastsRowFrame,
 };
+pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
     GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,
     GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
@@ -57,6 +59,14 @@ pub struct GuiLibraryFrame {
     /// A window-content reload's `report_layout` re-carries it. Boxed, so an
     /// unchanged frame's payload keeps only the revision.
     pub content: Option<Box<GuiLibraryContent>>,
+    /// The Search section (add-gui-library-panel design D12, row 12.1): the
+    /// query the top bar's field answers, and the rows it found. `None` while
+    /// the field is closed — no query and no row.
+    ///
+    /// Search is cross-destination, so it rides the frame and not the content:
+    /// the revision gates the content alone, and a result that lands between
+    /// two content changes still reaches the window.
+    pub search: Option<GuiSearchFrame>,
 }
 
 /// The content of the Library panel (design D2): the destination tabs the
