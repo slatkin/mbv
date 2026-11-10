@@ -126,7 +126,7 @@ pub struct EmbyItem {
     /// The containing item's Service id: the folder a homevideos video sits
     /// in, an episode's season. Empty when the payload declares none.
     /// `Default` so legacy serialized queue items (which predate the field)
-    /// deserialize unchanged; serialized queue compatibility is unchanged.
+    /// deserialize unchanged; an older Owner ignores the field on decode.
     #[serde(default)]
     pub parent_id: String,
     pub path: String,

@@ -34,4 +34,5 @@ None.
 - `src/app` and `src/lib.rs`: GUI-only Library entry points and projections (beside `src/app/gui_client_state.rs`), the Music collection store, the new play-next action, the shared service bootstrap step, and the GUI's Panel-focus and launch-restore settings.
 - `crates/mbv-config`: an additive GUI launch-location file.
 - `docs/adr/0036-gui-library-panel-owns-its-interaction-state.md`, `docs/architecture/gui-client.md`, `CONTEXT.md`, `AGENTS.md`.
-- No TUI behaviour change. No Owner-side, ctrl protocol, or Player change. No new dependency.
+- No TUI behaviour change. No new dependency.
+- One Owner-side change rides with it: the Player's queue-rebuild transition gate now outlives its arming command and disarms on the rebuild's settle, and a real `QueueDesynced` resubmits the canonical queue instead of only relaying to Clients (`docs/invariants/29-mpv-playlist-drift-resubmits-the-canonical-queue.md`). The ctrl wire gains one additive `EmbyItem` field (`parent_id`, `#[serde(default)]`), re-blessed into the v10 conformance corpus; an older Owner ignores it on decode.
