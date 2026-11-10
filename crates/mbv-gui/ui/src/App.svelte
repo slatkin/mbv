@@ -124,8 +124,8 @@
       class="relative flex h-full min-h-0"
       data-arrangement={arrangement}
       style:background={queueFocused
-        ? 'var(--mbv-queueColumnFocused)'
-        : 'var(--mbv-queueColumn)'}
+        ? 'var(--canvas-queue-column-focused)'
+        : 'var(--canvas-queue-column)'}
     >
       {#if queueVisible}
         <div

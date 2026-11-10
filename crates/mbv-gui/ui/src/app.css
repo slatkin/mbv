@@ -85,6 +85,11 @@
 	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
 	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
 	--canvas-library-control: #475258; /* the Hero's control border */
+	/* The Queue panel column's backdrop beside the Library panel: the dim
+	   tier, so the raised library panel contrasts against it. The focus step
+	   keeps the column focus-reactive, one sub-tier up. */
+	--canvas-queue-column: #1e2326; /* the queue column's resting backdrop */
+	--canvas-queue-column-focused: #232a2e; /* the queue column's focused backdrop */
 	/* The pointer's fill on every interactive control (design D16): the
 	   palette's foreground #d3c6aa veiled over whatever fill the control
 	   paints, so a bare ghost button, a picked row, and an accent Play button
