@@ -58,6 +58,7 @@ import {
 	focusLibrarySearch,
 	moveSearchHighlight,
 	searchFieldFocused,
+	searchFieldMounted,
 	searchResultsOf,
 } from './search';
 
@@ -227,9 +228,9 @@ function routeItemKey(event: KeyboardEvent): void {
 
 /** Close the front end's open menu or overlay with Esc (design D3): the right-click
  * item menu and the picked item's menu first, then the Narrow arrangement's Hero
- * overlay. Whether one paints decides the answer, so an Esc with nothing open may
- * not leave the core's Esc unclaimed. */
-function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
+ * overlay, then the carried Search section. Whether one paints decides the
+ * answer, so an Esc with nothing open may not leave the core's Esc unclaimed. */
+function routeEscapeKey(ui: LibraryUiState, search: GuiSearchFrame | null): KeyOutcome {
 	if (ui.rowMenu !== null) {
 		closeLibraryRowMenu();
 		return 'handled';
@@ -242,17 +243,29 @@ function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
 		closeLibraryHero();
 		return 'handled';
 	}
+	// The carried Search section (design D12, row 12.1): the dropdown paints
+	// while the frame carries it, so Esc closes it even after a press took the
+	// keyboard elsewhere — it is the only close the open results have.
+	if (search !== null) {
+		closeLibrarySearch();
+		return 'handled';
+	}
 	return 'core';
 }
 
 /** Route a key to the Library keys (design D3, step 4), with the pane the
- * window content focused deciding which control the key acts on. On Home the
+ * window content focused deciding which control the key acts on, and the
+ * carried Search section the Esc close reads (row 12.1). On Home the
  * Home keys route instead (design D12), on Shows the Shows keys (row 7.1), on
  * a plain Emby library the Emby keys (row 8.1), and on Audiobooks the
  * Audiobooks keys (row 9.1). */
-function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
+function routePanelKey(
+	event: KeyboardEvent,
+	ui: LibraryUiState,
+	search: GuiSearchFrame | null,
+): KeyOutcome {
 	if (event.key === 'Escape' && bare(event)) {
-		return routeEscapeKey(ui);
+		return routeEscapeKey(ui, search);
 	}
 	if (libraryHome() !== null) {
 		return routeHomePanelKey(event);
@@ -431,13 +444,17 @@ export function routeLibraryKey(
 	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
 	// the keyboard wherever the Library panel shows, before the open-field
 	// checks — even while the filter holds it, where the DOM focus move closes
-	// the filter the way any other focus move does.
+	// the filter the way any other focus move does. The chord arms the field
+	// only while a top bar mounts it: in Mini with Queue focus the panel paints
+	// no top bar, and arming a field that holds no element leaves the keyboard
+	// dead on its fact, so the chord keeps its core effect there instead.
 	if (
 		event.ctrlKey &&
 		!event.metaKey &&
 		!event.altKey &&
 		!event.shiftKey &&
-		(event.key === 'k' || event.key === 'K')
+		(event.key === 'k' || event.key === 'K') &&
+		searchFieldMounted()
 	) {
 		focusLibrarySearch();
 		return 'handled';
@@ -446,7 +463,9 @@ export function routeLibraryKey(
 	// routes first: its hold on the keyboard is DOM focus, which no panel key
 	// runs while it types (the key-leak rule), and the field's typing is the
 	// `text` answer the forwarder lets through (design D3, step 2, row 12.1).
-	if (searchFieldFocused()) {
+	// Both facts must hold: a stale armed fact an unmounted bar retracted must
+	// never route a key under it (the same key-leak gate).
+	if (searchFieldMounted() && searchFieldFocused()) {
 		return routeSearchKey(event, searchResultsOf(frame.library?.search ?? null));
 	}
 	const ui = get(libraryUi);
@@ -469,9 +488,10 @@ export function routeLibraryKey(
 		}
 		return 'handled';
 	}
-	// (4) The Library keys run while the Library panel has Panel focus.
+	// (4) The Library keys run while the Library panel has Panel focus. The
+	// carried Search section rides with them: its Esc close needs it.
 	if (frame.focus.panel === 'library') {
-		return routePanelKey(event, ui);
+		return routePanelKey(event, ui, frame.library?.search ?? null);
 	}
 	// (5) Every other key goes to the core's keyboard router.
 	return 'core';

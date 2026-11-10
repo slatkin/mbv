@@ -14,6 +14,11 @@ import type { GuiSearchFrame, GuiSearchRow } from '$lib/bridge/types';
 
 /** The Search field's front-end state (design D12, row 12.1). */
 export interface LibrarySearchState {
+	/** Whether a mounted top bar paints the Search field (design D3, step 3):
+	 * the key router arms and routes the field only on this fact, so a chord
+	 * never arms a field whose element no window paints. The top bar's own
+	 * mount sets it, and its teardown retracts it. */
+	mounted: boolean;
 	/** Whether the Search field holds the keyboard (design D3, step 2): the
 	 * key router's gate. The field's own focus events confirm it. */
 	focused: boolean;
@@ -26,7 +31,7 @@ export interface LibrarySearchState {
 
 /** The state a fresh session starts with. */
 export function initialLibrarySearch(): LibrarySearchState {
-	return { focused: false, query: '', highlight: null };
+	return { mounted: false, focused: false, query: '', highlight: null };
 }
 
 /** The Library panel's Search state. */
@@ -72,6 +77,28 @@ function cancelPendingSend(): void {
  * `null` while the search section is closed. */
 export function searchResultsOf(frame: GuiSearchFrame | null): GuiSearchFrame {
 	return frame ?? { query: '', loading: false, failed: false, results: [] };
+}
+
+/** A mounted top bar paints the Search field: the mount sets this fact, and
+ * teardown retracts it with the focus fact — an arrangement change that
+ * unmounts the bar under an armed field must not leave the keyboard armed
+ * where no element holds it (design D3, step 3). */
+export function mountSearchField(): void {
+	librarySearch.update((s) => (s.mounted ? s : { ...s, mounted: true }));
+}
+
+/** Retract the mount fact with the focus fact. The query text stays: the core
+ * keeps its live query, so a remounted field paints the same search. */
+export function unmountSearchField(): void {
+	librarySearch.update((s) =>
+		s.mounted || s.focused ? { ...s, mounted: false, focused: false } : s,
+	);
+}
+
+/** Whether a mounted top bar paints the Search field (design D3, step 3): the
+ * key router's second gate, beside the keyboard hold. */
+export function searchFieldMounted(): boolean {
+	return get(librarySearch).mounted;
 }
 
 /** Focus the Search field (design D3, step 3): the `Ctrl+K` chord. The top

@@ -28,6 +28,7 @@ import {
 	initialLibrarySearch,
 	librarySearch,
 	setSearchHighlight,
+	unmountSearchField,
 } from './search';
 import type { LibrarySearchState } from './search';
 
@@ -94,6 +95,14 @@ const ROWS: GuiSearchRow[] = [
 	{ id: 'r3', itemType: 'Album', title: 'Licensed To Ill', subtitle: 'Beastie Boys' },
 ];
 
+/** Arm the field's keyboard the way the mounted top bar's focus event does: the
+** mount fact and the focus fact hold together (design D3, step 2, row 12.1).
+*/
+function focusField(): void {
+	librarySearch.update((s) => (s.mounted ? s : { ...s, mounted: true }));
+	focusLibrarySearch();
+}
+
 /** The results frame the core carries. */
 function results(): GuiSearchFrame {
 	return {
@@ -113,6 +122,8 @@ function keyEvent(
 }
 
 test('Ctrl+K focuses the Search field while the Library panel shows', () => {
+	// A mounted top bar paints the field (row 12.1): the store holds its fact.
+	librarySearch.set({ ...initialLibrarySearch(), mounted: true });
 	const outcome = routeLibraryKey(keyEvent('k', { ctrlKey: true }), shownSearch(null));
 
 	expect(outcome).toBe('handled');
@@ -122,6 +133,7 @@ test('Ctrl+K focuses the Search field while the Library panel shows', () => {
 test('Ctrl+K focuses the Search field while the Queue panel holds Panel focus', () => {
 	// The chord is a window key (design D3, step 3): it is not a Library
 	// panel-focus key, so Queue Panel focus does not keep it from the field.
+	librarySearch.set({ ...initialLibrarySearch(), mounted: true });
 	const outcome = routeLibraryKey(
 		keyEvent('k', { ctrlKey: true }),
 		shownSearch(null),
@@ -142,8 +154,33 @@ test('Ctrl+K out of a Queue panel frame sends the key to the core instead', () =
 	expect(outcome).toBe('core');
 });
 
+test('Ctrl+K answers the core while no top bar mounts the Search field', () => {
+	// Review of row 12.1, finding P1: the chord is a window key, but the top
+	// bar mounts the field only where the arrangement paints the bar — in Mini
+	// with Queue focus the panel shows none, so arming the focus fact there
+	// would leave the keyboard on a field that holds no element. The chord
+	// keeps its core effect (`[keys]`) until the bar mounts.
+	librarySearch.set({ ...initialLibrarySearch(), mounted: false });
+	const outcome = routeLibraryKey(keyEvent('k', { ctrlKey: true }), shownSearch(null));
+
+	expect(outcome).toBe('core');
+	expect(get(librarySearch).focused).toBe(false);
+});
+
+test('a key meets the core after the top bar unmounts under the armed field', () => {
+	// Review of row 12.1, finding P1: the unmounted top bar retracts the focus
+	// fact with its mount fact, so the routing gate never traps the keyboard
+	// on the retracted field.
+	librarySearch.set({ ...initialLibrarySearch(), mounted: true, focused: true });
+	unmountSearchField();
+	const outcome = routeLibraryKey(keyEvent('b'), shownSearch(results()));
+
+	expect(outcome).toBe('core');
+	expect(get(librarySearch).focused).toBe(false);
+});
+
 test('the field takes its typing without a core forward (the text answer)', () => {
-	focusLibrarySearch();
+	focusField();
 	const outcome = routeLibraryKey(keyEvent('b'), shownSearch(results()));
 
 	expect(outcome).toBe('text');
@@ -152,7 +189,7 @@ test('the field takes its typing without a core forward (the text answer)', () =
 });
 
 test('Esc closes the results, clears the field, and sends searchClose', () => {
-	focusLibrarySearch();
+	focusField();
 	const outcome = routeLibraryKey(keyEvent('Escape'), shownSearch(results()));
 
 	expect(outcome).toBe('handled');
@@ -164,7 +201,7 @@ test('Esc closes the results, clears the field, and sends searchClose', () => {
 });
 
 test('Down and Up move the highlight along the row ids', () => {
-	focusLibrarySearch();
+	focusField();
 	const f = shownSearch(results());
 	setSearchHighlight('r1');
 	routeLibraryKey(keyEvent('ArrowDown'), f);
@@ -177,7 +214,7 @@ test('the highlight movement walks a new frame by id, not object identity', () =
 	// The key-leak lesson's identity half (row 12.1): a refresh's results are
 	// fresh row objects, so the movement must place the held id inside the new
 	// frame by id — r2 moves to r3 there.
-	focusLibrarySearch();
+	focusField();
 	const next = frame('library', {
 		library: { revision: 2, search: results(), content: content() },
 	});
@@ -187,7 +224,7 @@ test('the highlight movement walks a new frame by id, not object identity', () =
 });
 
 test('Enter on the highlighted row sends searchActivate and no close', () => {
-	focusLibrarySearch();
+	focusField();
 	setSearchHighlight('r2');
 	invokeMock.mockClear();
 	const outcome = routeLibraryKey(keyEvent('Enter'), shownSearch(results()));
@@ -200,7 +237,7 @@ test('Enter on the highlighted row sends searchActivate and no close', () => {
 });
 
 test('Enter with no highlighted row sends nothing', () => {
-	focusLibrarySearch();
+	focusField();
 	const outcome = routeLibraryKey(keyEvent('Enter'), shownSearch(results()));
 
 	expect(outcome).toBe('handled');
@@ -217,8 +254,24 @@ test('no search key acts while the field does not hold the keyboard', () => {
 	expect(get(librarySearch)).toEqual(before);
 });
 
+test('Escape closes the carried results after the field lost the keyboard', () => {
+	// Review of row 12.1, finding P2: the dropdown paints while the frame
+	// carries the section, so Esc must close it even after a pointer takes
+	// the keyboard elsewhere — the routeEscapeKey arm runs before the panel
+	// keys and it is the only close the open results have.
+	librarySearch.set({ ...initialLibrarySearch(), mounted: true });
+	const outcome = routeLibraryKey(keyEvent('Escape'), shownSearch(results()));
+
+	expect(outcome).toBe('handled');
+	expect(get(librarySearch)).toEqual(initialLibrarySearch());
+	expect(invokeMock).toHaveBeenCalledTimes(1);
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'searchClose' },
+	});
+});
+
 test('a core overlay keeps the keyboard even from the focused Search field', () => {
-	focusLibrarySearch();
+	focusField();
 	const overlay = frame('library', {
 		library: { revision: 1, search: results(), content: content() },
 		overlay: { kind: 'confirm' } as LibraryKeyFrame['overlay'],

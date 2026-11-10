@@ -23,8 +23,10 @@
 		blurSearchField,
 		focusLibrarySearch,
 		librarySearch,
+		mountSearchField,
 		setSearchHighlight,
 		setSearchQuery,
+		unmountSearchField,
 	} from '$lib/library/search';
 
 	interface Props {
@@ -53,6 +55,15 @@
 	}
 
 	let searchEl: HTMLInputElement | undefined = $state();
+
+	// The field's mount fact (row 12.1): the key router arms and routes the
+	// field only while this top bar paints it, and the teardown retracts it —
+	// an arrangement change can unmount the bar under an armed field, and the
+	// focus fact must not outlive the element.
+	$effect(() => {
+		mountSearchField();
+		return () => unmountSearchField();
+	});
 
 	// The field follows the focus fact into DOM focus and out of it (design
 	// D3, step 2): `Ctrl+K` arms the fact in the key router, and a press

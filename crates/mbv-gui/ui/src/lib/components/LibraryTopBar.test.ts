@@ -258,6 +258,27 @@ test('a press on a result row sends searchActivate, and never searchClose', () =
 	});
 });
 
+test('unmounting the top bar retracts the mount and focus facts', async () => {
+	// Review of row 12.1, finding P1: the bar's teardown retracts the focus
+	// fact with the mount fact, so an arrangement change never leaves the
+	// keyboard armed on a field whose element nothing paints.
+	const { unmount } = render(LibraryTopBar, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+	});
+	await tick();
+	expect(get(librarySearch).mounted).toBe(true);
+
+	librarySearch.update((s) => ({ ...s, focused: true }));
+	await tick();
+	expect(get(librarySearch).focused).toBe(true);
+
+	unmount();
+
+	expect(get(librarySearch).mounted).toBe(false);
+	expect(get(librarySearch).focused).toBe(false);
+});
+
 test('the field follows its focus fact into DOM focus, and its own focus event checks in', async () => {
 	const { container } = render(LibraryTopBar, {
 		tabs: [{ position: 1, label: 'Music' }],
