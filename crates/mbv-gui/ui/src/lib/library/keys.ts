@@ -8,6 +8,7 @@
 
 import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
+import { routeSettingsKey } from '$lib/settings/keys';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiFrame, GuiLibraryTab, GuiPanel, GuiSearchFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
@@ -73,7 +74,7 @@ import {
  * the installer passes the frame it holds; a test builds only these fields. */
 export type LibraryKeyFrame = Pick<
 	GuiFrame,
-	'focus' | 'overlay' | 'status' | 'library'
+	'focus' | 'overlay' | 'status' | 'library' | 'settings'
 > & {
 	summary: Pick<GuiFrame['summary'], 'filterActive'>;
 };
@@ -486,15 +487,7 @@ export function routeLibraryKey(
 	event: KeyboardEvent,
 	frame: LibraryKeyFrame | null,
 ): KeyOutcome {
-	// The attach states carry no slice, and no Library panel means no Library
-	// keys: the core takes every one of them. The panel's presence is the
-	// window's mount fact (design D2, D10), so a key never acts on a panel that
-	// paints nothing.
-	// The panel's presence is one fact for the window and the router (design
-	// D2, D10): a frame that carries no Library section takes no Library key,
-	// even while the window still holds the content of an earlier frame. The
-	// content names the active destination's section (design D12).
-	if (!frame || !libraryShown(frame.library, get(libraryContent))) {
+	if (!frame) {
 		return 'core';
 	}
 	// (1) An open core overlay or an armed prefix keeps the keyboard with the
@@ -506,6 +499,24 @@ export function routeLibraryKey(
 	// keyboard every key is the core's to type (`text_entry_focused` in
 	// `src/app/input/gui.rs`).
 	if (frame.summary.filterActive) {
+		return 'core';
+	}
+	// The Settings screen takes every key the overlay step leaves while its
+	// frame section is present (add-gui-settings-screen design D11): the
+	// window paints the screen in place of the two panels then, so no Library
+	// step runs.
+	if (frame.settings !== null) {
+		return routeSettingsKey(event, frame.settings);
+	}
+	// The attach states carry no slice, and no Library panel means no Library
+	// keys: the core takes every one of them. The panel's presence is the
+	// window's mount fact (design D2, D10), so a key never acts on a panel that
+	// paints nothing.
+	// The panel's presence is one fact for the window and the router (design
+	// D2, D10): a frame that carries no Library section takes no Library key,
+	// even while the window still holds the content of an earlier frame. The
+	// content names the active destination's section (design D12).
+	if (!libraryShown(frame.library, get(libraryContent))) {
 		return 'core';
 	}
 	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes

@@ -29,6 +29,8 @@ export type {
 	GuiSettingsFrame,
 	GuiSettingsKeyRefusal,
 	GuiSettingsKeyRow,
+	GuiSettingsRoute,
+	GuiSettingsRouteDevice,
 	GuiSettingsSection,
 	GuiSettingsService,
 	GuiSettingsSetup,

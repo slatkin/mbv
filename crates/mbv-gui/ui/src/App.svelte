@@ -5,20 +5,26 @@
 	import { installInput } from '$lib/bridge/input';
 	import { reportContainerSize } from '$lib/bridge/layout';
 	import {
+		clampQueueWidth,
 		dragQueueWidth,
 		draggedWidths,
+		noteUiResetEpoch,
 		panelWidths,
 		resetQueueWidth,
 	} from '$lib/bridge/resize';
+	import { QUEUE_PANEL_WIDTH_PX } from '$lib/bridge/arrangement';
 	import type { LayoutSize } from '$lib/bridge/types';
 	import { routeLibraryKey } from '$lib/library/keys';
 	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
+	import { resetLibraryInteraction } from '$lib/library/reset';
+	import { syncSettingsFrame, resetSettingsUi } from '$lib/settings/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
 	import ConfirmOverlay from './lib/components/ConfirmOverlay.svelte';
 	import DaemonLostOverlay from './lib/components/DaemonLostOverlay.svelte';
 	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import PanelDivider from '$lib/components/PanelDivider.svelte';
+	import SettingsScreen from '$lib/components/SettingsScreen.svelte';
 
 	// The webview's own context menu is turned off (add-tauri-gui-client D11).
 	// Tauri has no config key for it on WebKitGTK.
@@ -64,6 +70,26 @@
 		carryLibraryContent(held && 'slice' in held ? held.slice.library : null);
 	});
 
+	// The Settings screen's interaction state follows the frame
+	// (add-gui-settings-screen design D1): the screen's open resets it, a
+	// section change re-anchors it, and the frame's answer ends a sent
+	// capture. A new `uiResetEpoch` resets the window's presentation — the
+	// Library interaction stores, the panel widths, and the Settings state —
+	// as design D10's reset requires.
+	$effect(() => {
+		const held = $frames;
+		const slice = held && 'slice' in held ? held.slice : null;
+		if (slice === null) {
+			syncSettingsFrame(null);
+			return;
+		}
+		if (noteUiResetEpoch(slice.uiResetEpoch)) {
+			resetLibraryInteraction();
+			resetSettingsUi();
+		}
+		syncSettingsFrame(slice.settings);
+	});
+
 	onMount(() => {
 		// Input forwarding and the frame subscription live for the window's
 		// life (add-tauri-gui-client D4/D6); both clean up on unmount. Every
@@ -100,6 +126,10 @@
       resolution, so a drag paints the width the thresholds classify. -->
     {@const widths = panelWidths(container, frame.panel, $draggedWidths)}
     {@const arrangement = libraryArrangement(container, widths.queue)}
+    <!-- The Settings sidebar's column: the Queue column's expanded width
+      (design D11) — the dragged or the default width, whatever the collapse
+      toggle, because the rail cannot hold the section list. -->
+    {@const sidebarWidth = clampQueueWidth($draggedWidths.queue ?? QUEUE_PANEL_WIDTH_PX, container.width)}
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
     {@const home = content?.home ?? null}
@@ -127,6 +157,19 @@
         ? 'var(--canvas-queue-column-focused)'
         : 'var(--canvas-queue-column)'}
     >
+      {#if frame.settings !== null}
+        <!-- The Settings screen replaces the two panels while its frame
+          section is present (add-gui-settings-screen design D11): no player
+          panel, queue, or Library panel mounts, and playback continues. The
+          screen's own Mini check measures the window minus the sidebar's
+          column. -->
+        <SettingsScreen
+          settings={frame.settings}
+          status={frame.status}
+          {sidebarWidth}
+          arrangement={libraryArrangement(container, sidebarWidth)}
+        />
+      {:else}
       {#if queueVisible}
         <div
           class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
@@ -166,6 +209,7 @@
           listWidth={widths.list}
           libraryColumn={widths.libraryColumn}
         />
+      {/if}
       {/if}
     </div>
     {#if frame.overlay?.kind === 'confirm'}

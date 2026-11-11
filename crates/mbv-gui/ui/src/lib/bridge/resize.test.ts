@@ -18,6 +18,7 @@ import {
 	draggedWidths,
 	loadDraggedWidths,
 	panelWidths,
+	noteUiResetEpoch,
 	resetListWidth,
 	resetQueueWidth,
 } from './resize';
@@ -124,4 +125,27 @@ test('a corrupt saved value loads the defaults', () => {
 	const corrupt = { getItem: () => '{not json', setItem: () => {} } as unknown as Storage;
 
 	expect(loadDraggedWidths(corrupt)).toEqual(DEFAULT_DRAGGED_WIDTHS);
+});
+
+// add-gui-settings-screen row 6.8 (design D10): a new `uiResetEpoch` — the
+// core's Reset UI State — resets the panel widths to their defaults and
+// removes the saved `mbv.gui.panelWidths`, so the next launch starts from
+// them too.
+test('a new uiResetEpoch resets both widths and removes the storage key', () => {
+	localStorage.clear();
+
+	noteUiResetEpoch(11);
+	dragQueueWidth(500, 1600);
+	dragListWidth(500, 1200);
+
+	noteUiResetEpoch(12);
+
+	expect(get(draggedWidths)).toEqual(DEFAULT_DRAGGED_WIDTHS);
+	expect(localStorage.getItem(PANEL_WIDTHS_STORAGE_KEY)).toBeNull();
+
+	// A frame carrying the same epoch resets nothing.
+	dragQueueWidth(500, 1600);
+	noteUiResetEpoch(12);
+	expect(get(draggedWidths).queue).toBe(500);
+	resetQueueWidth();
 });

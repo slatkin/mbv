@@ -51,6 +51,7 @@ function frame(
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
+		settings: null,
 		library: { revision: 1, search: null, content: null },
 		...rest,
 	};

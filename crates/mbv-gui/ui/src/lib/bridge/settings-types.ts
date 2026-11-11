@@ -36,6 +36,15 @@ export type GuiSettingsSection =
 export type GuiSettingsContent =
 	| { kind: 'rows'; rows: GuiSettingRow[] }
 	| {
+			/** The Library section (design D9): its choice rows, the routable
+			 * libraries, the selected library, and its candidate devices. */
+			kind: 'library';
+			rows: GuiSettingRow[];
+			routes: GuiSettingsRoute[] | null;
+			selected: string | null;
+			devices: GuiSettingsRouteDevice[] | null;
+	  }
+	| {
 			kind: 'services';
 			services: GuiSettingsService[];
 			setup: GuiSettingsSetup | null;
@@ -85,6 +94,26 @@ export interface GuiSettingChoice {
 	selected: boolean;
 }
 
+/** One routable library of the Library section's routes list (design D9):
+ * `library` is the lowercased name the `routeDevices` and `assignRoute`
+ * commands carry. */
+export interface GuiSettingsRoute {
+	library: string;
+	/** The library's display name, as the TUI paints it. */
+	name: string;
+	/** The assigned device route; `null` while the library uses the
+	 * automatic route. */
+	endpoint: string | null;
+}
+
+/** One candidate device of the selected library (design D9): `name` is the
+ * device, `endpoint` the route `assignRoute` sends; `null` while the device
+ * is not currently routable. */
+export interface GuiSettingsRouteDevice {
+	name: string;
+	endpoint: string | null;
+}
+
 /** One Service row (design D9). */
 export interface GuiSettingsService {
 	entry: GuiServiceEntry;
@@ -111,6 +140,7 @@ export type GuiServiceActionIntent =
 	| 'setupEmby'
 	| 'retryEmby'
 	| 'repairEmby'
+	| 'removeEmby'
 	| 'setupAudiobookshelf'
 	| 'testAudiobookshelf'
 	| 'removeAudiobookshelf'
@@ -212,6 +242,12 @@ export type GuiSettingsCommand =
 			command: 'assignRoute';
 			library: string;
 			endpoint: string | null;
+	  }
+	| {
+			/** Load the candidate devices of `library` for the Library
+			 * section's routes list (row 5.1). */
+			command: 'routeDevices';
+			library: string;
 	  }
 	| {
 			command: 'embySetup';
