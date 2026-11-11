@@ -21,7 +21,8 @@
 		scrollTop: number;
 		/** The viewport height the destination's state holds, in pixels. */
 		viewportHeight: number;
-		/** The destination's own attribute prefix, as in `podcasts` or `abs`. */
+		/** The destination's own attribute prefix, as in `podcasts` or `abs`; empty for
+		 * Music, whose hook is `data-library-list`. */
 		attr: string;
 		/** The scroller's padding, where a destination's rail narrows the rows. */
 		padding?: string;
@@ -100,7 +101,7 @@
 	style:list-style="none"
 	style:margin="0"
 	style:padding
-	{...{ [`data-library-${attr}-list`]: '' }}
+	{...{ [attr === '' ? 'data-library-list' : `data-library-${attr}-list`]: '' }}
 	onscroll={handleScroll}
 >
 	<li style:height="{above}px" aria-hidden="true"></li>

@@ -20,7 +20,6 @@
 	// key router types into it without checking focus, so this field owns its
 	// focus. It takes the keyboard while the filter is open and closes the
 	// filter when it loses focus, keeping its text as Enter does.
-	import { onMount } from 'svelte';
 	import { ChevronRight } from '@lucide/svelte';
 	import type { GuiMusicFrame } from '$lib/bridge/types';
 	import {
@@ -29,8 +28,6 @@
 		TRACK_ROW_HEIGHT,
 		buildLibraryRows,
 		letterRail,
-		listWindow,
-		rowsHeight,
 	} from '$lib/library/list';
 	import type { LibraryRow } from '$lib/library/list';
 	import {
@@ -44,6 +41,7 @@
 		scrollLibraryList,
 		setLibraryFilter,
 	} from '$lib/library/state';
+	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
@@ -55,8 +53,6 @@
 		music: GuiMusicFrame;
 	}
 	const { music }: Props = $props();
-
-	let listEl: HTMLElement | undefined = $state();
 
 	/** The album the list last revealed. A pick reveals once, so a later frame
 	 * carrying the same pick does not move the cursor again. */
@@ -81,16 +77,6 @@
 			filter: $libraryUi.filter,
 		}),
 	);
-
-	/** The rows in view: only these paint. */
-	const view = $derived(listWindow(rows, $libraryUi.scrollTop, $libraryUi.viewportHeight));
-	const painted = $derived(rows.slice(view.start, view.end));
-
-	/** The list's whole painted height, and the spacers that hold its scroll
-	 * range while only the rows in view paint. */
-	const total = $derived(rowsHeight(rows));
-	const above = $derived(painted.length > 0 ? painted[0].top : 0);
-	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
 	/** The selected collection names in pill order (design D6): the core's one
 	 * derivation, carried on the Music frame so the list header and the Status
@@ -128,12 +114,6 @@
 	/** The album the Hero shows: the list paints its row in the canvas's picked
 	 * fill (design D7). */
 	const picked = $derived(music.hero?.album.albumId ?? null);
-
-	/** The bottom edge of the last painted row: the below-spacer's pair. */
-	function lastBottom(): number {
-		const last = painted[painted.length - 1];
-		return last === undefined ? 0 : last.top + last.height;
-	}
 
 	/** The stable Service id a row's menu names: an artist's Service item, an
 	 * album's own id, and a track's id — the same id the row's actions send. */
@@ -199,38 +179,6 @@
 		return row.kind === 'album' ? '0 8px 0 22px' : '0 8px 0 40px';
 	}
 
-	/** Report the list's measured height (design D7): the rows in view follow
-	 * it. */
-	function measure(): void {
-		measureLibraryList(listEl?.clientHeight ?? 0);
-	}
-
-	/** Report the list's native scroll offset, so the windowed paint follows a
-	 * user scroll. */
-	function onScroll(event: Event): void {
-		scrollLibraryList((event.currentTarget as HTMLElement).scrollTop);
-	}
-
-	// The scroller mirrors the state (design D7): a key that moved the cursor
-	// set the offset, and the element follows it. A user scroll already wrote
-	// the offset back, so this assignment is a no-op for it.
-	$effect(() => {
-		const el = listEl;
-		const top = $libraryUi.scrollTop;
-		if (el !== undefined && el.scrollTop !== top) {
-			el.scrollTop = top;
-		}
-	});
-
-	onMount(() => {
-		measure();
-		const observer =
-			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-		if (listEl !== undefined) {
-			observer?.observe(listEl);
-		}
-		return () => observer?.disconnect();
-	});
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-list-column="">
@@ -261,19 +209,16 @@
 		<LibraryListNotice text="No artists" attr="data-library-empty" />
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
-		<ol
-			bind:this={listEl}
-			class="min-h-0 flex-1"
-			style:overflow-y="auto"
-			style:list-style="none"
-			style:margin="0"
-			style:padding="0 0 0 8px"
-			data-library-list=""
-			onscroll={onScroll}
+		<LibraryVirtualList
+			{rows}
+			scrollTop={$libraryUi.scrollTop}
+			viewportHeight={$libraryUi.viewportHeight}
+			attr=""
+			padding="0 0 0 8px"
+			onmeasure={measureLibraryList}
+			onscroll={scrollLibraryList}
 		>
-			<li style:height="{above}px" aria-hidden="true"></li>
-			{#each painted as row (row.id)}
-				<li>
+			{#snippet row(row)}
 					{#if row.kind === 'letter'}
 						<div
 							class="flex items-end font-mono"
@@ -368,10 +313,8 @@
 							{/if}
 						</button>
 					{/if}
-				</li>
-			{/each}
-			<li style:height="{below}px" aria-hidden="true"></li>
-		</ol>
+			{/snippet}
+		</LibraryVirtualList>
 		<LibraryLetterRail letters={rail} {marked} />
 	</div>
 </div>
