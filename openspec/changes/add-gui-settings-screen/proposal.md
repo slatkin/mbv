@@ -17,6 +17,7 @@ The GUI Client has no settings. F2, F3, and F4 do nothing in it: the core router
 - **Sessions is basic.** It lists the same playback targets as the header chooser and selects one. Later work adds session-specific options.
 - **Playlists is a temporary home with the full TUI set.** It lists the saved playlists, opens one to its items, plays, shuffles, or adds a playlist or one item, renames, deletes, and refreshes.
 - **Shared effects move from the TUI shell to `App`.** The setting-choice lists (Hidden libraries, Feed view libraries, My languages), the library routes editor, feed add, edit, and remove, and the playlist actions run today only in the TUI `Model`. They move to `App` so both Clients run one implementation. The TUI's behaviour does not change.
+- **Colour by data type across the whole GUI (user-authorized scope).** Weight and size carry hierarchy, and colour carries data type: time, date, count, section label, secondary title, and role each get one colour. A repeated time or year in a list is dimmed. This applies to the Queue, the Library, and Settings, following the colour pass on the three design canvases (`canvas/colour-by-type.diff`). The TUI does not change.
 - **A new ADR** extends ADR 0036's rule to the Settings screen: the GUI window content owns the screen's interaction state, and the Client core owns the open section, the data, and the actions.
 
 ## Capabilities
@@ -38,4 +39,5 @@ The GUI Client has no settings. F2, F3, and F4 do nothing in it: the core router
 - `crates/mbv-config/`: `ConfigSection::Keys`, a full settings save that leaves `[keys]` as the file has it, and a clear for the GUI launch location.
 - `src/app/input/resolver.rs`: the inverse of `KeyChord::from_keybinds_chord`, so a captured key becomes a configured chord.
 - Docs: a new ADR, `docs/architecture/gui-client.md` (a Settings screen section), `docs/architecture/interactive-surface-ledger.md` (a GUI Settings screen row), and `CONTEXT.md` (the *Settings screen* term).
+- Colour pass: `mbv-ui-model` (a `MetaKind` for typed segments), `mbv-render`'s shared Hero meta-row builder (typed segments; the TUI joins them to the same text), the GUI Library and Queue frame DTOs, and the Queue, Library, and Settings Svelte components.
 - No new dependency.

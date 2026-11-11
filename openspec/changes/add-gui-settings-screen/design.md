@@ -217,6 +217,38 @@ The artboard's hexes with no token today get `--canvas-*` tokens in `app.css`: `
 
 `App::set_settings_value(key, value)` replaces the cycle for the three pick rows in the GUI. It sets the config value, runs the player update that the cycle handler runs (`update_subtitle_prefs`, then `push_subtitle_prefs`), and arms the deferred save. Each cycle handler then calls it with its computed next value, so the TUI's cycle and the GUI's pick share one effect. The value lists come from `mbv-ui-model`: a `SUBTITLE_MODES` constant in the order `next_subtitle_mode` steps through, which that function then reads, and the language list `""` plus `my_languages`, which `cycle_lang` already builds. The empty value paints as Any.
 
+### D14. Colour carries data type across the GUI
+
+The user authorized this scope beyond Settings. The reference is `canvas/colour-by-type.diff`, a diff of the Main (Queue), Library, and Settings artboards. Its Settings part is already applied to `canvas/Settings.dc.html`. The Main and Library artboards live in archived changes, which are never edited, so the diff itself is their reference.
+
+**The rule.** Weight and size carry hierarchy, and colour carries data type. Titles and body text stay heading, text, or muted. Each type has one semantic token in `app.css`, which aliases an existing hue where one exists:
+
+| Type | Token | Value |
+|---|---|---|
+| time and duration | `--canvas-type-time` | `#a7c080` |
+| year and date | `--canvas-type-date` | `#7fbbb3` |
+| count and meta | `--canvas-type-count` | `#e69875` |
+| section label | `--canvas-type-label` | `#83c092` |
+| secondary title (series, show, parent) | `--canvas-type-secondary` | `#d699b6` (new) |
+| role and character | `--canvas-type-role` | `#dbbc7f` |
+
+Links keep the date hue, and danger keeps `--canvas-destructive`. A time or a year repeated down a list (a duration column, a tree row's year, the queue's right column) paints at `--canvas-type-repeat-opacity: 0.65`. The selected or current row keeps full opacity in its own ink. The scrubber's remaining time paints the time hue at 0.75, as the diff draws it.
+
+**Typed segments, not parsed strings.** A line that joins values of several types is built as typed segments where it is built, and never split in the window:
+
+- `mbv-ui-model` gets `MetaKind { Plain, Time, Date, Count, Label, Secondary, Role }` and `MetaSegment { text, kind }`.
+- The shared Hero meta-row builder (`emby_hero_meta_rows_plain` in `mbv-render`, and its siblings that feed `meta_rows`) returns rows of segments. The TUI joins each row's text, so its output is byte-identical, and the existing TUI tests prove it. The GUI frame's `metaRows` carry the segments. `durationRow` and `progressRow` stay, because they mark whole rows.
+- Lines the window already builds from typed fields (`hero.ts`: the Music facts line `13 tracks · 44:25`, the kicker) return segments in TypeScript.
+- Single-type fields need no segments. Their painter picks the token: a year, a duration, `finishClock`, `remainingClock`, `episodeBadge` (count), and `parentLine` (secondary).
+
+One `TypedText.svelte` paints a segment list. Each kind maps to its token, and `repeat` applies the repeat opacity.
+
+**The sites, from the diff:**
+
+- **Library.** Letter headings and the tracklist column header are labels. The artist kicker is a label. Hero facts and meta segments are typed. The album year is a date. Tracklist durations are repeated times. Tree-row years are repeated dates. The same applies to the Shows, Emby, Audiobooks, Podcasts, Feeds, and Home Heroes and lists, wherever they paint a year, a duration, or a count.
+- **Queue.** The still's episode badge is a count. The parent line is a secondary title. The scrubber's remaining time is a time at 0.75. In the header, the remaining count is a count and the finish clock is a time. The footer's source line is a secondary title. The right column (Length or Ends at) is repeated time, and the current row keeps its ink.
+- **Settings.** The Feeds card's subscription count and the language count are counts (already painted). Key chords stay mono text, because a chord is not one of the six types.
+
 ### D12. No new dependency
 
 The change adds no crate and no npm package. It uses what the workspace and `ui/package.json` already pin: `toml` and `serde` on the Rust side, and `svelte` 5.57.3, `bits-ui` 2.20.6 (the switch, checkbox, and text-input primitives), `@lucide/svelte` 1.70.0, and `tailwindcss` 4.3.4 in the front end. No upgrade is part of this change.
