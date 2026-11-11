@@ -27,6 +27,10 @@ use crate::bridge::keys::{DomKey, neutral_key};
     rename_all_fields = "camelCase"
 )]
 pub enum GuiSettingsCommand {
+    /// Open the screen at Services, as the `settings_open` action does, and
+    /// change nothing while it is open (design D5's `open`, D11
+    /// *Mouse-centric*). The Library top bar's Settings control sends it.
+    Open,
     /// Close the screen.
     Close,
     /// Show a section, and start its load.
@@ -165,6 +169,7 @@ impl From<GuiPlaylistAction> for MusicTreeAction {
 #[must_use]
 pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
     Some(match command {
+        GuiSettingsCommand::Open => mbv::GuiSettingsCommand::Open,
         GuiSettingsCommand::Close => mbv::GuiSettingsCommand::Close,
         GuiSettingsCommand::SelectSection { section } => mbv::GuiSettingsCommand::SelectSection {
             section: section.into(),

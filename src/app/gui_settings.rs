@@ -248,6 +248,19 @@ impl App {
         self.settings_destination
     }
 
+    /// The `open` command's rule (design D5, design D11 *Mouse-centric*):
+    /// open the screen exactly as `settings_open` opens a closed one — at
+    /// Services — and change nothing while it shows, so a press on the top
+    /// bar's Settings control never moves a screen the pointer can already
+    /// see.
+    pub fn open_gui_settings(&mut self) {
+        if self.gui_settings_is_open() {
+            Self::log_ignored_gui_settings_command("open", "the Settings screen is open");
+        } else {
+            self.open_gui_settings_at(GuiSettingsGroup::F2.section());
+        }
+    }
+
     /// The toggle rule of design D2: with the screen closed, open it at the
     /// group's section; with the screen showing a section of the same group,
     /// close it; otherwise show the group's section and stay open.

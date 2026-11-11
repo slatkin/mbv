@@ -60,6 +60,11 @@ impl std::fmt::Debug for SetupSecret {
 /// action for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiSettingsCommand {
+    /// Open the screen at Services, as the `settings_open` action does when it
+    /// opens a closed screen, and change nothing while the screen is open
+    /// (design D5's `open`, design D11 *Mouse-centric*). The Library top bar's
+    /// Settings control sends it.
+    Open,
     /// Close the screen (design D2).
     Close,
     /// Show a section, and start its load (design D9).
@@ -161,6 +166,7 @@ impl App {
             "the GUI Settings screen sent a command"
         );
         match command {
+            GuiSettingsCommand::Open => self.open_gui_settings(),
             GuiSettingsCommand::Close => {
                 if self.gui_settings_is_open() {
                     self.close_gui_settings();

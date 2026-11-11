@@ -236,6 +236,12 @@ export type { GuiTargetChoice, GuiTargetKey } from './types';
  * shape of `GuiSettingsCommand` in bridge/settings.rs. Identities are stable —
  * a setting name, a playlist id, a feed URL, a chord — never row positions. */
 export type GuiSettingsCommand =
+	| {
+			/** Open the screen at Services, as the `settings_open` action does,
+			 * and change nothing while it is open (design D5, D11
+			 * *Mouse-centric*): the top bar's Settings control sends it. */
+			command: 'open';
+	  }
 	| { command: 'close' }
 	| { command: 'selectSection'; section: GuiSettingsSection }
 	| {

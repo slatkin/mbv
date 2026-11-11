@@ -83,6 +83,55 @@ fn a_first_start_opens_the_screen_at_services() {
     );
 }
 
+/// The top bar's Settings control (design D11 *Mouse-centric*, the spec's *A
+/// Settings control in the top bar opens the screen*): the `open` command
+/// opens a closed screen at Services, as the `settings_open` action does, and
+/// a second `open` on the showing screen changes nothing — the shown section
+/// stays.
+#[test]
+fn the_open_command_opens_at_services_and_leaves_an_open_screen_alone() {
+    let mut test = test_core_with(stub_app_with_queue(2));
+
+    test.tx
+        .send(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
+        .unwrap();
+    assert!(test.core.step());
+
+    assert_eq!(
+        test.core.gui_settings_section_for_test(),
+        Some(mbv::GuiSettingsSection::Services),
+        "the closed screen opened at Services"
+    );
+    assert!(
+        test.next_frame().settings.is_some(),
+        "the frame carries the open screen"
+    );
+
+    test.tx
+        .send(CoreInput::Settings(
+            mbv::GuiSettingsCommand::SelectSection {
+                section: mbv::GuiSettingsSection::Queue,
+            },
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    assert_eq!(
+        test.core.gui_settings_section_for_test(),
+        Some(mbv::GuiSettingsSection::Queue)
+    );
+
+    test.tx
+        .send(CoreInput::Settings(mbv::GuiSettingsCommand::Open))
+        .unwrap();
+    assert!(test.core.step());
+
+    assert_eq!(
+        test.core.gui_settings_section_for_test(),
+        Some(mbv::GuiSettingsSection::Queue),
+        "the open screen stayed where it was"
+    );
+}
+
 /// Space toggles playback behind the open screen (the spec's *Global keys
 /// keep working behind the screen*): the Settings id holds the core focus, so
 /// the key routes with no leaf, and the transport's deferred candidate fires.
