@@ -218,6 +218,17 @@ The GUI painted no hover at all: a pill, a tab, a row, a rail letter, and a Hero
 - **The selectors are the interaction roles**, not a class: `button`, `[role='menuitem']`, `[role='tab']`, `[role='option']`, and the filter field's `label:has(> input:hover)`. Disabled controls keep the arrow and no veil.
 - **The seekbar is the one exception.** It answers the pointer with the trickplay tile preview, and a veil over its 60 px box would tint the elapsed and remaining labels with it.
 
+### D17. One Hero frame, the largest unit as its title, and one painter per part
+
+D15 named the base slots, but the Heroes still diverged: `400d0fd28` made the frame's `header` optional so Podcasts, Audiobooks, and Feeds could skip it, and those Heroes looked nothing like Music and TV. Invariant 30 (`docs/invariants/30-shared-ui-is-never-bent-to-fit-a-consumer.md`) records the rule: a consumer maps its data onto the shared piece, the piece gets no escape hatch, and a look change is verified by looking. `hero-look-audit.md` holds the findings, the user's answers, and the step list.
+
+- **The header title is always the largest unit**: the artist, the series, the podcast, the feed. The block beside the art holds the selected smaller unit. A movie or a book is its own largest unit. Plain facts with no role sit on one line under the title; only duration and progress sit beside the art. `heroLayout` in `$lib/library/hero.ts` is the one mapping. The core carries the largest unit as `parent` on the Podcasts, Feeds, and Shows Hero frames.
+- **Feeds is a collection**: its Hero's list band holds the selected feed's entries, newest first, with the selected entry marked, and its list takes the shared header and the empty line.
+- **TV series get the action row**: Play, Play next, and Add to queue act on the selected season. A season is a folder item, so the existing folder play paths expand it; the Shows lookup now resolves season ids. No new command.
+- **One painter per part**: `LibraryHeroActions`, `LibraryWorkspaceTable` (Music's tracklist, Shows episodes, Audiobooks chapters, Feeds entries), `LibraryPillButton`, `LibraryItemRow`, `LibraryLetterHeading`, and `LibraryVirtualList` (Music's list too). Audiobooks chapters gain a number column, and a double-click on a track plays it, which replaces D8's "the hover play button is the only play gesture".
+- **Out of scope**: Home is redone after the GUI migration; Movies stay on `LibraryHeroSummary` until the user lifts the hold (they will take the frame, with the director, cast, and IMDb link, TUI parity); Home's list and the Music and Shows tree rows keep their own markup. Right-click on Feeds rows has no core row-menu path and stays a gap.
+- **Visual check**: vitest cannot see spacing, size, or band order. The user compares each destination next to Music in Wide and Narrow before this is called done.
+
 ## Risks / Trade-offs
 
 - [A window-content reload resets the Library's cursor, scroll, and open nodes] → The data selection survives in the core, so the destination, the pills, and the Hero's item stay.

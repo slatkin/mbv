@@ -88,3 +88,20 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 - [x] 13.1 Delete the saved-destination fallback and its test now that every destination is presented (design D9), and update the guide for the Phase 2 destinations and Search. Verify: the restore nextest for a location saved on Shows finds Shows active.
 - [x] 13.2 Run the gates from 5.2. Verify: all green.
+
+## 7B. One Hero frame and one painter per part (design D17, invariant 30)
+
+Plan, findings, and the user's answers: `hero-look-audit.md`. Each item is one commit on this branch.
+
+- [x] 7B.1 Music's Hero paints the shared `LibraryHeroActions`; one Hero attribute rule (`heroAttr`) replaces the empty-prefix bug. Verify: `LibraryHero.test.ts` passes unedited.
+- [x] 7B.2 The core carries `parent` (the largest unit) on the Podcasts, Feeds, and Shows Hero frames. Verify: `cargo nextest run -p mbv gui_library`.
+- [x] 7B.3 `heroLayout` maps a Hero's facts onto the frame's header and block; Podcasts, Audiobooks, Feeds, and Shows Latest use it. Verify: `hero.test.ts` and each consumer's header test.
+- [x] 7B.4 The Feeds Hero's list band holds the selected feed's entries, newest first. Verify: a vitest that the band paints the entries with the selected one marked.
+- [x] 7B.5 The Shows Hero paints Play, Play next, and Add to queue for the selected season or Latest episode. Verify: vitests that each press sends its command with the season or episode id.
+- [x] 7B.6 One `LibraryWorkspaceTable` for the Music tracklist, Shows episodes, Audiobooks chapters (number column), and Feeds entries; a double-click plays a track. Verify: the existing tracklist, Workspace, and chapter vitests pass with hook renames.
+- [x] 7B.7 One `LibraryPillButton` for the pill rows and the season pills. Verify: the pill-row vitests pass unedited.
+- [x] 7B.8 One `LibraryItemRow` and `LibraryLetterHeading` for the Emby, Audiobooks, Podcasts, Feeds, and Shows flat rows. Verify: the list vitests pass.
+- [x] 7B.9 The Feeds list paints `LibraryListHeader` and the empty line. Verify: a vitest for both.
+- [x] 7B.10 Music's list paints through `LibraryVirtualList`. Verify: `LibraryList.test.ts` passes.
+- [ ] 7B.11 Movies onto the frame, with the director, cast, and IMDb link. HELD until the user lifts the hold.
+- [ ] 7B.12 The user's visual pass: every destination in scope next to Music, Wide and Narrow, against the audit's Findings. Not done until this passes (invariant 30 rule 4).

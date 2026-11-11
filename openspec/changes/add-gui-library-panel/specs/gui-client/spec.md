@@ -460,7 +460,7 @@ A Library list sorted by name SHALL show a letter rail from A to Z. A letter wit
 
 ### Requirement: The Hero shows the picked item with its actions
 
-The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu. The tracklist row's hover play button SHALL be the tracklist's only play gesture: on hover it replaces the row's track number, and it plays the row's track as a double-clicked list track plays. A double-click on a tracklist row SHALL NOT play. The tracklist row of the track playing at the playhead SHALL show a play glyph beside its title. A highlight marks focus only, so the playing row SHALL NOT paint a green fill.
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu. The tracklist row's hover play button SHALL replace the row's track number on hover and play the row's track, and a double-click on a tracklist row SHALL play that track the same way, as it does in every Workspace list (Shows episodes, Audiobooks chapters, Feeds entries). The tracklist row of the track playing at the playhead SHALL show a play glyph beside its title. A highlight marks focus only, so the playing row SHALL NOT paint a green fill.
 
 #### Scenario: The Hero paints a picked album
 
@@ -479,12 +479,11 @@ The Hero SHALL show the picked album with its artist header, its square artwork,
 - **WHEN** the pointer is over a tracklist row and the user presses its Play next or Add to queue control
 - **THEN** that track is admitted after the active slot, or at the end of the queue
 
-#### Scenario: A tracklist play button is pressed
+#### Scenario: A tracklist row is played
 
 - **GIVEN** the pointer is over a tracklist row
-- **WHEN** the user presses the row's play button
+- **WHEN** the user presses the row's play button, or double-clicks the row
 - **THEN** the track plays: the queue is replaced, as a double-clicked list track is
-- **AND** a double-click on the tracklist row itself does not play
 
 #### Scenario: More actions opens the item menu
 
@@ -534,3 +533,33 @@ The Library panel SHALL paint artwork only from the mbv image cache through the 
 - **WHEN** the user picks an album whose artwork is not yet cached
 - **THEN** the Hero paints the artwork placeholder until a later frame carries the cached image
 - **AND** the window content makes no network request for the artwork
+
+### Requirement: Every Hero is one frame with the largest unit as its title
+
+The Hero of Music, Shows, Podcasts, Audiobooks, and Feeds SHALL paint one frame: a header band, a detail block beside or above the art, and a list band. The header band's title SHALL be the name of the largest unit: the artist, the series, the podcast, the feed, or, for a book, the book. The detail block SHALL show the selected smaller unit (the album, the season or episode, the episode, the entry) with its duration and progress, its Play, Play next, and Add to queue actions, and its overview. Plain facts with no role SHALL sit on one line under the header title. A destination SHALL map its facts onto this frame and SHALL NOT remove a band, add a layout, or paint its own copy of a part. Home and Movies are not yet on the frame.
+
+#### Scenario: A Podcasts episode's Hero
+
+- **WHEN** the Hero shows an episode of a podcast
+- **THEN** the header title is the podcast's name
+- **AND** the detail block shows the episode's name, its duration, and its actions
+
+#### Scenario: A Feeds entry's Hero
+
+- **WHEN** the Hero shows an entry of a feed
+- **THEN** the header title is the feed's name
+- **AND** the list band holds that feed's entries, newest first, with the selected entry marked
+
+#### Scenario: A TV series' actions act on the selected season
+
+- **WHEN** a series is selected and the user presses Play, Play next, or Add to queue
+- **THEN** the selected season is played, admitted after the active slot, or appended
+
+### Requirement: Library lists and Workspace tables paint through shared parts
+
+The Library's pills, flat list rows, letter headings, scrollers, Workspace tables, and Hero action buttons SHALL each have one painter that every destination in scope uses. A destination SHALL supply its data, its hook prefix, and its handlers, and SHALL NOT restate the part's look. A Workspace table SHALL paint a header row, a number or play-glyph cell, a title, a duration, and a progress run. An Audiobooks chapter row SHALL show its number.
+
+#### Scenario: A list row looks the same in every destination
+
+- **WHEN** an Emby, Audiobooks, Podcasts, Feeds, or Shows Latest row paints
+- **THEN** it paints through the shared item row with the same padding, title, subtitle, and trailing text
