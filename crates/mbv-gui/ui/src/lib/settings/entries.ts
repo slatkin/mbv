@@ -64,8 +64,8 @@ export type SettingsEntry =
 			/** One mark of a choice list: Space toggles it. */
 			kind: 'choice';
 			id: string;
-			/** The `applyChoices` kind the row resolves to. */
-			setting: GuiChoicesKind;
+			/** The row's own setting name, which keys the marks. */
+			rowKey: string;
 			choice: GuiSettingChoice;
 			/** The row's full choice list, which seeds the marks. */
 			choices: GuiSettingChoice[] | null;
@@ -207,22 +207,15 @@ function markedIds(
 	return Object.fromEntries(ids.map((id) => [id, true]));
 }
 
-/** The kind an `applyChoices` names for a choice-list row: the wire names
- * coincide (`hiddenLibraries`, `feedViewLibraries`, `myLanguages`). */
-function choicesKindOf(key: string): GuiChoicesKind | null {
-	return key === 'hiddenLibraries' || key === 'feedViewLibraries' || key === 'myLanguages'
-		? key
-		: null;
-}
-
 /** The entries one F2 row produces: a toggle, cycle, or action row is one
  * entry; a choice list is its marks plus its Apply control, painted under
- * the row's own header line. */
+ * the row's own header line. The apply kind is the one the frame carries
+ * (design D11 *Choice kind*), never a derivation from the row's name. */
 function rowEntries(row: GuiSettingRow, marks: Record<string, string[]>): SettingsEntry[] {
 	if (row.kind !== 'choiceList') {
 		return [{ kind: 'setting', id: entryId.setting(row.key), row }];
 	}
-	const kind = choicesKindOf(row.key);
+	const kind = row.choicesKind;
 	if (kind === null) {
 		return [];
 	}
@@ -230,7 +223,7 @@ function rowEntries(row: GuiSettingRow, marks: Record<string, string[]>): Settin
 	const entries: SettingsEntry[] = (row.choices ?? []).map((choice) => ({
 		kind: 'choice',
 		id: entryId.choice(row.key, choice.id),
-		setting: kind,
+		rowKey: row.key,
 		choice,
 		choices: row.choices,
 		marked: marked[choice.id] === true,

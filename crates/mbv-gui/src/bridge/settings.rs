@@ -7,7 +7,7 @@
 
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_msg::MusicTreeAction;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::bridge::frame::playback::{GuiTargetKey, chooser_target_key};
 use crate::bridge::frame::settings::GuiSettingsSection;
@@ -107,13 +107,24 @@ pub enum GuiSettingsCommand {
 }
 
 /// One choice-list kind the `applyChoices` command names (design D5): the
-/// three lists the Settings screen marks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+/// three lists the Settings screen marks. Each projected choice-list row
+/// carries its kind (design D11 *Choice kind*), and the command sends it back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GuiChoicesKind {
     HiddenLibraries,
     FeedViewLibraries,
     MyLanguages,
+}
+
+impl From<MultiSelectKind> for GuiChoicesKind {
+    fn from(kind: MultiSelectKind) -> Self {
+        match kind {
+            MultiSelectKind::HiddenLibraries => Self::HiddenLibraries,
+            MultiSelectKind::FeedViewLibraries => Self::FeedViewLibraries,
+            MultiSelectKind::MyLanguages => Self::MyLanguages,
+        }
+    }
 }
 
 impl From<GuiChoicesKind> for MultiSelectKind {

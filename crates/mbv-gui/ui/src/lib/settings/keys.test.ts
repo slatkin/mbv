@@ -30,6 +30,7 @@ function settings(): GuiSettingsFrame {
 					value: 'on',
 					flag: true,
 					choices: null,
+					choicesKind: null,
 				},
 				{
 					key: 'alwaysPlayNext',
@@ -38,6 +39,7 @@ function settings(): GuiSettingsFrame {
 					value: 'off',
 					flag: false,
 					choices: null,
+					choicesKind: null,
 				},
 			],
 		},

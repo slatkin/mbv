@@ -81,6 +81,10 @@ export interface GuiSettingRow {
 	flag: boolean | null;
 	/** A choice list's choices once its load lands (row 5.1). */
 	choices: GuiSettingChoice[] | null;
+	/** The kind this row's `applyChoices` names (design D11 *Choice kind*):
+	 * read here, never derived from `key`. `null` for a row that is no choice
+	 * list. */
+	choicesKind: GuiChoicesKind | null;
 }
 
 /** How an F2 row is edited (design D9). */

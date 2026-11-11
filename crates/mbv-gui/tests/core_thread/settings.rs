@@ -7,11 +7,15 @@
 
 use mbv::ClientTickHost;
 use mbv::{stub_app_with_playing_queue, stub_app_with_queue};
+use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 use rstest::rstest;
 
-use crate::{TEST_URL, TestCore, test_core_with};
+use crate::{
+    TEST_URL, TestCore, layout_report, measured_layout, press_at, region_at, test_core,
+    test_core_with,
+};
 
 /// A key press with no modifier held.
 fn press(key: Key, modifiers: KeyModifiers) -> CoreInput {
@@ -135,6 +139,56 @@ fn the_clear_queue_chord_opens_no_prompt_behind_the_screen() {
         test.core.gui_settings_section_for_test(),
         Some(mbv::GuiSettingsSection::Services),
         "the screen stays open"
+    );
+}
+
+/// A press at a former queue-row point runs no queue action while the screen
+/// is open (the spec's *A press does not act behind the screen*, design D11
+/// *Pointer contract*): the Queue panel reported its rows, then unmounted and
+/// retracted its regions, so the hit map holds nothing at that point and the
+/// press resolves to no core surface. The screen stays open and the queue
+/// cursor stays where it was.
+#[test]
+fn a_press_at_a_retracted_queue_row_runs_no_queue_action() {
+    let mut test = test_core(3);
+    // The mounted Queue panel reported its rows: the point is slot 2's row.
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::Queue(QueueTargetId::Slot(2)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx
+        .send(press(Key::Function(2), KeyModifiers::NONE))
+        .unwrap();
+    assert!(test.core.step());
+    assert!(test.next_frame().settings.is_some(), "the screen opened");
+
+    // The screen unmounted the panels, so the front end reported no regions.
+    test.tx.send(layout_report()).unwrap();
+    assert!(test.core.step());
+    let before = test.next_frame().queue.cursor;
+
+    test.tx.send(press_at(50.0, 10.0)).unwrap();
+    assert!(test.core.step());
+
+    let frame = test.next_frame();
+    assert_eq!(
+        frame.queue.cursor, before,
+        "the press at the former row point ran no queue action"
+    );
+    assert!(frame.settings.is_some(), "the screen stays open");
+    assert_eq!(
+        test.core.gui_settings_section_for_test(),
+        Some(mbv::GuiSettingsSection::Services),
+        "the Settings focus stays on the shown section"
     );
 }
 
@@ -690,7 +744,8 @@ fn a_route_devices_command_fills_the_library_device_candidates() {
 /// The Library section projects its choice rows and routes only: the
 /// `LibraryRoutes` F2 row is absent, because its TUI popup's work lives inline
 /// in this section and its activation would raise an overlay the GUI drops
-/// (design D9).
+/// (design D9). Each choice-list row carries its `applyChoices` kind, so the
+/// window never derives it from the row's name (design D11 *Choice kind*).
 #[test]
 fn the_library_section_projects_no_library_routes_row() {
     let _guard = mbv_config::TestStateDirGuard::new();
@@ -715,6 +770,16 @@ fn the_library_section_projects_no_library_routes_row() {
     };
     let keys: Vec<&str> = rows.iter().map(|row| row.key.as_str()).collect();
     assert_eq!(keys, ["hiddenLibraries", "feedViewLibraries"]);
+    assert_eq!(
+        rows[0].choices_kind,
+        Some(mbv_gui::bridge::settings::GuiChoicesKind::HiddenLibraries),
+        "the Hidden libraries row carries its apply kind"
+    );
+    assert_eq!(
+        rows[1].choices_kind,
+        Some(mbv_gui::bridge::settings::GuiChoicesKind::FeedViewLibraries),
+        "the Feed view libraries row carries its apply kind"
+    );
     assert!(
         routes
             .as_ref()

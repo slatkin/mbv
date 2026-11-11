@@ -20,7 +20,7 @@ binary, and the handshake refuses an Owner with a different build id.
 ## Process shape: one core thread
 
 Tauri owns the main thread and the window's event loop. `src/main.rs` builds
-the Tauri application, registers the four bridge commands, starts the core
+the Tauri application, registers the five bridge commands, starts the core
 thread in `setup`, turns the webview's context menu off, and joins the core
 thread after the event loop ends so a quit's exit teardown completes before
 the process exits.
@@ -1180,6 +1180,16 @@ the sidebar, one component per section kind, and the status line, and
 `App.svelte` mounts `SettingsScreen` in place of the two columns while
 `frame.settings` is present. Commands go through `sendSettingsCommand`
 (`ui/src/lib/bridge/settings.ts`) to the `settings` bridge command.
+
+The ACL grant rule (design D5). Tauri's ACL sits between `invoke` and the
+command: a command that `generate_handler!` registers but that
+`crates/mbv-gui/build.rs`'s app manifest does not declare, or that
+`capabilities/default.json` does not grant, is refused before the core sees it,
+and the front end's fire-and-forget invoke logs only to the webview console.
+Every command is therefore declared and granted once, and
+`crates/mbv-gui/tests/capabilities.rs` derives the command list from
+`generate_handler!` in `src/main.rs` and asserts both. No list in the test
+names a command, so a new one cannot ship without its grant.
 
 ## The attach states
 

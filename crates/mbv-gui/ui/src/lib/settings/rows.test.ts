@@ -59,6 +59,7 @@ test('Space on a toggle sends activate with the row key', () => {
 			value: 'on',
 			flag: true,
 			choices: null,
+			choicesKind: null,
 		},
 	]);
 	cursorAt(0);
@@ -71,8 +72,10 @@ test('Space on a toggle sends activate with the row key', () => {
 });
 
 // The choice list edits in place: Space marks a choice, and the Apply
-// entry's Enter commits the marked ids.
-test('applying a choice list sends applyChoices with the marked ids', () => {
+// entry's Enter commits the marked ids with the apply kind the row carries
+// (design D11 *Choice kind*). The row's key is a different choice list's name,
+// so a kind derived from the key would send `myLanguages` instead.
+test('applying a choice list sends applyChoices with the row-carried kind', () => {
 	const frame = rowsFrame([
 		{
 			key: 'myLanguages',
@@ -84,6 +87,7 @@ test('applying a choice list sends applyChoices with the marked ids', () => {
 				{ id: 'eng', label: 'English', selected: true },
 				{ id: 'deu', label: 'German', selected: false },
 			],
+			choicesKind: 'hiddenLibraries',
 		},
 	]);
 	cursorAt(1);
@@ -97,7 +101,7 @@ test('applying a choice list sends applyChoices with the marked ids', () => {
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: {
 			command: 'applyChoices',
-			kind: 'myLanguages',
+			kind: 'hiddenLibraries',
 			selected: ['eng', 'deu'],
 		},
 	});

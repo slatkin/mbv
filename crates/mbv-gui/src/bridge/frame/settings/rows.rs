@@ -6,6 +6,8 @@ use mbv::GuiSettingsRowProjection;
 use mbv_ui_model::settings::SettingKey;
 use serde::Serialize;
 
+use crate::bridge::settings::GuiChoicesKind;
+
 /// One F2 row (design D9).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +25,10 @@ pub struct GuiSettingRow {
     /// A choice list's choices once its load lands (row 5.1), and `None`
     /// otherwise.
     pub choices: Option<Vec<GuiSettingChoice>>,
+    /// The kind the row's `applyChoices` names (design D11 *Choice kind*), so
+    /// the window reads it here and never derives it from `key`. `None` for a
+    /// row that is no choice list.
+    pub choices_kind: Option<GuiChoicesKind>,
 }
 
 impl From<&GuiSettingsRowProjection> for GuiSettingRow {
@@ -37,6 +43,7 @@ impl From<&GuiSettingsRowProjection> for GuiSettingRow {
                 .choices
                 .as_ref()
                 .map(|choices| choices.iter().map(GuiSettingChoice::from).collect()),
+            choices_kind: row.choices_kind.map(GuiChoicesKind::from),
         }
     }
 }

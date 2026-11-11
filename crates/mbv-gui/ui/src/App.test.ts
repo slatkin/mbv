@@ -432,6 +432,7 @@ function settingsFrame(): GuiFrame['settings'] {
 					value: 'on',
 					flag: true,
 					choices: null,
+					choicesKind: null,
 				},
 			],
 		},

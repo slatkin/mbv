@@ -30,6 +30,10 @@ pub struct GuiSettingsRowProjection {
     /// The choice list's loaded choices (design D9). `None` until the
     /// section's load lands (row 5.1), and for a row that is no choice list.
     pub choices: Option<Vec<GuiSettingsChoiceProjection>>,
+    /// The kind an `applyChoices` names for this row's choice list (design D11
+    /// *Choice kind*): `None` for a row that is no choice list. Each client
+    /// reads this kind from the frame instead of deriving it from `key`.
+    pub choices_kind: Option<MultiSelectKind>,
 }
 
 /// The four ways an F2 row is edited (design D9): a toggle, a cycle, a choice
@@ -232,6 +236,7 @@ impl App {
                 value: setting_value(key, &cfg, &ui),
                 flag: setting_flag(key, &cfg),
                 choices: gui_settings_row_choices(&state, key),
+                choices_kind: gui_settings_choices_kind(key),
             })
             .collect()
     }
@@ -412,15 +417,22 @@ fn gui_settings_row_choices(
     state: &GuiSettingsState,
     key: SettingKey,
 ) -> Option<Vec<GuiSettingsChoiceProjection>> {
-    let kind = match key {
-        SettingKey::MyLanguages => MultiSelectKind::MyLanguages,
-        SettingKey::HiddenLibraries => MultiSelectKind::HiddenLibraries,
-        SettingKey::FeedViewLibraries => MultiSelectKind::FeedViewLibraries,
-        _ => return None,
-    };
+    let kind = gui_settings_choices_kind(key)?;
     state
         .choices(kind)
         .map(<[GuiSettingsChoiceProjection]>::to_vec)
+}
+
+/// The multiselect kind a choice-list row edits (design D9, D11): `None` for a
+/// row that is no choice list. The frame carries it, so neither client derives
+/// the kind from the row's name.
+fn gui_settings_choices_kind(key: SettingKey) -> Option<MultiSelectKind> {
+    match key {
+        SettingKey::MyLanguages => Some(MultiSelectKind::MyLanguages),
+        SettingKey::HiddenLibraries => Some(MultiSelectKind::HiddenLibraries),
+        SettingKey::FeedViewLibraries => Some(MultiSelectKind::FeedViewLibraries),
+        _ => None,
+    }
 }
 
 /// How an F2 row is edited (design D9). A boolean row is a toggle, a text or

@@ -303,22 +303,14 @@ export function toggleChoiceMark(setting: string, id: string, row: { choices: { 
 }
 
 /** Apply a choice list's marked ids (design D9): the `applyChoices` command
- * runs the TUI's multiselect commit. */
+ * runs the TUI's multiselect commit with the kind the frame carried on the row
+ * (design D11 *Choice kind*). */
 export function applyChoiceList(kind: GuiChoicesKind, row: { key: string; choices: { id: string; selected: boolean }[] | null }): void {
 	void sendSettingsCommand({
 		command: 'applyChoices',
 		kind,
 		selected: markedChoices(row),
 	});
-}
-
-/** The kind an `applyChoices` names for a row's setting: the wire names
- * coincide (`hiddenLibraries`, `feedViewLibraries`, `myLanguages`), so the
- * row's own key resolves it. `null` for any other row. */
-export function choicesKindOf(key: string): GuiChoicesKind | null {
-	return key === 'hiddenLibraries' || key === 'feedViewLibraries' || key === 'myLanguages'
-		? key
-		: null;
 }
 
 /** A form's text field holds the keyboard (the field's DOM `focus`): the key
@@ -515,7 +507,7 @@ export function activateSettingsEntry(entry: SettingsEntry): void {
 			return;
 		}
 		case 'choice':
-			toggleChoiceMark(entry.setting, entry.choice.id, { choices: entry.choices });
+			toggleChoiceMark(entry.rowKey, entry.choice.id, { choices: entry.choices });
 			return;
 		case 'choicesApply':
 			applyChoiceList(entry.setting, entry.row);
