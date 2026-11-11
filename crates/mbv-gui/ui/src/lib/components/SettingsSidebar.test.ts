@@ -1,12 +1,13 @@
-// add-gui-settings-screen rows 8.5 and 9.5: the sidebar's pointer path and
-// its canvas paint (the spec's *Every Settings control works by pointer* and
-// *A Back control in the sidebar closes the screen*, design D11, D13). A
-// press on a section entry sends `selectSection`, moves the sidebar cursor
-// onto the entry, and hands the keyboard to the content — the same effect
-// Enter on the cursor row has. Each entry paints its section's icon and name,
-// the open section's entry carries `aria-current="page"`, and a press on Back
-// closes the screen. The Tauri IPC is mocked; the asserted payload is the
-// serde wire shape of bridge/settings.rs.
+// add-gui-settings-screen rows 8.5, 9.5, and the design's *Sources label*:
+// the sidebar's pointer path and its canvas paint (the spec's *Every Settings
+// control works by pointer* and *A Back control in the sidebar closes the
+// screen*, design D11, D13). A press on a section entry sends `selectSection`,
+// moves the sidebar cursor onto the entry, and hands the keyboard to the
+// content — the same effect Enter on the cursor row has. Each entry paints its
+// section's icon and name, the open section's entry carries
+// `aria-current="page"`, and a press on Back closes the screen. The Services
+// section paints as Sources, a label only. The Tauri IPC is mocked; the
+// asserted payload is the serde wire shape of bridge/settings.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
@@ -58,7 +59,7 @@ test.each<[GuiSettingsSection, number]>([
 );
 
 test.each<[GuiSettingsSection, string]>([
-	['services', 'Services'],
+	['services', 'Sources'],
 	['feeds', 'Feeds'],
 	['keys', 'Keys'],
 ])('the %s entry paints its icon and its name', (section, name) => {

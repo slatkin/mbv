@@ -1,7 +1,9 @@
-// add-gui-settings-screen row 9.6: the content frame (design D11, D13). The
-// canvas `main` opens on the shown section's own name, so a user who arrives
-// by a sidebar press or by F2 reads which section they are on. The Tauri IPC
-// is mocked, and the frame is the window's own prop, so no command runs.
+// add-gui-settings-screen rows 9.6 and the design's *Sources label*: the
+// content frame (design D11, D13). The canvas `main` opens on the shown
+// section's own name, so a user who arrives by a sidebar press or by F2 reads
+// which section they are on. The Services section titles itself Sources, a
+// label only. The Tauri IPC is mocked, and the frame is the window's own prop,
+// so no command runs.
 
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test } from 'vitest';
@@ -23,7 +25,7 @@ beforeEach(() => {
 });
 
 test.each<[GuiSettingsSection, string]>([
-	['services', 'Services'],
+	['services', 'Sources'],
 	['playback', 'Playback'],
 	['mpv', 'mpv'],
 ])('the content frame titles the %s section with its name', (section, title) => {

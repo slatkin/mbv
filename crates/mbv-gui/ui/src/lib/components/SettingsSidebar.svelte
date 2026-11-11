@@ -35,9 +35,11 @@
 	}
 	const { settings }: Props = $props();
 
-	/** Each section's sidebar label. */
+	/** Each section's sidebar label. The Services section shows as Sources at
+	 * the user's choice (design D13, the *Sources label* bullet): only the label
+	 * changes, so the section id and every command keep their name. */
 	const LABELS: Record<GuiSettingsSection, string> = {
-		services: 'Services',
+		services: 'Sources',
 		playback: 'Playback',
 		display: 'Display',
 		session: 'Session',

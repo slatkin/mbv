@@ -37,9 +37,11 @@
 	}
 	const { settings, status, arrangement }: Props = $props();
 
-	/** The section's sidebar label, for the status line. */
+	/** The section's sidebar label, for the status line and the content's
+	 * title. The Services section shows as Sources at the user's choice (design
+	 * D13, the *Sources label* bullet): only the label changes. */
 	const LABELS: Record<GuiSettingsSection, string> = {
-		services: 'Services',
+		services: 'Sources',
 		playback: 'Playback',
 		display: 'Display',
 		session: 'Session',
