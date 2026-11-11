@@ -21,7 +21,10 @@ components (`docs/architecture/tui-frontend.md`).
 4. A look change is verified by looking: the screen next to its siblings.
    Passing type checks and unit tests prove attributes and commands, not
    appearance. Do not report a look-sharing change as done until someone has
-   seen it.
+. The Hero header's big title is always the largest unit's name: the podcast,
+   the feed, the series, the artist. The block beside the art holds the
+   selected smaller unit (episode, entry, season, album). A movie or a book is
+   its own largest unit.
 
 ## Why it matters
 

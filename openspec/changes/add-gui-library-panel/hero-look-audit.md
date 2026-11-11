@@ -225,7 +225,21 @@ the picked child in the block.
 | Audiobooks | `hero_content_abs_book` plus catalog rows (`src/app/gui_library/audiobooks_projection.rs:187-240`) | `audiobook` | Book | Author · `Read by …` · year (· `Finished`) | Duration, progress | None. Note: `Finished` has no role, so it lands in the header facts under this rule. |
 | Feeds | `hero_content_feed` (`hero.rs:631-655`) | `entry` | Entry | **Empty**: the producer has only the duration | Duration | **Flag (open question 4):** feed name and date are on the list row (`GuiFeedsRow`), not in the Hero. |
 
-## Open questions
+## Decisions
+
+The user answered the open questions below on 2026-11-11. These answers are final and replace the recommendations.
+
+- **Rule: the header's big title is always the largest unit's name.** It is the podcast, the feed, the series, or the artist. The block beside the art holds the selected smaller unit (episode, entry, season, album). A movie or a book is its own largest unit. This answers Q3 (yes) and Q4 (the feed's name is the title; the entry goes in the block).
+- **Q1: yes.** Plain facts sit on one line under the big title; only running time and progress sit beside the art.
+- **Q2: closed.** Home is out of scope. It is redone after the GUI migration and stays on `LibraryHeroSummary`. Drop Home from every step.
+- **Q5: yes, except Feeds.** Feeds is a collection like Music and TV. Its list band holds the selected feed's entries, newest first, with the selected entry marked. Movies, Podcasts, and Shows Latest have no list.
+- **Q6: yes.** A TV series shows Play, Play next, and Add to queue for the selected season (new core command).
+- **Q7: yes.** The window shows a movie's director, cast, and a real IMDb link. TUI parity is the floor and is never a question.
+- **Q8: yes.** Season buttons match the top pills (size, text, focus ring).
+- **Q9: yes.** Audiobook chapters get a number column.
+- **Q10: yes.** A double-click on a track plays it.
+
+## Open questions (answered; see Decisions)
 
 Each is about what you will see. Each blocks only the steps named.
 
