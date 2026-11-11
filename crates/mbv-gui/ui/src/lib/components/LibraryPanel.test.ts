@@ -618,6 +618,7 @@ function emby(feedGroup: boolean): GuiEmbyFrame {
 		],
 		selected: 'm1',
 		hero: {
+			kind: 'movie',
 			title: 'Alien',
 			metaRows: ['1979'],
 			durationRow: 0,
@@ -625,6 +626,8 @@ function emby(feedGroup: boolean): GuiEmbyFrame {
 			overview: null,
 			artShape: 'landscape',
 			art: null,
+			credits: [],
+			imdbUrl: null,
 		},
 	};
 }

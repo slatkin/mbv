@@ -1,9 +1,11 @@
-// add-gui-library-panel row 8.1: the plain Emby-library Hero (design D12) paints
-// the selected row's facts — the title, the meta rows with their duration and
-// progress roles, and the overview — and places the artwork box per the frame's
-// `artShape`. The actions send the Emby commands with the frame's selected row
-// and its library index, and no Workspace paints. The Tauri IPC is mocked; the
-// asserted payloads are the serde wire shapes of bridge/library.rs.
+// add-gui-library-panel row 8.1: the plain Emby-library Hero (design D12, D17)
+// paints the shared frame — the header's kind kicker, title, and plain facts,
+// the block's duration and progress rows beside the artwork the `artShape` arm
+// places, the action row, and the overview — and the movie's credits table with
+// the IMDb button under the block, as the TUI's hero does. The actions send the
+// Emby commands with the frame's selected row and its library index, and no
+// Workspace paints. The Tauri IPC is mocked; the asserted payloads are the serde
+// wire shapes of bridge/library.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
@@ -27,7 +29,10 @@ const LIB_IDX = 3;
 
 /** The selected row's Hero facts: two meta rows, with the runtime and the
  * resume roles marked, and the overview text (design D12, row 8.1). */
-function hero(artShape: GuiEmbyHero['artShape'] = 'landscape'): GuiEmbyHero {
+function hero(
+	artShape: GuiEmbyHero['artShape'] = 'landscape',
+	extra: Partial<GuiEmbyHero> = {},
+): GuiEmbyHero {
 	return {
 		kind: 'movie',
 		title: 'Heat',
@@ -39,6 +44,7 @@ function hero(artShape: GuiEmbyHero['artShape'] = 'landscape'): GuiEmbyHero {
 		art: null,
 		credits: [],
 		imdbUrl: null,
+		...extra,
 	};
 }
 
@@ -87,19 +93,36 @@ test('a landscape Hero fills the content width at 16:9 instead of the 300 px box
 	expect(box.style.height).toBe('auto');
 });
 
-test('the Hero paints its title, its meta rows with their roles, and its overview', () => {
+// Invariant 30: the header's big title is the movie itself (a movie is its own
+// largest unit), and the kicker is the item's kind word in upper case.
+test('the header paints the item kind\'s kicker and the movie\'s title', () => {
 	const container = mount();
 
+	expect(container.querySelector('[data-library-emby-hero-kicker]')?.textContent).toBe('MOVIE');
 	expect(container.querySelector('[data-library-emby-hero-title]')?.textContent).toBe('Heat');
-	const meta = [...container.querySelectorAll('[data-library-emby-hero-role]')];
-	expect(meta.map((row) => row.textContent)).toEqual(['2 h 50 m', '1995 · Crime']);
-	expect(meta.map((row) => row.getAttribute('data-library-emby-hero-role'))).toEqual([
-		'duration',
-		'progress',
-	]);
-	expect(container.querySelector('[data-library-emby-hero-overview]')?.textContent).toBe(
-		'A crew plans a bank job.',
+});
+
+// The movie's credits table and the IMDb link paint as the TUI's hero shows
+// them (design D17, Q7): the button carries the url in the attribute until the
+// core's open-URL command wires the click.
+test('the Hero paints its credits table and the IMDb button with the url', () => {
+	const container = mount(
+		hero('landscape', {
+			credits: [
+				{ name: 'Michael Mann', role: 'Director' },
+				{ name: 'Al Pacino', role: 'Lt. Vincent Hanna' },
+			],
+			imdbUrl: 'https://www.imdb.com/title/tt0113277/',
+		}),
 	);
+
+	const link = container.querySelector('[data-library-emby-imdb]') as HTMLElement;
+	expect(link.textContent).toBe('IMDb');
+	expect(link.getAttribute('data-library-emby-imdb')).toBe('https://www.imdb.com/title/tt0113277/');
+	const names = [...container.querySelectorAll('[data-library-emby-hero-credit-name]')];
+	const roles = [...container.querySelectorAll('[data-library-emby-hero-credit-role]')];
+	expect(names.map((row) => row.textContent)).toEqual(['Michael Mann', 'Al Pacino']);
+	expect(roles.map((row) => row.textContent)).toEqual(['Director', 'Lt. Vincent Hanna']);
 });
 
 test('a Hero that paints none paints nothing', () => {

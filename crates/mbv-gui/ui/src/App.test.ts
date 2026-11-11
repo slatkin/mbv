@@ -592,6 +592,7 @@ function embyContent(): GuiLibraryContent {
 			],
 			selected: 'm1',
 			hero: {
+				kind: 'movie',
 				title: 'Alien',
 				metaRows: ['1979'],
 				durationRow: 0,
@@ -599,6 +600,8 @@ function embyContent(): GuiLibraryContent {
 				overview: null,
 				artShape: 'landscape',
 				art: null,
+				credits: [],
+				imdbUrl: null,
 			},
 		},
 		audiobooks: null,

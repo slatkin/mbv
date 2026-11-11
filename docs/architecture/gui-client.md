@@ -1158,10 +1158,12 @@ environment that starts `mbv-gui`. The app does not set it by default
 
 Invariant 30 (`docs/invariants/30-shared-ui-is-never-bent-to-fit-a-consumer.md`)
 governs these. `LibraryHeroFrame` paints the Hero for Music, Shows, Podcasts,
-Audiobooks, and Feeds: a required header band (the largest unit's kicker, title,
-and plain facts), the detail block (art, selected unit, actions, overview), and
-the list band. `LibraryWorkspaceTable` paints the list band's rows,
+Audiobooks, Feeds, and Movies: a required header band (the largest unit's
+kicker, title, and plain facts — a movie is its own largest unit), the detail
+block (art, selected unit, actions, overview), and the list band (the movie's
+credits table and the IMDb button).
+`LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
 `LibraryPillButton` every pill, `LibraryItemRow` and `LibraryLetterHeading` the
-flat list rows, and `LibraryVirtualList` the scroller of every list. Movies and
-Home still paint `LibraryHeroSummary`.
+flat list rows, and `LibraryVirtualList` the scroller of every list. Home still
+paints `LibraryHeroSummary`.

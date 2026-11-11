@@ -43,8 +43,12 @@ a screen-specific copy.
 - `LibraryHeroFrame` takes a required `header`. `heroLayout` in
   `$lib/library/hero.ts` maps a Hero's facts onto the header (the largest unit
   as the title) and the block (the selected unit), and Podcasts, Audiobooks,
-  Feeds, and Shows Latest use it. The core carries the largest unit as
-  `parent` on the Podcasts, Feeds, and Shows Hero frames.
+  Feeds, Shows Latest, and Movies use it — a movie is its own largest unit, so
+  the item titles the header, its kind word is the kicker, its credits table
+  and IMDb button are the list band and the header action, and the `IMDb` meta
+  row is mapped out of the facts because the header's facts string cannot hold
+  a link. The core carries the largest unit as `parent` on the Podcasts,
+  Feeds, and Shows Hero frames.
 - `LibraryHeroActions`, `LibraryWorkspaceTable`, `LibraryPillButton`,
   `LibraryItemRow`, `LibraryLetterHeading`, and `LibraryVirtualList` are the
   one painter of their part: the Hero buttons, the Workspace list band (Music's
@@ -61,9 +65,8 @@ Nothing mechanical enforces rules 2 to 4.
   band, or swaps a layout, is the same escape hatch. Review these as findings.
 - **Looks that tests cannot see.** Spacing, size, and band order are not
   asserted. A consumer can match the attributes and still differ in look.
-- **Destinations not yet on the shared piece.** Movies (`LibraryEmbyHero`) and
-  Home still paint through `LibraryHeroSummary`, a second layout. Movies are
-  held until the user lifts the hold, and Home is redone after the GUI
+- **Destinations not yet on the shared piece.** Home still paints through
+  `LibraryHeroSummary`, a second layout; it is redone after the GUI
   migration. Home's list and its tree rows (Shows, Music) keep their own markup.
 - **Music has no loading line.** Its tracklist has no loading signal from the
   core, so the Workspace table paints none for it.
