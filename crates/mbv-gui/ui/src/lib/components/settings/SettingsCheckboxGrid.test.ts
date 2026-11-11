@@ -1,30 +1,34 @@
 // add-gui-settings-screen row 9.3: the shared Settings checkbox grid (design
 // D13, the canvas My languages card). Each box carries `role="checkbox"` and
-// `aria-checked`, a press flips the held mark, and Apply calls the apply
-// handler with the marked ids — the ids the `applyChoices` command carries.
+// `aria-checked` from the window's marks, and a press on a box or on Apply
+// reports the entry it names: the grid holds no marks of its own, so the
+// keyboard and the pointer share one store (the spec's *Choice-list settings
+// are edited in place*).
 
 import { fireEvent, render } from '@testing-library/svelte';
 import { expect, test, vi } from 'vitest';
 import SettingsCheckboxGrid from './SettingsCheckboxGrid.svelte';
 
-/** The boxes of one grid: two languages, one marked by the frame. */
+/** The boxes of one grid: two languages, one marked by the window. */
 const OPTIONS = [
 	{ id: 'english', label: 'English' },
 	{ id: 'french', label: 'French' },
 ];
 
-function grid(onapply: (ids: string[]) => void) {
+function grid(onpress: (id: string) => void) {
 	return render(SettingsCheckboxGrid, {
 		props: {
 			title: 'My languages',
+			rowKey: 'myLanguages',
 			options: OPTIONS,
 			selected: ['english'],
-			onapply,
+			cursorId: null,
+			onpress,
 		},
 	});
 }
 
-test('the boxes carry role="checkbox" and the frame’s aria-checked', () => {
+test('the boxes carry role="checkbox" and the window’s aria-checked', () => {
 	const { container } = grid(() => {});
 
 	const boxes = container.querySelectorAll('[role="checkbox"]');
@@ -32,18 +36,20 @@ test('the boxes carry role="checkbox" and the frame’s aria-checked', () => {
 	expect(boxes[1].getAttribute('aria-checked')).toBe('false');
 });
 
-test('a press flips one mark and Apply calls the apply handler with the marked ids', async () => {
-	const onapply = vi.fn();
-	const { container } = grid(onapply);
+test('a press on a box reports its choice entry', async () => {
+	const onpress = vi.fn();
+	const { container } = grid(onpress);
 
 	await fireEvent.click(container.querySelector('[data-settings-checkbox="french"]') as HTMLElement);
-	expect(
-		container
-			.querySelector('[data-settings-checkbox="french"]')
-			?.getAttribute('aria-checked'),
-	).toBe('true');
+
+	expect(onpress).toHaveBeenCalledWith('choice:myLanguages:french');
+});
+
+test('a press on Apply reports the apply entry', async () => {
+	const onpress = vi.fn();
+	const { container } = grid(onpress);
 
 	await fireEvent.click(container.querySelector('[data-settings-button="primary"]') as HTMLElement);
 
-	expect(onapply).toHaveBeenCalledWith(['english', 'french']);
+	expect(onpress).toHaveBeenCalledWith('apply:myLanguages');
 });

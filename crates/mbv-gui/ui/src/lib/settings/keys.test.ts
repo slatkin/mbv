@@ -10,6 +10,7 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiSettingsFrame } from '$lib/bridge/types';
 import { routeSettingsKey } from './keys';
+import { pickMenu } from './pick-menu';
 import { initialSettingsUi, settingsUi, startKeysCapture } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -55,6 +56,7 @@ function press(key: string, options: KeyboardEventInit = {}): string {
 beforeEach(() => {
 	invokeMock.mockClear();
 	settingsUi.set(initialSettingsUi());
+	pickMenu.set(null);
 });
 
 // A capture takes every key: F2 is its candidate, not the core's settings
@@ -112,4 +114,63 @@ test('Space on the sidebar goes to the core', () => {
 	expect(press(' ')).toBe('core');
 
 	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+/** A settings frame over the Playback section with one pick row. */
+function pickSettings(): GuiSettingsFrame {
+	return {
+		section: 'playback',
+		sections: ['playback'],
+		content: {
+			kind: 'rows',
+			rows: [
+				{
+					key: 'subtitleLanguage',
+					label: 'Subtitle language',
+					kind: 'pick',
+					value: 'English',
+					flag: null,
+					choices: null,
+					choicesKind: null,
+					values: ['', 'English', 'French'],
+				},
+			],
+		},
+	};
+}
+
+// Enter on a pick row opens its value list (the spec's *Value settings are
+// picked from their list*) and sends nothing; the menu's own choice sends
+// `setValue`.
+test('Enter on a pick row opens its menu and sends nothing', () => {
+	settingsUi.update((ui) => ({ ...ui, pane: 'content' }));
+
+	expect(routeSettingsKey(new KeyboardEvent('keydown', { key: 'Enter' }), pickSettings())).toBe(
+		'handled',
+	);
+
+	expect(get(pickMenu)?.setting).toBe('subtitleLanguage');
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Esc from the sidebar closes the screen even with a setup form open: the
+// form's cancel steps belong to the content pane (the spec's *Esc closes the
+// screen from the sidebar*).
+test('Esc from the sidebar with a setup form open sends close, not cancelSetup', () => {
+	const setupSettings: GuiSettingsFrame = {
+		section: 'services',
+		sections: ['services'],
+		content: {
+			kind: 'services',
+			services: [],
+			setup: { service: 'emby', serverUrl: '', busy: false, error: '' },
+		},
+	};
+
+	expect(routeSettingsKey(new KeyboardEvent('keydown', { key: 'Escape' }), setupSettings)).toBe(
+		'handled',
+	);
+
+	expect(invokeMock).toHaveBeenCalledTimes(1);
+	expect(invokeMock).toHaveBeenCalledWith('settings', { command: { command: 'close' } });
 });

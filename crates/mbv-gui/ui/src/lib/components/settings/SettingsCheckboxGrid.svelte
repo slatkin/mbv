@@ -2,60 +2,50 @@
 	// A Settings checkbox grid (add-gui-settings-screen design D13, the canvas
 	// My languages card): three columns of 36 px `role="checkbox"` buttons over
 	// a count header, closed by the Apply primary button. A checked box paints
-	// the success fill and border with an accent check box. The held marks seed
-	// from `selected` and follow the frame whenever its own selection changes,
-	// so a landed apply repaints and a frame that changes nothing keeps the
-	// user's marks in place.
+	// the success fill and border with an accent check box. The marks are the
+	// window's, not this card's: `selected` is the store's held marks (or the
+	// frame's selection), and a press on a box or on Apply runs its entry's
+	// activation through `onpress`, the same one the keyboard runs. The content
+	// cursor paints on the box or the Apply it rests on.
 	import { Check } from '@lucide/svelte';
+	import { entryId } from '$lib/settings/entries';
 	import SettingsButton from './SettingsButton.svelte';
 	import SettingsCard from './SettingsCard.svelte';
 
 	interface Props {
 		/** The card's heading: the section's name for the list. */
 		title: string;
+		/** The row's setting name, which names each box's and Apply's entry. */
+		rowKey: string;
 		/** The boxes, in paint order: `id` is the value the apply sends back. */
 		options: { id: string; label: string }[];
-		/** The ids the frame marks. */
+		/** The ids the window marks. */
 		selected: string[];
-		/** A press on Apply: the marked ids. */
-		onapply: (ids: string[]) => void;
+		/** The entry id the content cursor rests on, or `null` while the sidebar
+		 * holds the keyboard. */
+		cursorId: string | null;
+		/** A press on a box or on Apply: the entry's id. */
+		onpress: (id: string) => void;
 		/** The header's count text; the default names the count alone. */
 		countLabel?: (count: number) => string;
 	}
 	const {
 		title,
+		rowKey,
 		options,
 		selected,
-		onapply,
+		cursorId,
+		onpress,
 		countLabel = (count) => `${count} selected`,
 	}: Props = $props();
 
-	/** The user's held marks, seeded from the frame's selection. */
-	let marked = $state<string[]>([]);
-	/** The selection signature the marks were seeded from; a plain value, so
-	 * only the frame's own selection re-seeds them. */
-	let seeded: string | null = null;
-
-	$effect(() => {
-		const signature = selected.join('\u0000');
-		if (signature !== seeded) {
-			seeded = signature;
-			marked = [...selected];
-		}
-	});
-
-	/** Flip one box's mark. */
-	function toggle(id: string): void {
-		marked = marked.includes(id)
-			? marked.filter((candidate) => candidate !== id)
-			: [...marked, id];
-	}
+	const applyId = $derived(entryId.choicesApply(rowKey));
 </script>
 
 <SettingsCard {title}>
 	{#snippet header()}
 		<span style:font-size="12px" style:color="var(--canvas-type-count)">
-			{countLabel(marked.length)}
+			{countLabel(selected.length)}
 		</span>
 	{/snippet}
 	<div
@@ -65,7 +55,9 @@
 		data-settings-checkbox-grid=""
 	>
 		{#each options as option (option.id)}
-			{@const on = marked.includes(option.id)}
+			{@const id = entryId.choice(rowKey, option.id)}
+			{@const on = selected.includes(option.id)}
+			{@const cursor = id === cursorId}
 			<button
 				type="button"
 				role="checkbox"
@@ -79,8 +71,12 @@
 				style:background={on ? 'var(--canvas-success-fill)' : 'none'}
 				style:color={on ? 'var(--canvas-heading)' : 'var(--canvas-text)'}
 				style:font-size="13px"
+				style:outline={cursor ? '2px solid var(--canvas-accent)' : undefined}
+				style:outline-offset={cursor ? '-2px' : undefined}
 				data-settings-checkbox={option.id}
-				onclick={() => toggle(option.id)}
+				data-settings-entry={id}
+				data-settings-cursor={cursor ? '' : undefined}
+				onclick={() => onpress(id)}
 			>
 				<span
 					class="flex flex-none items-center justify-center"
@@ -99,6 +95,11 @@
 		{/each}
 	</div>
 	<div class="flex justify-end">
-		<SettingsButton variant="primary" onpress={() => onapply(marked)}>Apply</SettingsButton>
+		<SettingsButton
+			variant="primary"
+			entry={applyId}
+			cursor={applyId === cursorId}
+			onpress={() => onpress(applyId)}>Apply</SettingsButton
+		>
 	</div>
 </SettingsCard>

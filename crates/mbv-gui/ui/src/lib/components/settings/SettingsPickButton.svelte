@@ -2,7 +2,9 @@
 	// A Settings pick row's control (add-gui-settings-screen design D13, the
 	// canvas pick button): 34 px high, at least 140 px wide, the value and a
 	// `ChevronDown`, opening the row's values in the row menu's chrome. The
-	// menu is window content: the open state lives in the Settings pick store
+	// press runs the row's activation (`pressSettingsEntry`), the same one
+	// Enter runs, so the keyboard and the pointer open one menu. The menu is
+	// window content: the open state lives in the Settings pick store
 	// (`$lib/settings/pick-menu`), so the Settings key router takes its Up,
 	// Down, Enter, and Esc while it is open, and one press outside closes it
 	// with no send. A press on an entry sends `setValue` for the row's setting
@@ -11,7 +13,6 @@
 	import QueueRowMenu from '$lib/components/QueueRowMenu.svelte';
 	import {
 		closePickMenu,
-		openPickMenu,
 		pickMenu,
 		pickValueLabel,
 		selectPickValue,
@@ -24,28 +25,18 @@
 		label: string;
 		/** The value the row shows now; the empty value paints as Any. */
 		value: string;
-		/** The values the menu lists, in the frame's order. */
-		values: string[];
 		/** Whether the pick cannot be operated. */
 		disabled?: boolean;
+		/** A press on the button: the row's activation. */
+		onpress: () => void;
 	}
-	const { setting, label, value, values, disabled = false }: Props = $props();
+	const { setting, label, value, disabled = false, onpress }: Props = $props();
 
 	/** The open menu, while it is this row's. */
 	const menu = $derived($pickMenu?.setting === setting ? $pickMenu : null);
 
 	let buttonEl: HTMLButtonElement | undefined = $state();
 	let menuEl: HTMLElement | undefined = $state();
-
-	/** A press on the pick button opens the menu, and a second press closes
-	 * it. */
-	function press(): void {
-		if (menu !== null) {
-			closePickMenu();
-			return;
-		}
-		openPickMenu(setting, value, values);
-	}
 
 	// A press outside the menu and its button closes the menu with no send,
 	// as the queue's row menu closes on Esc (design D13).
@@ -86,7 +77,7 @@
 		aria-haspopup="menu"
 		aria-expanded={menu !== null}
 		{disabled}
-		onclick={press}
+		onclick={onpress}
 	>
 		<span class="min-w-0 truncate">{pickValueLabel(value)}</span>
 		<ChevronDown size={12} strokeWidth={2.2} aria-hidden="true" />

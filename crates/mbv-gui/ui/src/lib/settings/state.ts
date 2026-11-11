@@ -26,6 +26,7 @@ import type {
 import type { DomKey } from '$lib/bridge/types';
 import type { SettingsEntry } from './entries';
 import { settingsEntries } from './entries';
+import { togglePickMenu } from './pick-menu';
 
 /** The pane the keyboard is on — and the one Mini paints (design D11). */
 export type SettingsPane = 'sidebar' | 'content';
@@ -251,13 +252,18 @@ export function pointSettingsCursor(index: number): void {
 }
 
 /** Esc's ladder while the screen shows (design D11, the spec's *Esc closes
- * the screen from the sidebar*): a capture, a form, or a draft ends first,
- * the content hands the keyboard back to the sidebar, and the sidebar's Esc
- * closes the screen. The capture's and the text field's own steps run before
- * this in the router, so an Esc that reaches this point faces no capture and
- * no field hold. */
+ * the screen from the sidebar*): while the content holds the keyboard, a
+ * draft or a form ends first and the content then hands the keyboard back to
+ * the sidebar. The sidebar's Esc closes the screen whatever is open in the
+ * content. The capture's and the text field's own steps run before this in
+ * the router, so an Esc that reaches this point faces no capture and no field
+ * hold. */
 export function settingsEscape(settings: GuiSettingsFrame): void {
 	const ui = get(settingsUi);
+	if (ui.pane === 'sidebar') {
+		void sendSettingsCommand({ command: 'close' });
+		return;
+	}
 	if (ui.feedForm !== null || ui.rename !== null) {
 		settingsUi.update((state) => ({ ...state, feedForm: null, rename: null }));
 		return;
@@ -267,11 +273,7 @@ export function settingsEscape(settings: GuiSettingsFrame): void {
 		void sendSettingsCommand({ command: 'cancelSetup', service: setup.service });
 		return;
 	}
-	if (ui.pane === 'content') {
-		settingsUi.update((state) => ({ ...state, pane: 'sidebar' }));
-		return;
-	}
-	void sendSettingsCommand({ command: 'close' });
+	settingsUi.update((state) => ({ ...state, pane: 'sidebar' }));
 }
 
 /** Arm the capture for one binding target (design D6): the next key press is
@@ -514,6 +516,11 @@ export function activateSettingsEntry(entry: SettingsEntry): void {
 				// runs through the shell's own path), so the GUI's row sends the
 				// reset command (design D5).
 				void sendSettingsCommand({ command: 'resetUiState' });
+			} else if (row.kind === 'pick') {
+				// A value setting opens its list (the spec's *Value settings are
+				// picked from their list*): the same menu a press on its button
+				// opens. The menu's own choice sends `setValue`.
+				togglePickMenu(row.key, row.value, row.values ?? []);
 			} else if (row.kind !== 'choiceList') {
 				// A choice list's activate would raise the TUI's multiselect,
 				// which the overlay drain drops; its marks edit in place.

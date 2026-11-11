@@ -48,15 +48,6 @@
 	/** The choice-list rows, one checkbox-grid card each. */
 	const choiceRows = $derived(rows.filter((row) => row.kind === 'choiceList'));
 
-	/** Apply a grid card's marks: they become the row's held marks, and the
-	 * row's Apply entry runs, so the grid and the keyboard send one command. */
-	function apply(row: GuiSettingRow, ids: string[]): void {
-		settingsUi.update((ui) => ({
-			...ui,
-			choiceMarks: { ...ui.choiceMarks, [row.key]: ids },
-		}));
-		onpress(entryId.choicesApply(row.key));
-	}
 </script>
 
 <div
@@ -86,7 +77,7 @@
 							setting={row.key}
 							label={row.label}
 							value={row.value}
-							values={row.values ?? []}
+							onpress={() => onpress(id)}
 						/>
 					{:else}
 						<SettingsButton onpress={() => onpress(id)}>{row.value}</SettingsButton>
@@ -109,12 +100,14 @@
 	{#each choiceRows as row (row.key)}
 		<SettingsCheckboxGrid
 			title={row.label}
+			rowKey={row.key}
 			options={(row.choices ?? []).map((choice) => ({
 				id: choice.id,
 				label: choice.label,
 			}))}
 			selected={markedChoices(row, $settingsUi)}
-			onapply={(ids) => apply(row, ids)}
+			{cursorId}
+			{onpress}
 		/>
 	{/each}
 </div>

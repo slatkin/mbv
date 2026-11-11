@@ -103,6 +103,16 @@ The reference is design D14 and `canvas/colour-by-type.diff`. Paint goes through
 - [x] 10.5 Queue paint. In `QueuePlaybackPanel.svelte`, the episode badge is a count, the parent line is a secondary title, and the remaining time is a time at 0.75. In `QueueHeader.svelte`, the remaining count is a count and the finish clock is a time. In `QueueFooter.svelte`, the source line is a secondary title. In `QueuePanel.svelte`, the right column is repeated time, and the current row keeps its ink. Verify: `pnpm test`. Test contract: the right column of a non-current row carries the repeated-time token and the current row does not (extend `QueuePanel.test.ts`).
 - [x] 10.6 Add the D14 rule (the token table, typed segments, and the repeat opacity) to `docs/architecture/gui-client.md`'s *Theme mapping* section. Verify: the section names `--canvas-type-time` and `TypedText`.
 
+## 11. Review corrections (PR 998)
+
+The PR 998 review found three blocking or edge defects in the front end and one minor paint gap. The fixes stay in `crates/mbv-gui/ui`.
+
+- [x] 11.1 Value settings open their pick menu by key and by pointer (review finding 1). Enter on a pick row opens its value menu and sends nothing, a press on the pick button opens the same menu, and the press moves the content cursor onto the row. Verify: `pnpm test`. Test contract: the spec's *Value settings are picked from their list*.
+- [x] 11.2 Choice-list marks live in one store (review finding 2). The grid's boxes and Apply run their entries' activations, the grid holds no marks, and the cursor paints on choice and Apply entries. Verify: `pnpm test`. Test contract: the spec's *Choice-list settings are edited in place*, as a pointer mark saved by a keyboard Apply, and a Space mark saved by a pointer Apply.
+- [x] 11.3 Esc from the sidebar closes the screen while a setup form is open (review finding 3). The form's cancel steps run only while the content holds the keyboard. Verify: `pnpm test`. Test contract: the spec's *Esc closes the screen from the sidebar*.
+- [x] 11.4 The Settings status line shows the armed prefix and the live toast together (review, minor). Verify: `pnpm test`. Test contract: the spec's *The Settings screen shows the toasts*.
+- [ ] 11.5 Per-playlist loaded flag (design D9). Rust, separate worker: not part of this front-end pass.
+
 ## Workflow follow-up
 
 - Acceptance gate: the user's live run of the GUI against `canvas/Settings.dc.html`. Open Settings with F2 and by pointer, open each section, operate each control by pointer and by key, and check that the screen fills the window. No automated browser run stands in for it.

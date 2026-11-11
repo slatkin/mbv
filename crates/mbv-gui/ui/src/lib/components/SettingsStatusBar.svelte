@@ -38,16 +38,18 @@
 	style:background="var(--canvas-library-panel)"
 	data-settings-status=""
 >
-	<span class="overflow-hidden" data-settings-status-hints="">
+	<span class="flex items-center overflow-hidden" style:gap="12px" data-settings-status-hints="">
+		{#if status.prefixArmed}
+			<span class="font-bold" style:color="var(--mbv-accent)" data-settings-status-prefix=""
+				>PREFIX</span
+			>
+		{/if}
 		{#if status.toast}
 			<span style:color={toastColor(status.toast.severity)} data-settings-status-toast=""
 				>{status.toast.text}</span
 			>
-		{:else if status.prefixArmed}
-			<span class="font-bold" style:color="var(--mbv-accent)" data-settings-status-prefix=""
-				>PREFIX</span
-			>
-		{:else}
+		{/if}
+		{#if status.toast === null && !status.prefixArmed}
 			<span class="flex items-center" style:gap="12px" style:color="var(--canvas-muted)">
 				{#each HINTS as hint (hint.key)}
 					<span data-settings-hint=""

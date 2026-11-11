@@ -33,6 +33,16 @@ export function openPickMenu(setting: string, value: string, values: string[]): 
 	pickMenu.set({ setting, values, cursor: current === -1 ? 0 : current });
 }
 
+/** Open the row's menu, or close it when it is this row's already: the one
+ * activation a pick row runs, from Enter or from a press on its button. */
+export function togglePickMenu(setting: string, value: string, values: string[]): void {
+	if (get(pickMenu)?.setting === setting) {
+		closePickMenu();
+		return;
+	}
+	openPickMenu(setting, value, values);
+}
+
 /** Close the open menu with no change (Esc, a press outside, a second press on
  * the pick button). */
 export function closePickMenu(): void {
