@@ -17,15 +17,14 @@
 	// frame's selected book — the core owns the selection, so the actions name
 	// the book the frame painted and never a position.
 	
-	import { Play } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
 	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
-		hoverAbsChapter,
 		pressAbsChapter,
 		resolveAbsChapterCursor,
 	} from '$lib/library/audiobooks-workspace';
@@ -79,15 +78,28 @@
 		}
 	}
 
-	/** A row's painted fill: the cursor row's focus fill only. A highlight
-	 * marks focus, so the playing chapter keeps its own fill. */
-	function rowBackground(row: GuiAudiobooksChapterRow): string | undefined {
-		return row.chapter === cursorChapter ? 'var(--canvas-selected)' : undefined;
-	}
+	/** The Workspace table's rows: each chapter with its number, its title, its
+	 * duration, and the playing mark. */
+	const chapterRows = $derived(
+		(workspace?.rows ?? []).map((row) => ({
+			id: String(row.chapter),
+			number: String(row.chapter),
+			name: row.title,
+			duration: row.duration,
+			playing: row.current,
+		})),
+	);
 
-	/** A row's title colour: the playing chapter's heading tone. */
-	function nameColor(row: GuiAudiobooksChapterRow): string {
-		return row.current ? 'var(--canvas-heading)' : 'var(--canvas-text)';
+	/** A chapter has no row action beyond play: the table's play control and a
+	 * double-click send it. */
+	const rowActions: [] = [];
+
+	/** Run `act` for the chapter `id` names, when the Workspace still holds it. */
+	function withChapter(id: string, act: (chapter: GuiAudiobooksChapterRow) => void): void {
+		const chapter = workspace?.rows.find((known) => String(known.chapter) === id);
+		if (chapter !== undefined) {
+			act(chapter);
+		}
 	}
 </script>
 
@@ -112,114 +124,20 @@
 		{#if workspace !== null || audiobooks.workspaceLoading}
 			<!-- The book Hero's Workspace (design D12): the book's chapter rows, or
 			the loading line while the detail fetch has not landed. -->
-			<section
-				class="flex flex-col"
-				style:gap="10px"
-				data-library-abs-workspace=""
-				aria-label="Chapters"
-			>
-				{#if workspace === null}
-					<span
-						class="font-mono"
-						style:font-size="13px"
-						style:color="var(--canvas-muted)"
-						data-library-abs-chapters-loading="">Loading chapters…</span
-					>
-				{:else}
-					<div
-						class="grid items-center font-mono"
-						style:grid-template-columns="minmax(0, 1fr) 88px 64px"
-						style:height="32px"
-						style:padding="0 8px"
-						style:border-bottom="1px solid var(--canvas-border)"
-						style:font-size="12px"
-						style:letter-spacing="0.08em"
-						style:color="var(--canvas-muted)"
-					>
-						<span>TITLE</span>
-						<span></span>
-						<span style:text-align="right">TIME</span>
-					</div>
-					<ol class="flex flex-col" style:margin="4px 0 0" style:padding="0" style:list-style="none">
-						{#each workspace.rows as row (row.chapter)}
-							<li
-								class="group grid items-center"
-								style:grid-template-columns="minmax(0, 1fr) 88px 64px"
-								style:height="34px"
-								style:padding="0 8px"
-								style:border-radius="4px"
-								style:background={rowBackground(row)}
-								data-library-abs-chapter={row.chapter}
-								data-library-abs-chapter-cursor={row.chapter === cursorChapter ? '' : undefined}
-								data-library-abs-chapter-playing={row.current ? '' : undefined}
-								onpointerenter={() => hoverAbsChapter(row.chapter)}
-								onpointerleave={() => hoverAbsChapter(null)}
-							>
-								<button
-									type="button"
-									class="flex min-w-0 items-center"
-									style:background="none"
-									style:border="0"
-									style:padding="0"
-									style:text-align="left"
-									style:cursor="pointer"
-									aria-label="Chapter {row.title}"
-									data-library-abs-chapter-name=""
-									onclick={() => pressAbsChapter(row.chapter)}
-									ondblclick={() => play(row)}
-								>
-									<span class="flex min-w-0 items-center" style:gap="6px">
-										{#if row.current}
-											<!-- The playing chapter's play glyph sits beside its title: a
-											highlight marks focus only. -->
-											<span data-library-abs-chapter-glyph="">
-												<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
-											</span>
-										{/if}
-										<span
-											class="min-w-0 truncate"
-											style:font-size="13.5px"
-											style:color={nameColor(row)}>{row.title}</span
-										>
-									</span>
-								</button>
-								<span class="flex justify-end" style:gap="2px">
-									<span
-										class="justify-end"
-										style:gap="2px"
-										style:display={$audiobooksWorkspace.hover === row.chapter ? 'flex' : 'none'}
-										data-library-abs-chapter-actions=""
-									>
-										<button
-											type="button"
-											class="flex items-center justify-center"
-											style:width="28px"
-											style:height="28px"
-											style:background="none"
-											style:border="0"
-											style:border-radius="4px"
-											style:color="var(--canvas-text)"
-											style:cursor="pointer"
-											aria-label="Play {row.title}"
-											data-library-abs-chapter-action="play"
-											onclick={() => play(row)}
-										>
-											<Play size={14} />
-										</button>
-									</span>
-								</span>
-								<span
-									class="font-mono tabular-nums"
-									style:font-size="12px"
-									style:color="var(--canvas-muted)"
-									style:text-align="right"
-									data-library-abs-chapter-duration="">{row.duration}</span
-								>
-							</li>
-						{/each}
-					</ol>
-				{/if}
-			</section>
+			<LibraryWorkspaceTable
+				root="data-library-abs-workspace"
+				label="Chapters"
+				hook="abs-chapter"
+				noun="Chapter"
+				rows={chapterRows}
+				cursor={cursorChapter === null ? null : String(cursorChapter)}
+				actions={rowActions}
+				onpress={(id) => pressAbsChapter(Number(id))}
+				onplay={(id) => withChapter(id, play)}
+				loading={workspace === null
+					? { text: 'Loading chapters…', attr: 'data-library-abs-chapters-loading' }
+					: null}
+			/>
 		{/if}
 	</LibraryHeroFrame>
 {/if}

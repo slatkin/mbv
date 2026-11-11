@@ -1,7 +1,7 @@
 // The Audiobooks Hero's Workspace interaction state (add-gui-library-panel
-// design D1, D12, row 9.1): the cursor over the selected book's chapters and
-// the row the pointer hovers. Both are the window content's own — the core
-// never reads them — and the chapters themselves and the current-chapter mark
+// design D1, D12, row 9.1): the cursor over the selected book's chapters. It
+// is the window content's own — the core never reads it, and the hover is the
+// Workspace table's own paint — and the chapters themselves and the current-chapter mark
 // are the core's, carried by the frame.
 //
 // The cursor is a chapter number, never a row position: the frame carries the
@@ -26,14 +26,11 @@ export interface AudiobooksWorkspaceState {
 	/** The cursor's chapter number, or `null` while no chapter carries the
 	 * cursor (a fresh book, and a book whose chapters have not landed). */
 	cursor: number | null;
-	/** The chapter row the pointer hovers, or `null`: the row paints its play
-	 * control only while hovered. */
-	hover: number | null;
 }
 
 /** The state a freshly mounted Workspace starts with. */
 export function initialAudiobooksWorkspace(): AudiobooksWorkspaceState {
-	return { cursor: null, hover: null };
+	return { cursor: null };
 }
 
 /** The Workspace's interaction state. */
@@ -171,9 +168,3 @@ export function pressAbsChapter(chapter: number): void {
 	);
 }
 
-/** Report the row the pointer hovers, so it paints its play control. */
-export function hoverAbsChapter(chapter: number | null): void {
-	audiobooksWorkspace.update((state) =>
-		state.hover === chapter ? state : { ...state, hover: chapter },
-	);
-}

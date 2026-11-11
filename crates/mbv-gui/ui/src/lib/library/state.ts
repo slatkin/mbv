@@ -523,6 +523,12 @@ export function playLibraryTrack(trackId: string): void {
 	void sendLibraryCommand({ command: 'play', itemId: trackId });
 }
 
+/** Press a track row in the Hero's tracklist: the cursor moves onto it, as the
+ * list's track press does. */
+export function pressLibraryTrack(trackId: string): void {
+	libraryUi.update((ui) => (ui.trackCursor === trackId ? ui : { ...ui, trackCursor: trackId }));
+}
+
 /** Press a row (design D7): an artist or album row opens or closes and is
  * picked; a track row moves the cursor onto itself and is picked — the pick's
  * album shows in the Hero, and the cursor is the press's visible half, as the

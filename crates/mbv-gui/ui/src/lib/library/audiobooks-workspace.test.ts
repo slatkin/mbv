@@ -149,7 +149,7 @@ test('the chapter command names the cursor chapter and the selected book', () =>
 });
 
 test('the chapter command sends nothing while no chapter carries the cursor', () => {
-	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), hover: 1 });
+	audiobooksWorkspace.set(initialAudiobooksWorkspace());
 
 	playAbsChapter(audiobooks([]));
 

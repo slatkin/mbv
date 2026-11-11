@@ -19,11 +19,11 @@
 	import { ListEnd, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
 	import type { GuiShowsEpisodeRow, GuiShowsFrame } from '$lib/bridge/types';
 	import {
 		episodeProgress,
-		hoverShowsEpisode,
 		isPlayedEpisode,
 		pressShowsEpisode,
 		resolveShowsEpisodeCursor,
@@ -103,16 +103,45 @@
 		});
 	}
 
-	/** A row's painted fill: the cursor row's focus fill only. A highlight
-	 * marks focus, so an active row keeps its own paint. */
-	function rowBackground(episode: GuiShowsEpisodeRow): string | undefined {
-		return episode.episodeId === cursorEpisode ? 'var(--canvas-selected)' : undefined;
+	/** The Workspace table's rows: each episode with its played state and its
+	 * resume percent. */
+	const episodeRows = $derived(
+		(workspace?.episodes ?? []).map((episode) => ({
+			id: episode.episodeId,
+			number: String(episode.number),
+			name: episode.name,
+			duration: episode.duration,
+			state: isPlayedEpisode(episode.state)
+				? ('played' as const)
+				: episodeProgress(episode.state) === null
+					? ('ordinary' as const)
+					: ('active' as const),
+			progress: episodeProgress(episode.state),
+		})),
+	);
+
+	/** The row's hover actions (design D12). */
+	const rowActions = [
+		{
+			key: 'playNext',
+			label: 'Play next',
+			icon: ListEnd,
+			run: (id: string) => withEpisode(id, playNext),
+		},
+		{ key: 'queue', label: 'Add to queue', icon: Plus, run: (id: string) => withEpisode(id, queue) },
+	];
+
+	/** Run `act` for the episode `id` names, when the Workspace still holds it. */
+	function withEpisode(id: string, act: (episode: GuiShowsEpisodeRow) => void): void {
+		const episode = workspace?.episodes.find((known) => known.episodeId === id);
+		if (episode !== undefined) {
+			act(episode);
+		}
 	}
 
-	/** A row's name colour: the canvas's text tone, dimmed once the episode is
-	 * played. */
-	function nameColor(episode: GuiShowsEpisodeRow): string {
-		return isPlayedEpisode(episode.state) ? 'var(--canvas-muted)' : 'var(--canvas-text)';
+	/** Play the episode a row or its play control names. */
+	function playById(id: string): void {
+		withEpisode(id, play);
 	}
 </script>
 
@@ -168,142 +197,20 @@
 					</button>
 				{/each}
 			</div>
-			{#if shows.workspaceLoading}
-				<span
-					class="font-mono"
-					style:font-size="13px"
-					style:color="var(--canvas-muted)"
-					data-library-shows-episodes-loading="">Loading episodes…</span
-				>
-			{:else}
-				<section class="flex flex-col" aria-label="Episodes" data-library-shows-episodes="">
-					<div
-						class="grid items-center font-mono"
-						style:grid-template-columns="40px minmax(0, 1fr) 88px 64px"
-						style:height="32px"
-						style:padding="0 8px"
-						style:border-bottom="1px solid var(--canvas-border)"
-						style:font-size="12px"
-						style:letter-spacing="0.08em"
-						style:color="var(--canvas-muted)"
-					>
-						<span>#</span>
-						<span>TITLE</span>
-						<span></span>
-						<span style:text-align="right">TIME</span>
-					</div>
-					<ol class="flex flex-col" style:margin="4px 0 0" style:padding="0" style:list-style="none">
-						{#each workspace.episodes as episode (episode.episodeId)}
-							<li
-								class="group relative grid items-center"
-								style:grid-template-columns="40px minmax(0, 1fr) 88px 64px"
-								style:height="34px"
-								style:padding="0 8px"
-								style:border-radius="4px"
-								style:background={rowBackground(episode)}
-								data-library-shows-episode={episode.episodeId}
-								data-library-shows-episode-cursor={episode.episodeId === cursorEpisode
-									? ''
-									: undefined}
-								data-library-shows-episode-state={isPlayedEpisode(episode.state)
-									? 'played'
-									: episodeProgress(episode.state) === null
-										? 'ordinary'
-										: 'active'}
-								onpointerenter={() => hoverShowsEpisode(episode.episodeId)}
-								onpointerleave={() => hoverShowsEpisode(null)}
-							>
-								<span
-									class="flex-none font-mono tabular-nums"
-									style:font-size="11px"
-									style:color="var(--canvas-ordinal)"
-									data-library-shows-episode-number="">{episode.number}</span
-								>
-								<button
-									type="button"
-									class="flex min-w-0 items-center"
-									style:background="none"
-									style:border="0"
-									style:padding="0"
-									style:text-align="left"
-									style:cursor="pointer"
-									aria-label="Episode {episode.name}"
-									data-library-shows-episode-name=""
-									onclick={() => pressShowsEpisode(episode.episodeId)}
-									ondblclick={() => play(episode)}
-								>
-									<span
-										class="min-w-0 truncate"
-										style:font-size="13.5px"
-										style:color={nameColor(episode)}>{episode.name}</span
-									>
-								</button>
-								<span class="flex justify-end" style:gap="2px">
-									<span
-										class="justify-end"
-										style:gap="2px"
-										style:display={$showsWorkspace.hover === episode.episodeId ? 'flex' : 'none'}
-										data-library-shows-episode-actions=""
-									>
-										<button
-											type="button"
-											class="flex items-center justify-center"
-											style:width="28px"
-											style:height="28px"
-											style:background="none"
-											style:border="0"
-											style:border-radius="4px"
-											style:color="var(--canvas-text)"
-											style:cursor="pointer"
-											aria-label="Play next"
-											data-library-shows-episode-action="playNext"
-											onclick={() => playNext(episode)}
-										>
-											<ListEnd size={14} />
-										</button>
-										<button
-											type="button"
-											class="flex items-center justify-center"
-											style:width="28px"
-											style:height="28px"
-											style:background="none"
-											style:border="0"
-											style:border-radius="4px"
-											style:color="var(--canvas-text)"
-											style:cursor="pointer"
-											aria-label="Add to queue"
-											data-library-shows-episode-action="queue"
-											onclick={() => queue(episode)}
-										>
-											<Plus size={14} />
-										</button>
-									</span>
-								</span>
-								<span
-									class="font-mono tabular-nums"
-									style:font-size="12px"
-									style:color="var(--canvas-muted)"
-									style:text-align="right"
-									data-library-shows-episode-duration="">{episode.duration}</span
-								>
-								{#if episodeProgress(episode.state) !== null}
-									<!-- The resume position: a thin accent run under the row's
-									bottom edge, at the frame's bounded percent. -->
-									<span
-										class="absolute"
-										style:left="0"
-										style:bottom="0"
-										style:height="2px"
-										style:width="{episodeProgress(episode.state)}%"
-										style:background="var(--canvas-accent)"
-										data-library-shows-episode-progress=""
-									></span>
-								{/if}
-							</li>
-						{/each}
-					</ol>
-				</section>
-			{/if}
+			<LibraryWorkspaceTable
+				root="data-library-shows-episodes"
+				label="Episodes"
+				hook="shows-episode"
+				noun="Episode"
+				rows={episodeRows}
+				cursor={cursorEpisode}
+				actions={rowActions}
+				onpress={pressShowsEpisode}
+				onplay={playById}
+				loading={shows.workspaceLoading
+					? { text: 'Loading episodes…', attr: 'data-library-shows-episodes-loading' }
+					: null}
+			/>
 		</section>
 	{/if}
 	</LibraryHeroFrame>

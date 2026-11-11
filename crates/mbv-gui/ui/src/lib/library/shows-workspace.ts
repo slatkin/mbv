@@ -1,7 +1,7 @@
 // The Shows Hero's Workspace interaction state (add-gui-library-panel design
-// D1, D12, row 7.1): the cursor over the selected season's episodes and the
-// row the pointer hovers. Both are the window content's own — the core never
-// reads them — and the season pills, the selected season, and the episodes
+// D1, D12, row 7.1): the cursor over the selected season's episodes. It is
+// the window content's own — the core never reads it, and the hover is the
+// Workspace table's own paint — and the season pills, the selected season, and the episodes
 // themselves are the core's, carried by the frame.
 //
 // The cursor is an episode id, never a row position: the frame carries stable
@@ -25,14 +25,11 @@ export interface ShowsWorkspaceState {
 	/** The cursor's episode id, or `null` while no episode carries the cursor
 	 * (a fresh series, and a season whose episodes have not landed). */
 	cursor: string | null;
-	/** The episode row the pointer hovers, or `null`: the row paints its
-	 * play-next and add-to-queue controls only while hovered. */
-	hover: string | null;
 }
 
 /** The state a freshly mounted Workspace starts with. */
 export function initialShowsWorkspace(): ShowsWorkspaceState {
-	return { cursor: null, hover: null };
+	return { cursor: null };
 }
 
 /** The Workspace's interaction state. */
@@ -169,13 +166,6 @@ export function resetShowsEpisodeCursor(): void {
 export function pressShowsEpisode(episodeId: string): void {
 	showsWorkspace.update((state) =>
 		state.cursor === episodeId ? state : { ...state, cursor: episodeId },
-	);
-}
-
-/** Report the row the pointer hovers, so it paints its controls. */
-export function hoverShowsEpisode(episodeId: string | null): void {
-	showsWorkspace.update((state) =>
-		state.hover === episodeId ? state : { ...state, hover: episodeId },
 	);
 }
 
