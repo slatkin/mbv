@@ -19,6 +19,15 @@ mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal prog
 - **WHEN** the user starts the GUI Client program
 - **THEN** it opens one native window and presents mbv in it without a terminal
 
+### Requirement: The GUI program ships beside the terminal program
+
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the WebKitGTK 4.1 runtime dependency. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
+
+#### Scenario: A package installs both programs
+
+- **WHEN** the tarball, the `.deb`, or an Arch package is installed
+- **THEN** `mbv` and `mbv-gui` are installed in the same directory
+
 ### Requirement: The GUI Client attaches to the Owner process as a Client
 
 The GUI Client SHALL be a Client of the Owner process under the same rules as a TUI Client. It SHALL find, start, and attach to the Owner process as a TUI Client does. It SHALL NOT hold the owner lock. It SHALL NOT become a Player owner.

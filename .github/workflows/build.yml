@@ -161,6 +161,14 @@ jobs:
         # just runs.
         run: cargo build --release --all-targets
 
+      - name: Build GUI Client
+        # `mbv-gui` sits outside `default-members`, so the step above never
+        # builds it. The front end (ui/dist) was built before clippy and is
+        # embedded into the binary by `tauri::generate_context!`. The GUI
+        # starts its Owner from the sibling `mbv` binary and the handshake
+        # refuses a different build id, so both ship from this one commit.
+        run: cargo build --release -p mbv-gui
+
       - name: Test release
         # Bounded test concurrency: nextest runs each test in its own process,
         # and a third of this suite stand up a real libmpv handle or a loopback
@@ -180,6 +188,7 @@ jobs:
           mkdir -p "${DIST}"
           cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
+          cp target/release/mbv-gui "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
@@ -203,6 +212,8 @@ jobs:
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libwayland-client0(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libxkbcommon0(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libfontconfig1(,|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libwebkit2gtk-4\.1-0(,|$)'
+          dpkg-deb --contents "${MBV_DEB}" | grep -Eq ' \./usr/bin/mbv-gui$'
           if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"
             exit 1

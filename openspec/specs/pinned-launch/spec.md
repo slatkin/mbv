@@ -3,7 +3,7 @@
 ## Purpose
 
 Defines mbv's pinned panel: `mbv --pin` runs mbv's TUI docked in a Wayland layer-shell panel, the
-desktop entry launches it that way, and the panel layout is editable in the settings screen. The
+panel layout is editable in the settings screen. The
 panel is part of mbv, not a separate program.
 
 ## Requirements
@@ -17,10 +17,6 @@ in the panel SHALL run with that log level. `-h`, `-V`, `-q`, `--toggle` and `--
 SHALL never start a panel. The panel SHALL close when mbv in it exits. At most one panel named
 `mbv` SHALL run per Wayland display. When it already runs, `--pin` SHALL show it, leave a shown
 panel unchanged, open no second panel, start no TUI, and exit with status 0.
-
-#### Scenario: Pinned launch from the desktop
-- **WHEN** the user starts mbv from its desktop entry on a Wayland session with layer-shell
-- **THEN** mbv's TUI appears docked in the panel, and quitting mbv removes the panel
 
 #### Scenario: Pinned launch from a terminal
 - **WHEN** the user types `mbv --pin` in a terminal on a Wayland session with layer-shell
@@ -58,8 +54,8 @@ error.
 - **WHEN** `mbv --pin` starts with a `[panel] width` that leaves the output no width
 - **THEN** the panel does not open, and mbv exits with pinwin's failure status
 
-#### Scenario: Desktop launch without layer-shell
-- **WHEN** the desktop entry is launched on GNOME or X11
+#### Scenario: Pinned launch without layer-shell
+- **WHEN** `mbv --pin` is launched from a compositor key or launcher on GNOME or X11
 - **THEN** a notification says the panel could not open, the status stays in the log, and mbv exits with a non-zero status
 
 #### Scenario: Fatal start-up error in the panel
@@ -67,11 +63,11 @@ error.
 - **THEN** the error is logged and a desktop notification names it
 
 ### Requirement: Desktop entry
-`contrib/mbv.desktop` SHALL launch `mbv --pin` with `Terminal=false`.
+`contrib/mbv.desktop` SHALL launch `mbv-gui` with `Terminal=false`, SHALL NOT carry the `ConsoleOnly` category, and SHALL set `StartupWMClass` to the GUI app id `io.github.slatkin.mbv-gui`. The pinned panel is started by `mbv --pin`, not by the desktop entry.
 
 #### Scenario: Launcher entry
 - **WHEN** the tarball, the `.deb` or an Arch package is installed
-- **THEN** the mbv desktop entry runs `mbv --pin` without opening a terminal window
+- **THEN** the mbv desktop entry opens the GUI Client without opening a terminal window
 
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),

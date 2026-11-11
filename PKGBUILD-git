@@ -6,9 +6,9 @@ pkgdesc="mpv/Emby and Audiobookshelf front-end (git)"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-depends=('mpv' 'openssl' 'wayland' 'libxkbcommon' 'fontconfig')
+depends=('mpv' 'openssl' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
 optdepends=('pinwin>=0.4.1: pinned panel support')
-makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'wayland' 'libxkbcommon' 'fontconfig')
+makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1' 'nodejs' 'pnpm')
 provides=('mbv')
 conflicts=('mbv')
 source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
@@ -26,13 +26,18 @@ prepare() {
 
 build() {
     cd "${pkgname}"
+    # The GUI front end is embedded into `mbv-gui` at compile time, so build
+    # it first. `mbv-gui` is outside default-members and needs its own build.
+    make ui-build
     cargo build --frozen --release
+    cargo build --frozen --release -p mbv-gui
 }
 
 package() {
     cd "${pkgname}"
     install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
     install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
+    install -Dm755 "target/release/mbv-gui" "${pkgdir}/usr/bin/mbv-gui"
     install -Dm644 "contrib/mbv.desktop" "${pkgdir}/usr/share/applications/mbv.desktop"
     install -Dm644 "assets/icon.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/mbv.svg"
     install -Dm644 "scripts/mbv.lua" "${pkgdir}/usr/share/mbv/scripts/mbv.lua"
