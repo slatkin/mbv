@@ -4,11 +4,12 @@
 // components press through the store's functions, never a second router.
 // The order is the design's: an active capture takes every key (Esc cancels,
 // any other key is the candidate), a focused text field takes the key (Esc
-// cancels, Enter submits, the rest types), then the screen keys run — the
-// movements in the focused pane, Tab and Shift+Tab between the panes, Enter
-// opens or activates, Space activates a toggle or a choice mark, and Esc
-// walks the ladder — and every other key goes to the core, so the playback
-// chords keep working behind the screen.
+// cancels, Enter submits, the rest types), an open pick menu takes its own
+// keys (Up and Down walk it, Enter sets the value, Esc closes it), then the
+// screen keys run — the movements in the focused pane, Tab and Shift+Tab
+// between the panes, Enter opens or activates, Space activates a toggle or a
+// choice mark, and Esc walks the ladder — and every other key goes to the
+// core, so the playback chords keep working behind the screen.
 
 import { domKey } from '$lib/bridge/input';
 import type { KeyOutcome } from '$lib/bridge/input';
@@ -29,6 +30,12 @@ import {
 	submitSettingsForm,
 	switchSettingsPane,
 } from './state';
+import {
+	closePickMenu,
+	movePickMenuCursor,
+	pickMenu,
+	selectPickValue,
+} from './pick-menu';
 import { get } from 'svelte/store';
 
 /** Whether no modifier is held. */
@@ -71,7 +78,28 @@ export function routeSettingsKey(event: KeyboardEvent, settings: GuiSettingsFram
 		}
 		return 'text';
 	}
-	// (4) The screen keys run.
+	// (4) An open pick menu takes its own keys (design D13): Up and Down walk
+	// its values, Enter sends `setValue` for the cursor value, and Esc closes
+	// it with no change. Any other key closes it and falls through, so the
+	// screen's own keys keep acting and the menu never outlives them.
+	const menu = get(pickMenu);
+	if (menu !== null) {
+		if (event.key === 'Escape' && bare(event)) {
+			closePickMenu();
+			return 'handled';
+		}
+		if (event.key === 'Enter' && bare(event)) {
+			selectPickValue(menu.cursor);
+			return 'handled';
+		}
+		const pickMove = CURSOR_MOVES[event.key];
+		if ((pickMove === 'up' || pickMove === 'down') && bare(event)) {
+			movePickMenuCursor(pickMove === 'up' ? -1 : 1);
+			return 'handled';
+		}
+		closePickMenu();
+	}
+	// (5) The screen keys run.
 	if (event.key === 'Escape' && bare(event)) {
 		settingsEscape(settings);
 		return 'handled';
@@ -118,6 +146,6 @@ export function routeSettingsKey(event: KeyboardEvent, settings: GuiSettingsFram
 		}
 		return 'core';
 	}
-	// (5) Every other key goes to the core's keyboard router.
+	// (6) Every other key goes to the core's keyboard router.
 	return 'core';
 }

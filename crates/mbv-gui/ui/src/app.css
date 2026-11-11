@@ -78,6 +78,12 @@
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the footer's queue source text */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */
+	/* The Settings screen's values (`Settings.dc.html`, add-gui-settings-screen
+	   design D13): the success fill and border a Ready Service pill and a
+	   checked box paint, and the outline the destructive button paints. */
+	--canvas-success-fill: #3a4a3a; /* the Ready pill's and the checked box's fill */
+	--canvas-success-border: #5f7360; /* the checked box's border */
+	--canvas-destructive-border: #5c3f45; /* the destructive button's outline */
 	/* The Library column's values (add-gui-library-panel design D4): the body
 	   fill the Hero pane and the column paint, and the raised fill of the top
 	   bar and the list column. */
