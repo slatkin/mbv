@@ -15,6 +15,7 @@ The GUI Client presents only the player panel. A user cannot browse a library or
 - **The Library Status bar** under the Library column shows the canvas key hints and the location (destination › selected collections › picked item). The prefix state and toasts replace the hints while active.
 - **The GUI keeps its own launch location**: the destination, the selected collection of each Grouped Music destination, and Panel focus, saved at orderly exit and restored at start. The Podcasts and Feeds pill rows save no pill and open on Latest. The GUI no longer reads the TUI launch state.
 - **The service bootstrap becomes a shared Client step**, so the GUI runs the same Service startup as the TUI and its Library has content. The TUI's startup order and behaviour do not change.
+- **Every destination's Hero is one frame, and every list part has one painter** (design D17, invariant 30). The Hero's header title is the largest unit (the artist, series, podcast, or feed); the Hero of Music, Shows, Podcasts, Audiobooks, and Feeds shares one frame; a TV series gets Play, Play next, and Add to queue for the selected season; Feeds lists the selected feed's entries; and the pills, list rows, letter headings, scrollers, Workspace tables, and action buttons are each painted once. A double-click on a tracklist row now plays the track. Home is out of scope and Movies are held.
 - **Delivery has a gate.** Music lands first from end to end. A `/code-review` round and a user live-test round accept it before the other destinations and Search start.
 
 ## Capabilities
