@@ -15,7 +15,9 @@
 	// tab, so no library index rides the commands.
 	
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
+	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import { heroMetaRows } from '$lib/library/hero';
 	import type { GuiFeedsFrame } from '$lib/bridge/types';
 
 	interface Props {
@@ -40,13 +42,24 @@
 </script>
 
 {#if hero !== null}
-	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-feeds-hero="">
-		<LibraryHeroSummary
-						attr="feeds"
-			section="data-library-feeds-hero-summary"
-			{hero}
-			onplay={() => act('feedsPlay')}
-			onqueue={() => act('feedsQueue')}
-		/>
-	</div>
+	<LibraryHeroFrame
+		attr="feeds"
+		root="data-library-feeds-hero"
+		block={{
+			label: hero.title,
+			name: hero.title,
+			meta: heroMetaRows(hero),
+		}}
+		artShape={hero.artShape}
+		art={null}
+		artTitle={hero.title}
+	>
+		{#snippet actions()}
+			<LibraryHeroActions
+				attr="feeds"
+				onplay={() => act('feedsPlay')}
+				onqueue={() => act('feedsQueue')}
+			/>
+		{/snippet}
+	</LibraryHeroFrame>
 {/if}

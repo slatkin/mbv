@@ -11,7 +11,7 @@
 	// still fills the Hero content width above the title and meta block, and the
 	// portrait and square arms keep the canvas's 300 px box beside the text. A
 	// destination that paints a Hero adopts that rule rather than restating it.
-	import { Play } from '@lucide/svelte';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
 
@@ -110,69 +110,7 @@
 		</div>
 		{#if onplay !== undefined}
 			<div class="relative flex flex-wrap items-center" style:gap="8px">
-				<button
-					type="button"
-					class="flex items-center"
-					style:height="44px"
-					style:padding="0 18px 0 14px"
-					style:gap="8px"
-					style:background="var(--canvas-accent)"
-					style:border="0"
-					style:border-radius="22px"
-					style:color="var(--canvas-ink)"
-					style:font-size="15px"
-					style:font-weight="600"
-					style:cursor="pointer"
-					{...own('play')}
-					onclick={onplay}
-				>
-					<Play size={16} fill="var(--canvas-ink)" strokeWidth={0} />
-					Play
-				</button>
-				{#if onplaynext !== undefined}
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-library-raise)"
-						style:border="1px solid var(--canvas-library-control)"
-						style:border-radius="22px"
-						style:color="var(--canvas-text)"
-						style:font-size="14px"
-						style:cursor="pointer"
-						{...own('play-next')}
-						onclick={onplaynext}
-					>
-						Play next
-						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-							>n</span
-						>
-					</button>
-				{/if}
-				{#if onqueue !== undefined}
-					<button
-						type="button"
-						class="flex items-center"
-						style:height="44px"
-						style:padding="0 14px"
-						style:gap="8px"
-						style:background="var(--canvas-library-raise)"
-						style:border="1px solid var(--canvas-library-control)"
-						style:border-radius="22px"
-						style:color="var(--canvas-text)"
-						style:font-size="14px"
-						style:cursor="pointer"
-						{...own('add')}
-						onclick={onqueue}
-					>
-						Add to queue
-						<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)"
-							>a</span
-						>
-					</button>
-				{/if}
+				<LibraryHeroActions {attr} {onplay} {onplaynext} {onqueue} />
 			</div>
 		{/if}
 		{#if (hero.overview ?? null) !== null}

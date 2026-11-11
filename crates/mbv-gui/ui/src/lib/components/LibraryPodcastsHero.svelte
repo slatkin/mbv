@@ -14,7 +14,9 @@
 	// row the frame painted and never a position.
 	
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
+	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import { heroMetaRows } from '$lib/library/hero';
 	import type { GuiPodcastsFrame } from '$lib/bridge/types';
 
 	interface Props {
@@ -39,13 +41,25 @@
 </script>
 
 {#if hero !== null}
-	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-podcasts-hero="">
-		<LibraryHeroSummary
-						attr="podcasts"
-			section="data-library-podcasts-hero-summary"
-			{hero}
-			onplay={() => act('podcastsPlay')}
-			onqueue={() => act('podcastsQueue')}
-		/>
-	</div>
+	<LibraryHeroFrame
+		attr="podcasts"
+		root="data-library-podcasts-hero"
+		block={{
+			label: hero.title,
+			name: hero.title,
+			meta: heroMetaRows(hero),
+			overview: hero.overview ?? null,
+		}}
+		artShape={hero.artShape}
+		art={hero.art ?? null}
+		artTitle={hero.title}
+	>
+		{#snippet actions()}
+			<LibraryHeroActions
+				attr="podcasts"
+				onplay={() => act('podcastsPlay')}
+				onqueue={() => act('podcastsQueue')}
+			/>
+		{/snippet}
+	</LibraryHeroFrame>
 {/if}

@@ -105,3 +105,28 @@ export function moveTrackCursor(
 	}[move];
 	return ids[Math.min(Math.max(to, 0), last)];
 }
+
+/** One meta row of a single-row Hero, with the role the frame paints it in. */
+export interface HeroMetaRow {
+	text: string;
+	role: 'meta' | 'duration' | 'progress';
+}
+
+/** The meta rows of a Hero that shows one selected row (add-gui-library-panel
+ * design D15): each row's text with its duration or progress role, as the
+ * core's `durationRow` and `progressRow` indices mark them. */
+export function heroMetaRows(facts: {
+	metaRows: string[];
+	durationRow: number | null;
+	progressRow: number | null;
+}): HeroMetaRow[] {
+	return facts.metaRows.map((text, index) => ({
+		text,
+		role:
+			index === facts.durationRow
+				? 'duration'
+				: index === facts.progressRow
+					? 'progress'
+					: 'meta',
+	}));
+}

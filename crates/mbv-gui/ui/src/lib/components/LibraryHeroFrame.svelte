@@ -1,18 +1,20 @@
 <script lang="ts">
 	// The Library Hero's frame (add-gui-library-panel design D5, D8, D15): the
-	// one layout Music and Shows both paint, as the TUI paints both through one
-	// `HeroContentData` and one Workspace. Three bands, top to bottom:
+	// one layout Music, Shows, Podcasts, Audiobooks, and Feeds paint, as the TUI
+	// paints them through one `HeroContentData` and one Workspace. Three bands, top to bottom:
 	//
 	//   1. the header — the parent's kicker, title, and facts (Music's artist,
 	//      Shows' series), with an optional action on its right;
 	//   2. the detail block — the artwork box and, beside it, the picked
 	//      item's eyebrow, name, facts, action row, and overview (Music's
-	//      album, Shows' selected season with the series' overview);
+	//      album, Shows' selected season with the series' overview). A Hero of one
+	//      selected row (Podcasts, Audiobooks, Feeds) has no parent item: it omits
+	//      the header, and the block's name is its title;
 	//   3. the list — the destination's rows (Music's tracklist, Shows'
 	//      season pills over the episodes), passed as the children.
 	//
 	// A destination supplies facts and rows and never restates the layout, so a
-	// fix here lands in both. The artwork arm is `LibraryHeroArt`'s: the canvas's
+	// fix here lands in all of them. The artwork arm is `LibraryHeroArt`'s: the canvas's
 	// 300 px box for a square or portrait cover, and the TUI's full-width 16:9
 	// still, stacked above the text, for a landscape one.
 	//
@@ -28,8 +30,10 @@
 		attr: string;
 		/** The root's own attribute, the hook the panel's tests take. */
 		root: string;
-		/** The header band: the parent item the block and rows belong to. */
-		header: { kicker: string; title: string; facts: string };
+		/** The header band: the parent item the block and rows belong to. A Hero
+		 * with no parent item (one selected row) omits it, and the block's name
+		 * paints as the Hero's title. */
+		header?: { kicker: string; title: string; facts: string };
 		/** The header band's trailing control, when the destination has one. */
 		headerAction?: Snippet;
 		/** The detail block's text: each line paints only when it is non-empty. */
@@ -38,6 +42,8 @@
 			eyebrow?: string;
 			name?: string;
 			facts?: string;
+			/** Meta rows that carry a role, for a Hero whose facts are rows. */
+			meta?: { text: string; role: 'meta' | 'duration' | 'progress' }[];
 			overview?: string | null;
 		};
 		/** The artwork box's shape and its fetched art. */
@@ -70,9 +76,9 @@
 	const band = $derived(artShape === 'landscape');
 
 	/** The destination's own attribute for one part. */
-	function own(name: string): Record<string, string> {
+	function own(name: string, value = ''): Record<string, string> {
 		const prefix = attr === '' ? 'data-library-hero' : `data-library-${attr}-hero`;
-		return { [`${prefix}-${name}`]: '' };
+		return { [`${prefix}-${name}`]: value };
 	}
 </script>
 
@@ -82,7 +88,8 @@
 	style:gap="28px"
 	{...{ [root]: '' }}
 >
-	<!-- The header band. -->
+	<!-- The header band; a Hero with no parent item omits it. -->
+	{#if header !== undefined}
 	<div
 		class="flex items-end justify-between"
 		style:gap="24px"
@@ -116,6 +123,7 @@
 		</div>
 		{@render headerAction?.()}
 	</div>
+	{/if}
 
 	<!-- The detail block: the artwork and the picked item's text. -->
 	<section
@@ -136,7 +144,7 @@
 			style:gap="18px"
 			style:padding-top={band ? '0' : '8px'}
 		>
-			{#if (block.eyebrow ?? '') !== '' || (block.name ?? '') !== '' || (block.facts ?? '') !== ''}
+			{#if (block.eyebrow ?? '') !== '' || (block.name ?? '') !== '' || (block.facts ?? '') !== '' || (block.meta ?? []).length > 0}
 				<div class="flex flex-col" style:gap="6px">
 					{#if (block.eyebrow ?? '') !== ''}
 						<span
@@ -152,7 +160,7 @@
 							style:font-size="24px"
 							style:font-weight="600"
 							style:color="var(--canvas-heading)"
-							{...own('block-name')}>{block.name}</h2
+							{...own(header === undefined ? 'title' : 'block-name')}>{block.name}</h2
 						>
 					{/if}
 					{#if (block.facts ?? '') !== ''}
@@ -163,6 +171,14 @@
 							{...own('block-facts')}>{block.facts}</span
 						>
 					{/if}
+					{#each block.meta ?? [] as row, index (index)}
+						<span
+							class={row.role === 'meta' ? 'font-mono' : 'font-mono tabular-nums'}
+							style:font-size="13px"
+							style:color={row.role === 'progress' ? 'var(--canvas-accent)' : 'var(--canvas-muted)'}
+							{...own('role', row.role)}>{row.text}</span
+						>
+					{/each}
 				</div>
 			{/if}
 			{#if actions !== undefined}

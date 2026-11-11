@@ -19,7 +19,9 @@
 	
 	import { Play } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
+	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import { heroMetaRows } from '$lib/library/hero';
 	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
@@ -87,14 +89,26 @@
 </script>
 
 {#if hero !== null}
-	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-abs-hero="">
-		<LibraryHeroSummary
-						attr="abs"
-			section="data-library-abs-hero-summary"
-			{hero}
-			onplay={() => actBook('absPlay')}
-			onqueue={() => actBook('absQueue')}
-		/>
+	<LibraryHeroFrame
+		attr="abs"
+		root="data-library-abs-hero"
+		block={{
+			label: hero.title,
+			name: hero.title,
+			meta: heroMetaRows(hero),
+			overview: hero.overview ?? null,
+		}}
+		artShape={hero.artShape}
+		art={hero.art ?? null}
+		artTitle={hero.title}
+	>
+		{#snippet actions()}
+			<LibraryHeroActions
+				attr="abs"
+				onplay={() => actBook('absPlay')}
+				onqueue={() => actBook('absQueue')}
+			/>
+		{/snippet}
 
 		{#if workspace !== null || audiobooks.workspaceLoading}
 			<!-- The book Hero's Workspace (design D12): the book's chapter rows, or
@@ -208,5 +222,5 @@
 				{/if}
 			</section>
 		{/if}
-	</div>
+	</LibraryHeroFrame>
 {/if}

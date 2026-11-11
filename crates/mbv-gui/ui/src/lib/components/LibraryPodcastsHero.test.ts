@@ -152,6 +152,6 @@ test('the Hero paints no play-next control', () => {
 
 	expect(container.querySelector('[data-library-podcasts-hero-play-next]')).toBeNull();
 	expect(
-		container.querySelector('[data-library-podcasts-hero-summary]')?.textContent,
+		container.querySelector('[data-library-podcasts-hero-block]')?.textContent,
 	).not.toContain('Play next');
 });
