@@ -82,6 +82,8 @@ Every other action is `AllClients`. The Keys section lists only `AllClients` act
 
 ### D5. A fifth bridge command, `settings(GuiSettingsCommand)`
 
+**Grant rule (live finding).** Tauri's ACL sits between `invoke` and the command. A command that `generate_handler!` registers but `build.rs`'s app manifest does not declare, or that `capabilities/default.json` does not grant, is refused before the core sees it. The front end's fire-and-forget invoke then logs only to the webview console. The first build of this change shipped `settings` in neither file, so every Settings action died silently, by pointer and by key. `crates/mbv-gui/tests/capabilities.rs` now reads the command list from `generate_handler!` in `src/main.rs` and asserts that each command is declared and granted once. A new command cannot repeat the miss, because no list in the test names one.
+
 `src/main.rs` registers `settings`. It only pushes `CoreInput::Settings`, as `library` does. `src/bridge/settings.rs` translates the wire form into `mbv::GuiSettingsCommand`, and `App::apply_gui_settings_command` (`src/app/gui_settings.rs`) applies each variant through the shared `App` method. Identities are stable, never row positions. A command built from a stale frame logs at debug level and changes nothing, as the `library` arms do.
 
 | Variant | Carries | Applies through |
@@ -178,6 +180,9 @@ When the front end sees a new epoch value, it resets its Library interaction sto
 
 `ui/src/lib/settings/` holds the store and the key router. `ui/src/lib/components/Settings*.svelte` holds the screen, the sidebar, one component for each section, and the status line. `App.svelte` mounts `SettingsScreen` in place of the two columns while `frame.settings` is present.
 
+- **Fill.** `SettingsScreen`'s root is a flex item of `App.svelte`'s row container, so it carries `flex-1 min-w-0`. Without them it took its content's width (631 px of a 1400 px window in the live finding), and the content pane shrank to a strip. jsdom has no layout, so no test can measure this. The user's live run is the layout gate. No front-end test runs in a real browser.
+- **Pointer contract.** Every control is a native `button` or `input` whose press runs the same store function as the keyboard path, so the two paths share one effect. A press moves the store's cursor and pane to the pressed item. Hover feedback paints for each control that can act, and an unavailable control is a disabled `button`, so a press on it never runs its handler. The window forwards each press to the core as well (`pointer`). The Queue and Library panels retract their reported regions on unmount, so while the screen is open a press resolves to no core surface. A core test pins this.
+- **Choice kind.** Each projected choice-list row carries its apply kind in the frame. The front end reads that kind and does not derive it again from the setting name (the open review finding on `choicesKindOf`).
 - **Widths.** The sidebar takes the Queue column's expanded width: the dragged or default width, whatever the collapse toggle, because the 72 px rail cannot hold the list. No divider shows. Mini is the existing `libraryArrangement` threshold, measured as the window width minus that width.
 - **Paint.** The screen paints with the existing `app.css` tokens and the shared Library parts (rows, list headers, scrollers, buttons). Icons are Lucide only.
 - **Key routing order.** This is added to `routeLibraryKey`'s chain while `frame.settings` is present, and the Library steps do not run:

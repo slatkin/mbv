@@ -23,6 +23,50 @@ While the Settings screen is open, the GUI Client SHALL show the Settings sideba
 - **WHEN** the user closes the Settings screen
 - **THEN** the Library shows the same destination and picked item, and the Queue panel has Panel focus
 
+### Requirement: The Settings screen fills the window
+
+While the Settings screen is open, the sidebar SHALL take its column width and the section content SHALL take the rest of the window's width and height. Outside Mini, no part of the window SHALL stay empty beside the content.
+
+#### Scenario: The content takes the remaining width
+
+- **GIVEN** a window wider than the Mini threshold
+- **WHEN** the Settings screen opens
+- **THEN** the content spans from the sidebar's edge to the window's right edge
+
+### Requirement: Every Settings request reaches the Client core
+
+Every request that the Settings screen sends SHALL reach the Client core. The window's permissions SHALL grant every command that the GUI Client registers, so no Settings action is refused before the core sees it.
+
+#### Scenario: A sidebar press reaches the core
+
+- **WHEN** the user presses a sidebar entry
+- **THEN** the core receives the section request, and the next frame shows that section
+
+### Requirement: Every Settings control works by pointer
+
+A pointer press on any Settings control (sidebar entries, rows, marks, routes, Service and form controls, feed, playlist, Keys, and target controls) SHALL have the same effect as the keyboard path to it, and SHALL move the keyboard position to it. A control that can act SHALL show hover feedback. A control that cannot act SHALL show as unavailable, and a press on it SHALL do nothing.
+
+#### Scenario: A press on a toggle
+
+- **WHEN** the user presses the Consume audio row in the Queue section
+- **THEN** the setting changes as Enter on that row changes it, and the content cursor rests on the row
+
+#### Scenario: A press starts a capture
+
+- **WHEN** the user presses an action's chord in Keys
+- **THEN** a capture starts for that action, as the keyboard path starts it
+
+#### Scenario: A press on an unavailable control
+
+- **WHEN** the user presses a control that shows as unavailable
+- **THEN** nothing is sent and nothing changes
+
+#### Scenario: A press does not act behind the screen
+
+- **GIVEN** the Settings screen is open
+- **WHEN** the user presses where a queue row painted before the screen opened
+- **THEN** no queue action runs
+
 ### Requirement: The Settings screen shows the toasts
 
 While the Settings screen is open, it SHALL show the prefix-armed state and the toasts of the shared Status bar projection, because neither the footer line nor the Library Status bar shows.
@@ -153,7 +197,7 @@ The Hidden libraries, Feed view libraries, and My languages settings SHALL each 
 
 ### Requirement: Library routes are edited in the Library section
 
-The Library section SHALL list the routable libraries with each one's assigned device and SHALL let the user assign one device or clear the route. A device with no direct-connect endpoint SHALL be refused with the TUI's notice. The route SHALL be saved and take effect as the TUI's route editor saves it.
+The Library section SHALL list the routable libraries with each one's assigned device and SHALL let the user assign one device or clear the route. A device with no direct-connect endpoint SHALL show as not routable and SHALL NOT be assignable by pointer or key. The route SHALL be saved and take effect as the TUI's route editor saves it.
 
 #### Scenario: Assigning a route
 
@@ -168,8 +212,9 @@ The Library section SHALL list the routable libraries with each one's assigned d
 
 #### Scenario: A device with no endpoint
 
-- **WHEN** the user assigns a device that has no direct-connect endpoint
-- **THEN** no route is saved and the GUI shows the TUI's notice
+- **GIVEN** a library's candidate devices include one with no direct-connect endpoint
+- **WHEN** the user presses that device or presses Enter on it
+- **THEN** the device shows as not routable, no command is sent, and no route is saved
 
 ### Requirement: Services shows each Service and its setup
 
