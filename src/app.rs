@@ -5,6 +5,7 @@ mod client_drains;
 mod dispatch;
 mod gui_client_state;
 mod gui_library;
+mod gui_settings;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
     set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
@@ -64,6 +65,7 @@ pub use self::gui_library::{
     GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
     GuiSearchProjection, GuiSearchRow,
 };
+pub use self::gui_settings::{GuiSettingsGroup, GuiSettingsSection, GuiSettingsState};
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{

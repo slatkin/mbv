@@ -501,6 +501,11 @@ pub struct App {
     /// The GUI Client's open overlay: the queue row's menu or a track chip's
     /// popover (design D4a). `None` while none is open.
     pub(in crate::app) gui_overlay: Option<GuiOverlay>,
+    /// The GUI Settings screen's open state (`add-gui-settings-screen`
+    /// design D2): `None` while closed. The GUI core thread's drain drives it
+    /// and its focus sync mirrors it onto the core `FocusStack`; the TUI
+    /// Client never sets it (its Settings sidebar keeps its own shell state).
+    pub(in crate::app) gui_settings: Option<crate::app::gui_settings::GuiSettingsState>,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
     pub(in crate::app) ui_volume: u8,

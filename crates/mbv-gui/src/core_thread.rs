@@ -45,6 +45,7 @@ use crate::painted_choices::PaintedChoices;
 
 mod launch_restore;
 mod overlays;
+mod settings;
 mod tick_host;
 
 use self::launch_restore::GuiLaunchRestore;
@@ -362,6 +363,16 @@ impl CoreThread {
     #[doc(hidden)]
     pub fn set_last_frame_for_test(&mut self, stamp: Instant) {
         self.last_frame = stamp;
+    }
+
+    /// The Settings screen's open section, for a Client's test that asserts a
+    /// key opened, closed, or switched it (`add-gui-settings-screen` rows
+    /// 3.2, 3.3). The frame carries the section from the change's section 4
+    /// on; until then this is the only read a Client's test has.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
+        self.app.gui_settings().map(|state| state.section)
     }
 
     /// Apply one `LayoutReport` to the Surface state's capacity and the hit

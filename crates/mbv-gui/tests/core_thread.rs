@@ -35,6 +35,7 @@ mod core_thread {
     mod overlay;
     mod pointer;
     mod queue;
+    mod settings;
 }
 
 /// A URL that never leaves the process: the mock transport ignores it, but it

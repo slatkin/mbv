@@ -7,6 +7,14 @@ use crate::app::gui_client_state::GuiOverlay;
 use crate::app::{ConfirmModal, SavePlaylistDialog};
 
 impl App {
+    /// Take the pending shell request (`add-gui-settings-screen` design D2):
+    /// the GUI core thread's drain reads it once per tick, after input
+    /// routing. The TUI shell drains it through `sync_modal_requests`
+    /// instead.
+    pub fn take_pending_overlay(&mut self) -> Option<mbv_ui_model::overlay::OverlayRequest> {
+        self.pending_overlay.take()
+    }
+
     pub(in crate::app) fn request_sidebar_open(
         &mut self,
         sidebar: mbv_ui_model::overlay::SidebarId,

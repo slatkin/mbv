@@ -155,6 +155,7 @@ impl App {
             resize_drag_activity: None,
 
             pending_overlay: None,
+            gui_settings: None,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_delete_selection: None,

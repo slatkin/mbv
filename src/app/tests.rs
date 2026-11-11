@@ -22,6 +22,7 @@ mod gui_library_podcasts;
 mod gui_library_search;
 mod gui_library_shows;
 mod gui_library_tv;
+mod gui_settings;
 mod home_latest;
 mod library_navigate_reveal;
 mod library_position;

@@ -251,5 +251,10 @@ impl ClientTickHost for CoreThread {
                 }
             }
         }
+        // The sidebar requests' drain (`add-gui-settings-screen` design D2):
+        // once per tick, after input routing — a request the routing raised
+        // drives the Settings screen this tick, and the Settings id's stack
+        // membership follows the App's state.
+        self.drain_pending_overlay(outcome);
     }
 }

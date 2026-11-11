@@ -15,6 +15,10 @@ mod gui_feeds;
 /// module for the same reason.
 mod search;
 
+/// The Settings screen's test seams (`add-gui-settings-screen` rows 3.2,
+/// 3.3) sit in their own child module for the same reason.
+mod settings;
+
 #[cfg(feature = "test")]
 use std::sync::{Arc, Mutex};
 
