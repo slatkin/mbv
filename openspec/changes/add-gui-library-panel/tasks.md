@@ -104,4 +104,3 @@ Plan, findings, and the user's answers: `hero-look-audit.md`. Each item is one c
 - [x] 7B.9 The Feeds list paints `LibraryListHeader` and the empty line. Verify: a vitest for both.
 - [x] 7B.10 Music's list paints through `LibraryVirtualList`. Verify: `LibraryList.test.ts` passes.
 - [x] 7B.11 Movies onto the frame, with the kind kicker, the credits (director, cast), and the IMDb link, which opens through the new core `openUrl` command (http and https only). Verify: the Emby projection test, the `openUrl` scheme test, and the Emby Hero vitests.
-- [ ] 7B.12 The user's visual pass: every destination in scope next to Music, Wide and Narrow, against the audit's Findings. Not done until this passes (invariant 30 rule 4).
