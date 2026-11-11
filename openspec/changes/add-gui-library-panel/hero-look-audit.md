@@ -286,14 +286,17 @@ Each is about what you will see. Each blocks only the steps named.
 
 ## Refactor plan
 
+Updated 2026-11-11 to follow the Decisions section. Home is out of scope and
+Movies are held until the user lifts the hold, so `LibraryHeroSummary` stays
+for both and is not deleted in this plan.
+
 Rules for every step: consumers change to fit the shared piece; the
 shared piece is not bent. No scripts, no lint suppression, no new test
 unless it owns a named contract. Run `cargo fmt` for Rust changes. Keep
-every file under 800 lines (`LibraryShowsHero.svelte` 300 and
-`LibraryAudiobooksHero.svelte` 226 lines shrink). Update docs in the same
-commit as the code (invariant 30 "How the code maintains it today", design
-D15, `docs/architecture/gui-client.md` Hero list). Each step is one
-commit.
+every file under 800 lines. Update docs in the same commit as the code
+(invariant 30 "How the code maintains it today", design D15,
+`docs/architecture/gui-client.md` Hero list). Each step is one commit. TUI
+parity is the floor and is never a question to the user.
 
 Visual check (V) for a step: the user runs `make dev` (live; agents ask
 the user first and never run it on their own), opens the destination and
@@ -308,93 +311,94 @@ check.
    Files: `LibraryHeroActions.svelte` (empty `attr` gives
    `data-library-hero-*`, the frame's rule), `LibraryHero.svelte` (actions
    snippet renders `LibraryHeroActions` plus its own More control),
-   `$lib/library/hero.ts` (one `own()` helper the four pieces import).
+   `$lib/library/hero.ts` (one `own()` helper the pieces import).
    Contract kept: Music's Hero buttons send the album commands under the
    same hooks; `LibraryHero.test.ts` passes unedited. V: Music unchanged.
-2. **Core: carry the facts the header needs.** Change source-of-truth
-   types before callers. Files: `src/app/gui_library/emby_projection.rs`,
-   `src/app/gui_library/home.rs`, their bridge DTOs in
-   `crates/mbv-gui/src/bridge/frame*`, and `library-types*.ts`. Add the
-   item kind word to `GuiEmbyHero` and `GuiHomeHero` (per question 2);
-   add `credits` and the IMDb link only if question 7 is yes. Contract: the
-   Hero kind is the producer's item kind; extend the existing Emby and
-   Home projection tests with one assertion each (no new test). Gate:
-   `cargo nextest run -p mbv`.
-3. **One header mapping in `$lib/library/hero.ts`** (after question 1).
-   A function from `{title, metaRows, durationRow, progressRow}` and a
-   kicker to the frame's `header` and `block`, replacing
-   `heroMetaRows`' role split for headers. Contract: rows with no role go
-   to the header facts, duration and progress rows to the block. Test:
-   one `hero.test.ts` with `#[case]`-style table rows only for the
-   distinct outcomes (no role rows; duration only; duration and progress).
-4. **Movies onto the frame.** File: `LibraryEmbyHero.svelte`: paint
-   `LibraryHeroFrame` with `attr="emby"`, `root="data-library-emby-hero"`,
-   the step 3 mapping, and `LibraryHeroActions`. Test:
-   `LibraryEmbyHero.test.ts` keeps its command and art tests; the summary
-   hook moves to the block hook; add the header kicker-and-title assertion
-   the invariant names (one per frame consumer). V: Movies next to Music,
-   a landscape movie and a portrait one.
-5. **Home onto the frame.** File: `LibraryHomeHero.svelte`, same as step
-   4, with root `data-library-home-hero` (removes the clash with Music's
-   `data-library-hero`). Test: `LibraryHomeHero.test.ts` as step 4;
-   `LibraryPanel.test.ts` passes unedited. V: Home next to Music, one
-   movie, one episode, one audiobook row.
-6. **Delete `LibraryHeroSummary.svelte`.** It has no users after steps 4
-   and 5. Fix the comment in `LibraryHeroActions.svelte:5`. Contract: none;
-   svelte-check and the UI suite stay green. Update invariant 30 "Where it
-   currently fails" (the Movies and Home bullet goes).
-7. **Podcasts, Audiobooks, Feeds, Shows Latest take the step 3 mapping**
-   (and the answers to questions 3 and 4). Files: the four Hero
-   components; the core projections only if question 3 or 4 is yes. Test:
-   extend each consumer's existing header test to the facts line. Fix the
-   stale "Emby Hero look" comments. V: each next to Music; the header
-   bands line up in height.
-8. **Shows action row.** File: `LibraryShowsHero.svelte`. Latest episode:
+2. **Core: carry the facts the headers need** (rule: the header title is the
+   largest unit). Change source-of-truth types before callers. Files: the
+   Podcasts, Feeds, and Shows projections in `src/app/gui_library/`, their
+   bridge DTOs in `crates/mbv-gui/src/bridge/`, and `library-types*.ts`.
+   Podcasts: the show name as its own fact (Q3). Feeds: the feed's name and
+   the entry date (Q4). Shows Latest: the series name of the episode (the TUI
+   has the same gap; this is a GUI projection fact, so confirm the producer
+   carries it, else stop and report). Extend each projection's existing test
+   by one assertion (no new test). Gate: `cargo nextest run -p mbv`.
+3. **One header mapping in `$lib/library/hero.ts`.** A function from the
+   Hero's facts and a kicker to the frame's `header` (largest unit: kicker,
+   title, plain facts line) and `block` (selected unit: name, duration and
+   progress rows, overview). Contract: rows with no role go to the header
+   facts line, duration and progress rows to the block (Q1). Test: one
+   `hero.test.ts` with a `#[case]` table of the distinct outcomes only (no
+   role rows; duration only; duration and progress).
+4. **Podcasts, Audiobooks, Feeds, Shows Latest take the step 3 mapping.**
+   Header title: the podcast, the feed, the series; Audiobooks is its own
+   largest unit (the book is the title, per the rule). Files: the four Hero
+   components. Test: extend each consumer's existing header test to the facts
+   line. Fix the stale "Emby Hero look" comments. V: each next to Music; the
+   header bands line up in height.
+5. **Feeds list band.** `LibraryFeedsHero.svelte`: the selected feed's
+   entries, newest first, with the selected entry marked, in the frame's list
+   band, using the Workspace table from step 9 if it has landed, else a
+   plain list that step 9 replaces. First read how `GuiFeedsFrame.rows` is
+   filtered by pill: if the Hero needs rows the frame does not carry, add
+   them in the core first (a step 2 style change). Test: one vitest that the
+   list band paints the feed's entries with the selected one marked. V:
+   Feeds next to Music.
+6. **Shows action row.** `LibraryShowsHero.svelte`: Latest episode paints
    `LibraryHeroActions` with `showsPlay`, `showsPlayNext`, `showsQueue`
-   (commands exist). Series: only if question 6 is yes, after a core
-   command. Test: one vitest that the Latest Play press sends `showsPlay`
-   with the episode id. V: Shows Latest next to Podcasts.
-9. **One pill button.** Extract `LibraryPill.svelte` from
-   `LibraryPillRow.svelte`; the row and the season pills paint it (after
-   question 8). Test: the five pill-row vitests and the Shows Workspace
-   vitest pass unedited. V: Shows series Hero, the season pills next to the
-   top pill row.
-10. **One Workspace table.** New `LibraryWorkspaceTable.svelte` and
-    `LibraryRowActions.svelte`: header row, row grid, cursor fill, hover
-    controls with one hover mechanism, playing glyph, duration cell,
-    progress run, loading line. `LibraryTracklist.svelte`, the Shows
-    episodes, and the Audiobooks chapters adopt it; columns and
-    double-click follow questions 9 and 10. Music gains a loading line
-    while its tracks have not landed. Test: the existing tracklist, Shows
-    Workspace, and Audiobooks chapter vitests pass with only hook renames;
-    one new vitest for the loading line (contract: a Workspace whose rows
-    have not landed paints the loading line, not an empty header). V:
-    Music, Shows, Audiobooks lists side by side.
-11. **One flat item row.** New `LibraryItemRow.svelte`,
-    `LibraryProgressRun.svelte`, `LibraryLetterHeading.svelte`, and the
-    row fill function in `$lib/library/list.ts`. Home, Shows (flat),
-    Emby, Audiobooks, Podcasts, and Feeds lists adopt them; row padding
-    takes one value (`0 12px`); Emby and Audiobooks rows dim when played if the row
-    carries the state, else leave as is and note it. Test: the list vitests
-    pass with hook renames only. V: each list column next to Home's.
-12. **Feeds list header and empty line.** File: `LibraryFeedsList.svelte`:
+   (commands exist). Series paints them for the selected season (Q6): add the
+   Play, Play next, and Queue-season commands in the core first (the Owner
+   admission path, never the component). Test: one vitest that the Latest
+   Play press sends `showsPlay` with the episode id; core tests extend the
+   existing Shows command tests. V: Shows Latest and Shows series next to
+   Music.
+7. **One pill button (Q8).** Extract `LibraryPill.svelte` from
+   `LibraryPillRow.svelte`; the row and the season pills paint it (32 px,
+   14 px text, focus ring). Test: the five pill-row vitests and the Shows
+   Workspace vitest pass unedited. V: Shows series Hero, the season pills
+   next to the top pill row.
+8. **One flat item row.** New `LibraryItemRow.svelte`,
+   `LibraryProgressRun.svelte`, `LibraryLetterHeading.svelte`, and the row
+   fill function in `$lib/library/list.ts`, extracted from Home's list. Shows
+   (flat), Emby, Audiobooks, Podcasts, and Feeds lists adopt them; Home's
+   list is left as it is (out of scope). Row padding takes one value
+   (`0 12px`). Test: the list vitests pass with hook renames only. V: each
+   list column next to Podcasts.
+9. **One Workspace table.** New `LibraryWorkspaceTable.svelte` and
+   `LibraryRowActions.svelte`: header row, row grid, cursor fill, hover
+   controls with one hover mechanism, playing glyph, duration cell, progress
+   run, loading line. `LibraryTracklist.svelte`, the Shows episodes, the
+   Audiobooks chapters, and the Feeds entries adopt it. Audiobooks chapters
+   gain a number column (Q9). A double-click on a track plays it (Q10). Music
+   gains a loading line while its tracks have not landed. Test: the existing
+   tracklist, Shows Workspace, and Audiobooks chapter vitests pass with only
+   hook renames; one new vitest for the loading line (contract: a Workspace
+   whose rows have not landed paints the loading line, not an empty header);
+   one for the track double-click. V: Music, Shows, Audiobooks, Feeds lists
+   side by side.
+10. **Feeds list header and empty line.** `LibraryFeedsList.svelte`:
     `LibraryListHeader` (title `Feeds`, label the selected pill) and a
-    `No entries` notice. Test: one vitest for the header (title and label).
-    Right-click on Feeds rows stays out of scope (no core row-menu path for
-    feeds; record it in design D15 as a gap). V: Feeds list next to
-    Podcasts.
-13. **Music list scroller (check first).** Read `LibraryVirtualList` and
+    `No entries` notice. Test: one vitest for the header. Right-click on
+    Feeds rows stays out of scope (no core row-menu path for feeds; record it
+    in design D15 as a gap). V: Feeds list next to Podcasts.
+11. **Music list scroller (check first).** Read `LibraryVirtualList` and
     `LibraryList.svelte`: adopt the shared scroller only if it takes the
     tree's three row heights with no new prop. If it needs a new prop, stop
-    and ask; do not add one. Test: `LibraryList.test.ts` passes unedited.
+    and report; do not add one. Test: `LibraryList.test.ts` passes unedited.
     V: Music list scroll and rail jump.
-14. **Gates and the final look pass.** `pnpm -C crates/mbv-gui/ui test`,
+12. **Movies onto the frame (HELD until the user lifts the hold).** Core:
+    the item kind word for the kicker, and the director, cast, and IMDb link
+    (Q7) on `GuiEmbyHero`. `LibraryEmbyHero.svelte` paints `LibraryHeroFrame`
+    with the step 3 mapping and `LibraryHeroActions`. Test: header assertion
+    plus the existing command and art tests. V: Movies next to Music, a
+    landscape movie and a portrait one.
+13. **Gates and the final look pass.** `pnpm -C crates/mbv-gui/ui test`,
     svelte-check, `make ui-lint`, `cargo nextest run -p mbv -p mbv-gui`,
     `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt
     --all -- --check`, and `make check-code-file-lines` just before push.
-    Then the user's final V pass: all seven destinations in a row, Wide
-    and Narrow, against this audit's Findings tables. Report done only
-    after that pass (invariant 30 rule 4).
+    Then the user's final V pass on every destination in scope, Wide and
+    Narrow, against this audit's Findings tables. Report done only after that
+    pass (invariant 30 rule 4).
 
 ## Other GUI screens
 
