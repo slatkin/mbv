@@ -10,8 +10,9 @@
 	// The `IMDb` meta row is a link the header's facts string cannot hold, so
 	// the consumer maps it out of the facts it hands `heroLayout` (invariant
 	// 30: the piece is never bent) and paints it as the header's trailing
-	// action — the IMDb button carries the url for the core's open-URL command
-	// (the click wiring lands with that command).
+	// action — the IMDb button sends the core's open-url command with the url
+	// the frame carries, as the TUI's link opens it (the core scheme-gates the
+	// url the webview sends).
 	//
 	// A plain Emby library carries no Workspace and no tracklist: a folder or a
 	// boxset plays through the TUI's folder-play rule, so the pane is the frame
@@ -78,6 +79,16 @@
 			void sendLibraryCommand({ command, libIdx: emby.libIdx, itemId });
 		}
 	}
+
+	/** Open the Hero's IMDb link in the user's browser (design D17, Q7): the
+	 * open-url command with the url the frame carries; the core opens only an
+	 * http or https URL. */
+	function openImdb(): void {
+		const url = hero?.imdbUrl;
+		if (url !== null && url !== undefined) {
+			void sendLibraryCommand({ command: 'openUrl', url });
+		}
+	}
 </script>
 
 {#if hero !== null && layout !== null}
@@ -93,8 +104,7 @@
 		{#snippet headerAction()}
 			{#if hero.imdbUrl !== null}
 				<!-- The IMDb link (design D17, Q7): the TUI underlines the `IMDb`
-				meta row and a press opens the url; the button carries the url in the
-				attribute until the core's open-URL command wires the click. -->
+				meta row and a press opens the url in the user's browser. -->
 				<button
 					type="button"
 					class="font-mono"
@@ -105,7 +115,8 @@
 					style:text-decoration="underline"
 					style:color="var(--canvas-muted)"
 					style:cursor="pointer"
-					data-library-emby-imdb={hero.imdbUrl}>IMDb</button
+					data-library-emby-imdb={hero.imdbUrl}
+					onclick={openImdb}>IMDb</button
 				>
 			{/if}
 		{/snippet}

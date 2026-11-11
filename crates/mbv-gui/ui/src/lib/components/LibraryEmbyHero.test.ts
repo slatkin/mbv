@@ -103,9 +103,9 @@ test('the header paints the item kind\'s kicker and the movie\'s title', () => {
 });
 
 // The movie's credits table and the IMDb link paint as the TUI's hero shows
-// them (design D17, Q7): the button carries the url in the attribute until the
-// core's open-URL command wires the click.
-test('the Hero paints its credits table and the IMDb button with the url', () => {
+// them (design D17, Q7), and a press on the IMDb button sends the open-url
+// command with the url the frame carries.
+test('the Hero paints its credits table and the IMDb button, and a press sends the open-url command', async () => {
 	const container = mount(
 		hero('landscape', {
 			credits: [
@@ -123,6 +123,12 @@ test('the Hero paints its credits table and the IMDb button with the url', () =>
 	const roles = [...container.querySelectorAll('[data-library-emby-hero-credit-role]')];
 	expect(names.map((row) => row.textContent)).toEqual(['Michael Mann', 'Al Pacino']);
 	expect(roles.map((row) => row.textContent)).toEqual(['Director', 'Lt. Vincent Hanna']);
+
+	await fireEvent.click(link);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'openUrl', url: 'https://www.imdb.com/title/tt0113277/' },
+	});
 });
 
 test('a Hero that paints none paints nothing', () => {
