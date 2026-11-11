@@ -188,8 +188,25 @@ pub fn image_disk_cache_dir() -> PathBuf {
     mbv_config::cache_dir().join("images")
 }
 
+/// The on-disk cache generation, folded into every image cache filename. The
+/// files hold the server's raw bytes, so a change to the fetch's resolution
+/// or quality makes every entry the previous generation wrote stale; bumping
+/// this name stops those entries from satisfying fetches, and the mtime
+/// eviction (`evict_old_image_cache`) reclaims their files.
+///
+/// Generation 2 is the 1280-pixel, quality-90 fetch.
+const IMAGE_DISK_CACHE_GENERATION: &str = "v2";
+
+/// The image cache's filename for `key`: the key's path-safe form and the
+/// cache generation. Reads, writes, and the `mpris:artUrl` path all derive the
+/// name here, so a fetch never writes one file while a later read looks for
+/// another.
+fn image_cache_filename(key: &str) -> String {
+    format!("{}.{IMAGE_DISK_CACHE_GENERATION}", safe_cache_filename(key))
+}
+
 pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
-    let path = image_disk_cache_dir().join(safe_cache_filename(key));
+    let path = image_disk_cache_dir().join(image_cache_filename(key));
     let bytes = std::fs::read(&path).ok()?;
     touch_image_disk_cache(&path);
     Some(bytes)
@@ -201,7 +218,7 @@ pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
 /// path itself, not the decoded image data.
 #[cfg(not(test))]
 pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
-    let path = image_disk_cache_dir().join(safe_cache_filename(key));
+    let path = image_disk_cache_dir().join(image_cache_filename(key));
     if !path.is_file() {
         return None;
     }
@@ -212,7 +229,7 @@ pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
 pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
     let dir = image_disk_cache_dir();
     let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(dir.join(safe_cache_filename(key)), bytes);
+    let _ = std::fs::write(dir.join(image_cache_filename(key)), bytes);
 }
 
 pub fn clear_image_disk_cache_prefix(prefix: &str) {

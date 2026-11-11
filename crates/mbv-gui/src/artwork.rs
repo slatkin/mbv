@@ -76,10 +76,13 @@ impl ArtworkFrames {
 /// The frame's artwork value for one projection state: the image bytes as a
 /// `data:` URL. The webview never fetches artwork — the bytes are the
 /// core's cache reads — so the URL needs only the CSP's `data:` image
-/// source.
+/// source. The bytes are the lossless WebP display encode the App's
+/// projection holds, so the URL carries `image/webp`.
 fn encode(artwork: &QueueCardArtwork) -> GuiCardArtwork {
     match artwork {
-        QueueCardArtwork::Image { jpeg, .. } => GuiCardArtwork::Image(data_url("image/jpeg", jpeg)),
+        QueueCardArtwork::Image { bytes, .. } => {
+            GuiCardArtwork::Image(data_url("image/webp", bytes))
+        }
         QueueCardArtwork::Placeholder => {
             GuiCardArtwork::Placeholder(data_url("image/webp", QUEUE_CARD_PLACEHOLDER_BYTES))
         }

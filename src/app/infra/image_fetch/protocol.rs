@@ -640,6 +640,19 @@ fn fetch_audiobookshelf_image(
     }
 }
 
+/// The Emby image fetch's long-side cap: the largest box any display encode
+/// reads. The GUI Hero encodes at 1280 (`App::HERO_ENCODE_LONG_SIDE`), and
+/// one cache entry feeds both Hero and card art, so a single cap serves
+/// every encode — a smaller one leaves the Hero browser upscaling the
+/// server's pixels, and a larger one costs fetch and decode time for pixels
+/// no encode reads.
+const IMAGE_FETCH_MAX_SIDE: u32 = 1280;
+
+/// The Emby image fetch's JPEG quality: the source the cache holds is the
+/// last lossy generation, so it stays high enough that the lossless display
+/// encodes have the pixels the server holds to work from.
+const IMAGE_FETCH_QUALITY: u8 = 90;
+
 fn fetch_emby_image(
     cache_key: &str,
     item_id: &str,
@@ -656,7 +669,8 @@ fn fetch_emby_image(
     let fetched = first_image(types, |kind| {
         fetch_emby_image_type(kind, item_id, series_id, server_url, token)
     });
-    // Cache original server bytes as-is; Emby already resized these to maxHeight=400.
+    // Cache original server bytes as-is; Emby already resized these to the
+    // 1280 long side the display encodes read (`IMAGE_FETCH_MAX_SIDE`).
     if let FetchedBytes::Bytes(ref bytes) = fetched {
         crate::config::write_image_disk_cache(cache_key, bytes);
     }
@@ -700,7 +714,7 @@ fn fetch_emby_image_type(
             return FetchedBytes::Missing;
         };
         let url = format!(
-            "{server_url}/Items/{child_id}/Images/Primary?maxHeight=400&quality=80&api_key={token}"
+            "{server_url}/Items/{child_id}/Images/Primary?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
         );
         return fetch_url(&url);
     }
@@ -716,7 +730,7 @@ fn fetch_emby_image_type(
         _ => "Primary",
     };
     let url = format!(
-        "{server_url}/Items/{src}/Images/{image_kind}?maxHeight=400&quality=80&api_key={token}"
+        "{server_url}/Items/{src}/Images/{image_kind}?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
     );
     fetch_url(&url)
 }

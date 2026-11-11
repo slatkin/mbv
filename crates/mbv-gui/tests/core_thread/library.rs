@@ -179,10 +179,10 @@ fn assert_placeholder(art: GuiLibraryArt) {
     assert!(url.starts_with("data:image/webp;base64,"));
 }
 
-/// The Hero paints the cached art as a `data:image/jpeg` URL.
+/// The Hero paints the cached art as a lossless `data:image/webp` URL.
 fn assert_image(art: GuiLibraryArt) {
     let GuiLibraryArt::Image(url) = art else {
         panic!("the Hero paints the cached art, not {art:?}");
     };
-    assert!(url.starts_with("data:image/jpeg;base64,"));
+    assert!(url.starts_with("data:image/webp;base64,"));
 }

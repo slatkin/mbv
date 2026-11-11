@@ -160,7 +160,7 @@ pub struct GuiStatusIndicator {
 #[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
 pub enum GuiCardArtwork {
     /// The slot paints this image: the cached artwork's display encode, as a
-    /// `data:image/jpeg` URL.
+    /// `data:image/webp` URL.
     Image(String),
     /// The slot paints the bundled placeholder, as a `data:image/webp` URL.
     Placeholder(String),

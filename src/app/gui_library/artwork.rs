@@ -10,7 +10,7 @@ use mbv_components::library_panel::content::{
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
-use super::super::queue_card_artwork::{encode_for_display, encode_jpeg};
+use super::super::queue_card_artwork::{encode_for_display, encode_webp};
 use crate::app::App;
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
@@ -57,7 +57,7 @@ fn emby_fetch_parts(source: ArtworkSource) -> Option<(String, String, String, Ve
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiLibraryArtwork {
     /// The album's cached artwork under `key`, display-encoded.
-    Image { key: String, jpeg: Vec<u8> },
+    Image { key: String, bytes: Vec<u8> },
     /// The album has no cached art and no fetch in flight.
     Placeholder,
     /// The album's art fetch is in flight or awaits its retry.
@@ -105,22 +105,27 @@ impl App {
     /// this box at the Hero's painted aspect, from the full-size source —
     /// the TUI's `cover_fill_hero_box` rule at the Hero pane's painted sizes
     /// (logical points at the GUI's reference density, covering a 2x scale
-    /// factor), so the browser never upscales the Hero's art. The queue
-    /// card's smaller [`encode_for_display`] box stays the row and card
-    /// art's bound.
+    /// factor), so the browser never upscales the Hero's art. The image
+    /// fetch's own cap is the same 1280 long side, so the cache holds
+    /// enough pixels for this encode. The queue card's smaller
+    /// [`encode_for_display`] box stays the row and card art's bound.
     const HERO_ENCODE_LONG_SIDE: u32 = 1280;
 
     /// Encode `img` for the Library Hero's display: cover-cropped to the
     /// aspect the image's own pixels paint (the one rule the Hero's shape
     /// re-arm and the TUI's `cover_fill_hero_box` both apply — landscape
     /// 16:9, square 1:1, portrait 2:3), scaled from the full-size source
-    /// with the hero fill's filter, then JPEG-encoded. The Hero paints the
-    /// result uncropped: the crop the TUI applies at its artwork box happens
-    /// here, at the Hero's own box sizes.
+    /// with the hero fill's filter, then losslessly WebP-encoded. The Hero
+    /// paints the result uncropped: the crop the TUI applies at its artwork
+    /// box happens here, at the Hero's own box sizes.
+    ///
+    /// The encode is lossless for the reason the card encode is
+    /// ([`encode_webp`]): the cached source is already lossy, and a second
+    /// lossy generation is what the TUI's own paint never applies.
     ///
     /// # Panics
     ///
-    /// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
+    /// Panics when the in-memory WebP encode fails: a `Cursor` over a `Vec`
     /// cannot fail to write, so a failure is a bug.
     fn encode_hero_for_display(img: &image::DynamicImage) -> Vec<u8> {
         let shape = painted_shape_for_pixels(img.width(), img.height());
@@ -139,7 +144,7 @@ impl App {
             ),
         };
         let resized = img.resize_to_fill(box_w, box_h, image::imageops::FilterType::Lanczos3);
-        encode_jpeg(&resized)
+        encode_webp(&resized)
     }
 
     /// Project the Hero's artwork for the album `album_id` (design D5): the
@@ -202,7 +207,7 @@ impl App {
         };
         GuiLibraryArtwork::Image {
             key: key.clone(),
-            jpeg: encoded.clone(),
+            bytes: encoded.clone(),
         }
     }
 
@@ -325,10 +330,10 @@ impl App {
         }
         self.gui_hero_art_encoded
             .get(cache_key)
-            .map_or(GuiLibraryArtwork::Placeholder, |jpeg| {
+            .map_or(GuiLibraryArtwork::Placeholder, |bytes| {
                 GuiLibraryArtwork::Image {
                     key: cache_key.to_owned(),
-                    jpeg: jpeg.clone(),
+                    bytes: bytes.clone(),
                 }
             })
     }
@@ -367,10 +372,10 @@ impl App {
         }
         self.gui_home_art_encoded
             .get(cache_key)
-            .map_or(GuiLibraryArtwork::Placeholder, |jpeg| {
+            .map_or(GuiLibraryArtwork::Placeholder, |bytes| {
                 GuiLibraryArtwork::Image {
                     key: cache_key.to_owned(),
-                    jpeg: jpeg.clone(),
+                    bytes: bytes.clone(),
                 }
             })
     }

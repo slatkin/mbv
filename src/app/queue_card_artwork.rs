@@ -22,7 +22,7 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QueueCardArtwork {
     /// The slot paints the cached artwork under `key`, display-encoded.
-    Image { key: String, jpeg: Vec<u8> },
+    Image { key: String, bytes: Vec<u8> },
     /// The slot paints the bundled placeholder: a fetch resolved empty, or
     /// the slot's item carries no resolvable artwork.
     Placeholder,
@@ -36,28 +36,27 @@ pub enum QueueCardArtwork {
 
 /// The display encode box: the artwork encodes to fit within this square
 /// (logical points at the GUI's reference density, covering a 2x scale
-/// factor), so the encode's cost and a frame's payload stay bounded
-/// whatever the source's resolution.
+/// factor), so the encode cost and a frame's payload stay bounded whatever
+/// the source's resolution.
 const ARTWORK_ENCODE_BOX: u32 = 448;
 
-/// The JPEG quality the display encode writes: photographic artwork at the
-/// display box keeps no visible loss above it, and the payload stays an
-/// order of magnitude under a lossless PNG's.
-const ARTWORK_ENCODE_QUALITY: u8 = 85;
-
-/// JPEG-encode a decoded image at the display quality.
+/// Losslessly WebP-encode a decoded image for display.
+///
+/// Lossless is the point. The cached source is already a lossy JPEG from the
+/// server, so a second lossy generation on top of it — with the chroma
+/// subsampling every JPEG encoder applies — smears colour edges the source
+/// still holds. The TUI avoids that by painting the cached bytes themselves;
+/// a Client that paints no terminal protocols re-encodes, and only a lossless
+/// encode leaves the pixels the TUI shows intact.
 ///
 /// # Panics
 ///
-/// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
+/// Panics when the in-memory WebP encode fails: a `Cursor` over a `Vec`
 /// cannot fail to write, so a failure is a bug.
-pub(in crate::app) fn encode_jpeg(img: &image::DynamicImage) -> Vec<u8> {
+pub(in crate::app) fn encode_webp(img: &image::DynamicImage) -> Vec<u8> {
     let mut buf = std::io::Cursor::new(Vec::new());
-    let mut encoder =
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, ARTWORK_ENCODE_QUALITY);
-    encoder
-        .encode_image(img)
-        .expect("JPEG encode of an in-memory cursor cannot fail");
+    img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(&mut buf))
+        .expect("WebP encode of an in-memory cursor cannot fail");
     buf.into_inner()
 }
 
@@ -134,7 +133,7 @@ impl App {
         };
         QueueCardArtwork::Image {
             key: key.clone(),
-            jpeg: encoded.clone(),
+            bytes: encoded.clone(),
         }
     }
 
@@ -163,17 +162,15 @@ impl App {
 }
 
 /// Encode `img` for display: downscaled to fit the [`ARTWORK_ENCODE_BOX`]
-/// box with the card's render filter, then JPEG-encoded.
+/// box, then losslessly WebP-encoded.
 ///
-/// # Panics
-///
-/// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
-/// cannot fail to write, so a failure is a bug.
+/// The downscale uses `Lanczos3`, the filter the TUI's artwork resizes use:
+/// a cheaper filter blurs the fine detail a lossless encode would keep.
 pub(in crate::app) fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
     let resized = img.resize(
         ARTWORK_ENCODE_BOX,
         ARTWORK_ENCODE_BOX,
-        image::imageops::FilterType::Triangle,
+        image::imageops::FilterType::Lanczos3,
     );
-    encode_jpeg(&resized)
+    encode_webp(&resized)
 }
