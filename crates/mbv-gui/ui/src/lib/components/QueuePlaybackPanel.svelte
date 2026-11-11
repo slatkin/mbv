@@ -325,9 +325,11 @@
 		chooser row is its own `targetChoice` region; Esc and an outside press
 		close the popover in the core. The canvas paints no queue-fold control
 		here (`main` audit 4): `q` stays a chord. -->
+	<!-- The header is as tall as the Library top bar (56 px), so the two bottom
+		borders line up across the window; its controls centre vertically. -->
 	<div
 		class="relative flex items-center justify-between whitespace-nowrap"
-		style:height="44px"
+		style:height="56px"
 		style:padding="0 8px 0 4px"
 		style:border-bottom="1px solid var(--mbv-border)"
 	>
