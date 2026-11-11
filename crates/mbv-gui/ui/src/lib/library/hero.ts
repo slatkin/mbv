@@ -139,3 +139,51 @@ export function heroMetaRows(facts: {
 export function heroAttr(attr: string, name: string): string {
 	return attr === '' ? `data-library-hero-${name}` : `data-library-${attr}-hero-${name}`;
 }
+
+/** The facts every Hero carries, as the core's frames declare them. */
+export interface HeroLayoutFacts {
+	title: string;
+	/** The largest unit's name (show, feed, series), when the item has one. */
+	parent?: string | null;
+	metaRows: string[];
+	durationRow: number | null;
+	progressRow: number | null;
+	overview?: string | null;
+}
+
+/** The frame's header and block for one Hero (add-gui-library-panel design D15,
+ * invariant 30): the header's big title is the largest unit — the parent when
+ * the item has one, else the item itself — over the plain facts on one line;
+ * the block beside the art holds the selected item's name (only when a parent
+ * took the header), its duration and progress rows, and its overview. */
+export function heroLayout(
+	facts: HeroLayoutFacts,
+	kicker: string,
+): {
+	header: { kicker: string; title: string; facts: string };
+	block: {
+		label: string;
+		name?: string;
+		meta: HeroMetaRow[];
+		overview: string | null;
+	};
+} {
+	const rows = heroMetaRows(facts);
+	const parent = (facts.parent ?? '') === '' ? null : (facts.parent ?? null);
+	return {
+		header: {
+			kicker,
+			title: parent ?? facts.title,
+			facts: rows
+				.filter((row) => row.role === 'meta' && row.text !== '')
+				.map((row) => row.text)
+				.join(' · '),
+		},
+		block: {
+			label: facts.title,
+			name: parent === null ? undefined : facts.title,
+			meta: rows.filter((row) => row.role !== 'meta'),
+			overview: facts.overview ?? null,
+		},
+	};
+}

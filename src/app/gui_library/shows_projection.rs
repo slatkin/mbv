@@ -205,6 +205,10 @@ pub struct GuiShowsWorkspace {
 pub struct GuiShowsHero {
     /// The hero's title.
     pub title: String,
+    /// The name of the largest unit the item belongs to (the invariant 30 header
+    /// title rule): the show, the feed, or the series. `None` when the item is
+    /// its own largest unit. The meta rows never repeat it.
+    pub parent: Option<String>,
     /// The meta rows in display order.
     pub meta_rows: Vec<String>,
     /// Which meta row paints the duration role, when one does.

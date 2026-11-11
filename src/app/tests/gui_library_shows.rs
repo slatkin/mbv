@@ -247,6 +247,11 @@ fn the_latest_mode_projects_flat_rows_and_the_episode_hero() {
     let hero = projection.hero.expect("the episode Hero paints");
     assert_eq!(hero.title, "The New Case");
     assert_eq!(
+        hero.parent.as_deref(),
+        Some("Alfred"),
+        "the series is the largest unit, so it rides as the Hero's parent"
+    );
+    assert_eq!(
         hero.art_shape,
         crate::app::gui_library::GuiArtShape::Landscape,
         "a thumb-declared episode takes the landscape arm"

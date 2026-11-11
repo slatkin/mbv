@@ -17,7 +17,7 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
-	import { heroMetaRows } from '$lib/library/hero';
+	import { heroLayout } from '$lib/library/hero';
 	import type { GuiFeedsFrame } from '$lib/bridge/types';
 
 	interface Props {
@@ -30,6 +30,9 @@
 	/** The Hero's facts, present exactly while the pane paints. */
 	const hero = $derived(feeds.hero);
 
+	/** The frame's header and block for the Hero (invariant 30). */
+	const layout = $derived(hero === null ? null : heroLayout(hero, 'feed'));
+
 
 	/** Send a Feeds command for the frame's selected entry (design D12, row
 	 * 11.1): the row the frame painted, never a position. */
@@ -41,15 +44,12 @@
 	}
 </script>
 
-{#if hero !== null}
+{#if hero !== null && layout !== null}
 	<LibraryHeroFrame
 		attr="feeds"
 		root="data-library-feeds-hero"
-		header={{ kicker: 'entry', title: hero.title, facts: '' }}
-		block={{
-			label: hero.title,
-			meta: heroMetaRows(hero),
-		}}
+		header={layout.header}
+		block={layout.block}
 		artShape={hero.artShape}
 		art={null}
 		artTitle={hero.title}

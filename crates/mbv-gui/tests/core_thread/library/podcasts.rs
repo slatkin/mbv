@@ -165,7 +165,7 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
     );
     let hero = podcasts.hero.expect("the Hero paints");
     assert_eq!(hero.title, "B New");
-    assert_eq!(hero.meta_rows[0], "Show B");
+    assert_eq!(hero.parent.as_deref(), Some("Show B"));
     assert_eq!(
         hero.overview.as_deref(),
         Some("The B show's newest episode.")

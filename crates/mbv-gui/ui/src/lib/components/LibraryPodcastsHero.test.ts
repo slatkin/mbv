@@ -26,14 +26,15 @@ beforeEach(() => {
 /** The library index the Podcasts commands name. */
 const LIB_IDX = 4;
 
-/** The selected episode's Hero facts: three meta rows — the show, the
- * duration, and the publish date — with the duration role marked, and the
+/** The selected episode's Hero facts: the show as the parent, two meta rows — the
+ * duration and the publish date — with the duration role marked, and the
  * description (design D12, row 10.1). */
 function hero(artShape: GuiPodcastsHero['artShape'] = 'square'): GuiPodcastsHero {
 	return {
 		title: 'Episode 12: The Long Road',
-		metaRows: ['Bits and Bites', '0 h 54 m', '08 Oct'],
-		durationRow: 1,
+		parent: 'Bits and Bites',
+		metaRows: ['0 h 54 m', '08 Oct'],
+		durationRow: 0,
 		progressRow: null,
 		overview: 'A conversation about long walks.',
 		artShape,
@@ -84,22 +85,22 @@ test.each([
 	expect(box.style.height).toBe(height);
 });
 
-test('the Hero paints its title, its meta rows with their roles, and its overview', () => {
+test('the Hero paints the show as its title, the episode in the block, the duration beside the art, and the overview', () => {
 	const container = mount();
 
 	expect(container.querySelector('[data-library-podcasts-hero-title]')?.textContent).toBe(
+		'Bits and Bites',
+	);
+	expect(container.querySelector('[data-library-podcasts-hero-facts]')?.textContent).toBe(
+		'08 Oct',
+	);
+	expect(container.querySelector('[data-library-podcasts-hero-block-name]')?.textContent).toBe(
 		'Episode 12: The Long Road',
 	);
 	const meta = [...container.querySelectorAll('[data-library-podcasts-hero-role]')];
-	expect(meta.map((row) => row.textContent)).toEqual([
-		'Bits and Bites',
-		'0 h 54 m',
-		'08 Oct',
-	]);
+	expect(meta.map((row) => row.textContent)).toEqual(['0 h 54 m']);
 	expect(meta.map((row) => row.getAttribute('data-library-podcasts-hero-role'))).toEqual([
-		'meta',
 		'duration',
-		'meta',
 	]);
 	expect(container.querySelector('[data-library-podcasts-hero-overview]')?.textContent).toBe(
 		'A conversation about long walks.',
@@ -161,6 +162,6 @@ test('the Hero paints no play-next control', () => {
 test('the Hero paints the frame header above its artwork', () => {
 	const container = mount();
 
-	expect(container.querySelector('[data-library-podcasts-hero-kicker]')?.textContent).toBe('episode');
+	expect(container.querySelector('[data-library-podcasts-hero-kicker]')?.textContent).toBe('podcast');
 	expect(container.querySelector('[data-library-podcasts-hero-title]')?.tagName).toBe('H1');
 });

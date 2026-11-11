@@ -84,7 +84,9 @@ impl App {
         workspace: Option<GuiShowsWorkspace>,
     ) -> GuiShowsHero {
         let content = primary_poster(hero_content_emby(item), false);
-        self.gui_shows_hero_from(&content, workspace)
+        let mut hero = self.gui_shows_hero_from(&content, workspace);
+        hero.parent = Some(item.series_name.clone()).filter(|series| !series.is_empty());
+        hero
     }
 
     /// The TUI series producer's facts for one series (design D14): the genre,
@@ -116,6 +118,7 @@ impl App {
         let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
         GuiShowsHero {
             title: content.facts.title.clone(),
+            parent: None,
             meta_rows: content.facts.meta_rows.clone(),
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,

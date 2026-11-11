@@ -484,9 +484,13 @@ fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "B New");
-    assert_eq!(hero.meta_rows.len(), 3, "the show, the duration, the date");
-    assert_eq!(hero.meta_rows[0], "Show B");
-    assert_eq!(hero.duration_row, Some(1));
+    assert_eq!(
+        hero.parent.as_deref(),
+        Some("Show B"),
+        "the show is the largest unit, so it rides as the parent and not as a meta row"
+    );
+    assert_eq!(hero.meta_rows.len(), 2, "the duration, the date");
+    assert_eq!(hero.duration_row, Some(0));
     assert_eq!(
         hero.overview.as_deref(),
         Some("The B show's newest episode."),

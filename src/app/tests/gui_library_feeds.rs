@@ -283,9 +283,13 @@ fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero(
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "a-new");
     assert_eq!(
-        hero.meta_rows,
-        ["Feed A"],
-        "the subscription name rides the meta rows, and an entry of no duration adds none"
+        hero.parent.as_deref(),
+        Some("Feed A"),
+        "the feed is the largest unit"
+    );
+    assert!(
+        hero.meta_rows.is_empty(),
+        "an entry of no duration adds no meta row, and the feed name is the parent"
     );
     assert_eq!(hero.duration_row, None);
     assert_eq!(hero.progress_row, None);

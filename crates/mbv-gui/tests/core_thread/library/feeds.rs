@@ -186,7 +186,7 @@ fn the_frame_carries_the_feed_list_after_the_open() {
     );
     let hero = feeds.hero.expect("the Hero paints");
     assert_eq!(hero.title, "a-new");
-    assert_eq!(hero.meta_rows, ["Feed A"]);
+    assert_eq!(hero.parent.as_deref(), Some("Feed A"));
     assert_eq!(
         hero.art_shape,
         mbv_gui::bridge::frame::library::GuiArtShapeFrame::Square
@@ -243,7 +243,7 @@ fn the_select_command_moves_the_hero() {
     assert_eq!(feeds.selected.as_deref(), Some(row.as_str()));
     let hero = feeds.hero.expect("the Hero paints");
     assert_eq!(hero.title, "b-mid");
-    assert_eq!(hero.meta_rows[0], "Feed B");
+    assert_eq!(hero.parent.as_deref(), Some("Feed B"));
 }
 
 /// The play and queue commands reach the Owner through the TUI's feed paths

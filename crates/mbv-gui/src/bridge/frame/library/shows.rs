@@ -150,6 +150,8 @@ pub struct GuiShowsRowFrame {
 pub struct GuiShowsHeroFrame {
     /// The hero's title.
     pub title: String,
+    /// The name of the largest unit the item belongs to; see the projection.
+    pub parent: Option<String>,
     /// The meta rows in display order.
     pub meta_rows: Vec<String>,
     /// Which meta row paints the duration role, when one does.
@@ -297,6 +299,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
     fn from(hero: &GuiShowsHero) -> Self {
         Self {
             title: hero.title.clone(),
+            parent: hero.parent.clone(),
             meta_rows: hero.meta_rows.clone(),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,

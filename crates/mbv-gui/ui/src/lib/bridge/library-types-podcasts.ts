@@ -76,8 +76,10 @@ export interface GuiPodcastsRow {
 export interface GuiPodcastsHero {
 	/** The hero's title: the episode title. */
 	title: string;
-	/** The meta rows in display order: the show title, the duration, and the
-	 * publish date. */
+	/** The parent show's title: the largest unit, painted as the header's title. */
+	parent?: string | null;
+	/** The meta rows in display order: the duration, then the publish date
+	 * (the show title is the parent). */
 	metaRows: string[];
 	/** Which meta row paints the duration role, when one does. */
 	durationRow: number | null;

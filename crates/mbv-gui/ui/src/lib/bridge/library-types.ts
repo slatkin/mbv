@@ -525,6 +525,8 @@ export interface GuiShowsRow {
  * Hero's Workspace. */
 export interface GuiShowsHero {
 	title: string;
+	/** The series' name on an episode Hero: the largest unit, the header's title. */
+	parent?: string | null;
 	metaRows: string[];
 	durationRow: number | null;
 	progressRow: number | null;

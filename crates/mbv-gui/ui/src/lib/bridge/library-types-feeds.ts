@@ -80,8 +80,10 @@ export interface GuiFeedsRow {
 export interface GuiFeedsHero {
 	/** The hero's title: the entry title. */
 	title: string;
-	/** The meta rows in display order: the subscription name, then the
-	 * duration when the entry declares one. */
+	/** The subscription's name: the largest unit, painted as the header's title. */
+	parent?: string | null;
+	/** The meta rows in display order: the duration when the entry declares
+	 * one (the subscription name is the parent). */
 	metaRows: string[];
 	/** Which meta row paints the duration role, when one does. */
 	durationRow: number | null;

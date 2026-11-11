@@ -85,6 +85,8 @@ pub struct GuiPodcastsRowFrame {
 pub struct GuiPodcastsHeroFrame {
     /// The hero's title: the episode title.
     pub title: String,
+    /// The name of the largest unit the item belongs to; see the projection.
+    pub parent: Option<String>,
     /// The meta rows in display order: the show title, the duration, and the
     /// publish date.
     pub meta_rows: Vec<String>,
@@ -155,6 +157,7 @@ impl From<&GuiPodcastsHero> for GuiPodcastsHeroFrame {
     fn from(hero: &GuiPodcastsHero) -> Self {
         Self {
             title: hero.title.clone(),
+            parent: hero.parent.clone(),
             meta_rows: hero.meta_rows.clone(),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,

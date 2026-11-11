@@ -95,16 +95,18 @@ test('the portrait Hero places its artwork box at the portrait size', () => {
 	expect(box.style.height).toBe('450px');
 });
 
-test('the Hero paints its title and its meta rows with their roles', () => {
+test('the Hero paints its title, its plain facts under it, and its duration and progress beside the art', () => {
 	const container = mountFrame(hero());
 
 	expect(container.querySelector('[data-library-abs-hero-title]')?.textContent).toBe(
 		'The Caves of Steel',
 	);
+	expect(container.querySelector('[data-library-abs-hero-facts]')?.textContent).toBe(
+		'Isaac Asimov',
+	);
 	const meta = [...container.querySelectorAll('[data-library-abs-hero-role]')];
-	expect(meta.map((row) => row.textContent)).toEqual(['Isaac Asimov', '9 h 51 m', '17%']);
+	expect(meta.map((row) => row.textContent)).toEqual(['9 h 51 m', '17%']);
 	expect(meta.map((row) => row.getAttribute('data-library-abs-hero-role'))).toEqual([
-		'meta',
 		'duration',
 		'progress',
 	]);

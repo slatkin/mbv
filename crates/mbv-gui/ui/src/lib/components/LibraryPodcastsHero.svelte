@@ -16,7 +16,7 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
-	import { heroMetaRows } from '$lib/library/hero';
+	import { heroLayout } from '$lib/library/hero';
 	import type { GuiPodcastsFrame } from '$lib/bridge/types';
 
 	interface Props {
@@ -29,6 +29,9 @@
 	/** The Hero's facts, present exactly while the pane paints. */
 	const hero = $derived(podcasts.hero);
 
+	/** The frame's header and block for the Hero (invariant 30). */
+	const layout = $derived(hero === null ? null : heroLayout(hero, 'podcast'));
+
 
 	/** Send a Podcasts command for the frame's selected episode (design D12,
 	 * row 10.1): the row the frame painted, never a position. */
@@ -40,16 +43,12 @@
 	}
 </script>
 
-{#if hero !== null}
+{#if hero !== null && layout !== null}
 	<LibraryHeroFrame
 		attr="podcasts"
 		root="data-library-podcasts-hero"
-		header={{ kicker: 'episode', title: hero.title, facts: '' }}
-		block={{
-			label: hero.title,
-			meta: heroMetaRows(hero),
-			overview: hero.overview ?? null,
-		}}
+		header={layout.header}
+		block={layout.block}
 		artShape={hero.artShape}
 		art={hero.art ?? null}
 		artTitle={hero.title}

@@ -19,6 +19,7 @@
 	import { ListEnd, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import { heroLayout } from '$lib/library/hero';
 	import type { GuiShowsEpisodeRow, GuiShowsFrame } from '$lib/bridge/types';
 	import {
 		episodeProgress,
@@ -42,6 +43,15 @@
 
 	/** The series Hero's Workspace, or `null` on a Hero that paints none. */
 	const workspace = $derived(hero?.workspace ?? null);
+
+	/** A Latest episode's header and block (invariant 30): the series is the
+	 * largest unit and titles the header, and the episode is the block's name.
+	 * `null` on the series Hero, whose Workspace holds the seasons. */
+	const episodeLayout = $derived(
+		hero === null || workspace !== null
+			? null
+			: heroLayout(hero, (hero.parent ?? '') === '' ? 'episode' : 'series'),
+	);
 
 	/** The selected season's name: the detail block's name, as the album's is
 	 * Music's. Empty on a Hero that paints no Workspace. */
@@ -110,12 +120,12 @@
 	<LibraryHeroFrame
 		attr="shows"
 		root="data-library-shows-hero"
-		header={{
-			kicker: workspace !== null ? 'series' : 'episode',
+		header={episodeLayout?.header ?? {
+			kicker: 'series',
 			title: hero.title,
 			facts: hero.metaRows.filter((row) => row !== '').join(' · '),
 		}}
-		block={{
+		block={episodeLayout?.block ?? {
 			label: hero.title,
 			name: seasonName,
 			facts: seasonFacts,

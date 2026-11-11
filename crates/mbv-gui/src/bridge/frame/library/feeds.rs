@@ -87,8 +87,10 @@ pub struct GuiFeedsRowFrame {
 pub struct GuiFeedsHeroFrame {
     /// The hero's title: the entry title.
     pub title: String,
-    /// The meta rows in display order: the subscription name, then the
-    /// duration when the entry declares one.
+    /// The name of the largest unit the item belongs to; see the projection.
+    pub parent: Option<String>,
+    /// The meta rows in display order: the duration when the entry
+    /// declares one (the subscription name is the parent).
     pub meta_rows: Vec<String>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
@@ -146,6 +148,7 @@ impl From<&GuiFeedsHero> for GuiFeedsHeroFrame {
     fn from(hero: &GuiFeedsHero) -> Self {
         Self {
             title: hero.title.clone(),
+            parent: hero.parent.clone(),
             meta_rows: hero.meta_rows.clone(),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,

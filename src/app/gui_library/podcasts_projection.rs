@@ -160,6 +160,10 @@ pub struct GuiPodcastsRow {
 pub struct GuiPodcastsHero {
     /// The hero's title: the episode title.
     pub title: String,
+    /// The name of the largest unit the item belongs to (the invariant 30 header
+    /// title rule): the show, the feed, or the series. `None` when the item is
+    /// its own largest unit. The meta rows never repeat it.
+    pub parent: Option<String>,
     /// The meta rows in display order: the show title, the duration, and the
     /// publish date, exactly as the producer orders them.
     pub meta_rows: Vec<String>,
@@ -363,10 +367,19 @@ impl App {
             }) => self.gui_podcast_episode_artwork(library_item_id),
             Some(_) | None => None,
         };
+        // The show is the largest unit and rides as the parent: the producer puts
+        // it first, so the rows drop it and the duration index follows.
+        let parent = item.show_title.clone().filter(|show| !show.is_empty());
+        let skip = usize::from(parent.is_some());
+        let duration_row = content
+            .facts
+            .duration_row
+            .and_then(|row| row.checked_sub(skip));
         Some(GuiPodcastsHero {
             title: content.facts.title.clone(),
-            meta_rows: content.facts.meta_rows.clone(),
-            duration_row: content.facts.duration_row,
+            parent,
+            meta_rows: content.facts.meta_rows.iter().skip(skip).cloned().collect(),
+            duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
             art_shape: artwork_shape(

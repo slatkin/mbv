@@ -28,8 +28,9 @@ beforeEach(() => {
 function hero(artShape: GuiFeedsHero['artShape']): GuiFeedsHero {
 	return {
 		title: 'The Long Road Home',
-		metaRows: ['Bits and Bites', '0 h 54 m'],
-		durationRow: 1,
+		parent: 'Bits and Bites',
+		metaRows: ['0 h 54 m'],
+		durationRow: 0,
 		progressRow: null,
 		artShape,
 	};
@@ -78,16 +79,18 @@ test.each([
 	expect(box.textContent).toContain("the window's placeholder");
 });
 
-test('the Hero paints its title and its meta rows with their roles', () => {
+test('the Hero paints the feed as its title, the entry in the block, and the duration beside the art', () => {
 	const container = mount();
 
 	expect(container.querySelector('[data-library-feeds-hero-title]')?.textContent).toBe(
+		'Bits and Bites',
+	);
+	expect(container.querySelector('[data-library-feeds-hero-block-name]')?.textContent).toBe(
 		'The Long Road Home',
 	);
 	const meta = [...container.querySelectorAll('[data-library-feeds-hero-role]')];
-	expect(meta.map((row) => row.textContent)).toEqual(['Bits and Bites', '0 h 54 m']);
+	expect(meta.map((row) => row.textContent)).toEqual(['0 h 54 m']);
 	expect(meta.map((row) => row.getAttribute('data-library-feeds-hero-role'))).toEqual([
-		'meta',
 		'duration',
 	]);
 });
@@ -153,6 +156,6 @@ test('the Hero paints no play-next control', () => {
 test('the Hero paints the frame header above its artwork', () => {
 	const container = mount();
 
-	expect(container.querySelector('[data-library-feeds-hero-kicker]')?.textContent).toBe('entry');
+	expect(container.querySelector('[data-library-feeds-hero-kicker]')?.textContent).toBe('feed');
 	expect(container.querySelector('[data-library-feeds-hero-title]')?.tagName).toBe('H1');
 });

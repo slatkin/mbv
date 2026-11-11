@@ -132,8 +132,12 @@ pub struct GuiFeedsRow {
 pub struct GuiFeedsHero {
     /// The hero's title: the entry title.
     pub title: String,
-    /// The meta rows in display order: the subscription name, then the
-    /// duration when the entry declares one.
+    /// The name of the largest unit the item belongs to (the invariant 30 header
+    /// title rule): the show, the feed, or the series. `None` when the item is
+    /// its own largest unit. The meta rows never repeat it.
+    pub parent: Option<String>,
+    /// The meta rows in display order: the duration when the entry
+    /// declares one (the subscription name is the parent).
     pub meta_rows: Vec<String>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
@@ -276,16 +280,14 @@ impl App {
             .iter()
             .find(|known| feed_entry_matches(known, entry))?;
         let content = hero_content_feed(entry);
-        let mut meta_rows = Vec::with_capacity(content.facts.meta_rows.len() + 1);
-        if let Some(name) = self.gui_feeds_subscription_name(entry.feed_id.as_deref()) {
-            meta_rows.push(name.to_string());
-        }
-        let duration_row = content.facts.duration_row.map(|row| row + meta_rows.len());
-        meta_rows.extend(content.facts.meta_rows.iter().cloned());
+        let parent = self
+            .gui_feeds_subscription_name(entry.feed_id.as_deref())
+            .map(str::to_string);
         Some(GuiFeedsHero {
             title: content.facts.title.clone(),
-            meta_rows,
-            duration_row,
+            parent,
+            meta_rows: content.facts.meta_rows.clone(),
+            duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             art_shape: artwork_shape(content.facts.artwork.shape),
         })
