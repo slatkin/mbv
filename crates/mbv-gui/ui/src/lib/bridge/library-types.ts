@@ -597,6 +597,8 @@ export type {
 	GuiHomeRowState,
 } from './library-types-home';
 
+export type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
+
 export type {
 	GuiSearchFrame,
 	GuiSearchLibraryCommand,

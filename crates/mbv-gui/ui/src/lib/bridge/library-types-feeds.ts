@@ -1,12 +1,14 @@
 // The Feeds DTOs of the GUI bridge contract (openspec change
 // add-gui-library-panel, design D12, row 11.1). Each type mirrors one serde
-// DTO in crates/mbv-gui/src/bridge/frame/library/feeds.rs field for field: the
-// names are the serde wire names, so a rename on the Rust side is a rename
-// here. `library-types.ts` re-exports this family with the rest of the
-// Library's wire types, so every call site keeps importing from the one bridge
-// module.
+// DTO in crates/mbv-gui/src/bridge/frame/library/feeds.rs field for field:
+// the names are the serde wire names, so a rename on the Rust side is a
+// rename here. The pill row and the entry rows are the shared entry-list
+// types (`library-types-entry-list.ts`, mirrored by the shared serde DTOs in
+// `bridge/frame/library/entry_list.rs`) over this destination's pill DTO.
+// `library-types.ts` re-exports this family with the rest of the Library's
+// wire types, so every call site keeps importing from the one bridge module.
 
-import type { GuiHomeRowState } from './library-types';
+import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
 
 /** The Feeds destination's content (design D12, row 11.1), present while
  * Feeds is the active destination: the single-select pill row of Latest and
@@ -37,41 +39,19 @@ export interface GuiFeedsFrame {
 	hero: GuiFeedsHero | null;
 }
 
-/** One pill of the Feeds pill row (design D12, row 11.1): single-select. */
-export interface GuiFeedsPill {
-	/** The pill's selection: the set-pill command carries it back. */
-	pill: GuiFeedPill;
-	/** The pill's label: `Latest`, or the subscription's name. */
-	name: string;
-	/** Whether the core's stored pill is this one. */
-	selected: boolean;
-	/** Whether the pill is a collection pill (multi-select) rather than a
-	 * single-select one. Every Feeds pill is single-select. */
-	collection: boolean;
-}
+/** One pill of the Feeds pill row (design D12, row 11.1): the shared
+ * single-select pill frame over the Feeds pill. */
+export type GuiFeedsPill = GuiLibraryPill<GuiFeedPill>;
 
 /** One Feeds pill (design D12, row 11.1): the merged Latest view, or one
  * subscription by its URL. */
 export type GuiFeedPill = { kind: 'latest' } | { kind: 'subscription'; id: string };
 
-/** One row of the Feeds list (design D12, row 11.1). The identity is the
- * entry's `(subscription url, guid)` pair as one opaque string a select,
- * play, or enqueue command sends, never a row position: two subscriptions can
- * publish the same `guid`. */
-export interface GuiFeedsRow {
-	/** The entry's stable identity, as one opaque string. */
-	id: string;
-	/** The entry's display title. */
-	title: string;
-	/** The subscription's name; `null` on an entry whose subscription the tab
-	 * no longer holds. */
-	subtitle: string | null;
-	/** The gutter date, `day month`; `null` on an undated entry. */
-	date: string | null;
-	/** The row's played state, with the resume percent on a partly played
-	 * entry. */
-	state: GuiHomeRowState;
-}
+/** One row of the Feeds list (design D12, row 11.1) — the shared entry row.
+ * The identity is the entry's `(subscription url, guid)` pair as one opaque
+ * string a select, play, or enqueue command sends, never a row position: two
+ * subscriptions can publish the same `guid`. */
+export type GuiFeedsRow = GuiLibraryEntryRow;
 
 /** The selected entry's Hero facts (design D12, row 11.1): the TUI
  * `hero_content_feed` producer's title and duration behind the subscription

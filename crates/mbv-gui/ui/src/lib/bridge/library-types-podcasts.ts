@@ -2,11 +2,14 @@
 // add-gui-library-panel, design D12, row 10.1). Each type mirrors one serde
 // DTO in crates/mbv-gui/src/bridge/frame/library/podcasts.rs field for field:
 // the names are the serde wire names, so a rename on the Rust side is a
-// rename here. `library-types.ts` re-exports this family with the rest of the
-// Library's wire types, so every call site keeps importing from the one
-// bridge module.
+// rename here. The pill row and the entry rows are the shared entry-list
+// types (`library-types-entry-list.ts`, mirrored by the shared serde DTOs in
+// `bridge/frame/library/entry_list.rs`) over this destination's pill DTO.
+// `library-types.ts` re-exports this family with the rest of the Library's
+// wire types, so every call site keeps importing from the one bridge module.
 
-import type { GuiHomeRowState, GuiLibraryArt } from './library-types';
+import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
+import type { GuiLibraryArt } from './library-types';
 import type { GuiPodcastPill } from './library-types';
 
 /** The Podcasts destination's content (design D12, row 10.1), present while
@@ -39,35 +42,15 @@ export interface GuiPodcastsFrame {
 	hero: GuiPodcastsHero | null;
 }
 
-/** One pill of the Podcasts pill row (design D12, row 10.1): single-select. */
-export interface GuiPodcastsPill {
-	/** The pill's selection: the set-pill command carries it back. */
-	pill: GuiPodcastPill;
-	/** The pill's label: `Latest`, or the show's title. */
-	name: string;
-	/** Whether the core's stored pill is this one. */
-	selected: boolean;
-	/** Whether the pill is a collection pill (multi-select) rather than a
-	 * single-select one. Every Podcasts pill is single-select. */
-	collection: boolean;
-}
+/** One pill of the Podcasts pill row (design D12, row 10.1): the shared
+ * single-select pill frame over the Podcasts pill. */
+export type GuiPodcastsPill = GuiLibraryPill<GuiPodcastPill>;
 
-/** One row of the Podcasts list (design D12, row 10.1). The identity is the
- * episode's stable `(library_item_id, episode_id)` pair as one opaque string
- * a select, play, or enqueue command sends, never a row position. */
-export interface GuiPodcastsRow {
-	/** The episode's stable identity, as one opaque string. */
-	id: string;
-	/** The episode's display title. */
-	title: string;
-	/** The parent show's title. */
-	subtitle: string | null;
-	/** The gutter date, `day month`; `null` on an undated episode. */
-	date: string | null;
-	/** The row's played state, with the resume percent on a partly played
-	 * episode. */
-	state: GuiHomeRowState;
-}
+/** One row of the Podcasts list (design D12, row 10.1) — the shared entry
+ * row. The identity is the episode's stable `(library_item_id, episode_id)`
+ * pair as one opaque string a select, play, or enqueue command sends, never a
+ * row position. */
+export type GuiPodcastsRow = GuiLibraryEntryRow;
 
 /** The selected episode's Hero facts (design D12, row 10.1): the TUI
  * producer's facts — the episode title, the show, the duration, and the
