@@ -40,6 +40,8 @@
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
+	import LibraryItemRow from './LibraryItemRow.svelte';
+	import LibraryLetterHeading from './LibraryLetterHeading.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import { canvasVar } from '$lib/bridge/theme';
 
@@ -217,16 +219,7 @@
 	>
 		{#snippet row(row)}
 					{#if row.kind === 'heading'}
-					<div
-						class="flex items-end font-mono"
-						style:height="{row.height}px"
-						style:padding="0 8px 2px"
-						style:font-size="12px"
-						style:color="var(--canvas-source)"
-						data-library-shows-letter={row.letter}
-					>
-						{row.letter}
-					</div>
+					<LibraryLetterHeading attr="shows" letter={row.letter} height={row.height} />
 				{:else if row.kind === 'series' || row.kind === 'season'}
 					<button
 						type="button"
@@ -321,51 +314,24 @@
 						{/if}
 					</button>
 				{:else}
-					<button
-						type="button"
-						class="relative flex w-full items-center overflow-hidden"
-						style:height="{row.height}px"
-						style:padding="0 12px"
-						style:gap="10px"
-						style:border="0"
-						style:border-radius="4px"
-						style:text-align="left"
-						style:font-size="14px"
-						style:background={rowBackground(row)}
-						style:cursor="pointer"
-						data-library-shows-row="flat"
-						data-library-shows-row-id={row.id}
-						data-library-shows-cursor={row.id === $showsUi.cursor ? '' : undefined}
-						data-library-shows-selected={isSelectedRow(row) ? '' : undefined}
-						onclick={() => pressShowsRow(row)}
-						ondblclick={() => playShowsRow(row.row.id)}
-						oncontextmenu={(event) => rowMenu(event, row)}
-					>
-						<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
-							<span
-								class="truncate"
-								style:color={canvasVar('text')}
-								style:font-weight={isSelectedRow(row) ? 600 : 400}
-								data-library-shows-title="">{row.row.title}</span
-							>
-							{#if row.row.subtitle !== null}
-								<span
-									class="truncate"
-									style:font-size="12px"
-									style:color="var(--canvas-muted)"
-									data-library-shows-subtitle="">{row.row.subtitle}</span
-								>
-							{/if}
-						</span>
-						{#if row.row.date !== null}
-							<span
-								class="flex-none font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-shows-date="">{row.row.date}</span
-							>
-						{/if}
-					</button>
+					<LibraryItemRow
+						attr="shows"
+						kind="flat"
+						id={row.id}
+						height={row.height}
+						title={row.row.title}
+						subtitle={row.row.subtitle}
+						trail={row.row.date}
+						trailPart="date"
+						titleColor={canvasVar('text')}
+						background={rowBackground(row)}
+						cursor={row.id === $showsUi.cursor}
+						selected={isSelectedRow(row)}
+						progress={null}
+						onpress={() => pressShowsRow(row)}
+						onplay={() => playShowsRow(row.row.id)}
+						oncontext={(event) => rowMenu(event, row)}
+					/>
 				{/if}
 			{/snippet}
 	</LibraryVirtualList>
