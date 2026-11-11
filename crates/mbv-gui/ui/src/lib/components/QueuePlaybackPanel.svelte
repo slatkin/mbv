@@ -420,18 +420,18 @@
 			left (`main` audit 7); a non-episode item paints none. -->
 		{#if art && art.kind !== 'hidden'}
 			<div
-				class="relative flex items-center justify-center overflow-hidden"
-				style:height="225px"
+				class="relative flex w-fit max-w-full items-center justify-center overflow-hidden"
+				style:height={art.kind === 'image' ? undefined : '225px'}
 				style:background="var(--mbv-secondary)"
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
 				{#if art.kind === 'image' || art.kind === 'placeholder'}
 					<img
-						class="h-full w-full object-contain"
+						class="block"
 						alt=""
 						src={art.detail}
-						use:capToNaturalSize
+						use:capToNaturalSize={{ height: 225 }}
 					/>
 				{:else}
 					<!-- The canvas's source caption while no image lands
