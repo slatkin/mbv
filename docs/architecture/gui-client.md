@@ -92,7 +92,9 @@ its message and button row, and the daemon-lost recovery dialog with its
 diagnostics and recovery choices), the Queue playback projection
 (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
 projection (`GuiStatusBar`), the Library panel's section (`GuiLibraryFrame`;
-*The Library panel* names it), and the theme when it is armed (`GuiTheme`).
+*The Library panel* names it), the Settings screen's section
+(`GuiSettingsFrame`; *The Settings screen* names it), the UI-reset counter
+(`uiResetEpoch`), and the theme when it is armed (`GuiTheme`).
 The window picks the panel state from the frame's toggles and its own
 measurement of the panel container; the frame carries no breakpoint class
 (design D10).
@@ -127,7 +129,7 @@ image. A move away from the bar carries no hover. An item with no
 trickplay, a sheet not yet cached, or a tile the server does not hold paints
 the time and the chapter without a tile.
 
-Front end to Rust there are three commands, registered in
+Front end to Rust there are five commands, registered in
 `src/main.rs`. Each only pushes into the core channel:
 
 - `key(DomKey)`: the DOM `KeyboardEvent` fields. `src/bridge/keys.rs`
@@ -149,6 +151,9 @@ Front end to Rust there are three commands, registered in
   size in logical pixels (`src/bridge/layout.rs`).
 - `library(GuiLibraryCommand)`: the Library panel's one semantic request,
   pushed into the core channel as `CoreInput::Library` (*The Library panel*
+  names the variants).
+- `settings(GuiSettingsCommand)`: the Settings screen's one semantic request,
+  pushed into the core channel as `CoreInput::Settings` (*The Settings screen*
   names the variants).
 
 The front end interprets no input apart from the Library panel's own keys and
@@ -1056,6 +1061,78 @@ them under another destination. The restore is idempotent, so the catalog and
 library drains call it whenever their content can complete a phase. The saved
 picks restore with the group list, and a group with no pick heroes its first
 album (design D13).
+
+## The Settings screen
+
+`settings(GuiSettingsCommand)` is the fifth bridge command (`src/main.rs`). It
+only pushes `CoreInput::Settings` into the core channel, as the other commands
+do. `src/bridge/settings.rs` translates the wire variants and
+`App::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
+each one through the existing `App` method, so the TUI's own paths do not
+change. The variants are `close`, `selectSection` (`section`), `activate`
+(`setting`, the `SettingKey` name), `applyChoices` (`kind`, `selected`),
+`assignRoute` (`library`, `endpoint` or none), `embySetup` (`serverUrl`,
+`username`, `password`), `audiobookshelfSetup` (`serverUrl`, `apiKey`),
+`serviceAction` (`action`), `cancelSetup` (`service`), `feedAdd` (`name`,
+`url`, `kind`), `feedEdit` (`url`, `name`, `kind`), `feedRemove` (`url`),
+`keysCapture` (`target`, `key` as a `DomKey`), `keysReset` (`action`),
+`keysClear` (`target`), `selectTarget` (`target`), `playlistOpen`,
+`playlistBack`, and `playlistRefresh` (`id` or none), `playlistAction` and
+`playlistItemAction` (`id`, the item `id`, and `play`, `shuffle`, or
+`enqueue`), `playlistRename` (`id`, `name`), `playlistDelete` (`id`), and
+`resetUiState`. Identities are stable — a `SettingKey` name, a playlist id, a
+feed URL, a chord — never row positions, so a command built from a stale frame
+addresses what that frame painted or nothing, and a `setting` name this build
+declares no key for logs and changes nothing. `src/bridge/keys.rs` translates a
+`keysCapture` press to the neutral `KeyEvent` the router normalizes, so the
+window never forms a chord string and the two Clients cannot disagree on one
+chord's spelling.
+
+The Client core owns whether the screen is open and which section it shows
+(`App::gui_settings`, `src/app/gui_settings.rs`); the window content owns its
+interaction state — the sidebar cursor, the keyboard pane, each list's cursor
+and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
+frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the
+sidebar lists, and `content`, a tagged union with `rows` (an F2 page's rows),
+`services`, `feeds`, `keys`, `sessions`, and `playlists`. Each F2 row carries
+its stable setting name, its label, its kind (toggle, cycle, choice list, or
+action), its value text, its toggle flag, and its choices once the section's
+load lands. The Services content carries each Service's state and the actions
+the TUI offers for it, with the open setup form's progress and error; the Keys
+content the prefix chord, one row per `AllClients` action, and the last
+refusal; the Sessions content the same playback-target choices the header's
+chooser lists; and the Playlists content the saved list, the open playlist, and
+the loading flags. No variant carries a password, an API key, or any other
+Service credential. `GuiFrame.settings` is `None` while the screen is closed,
+so the window mounts the screen only for a frame that carries it.
+
+The sidebar requests reach the GUI through one per-tick drain
+(`CoreThread::drain_pending_overlay`, `src/core_thread/settings.rs`).
+`ClientTickHost` gets no new hook: after input routing the core takes
+`App::pending_overlay` once and matches it exhaustively — one documented arm
+per variant, no wildcard. `ToggleSidebar(Settings)` toggles the F2 group,
+`ToggleSidebar(Sessions)` and `ToggleSidebar(Playlists)` toggle their own
+sections, and the toggle rule is the spec's: closed opens at the action's
+section, the action's own group closes, and any other section switches.
+`OpenSidebar(Settings)` opens the screen at the section `settings_destination`
+names, so the first-start open reaches the GUI with no new code in `construct`,
+and `DismissSidebar(Playlists)` closes the screen while it shows Playlists,
+which is what the playlist play's `ReplacementExecutor` request does. Every
+other variant is a TUI overlay the GUI does not present: it logs
+`gui.overlay_request.undelivered` at debug level and drops. The drain also
+clears a stale request, which `run_replacement` reads through
+`pending_overlay.is_none()`.
+
+Opening the screen pushes `ComponentId::Overlay(OverlayId::Settings)` onto the
+core `FocusStack`, and closing pops it. The GUI keeps no `GuiSurfaceLeaf` for
+that id, so a key routes with no leaf: global and transport actions fire, while
+a queue-scoped gate such as `ClearQueuePrompt` reads a focus that is not the
+Queue and stays closed. Settings is not added to `is_blocking_overlay`, so the
+two Clients' overlay rules stay the TUI's.
+
+The frame carries the UI-reset counter `uiResetEpoch` (design D10): the window
+resets its Library interaction stores and its panel widths when the value
+changes, and the TUI's own reset does not move it.
 
 ## The attach states
 
