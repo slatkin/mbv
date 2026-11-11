@@ -28,7 +28,9 @@ export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | unde
 		const ratio = window.devicePixelRatio || 1;
 		const width = img.naturalWidth / ratio;
 		const height = img.naturalHeight / ratio;
-		img.style.maxWidth = `${Math.min(width, bounds?.width ?? width)}px`;
+		const boundedWidth = Math.min(width, bounds?.width ?? width);
+		// With bounds the image also never outgrows its parent's width.
+		img.style.maxWidth = bounds ? `min(${boundedWidth}px, 100%)` : `${boundedWidth}px`;
 		img.style.maxHeight = `${Math.min(height, bounds?.height ?? height)}px`;
 	};
 	img.addEventListener('load', cap);
