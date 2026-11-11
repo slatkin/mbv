@@ -88,7 +88,8 @@ Every other action is `AllClients`. The Keys section lists only `AllClients` act
 
 | Variant | Carries | Applies through |
 |---|---|---|
-| `close` | none | close the screen (D2) |
+| `open` | none | open the screen at Services, as `ToggleSettings` opens it when closed (D2); a no-op while open. The top bar's Settings control sends it |
+| `close` | none | close the screen (D2); Esc from the sidebar and the sidebar's Back control send it |
 | `selectSection` | `section` | set `section`, then start the section's load (D9) |
 | `activate` | `setting` (the `SettingKey` name) | `App::handle_settings_activate`, refused for a key whose scope is not `AllClients` |
 | `setValue` | `setting` (`SubtitleMode`, `SubtitleLanguage`, or `AudioLanguage`), `value` | `App::set_settings_value` (D13): sets the value directly, with the cycle handler's player update and deferred save; a value outside the row's projected list logs and changes nothing |
@@ -181,6 +182,7 @@ When the front end sees a new epoch value, it resets its Library interaction sto
 
 `ui/src/lib/settings/` holds the store and the key router. `ui/src/lib/components/Settings*.svelte` holds the screen, the sidebar, one component for each section, and the status line. `App.svelte` mounts `SettingsScreen` in place of the two columns while `frame.settings` is present.
 
+- **Mouse-centric.** The pointer is the primary path, and keys give parity. The Library top bar shows a Lucide `Settings` button to the right of the Search field, which sends `open`. The sidebar shows a Lucide `ArrowLeft` Back button above its title, which sends `close`. A user can therefore enter, use, and leave the screen without a key. Each control has a visible press target and hover feedback. No action is reachable only by key, the mirror of the `gui-client` rule that no action is reachable only by pointer.
 - **Fill.** `SettingsScreen`'s root is a flex item of `App.svelte`'s row container, so it carries `flex-1 min-w-0`. Without them it took its content's width (631 px of a 1400 px window in the live finding), and the content pane shrank to a strip. jsdom has no layout, so no test can measure this. The user's live run is the layout gate. No front-end test runs in a real browser.
 - **Pointer contract.** Every control is a native `button` or `input` whose press runs the same store function as the keyboard path, so the two paths share one effect. A press moves the store's cursor and pane to the pressed item. Hover feedback paints for each control that can act, and an unavailable control is a disabled `button`, so a press on it never runs its handler. The window forwards each press to the core as well (`pointer`). The Queue and Library panels retract their reported regions on unmount, so while the screen is open a press resolves to no core surface. A core test pins this.
 - **Choice kind.** Each projected choice-list row carries its apply kind in the frame. The front end reads that kind and does not derive it again from the setting name (the open review finding on `choicesKindOf`).

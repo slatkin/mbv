@@ -121,6 +121,35 @@ The `settings_open` action SHALL open the Settings screen at Services, the `sess
 - **WHEN** the user presses that chord
 - **THEN** the Settings screen opens at Services
 
+### Requirement: A Settings control in the top bar opens the screen
+
+The Library top bar SHALL show a Settings control to the right of the Search field. A press on it SHALL open the Settings screen at Services, as the `settings_open` action does.
+
+#### Scenario: The cog opens Settings
+
+- **GIVEN** the Library panel shows and the Settings screen is closed
+- **WHEN** the user presses the Settings control in the top bar
+- **THEN** the Settings screen opens at Services
+
+### Requirement: A Back control in the sidebar closes the screen
+
+The Settings sidebar SHALL show a Back control above its section list. A press on it SHALL close the Settings screen and restore the panels as they were, as Esc from the sidebar does.
+
+#### Scenario: Back returns to the panels
+
+- **GIVEN** the Settings screen is open
+- **WHEN** the user presses Back
+- **THEN** the screen closes and the Queue and Library panels show as they were before it opened
+
+### Requirement: The pointer is the primary path
+
+The Settings screen SHALL be fully usable by pointer alone: opening, moving between sections, every setting and action, and leaving. Every pointer path SHALL also have a key path.
+
+#### Scenario: A round trip by pointer
+
+- **WHEN** the user presses the top bar's Settings control, presses a section, changes a setting, and presses Back
+- **THEN** each step takes effect, and no key press was needed
+
 ### Requirement: Esc closes the screen from the sidebar
 
 Esc SHALL close the Settings screen while the sidebar holds the keyboard. While the section content holds the keyboard, Esc SHALL first cancel the open edit, capture, or form, and otherwise return the keyboard to the sidebar.
