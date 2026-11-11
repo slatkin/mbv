@@ -159,3 +159,24 @@ test('the Hero paints the frame header above its artwork', () => {
 	expect(container.querySelector('[data-library-feeds-hero-kicker]')?.textContent).toBe('feed');
 	expect(container.querySelector('[data-library-feeds-hero-title]')?.tagName).toBe('H1');
 });
+
+// A feed is a collection (invariant 30): the list band holds the selected
+// feed's entries, with the selected one carrying the cursor, and no other
+// feed's entry.
+test('the list band holds the selected feed entries and marks the selected one', () => {
+	const frame = feeds(hero('square'));
+	frame.rows = [
+		{ ...frame.rows[0] },
+		{ ...frame.rows[0], id: 'sub1:guid11', title: 'Earlier Walk' },
+		{ ...frame.rows[0], id: 'sub2:guid20', title: 'Other Feed', subtitle: 'Elsewhere' },
+	];
+	const { container } = render(LibraryFeedsHero, { feeds: frame });
+
+	const rows = [...container.querySelectorAll('[data-library-feeds-entry]')];
+	expect(rows.map((row) => row.getAttribute('data-library-feeds-entry'))).toEqual([
+		'sub1:guid12',
+		'sub1:guid11',
+	]);
+	expect(rows[0].hasAttribute('data-library-feeds-entry-cursor')).toBe(true);
+	expect(rows[1].hasAttribute('data-library-feeds-entry-cursor')).toBe(false);
+});

@@ -16,7 +16,11 @@
 	
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
+	import { ListEnd } from '@lucide/svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
+	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
+	import { selectFeedsRow } from '$lib/library/feeds';
+	import { episodeProgress, isPlayedEpisode } from '$lib/library/shows-workspace';
 	import { heroLayout } from '$lib/library/hero';
 	import type { GuiFeedsFrame } from '$lib/bridge/types';
 
@@ -32,6 +36,38 @@
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'feed'));
+
+	/** The feed's entries, newest first, as the Workspace table paints them: the
+	 * active pill's rows that belong to the Hero's feed, the selected entry
+	 * marked by the table's cursor. A date takes the time cell. */
+	const entryRows = $derived(
+		hero?.parent == null
+			? []
+			: feeds.rows
+					.filter((row) => row.subtitle === hero.parent)
+					.map((row, index) => ({
+						id: row.id,
+						number: String(index + 1),
+						name: row.title,
+						duration: row.date ?? '',
+						state: isPlayedEpisode(row.state)
+							? ('played' as const)
+							: episodeProgress(row.state) === null
+								? ('ordinary' as const)
+								: ('active' as const),
+						progress: episodeProgress(row.state),
+					})),
+	);
+
+	/** The row's hover action: add the entry to the queue. */
+	const rowActions = [
+		{
+			key: 'queue',
+			label: 'Add to queue',
+			icon: ListEnd,
+			run: (id: string) => void sendLibraryCommand({ command: 'feedsQueue', itemId: id }),
+		},
+	];
 
 
 	/** Send a Feeds command for the frame's selected entry (design D12, row
@@ -61,5 +97,16 @@
 				onqueue={() => act('feedsQueue')}
 			/>
 		{/snippet}
+		<LibraryWorkspaceTable
+			root="data-library-feeds-entries"
+			label="Entries"
+			hook="feeds-entry"
+			noun="Entry"
+			rows={entryRows}
+			cursor={feeds.selected}
+			actions={rowActions}
+			onpress={selectFeedsRow}
+			onplay={(id) => void sendLibraryCommand({ command: 'feedsPlay', itemId: id })}
+		/>
 	</LibraryHeroFrame>
 {/if}
