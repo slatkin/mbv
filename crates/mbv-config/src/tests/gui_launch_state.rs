@@ -80,3 +80,22 @@ fn gui_launch_state_without_picks_loads_with_none() {
         two_group_location().collections[0].group_ids
     );
 }
+
+/// The GUI's Reset UI State clears the launch location (D10): after a save
+/// and a clear, the next start restores nothing. A file that is already
+/// absent is a cleared state, not a failure.
+#[test]
+fn gui_launch_state_clear_removes_the_location_and_a_missing_file_is_success() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("gui_launch_state.json");
+
+    crate::clear_gui_launch_state_at(&path).expect("clearing a missing file succeeds");
+
+    save_gui_launch_state_at(&path, &two_group_location()).unwrap();
+    assert!(load_gui_launch_state_at(&path).is_some());
+
+    crate::clear_gui_launch_state_at(&path).unwrap();
+
+    assert_eq!(load_gui_launch_state_at(&path), None);
+    crate::clear_gui_launch_state_at(&path).expect("a second clear still succeeds");
+}

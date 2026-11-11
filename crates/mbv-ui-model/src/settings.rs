@@ -24,6 +24,21 @@ pub enum PanelMode {
     QueueOnly,   // right (library) column hidden; queue spans full window
 }
 
+/// Which Clients a setting has an effect in. Each `SettingKey` declares its
+/// scope once, beside its own declaration (`add-gui-settings-screen` D4); the
+/// GUI Settings screen lists only `AllClients` rows, and the TUI ignores the
+/// scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingScope {
+    /// The setting has an effect in every Client.
+    AllClients,
+    /// The setting has an effect in the TUI only (pinned-panel geometry,
+    /// terminal image protocol, mouse support).
+    TuiOnly,
+    /// No Client acts on the setting (`LogOut`; a separate bug owns it).
+    Inert,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKey {
     Services,
@@ -67,6 +82,62 @@ pub enum SettingKey {
     ManageFeeds,
     ResetUiState,
     LogOut,
+}
+
+impl SettingKey {
+    /// The Clients this setting has an effect in. An exhaustive match with
+    /// no wildcard: a new key must declare its scope when it is added.
+    #[must_use]
+    pub fn scope(self) -> SettingScope {
+        use SettingKey as K;
+        match self {
+            // The pinned-panel page: pinwin geometry, gutters, and accent are
+            // terminal-panel state the GUI window does not paint.
+            K::Panel
+            | K::PanelSide
+            | K::PanelWidth
+            | K::PanelWidthExpanded
+            | K::PanelReserve
+            | K::PanelGutterTop
+            | K::PanelGutterBottom
+            | K::PanelGutterLeft
+            | K::PanelGutterRight
+            | K::PanelAccent
+            | K::PanelAccentColor
+            | K::PanelAccentWidth
+            | K::ImageProtocol
+            | K::MouseSupport => SettingScope::TuiOnly,
+            // No Client acts on it: the row sets a flag nothing reads. A
+            // separate bug owns the fix or removal.
+            K::LogOut => SettingScope::Inert,
+            K::Services
+            | K::Keys
+            | K::StayAlive
+            | K::AutoReconnect
+            | K::SavePlaylistOnQuit
+            | K::AlwaysPlayNext
+            | K::ConsumeVideos
+            | K::ConsumeAudio
+            | K::SavePlaylistOnConsume
+            | K::SavePlaylistOnConsumeAudio
+            | K::AlwaysSkipIntro
+            | K::HiddenLibraries
+            | K::ShowAudioWindow
+            | K::UseMpvConfig
+            | K::NoScripts
+            | K::Autoload
+            | K::ShowSysTrayIcon
+            | K::SystemNotifications
+            | K::MyLanguages
+            | K::SubtitleMode
+            | K::FeedViewLibraries
+            | K::LibraryRoutes
+            | K::SubtitleLanguage
+            | K::AudioLanguage
+            | K::ManageFeeds
+            | K::ResetUiState => SettingScope::AllClients,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

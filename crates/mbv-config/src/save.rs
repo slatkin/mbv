@@ -37,7 +37,10 @@ pub(super) fn save_config_settings_at(
     table.remove("shared_data");
     write_mbvd_section(table, cfg);
     write_playback_section(table, cfg);
-    write_keys_section(table, cfg);
+    // `[keys]` is NOT written here (add-gui-settings-screen D8): only the
+    // Keys editor's `ConfigSection::Keys` write touches it, so a settings
+    // save from a Client that loaded its bindings earlier never puts back
+    // its own copy over another Client's accepted edit.
     write_panel_section(table, cfg);
 
     let s = toml::to_string(&doc)
@@ -517,6 +520,9 @@ pub enum ConfigSection {
     Library,
     Feeds,
     LibraryRoutes,
+    /// The `[keys]` table, written by the Keys editor's accepted edit
+    /// (`add-gui-settings-screen` D8). A settings save never writes it.
+    Keys,
 }
 
 /// Rewrite only `section` from `cfg`, leaving every other section in the
@@ -542,6 +548,7 @@ pub(super) fn save_config_section_at(
         ConfigSection::Library => write_library_section(table, cfg),
         ConfigSection::Feeds => write_feeds_section(table, cfg),
         ConfigSection::LibraryRoutes => write_library_routes_section(table, cfg),
+        ConfigSection::Keys => write_keys_section(table, cfg),
     }
     let s = toml::to_string(&doc)
         .map_err(|e| ConfigError::save(format!("serialize {}: {e}", path.display())))?;

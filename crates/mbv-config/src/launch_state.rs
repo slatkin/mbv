@@ -281,6 +281,7 @@ enum LaunchStateErrorKind {
     Serialize(String),
     Write(String),
     Replace(String),
+    Remove(String),
 }
 
 impl LaunchStateError {
@@ -289,6 +290,11 @@ impl LaunchStateError {
             kind,
             backtrace: std::backtrace::Backtrace::capture(),
         }
+    }
+
+    /// A failed removal (the GUI launch-state clear).
+    pub(super) fn remove(detail: String) -> Self {
+        Self::new(LaunchStateErrorKind::Remove(detail))
     }
 
     /// Backtrace captured when this error was created.
@@ -305,6 +311,7 @@ impl LaunchStateError {
             LaunchStateErrorKind::Serialize(_) => "config.launch_state.serialize",
             LaunchStateErrorKind::Write(_) => "config.launch_state.write",
             LaunchStateErrorKind::Replace(_) => "config.launch_state.replace",
+            LaunchStateErrorKind::Remove(_) => "config.launch_state.remove",
         }
     }
 }
@@ -320,6 +327,7 @@ impl std::fmt::Display for LaunchStateError {
             }
             LaunchStateErrorKind::Write(detail) => write!(f, "write launch state: {detail}"),
             LaunchStateErrorKind::Replace(detail) => write!(f, "replace launch state: {detail}"),
+            LaunchStateErrorKind::Remove(detail) => write!(f, "remove launch state: {detail}"),
         }
     }
 }

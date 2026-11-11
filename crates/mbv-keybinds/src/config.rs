@@ -104,6 +104,124 @@ impl Keybinds {
         overridden.dedup();
         overridden.len()
     }
+
+    /// The raw `[keys]` form of this configuration: the exact inverse of
+    /// [`load`], so the Keys editor can validate an edit by loading it back
+    /// (`add-gui-settings-screen` D6). None of these builders checks
+    /// anything; the candidate is accepted only when
+    /// `load(&candidate.to_raw())` returns `Ok`.
+    #[must_use]
+    pub fn to_raw(&self) -> RawKeybinds {
+        RawKeybinds {
+            prefix: self.prefix.map(|chord| chord.to_string()),
+            sections: self
+                .sections
+                .iter()
+                .map(|(section, bindings)| {
+                    (
+                        section.name().to_ascii_lowercase(),
+                        RawSection {
+                            router: bindings
+                                .router
+                                .iter()
+                                .map(|(id, chord)| (id.to_string(), chord.to_string()))
+                                .collect(),
+                            prefix: bindings
+                                .prefix
+                                .iter()
+                                .map(|(id, chord)| (id.to_string(), chord.to_string()))
+                                .collect(),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    /// The configuration with `action`'s router-scope override set to
+    /// `chord`, stored under the action's declared section. A chord equal to
+    /// the action's only default chord removes the override instead: the
+    /// default needs no entry, and an entry would survive as stale config.
+    /// The section's prefix-namespace assignments are kept.
+    #[must_use]
+    pub fn with_router(&self, action: &'static KeybindAction, chord: Chord) -> Self {
+        let defaults = action.parsed_default_chords();
+        if defaults.len() == 1 && defaults[0] == chord {
+            return self.without_router(action);
+        }
+        let mut next = self.clone();
+        let bindings = next.section_bindings_mut(action.section);
+        match bindings.router.iter_mut().find(|(id, _)| *id == action.id) {
+            Some((_, existing)) => *existing = chord,
+            None => bindings.router.push((action.id, chord)),
+        }
+        next
+    }
+
+    /// The configuration with `action`'s router-scope override removed, so
+    /// the action fires its declared defaults again. The section's
+    /// prefix-namespace assignments are kept.
+    #[must_use]
+    pub fn without_router(&self, action: &'static KeybindAction) -> Self {
+        let mut next = self.clone();
+        let bindings = next.section_bindings_mut(action.section);
+        bindings.router.retain(|(id, _)| *id != action.id);
+        if bindings.router.is_empty() && bindings.prefix.is_empty() {
+            next.sections
+                .retain(|(section, _)| *section != action.section);
+        }
+        next
+    }
+
+    /// The configuration with `action`'s prefix-namespace assignment set to
+    /// `chord`, or removed for `None`. The section's router overrides are
+    /// kept.
+    #[must_use]
+    pub fn with_prefix_assignment(
+        &self,
+        action: &'static KeybindAction,
+        chord: Option<Chord>,
+    ) -> Self {
+        let mut next = self.clone();
+        let bindings = next.section_bindings_mut(action.section);
+        match chord {
+            Some(chord) => match bindings.prefix.iter_mut().find(|(id, _)| *id == action.id) {
+                Some((_, existing)) => *existing = chord,
+                None => bindings.prefix.push((action.id, chord)),
+            },
+            None => {
+                bindings.prefix.retain(|(id, _)| *id != action.id);
+            }
+        }
+        if bindings.router.is_empty() && bindings.prefix.is_empty() {
+            next.sections
+                .retain(|(section, _)| *section != action.section);
+        }
+        next
+    }
+
+    /// The configuration with the prefix chord set to `chord`, or cleared
+    /// for `None`. Every action's bindings are kept.
+    #[must_use]
+    pub fn with_prefix(&self, chord: Option<Chord>) -> Self {
+        let mut next = self.clone();
+        next.prefix = chord;
+        next
+    }
+
+    /// The entry of this configuration's own section bindings for `section`,
+    /// created when absent. Shared by the `with_*` builders.
+    fn section_bindings_mut(&mut self, section: KeySection) -> &mut SectionBindings {
+        let position = self
+            .sections
+            .iter()
+            .position(|(candidate, _)| *candidate == section);
+        let index = position.unwrap_or_else(|| {
+            self.sections.push((section, SectionBindings::default()));
+            self.sections.len() - 1
+        });
+        &mut self.sections[index].1
+    }
 }
 
 /// The `[keys]` configuration as read from the file, before compilation:
