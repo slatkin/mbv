@@ -1,9 +1,11 @@
-// add-gui-settings-screen row 6.4: the Services section's Emby setup form
-// (design D9). A submit sends `embySetup` with the three fields and then the
-// password field is empty — the typed secret rides the command and stays in
-// no draft or painted value (the spec's *Secrets never return*). The Tauri
-// IPC is mocked; the asserted payload is the serde wire shape of
-// bridge/settings.rs.
+// add-gui-settings-screen rows 6.4 and 9.7: the Services section's Emby setup
+// form (design D9) and its canvas paint (design D13, the Services grid). A
+// submit sends `embySetup` with the three fields and then the password field
+// is empty — the typed secret rides the command and stays in no draft or
+// painted value (the spec's *Secrets never return*). Each Service is its own
+// card, so the open form paints inside the card of the Service it sets up, and
+// Remove paints as the destructive button. The Tauri IPC is mocked; the
+// asserted payload is the serde wire shape of bridge/settings.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
@@ -53,6 +55,29 @@ beforeEach(() => {
 	settingsUi.set(initialSettingsUi());
 });
 
+/** The Audiobookshelf card alone, with its form open and the four actions a
+ * configured Service offers. */
+function audiobookshelfContent(): Extract<GuiSettingsContent, { kind: 'services' }> {
+	return {
+		kind: 'services',
+		services: [
+			{
+				entry: 'audiobookshelf',
+				name: 'Audiobookshelf',
+				state: 'Ready',
+				context: '',
+				actions: [
+					{ intent: 'testAudiobookshelf', label: 'Test connection' },
+					{ intent: 'setupAudiobookshelf', label: 'Set up Audiobookshelf' },
+					{ intent: 'replaceAudiobookshelf', label: 'Replace' },
+					{ intent: 'removeAudiobookshelf', label: 'Remove' },
+				],
+			},
+		],
+		setup: { service: 'audiobookshelf', serverUrl: 'http://abs', busy: false, error: '' },
+	};
+}
+
 test('a submit sends embySetup with the three fields, then the password field is empty', async () => {
 	const content = servicesContent();
 	// The form paints on the draft the frame's open seeded (state.ts's
@@ -61,7 +86,7 @@ test('a submit sends embySetup with the three fields, then the password field is
 		...ui,
 		embySetup: { serverUrl: 'http://emby', username: '', password: '' },
 	}));
-	const { container } = render(SettingsServices, {
+	const { container, getByRole } = render(SettingsServices, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
 	await tick();
@@ -76,9 +101,7 @@ test('a submit sends embySetup with the three fields, then the password field is
 	await fireEvent.input(form.querySelector('[data-settings-field="password"]') as Element, {
 		target: { value: 's3cret' },
 	});
-	await fireEvent.click(
-		container.querySelector('[data-settings-setup-submit]') as HTMLElement,
-	);
+	await fireEvent.click(getByRole('button', { name: 'Set up' }));
 
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: {
@@ -129,16 +152,41 @@ test('the setup form\'s Cancel sends cancelSetup for the form\'s service', async
 		...ui,
 		embySetup: { serverUrl: 'http://emby', username: '', password: '' },
 	}));
+	const { getByRole } = render(SettingsServices, {
+		props: { content, entries: settingsEntries(content, {}), cursorId: null },
+	});
+	await tick();
+
+	await fireEvent.click(getByRole('button', { name: 'Cancel' }));
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'cancelSetup', service: 'emby' },
+	});
+});
+
+test('an open Audiobookshelf form renders inside the Audiobookshelf card', async () => {
+	const content = audiobookshelfContent();
+	settingsUi.update((ui) => ({
+		...ui,
+		audiobookshelfSetup: { serverUrl: 'http://abs', apiKey: '' },
+	}));
 	const { container } = render(SettingsServices, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
 	await tick();
 
-	await fireEvent.click(
-		container.querySelector('[data-settings-setup-cancel]') as HTMLElement,
-	);
+	const card = container.querySelector('[data-settings-card][aria-label="Audiobookshelf"]');
+	expect(card).toBeTruthy();
+	expect(card?.querySelector('[data-settings-setup="audiobookshelf"]')).toBeTruthy();
+});
 
-	expect(invokeMock).toHaveBeenCalledWith('settings', {
-		command: { command: 'cancelSetup', service: 'emby' },
+test('Remove paints as the destructive button', () => {
+	const content = audiobookshelfContent();
+	const { getByRole } = render(SettingsServices, {
+		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
+
+	expect(getByRole('button', { name: 'Remove' }).getAttribute('data-settings-button')).toBe(
+		'destructive',
+	);
 });

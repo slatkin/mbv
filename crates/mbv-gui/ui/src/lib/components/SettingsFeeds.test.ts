@@ -94,7 +94,7 @@ test('a press on a remove row sends feedRemove with the subscription URL', async
 
 test('the add form\'s submit sends feedAdd with the typed fields', async () => {
 	const content = feedsContent();
-	const { container } = render(SettingsFeeds, {
+	const { container, getByRole } = render(SettingsFeeds, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
 	await fireEvent.click(
@@ -111,9 +111,7 @@ test('the add form\'s submit sends feedAdd with the typed fields', async () => {
 	await fireEvent.input(container.querySelector('[data-settings-field="url"]') as Element, {
 		target: { value: 'https://c' },
 	});
-	await fireEvent.click(
-		container.querySelector('[data-settings-feed-submit]') as HTMLElement,
-	);
+	await fireEvent.click(getByRole('button', { name: 'Add' }));
 
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: { command: 'feedAdd', name: 'C feed', url: 'https://c', kind: 'audio' },
@@ -123,7 +121,7 @@ test('the add form\'s submit sends feedAdd with the typed fields', async () => {
 
 test('the edit form\'s submit sends feedEdit with the subscription URL as the identity', async () => {
 	const content = feedsContent();
-	const { container } = render(SettingsFeeds, {
+	const { container, getByRole } = render(SettingsFeeds, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
 	await fireEvent.click(
@@ -137,9 +135,7 @@ test('the edit form\'s submit sends feedEdit with the subscription URL as the id
 	await fireEvent.input(container.querySelector('[data-settings-field="name"]') as Element, {
 		target: { value: 'Renamed' },
 	});
-	await fireEvent.click(
-		container.querySelector('[data-settings-feed-submit]') as HTMLElement,
-	);
+	await fireEvent.click(getByRole('button', { name: 'Save' }));
 
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: { command: 'feedEdit', url: 'https://a', name: 'Renamed', kind: 'audio' },
@@ -157,7 +153,7 @@ test('Cancel drops the text-field hold, so a movement key reaches the screen rou
 		section: 'feeds',
 		feedForm: { identity: null, name: '', url: '', kind: 'audio' },
 	}));
-	const { container } = render(SettingsFeeds, {
+	const { container, getByRole } = render(SettingsFeeds, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
 	await tick();
@@ -169,7 +165,7 @@ test('Cancel drops the text-field hold, so a movement key reaches the screen rou
 	expect(get(settingsUi).textField).toBe('feed');
 	expect(press('ArrowDown')).toBe('text');
 
-	await fireEvent.click(container.querySelector('[data-settings-feed-cancel]') as HTMLElement);
+	await fireEvent.click(getByRole('button', { name: 'Cancel' }));
 
 	expect(invokeMock).not.toHaveBeenCalled();
 	expect(get(settingsUi).feedForm).toBeNull();

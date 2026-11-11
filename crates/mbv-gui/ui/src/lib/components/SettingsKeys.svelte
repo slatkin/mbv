@@ -1,15 +1,17 @@
 <script lang="ts">
-	// The Keys section (add-gui-settings-screen design D9): the configured
-	// prefix chord, then one row per `AllClients` action grouped by the shared
-	// section vocabulary — each row's effective router chords, its
+	// The Keys section (add-gui-settings-screen design D9, D13): the configured
+	// prefix chord and one card for each action group, every card holding 36 px
+	// rows of buttons. Each action row shows the effective router chords, its
 	// prefix-namespace chord where one is assigned, and the changed-from-default
 	// mark. Each chord is its own capture target: activating it arms the
 	// capture, and the next press is the candidate chord. The frame's last
-	// refusal paints on the edited row.
-	import type { GuiSettingsContent } from '$lib/bridge/types';
+	// refusal paints under the edited row.
+	import type { GuiSettingsContent, GuiSettingsKeyRow } from '$lib/bridge/types';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
 	import { pressSettingsEntry, settingsUi } from '$lib/settings/state';
+	import SettingsButton from './settings/SettingsButton.svelte';
+	import SettingsCard from './settings/SettingsCard.svelte';
 
 	interface Props {
 		/** The Keys section's content: the prefix chord, the action rows, and
@@ -25,9 +27,26 @@
 
 	const onpress = (id: string) => pressSettingsEntry(entries, id);
 
-	/** The small control style of a row's binding buttons. */
-	const keyButton =
-		'font-size:12px;padding:2px 8px;border-radius:4px;border:1px solid var(--canvas-border);background:var(--canvas-well);color:var(--canvas-text);font-family:monospace;';
+	/** One card's worth of rows: the group's name and its actions in paint
+	 * order. */
+	interface KeyGroup {
+		section: string;
+		rows: GuiSettingsKeyRow[];
+	}
+
+	/** The rows grouped into one card per section, in the frame's order. */
+	const groups = $derived.by<KeyGroup[]>(() => {
+		const out: KeyGroup[] = [];
+		for (const row of content.rows) {
+			const last = out[out.length - 1];
+			if (last !== undefined && last.section === row.section) {
+				last.rows.push(row);
+			} else {
+				out.push({ section: row.section, rows: [row] });
+			}
+		}
+		return out;
+	});
 
 	/** The capture target's painted text: "press a key" while its capture
 	 * waits, the assigned chords otherwise. */
@@ -41,135 +60,98 @@
 	}
 </script>
 
-<div data-settings-keys="">
-	<!-- The prefix chord: the `prefix` capture target, with its clear control
-		while one is assigned. -->
-	<div
-		class="flex items-center"
-		style:min-height="36px"
-		style:padding="4px 16px"
-		style:gap="8px"
-		style:font-size="14px"
-		style:border-bottom="1px solid var(--canvas-border)"
-		data-settings-key-row="prefix"
+{#snippet chord(id: string, target: string, chords: string)}
+	<SettingsButton entry={id} cursor={cursor(id)} onpress={() => onpress(id)}
+		><span class="font-mono">{targetText(target, chords)}</span></SettingsButton
 	>
-		<span
-			class="min-w-0 flex-1 truncate"
-			style:color="var(--canvas-heading)"
-		>Prefix chord</span
-		>
-		<button
-			type="button"
-			style={keyButton}
-			style:border-color={cursor(entryId.keyTarget('prefix'))
-				? 'var(--canvas-accent)'
-				: undefined}
-			data-settings-entry={entryId.keyTarget('prefix')}
-			data-settings-cursor={cursor(entryId.keyTarget('prefix')) ? '' : undefined}
-			onclick={() => onpress(entryId.keyTarget('prefix'))}
-			>{targetText('prefix', content.prefix ?? 'none')}</button
-		>
-		{#if content.prefix !== null}
-			<button
-				type="button"
-				style={keyButton}
-				style:color="var(--canvas-destructive)"
-				data-settings-entry={entryId.keyClear('prefix')}
-				data-settings-cursor={cursor(entryId.keyClear('prefix')) ? '' : undefined}
-				onclick={() => onpress(entryId.keyClear('prefix'))}
-				aria-label="Clear the prefix chord">✕</button
-			>
-		{/if}
-	</div>
-	{#if content.refusal?.action === 'prefix'}
+{/snippet}
+
+{#snippet refusal(action: string)}
+	{#if content.refusal?.action === action}
 		<div
-			style:padding="0 16px 4px"
+			style:padding="0 0 6px"
 			style:font-size="13px"
 			style:color="var(--canvas-destructive)"
 			data-settings-key-refusal="">{content.refusal.text}</div
 		>
 	{/if}
-	{#each content.rows as row, index (row.id)}
-		{#if index === 0 || content.rows[index - 1].section !== row.section}
-			<div
-				class="flex items-center font-mono"
-				style:height="32px"
-				style:padding="0 16px"
-				style:font-size="13px"
-				style:color="var(--canvas-muted)"
-				style:border-bottom="1px solid var(--canvas-border)"
-				data-settings-key-group="">{row.section}</div
-			>
-		{/if}
-		{@const targetId = entryId.keyTarget(row.id)}
-		{@const prefixTargetId = entryId.keyTarget(`prefix:${row.id}`)}
-		{@const resetId = entryId.keyReset(row.id)}
-		{@const clearId = entryId.keyClear(`prefix:${row.id}`)}
+{/snippet}
+
+<div
+	class="grid"
+	style:grid-template-columns="repeat(2, minmax(0, 1fr))"
+	style:gap="20px"
+	style:align-items="start"
+	data-settings-keys=""
+>
+	<SettingsCard title="Prefix chord" rows>
 		<div
 			class="flex items-center"
-			style:min-height="36px"
-			style:padding="4px 16px"
+			style:height="36px"
 			style:gap="8px"
-			style:font-size="14px"
-			data-settings-key-row={row.id}
+			data-settings-key-row="prefix"
 		>
-			<span
-				class="min-w-0 flex-1 truncate"
-				style:color={row.changed ? 'var(--canvas-accent)' : 'var(--canvas-heading)'}
-				>{row.label}{row.changed ? ' *' : ''}</span
+			<span class="min-w-0 flex-1 truncate" style:font-size="14px" style:color="var(--canvas-heading)"
+				>Assigned</span
 			>
-			<span class="flex-none" style:color="var(--canvas-muted)" style:font-size="12px"
-				>{row.section}</span
-			>
-			<button
-				type="button"
-				style={keyButton}
-				style:border-color={cursor(targetId) ? 'var(--canvas-accent)' : undefined}
-				data-settings-entry={targetId}
-				data-settings-cursor={cursor(targetId) ? '' : undefined}
-				onclick={() => onpress(targetId)}
-				>{targetText(row.id, row.chords.join(' '))}</button
-			>
-			{#if row.prefixAddressable}
-				<button
-					type="button"
-					style={keyButton}
-					style:border-color={cursor(prefixTargetId) ? 'var(--canvas-accent)' : undefined}
-					data-settings-entry={prefixTargetId}
-					data-settings-cursor={cursor(prefixTargetId) ? '' : undefined}
-					onclick={() => onpress(prefixTargetId)}
-					>{targetText(`prefix:${row.id}`, row.prefixChord ?? '—')}</button
-				>
-			{/if}
-			{#if row.changed}
-				<button
-					type="button"
-					style={keyButton}
-					data-settings-entry={resetId}
-					data-settings-cursor={cursor(resetId) ? '' : undefined}
-					onclick={() => onpress(resetId)}
-					aria-label="Reset {row.label} to its default">↺</button
-				>
-			{/if}
-			{#if row.prefixChord !== null}
-				<button
-					type="button"
-					style={keyButton}
-					style:color="var(--canvas-destructive)"
-					data-settings-entry={clearId}
-					data-settings-cursor={cursor(clearId) ? '' : undefined}
-					onclick={() => onpress(clearId)}
-					aria-label="Clear {row.label}'s prefix chord">✕</button
+			{@render chord(entryId.keyTarget('prefix'), 'prefix', content.prefix ?? 'none')}
+			{#if content.prefix !== null}
+				{@const clearId = entryId.keyClear('prefix')}
+				<SettingsButton
+					variant="destructive"
+					entry={clearId}
+					label="Clear the prefix chord"
+					cursor={cursor(clearId)}
+					onpress={() => onpress(clearId)}>✕</SettingsButton
 				>
 			{/if}
 		</div>
-		{#if content.refusal?.action === row.id}
-			<div
-				style:padding="0 16px 4px"
-				style:font-size="13px"
-				style:color="var(--canvas-destructive)"
-				data-settings-key-refusal="">{content.refusal.text}</div
-			>
-		{/if}
+		{@render refusal('prefix')}
+	</SettingsCard>
+	{#each groups as group (group.section)}
+		<SettingsCard title={group.section} rows>
+			{#each group.rows as row (row.id)}
+				{@const targetId = entryId.keyTarget(row.id)}
+				{@const prefixTargetId = entryId.keyTarget(`prefix:${row.id}`)}
+				{@const resetId = entryId.keyReset(row.id)}
+				{@const clearId = entryId.keyClear(`prefix:${row.id}`)}
+				<div
+					class="flex items-center"
+					style:height="36px"
+					style:gap="8px"
+					data-settings-key-row={row.id}
+				>
+					<span
+						class="min-w-0 flex-1 truncate"
+						style:font-size="14px"
+						style:color={row.changed ? 'var(--canvas-accent)' : 'var(--canvas-heading)'}
+						>{row.label}{row.changed ? ' *' : ''}</span
+					>
+					{@render chord(targetId, row.id, row.chords.join(' '))}
+					{#if row.prefixAddressable}
+						{@render chord(prefixTargetId, `prefix:${row.id}`, row.prefixChord ?? '—')}
+					{/if}
+					{#if row.changed}
+						<SettingsButton
+							variant="ghost"
+							entry={resetId}
+							label={`Reset ${row.label} to its default`}
+							cursor={cursor(resetId)}
+							onpress={() => onpress(resetId)}>↺</SettingsButton
+						>
+					{/if}
+					{#if row.prefixChord !== null}
+						<SettingsButton
+							variant="destructive"
+							entry={clearId}
+							label={`Clear ${row.label}'s prefix chord`}
+							cursor={cursor(clearId)}
+							onpress={() => onpress(clearId)}>✕</SettingsButton
+						>
+					{/if}
+				</div>
+				{@render refusal(row.id)}
+			{/each}
+		</SettingsCard>
 	{/each}
 </div>

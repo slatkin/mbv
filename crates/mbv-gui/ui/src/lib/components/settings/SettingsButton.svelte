@@ -4,7 +4,9 @@
 	// raised fill and the control border), primary (the accent fill and ink
 	// text), destructive (the destructive outline), and ghost (muted text with
 	// no fill). A disabled button paints as unavailable, so a press on it never
-	// runs its handler (design D11's pointer contract).
+	// runs its handler (design D11's pointer contract). A button that activates
+	// a content entry carries the entry's id and the content cursor's ring, so
+	// the keyboard and the pointer rest on the same control.
 	import type { Snippet } from 'svelte';
 
 	type Variant = 'secondary' | 'primary' | 'destructive' | 'ghost';
@@ -14,12 +16,29 @@
 		variant?: Variant;
 		/** Whether the action is currently unavailable. */
 		disabled?: boolean;
+		/** The content entry this button activates (`entryId` in
+		 * `$lib/settings/entries`), painted for the section's press handler and
+		 * the cursor fact. */
+		entry?: string;
+		/** The button's accessible name, for a button whose label is a glyph. */
+		label?: string;
+		/** Whether the content cursor rests on this button while the content
+		 * pane holds the keyboard. */
+		cursor?: boolean;
 		/** A press on the button. */
 		onpress?: () => void;
 		/** The button's label. */
 		children?: Snippet;
 	}
-	const { variant = 'secondary', disabled = false, onpress = undefined, children }: Props = $props();
+	const {
+		variant = 'secondary',
+		disabled = false,
+		entry = undefined,
+		label = undefined,
+		cursor = false,
+		onpress = undefined,
+		children,
+	}: Props = $props();
 
 	/** Each kind's fill, border, text colour, padding, and weight. */
 	const VARIANTS: Record<
@@ -67,7 +86,12 @@
 	style:font-size="13px"
 	style:font-weight={paint.weight}
 	style:opacity={disabled ? '0.7' : undefined}
+	style:outline={cursor ? '2px solid var(--canvas-accent)' : undefined}
+	style:outline-offset={cursor ? '-2px' : undefined}
 	data-settings-button={variant}
+	data-settings-entry={entry}
+	data-settings-cursor={cursor ? '' : undefined}
+	aria-label={label}
 	{disabled}
 	onclick={() => onpress?.()}
 >

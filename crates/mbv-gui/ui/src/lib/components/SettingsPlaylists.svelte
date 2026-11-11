@@ -1,10 +1,11 @@
 <script lang="ts">
-	// The Playlists section (add-gui-settings-screen design D9): the saved
-	// playlists, and the open playlist's items. Each playlist offers the
-	// TUI's actions — open, play, shuffle, add, rename, delete, refresh —
-	// and each item play, shuffle, and add. The rename field is the window
-	// content's draft; a delete raises the core's confirm.
-	import type { GuiSettingsContent } from '$lib/bridge/types';
+	// The Playlists section (add-gui-settings-screen design D9, D13): the saved
+	// playlists in a card, and the open playlist's items in one. Each playlist
+	// offers the TUI's actions — open, play, shuffle, add, rename, delete,
+	// refresh — and each item play, shuffle, and add, all as the canvas's
+	// buttons on 36 px rows. The rename field is the window content's draft; a
+	// delete raises the core's confirm.
+	import type { GuiPlaylistAction, GuiSettingsContent } from '$lib/bridge/types';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
 	import {
@@ -14,6 +15,8 @@
 		setRenameDraft,
 		settingsUi,
 	} from '$lib/settings/state';
+	import SettingsButton from './settings/SettingsButton.svelte';
+	import SettingsCard from './settings/SettingsCard.svelte';
 	import SettingsEntryRow from './SettingsEntryRow.svelte';
 
 	interface Props {
@@ -30,8 +33,12 @@
 
 	const onpress = (id: string) => pressSettingsEntry(entries, id);
 
-	const fieldStyle =
-		'background:var(--canvas-library-column);border:1px solid var(--canvas-border);border-radius:6px;color:var(--canvas-heading);font-size:14px;height:32px;padding:0 10px;outline:none;';
+	/** The three whole-playlist and whole-item actions, in paint order. */
+	const ACTIONS: readonly { action: GuiPlaylistAction; label: string }[] = [
+		{ action: 'play', label: 'Play' },
+		{ action: 'shuffle', label: 'Shuffle' },
+		{ action: 'enqueue', label: 'Add' },
+	];
 
 	let renameEl: HTMLInputElement | undefined = $state();
 	let renameWasOpen = false;
@@ -53,173 +60,141 @@
 			blurSettingsField('rename');
 		}
 	}
+
+	/** A refresh control's painted text: the load flag while it runs. */
+	function refreshLabel(loading: boolean): string {
+		return loading ? 'Refreshing…' : 'Refresh';
+	}
 </script>
 
-<div data-settings-playlists="">
-	{#if content.open === null}
-		<SettingsEntryRow
-			id={entryId.playlistRefresh(null)}
-			cursor={entryId.playlistRefresh(null) === cursorId}
-			{onpress}
-			label={content.loading ? 'Refreshing…' : 'Refresh'}
+{#snippet playlistActions(id: string)}
+	<div class="flex flex-wrap" style:gap="6px">
+		{#each ACTIONS as control (control.action)}
+			{@const actionId = entryId.playlistAction(id, control.action)}
+			<SettingsButton
+				entry={actionId}
+				cursor={actionId === cursorId}
+				onpress={() => onpress(actionId)}>{control.label}</SettingsButton
+			>
+		{/each}
+		<SettingsButton
+			entry={entryId.playlistRename(id)}
+			cursor={entryId.playlistRename(id) === cursorId}
+			onpress={() => onpress(entryId.playlistRename(id))}>Rename</SettingsButton
+		>
+		<SettingsButton
+			variant="destructive"
+			entry={entryId.playlistDelete(id)}
+			cursor={entryId.playlistDelete(id) === cursorId}
+			onpress={() => onpress(entryId.playlistDelete(id))}>Delete</SettingsButton
+		>
+	</div>
+{/snippet}
+
+{#snippet renameField()}
+	<div
+		class="flex"
+		style:padding="4px 0"
+		data-settings-rename=""
+		onfocusin={() => focusSettingsField('rename')}
+		onfocusout={renameFocusOut}
+	>
+		<input
+			bind:this={renameEl}
+			type="text"
+			aria-label="New playlist name"
+			style:flex="1"
+			value={$settingsUi.rename?.name ?? ''}
+			data-settings-field="rename"
+			oninput={(event) => setRenameDraft(event.currentTarget.value)}
 		/>
-		{#each content.playlists as playlist (playlist.id)}
-			{@const rowId = entryId.playlist(playlist.id)}
-			<SettingsEntryRow
-				id={rowId}
-				cursor={rowId === cursorId}
-				{onpress}
-				label={playlist.name}
-				trailing={`${playlist.itemCount} items`}
-			/>
-			<div class="flex flex-wrap" style:padding="0 16px 4px 32px" style:gap="6px">
-				{#each [{ action: 'play', label: 'Play' }, { action: 'shuffle', label: 'Shuffle' }, { action: 'enqueue', label: 'Add' }] as control (control.action)}
-					{@const id = entryId.playlistAction(playlist.id, control.action as 'play' | 'shuffle' | 'enqueue')}
-					<button
-						type="button"
-						style:font-size="12px"
-						style:padding="2px 8px"
-						style:border-radius="4px"
-						style:border="1px solid var(--canvas-border)"
-						style:background={id === cursorId ? 'var(--canvas-selected)' : 'var(--canvas-well)'}
-						style:color="var(--canvas-text)"
-						data-settings-entry={id}
-						data-settings-cursor={id === cursorId ? '' : undefined}
-						onclick={() => onpress(id)}>{control.label}</button
-					>
-				{/each}
-				{#each [{ id: entryId.playlistRename(playlist.id), label: 'Rename' }, { id: entryId.playlistDelete(playlist.id), label: 'Delete' }] as control (control.id)}
-					<button
-						type="button"
-						style:font-size="12px"
-						style:padding="2px 8px"
-						style:border-radius="4px"
-						style:border="1px solid var(--canvas-border)"
-						style:background={control.id === cursorId ? 'var(--canvas-selected)' : 'var(--canvas-well)'}
-						style:color={control.label === 'Delete'
-							? 'var(--canvas-destructive)'
-							: 'var(--canvas-text)'}
-						data-settings-entry={control.id}
-						data-settings-cursor={control.id === cursorId ? '' : undefined}
-						onclick={() => onpress(control.id)}>{control.label}</button
-					>
+	</div>
+{/snippet}
+
+<div
+	class="grid"
+	style:grid-template-columns="repeat(2, minmax(0, 1fr))"
+	style:gap="20px"
+	style:align-items="start"
+	data-settings-playlists=""
+>
+	{#if content.open === null}
+		<SettingsCard title="Playlists">
+			{#snippet header()}
+				<SettingsButton
+					entry={entryId.playlistRefresh(null)}
+					cursor={entryId.playlistRefresh(null) === cursorId}
+					onpress={() => onpress(entryId.playlistRefresh(null))}
+					>{refreshLabel(content.loading)}</SettingsButton
+				>
+			{/snippet}
+			{#if content.playlists.length === 0}
+				<div style:font-size="13px" style:color="var(--canvas-muted)">No saved playlists</div>
+			{/if}
+			<div class="flex flex-col">
+				{#each content.playlists as playlist (playlist.id)}
+					{@const rowId = entryId.playlist(playlist.id)}
+					<SettingsEntryRow
+						id={rowId}
+						cursor={rowId === cursorId}
+						{onpress}
+						label={playlist.name}
+						trailing={`${playlist.itemCount} items`}
+					/>
+					{@render playlistActions(playlist.id)}
+					{#if $settingsUi.rename?.id === playlist.id}
+						{@render renameField()}
+					{/if}
+					<div style:height="8px"></div>
 				{/each}
 			</div>
-			{#if $settingsUi.rename?.id === playlist.id}
-				<div
-					class="flex"
-					style:padding="0 16px 8px 32px"
-					data-settings-rename=""
-					onfocusin={() => focusSettingsField('rename')}
-					onfocusout={renameFocusOut}
-				>
-					<input
-						bind:this={renameEl}
-						type="text"
-						aria-label="New playlist name"
-						style={fieldStyle}
-						style:flex="1"
-						value={$settingsUi.rename.name}
-						data-settings-field="rename"
-						oninput={(event) => setRenameDraft(event.currentTarget.value)}
-					/>
-				</div>
-			{/if}
-		{/each}
+		</SettingsCard>
 	{:else}
 		{@const open = content.open}
-		<SettingsEntryRow
-			id={entryId.playlistBack()}
-			cursor={entryId.playlistBack() === cursorId}
-			{onpress}
-			label="‹ Back"
-		/>
-		<SettingsEntryRow
-			id={entryId.playlistRefresh(open.id)}
-			cursor={entryId.playlistRefresh(open.id) === cursorId}
-			{onpress}
-			label={content.openLoading ? 'Refreshing…' : 'Refresh'}
-		/>
-		<div
-			class="flex items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:font-size="14px"
-			style:color="var(--canvas-heading)"
-			style:border-top="1px solid var(--canvas-border)"
-			data-settings-playlist-head="">{open.name}</div
-		>
-		<div class="flex flex-wrap" style:padding="0 16px 8px" style:gap="6px">
-			{#each [{ action: 'play', label: 'Play' }, { action: 'shuffle', label: 'Shuffle' }, { action: 'enqueue', label: 'Add' }] as control (control.action)}
-				{@const id = entryId.playlistAction(open.id, control.action as 'play' | 'shuffle' | 'enqueue')}
-				<button
-					type="button"
-					style:font-size="12px"
-					style:padding="2px 8px"
-					style:border-radius="4px"
-					style:border="1px solid var(--canvas-border)"
-					style:background={id === cursorId ? 'var(--canvas-selected)' : 'var(--canvas-well)'}
-					style:color="var(--canvas-text)"
-					data-settings-entry={id}
-					data-settings-cursor={id === cursorId ? '' : undefined}
-					onclick={() => onpress(id)}>{control.label}</button
-				>
-			{/each}
-			{#each [{ id: entryId.playlistRename(open.id), label: 'Rename' }, { id: entryId.playlistDelete(open.id), label: 'Delete' }] as control (control.id)}
-				<button
-					type="button"
-					style:font-size="12px"
-					style:padding="2px 8px"
-					style:border-radius="4px"
-					style:border="1px solid var(--canvas-border)"
-					style:background={control.id === cursorId ? 'var(--canvas-selected)' : 'var(--canvas-well)'}
-					style:color={control.label === 'Delete' ? 'var(--canvas-destructive)' : 'var(--canvas-text)'}
-					data-settings-entry={control.id}
-					data-settings-cursor={control.id === cursorId ? '' : undefined}
-					onclick={() => onpress(control.id)}>{control.label}</button
-				>
-			{/each}
-		</div>
-		{#if $settingsUi.rename?.id === open.id}
-			<div
-				class="flex"
-				style:padding="0 16px 8px"
-				data-settings-rename=""
-				onfocusin={() => focusSettingsField('rename')}
-				onfocusout={renameFocusOut}
-			>
-				<input
-					bind:this={renameEl}
-					type="text"
-					aria-label="New playlist name"
-					style={fieldStyle}
-					style:flex="1"
-					value={$settingsUi.rename.name}
-					data-settings-field="rename"
-					oninput={(event) => setRenameDraft(event.currentTarget.value)}
-				/>
-			</div>
-		{/if}
-		{#each open.items as item (item.id)}
-			<div class="flex items-center" style:min-height="32px" style:padding="0 16px" style:gap="8px">
-				<span class="min-w-0 flex-1 truncate" style:font-size="14px" style:color="var(--canvas-text)">{item.name}</span>
-				{#each [{ action: 'play', label: 'Play' }, { action: 'shuffle', label: 'Shuffle' }, { action: 'enqueue', label: 'Add' }] as control (control.action)}
-					{@const id = entryId.playlistItemAction(open.id, item.id, control.action as 'play' | 'shuffle' | 'enqueue')}
-					<button
-						type="button"
-						class="flex-none"
-						style:font-size="12px"
-						style:padding="2px 8px"
-						style:border-radius="4px"
-						style:border="1px solid var(--canvas-border)"
-						style:background={id === cursorId ? 'var(--canvas-selected)' : 'var(--canvas-well)'}
-						style:color="var(--canvas-text)"
-						data-settings-entry={id}
-						data-settings-cursor={id === cursorId ? '' : undefined}
-						onclick={() => onpress(id)}>{control.label}</button
+		<SettingsCard title={open.name}>
+			{#snippet header()}
+				<div class="flex" style:gap="8px">
+					<SettingsButton
+						variant="ghost"
+						entry={entryId.playlistBack()}
+						cursor={entryId.playlistBack() === cursorId}
+						onpress={() => onpress(entryId.playlistBack())}>‹ Back</SettingsButton
 					>
+					<SettingsButton
+						entry={entryId.playlistRefresh(open.id)}
+						cursor={entryId.playlistRefresh(open.id) === cursorId}
+						onpress={() => onpress(entryId.playlistRefresh(open.id))}
+						>{refreshLabel(content.openLoading)}</SettingsButton
+					>
+				</div>
+			{/snippet}
+			{@render playlistActions(open.id)}
+			{#if $settingsUi.rename?.id === open.id}
+				{@render renameField()}
+			{/if}
+			<div class="flex flex-col">
+				{#each open.items as item (item.id)}
+					<div class="flex items-center" style:height="36px" style:gap="8px">
+						<span
+							class="min-w-0 flex-1 truncate"
+							style:font-size="14px"
+							style:color="var(--canvas-text)">{item.name}</span
+						>
+						{#each ACTIONS as control (control.action)}
+							{@const itemActionId = entryId.playlistItemAction(
+								open.id,
+								item.id,
+								control.action,
+							)}
+							<SettingsButton
+								entry={itemActionId}
+								cursor={itemActionId === cursorId}
+								onpress={() => onpress(itemActionId)}>{control.label}</SettingsButton
+							>
+						{/each}
+					</div>
 				{/each}
 			</div>
-		{/each}
+		</SettingsCard>
 	{/if}
 </div>

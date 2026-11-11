@@ -172,6 +172,23 @@
 	border-radius: 0;
 }
 
+/* The Settings forms' one field look (add-gui-settings-screen design D13,
+   the canvas field inside a Service's well): the raised fill over the well,
+   the control border, the mono face, and a 38 px box. Each form wraps it in a
+   labelled field; this rule owns the box, so no form repeats it inline. */
+[data-settings-field] {
+	height: 38px;
+	box-sizing: border-box;
+	padding: 0 12px;
+	background: var(--canvas-library-panel);
+	border: 1px solid var(--canvas-menu-border);
+	border-radius: 6px;
+	color: var(--canvas-heading);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	outline: none;
+}
+
 /* Every interactive control answers the pointer (design D16): one rule, so a
    new button cannot be born without the hover, and the glow is a veil rather
    than a fill because the controls paint their own fills inline. An inset

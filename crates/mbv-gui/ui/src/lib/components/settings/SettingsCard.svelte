@@ -28,6 +28,13 @@
 		rows = false,
 		children,
 	}: Props = $props();
+
+	/** Whether the card paints a heading band. */
+	const headed = $derived(title !== undefined || header !== undefined);
+	/** The card's padding: a headed card whose body is setting rows keeps the
+	 * canvas's 20 px side padding, so the heading and the rows share one left
+	 * edge, and closes with the canvas's 8 px foot. */
+	const padding = $derived(rows ? (headed ? '20px 20px 8px' : '8px 20px') : '20px');
 </script>
 
 <section
@@ -35,13 +42,17 @@
 	style:background="var(--canvas-library-panel)"
 	style:border="1px solid var(--canvas-border)"
 	style:border-radius="10px"
-	style:padding={rows ? '8px 20px' : '20px'}
+	style:padding={padding}
 	style:gap={rows ? '0' : '16px'}
 	aria-label={label}
 	data-settings-card=""
 >
-	{#if title !== undefined || header !== undefined}
-		<div class="flex items-center justify-between" style:gap="12px">
+	{#if headed}
+		<div
+			class="flex items-center justify-between"
+			style:gap="12px"
+			style:padding-bottom={rows ? '12px' : undefined}
+		>
 			{#if title !== undefined}
 				<h2
 					style:margin="0"

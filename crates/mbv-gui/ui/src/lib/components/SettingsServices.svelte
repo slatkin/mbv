@@ -1,12 +1,17 @@
 <script lang="ts">
-	// The Services section (add-gui-settings-screen design D9): the three
-	// Services with each one's state label and the actions the TUI offers for
-	// that state, plus the open setup form — the Emby three-field form or the
-	// Audiobookshelf two-field one — with its progress and its error. The
+	// The Services section (add-gui-settings-screen design D9, D13's canvas
+	// Services grid): one card for each Service in the canvas's two-column
+	// grid. The card's header carries the Service's name and, on the right, its
+	// state pill — or, for Feeds, the subscription count the frame projects.
+	// The actions the TUI offers for the Service's state paint as the canvas's
+	// buttons: Remove destructive, setup primary, Cancel ghost, the rest
+	// secondary. The open setup form is a recessed well inside its own
+	// Service's card, with labelled mono fields — the Emby three-field form or
+	// the Audiobookshelf two-field one — with its progress and its error. The
 	// password and API-key fields are password inputs the draft clears on
-	// submit, so a secret the user typed leaves the window in the command
-	// and never in a frame or a draft (the spec's *Secrets never return*).
-	import type { GuiSettingsContent } from '$lib/bridge/types';
+	// submit, so a secret the user typed leaves the window in the command and
+	// never in a frame or a draft (the spec's *Secrets never return*).
+	import type { GuiServiceActionIntent, GuiSettingsContent } from '$lib/bridge/types';
 	import { sendSettingsCommand } from '$lib/bridge/settings';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
@@ -19,10 +24,12 @@
 		settingsUi,
 		submitSettingsForm,
 	} from '$lib/settings/state';
-	import SettingsEntryRow from './SettingsEntryRow.svelte';
+	import SettingsButton from './settings/SettingsButton.svelte';
+	import SettingsCard from './settings/SettingsCard.svelte';
+	import SettingsStatePill from './settings/SettingsStatePill.svelte';
 
 	interface Props {
-		/** The Services section's content: the Service rows and the open setup
+		/** The Services section's content: the Service cards and the open setup
 		 * form's facts. */
 		content: Extract<GuiSettingsContent, { kind: 'services' }>;
 		/** The section's full entry list. */
@@ -35,9 +42,14 @@
 
 	const onpress = (id: string) => pressSettingsEntry(entries, id);
 
-	/** The canvas-bordered text field every Settings form paints. */
-	const fieldStyle =
-		'background:var(--canvas-library-column);border:1px solid var(--canvas-border);border-radius:6px;color:var(--canvas-heading);font-size:14px;height:32px;padding:0 10px;outline:none;';
+	/** Each Service action's button kind (design D13): Remove is destructive,
+	 * setup is primary, and every other action is secondary. */
+	const ACTION_VARIANTS: Partial<Record<GuiServiceActionIntent, 'primary' | 'destructive'>> = {
+		setupEmby: 'primary',
+		setupAudiobookshelf: 'primary',
+		removeEmby: 'destructive',
+		removeAudiobookshelf: 'destructive',
+	};
 
 	/** The form's keyboard hold (design D11, step 3): a field's focus sets
 	 * the router's fact, and a `focusout` that leaves the form clears it. */
@@ -78,170 +90,184 @@
 	});
 </script>
 
-<div data-settings-services="">
-	{#each content.services as service (service.entry)}
-		<div
-			class="flex items-center"
-			style:height="36px"
-			style:padding="0 16px"
-			style:gap="8px"
-			style:font-size="14px"
-			style:color="var(--canvas-heading)"
-			style:border-top="1px solid var(--canvas-border)"
-			data-settings-service={service.entry}
+{#snippet formActions(service: 'emby' | 'audiobookshelf')}
+	<div class="flex justify-end" style:gap="8px">
+		<SettingsButton
+			variant="ghost"
+			onpress={() => void sendSettingsCommand({ command: 'cancelSetup', service })}>Cancel</SettingsButton
 		>
-			<span class="min-w-0 flex-1 truncate">{service.name}</span>
-			<span class="flex-none truncate" style:color="var(--canvas-muted)"
-				>{service.state}{service.context === '' ? '' : ` · ${service.context}`}</span
-			>
-		</div>
-		{#each service.actions as action (action.intent)}
-			{@const id = entryId.serviceAction(service.entry, action.intent)}
-			<SettingsEntryRow {id} cursor={id === cursorId} {onpress} label={action.label} indent={true} />
-		{/each}
-		{#if service.entry === 'emby' && content.setup?.service === 'emby' && $settingsUi.embySetup !== null}
-			{@const setup = content.setup}
-			{@const draft = $settingsUi.embySetup}
-			<div
-				bind:this={embyFormEl}
-				class="flex flex-col"
-				style:padding="8px 16px"
-				style:gap="8px"
-				style:border-top="1px solid var(--canvas-border)"
-				data-settings-setup="emby"
-				onfocusin={() => focusSettingsField('embySetup')}
-				onfocusout={(event) => fieldFocusOut(event, 'embySetup')}
-			>
-				<input
-					type="text"
-					placeholder="Server URL"
-					aria-label="Emby server URL"
-					style={fieldStyle}
-					value={draft.serverUrl}
-					data-settings-field="serverUrl"
-					oninput={(event) => setEmbySetupDraft({ serverUrl: event.currentTarget.value })}
-				/>
-				<input
-					type="text"
-					placeholder="Username"
-					aria-label="Emby username"
-					style={fieldStyle}
-					value={draft.username}
-					data-settings-field="username"
-					oninput={(event) => setEmbySetupDraft({ username: event.currentTarget.value })}
-				/>
-				<input
-					type="password"
-					placeholder="Password"
-					aria-label="Emby password"
-					style={fieldStyle}
-					value={draft.password}
-					data-settings-field="password"
-					oninput={(event) => setEmbySetupDraft({ password: event.currentTarget.value })}
-				/>
-				{#if setup.error !== ''}
-					<div style:font-size="13px" style:color="var(--canvas-destructive)" data-settings-setup-error="">
-						{setup.error}
-					</div>
+		<SettingsButton
+			variant="primary"
+			disabled={content.setup?.busy ?? false}
+			onpress={() => submitSettingsForm(content)}
+			>{content.setup?.busy === true ? 'Checking…' : 'Set up'}</SettingsButton
+		>
+	</div>
+{/snippet}
+
+<div
+	class="grid"
+	style:grid-template-columns="repeat(2, minmax(0, 1fr))"
+	style:gap="20px"
+	style:align-items="start"
+	data-settings-services=""
+>
+	{#each content.services as service (service.entry)}
+		<SettingsCard title={service.name} label={service.name}>
+			{#snippet header()}
+				{#if service.entry === 'feeds' && service.context !== ''}
+					<span
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
+						data-settings-service-context="">{service.context}</span
+					>
+				{:else}
+					<SettingsStatePill state={service.state} />
 				{/if}
-				<div class="flex" style:gap="8px">
-					<button
-						type="button"
-						disabled={setup.busy}
-						style:font-size="13px"
-						style:padding="4px 10px"
-						style:border-radius="4px"
-						style:border="0"
-						style:background="var(--canvas-well)"
-						style:color={setup.busy ? 'var(--canvas-ordinal)' : 'var(--canvas-accent)'}
-						style:opacity={setup.busy ? '0.7' : undefined}
-						data-settings-setup-submit=""
-						onclick={() => submitSettingsForm(content)}
-						>{setup.busy ? 'Checking…' : 'Set up'}</button
+			{/snippet}
+			<div class="flex flex-wrap" style:gap="8px">
+				{#each service.actions as action (action.intent)}
+					{@const id = entryId.serviceAction(service.entry, action.intent)}
+					<SettingsButton
+						variant={ACTION_VARIANTS[action.intent] ?? 'secondary'}
+						entry={id}
+						cursor={id === cursorId}
+						onpress={() => onpress(id)}>{action.label}</SettingsButton
 					>
-					<button
-						type="button"
-						style:font-size="13px"
-						style:padding="4px 10px"
-						style:border-radius="4px"
-						style:border="0"
-						style:background="var(--canvas-well)"
-						style:color="var(--canvas-destructive)"
-						data-settings-setup-cancel=""
-						onclick={() =>
-							void sendSettingsCommand({ command: 'cancelSetup', service: 'emby' })}
-						>Cancel</button
-					>
-				</div>
+				{/each}
 			</div>
-		{:else if service.entry === 'audiobookshelf' && content.setup?.service === 'audiobookshelf' && $settingsUi.audiobookshelfSetup !== null}
-			{@const setup = content.setup}
-			{@const draft = $settingsUi.audiobookshelfSetup}
-			<div
-				bind:this={absFormEl}
-				class="flex flex-col"
-				style:padding="8px 16px"
-				style:gap="8px"
-				style:border-top="1px solid var(--canvas-border)"
-				data-settings-setup="audiobookshelf"
-				onfocusin={() => focusSettingsField('audiobookshelfSetup')}
-				onfocusout={(event) => fieldFocusOut(event, 'audiobookshelfSetup')}
-			>
-				<input
-					type="text"
-					placeholder="Server URL"
-					aria-label="Audiobookshelf server URL"
-					style={fieldStyle}
-					value={draft.serverUrl}
-					data-settings-field="serverUrl"
-					oninput={(event) =>
-						setAudiobookshelfSetupDraft({ serverUrl: event.currentTarget.value })}
-				/>
-				<input
-					type="password"
-					placeholder="API key"
-					aria-label="Audiobookshelf API key"
-					style={fieldStyle}
-					value={draft.apiKey}
-					data-settings-field="apiKey"
-					oninput={(event) =>
-						setAudiobookshelfSetupDraft({ apiKey: event.currentTarget.value })}
-				/>
-				{#if setup.error !== ''}
-					<div style:font-size="13px" style:color="var(--canvas-destructive)" data-settings-setup-error="">
-						{setup.error}
-					</div>
-				{/if}
-				<div class="flex" style:gap="8px">
-					<button
-						type="button"
-						disabled={setup.busy}
-						style:font-size="13px"
-						style:padding="4px 10px"
-						style:border-radius="4px"
-						style:border="0"
-						style:background="var(--canvas-well)"
-						style:color={setup.busy ? 'var(--canvas-ordinal)' : 'var(--canvas-accent)'}
-						style:opacity={setup.busy ? '0.7' : undefined}
-						data-settings-setup-submit=""
-						onclick={() => submitSettingsForm(content)}
-						>{setup.busy ? 'Checking…' : 'Set up'}</button
+			{#if service.entry === 'emby' && content.setup?.service === 'emby' && $settingsUi.embySetup !== null}
+				{@const setup = content.setup}
+				{@const draft = $settingsUi.embySetup}
+				<div
+					bind:this={embyFormEl}
+					class="flex flex-col"
+					style:padding="16px"
+					style:gap="12px"
+					style:background="var(--canvas-well)"
+					style:border-radius="8px"
+					data-settings-setup="emby"
+					onfocusin={() => focusSettingsField('embySetup')}
+					onfocusout={(event) => fieldFocusOut(event, 'embySetup')}
+				>
+					<label
+						class="flex flex-col"
+						style:gap="6px"
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
 					>
-					<button
-						type="button"
-						style:font-size="13px"
-						style:padding="4px 10px"
-						style:border-radius="4px"
-						style:border="0"
-						style:background="var(--canvas-well)"
-						style:color="var(--canvas-destructive)"
-						data-settings-setup-cancel=""
-						onclick={() =>
-							void sendSettingsCommand({ command: 'cancelSetup', service: 'audiobookshelf' })}
-						>Cancel</button
+						Server URL
+						<input
+							type="text"
+							placeholder="http://emby:8096"
+							aria-label="Emby server URL"
+							value={draft.serverUrl}
+							data-settings-field="serverUrl"
+							oninput={(event) =>
+								setEmbySetupDraft({ serverUrl: event.currentTarget.value })}
+						/>
+					</label>
+					<label
+						class="flex flex-col"
+						style:gap="6px"
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
 					>
+						Username
+						<input
+							type="text"
+							placeholder="Username"
+							aria-label="Emby username"
+							value={draft.username}
+							data-settings-field="username"
+							oninput={(event) =>
+								setEmbySetupDraft({ username: event.currentTarget.value })}
+						/>
+					</label>
+					<label
+						class="flex flex-col"
+						style:gap="6px"
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
+					>
+						Password
+						<input
+							type="password"
+							placeholder="Password"
+							aria-label="Emby password"
+							value={draft.password}
+							data-settings-field="password"
+							oninput={(event) =>
+								setEmbySetupDraft({ password: event.currentTarget.value })}
+						/>
+					</label>
+					{#if setup.error !== ''}
+						<div
+							style:font-size="13px"
+							style:color="var(--canvas-destructive)"
+							data-settings-setup-error="">{setup.error}</div
+						>
+					{/if}
+					{@render formActions('emby')}
 				</div>
-			</div>
-		{/if}
+			{:else if service.entry === 'audiobookshelf' && content.setup?.service === 'audiobookshelf' && $settingsUi.audiobookshelfSetup !== null}
+				{@const setup = content.setup}
+				{@const draft = $settingsUi.audiobookshelfSetup}
+				<div
+					bind:this={absFormEl}
+					class="flex flex-col"
+					style:padding="16px"
+					style:gap="12px"
+					style:background="var(--canvas-well)"
+					style:border-radius="8px"
+					data-settings-setup="audiobookshelf"
+					onfocusin={() => focusSettingsField('audiobookshelfSetup')}
+					onfocusout={(event) => fieldFocusOut(event, 'audiobookshelfSetup')}
+				>
+					<label
+						class="flex flex-col"
+						style:gap="6px"
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
+					>
+						Server URL
+						<input
+							type="text"
+							placeholder="http://audiobookshelf:13378"
+							aria-label="Audiobookshelf server URL"
+							value={draft.serverUrl}
+							data-settings-field="serverUrl"
+							oninput={(event) =>
+								setAudiobookshelfSetupDraft({ serverUrl: event.currentTarget.value })}
+						/>
+					</label>
+					<label
+						class="flex flex-col"
+						style:gap="6px"
+						style:font-size="12px"
+						style:color="var(--canvas-muted)"
+					>
+						API key
+						<input
+							type="password"
+							placeholder="API key"
+							aria-label="Audiobookshelf API key"
+							value={draft.apiKey}
+							data-settings-field="apiKey"
+							oninput={(event) =>
+								setAudiobookshelfSetupDraft({ apiKey: event.currentTarget.value })}
+						/>
+					</label>
+					{#if setup.error !== ''}
+						<div
+							style:font-size="13px"
+							style:color="var(--canvas-destructive)"
+							data-settings-setup-error="">{setup.error}</div
+						>
+					{/if}
+					{@render formActions('audiobookshelf')}
+				</div>
+			{/if}
+		</SettingsCard>
 	{/each}
 </div>

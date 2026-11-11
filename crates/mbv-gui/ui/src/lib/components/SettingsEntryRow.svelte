@@ -1,10 +1,11 @@
 <script lang="ts">
 	// One activatable row of a Settings section (add-gui-settings-screen
 	// design D11): the label, an optional leading mark, and an optional
-	// trailing value, in the one row look every section paints. The cursor
-	// fill paints only while the content pane holds the keyboard (`cursor`
-	// names the row the cursor rests on). A press reports to the screen's
-	// press handler, which moves the cursor and runs the entry's activation.
+	// trailing value, in the one row look every section paints — 36 px inside
+	// the card that holds it, with no side padding of its own. The cursor fill
+	// paints only while the content pane holds the keyboard (`cursor` names the
+	// row the cursor rests on). A press reports to the screen's press handler,
+	// which moves the cursor and runs the entry's activation.
 	import { Check } from '@lucide/svelte';
 
 	interface Props {
@@ -43,8 +44,8 @@
 	type="button"
 	class="flex w-full items-center text-left"
 	style:height="36px"
-	style:padding="0 16px"
-	style:padding-left={indent ? '32px' : undefined}
+	style:padding="0"
+	style:padding-left={indent ? '16px' : undefined}
 	style:gap="8px"
 	style:font-size="14px"
 	style:background={cursor ? 'var(--canvas-selected)' : 'none'}
