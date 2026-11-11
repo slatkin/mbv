@@ -952,7 +952,31 @@ action prevented, `handled` means the window content took the key so the core
 receives none, and `text` means an open text field takes it, so the browser's
 own default types it. `App.svelte` installs `routeLibraryKey`
 (`ui/src/lib/library/keys.ts`) as that router, so the Library's handler runs
-before the forwarder (design D3). The order is:
+before the forwarder (design D3).
+
+While the frame carries `settings`, `routeLibraryKey` hands the key to
+`routeSettingsKey` (`ui/src/lib/settings/keys.ts`) after the overlay, prefix,
+and Queue-filter steps, and the Library steps do not run
+(add-gui-settings-screen design D11). The Settings order is:
+
+1. An active capture takes every key: Esc cancels it, and any other key
+   sends `keysCapture` with the capture's target and the raw `DomKey`. A
+   sent capture keeps swallowing keys until the next frame answers it.
+2. A focused text field takes the key: Esc cancels the form, Enter submits
+   it, and every other key is the field's typing — the `text` answer lets
+   the browser's own default run, so Tab walks the form's fields.
+3. The screen keys run: Up, Down, Page Up, Page Down, Home, and End move
+   the cursor in the focused pane; Tab and Shift+Tab switch between the
+   sidebar and the content; Enter opens the sidebar entry or activates
+   the content row; Space activates a focused toggle or choice mark; Esc
+   walks the spec's ladder — an open edit, capture, or form cancels first,
+   then the content hands the keyboard back to the sidebar, then the
+   sidebar's Esc sends `close`.
+4. Every other key goes to the core's keyboard router, so playback and
+   global chords keep working behind the screen: Space on the sidebar
+   plays or pauses.
+
+With no Settings frame, the Library chain runs. The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
    playback-target chooser, the confirmation modal, the daemon-lost recovery
@@ -1020,6 +1044,18 @@ never disagree. A double-click returns a divider to its default. The
 dividers are the window content's: they report no region to the core, which
 needs none, because the Queue panel's own resize observer re-reports the
 regions a drag moved.
+
+While the Settings screen is open it replaces the two columns
+(add-gui-settings-screen design D11): the sidebar sits in the Queue column's
+place at the column's expanded width — the dragged or the default width,
+whatever the collapse toggle, because the 72 px rail cannot hold the section
+list — and paints no divider; the shown section's content takes the rest of
+the window, and the status line closes the screen with the frame's `status`
+facts (the prefix-armed state and the live toast). Below the Mini threshold
+— `libraryArrangement` measured on the window width minus the sidebar's
+column — only the pane that holds the keyboard shows: the sidebar until a
+section opens, then its content. A resize across the threshold keeps the
+open section, which the core owns.
 
 Panel focus stays in the core's `FocusStack`, and the frame's `GuiFocus`
 carries it. `CoreThread::new` mounts `ComponentId::Library`; a press inside the
@@ -1133,6 +1169,17 @@ two Clients' overlay rules stay the TUI's.
 The frame carries the UI-reset counter `uiResetEpoch` (design D10): the window
 resets its Library interaction stores and its panel widths when the value
 changes, and the TUI's own reset does not move it.
+
+The window-content half lives in `ui/src/lib/settings/` (design D11):
+`state.ts` holds the screen store — the keyboard pane, the sidebar and
+content cursors, the Mini pane (which is the keyboard pane), the form
+drafts, the choice marks, and the capture — and `entries.ts` builds each
+section's flat list of activatable controls, which `keys.ts` routes the
+screen keys over. `ui/src/lib/components/Settings*.svelte` holds the screen,
+the sidebar, one component per section kind, and the status line, and
+`App.svelte` mounts `SettingsScreen` in place of the two columns while
+`frame.settings` is present. Commands go through `sendSettingsCommand`
+(`ui/src/lib/bridge/settings.ts`) to the `settings` bridge command.
 
 ## The attach states
 
