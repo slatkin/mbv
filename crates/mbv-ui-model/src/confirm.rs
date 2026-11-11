@@ -54,9 +54,11 @@ pub enum ConfirmAction {
     /// continues). Enter selects the named Session as the local Owner's
     /// playback output — the Owner stops the old output and continues the
     /// active slot on the Session at its position; Esc instead switches to
-    /// the Session's direct endpoint and leaves the prior playback running.
+    /// the Session's direct endpoint and leaves the prior playback running
+    /// (either answer warns when the Session has left the snapshot).
     /// The Session resolves against the current snapshot at answer time, so
-    /// the payload carries only its stable device identity.
+    /// the payload carries only its stable device identity and the display
+    /// name the prompt showed (for the no-longer-available notice).
     HandOffPlaybackToSession {
         device_id: String,
         name: String,

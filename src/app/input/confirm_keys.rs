@@ -8,8 +8,9 @@ use mbv_ui_msg::{Key, KeyEvent};
 impl App {
     /// Shared dispatcher for the confirmation modal: matches on which
     /// `ConfirmAction` is pending and re-uses each action's existing effect.
-    /// Only Enter (and `d`/Esc on the dirty-playlist prompt) answers; every
-    /// other key is a no-op that leaves the modal mounted.
+    /// Only Enter (and `d`/Esc on the dirty-playlist prompt, Esc on the
+    /// session-switch hand-off fork) answers; every other key is a no-op
+    /// that leaves the modal mounted.
     pub(in crate::app) fn apply_confirm_action(
         &mut self,
         action: ConfirmAction,

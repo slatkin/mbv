@@ -126,10 +126,11 @@ impl App {
     ) {
         // Attachment slots are mutually exclusive: a library-route switch can
         // be reached (via `apply_route_for_playback`) without going through
-        // `connect_to_session`'s sever. The owner's remote output is handed
-        // back to Local first, exactly as a session connect does
-        // (design D13) — `self.player` is still the outgoing owner here.
-        self.hand_remote_output_back_to_local();
+        // `connect_to_session`'s sever. The switch stops no playback, exactly
+        // as a session connect does not (session-switch playback-continuity
+        // decision): the outgoing owner's remote output keeps playing
+        // whatever it plays, and `attach_remote_owner` suspends or
+        // disconnects the outgoing link itself.
         let current_is_home = self.is_local_daemon();
         self.stop_visualizer_capture();
         let previous_route = self.active_route.clone();
@@ -558,7 +559,7 @@ impl App {
             "Just switch",
             mbv_ui_model::confirm::ConfirmAction::HandOffPlaybackToSession {
                 device_id: sess.device_id.clone(),
-                name: sess.device_name.clone(),
+                name: session_display_name(sess),
             },
         ));
     }
@@ -603,9 +604,14 @@ impl App {
                 });
             }
             Key::Esc => {
-                if let Some(sess) = resolve(&self.panel_targets) {
-                    self.activate_session_target_without_hand_off(&sess);
-                }
+                let Some(sess) = resolve(&self.panel_targets) else {
+                    self.flash(
+                        format!("\"{name}\" is no longer available"),
+                        ToastSeverity::Warning,
+                    );
+                    return;
+                };
+                self.activate_session_target_without_hand_off(&sess);
             }
             _ => {}
         }

@@ -109,7 +109,7 @@ The exit of a Client SHALL NOT affect the receiver. The owner SHALL continue to 
 
 ### Requirement: Playback targets are mutually exclusive
 
-Connecting to a new playback target SHALL sever the currently connected one. A cast output, an Emby Session output, a direct remote, and a library route are mutually exclusive targets of a Client. Selecting a cast target or an Emby Session SHALL return the Client to its Local daemon owner before the owner selects it. When one remote output replaces the other, the owner SHALL hand off the active slot. The owner SHALL NOT select a cast receiver when it starts: a receiver becomes the output only by explicit user selection.
+Connecting to a new playback target SHALL sever the currently connected one, sending the outgoing target's owner no playback commands: it keeps playing. A cast output, an Emby Session output, a direct remote, and a library route are mutually exclusive Client targets. Selecting one SHALL return the Client to its Local daemon owner before the owner selects it, and one remote output replacing the other hands off the active slot. A receiver becomes the output only by explicit user selection.
 
 #### Scenario: Cast target is selected while a direct remote or library route is connected
 
@@ -127,15 +127,32 @@ Connecting to a new playback target SHALL sever the currently connected one. A c
 
 - **WHEN** the user connects to Direct remote control (Sessions panel or auto-reconnect)
   while a cast target is the active output
-- **THEN** the owner stops the receiver and selects local playback as its output
-- **AND** local playback does not start
+- **THEN** the severed link sends no playback commands and the receiver keeps playing
 - **AND** the newly connected target becomes the one active target
 
 #### Scenario: An Emby Session is selected while a cast target is attached
 
-- **WHEN** the user selects an Emby Session in the Sessions panel while a cast receiver is the output
-- **THEN** the receiver stops
+- **WHEN** the user selects an Emby Session in the Sessions panel while a cast receiver is the output, and no hand-off fork applies
+- **THEN** the owner makes the Session its output: the receiver stops
 - **AND** the Session continues the active slot
+
+#### Scenario: The hand-off fork is offered before a Session switch
+
+- **WHEN** the user selects an Emby Session that advertises a direct endpoint while a slot is active on the local Owner's output and the Owner advertises `emby-session-output`
+- **THEN** the Client asks whether to hand off before it switches
+- **AND** accepting makes the Session the Owner's output: the Owner stops the old output and the Session continues the active slot at its position
+
+#### Scenario: Declining the hand-off keeps the prior output playing
+
+- **WHEN** the user declines the hand-off fork
+- **THEN** the Client attaches the Session's direct endpoint
+- **AND** the prior output keeps playing
+
+#### Scenario: Nothing active on the output skips the fork
+
+- **WHEN** the user selects an Emby Session that advertises a direct endpoint while nothing is active on the local Owner's output
+- **THEN** the plain switch runs without asking
+- **AND** the same holds when the Session's device already is the output: that selection is the Owner's no-op hand-off
 
 #### Scenario: A different cast target is selected while one is attached
 

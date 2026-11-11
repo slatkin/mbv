@@ -279,3 +279,30 @@ fn switching_away_from_home_never_stops_local_playback() {
             if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
     )));
 }
+
+// The same continuity contract a session connect holds (session-switch
+// playback-continuity decision): a library-route switch severs only the
+// control link — the local Owner's remote output keeps playing, so no
+// `Stop` and no output change are sent. A hand-off is always the owner's
+// own output selection. Guards the sever removed with `sever_active_connection`.
+#[test]
+fn switching_to_a_library_route_leaves_the_local_owners_remote_output_playing() {
+    let mut app = make_app_stub();
+    let cmd_rx = live_owner_channel(&mut app);
+    app.player_endpoint = Some(DaemonEndpoint::Local);
+    app.player
+        .remote()
+        .update_playback_output_for_test(mbv_ctrl::OutputState::Cast {
+            receiver_id: "receiver-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+        });
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
+
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "a route switch sends nothing to the local Owner: the receiver keeps playing"
+    );
+}
