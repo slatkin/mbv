@@ -57,6 +57,12 @@ impl App {
                 Key::Enter => self.run_staged_queue_transfer(),
                 _ => self.cancel_staged_queue_transfer(),
             },
+            // The session-switch hand-off fork: Enter selects the Session as
+            // the owner's playback output; Esc runs the plain switch, which
+            // stops no playback.
+            ConfirmAction::HandOffPlaybackToSession { device_id, name } => {
+                self.confirm_hand_off_playback_to_session(&device_id, &name, key);
+            }
         }
         false
     }
