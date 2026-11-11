@@ -7,16 +7,31 @@
 
 import type { Action } from 'svelte/action';
 
+/** An optional box in CSS pixels the image also stays inside. */
+export interface NaturalSizeBounds {
+	width?: number;
+	height?: number;
+}
+
 /** Cap `img`'s rendered size at its natural size, and keep the cap current
- * as the image source or the display's pixel ratio changes. */
-export const capToNaturalSize: Action<HTMLImageElement> = (img) => {
+ * as the image source or the display's pixel ratio changes. With `bounds`,
+ * the image also stays inside that box, so its parent can hug the image
+ * instead of holding a fixed box around it. */
+export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | undefined> = (
+	img,
+	bounds
+) => {
 	const cap = () => {
 		if (img.naturalWidth === 0 || img.naturalHeight === 0) {
 			return;
 		}
 		const ratio = window.devicePixelRatio || 1;
-		img.style.maxWidth = `${img.naturalWidth / ratio}px`;
-		img.style.maxHeight = `${img.naturalHeight / ratio}px`;
+		const width = img.naturalWidth / ratio;
+		const height = img.naturalHeight / ratio;
+		const boundedWidth = Math.min(width, bounds?.width ?? width);
+		// With bounds the image also never outgrows its parent's width.
+		img.style.maxWidth = bounds ? `min(${boundedWidth}px, 100%)` : `${boundedWidth}px`;
+		img.style.maxHeight = `${Math.min(height, bounds?.height ?? height)}px`;
 	};
 	img.addEventListener('load', cap);
 	window.addEventListener('resize', cap);

@@ -238,10 +238,10 @@ test('a playing frame renders the header, artwork badge, title, and clocks', () 
 	expect(collapse.style.width).toBe('44px');
 	expect(collapse.style.height).toBe('44px');
 
-	// The still slot is the canvas's fixed 225 px box with the episode badge
+	// The still slot hugs a loaded image (at most 225 px high) with the episode badge
 	// at its bottom left (`main` audits 6–7); the title block paints its
 	// 18 px title and 13 px parent link colour (`main` audit 8).
-	expect(control(container, 'visualSlot').style.height).toBe('225px');
+	expect(control(container, 'visualSlot').style.height).toBe('');
 	const badge = getByText('S2 · E5');
 	expect(badge.style.left).toBe('12px');
 	expect(badge.style.bottom).toBe('10px');

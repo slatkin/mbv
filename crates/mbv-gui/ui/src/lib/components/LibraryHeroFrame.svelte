@@ -15,8 +15,9 @@
 	//
 	// A destination supplies facts and rows and never restates the layout, so a
 	// fix here lands in all of them. The artwork arm is `LibraryHeroArt`'s: the canvas's
-	// 300 px box for a square or portrait cover, and the TUI's full-width 16:9
-	// still, stacked above the text, for a landscape one.
+	// 300 px box for a square or portrait cover, and the 16:9 still for a landscape
+	// one, which sits beside the text when 320 px or more is free and wraps
+	// above it when the Hero is narrower.
 	//
 	// `attr` names the destination's own attributes: the Music Hero's are
 	// `data-library-hero-*` (`attr` empty) and the Shows Hero's are
@@ -71,7 +72,7 @@
 		children,
 	}: Props = $props();
 
-	/** Whether the block stacks the still above its text. */
+	/** Whether the still is landscape: its text wraps below it when too narrow. */
 	const band = $derived(artShape === 'landscape');
 
 	/** The destination's own attribute for one part. */
@@ -123,8 +124,8 @@
 
 	<!-- The detail block: the artwork and the picked item's text. -->
 	<section
-		class={band ? 'flex flex-col' : 'flex items-start'}
-		style:gap={band ? '18px' : '32px'}
+		class={band ? 'flex flex-wrap items-start' : 'flex items-start'}
+		style:gap={band ? '18px 32px' : '32px'}
 		aria-label={block.label}
 		{...own('block')}
 	>
@@ -138,6 +139,7 @@
 		<div
 			class="flex min-w-0 flex-1 flex-col"
 			style:gap="18px"
+			style:flex-basis={band ? '320px' : undefined}
 			style:padding-top={band ? '0' : '8px'}
 		>
 			{#if (block.eyebrow ?? '') !== '' || (block.name ?? '') !== '' || (block.facts ?? '') !== '' || (block.meta ?? []).length > 0}

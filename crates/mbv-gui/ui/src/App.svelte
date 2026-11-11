@@ -109,7 +109,7 @@
 
 <svelte:document oncontextmenu={preventContextMenu} />
 
-<main class="h-dvh bg-background text-foreground">
+<main class="h-dvh w-full overflow-hidden bg-background text-foreground">
   {#if $frames && 'slice' in $frames}
     <!-- The two-panel arrangement (add-gui-library-panel design D4): the Queue
       panel beside the Library panel, picked from the measured Library column
@@ -151,7 +151,7 @@
     {@const twoColumns = queueVisible && libraryVisible}
     <div
       bind:this={containerEl}
-      class="relative flex h-full min-h-0"
+      class="relative flex h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-arrangement={arrangement}
       style:background={queueFocused
         ? 'var(--canvas-queue-column-focused)'

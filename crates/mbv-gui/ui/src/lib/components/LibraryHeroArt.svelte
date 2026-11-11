@@ -51,14 +51,22 @@
 
 	/** Whether the arm paints the TUI's full-width still. */
 	const band = $derived(shape === 'landscape');
+	/** Whether a loaded image sizes its own box: a portrait or square box
+	 * hugs the image (never above its natural size) instead of holding the
+	 * fixed art box around a smaller, centered picture. */
+	const hugs = $derived(art !== null && art.kind !== 'loading');
+	/** The tallest a landscape still paints: its box hugs the image up to the
+	 * content width, so a wide window never grows the still without bound. */
+	const BAND_MAX_HEIGHT = 360;
 
 </script>
 
 <div
 	class="flex flex-none items-center justify-center"
-	style:width={band ? '100%' : `${ART_WIDTH}px`}
-	style:height={band ? 'auto' : `${ART_HEIGHT[shape]}px`}
-	style:aspect-ratio={band ? '16 / 9' : undefined}
+	style:width={hugs ? 'fit-content' : band ? '100%' : `${ART_WIDTH}px`}
+	style:max-width={hugs ? (band ? '100%' : `${ART_WIDTH}px`) : undefined}
+	style:height={band ? 'auto' : hugs ? undefined : `${ART_HEIGHT[shape]}px`}
+	style:aspect-ratio={band && !hugs ? '16 / 9' : undefined}
 	style:background={canvasVar('library-raise')}
 	style:border-radius="6px"
 	style:overflow="hidden"
@@ -67,10 +75,12 @@
 >
 	{#if art !== null && art.kind !== 'loading'}
 		<img
-			class="h-full w-full object-cover"
+			class="block"
 			src={art.detail}
 			alt={title}
-			use:capToNaturalSize
+			use:capToNaturalSize={band
+				? { height: BAND_MAX_HEIGHT }
+				: { width: ART_WIDTH, height: ART_HEIGHT[shape] }}
 		/>
 	{:else}
 		<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
