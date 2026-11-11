@@ -5,8 +5,8 @@ mbv is a media client for Emby, Audiobookshelf, and Feeds. It browses catalogs a
 ## Services
 
 Service:
-One of the singleton media integrations in mbv. The three kinds are Emby, Audiobookshelf, and Feeds. Each kind exists at most one time in mbv. Feeds is always present, even with no subscriptions.
-_Avoid_: account, provider, backend
+One of the singleton media integrations in mbv. The three kinds are Emby, Audiobookshelf, and Feeds. Each kind exists at most one time in mbv. Feeds is always present, even with no subscriptions. The GUI Client's *Settings screen* labels its Services section "Sources". That is a UI label only: when the user says Source or Sources, they mean Service, and the code, the specs, and the TUI keep the name Service.
+_Avoid_: account, provider, backend, Source (outside that one GUI label)
 
 Remote Service:
 An Emby or Audiobookshelf Service at a configured server. It uses its own Service credential for authorization.
@@ -467,7 +467,7 @@ The GUI Client's Library panel, beside its Queue panel. The design canvas specif
 _Avoid_: GUI library screen, Library panel (bare, for the GUI's)
 
 Settings screen:
-The GUI Client's one Settings screen: the full-window arrangement that replaces the player panel and the *Library panel* while it is open, with a sidebar of sections (Services, Playback, Display, Session, Library, Queue, Mpv, Feeds, Actions, Keys, Sessions, Playlists) and the selected section's content. The GUI front end holds its interaction state (sidebar cursor, keyboard position, form drafts, choice marks, capture state); the *Client core* holds the open section, the section's data, and the actions (ADR 0037). The rebindable function-key open actions reach it through the core's Keyboard Router. It is not the TUI's *Settings sidebar*, and it is not the *Services view* the TUI sidebar presents.
+The GUI Client's one Settings screen: the full-window arrangement that replaces the player panel and the *Library panel* while it is open, with a sidebar of sections (Services, labelled Sources, Playback, Display, Session, Library, Queue, Mpv, Feeds, Actions, Keys, Sessions, Playlists) and the selected section's content. The GUI front end holds its interaction state (sidebar cursor, keyboard position, form drafts, choice marks, capture state); the *Client core* holds the open section, the section's data, and the actions (ADR 0037). The rebindable function-key open actions reach it through the core's Keyboard Router. It is not the TUI's *Settings sidebar*, and it is not the *Services view* the TUI sidebar presents.
 _Avoid_: Settings sidebar (for the GUI's), settings overlay, F2 screen, settings page
 
 Collection pill:
