@@ -29,6 +29,7 @@ const LIB_IDX = 3;
  * resume roles marked, and the overview text (design D12, row 8.1). */
 function hero(artShape: GuiEmbyHero['artShape'] = 'landscape'): GuiEmbyHero {
 	return {
+		kind: 'movie',
 		title: 'Heat',
 		metaRows: ['2 h 50 m', '1995 · Crime'],
 		durationRow: 0,
@@ -36,6 +37,8 @@ function hero(artShape: GuiEmbyHero['artShape'] = 'landscape'): GuiEmbyHero {
 		overview: 'A crew plans a bank job.',
 		artShape,
 		art: null,
+		credits: [],
+		imdbUrl: null,
 	};
 }
 

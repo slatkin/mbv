@@ -36,7 +36,8 @@ pub(in crate::app) use self::emby::{
     GuiEmbyLatestItems, GuiEmbyLatestItemsEvent, GuiEmbyRootItems, GuiEmbyRootItemsEvent,
 };
 pub use self::emby_projection::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind,
 };
 pub use self::feeds::{GuiFeedPill, GuiFeedsSelection};
 pub use self::feeds_projection::{

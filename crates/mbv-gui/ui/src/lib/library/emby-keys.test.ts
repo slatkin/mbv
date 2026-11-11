@@ -96,6 +96,7 @@ const FEED: GuiEmbyRow[] = [
 /** The selected row's Hero facts: a plain Emby-library Hero with no
  * Workspace. */
 const EMBY_HERO: GuiEmbyHero = {
+	kind: 'movie',
 	title: 'Alien',
 	metaRows: ['1979 · 1 h 57 m'],
 	durationRow: 0,
@@ -103,6 +104,8 @@ const EMBY_HERO: GuiEmbyHero = {
 	overview: null,
 	artShape: 'landscape',
 	art: null,
+	credits: [],
+	imdbUrl: null,
 };
 
 /** The carried content while an Emby library is active (row 8.1): no Music,

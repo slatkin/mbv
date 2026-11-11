@@ -33,8 +33,8 @@ pub use self::audiobooks::{
     GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
 };
 pub use self::emby::{
-    GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroFrame, GuiEmbyPillFrame, GuiEmbyRowFrame,
-    GuiEmbyRowKindFrame,
+    GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
+    GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
 };
 pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame, GuiFeedsPillFrame, GuiFeedsRowFrame};
 pub use self::podcasts::{

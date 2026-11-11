@@ -658,6 +658,9 @@ export interface GuiEmbyRow {
 /** The Hero's facts for the selected row (design D12, row 8.1), with no
  * Workspace: a plain Emby-library Hero carries none. */
 export interface GuiEmbyHero {
+	/** The item's kind word for the Hero's kicker (design D17): `movie`,
+	 * `video`, as the projection carries it. */
+	kind: string;
 	title: string;
 	metaRows: string[];
 	durationRow: number | null;
@@ -667,6 +670,22 @@ export interface GuiEmbyHero {
 	 * arm). */
 	artShape: 'landscape' | 'square' | 'portrait';
 	art: GuiLibraryArt | null;
+	/** The movie's credits table (design D17, Q7): the director first,
+	 * then the cast, as the TUI's credits table paints them. */
+	credits: GuiEmbyHeroCredit[];
+	/** The IMDb link's target (design D17, Q7), when the item carries
+	 * one; the `IMDb` meta row links to it. */
+	imdbUrl: string | null;
+}
+
+/** One credit of the Hero's credits table (design D17, Q7), mirroring
+ * `GuiEmbyHeroCreditFrame` field for field. */
+export interface GuiEmbyHeroCredit {
+	/** The person's name. */
+	name: string;
+	/** The role painted beside the name: the person's role, else their
+	 * kind (a director's `Director`). */
+	role: string;
 }
 
 /** The Audiobooks destination's content (design D12, row 9.1), present

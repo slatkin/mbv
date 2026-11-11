@@ -5,7 +5,8 @@
 //! carries, never by position.
 
 use mbv::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind,
 };
 use serde::Serialize;
 
@@ -118,6 +119,9 @@ pub struct GuiEmbyRowFrame {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiEmbyHeroFrame {
+    /// The item's kind word for the Hero's kicker (design D17): `movie`,
+    /// `video`, as the projection carries it.
+    pub kind: String,
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
@@ -134,6 +138,24 @@ pub struct GuiEmbyHeroFrame {
     /// The Hero's artwork, present exactly while the item obtains art from
     /// the image cache; the window paints its own placeholder while `None`.
     pub art: Option<GuiLibraryArt>,
+    /// The movie's credits table (design D17, Q7): the director first, then
+    /// the cast, as the TUI's credits table paints them.
+    pub credits: Vec<GuiEmbyHeroCreditFrame>,
+    /// The `IMDb` link's target (design D17, Q7), when the item carries one;
+    /// the `IMDb` meta row links to it.
+    pub imdb_url: Option<String>,
+}
+
+/// One credit of the Hero's credits table (design D17, Q7), mirroring
+/// `mbv::GuiEmbyHeroCredit`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiEmbyHeroCreditFrame {
+    /// The person's name.
+    pub name: String,
+    /// The role painted beside the name: the person's role, else their
+    /// kind (a director's `Director`).
+    pub role: String,
 }
 
 impl GuiEmbyFrame {
@@ -195,6 +217,7 @@ impl From<GuiEmbyRowKind> for GuiEmbyRowKindFrame {
 impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
     fn from(hero: &GuiEmbyHero) -> Self {
         Self {
+            kind: hero.kind.clone(),
             title: hero.title.clone(),
             meta_rows: hero.meta_rows.clone(),
             duration_row: hero.duration_row,
@@ -202,6 +225,21 @@ impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiLibraryArt::from),
+            credits: hero
+                .credits
+                .iter()
+                .map(GuiEmbyHeroCreditFrame::from)
+                .collect(),
+            imdb_url: hero.imdb_url.clone(),
+        }
+    }
+}
+
+impl From<&GuiEmbyHeroCredit> for GuiEmbyHeroCreditFrame {
+    fn from(credit: &GuiEmbyHeroCredit) -> Self {
+        Self {
+            name: credit.name.clone(),
+            role: credit.role.clone(),
         }
     }
 }

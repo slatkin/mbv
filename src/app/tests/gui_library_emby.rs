@@ -465,6 +465,22 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
                 5400 * mbv_emby_model::TICKS_PER_SECOND,
             );
             item.premiere_date = "1999-06-01T00:00:00Z".into();
+            item.people = vec![
+                mbv_emby_model::EmbyPerson {
+                    name: "Kirsten Johnson".into(),
+                    role: String::new(),
+                    kind: "Director".into(),
+                },
+                mbv_emby_model::EmbyPerson {
+                    name: "Jane Doe".into(),
+                    role: "Lead".into(),
+                    kind: "Actor".into(),
+                },
+            ];
+            item.external_urls = vec![mbv_emby_model::EmbyLink {
+                name: "IMDb".into(),
+                url: "https://www.imdb.com/title/tt0000001".into(),
+            }];
             item
         },
         movie_item("m-2", "B Movie", 0, 900 * mbv_emby_model::TICKS_PER_SECOND),
@@ -505,12 +521,37 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
         "the first row is the Hero default"
     );
     let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(
+        hero.kind, "movie",
+        "the kicker's kind word is the item type's lowercase word"
+    );
     assert_eq!(hero.title, "A Movie");
-    // The shared Emby hero producer's facts: the premiere date and the
-    // duration row, the same meta rows the TUI's hero paints.
-    assert_eq!(hero.meta_rows, vec!["1 Jun 1999", "01:30:00"]);
+    // The shared Emby hero producer's facts: the premiere date, the
+    // duration row, and the IMDb row the producer appends from the item's
+    // external URLs — the same meta rows the TUI's hero paints.
+    assert_eq!(hero.meta_rows, vec!["1 Jun 1999", "01:30:00", "IMDb"]);
     assert_eq!(hero.duration_row, Some(1));
     assert_eq!(hero.progress_row, None);
+    // The credits and the IMDb target ride the shared producer's output,
+    // director first (design D17, Q7): the TUI paints the same table.
+    assert_eq!(
+        hero.credits,
+        vec![
+            GuiEmbyHeroCredit {
+                name: "Kirsten Johnson".into(),
+                role: "Director".into(),
+            },
+            GuiEmbyHeroCredit {
+                name: "Jane Doe".into(),
+                role: "Lead".into(),
+            },
+        ]
+    );
+    assert_eq!(
+        hero.imdb_url.as_deref(),
+        Some("https://www.imdb.com/title/tt0000001"),
+        "the IMDb meta row's link target rides the hero"
+    );
     assert!(hero.overview.is_none());
     // No image tag declares a source, so the Hero carries none and the
     // window paints its own placeholder.

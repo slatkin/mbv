@@ -83,12 +83,28 @@ pub struct GuiEmbyRow {
     pub kind: GuiEmbyRowKind,
 }
 
+/// One credit of the movie's credits table (design D17, Q7): the shared
+/// Emby hero producer's credit — the director first, then the cast — as the
+/// TUI's credits table paints it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiEmbyHeroCredit {
+    /// The person's name.
+    pub name: String,
+    /// The role painted beside the name: the person's role, else their
+    /// kind (a director's `Director`).
+    pub role: String,
+}
+
 /// The Hero's facts for the selected row (row 8.1): the shared Emby hero
 /// producer's facts for the item — the same facts the TUI paints — and the
 /// artwork at the artwork policy's chain. A plain Emby-library Hero has no
 /// Workspace, so none rides here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEmbyHero {
+    /// The item's kind word for the Hero's kicker (design D17): the item
+    /// type's lowercase word — `movie`, `video` — the kind's own word, so a
+    /// library of mixed kinds names each item's.
+    pub kind: String,
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
@@ -108,6 +124,15 @@ pub struct GuiEmbyHero {
     /// policy's chain. `None` when the item declares no image source; the
     /// window content paints its own placeholder there.
     pub art: Option<GuiLibraryArtwork>,
+    /// The movie's credits table (design D17, Q7): the shared Emby hero
+    /// producer's credits — the director first, then the cast. Empty when
+    /// the item carries no people or is not a movie, as the TUI's credits
+    /// table paints none either.
+    pub credits: Vec<GuiEmbyHeroCredit>,
+    /// The `IMDb` link's target (design D17, Q7), when the shared producer
+    /// carried one; the `IMDb` meta row links to it. `None` on an item the
+    /// producer gives no link, as the TUI paints no link either.
+    pub imdb_url: Option<String>,
 }
 
 /// The plain Emby-library projection the GUI Library panel paints (row 8.1):
@@ -467,11 +492,22 @@ impl App {
         let content = hero_content_emby(item);
         let art = self.gui_emby_hero_art(content.facts.artwork.source.as_ref());
         GuiEmbyHero {
+            kind: item.item_type.to_lowercase(),
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),
             duration_row: content.facts.duration_row,
             progress_row: content.facts.progress_row,
             overview: content.overview.clone(),
+            credits: content
+                .credits
+                .unwrap_or_default()
+                .into_iter()
+                .map(|credit| GuiEmbyHeroCredit {
+                    name: credit.name,
+                    role: credit.role,
+                })
+                .collect(),
+            imdb_url: content.facts.links.first().map(|link| link.url.clone()),
             art_shape: artwork_shape(
                 self.gui_hero_shape(content.facts.artwork.shape, art.as_ref()),
             ),

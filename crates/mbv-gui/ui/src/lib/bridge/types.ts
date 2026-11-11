@@ -43,6 +43,7 @@ export type {
 	GuiEmbyFeedGroup,
 	GuiEmbyFrame,
 	GuiEmbyHero,
+	GuiEmbyHeroCredit,
 	GuiEmbyPill,
 	GuiEmbyRow,
 	GuiFeedPill,
