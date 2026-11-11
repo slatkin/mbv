@@ -15,6 +15,12 @@ export const QUEUE_PANEL_WIDTH_PX = 400;
 /** The Queue panel's collapsed width: the `z` toggle's 72 px rail. */
 export const QUEUE_RAIL_WIDTH_PX = 72;
 
+/** The Settings screen's sidebar width: the canvas's 260 px nav. It replaces
+ * the Queue column's expanded width, so it takes neither the session's drag
+ * nor the collapse toggle, and the screen's Mini check subtracts it from the
+ * window width (design D11 *Widths*, D13). */
+export const SETTINGS_SIDEBAR_WIDTH_PX = 260;
+
 /** The Library column width below which only the panel with Panel focus
  * shows: the 320 px list plus the pill row. */
 export const LIBRARY_MINI_MAX_WIDTH_PX = 480;

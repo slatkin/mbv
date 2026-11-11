@@ -5,14 +5,13 @@
 	import { installInput } from '$lib/bridge/input';
 	import { reportContainerSize } from '$lib/bridge/layout';
 	import {
-		clampQueueWidth,
 		dragQueueWidth,
 		draggedWidths,
 		noteUiResetEpoch,
 		panelWidths,
 		resetQueueWidth,
 	} from '$lib/bridge/resize';
-	import { QUEUE_PANEL_WIDTH_PX } from '$lib/bridge/arrangement';
+	import { SETTINGS_SIDEBAR_WIDTH_PX } from '$lib/bridge/arrangement';
 	import type { LayoutSize } from '$lib/bridge/types';
 	import { routeLibraryKey } from '$lib/library/keys';
 	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
@@ -126,10 +125,6 @@
       resolution, so a drag paints the width the thresholds classify. -->
     {@const widths = panelWidths(container, frame.panel, $draggedWidths)}
     {@const arrangement = libraryArrangement(container, widths.queue)}
-    <!-- The Settings sidebar's column: the Queue column's expanded width
-      (design D11) — the dragged or the default width, whatever the collapse
-      toggle, because the rail cannot hold the section list. -->
-    {@const sidebarWidth = clampQueueWidth($draggedWidths.queue ?? QUEUE_PANEL_WIDTH_PX, container.width)}
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
     {@const home = content?.home ?? null}
@@ -161,13 +156,12 @@
         <!-- The Settings screen replaces the two panels while its frame
           section is present (add-gui-settings-screen design D11): no player
           panel, queue, or Library panel mounts, and playback continues. The
-          screen's own Mini check measures the window minus the sidebar's
-          column. -->
+          screen's own Mini check measures the window minus its fixed 260 px
+          sidebar. -->
         <SettingsScreen
           settings={frame.settings}
           status={frame.status}
-          {sidebarWidth}
-          arrangement={libraryArrangement(container, sidebarWidth)}
+          arrangement={libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)}
         />
       {:else}
       {#if queueVisible}

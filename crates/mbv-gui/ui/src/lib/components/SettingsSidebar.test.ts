@@ -1,8 +1,11 @@
-// add-gui-settings-screen row 8.5: the sidebar's pointer path (the spec's
-// *Every Settings control works by pointer*, design D11). A press on a
-// section entry sends `selectSection`, moves the sidebar cursor onto the
-// entry, and hands the keyboard to the content — the same effect Enter on
-// the cursor row has. The Tauri IPC is mocked; the asserted payload is the
+// add-gui-settings-screen rows 8.5 and 9.5: the sidebar's pointer path and
+// its canvas paint (the spec's *Every Settings control works by pointer* and
+// *A Back control in the sidebar closes the screen*, design D11, D13). A
+// press on a section entry sends `selectSection`, moves the sidebar cursor
+// onto the entry, and hands the keyboard to the content — the same effect
+// Enter on the cursor row has. Each entry paints its section's icon and name,
+// the open section's entry carries `aria-current="page"`, and a press on Back
+// closes the screen. The Tauri IPC is mocked; the asserted payload is the
 // serde wire shape of bridge/settings.rs.
 
 import { invoke } from '@tauri-apps/api/core';
@@ -24,6 +27,11 @@ function frame(): GuiSettingsFrame {
 	};
 }
 
+/** One section row of a rendered sidebar. */
+function row(container: HTMLElement, section: GuiSettingsSection): HTMLElement {
+	return container.querySelector(`[data-settings-section="${section}"]`) as HTMLElement;
+}
+
 beforeEach(() => {
 	invokeMock.mockClear();
 	settingsUi.set(initialSettingsUi());
@@ -38,9 +46,7 @@ test.each<[GuiSettingsSection, number]>([
 	async (section, index) => {
 		const { container } = render(SettingsSidebar, { props: { settings: frame() } });
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-section="${section}"]`) as HTMLElement,
-		);
+		await fireEvent.click(row(container, section));
 
 		expect(invokeMock).toHaveBeenCalledWith('settings', {
 			command: { command: 'selectSection', section },
@@ -50,3 +56,36 @@ test.each<[GuiSettingsSection, number]>([
 		expect(ui.pane).toBe('content');
 	},
 );
+
+test.each<[GuiSettingsSection, string]>([
+	['services', 'Services'],
+	['feeds', 'Feeds'],
+	['keys', 'Keys'],
+])('the %s entry paints its icon and its name', (section, name) => {
+	const { container } = render(SettingsSidebar, { props: { settings: frame() } });
+
+	const entry = row(container, section);
+
+	expect(entry.querySelector('svg')).not.toBeNull();
+	expect(entry.textContent?.trim()).toBe(name);
+});
+
+test.each<[GuiSettingsSection, string | null]>([
+	['services', 'page'],
+	['feeds', null],
+	['keys', null],
+])('the %s entry carries aria-current %s', (section, current) => {
+	const { container } = render(SettingsSidebar, { props: { settings: frame() } });
+
+	expect(row(container, section).getAttribute('aria-current')).toBe(current);
+});
+
+test('a press on Back closes the screen', async () => {
+	const { container } = render(SettingsSidebar, { props: { settings: frame() } });
+
+	await fireEvent.click(container.querySelector('[data-settings-back]') as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'close' },
+	});
+});

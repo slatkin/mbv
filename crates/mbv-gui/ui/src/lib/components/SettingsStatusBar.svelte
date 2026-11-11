@@ -1,11 +1,12 @@
 <script lang="ts">
 	// The Settings screen's status line (add-gui-settings-screen design D9,
-	// the spec's *The Settings screen shows the toasts*): the 40 px band that
-	// closes the screen, painting the shared Status bar projection — the
-	// armed prefix and the live toast — because neither the footer line nor
-	// the Library Status bar shows while the screen is open. The left side is
-	// the screen's fixed key hints while no toast or prefix is live; the
-	// right side is the shown section.
+	// the spec's *The Settings screen shows the toasts*; the canvas's status
+	// bar, design D13): the 36 px band that closes the screen, painting the
+	// shared Status bar projection — the armed prefix and the live toast —
+	// because neither the footer line nor the Library Status bar shows while
+	// the screen is open. The left side is the screen's fixed key hints in the
+	// canvas's source tone while no toast or prefix is live; the right side is
+	// the shown section.
 	import { toastColor } from '$lib/bridge/status';
 	import type { GuiStatusBar } from '$lib/bridge/types';
 
@@ -30,9 +31,9 @@
 
 <div
 	class="flex flex-none items-center justify-between overflow-hidden font-mono whitespace-nowrap"
-	style:height="40px"
+	style:height="36px"
 	style:padding-inline="16px"
-	style:font-size="13px"
+	style:font-size="12px"
 	style:border-top="1px solid var(--canvas-border)"
 	style:background="var(--canvas-library-panel)"
 	data-settings-status=""
@@ -47,7 +48,7 @@
 				>PREFIX</span
 			>
 		{:else}
-			<span class="flex items-center" style:gap="14px" style:color="var(--canvas-muted)">
+			<span class="flex items-center" style:gap="12px" style:color="var(--canvas-muted)">
 				{#each HINTS as hint (hint.key)}
 					<span data-settings-hint=""
 						><span style:color="var(--canvas-source)">{hint.key}</span> {hint.label}</span

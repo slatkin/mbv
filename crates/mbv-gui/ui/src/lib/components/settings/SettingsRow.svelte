@@ -2,7 +2,8 @@
 	// One setting row of a Settings card (add-gui-settings-screen design D13,
 	// the canvas row): 60 px high, the label on the left at the canvas's
 	// 14 px heading colour, the control on the right, and the canvas's
-	// divider under every row but its card's last one.
+	// divider under every row but its card's last one. The cursor row takes
+	// the picked row's fill while the content pane holds the keyboard.
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -11,19 +12,24 @@
 		/** Whether the row paints its divider; the last row of a card
 		 * passes `false`. */
 		divider?: boolean;
+		/** Whether the content cursor rests on this row while the content
+		 * pane holds the keyboard. */
+		cursor?: boolean;
 		/** The row's control, flush right: a switch, a pick button, or
 		 * text. */
 		children?: Snippet;
 	}
-	const { label, divider = true, children }: Props = $props();
+	const { label, divider = true, cursor = false, children }: Props = $props();
 </script>
 
 <div
 	class="flex items-center justify-between"
 	style:height="60px"
 	style:gap="16px"
+	style:background={cursor ? 'var(--canvas-selected)' : undefined}
 	style:border-bottom={divider ? '1px solid var(--canvas-border)' : undefined}
 	data-settings-setting-row=""
+	data-settings-cursor={cursor ? '' : undefined}
 >
 	<span
 		class="min-w-0 flex-1 truncate"

@@ -1,17 +1,17 @@
-// add-gui-settings-screen row 8.5: the F2-row sections' pointer path (the
-// spec's *Every Settings control works by pointer*, design D11). A press on
-// a toggle row sends the row's `activate`, a press on a choice mark flips
-// the held mark in place with no command, and a press on Apply sends
-// `applyChoices` with the marked ids — each the same command the keyboard's
-// activation sends, and each moves the content cursor onto the pressed row.
-// The Tauri IPC is mocked; the asserted payload is the serde wire shape of
-// bridge/settings.rs.
+// add-gui-settings-screen rows 8.5 and 9.6: the F2-row sections' pointer path
+// and their canvas paint (the spec's *Every Settings control works by
+// pointer*, design D11, D13). A toggle row paints a switch whose press sends
+// the row's `activate`; a choice list paints a checkbox-grid card whose boxes
+// hold the marks and whose Apply sends `applyChoices` with them — each the
+// same command the keyboard's activation sends, and each moves the content
+// cursor onto the pressed row. The Tauri IPC is mocked; the asserted payload
+// is the serde wire shape of bridge/settings.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiSettingsCommand, GuiSettingsContent } from '$lib/bridge/types';
+import type { GuiSettingsContent } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
 import { cursorEntryId, initialSettingsUi, settingsUi } from '$lib/settings/state';
 import SettingsRows from './SettingsRows.svelte';
@@ -55,47 +55,58 @@ beforeEach(() => {
 	settingsUi.set(initialSettingsUi());
 });
 
-test.each<[string, GuiSettingsCommand]>([
-	['setting:autoplay', { command: 'activate', setting: 'autoplay' }],
-	[
-		'apply:hiddenLibraries',
-		{ command: 'applyChoices', kind: 'hiddenLibraries', selected: ['shows'] },
-	],
-])(
-	'a press on %s sends its command and moves the content cursor to it',
-	async (id, command) => {
-		const content = rowsContent();
-		const entries = settingsEntries(content, {});
-		const { container } = render(SettingsRows, {
-			props: { rows: content.rows, entries, cursorId: null },
-		});
-
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
-
-		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
-		const ui = get(settingsUi);
-		expect(ui.pane).toBe('content');
-		expect(cursorEntryId(entries, ui)).toBe(id);
-	},
-);
-
-test('a press on a choice mark flips the held mark in place and sends no command', async () => {
+test('a press on a toggle row switch sends activate and moves the content cursor to it', async () => {
 	const content = rowsContent();
 	const entries = settingsEntries(content, {});
-	const { container } = render(SettingsRows, {
+	const { getByRole } = render(SettingsRows, {
 		props: { rows: content.rows, entries, cursorId: null },
 	});
 
-	const id = 'choice:hiddenLibraries:music';
-	await fireEvent.click(
-		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-	);
+	await fireEvent.click(getByRole('switch', { name: 'Autoplay' }));
 
-	expect(invokeMock).not.toHaveBeenCalled();
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'activate', setting: 'autoplay' },
+	});
 	const ui = get(settingsUi);
-	expect(ui.choiceMarks['hiddenLibraries']).toEqual(['shows', 'music']);
 	expect(ui.pane).toBe('content');
-	expect(cursorEntryId(entries, ui)).toBe(id);
+	expect(cursorEntryId(entries, ui)).toBe('setting:autoplay');
+});
+
+test('a press on the choice list Apply sends applyChoices and moves the content cursor to it', async () => {
+	const content = rowsContent();
+	const entries = settingsEntries(content, {});
+	const { getByRole } = render(SettingsRows, {
+		props: { rows: content.rows, entries, cursorId: null },
+	});
+
+	await fireEvent.click(getByRole('button', { name: 'Apply' }));
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'applyChoices', kind: 'hiddenLibraries', selected: ['shows'] },
+	});
+	const ui = get(settingsUi);
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe('apply:hiddenLibraries');
+});
+
+// The grid card holds the marks until Apply sends them: a press on a box
+// sends nothing, and the Apply press carries the frame's marks plus the
+// pressed one.
+test('a press on a choice box holds the mark, and Apply sends the marked ids', async () => {
+	const content = rowsContent();
+	const entries = settingsEntries(content, {});
+	const { container, getByRole } = render(SettingsRows, {
+		props: { rows: content.rows, entries, cursorId: null },
+	});
+
+	await fireEvent.click(
+		container.querySelector('[data-settings-checkbox="music"]') as HTMLElement,
+	);
+	expect(invokeMock).not.toHaveBeenCalled();
+
+	await fireEvent.click(getByRole('button', { name: 'Apply' }));
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'applyChoices', kind: 'hiddenLibraries', selected: ['shows', 'music'] },
+	});
 });
