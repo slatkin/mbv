@@ -17,10 +17,6 @@ impl App {
         username: String,
         password: String,
     ) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("embySetup", "the Settings screen is closed");
-            return;
-        }
         self.fill_emby_setup_form(server_url, username, password);
         self.submit_emby_setup();
     }
@@ -32,13 +28,6 @@ impl App {
         server_url: String,
         api_key: String,
     ) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "audiobookshelfSetup",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         self.fill_audiobookshelf_setup_form(server_url, api_key);
         self.submit_audiobookshelf_setup();
     }
@@ -48,13 +37,6 @@ impl App {
     /// raises the TUI's `OpenFeedsManage` request, which the GUI presents
     /// nothing for, so it shows the Feeds section instead.
     pub(super) fn apply_gui_settings_service_action(&mut self, action: ServiceActionIntent) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "serviceAction",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         if action == ServiceActionIntent::ManageFeeds {
             self.select_gui_settings_section(GuiSettingsSection::Feeds);
             return;
@@ -65,10 +47,6 @@ impl App {
     /// Row 5.2's `cancelSetup` arm: abandon the named setup form, cancelling
     /// its generation as the TUI's Esc does.
     pub(super) fn apply_gui_settings_cancel_setup(&mut self, service: GuiSetupService) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("cancelSetup", "the Settings screen is closed");
-            return;
-        }
         match service {
             GuiSetupService::Emby => self.cancel_emby_setup(),
             GuiSetupService::Audiobookshelf => self.cancel_audiobookshelf_setup(),

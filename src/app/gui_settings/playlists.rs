@@ -13,20 +13,12 @@ impl App {
     /// through the chooser's own path, leaving the screen open (the spec's
     /// *Sessions lists and selects the playback targets*).
     pub(super) fn apply_gui_settings_select_target(&mut self, target: &ChooserTargetKey) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("selectTarget", "the Settings screen is closed");
-            return;
-        }
         self.select_chooser_target(target);
     }
 
     /// Row 5.5's `playlistOpen` arm: open the playlist `id` names to its
     /// items, or return the list view and load it for no id.
     pub(super) fn apply_gui_settings_playlist_open(&mut self, id: Option<&str>) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("playlistOpen", "the Settings screen is closed");
-            return;
-        }
         if let Some(id) = id {
             self.open_gui_settings_playlist(id);
             return;
@@ -39,10 +31,6 @@ impl App {
     /// Row 5.5's `playlistBack` arm: return from the open playlist to the
     /// list, as the TUI's Back does.
     pub(super) fn apply_gui_settings_playlist_back(&mut self) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("playlistBack", "the Settings screen is closed");
-            return;
-        }
         self.playlists_open = None;
         self.playlists_open_items.clear();
     }
@@ -50,13 +38,6 @@ impl App {
     /// Row 5.5's `playlistRefresh` arm: reload the playlist `id` names, or the
     /// open one — and with neither open, the list — as the TUI's Refresh does.
     pub(super) fn apply_gui_settings_playlist_refresh(&mut self, id: Option<&str>) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "playlistRefresh",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         if let Some(id) = id {
             self.open_gui_settings_playlist(id);
             return;
@@ -74,13 +55,6 @@ impl App {
     /// Row 5.5's `playlistAction` arm: play, shuffle, or enqueue a whole
     /// playlist through the shared `App::playlist_action`.
     pub(super) fn apply_gui_settings_playlist_action(&mut self, id: &str, action: MusicTreeAction) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "playlistAction",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         self.playlist_action(id, action);
     }
 
@@ -93,13 +67,6 @@ impl App {
         item_id: &str,
         action: MusicTreeAction,
     ) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "playlistItemAction",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         if self
             .playlists_open
             .as_ref()
@@ -117,13 +84,6 @@ impl App {
     /// Row 5.5's `playlistRename` arm: rename the playlist on the server
     /// through the shared spawn; the landed list reload repaints the rows.
     pub(super) fn apply_gui_settings_playlist_rename(&mut self, id: &str, name: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "playlistRename",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         let name = name.trim().to_string();
         if name.is_empty() {
             self.flash(
@@ -145,13 +105,6 @@ impl App {
     /// Row 5.5's `playlistDelete` arm: raise the same delete confirmation the
     /// TUI's sidebar raises.
     pub(super) fn apply_gui_settings_playlist_delete(&mut self, id: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command(
-                "playlistDelete",
-                "the Settings screen is closed",
-            );
-            return;
-        }
         let Some(playlist) = self
             .playlists
             .iter()

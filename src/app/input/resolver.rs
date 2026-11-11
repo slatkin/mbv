@@ -148,8 +148,6 @@ fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     out
 }
 
-/// The inverse of [`registry_mods_to_modifiers`]: the neutral modifier set
-/// onto the registry's Ctrl/Shift/Alt, which is lossless in both directions.
 /// The neutral modifiers as the registry's Ctrl/Shift/Alt set, the inverse of
 /// [`registry_mods_to_modifiers`]: the Keys editor's captured chord carries
 /// them (`add-gui-settings-screen` D6).

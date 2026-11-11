@@ -9,7 +9,7 @@
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
 	import {
-		blurSettingsField,
+		blurSettingsFieldOnLeave,
 		focusSettingsField,
 		pressSettingsEntry,
 		setRenameDraft,
@@ -53,14 +53,6 @@
 		renameWasOpen = open;
 	});
 
-	function renameFocusOut(event: FocusEvent): void {
-		const host = event.currentTarget;
-		const next = event.relatedTarget;
-		if (host instanceof HTMLElement && (next === null || !host.contains(next as Node))) {
-			blurSettingsField('rename');
-		}
-	}
-
 	/** A refresh control's painted text: the load flag while it runs. */
 	function refreshLabel(loading: boolean): string {
 		return loading ? 'Refreshing…' : 'Refresh';
@@ -97,7 +89,7 @@
 		style:padding="4px 0"
 		data-settings-rename=""
 		onfocusin={() => focusSettingsField('rename')}
-		onfocusout={renameFocusOut}
+		onfocusout={(event) => blurSettingsFieldOnLeave(event, 'rename')}
 	>
 		<input
 			bind:this={renameEl}

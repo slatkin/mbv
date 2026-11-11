@@ -61,10 +61,6 @@ impl App {
     /// chord for the target, and the edit is accepted only when the resulting
     /// configuration passes the load rules (design D6).
     pub(super) fn apply_gui_settings_keys_capture(&mut self, target: &str, key: KeyEvent) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("keysCapture", "the Settings screen is closed");
-            return;
-        }
         let Some(target) = GuiKeyTarget::parse(target) else {
             Self::log_ignored_gui_settings_command("keysCapture", "the target is not declared");
             return;
@@ -90,10 +86,6 @@ impl App {
     /// Row 5.4's `keysReset` arm: remove the action's router-scope override,
     /// so it fires its declared default chords again (design D6).
     pub(super) fn apply_gui_settings_keys_reset(&mut self, action: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("keysReset", "the Settings screen is closed");
-            return;
-        }
         let Some(action) = action_by_id(action) else {
             Self::log_ignored_gui_settings_command("keysReset", "the action is not declared");
             return;
@@ -105,10 +97,6 @@ impl App {
     /// Row 5.4's `keysClear` arm: clear one prefix-namespace assignment, or
     /// the prefix chord (design D6).
     pub(super) fn apply_gui_settings_keys_clear(&mut self, target: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("keysClear", "the Settings screen is closed");
-            return;
-        }
         let Some(target) = GuiKeyTarget::parse(target) else {
             Self::log_ignored_gui_settings_command("keysClear", "the target is not declared");
             return;

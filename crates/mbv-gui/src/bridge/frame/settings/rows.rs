@@ -3,7 +3,6 @@
 //! toggle flag, and its choice list once loaded.
 
 use mbv::GuiSettingsRowProjection;
-use mbv_ui_model::settings::SettingKey;
 use serde::Serialize;
 
 use crate::bridge::settings::GuiChoicesKind;
@@ -93,12 +92,4 @@ impl From<&mbv::GuiSettingsChoiceProjection> for GuiSettingChoice {
             selected: choice.selected,
         }
     }
-}
-
-/// The setting key a wire name names, for the `activate` command: `None` for a
-/// name this build declares no key for, so a stale frame's edit changes
-/// nothing.
-#[must_use]
-pub fn setting_key(name: &str) -> Option<SettingKey> {
-    SettingKey::from_name(name)
 }

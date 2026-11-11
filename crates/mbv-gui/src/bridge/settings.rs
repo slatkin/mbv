@@ -6,13 +6,13 @@
 //! frame addresses what that frame painted or nothing.
 
 use mbv_ui_model::context_menu::MultiSelectKind;
+use mbv_ui_model::settings::SettingKey;
 use mbv_ui_msg::MusicTreeAction;
 use serde::{Deserialize, Serialize};
 
 use crate::bridge::frame::playback::{GuiTargetKey, chooser_target_key};
 use crate::bridge::frame::settings::GuiSettingsSection;
 use crate::bridge::frame::settings::feeds::GuiFeedKind;
-use crate::bridge::frame::settings::rows;
 use crate::bridge::frame::settings::services::{GuiServiceActionIntent, GuiSetupService};
 use crate::bridge::keys::{DomKey, neutral_key};
 
@@ -175,10 +175,10 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
             section: section.into(),
         },
         GuiSettingsCommand::Activate { setting } => mbv::GuiSettingsCommand::Activate {
-            setting: rows::setting_key(&setting)?,
+            setting: SettingKey::from_name(&setting)?,
         },
         GuiSettingsCommand::SetValue { setting, value } => mbv::GuiSettingsCommand::SetValue {
-            setting: rows::setting_key(&setting)?,
+            setting: SettingKey::from_name(&setting)?,
             value,
         },
         GuiSettingsCommand::ApplyChoices { kind, selected } => {

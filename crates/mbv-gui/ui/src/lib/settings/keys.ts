@@ -14,7 +14,7 @@
 import { domKey } from '$lib/bridge/input';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiSettingsFrame } from '$lib/bridge/types';
-import { CURSOR_MOVES } from '$lib/library/keys-shared';
+import { bare, CURSOR_MOVES } from '$lib/library/keys-shared';
 import {
 	activateSettingsEntry,
 	cancelKeysCapture,
@@ -38,11 +38,6 @@ import {
 	selectPickValue,
 } from './pick-menu';
 import { get } from 'svelte/store';
-
-/** Whether no modifier is held. */
-function bare(event: KeyboardEvent): boolean {
-	return !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
-}
 
 /**
  * Route one keydown while the Settings screen shows (design D11): the

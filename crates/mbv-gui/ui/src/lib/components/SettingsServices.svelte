@@ -16,7 +16,7 @@
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
 	import {
-		blurSettingsField,
+		blurSettingsFieldOnLeave,
 		focusSettingsField,
 		pressSettingsEntry,
 		setAudiobookshelfSetupDraft,
@@ -50,16 +50,6 @@
 		removeEmby: 'destructive',
 		removeAudiobookshelf: 'destructive',
 	};
-
-	/** The form's keyboard hold (design D11, step 3): a field's focus sets
-	 * the router's fact, and a `focusout` that leaves the form clears it. */
-	function fieldFocusOut(event: FocusEvent, form: 'embySetup' | 'audiobookshelfSetup'): void {
-		const host = event.currentTarget;
-		const next = event.relatedTarget;
-		if (host instanceof HTMLElement && (next === null || !host.contains(next as Node))) {
-			blurSettingsField(form);
-		}
-	}
 
 	/** The field the form hands the keyboard to when it opens. */
 	function focusFirstField(formEl: HTMLElement | undefined): void {
@@ -148,7 +138,7 @@
 					style:border-radius="8px"
 					data-settings-setup="emby"
 					onfocusin={() => focusSettingsField('embySetup')}
-					onfocusout={(event) => fieldFocusOut(event, 'embySetup')}
+					onfocusout={(event) => blurSettingsFieldOnLeave(event, 'embySetup')}
 				>
 					<label
 						class="flex flex-col"
@@ -222,7 +212,7 @@
 					style:border-radius="8px"
 					data-settings-setup="audiobookshelf"
 					onfocusin={() => focusSettingsField('audiobookshelfSetup')}
-					onfocusout={(event) => fieldFocusOut(event, 'audiobookshelfSetup')}
+					onfocusout={(event) => blurSettingsFieldOnLeave(event, 'audiobookshelfSetup')}
 				>
 					<label
 						class="flex flex-col"

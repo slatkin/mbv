@@ -156,15 +156,6 @@ export function cursorEntryId(
 	return entries[Math.min(ui.contentCursor, entries.length - 1)]?.id ?? null;
 }
 
-/** Activate the entry `id` names (a pointer press on its row): the same
- * activation Enter runs on the cursor entry. */
-export function activateSettingsEntryId(entries: SettingsEntry[], id: string): void {
-	const entry = entries.find((candidate) => candidate.id === id);
-	if (entry !== undefined) {
-		activateSettingsEntry(entry);
-	}
-}
-
 /** A pointer press on an entry's row (design D11): the cursor moves onto it
  * and the keyboard takes the content pane, then the row's activation runs —
  * the one gesture a click always means. */
@@ -204,11 +195,6 @@ export function hideSettingsCursor(): void {
 	settingsUi.update((ui) => (ui.keyboard ? { ...ui, keyboard: false } : ui));
 }
 
-/** Put the keyboard on one pane (a pointer press on it). */
-export function focusSettingsPane(pane: SettingsPane): void {
-	settingsUi.update((ui) => (ui.pane === pane ? ui : { ...ui, pane }));
-}
-
 /** The key map of one movement name to a step or an end. */
 const CURSOR_STEPS = {
 	up: -1,
@@ -239,16 +225,6 @@ export function moveSettingsCursor(move: string, count: number): void {
 			? { ...ui, sidebarCursor: next }
 			: { ...ui, contentCursor: next };
 	});
-}
-
-/** Point the focused pane's cursor at an index (a pointer press on an entry
- * moves the cursor onto it before its activation). */
-export function pointSettingsCursor(index: number): void {
-	settingsUi.update((ui) =>
-		ui.pane === 'sidebar'
-			? { ...ui, sidebarCursor: index }
-			: { ...ui, contentCursor: index },
-	);
 }
 
 /** Esc's ladder while the screen shows (design D11, the spec's *Esc closes
@@ -340,6 +316,16 @@ export function focusSettingsField(form: SettingsForm): void {
  * form clears the hold. */
 export function blurSettingsField(form: SettingsForm): void {
 	settingsUi.update((ui) => (ui.textField === form ? { ...ui, textField: null } : ui));
+}
+
+/** A `focusout` on a form host: the hold clears only when focus leaves the
+ * host, not when it moves between the form's own fields. */
+export function blurSettingsFieldOnLeave(event: FocusEvent, form: SettingsForm): void {
+	const host = event.currentTarget;
+	const next = event.relatedTarget;
+	if (host instanceof HTMLElement && (next === null || !host.contains(next as Node))) {
+		blurSettingsField(form);
+	}
 }
 
 /** Open the feed form: an add (`feed === null`) starts empty, an edit seeds

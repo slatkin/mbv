@@ -11,7 +11,7 @@
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
 	import {
-		blurSettingsField,
+		blurSettingsFieldOnLeave,
 		focusSettingsField,
 		pressSettingsEntry,
 		setFeedForm,
@@ -48,14 +48,6 @@
 		}
 		formWasOpen = open;
 	});
-
-	function fieldFocusOut(event: FocusEvent): void {
-		const host = event.currentTarget;
-		const next = event.relatedTarget;
-		if (host instanceof HTMLElement && (next === null || !host.contains(next as Node))) {
-			blurSettingsField('feed');
-		}
-	}
 
 	/** The count line the card's header paints. */
 	const countLabel = $derived(
@@ -122,7 +114,7 @@
 				style:border-radius="8px"
 				data-settings-feed-form=""
 				onfocusin={() => focusSettingsField('feed')}
-				onfocusout={fieldFocusOut}
+				onfocusout={(event) => blurSettingsFieldOnLeave(event, 'feed')}
 			>
 				{#if form.identity !== null}
 					<div

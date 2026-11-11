@@ -15,10 +15,6 @@ impl App {
     /// `App::begin_feed_add`, whose result the Client tick host drains
     /// (`App::drain_feed_add_results`).
     pub(super) fn apply_gui_settings_feed_add(&mut self, name: &str, url: &str, kind: FeedKind) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("feedAdd", "the Settings screen is closed");
-            return;
-        }
         if self.feeds_manage.is_none() {
             self.feeds_manage = Some(FeedsManagePopup::new());
         }
@@ -29,20 +25,12 @@ impl App {
     /// at `url` through the shared `App::edit_feed`. An unknown URL changes
     /// nothing.
     pub(super) fn apply_gui_settings_feed_edit(&mut self, url: &str, name: &str, kind: FeedKind) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("feedEdit", "the Settings screen is closed");
-            return;
-        }
         self.edit_feed(url, name, kind);
     }
 
     /// Row 5.3's `feedRemove` arm: raise the shared remove confirmation for
     /// the subscription at `url`. An unknown URL changes nothing.
     pub(super) fn apply_gui_settings_feed_remove(&mut self, url: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("feedRemove", "the Settings screen is closed");
-            return;
-        }
         self.request_feed_removal(url);
     }
 }

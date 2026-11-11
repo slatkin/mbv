@@ -165,18 +165,17 @@ impl App {
             command = ?command,
             "the GUI Settings screen sent a command"
         );
+        if !matches!(
+            command,
+            GuiSettingsCommand::Open | GuiSettingsCommand::ResetUiState
+        ) && !self.gui_settings_is_open()
+        {
+            Self::log_ignored_gui_settings_command("stale", "the Settings screen is closed");
+            return;
+        }
         match command {
             GuiSettingsCommand::Open => self.open_gui_settings(),
-            GuiSettingsCommand::Close => {
-                if self.gui_settings_is_open() {
-                    self.close_gui_settings();
-                } else {
-                    Self::log_ignored_gui_settings_command(
-                        "close",
-                        "the Settings screen is closed",
-                    );
-                }
-            }
+            GuiSettingsCommand::Close => self.close_gui_settings(),
             GuiSettingsCommand::SelectSection { section } => {
                 self.select_gui_settings_section(section);
             }

@@ -98,10 +98,6 @@ impl App {
     /// is refused, because the TUI client scope or an inert row has no GUI
     /// effect (design D4). A command whose screen is closed changes nothing.
     pub(super) fn apply_gui_settings_activate(&mut self, setting: SettingKey) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("activate", "the Settings screen is closed");
-            return;
-        }
         if setting.scope() != SettingScope::AllClients {
             Self::log_ignored_gui_settings_command(
                 "activate",
@@ -117,10 +113,6 @@ impl App {
     /// be one the row's projected list carries, so a command built from a
     /// stale frame — or a value the list does not offer — changes nothing.
     pub(super) fn apply_gui_settings_set_value(&mut self, setting: SettingKey, value: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("setValue", "the Settings screen is closed");
-            return;
-        }
         if setting.scope() != SettingScope::AllClients {
             Self::log_ignored_gui_settings_command(
                 "setValue",
@@ -151,10 +143,6 @@ impl App {
         kind: MultiSelectKind,
         selected: &[String],
     ) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("applyChoices", "the Settings screen is closed");
-            return;
-        }
         let Some(rows) = self.settings_choices(kind) else {
             Self::log_ignored_gui_settings_command(
                 "applyChoices",
@@ -180,10 +168,6 @@ impl App {
     /// the shared `App::assign_library_route`, then re-cache the refreshed
     /// library rows the section paints.
     pub(super) fn apply_gui_settings_route(&mut self, library: &str, endpoint: Option<String>) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("assignRoute", "the Settings screen is closed");
-            return;
-        }
         let library = library.to_lowercase();
         // The picked device row names the library's display name, which the
         // shared refusal prints; the loaded route rows hold it.
@@ -213,10 +197,6 @@ impl App {
     /// library must be one the section's loaded route rows list, so a command
     /// built from a stale frame changes nothing.
     pub(super) fn apply_gui_settings_route_devices(&mut self, library: &str) {
-        if !self.gui_settings_is_open() {
-            Self::log_ignored_gui_settings_command("routeDevices", "the Settings screen is closed");
-            return;
-        }
         let library = library.to_lowercase();
         let loaded = self
             .gui_settings
