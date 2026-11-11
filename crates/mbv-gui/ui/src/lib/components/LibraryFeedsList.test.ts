@@ -195,3 +195,24 @@ test('a loading tab paints its line and no row', async () => {
 	expect(container.querySelector('[data-library-feeds-loading]')).toBeTruthy();
 	expect(paintedRows(container)).toEqual([]);
 });
+
+// add-gui-library-panel design D15, invariant 30: the Feeds column carries the
+// Music list's header, naming the active pill as the carried scope.
+test('the list paints the Feeds header with the active pill as its label', async () => {
+	const container = await mountList([], {});
+
+	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Feeds');
+	expect(container.querySelector('[data-library-feeds-selection-label]')?.textContent).toBe(
+		'Latest',
+	);
+});
+
+// A landed view that holds no entry paints the TUI's empty line, not a blank
+// column.
+test('a landed view with no entry paints the empty line', async () => {
+	const container = await mountList([], {});
+
+	expect(container.querySelector('[data-library-feeds-empty]')?.textContent).toContain(
+		'No entries',
+	);
+});

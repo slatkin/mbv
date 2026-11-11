@@ -28,7 +28,7 @@
 		scrollFeedsList,
 		setFeedsFilter,
 	} from '$lib/library/feeds';
-	import LibraryFilterField from './LibraryFilterField.svelte';
+	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryItemRow from './LibraryItemRow.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
@@ -44,6 +44,9 @@
 	/** The painted rows of the flat list (row 11.1): the same model
 	 * `$lib/library/feeds` builds from the carried content, narrowed by the
 	 * filter's text. */
+	/** The header's selection label (design D15): the active pill's name. */
+	const selectionLabel = $derived(feeds.pills.find((pill) => pill.selected)?.name ?? 'Latest');
+
 	const rows = $derived(buildFeedsRows(feeds.rows, $feedsUi.filter));
 
 
@@ -70,10 +73,15 @@
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-feeds-list-column="">
-	<div class="flex flex-none flex-col" style:padding="8px 16px 0">
-		<LibraryFilterField
-			value={$feedsUi.filter}
-			placeholder="Filter entries"
+	<!-- The Music list's header (design D15): the list names itself, the active
+	pill is the carried scope, and the `/` filter field narrows it. -->
+	<div class="flex flex-none flex-col">
+		<LibraryListHeader
+			title="Feeds"
+			label={selectionLabel}
+			labelAttr="data-library-feeds-selection-label"
+			filter={$feedsUi.filter}
+			placeholder="Filter {selectionLabel}"
 			ariaLabel="Filter entries"
 			oninput={setFeedsFilter}
 			onaccept={acceptFeedsFilter}
@@ -88,6 +96,10 @@
 		<!-- A fetch failed (row 11.1): the failure line, and no row until the
 			destination opens again. -->
 		<LibraryListNotice text="Couldn’t load this destination." attr="data-library-feeds-failed" />
+	{/if}
+	{#if !feeds.loading && !feeds.failed && feeds.rows.length === 0}
+		<!-- The active view holds no entry (row 11.1): the TUI's empty slot. -->
+		<LibraryListNotice text="No entries" attr="data-library-feeds-empty" />
 	{/if}
 	<LibraryVirtualList
 		{rows}
