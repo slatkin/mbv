@@ -77,6 +77,10 @@ pub enum CoreInput {
     /// moves the core's `FocusStack` with the App's stored focus (design D4),
     /// so the frame paints the focus the App's key gates use.
     Library(mbv::GuiLibraryCommand),
+    /// One Settings screen request (`add-gui-settings-screen` design D5): the
+    /// window content's `settings` command. The core applies it through
+    /// [`App::apply_gui_settings_command`].
+    Settings(mbv::GuiSettingsCommand),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,

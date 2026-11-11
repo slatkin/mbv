@@ -108,6 +108,8 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 			},
 			status: { prefixArmed: false, toast: null },
 			library: null,
+			settings: null,
+			uiResetEpoch: 0,
 			theme,
 		},
 	};

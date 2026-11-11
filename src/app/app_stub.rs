@@ -354,6 +354,33 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
     (app, cmd_rx)
 }
 
+/// The `App` a GUI Client's test drives with the Settings screen open at
+/// Services and a failed Emby setup form whose password field still holds the
+/// typed secret (`add-gui-settings-screen` row 4.3): the frame's Services
+/// content must carry the error and the server URL and never the password.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_failed_emby_setup() -> App {
+    use crate::app::dispatch::session::services_settings::EmbySetupForm;
+    use mbv_core::service_runtime::ServiceState;
+
+    let mut app = make_app_stub();
+    app.open_gui_settings_at(super::GuiSettingsSection::Services);
+    app.setup.emby_setup_form = Some(EmbySetupForm {
+        fields: [
+            "https://emby.example.test".to_string(),
+            "viewer".to_string(),
+            "hunter2".to_string(),
+        ],
+        focus: 2,
+        busy: false,
+        error: "Invalid username or password".to_string(),
+        generation: None,
+        previous_state: ServiceState::NotConfigured,
+    });
+    app
+}
+
 /// The `App` a GUI Client's test drives with an active local player
 /// carrying one audio track (id 1, chosen) and one forced subtitle track
 /// (id 2; id 0, Off, is chosen), so a chip press opens its popover and a

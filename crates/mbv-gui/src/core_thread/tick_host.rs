@@ -219,6 +219,14 @@ impl ClientTickHost for CoreThread {
                         self.focus.set_panel_focus(panel);
                     }
                 }
+                CoreInput::Settings(command) => {
+                    // The Settings screen's request (`add-gui-settings-screen`
+                    // design D5): the App applies the semantic intent, and the
+                    // sidebar drain below mirrors the screen's state onto the
+                    // core `FocusStack`.
+                    outcome.input_received = true;
+                    self.app.apply_gui_settings_command(command);
+                }
                 CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,
                     // changed or not (design D3), and re-arms the theme: the

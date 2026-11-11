@@ -128,6 +128,8 @@ function frame(
 		},
 		status: { prefixArmed: false, toast: null },
 		library: null,
+		settings: null,
+		uiResetEpoch: 0,
 		theme: null,
 	};
 }

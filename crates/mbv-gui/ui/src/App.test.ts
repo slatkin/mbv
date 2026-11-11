@@ -164,6 +164,8 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 							rowMenu: null,
 						},
 					},
+		settings: null,
+		uiResetEpoch: 0,
 		theme: null,
 	};
 }

@@ -266,6 +266,45 @@ impl App {
         }
     }
 
+    /// The Service actions the GUI's Services section offers for `entry`
+    /// (`add-gui-settings-screen` design D9): the intents
+    /// [`Self::activate_service_entry`] resolves and the TUI's action hints
+    /// name for the Service's current state. Each intent paints its own label
+    /// ([`ServiceActionIntent::label`]), so the GUI offers one button per
+    /// action where the TUI paints one key-hint sentence.
+    pub(in crate::app) fn service_action_intents(
+        &self,
+        entry: ServiceEntry,
+    ) -> Vec<ServiceActionIntent> {
+        use ServiceActionIntent as Intent;
+        match entry {
+            ServiceEntry::Emby => match self.emby_runtime.state {
+                ServiceState::Connecting => Vec::new(),
+                ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {
+                    vec![Intent::SetupEmby]
+                }
+                ServiceState::Ready => vec![Intent::RepairEmby],
+                ServiceState::Unavailable => vec![Intent::RetryEmby],
+            },
+            ServiceEntry::Audiobookshelf => match self.audiobookshelf_runtime.state {
+                ServiceState::Connecting => Vec::new(),
+                ServiceState::NotConfigured => vec![Intent::SetupAudiobookshelf],
+                ServiceState::NeedsAuthentication => vec![
+                    Intent::SetupAudiobookshelf,
+                    Intent::ReplaceAudiobookshelf,
+                    Intent::RemoveAudiobookshelf,
+                ],
+                ServiceState::Ready | ServiceState::Unavailable => vec![
+                    Intent::TestAudiobookshelf,
+                    Intent::SetupAudiobookshelf,
+                    Intent::ReplaceAudiobookshelf,
+                    Intent::RemoveAudiobookshelf,
+                ],
+            },
+            ServiceEntry::Feeds => vec![Intent::ManageFeeds],
+        }
+    }
+
     pub(in crate::app) fn service_action_label(&self, entry: ServiceEntry) -> &'static str {
         match entry {
             ServiceEntry::Emby => match self.emby_runtime.state {

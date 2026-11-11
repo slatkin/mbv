@@ -10,11 +10,12 @@ mod gui_settings;
 pub use self::app_stub::{
     set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
     stub_app_with_cast_target, stub_app_with_completed_emby_startup,
-    stub_app_with_completed_emby_startup_and_contents, stub_app_with_local_daemon_events,
-    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
-    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
-    stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
+    stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
+    stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
+    stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,
+    stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;
@@ -65,7 +66,15 @@ pub use self::gui_library::{
     GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
     GuiSearchProjection, GuiSearchRow,
 };
-pub use self::gui_settings::{GuiSettingsGroup, GuiSettingsSection, GuiSettingsState};
+pub use self::gui_settings::{
+    GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
+    GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
+    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsOpenPlaylistProjection,
+    GuiSettingsPlaylistItemProjection, GuiSettingsPlaylistRowProjection,
+    GuiSettingsPlaylistsProjection, GuiSettingsRowKind, GuiSettingsRowProjection,
+    GuiSettingsSection, GuiSettingsServiceProjection, GuiSettingsServicesProjection,
+    GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
+};
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{

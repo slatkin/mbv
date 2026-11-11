@@ -506,6 +506,10 @@ pub struct App {
     /// and its focus sync mirrors it onto the core `FocusStack`; the TUI
     /// Client never sets it (its Settings sidebar keeps its own shell state).
     pub(in crate::app) gui_settings: Option<crate::app::gui_settings::GuiSettingsState>,
+    /// The UI-reset counter the GUI frame carries (`add-gui-settings-screen`
+    /// design D10): the front end resets its interaction stores when the value
+    /// changes. Row 5.6 raises it. The TUI Client never reads it.
+    pub(in crate::app) gui_ui_reset_epoch: u64,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
     pub(in crate::app) ui_volume: u8,

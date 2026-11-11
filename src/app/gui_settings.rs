@@ -5,6 +5,23 @@
 //! the core half the drain (`App::pending_overlay`'s GUI half) drives and the
 //! frame projects. The TUI Client never sets any of it — its Settings sidebar
 //! keeps its own shell state.
+//!
+//! The bridge's half lives in the children: `command` holds the semantic
+//! requests the window content sends (design D5), and `projection` the
+//! section content the frame carries (design D9).
+
+mod command;
+mod projection;
+
+pub use self::command::{GuiSettingsCommand, GuiSetupService};
+pub use self::projection::{
+    GuiSettingsChoiceProjection, GuiSettingsFeedProjection, GuiSettingsFeedsProjection,
+    GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection, GuiSettingsKeysProjection,
+    GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
+    GuiSettingsPlaylistRowProjection, GuiSettingsPlaylistsProjection, GuiSettingsRowKind,
+    GuiSettingsRowProjection, GuiSettingsServiceProjection, GuiSettingsServicesProjection,
+    GuiSettingsSetupProjection,
+};
 
 use mbv_ui_model::settings::{SETTING_SECTIONS, SettingKey, SettingScope, SettingsDestination};
 
@@ -196,5 +213,37 @@ impl App {
     /// focus returns.
     pub fn close_gui_settings(&mut self) {
         self.gui_settings = None;
+    }
+
+    /// The UI-reset counter the frame carries (design D10): the front end
+    /// resets its interaction stores when the value changes. Row 5.6 raises
+    /// it.
+    #[must_use]
+    pub fn gui_ui_reset_epoch(&self) -> u64 {
+        self.gui_ui_reset_epoch
+    }
+
+    /// Show a section (design D5's `selectSection`). A command whose screen is
+    /// closed changes nothing: the frame it rode is stale.
+    fn select_gui_settings_section(&mut self, section: GuiSettingsSection) {
+        match self.gui_settings {
+            Some(_) => self.gui_settings = Some(GuiSettingsState { section }),
+            None => Self::log_ignored_gui_settings_command(
+                "selectSection",
+                "the Settings screen is closed",
+            ),
+        }
+    }
+
+    /// Log the Settings command whose frame is stale: the screen it addresses
+    /// is closed, so the command changes nothing.
+    fn log_ignored_gui_settings_command(command: &str, reason: impl std::fmt::Display) {
+        tracing::debug!(
+            name: "gui_settings.command.ignored",
+            target: "gui_settings",
+            command,
+            reason = %reason,
+            "the Settings command changed nothing"
+        );
     }
 }

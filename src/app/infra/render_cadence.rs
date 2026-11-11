@@ -2,6 +2,17 @@ use super::super::App;
 use std::time::{Duration, Instant};
 
 impl App {
+    /// The App's configuration, cloned for a projection that reads it
+    /// (`add-gui-settings-screen` design D9's Settings content).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the config lock is poisoned: a thread panicked while it
+    /// held the lock, which no projection path expects.
+    pub(in crate::app) fn config_snapshot(&self) -> crate::config::Config {
+        self.config.lock().unwrap().clone()
+    }
+
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
         let indicator_style = match self.indicator_style {
             mbv_render::indicators::IndicatorStyle::Brackets => "brackets",

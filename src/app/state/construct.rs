@@ -156,6 +156,7 @@ impl App {
 
             pending_overlay: None,
             gui_settings: None,
+            gui_ui_reset_epoch: 0,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_delete_selection: None,

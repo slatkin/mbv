@@ -6,6 +6,32 @@
 // keeps importing from the one bridge module.
 
 import type { GuiLibraryFrame } from './library-types';
+import type { GuiSettingsFrame } from './settings-types';
+
+export type {
+	GuiChoicesKind,
+	GuiFeedKind,
+	GuiOpenPlaylist,
+	GuiPlaylistAction,
+	GuiPlaylistItem,
+	GuiPlaylistRow,
+	GuiServiceAction,
+	GuiServiceActionIntent,
+	GuiServiceEntry,
+	GuiSettingChoice,
+	GuiSettingRow,
+	GuiSettingRowKind,
+	GuiSettingsCommand,
+	GuiSettingsContent,
+	GuiSettingsFeed,
+	GuiSettingsFrame,
+	GuiSettingsKeyRefusal,
+	GuiSettingsKeyRow,
+	GuiSettingsSection,
+	GuiSettingsService,
+	GuiSettingsSetup,
+	GuiSetupService,
+} from './settings-types';
 
 export type {
 	GuiArtistKey,
@@ -89,6 +115,13 @@ export interface GuiFrame {
 	 * active destination's content under its revision. `null` while no Library
 	 * panel shows. */
 	library: GuiLibraryFrame | null;
+	/** The Settings screen's section (add-gui-settings-screen design D9). `null`
+	 * while the screen is closed: the window replaces the two columns with the
+	 * screen only for a frame that carries it. */
+	settings: GuiSettingsFrame | null;
+	/** The UI-reset counter (design D10): the front end resets its interaction
+	 * stores when the value changes. */
+	uiResetEpoch: number;
 	/** `null` unless the theme changed for this window (design D7). */
 	theme: GuiTheme | null;
 }

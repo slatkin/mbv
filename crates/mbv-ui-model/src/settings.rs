@@ -85,6 +85,109 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
+    /// The key's stable wire name (`add-gui-settings-screen` design D5): the
+    /// name a Settings frame row carries, and the name the bridge's
+    /// `activate` command sends back, so an edit addresses the key the frame
+    /// painted and never a row position.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        use SettingKey as K;
+        match self {
+            K::Services => "services",
+            K::Keys => "keys",
+            K::Panel => "panel",
+            K::PanelSide => "panelSide",
+            K::PanelWidth => "panelWidth",
+            K::PanelWidthExpanded => "panelWidthExpanded",
+            K::PanelReserve => "panelReserve",
+            K::PanelGutterTop => "panelGutterTop",
+            K::PanelGutterBottom => "panelGutterBottom",
+            K::PanelGutterLeft => "panelGutterLeft",
+            K::PanelGutterRight => "panelGutterRight",
+            K::PanelAccent => "panelAccent",
+            K::PanelAccentColor => "panelAccentColor",
+            K::PanelAccentWidth => "panelAccentWidth",
+            K::StayAlive => "stayAlive",
+            K::AutoReconnect => "autoReconnect",
+            K::SavePlaylistOnQuit => "savePlaylistOnQuit",
+            K::AlwaysPlayNext => "alwaysPlayNext",
+            K::ConsumeVideos => "consumeVideos",
+            K::ConsumeAudio => "consumeAudio",
+            K::SavePlaylistOnConsume => "savePlaylistOnConsume",
+            K::SavePlaylistOnConsumeAudio => "savePlaylistOnConsumeAudio",
+            K::AlwaysSkipIntro => "alwaysSkipIntro",
+            K::ImageProtocol => "imageProtocol",
+            K::HiddenLibraries => "hiddenLibraries",
+            K::ShowAudioWindow => "showAudioWindow",
+            K::UseMpvConfig => "useMpvConfig",
+            K::NoScripts => "noScripts",
+            K::Autoload => "autoload",
+            K::ShowSysTrayIcon => "showSysTrayIcon",
+            K::SystemNotifications => "systemNotifications",
+            K::MouseSupport => "mouseSupport",
+            K::MyLanguages => "myLanguages",
+            K::SubtitleMode => "subtitleMode",
+            K::FeedViewLibraries => "feedViewLibraries",
+            K::LibraryRoutes => "libraryRoutes",
+            K::SubtitleLanguage => "subtitleLanguage",
+            K::AudioLanguage => "audioLanguage",
+            K::ManageFeeds => "manageFeeds",
+            K::ResetUiState => "resetUiState",
+            K::LogOut => "logOut",
+        }
+    }
+
+    /// The key a stable wire name names, `None` for a name no key declares —
+    /// a command built from a stale frame changes nothing.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<SettingKey> {
+        use SettingKey as K;
+        Some(match name {
+            "services" => K::Services,
+            "keys" => K::Keys,
+            "panel" => K::Panel,
+            "panelSide" => K::PanelSide,
+            "panelWidth" => K::PanelWidth,
+            "panelWidthExpanded" => K::PanelWidthExpanded,
+            "panelReserve" => K::PanelReserve,
+            "panelGutterTop" => K::PanelGutterTop,
+            "panelGutterBottom" => K::PanelGutterBottom,
+            "panelGutterLeft" => K::PanelGutterLeft,
+            "panelGutterRight" => K::PanelGutterRight,
+            "panelAccent" => K::PanelAccent,
+            "panelAccentColor" => K::PanelAccentColor,
+            "panelAccentWidth" => K::PanelAccentWidth,
+            "stayAlive" => K::StayAlive,
+            "autoReconnect" => K::AutoReconnect,
+            "savePlaylistOnQuit" => K::SavePlaylistOnQuit,
+            "alwaysPlayNext" => K::AlwaysPlayNext,
+            "consumeVideos" => K::ConsumeVideos,
+            "consumeAudio" => K::ConsumeAudio,
+            "savePlaylistOnConsume" => K::SavePlaylistOnConsume,
+            "savePlaylistOnConsumeAudio" => K::SavePlaylistOnConsumeAudio,
+            "alwaysSkipIntro" => K::AlwaysSkipIntro,
+            "imageProtocol" => K::ImageProtocol,
+            "hiddenLibraries" => K::HiddenLibraries,
+            "showAudioWindow" => K::ShowAudioWindow,
+            "useMpvConfig" => K::UseMpvConfig,
+            "noScripts" => K::NoScripts,
+            "autoload" => K::Autoload,
+            "showSysTrayIcon" => K::ShowSysTrayIcon,
+            "systemNotifications" => K::SystemNotifications,
+            "mouseSupport" => K::MouseSupport,
+            "myLanguages" => K::MyLanguages,
+            "subtitleMode" => K::SubtitleMode,
+            "feedViewLibraries" => K::FeedViewLibraries,
+            "libraryRoutes" => K::LibraryRoutes,
+            "subtitleLanguage" => K::SubtitleLanguage,
+            "audioLanguage" => K::AudioLanguage,
+            "manageFeeds" => K::ManageFeeds,
+            "resetUiState" => K::ResetUiState,
+            "logOut" => K::LogOut,
+            _ => return None,
+        })
+    }
+
     /// The Clients this setting has an effect in. An exhaustive match with
     /// no wildcard: a new key must declare its scope when it is added.
     #[must_use]
@@ -172,6 +275,26 @@ pub enum ServiceActionIntent {
     RemoveAudiobookshelf,
     ReplaceAudiobookshelf,
     ManageFeeds,
+}
+
+impl ServiceActionIntent {
+    /// The action's label as a section paints it (`add-gui-settings-screen`
+    /// design D9): the GUI's Services section offers one button per intent,
+    /// so each intent names itself instead of sharing the TUI's one
+    /// key-hint sentence.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::SetupEmby => "Set up Emby",
+            Self::RetryEmby => "Retry connection",
+            Self::RepairEmby => "Repair",
+            Self::SetupAudiobookshelf => "Set up Audiobookshelf",
+            Self::TestAudiobookshelf => "Test connection",
+            Self::RemoveAudiobookshelf => "Remove",
+            Self::ReplaceAudiobookshelf => "Replace",
+            Self::ManageFeeds => "Manage feeds",
+        }
+    }
 }
 
 // Sections rendered as YELLOW blocks in a 2×2 grid.
@@ -450,6 +573,14 @@ fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
 }
 
 fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
+    setting_flag(key, cfg).map(bool_val)
+}
+
+/// The boolean setting's value, `None` for a key that is no boolean. The
+/// Settings frame's toggle rows carry the flag itself (`add-gui-settings-screen`
+/// design D9), and the TUI's text value is this flag through [`bool_val`].
+#[must_use]
+pub fn setting_flag(key: SettingKey, cfg: &Config) -> Option<bool> {
     let value = match key {
         SettingKey::StayAlive => cfg.stay_alive,
         SettingKey::AutoReconnect => cfg.auto_reconnect,
@@ -473,7 +604,7 @@ fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::PanelReserve => cfg.panel.reserve,
         _ => return None,
     };
-    Some(bool_val(value))
+    Some(value)
 }
 
 fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<String> {
