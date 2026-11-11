@@ -59,8 +59,8 @@ Each row is a move with no behaviour change. The existing TUI tests for that flo
 
 ## 7. Integration checks
 
-- [ ] 7.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run --workspace`, and, in `crates/mbv-gui/ui`, `pnpm check`, `pnpm lint`, and `pnpm test`. Fix every failure, whatever its origin. Verify: all commands exit 0.
-- [ ] 7.2 Run `openspec validate add-gui-settings-screen --strict` and `make check-code-file-lines`. Verify: both pass.
+- [x] 7.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run --workspace`, and, in `crates/mbv-gui/ui`, `pnpm check`, `pnpm lint`, and `pnpm test`. Fix every failure, whatever its origin. Verify: all commands exit 0.
+- [x] 7.2 Run `openspec validate add-gui-settings-screen --strict` and `make check-code-file-lines`. Verify: both pass.
 
 ## Workflow follow-up
 
