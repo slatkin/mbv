@@ -139,7 +139,8 @@
 					style:background="var(--canvas-well)"
 					style:color="var(--canvas-destructive)"
 					data-settings-feed-cancel=""
-					onclick={() => settingsUi.update((ui) => ({ ...ui, feedForm: null }))}
+					onclick={() =>
+						settingsUi.update((ui) => ({ ...ui, feedForm: null, textField: null }))}
 					>Cancel</button
 				>
 			</div>
