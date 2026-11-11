@@ -118,7 +118,7 @@
 				{#if service.entry === 'feeds' && service.context !== ''}
 					<span
 						style:font-size="12px"
-						style:color="var(--canvas-partial)"
+						style:color="var(--canvas-type-count)"
 						data-settings-service-context="">{service.context}</span
 					>
 				{:else}

@@ -162,7 +162,7 @@
 		headerAction={shuffle}
 		block={{
 			label: hero.album.name,
-			eyebrow: hero.album.year,
+			eyebrow: [{ text: hero.album.year, kind: 'date' }],
 			name: hero.album.name,
 			facts: albumFacts(hero),
 		}}

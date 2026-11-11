@@ -65,6 +65,7 @@
 	} from '$lib/bridge/types';
 	import QueueHeader from './QueueHeader.svelte';
 	import QueueRowMenu from './QueueRowMenu.svelte';
+	import TypedText from './TypedText.svelte';
 
 	type ItemRow = Extract<GuiQueueRow, { row: 'item' }>;
 
@@ -218,14 +219,12 @@
 	/** The colour set one row's cells paint in (the canvas's row states): the
 	 * filled active row reads the dark ink, the hovered row the canvas's
 	 * hover text, the watched row the muted text with a strike, and every
-	 * other row the canvas's row text. The right value is green in "Ends at"
-	 * and muted in "Length". */
+	 * other row the canvas's row text. */
 	interface RowTone {
 		title: string;
 		weight: number;
 		strike: string;
 		ordinal: string;
-		right: string;
 		track: string;
 		fill: string;
 	}
@@ -237,7 +236,6 @@
 				weight: 600,
 				strike: canvasVar('strike'),
 				ordinal: canvasVar('accent'),
-				right: canvasVar('text'),
 				track: canvasVar('track-current'),
 				fill: canvasVar('accent'),
 			};
@@ -249,9 +247,6 @@
 			weight: 400,
 			strike: canvasVar('strike'),
 			ordinal: hovered ? canvasVar('heading') : canvasVar('ordinal'),
-			right: hovered
-				? canvasVar('heading')
-				: canvasVar(summary.rightColumn === 'endsAt' ? 'accent' : 'muted'),
 			track: canvasVar('track'),
 			fill: canvasVar('partial'),
 		};
@@ -412,10 +407,19 @@
 		{/if}
 	</span>
 	{#if right}
-		<span
-			class="shrink-0 font-mono text-xs tabular-nums"
-			style:color={cellTone.right} data-right-value>{right}</span
-		>
+		<!-- The right column repeats a time down the list, so it paints the time
+			token at the repeat opacity; the current row keeps its own ink at full
+			strength (design D14). -->
+		{#if row.state.state === 'nowPlaying'}
+			<span
+				class="shrink-0 font-mono text-xs tabular-nums"
+				style:color={canvasVar('ink')} data-right-value>{right}</span
+			>
+		{:else}
+			<span class="shrink-0 font-mono text-xs tabular-nums" data-right-value>
+				<TypedText segments={[{ text: right, kind: 'time' }]} repeat />
+			</span>
+		{/if}
 	{:else if chrome === 'ghost' && progress !== null}
 		<span
 			class="shrink-0 font-mono tabular-nums"

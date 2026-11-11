@@ -456,7 +456,7 @@
 						style:padding="3px 6px"
 						style:border-radius="4px"
 						style:background="var(--mbv-background)"
-						style:color={roleVar('textPrimary')}
+						style:color="var(--canvas-type-count)"
 						>{playback.episodeBadge}</span
 					>
 				{/if}
@@ -477,7 +477,7 @@
 				<span
 					class="truncate"
 					style:font-size="13px"
-					style:color={roleVar('playbackContextFg')}>{playback.parentLine}</span
+					style:color="var(--canvas-type-secondary)">{playback.parentLine}</span
 				>
 			{/if}
 		</div>
@@ -632,8 +632,11 @@
 						style:top="42px"
 						style:font-size="12px"
 					>
-						<span style:color="var(--mbv-accent)">{playback.elapsedClock}</span>
-						<span style:color={roleVar('textMuted')}
+						<!-- A clock is time (design D14): the elapsed label paints the time
+							token, and the remaining label paints it at 0.75, as the canvas
+							draws the scrubber's two ends. -->
+						<span style:color="var(--canvas-type-time)">{playback.elapsedClock}</span>
+						<span style:color="var(--canvas-type-time)" style:opacity="0.75"
 							>{minus(playback.remainingClock)}{playback.finishClock
 								? ` · ends ${playback.finishClock}`
 								: ''}</span

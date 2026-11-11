@@ -13,8 +13,8 @@
 	// destination that paints a Hero adopts that rule rather than restating it.
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
+	import TypedText from './TypedText.svelte';
 	import type { GuiLibraryArt, GuiMetaRow } from '$lib/bridge/library-types';
-	import { metaRowText } from '$lib/library/hero';
 
 	/** The facts every Hero carries, as its frame declares them. */
 	interface HeroFacts {
@@ -90,21 +90,21 @@
 						class="font-mono tabular-nums"
 						style:font-size="13px"
 						style:color="var(--canvas-muted)"
-						{...own('role', 'duration')}>{metaRowText(meta)}</span
+						{...own('role', 'duration')}><TypedText segments={meta} /></span
 					>
 				{:else if index === hero.progressRow}
 					<span
 						class="font-mono tabular-nums"
 						style:font-size="13px"
 						style:color="var(--canvas-accent)"
-						{...own('role', 'progress')}>{metaRowText(meta)}</span
+						{...own('role', 'progress')}><TypedText segments={meta} /></span
 					>
 				{:else}
 					<span
 						class="font-mono"
 						style:font-size="13px"
 						style:color="var(--canvas-muted)"
-						{...own('role', 'meta')}>{metaRowText(meta)}</span
+						{...own('role', 'meta')}><TypedText segments={meta} /></span
 					>
 				{/if}
 			{/each}

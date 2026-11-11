@@ -39,9 +39,9 @@
 	//
 	// The band paints the canvas's type and border (mono 12 px, a 1 px top
 	// border in the queue-local `--canvas-border` token) on the frame's
-	// `queueFooterBand` fill, with the canvas's source-text teal
-	// (`--canvas-source`) and owner-marker sand (`--canvas-owner`) in place of
-	// the pills' theme roles. The slice's `GuiStatusBar` carries no volume,
+	// `queueFooterBand` fill, with the secondary-title token
+	// (`--canvas-type-secondary`, the queue source is a secondary title) and
+	// owner-marker sand (`--canvas-owner`) in place of the pills' theme roles. The slice's `GuiStatusBar` carries no volume,
 	// mute, or visual-mode content, so the line paints no interactive status
 	// pill and reports no region at all — a point on the line resolves to
 	// nothing. It still reports through the shared layout reporter so the
@@ -124,9 +124,9 @@
 			<SaveCheck size={14} color={roleVar(footer.autosave.role)} class="shrink-0" />
 		{/if}
 		{#if footer.playlist.text}
-			<!-- The canvas paints the source line in its teal token; the
-				front end paints no role here. -->
-			<span style:color="var(--canvas-source)" data-footer-source
+			<!-- The queue's source is a secondary title, so it paints the secondary
+				token (design D14); the front end paints no role here. -->
+			<span style:color="var(--canvas-type-secondary)" data-footer-source
 				>{footer.playlist.text}</span
 			>
 		{/if}

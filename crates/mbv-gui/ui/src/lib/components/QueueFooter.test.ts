@@ -69,8 +69,8 @@ test('an owner whose link is down paints no liveness dot', () => {
 
 // The footer's canvas form (U4.3): a 40 px band, 16 px side padding, the
 // canvas's mono type, a 1 px top border, and the canvas's two line colours
-// — the source text in its teal and the owner marker in its sand — from the
-// queue's `--canvas-*` tokens.
+// — the source text as a secondary title and the owner marker in its sand —
+// from the queue's `--canvas-*` tokens (add-gui-settings-screen design D14).
 test('the line paints the canvas footer band', () => {
 	const { container } = renderFooter();
 	const line = container.querySelector('[data-footer-line]') as HTMLElement;
@@ -82,7 +82,7 @@ test('the line paints the canvas footer band', () => {
 
 	const source = container.querySelector('[data-footer-source]') as HTMLElement;
 	const ownerGroup = container.querySelector('[data-owner-label]')?.parentElement as HTMLElement;
-	expect(source.style.color).toBe('var(--canvas-source)');
+	expect(source.style.color).toBe('var(--canvas-type-secondary)');
 	expect(ownerGroup.style.color).toBe('var(--canvas-owner)');
 });
 

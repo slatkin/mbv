@@ -54,7 +54,7 @@
 
 <SettingsCard {title}>
 	{#snippet header()}
-		<span style:font-size="12px" style:color="var(--canvas-partial)">
+		<span style:font-size="12px" style:color="var(--canvas-type-count)">
 			{countLabel(marked.length)}
 		</span>
 	{/snippet}

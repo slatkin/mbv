@@ -257,6 +257,36 @@ writes each role and chrome fill into a `--mbv-<name>` custom property on
 `:root`, and `ui/src/app.css` points every shadcn-svelte variable at the mbv
 properties. There is one palette and no light or dark variant.
 
+### Colour by data type
+
+Weight and size carry hierarchy; colour carries the data type (design D14).
+A title or a body line stays `--canvas-heading`, `--canvas-text`, or
+`--canvas-muted`, and each data type names one `--canvas-type-*` token in
+`app.css`. Each token aliases the hue the palette already carried, except
+the secondary title's purple, which the GUI adds.
+
+| Type | Token |
+|---|---|
+| time and duration | `--canvas-type-time` (`--canvas-accent`) |
+| year and date | `--canvas-type-date` (`--canvas-source`, the link hue) |
+| count and meta | `--canvas-type-count` (`--canvas-partial`) |
+| section label | `--canvas-type-label` (`--canvas-insertion`) |
+| secondary title (series, show, parent) | `--canvas-type-secondary` |
+| role and character | `--canvas-type-role` (`--canvas-owner`) |
+
+A line that joins values of several types is built as typed segments where it
+is built, never split in the window. The core's Hero meta rows and the
+window's own facts lines (`ui/src/lib/library/hero.ts`) return segments, and
+`ui/src/lib/components/TypedText.svelte` paints them: each segment maps its
+kind to its token, and a plain segment inherits the line's own colour. A
+time or a date repeated down a list — a duration column, a tree row's year,
+the queue's right column — paints at `--canvas-type-repeat-opacity`; a
+selected or current row keeps its own ink at full strength by painting
+without `repeat`. The scrubber's remaining clock is a time at 0.75, as the
+canvas draws it. A single-type field needs no segments: its painter names its
+token (`--canvas-type-count` for an episode badge, `--canvas-type-secondary`
+for a parent line).
+
 ## Text and icons
 
 The front end bundles the two canvas faces (design D8): IBM Plex Sans at

@@ -192,16 +192,30 @@ test('the active filter paints its text and the caret', () => {
 	expect(container.querySelector('[data-caret]')).toBeTruthy();
 });
 
-test('the right column paints the mode\'s value in the canvas colour', () => {
-	// "Ends at" reads green, "Length" muted (the canvas's right-column rule).
+// The right column repeats a time down the list, so a non-current row paints
+// the time token at the repeat opacity (add-gui-settings-screen design D14).
+test('the right column paints the mode\'s value as a repeated time', () => {
 	const ends = renderPanel(queue([item(1)]), summary({ rightColumn: 'endsAt' }));
 
-	expect(ends.getByText('21:40').style.color).toBe('var(--canvas-accent)');
+	expect(ends.getByText('21:40').style.color).toBe('var(--canvas-type-time)');
+	expect(ends.getByText('21:40').style.opacity).toBe('var(--canvas-type-repeat-opacity)');
 	expect(ends.queryByText('3:12')).toBeNull();
 
 	const length = renderPanel(queue([item(1)]), summary({ rightColumn: 'length' }));
 
-	expect(length.getByText('3:12').style.color).toBe('var(--canvas-muted)');
+	expect(length.getByText('3:12').style.color).toBe('var(--canvas-type-time)');
+});
+
+// A highlight marks focus only, so the current row keeps its own ink in the
+// right column at full strength (design D14).
+test('the current row keeps its ink in the right column', () => {
+	const { container } = renderPanel(
+		queue([item(1, { state: { state: 'nowPlaying', progress: 12 } })]),
+	);
+
+	const value = container.querySelector('[data-slot="1"] [data-right-value]') as HTMLElement;
+	expect(value.style.color).toBe('var(--canvas-ink)');
+	expect(value.textContent).toBe('3:12');
 });
 
 test('the rows paint the watched, active, and partial-progress states', () => {
