@@ -24,8 +24,8 @@ impl App {
     /// only a successful result -- matched against the pending id by the
     /// drain -- appends to `config.feeds` and persists. Failure surfaces via
     /// the drain. Returns the pending id when the fetch started, `None` for
-    /// an in-flight add (one at a time), a rejected form, or no open feed
-    /// state.
+    /// an in-flight add (one at a time), a rejected form, a URL already
+    /// subscribed, or no open feed state.
     pub(in crate::app) fn begin_feed_add(
         &mut self,
         name: &str,
@@ -47,6 +47,36 @@ impl App {
                 ToastSeverity::Error,
             );
             return None;
+        }
+        // The URL is the subscription list's only stable identity (design
+        // D5 of `add-gui-settings-screen`): edit and remove resolve by
+        // first URL match, so a second subscription at the same URL could
+        // never be addressed. Refuse the duplicate up front through the
+        // same failed-add drain a fetch failure takes.
+        if self
+            .config
+            .lock()
+            .unwrap()
+            .feeds
+            .iter()
+            .any(|s| s.url == url)
+        {
+            let Some(popup) = &mut self.feeds_manage else {
+                return None;
+            };
+            let id = popup.next_add_id;
+            popup.next_add_id += 1;
+            popup.pending_add = Some(id);
+            let _ = popup.add_tx.send(FeedAddResult {
+                id,
+                name,
+                url,
+                kind,
+                result: Err(mbv_ui_model::UiModelError::operation(
+                    "a subscription with this URL already exists",
+                )),
+            });
+            return Some(id);
         }
         let Some(popup) = &mut self.feeds_manage else {
             return None;
