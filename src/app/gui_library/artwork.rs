@@ -186,11 +186,11 @@ impl App {
             let Some(entry) = self
                 .images
                 .image(cache_key)
-                .and_then(|entry| entry.img.clone())
+                .and_then(|entry| entry.img.as_ref())
             else {
                 return GuiLibraryArtwork::Placeholder;
             };
-            let encoded = Self::encode_hero_for_display(&entry);
+            let encoded = Self::encode_hero_for_display(entry);
             self.gui_library_art_encoded = Some((cache_key.to_owned(), encoded));
         }
         let Some((key, encoded)) = self
@@ -315,11 +315,11 @@ impl App {
             let Some(entry) = self
                 .images
                 .image(cache_key)
-                .and_then(|entry| entry.img.clone())
+                .and_then(|entry| entry.img.as_ref())
             else {
                 return GuiLibraryArtwork::Placeholder;
             };
-            let encoded = Self::encode_hero_for_display(&entry);
+            let encoded = Self::encode_hero_for_display(entry);
             self.gui_hero_art_encoded
                 .insert(cache_key.to_owned(), encoded);
         }
@@ -357,11 +357,11 @@ impl App {
             let Some(entry) = self
                 .images
                 .image(cache_key)
-                .and_then(|entry| entry.img.clone())
+                .and_then(|entry| entry.img.as_ref())
             else {
                 return GuiLibraryArtwork::Placeholder;
             };
-            let encoded = encode_for_display(&entry);
+            let encoded = encode_for_display(entry);
             self.gui_home_art_encoded
                 .insert(cache_key.to_owned(), encoded);
         }
