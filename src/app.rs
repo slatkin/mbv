@@ -71,9 +71,9 @@ pub use self::gui_settings::{
     GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
     GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsOpenPlaylistProjection,
     GuiSettingsPlaylistItemProjection, GuiSettingsPlaylistRowProjection,
-    GuiSettingsPlaylistsProjection, GuiSettingsRowKind, GuiSettingsRowProjection,
-    GuiSettingsSection, GuiSettingsServiceProjection, GuiSettingsServicesProjection,
-    GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
+    GuiSettingsPlaylistsProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
+    GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
+    GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
 };
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};

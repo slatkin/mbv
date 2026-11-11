@@ -76,6 +76,7 @@ pub enum GuiServiceActionIntent {
     SetupEmby,
     RetryEmby,
     RepairEmby,
+    RemoveEmby,
     SetupAudiobookshelf,
     TestAudiobookshelf,
     RemoveAudiobookshelf,
@@ -89,6 +90,7 @@ impl From<mbv_ui_model::settings::ServiceActionIntent> for GuiServiceActionInten
             mbv_ui_model::settings::ServiceActionIntent::SetupEmby => Self::SetupEmby,
             mbv_ui_model::settings::ServiceActionIntent::RetryEmby => Self::RetryEmby,
             mbv_ui_model::settings::ServiceActionIntent::RepairEmby => Self::RepairEmby,
+            mbv_ui_model::settings::ServiceActionIntent::RemoveEmby => Self::RemoveEmby,
             mbv_ui_model::settings::ServiceActionIntent::SetupAudiobookshelf => {
                 Self::SetupAudiobookshelf
             }
@@ -112,6 +114,7 @@ impl From<GuiServiceActionIntent> for mbv_ui_model::settings::ServiceActionInten
             GuiServiceActionIntent::SetupEmby => Self::SetupEmby,
             GuiServiceActionIntent::RetryEmby => Self::RetryEmby,
             GuiServiceActionIntent::RepairEmby => Self::RepairEmby,
+            GuiServiceActionIntent::RemoveEmby => Self::RemoveEmby,
             GuiServiceActionIntent::SetupAudiobookshelf => Self::SetupAudiobookshelf,
             GuiServiceActionIntent::TestAudiobookshelf => Self::TestAudiobookshelf,
             GuiServiceActionIntent::RemoveAudiobookshelf => Self::RemoveAudiobookshelf,

@@ -128,8 +128,15 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_feed_add_results(&mut self) -> bool {
-        // The GUI opens no feed-add flow, so nothing sends on its channel.
-        false
+        // The feed add this Client started from the Settings screen's Feeds
+        // section (design D5, row 5.3) lands here: the App drain owns the
+        // channel and the config write, and the frame reads the subscription
+        // list from the App. The GUI mounts no feed-manage component, so no
+        // stage follows the outcome.
+        !matches!(
+            self.app.drain_feed_add_results(),
+            mbv_ui_model::feeds_manage::FeedAddDrain::Idle
+        )
     }
 
     fn drain_card_image_completions(&mut self) -> bool {
@@ -223,9 +230,14 @@ impl ClientTickHost for CoreThread {
                     // The Settings screen's request (`add-gui-settings-screen`
                     // design D5): the App applies the semantic intent, and the
                     // sidebar drain below mirrors the screen's state onto the
-                    // core `FocusStack`.
+                    // core `FocusStack`. The UI reset spans the App and this
+                    // thread (design D10), so it runs here in one place.
                     outcome.input_received = true;
-                    self.app.apply_gui_settings_command(command);
+                    if matches!(command, mbv::GuiSettingsCommand::ResetUiState) {
+                        self.reset_gui_ui_state();
+                    } else {
+                        self.app.apply_gui_settings_command(command);
+                    }
                 }
                 CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,

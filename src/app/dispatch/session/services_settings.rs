@@ -63,6 +63,41 @@ impl App {
         self.setup.emby_setup_form = Some(EmbySetupForm::new(&config, previous));
     }
 
+    /// Fill the Emby setup form with a submitted command's fields
+    /// (`add-gui-settings-screen` design D5's `embySetup`): the window content
+    /// sends a form's values as one command, and the shared submit validates
+    /// them. An open form keeps its generation, so a resubmit while one runs
+    /// is refused by [`Self::submit_emby_setup`] instead of orphaning it.
+    pub(in crate::app) fn fill_emby_setup_form(
+        &mut self,
+        server_url: String,
+        username: String,
+        password: String,
+    ) {
+        if self.setup.emby_setup_form.is_none() {
+            self.open_emby_setup();
+        }
+        if let Some(form) = self.setup.emby_setup_form.as_mut() {
+            form.fields = [server_url, username, password];
+        }
+    }
+
+    /// Fill the Audiobookshelf setup form with a submitted command's fields
+    /// (design D5's `audiobookshelfSetup`), as [`Self::fill_emby_setup_form`]
+    /// does for Emby.
+    pub(in crate::app) fn fill_audiobookshelf_setup_form(
+        &mut self,
+        server_url: String,
+        api_key: String,
+    ) {
+        if self.setup.audiobookshelf_setup_form.is_none() {
+            self.open_audiobookshelf_setup();
+        }
+        if let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() {
+            form.fields = [server_url, api_key];
+        }
+    }
+
     fn open_audiobookshelf_setup(&mut self) {
         let config = self.config.lock().unwrap().clone();
         self.setup.audiobookshelf_setup_form = Some(AudiobookshelfSetupForm {
@@ -222,6 +257,7 @@ impl App {
             ServiceActionIntent::SetupEmby | ServiceActionIntent::RepairEmby => {
                 self.open_emby_setup();
             }
+            ServiceActionIntent::RemoveEmby => self.request_emby_removal(),
             ServiceActionIntent::RetryEmby => self.retry_emby(),
         }
     }
@@ -283,7 +319,7 @@ impl App {
                 ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {
                     vec![Intent::SetupEmby]
                 }
-                ServiceState::Ready => vec![Intent::RepairEmby],
+                ServiceState::Ready => vec![Intent::RepairEmby, Intent::RemoveEmby],
                 ServiceState::Unavailable => vec![Intent::RetryEmby],
             },
             ServiceEntry::Audiobookshelf => match self.audiobookshelf_runtime.state {

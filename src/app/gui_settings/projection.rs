@@ -7,6 +7,7 @@
 
 use mbv_emby_model::EmbyItem;
 use mbv_queue::FeedKind;
+use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{
     SERVICE_ENTRIES, ServiceActionIntent, ServiceEntry, SettingKey, SettingValueKind, setting_flag,
     setting_kind, setting_label, setting_value,
@@ -14,7 +15,7 @@ use mbv_ui_model::settings::{
 
 use crate::app::App;
 
-use super::GuiSetupService;
+use super::{GuiSettingsState, GuiSetupService};
 
 /// One F2 row the Settings frame carries (design D9): the setting's stable
 /// name, its label, how the row edits it, its value text, and — for a toggle —
@@ -48,6 +49,27 @@ pub struct GuiSettingsChoiceProjection {
     pub id: String,
     pub label: String,
     pub selected: bool,
+}
+
+/// One routable library of the Library section's routes list (design D9):
+/// `library` is the lowercased name the saved route table is keyed by — the
+/// `assignRoute` command's identity — and `endpoint` the device route the
+/// library is assigned to, `None` while it uses the automatic route.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiSettingsRouteProjection {
+    pub library: String,
+    pub name: String,
+    pub endpoint: Option<String>,
+}
+
+impl From<(String, String, Option<String>)> for GuiSettingsRouteProjection {
+    fn from((library, name, endpoint): (String, String, Option<String>)) -> Self {
+        Self {
+            library,
+            name,
+            endpoint,
+        }
+    }
 }
 
 /// The Services section's content (design D9): each Service's state and the
@@ -159,8 +181,8 @@ pub struct GuiSettingsPlaylistItemProjection {
 
 impl App {
     /// The open section's F2 rows (design D9): the shown keys in paint order,
-    /// each with its label, kind, value text, toggle flag, and — once row 5.1
-    /// loads them — its choices.
+    /// each with its label, kind, value text, toggle flag, and — for a choice
+    /// list — the choices the section's load cached.
     #[must_use]
     pub fn gui_settings_rows(&self) -> Vec<GuiSettingsRowProjection> {
         let Some(state) = self.gui_settings() else {
@@ -178,7 +200,7 @@ impl App {
                 kind: gui_settings_row_kind(key),
                 value: setting_value(key, &cfg, &ui),
                 flag: setting_flag(key, &cfg),
-                choices: None,
+                choices: gui_settings_row_choices(&state, key),
             })
             .collect()
     }
@@ -290,9 +312,16 @@ impl App {
         GuiSettingsKeysProjection {
             prefix: keybinds.prefix.map(|chord| chord.to_string()),
             rows,
-            // Row 5.4 stores the last refused edit.
-            refusal: None,
+            refusal: self.gui_settings().and_then(|state| state.refusal),
         }
+    }
+
+    /// The Library section's routable libraries (design D9): the loaded route
+    /// rows, `None` until the section's fetch lands. The front end paints each
+    /// one's assigned device and sends `assignRoute` for the library it edits.
+    #[must_use]
+    pub fn gui_settings_routes(&self) -> Option<Vec<GuiSettingsRouteProjection>> {
+        self.gui_settings().and_then(|state| state.routes)
     }
 
     /// The Playlists section's content (design D9): the saved playlists with
@@ -335,6 +364,23 @@ fn playlist_item(item: &EmbyItem) -> GuiSettingsPlaylistItemProjection {
         id: item.id.clone(),
         name: item.name.clone(),
     }
+}
+
+/// The choices a row paints (design D9): `None` for a row that is no choice
+/// list, and for one whose load has not landed yet.
+fn gui_settings_row_choices(
+    state: &GuiSettingsState,
+    key: SettingKey,
+) -> Option<Vec<GuiSettingsChoiceProjection>> {
+    let kind = match key {
+        SettingKey::MyLanguages => MultiSelectKind::MyLanguages,
+        SettingKey::HiddenLibraries => MultiSelectKind::HiddenLibraries,
+        SettingKey::FeedViewLibraries => MultiSelectKind::FeedViewLibraries,
+        _ => return None,
+    };
+    state
+        .choices(kind)
+        .map(<[GuiSettingsChoiceProjection]>::to_vec)
 }
 
 /// How an F2 row is edited (design D9). A boolean row is a toggle, a text or

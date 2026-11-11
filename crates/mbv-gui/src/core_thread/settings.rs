@@ -4,6 +4,9 @@
 //! wildcard. The open actions drive the Settings screen's core state; every
 //! TUI overlay request the GUI does not present logs
 //! `gui.overlay_request.undelivered` at debug level and drops.
+//!
+//! The Settings screen's UI reset lives here too (design D10): its steps span
+//! the App and this thread's own state, so the command runs them in one place.
 
 use mbv::{GuiSettingsGroup, GuiSettingsSection, TickOutcome};
 use mbv_ui_model::overlay::{OverlayRequest, SidebarId};
@@ -11,6 +14,7 @@ use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, OverlayId};
 
 use super::CoreThread;
+use super::launch_restore::GuiLaunchRestore;
 
 /// The debug log the dropped variants share (design D2): the request names a
 /// TUI overlay the GUI does not present.
@@ -24,6 +28,27 @@ fn log_undelivered(request: &OverlayRequest) {
 }
 
 impl CoreThread {
+    /// The GUI's UI reset (`add-gui-settings-screen` design D10). The steps run
+    /// in the design's order: the pending saved-launch restore is abandoned and
+    /// Home is selected with the Library store's selections cleared, the Queue
+    /// Surface state's cursor, marks, and viewport reset, the overlays and the
+    /// Settings screen close, the saved launch location is deleted after every
+    /// live write, and the reset counter rises last so the window content
+    /// resets its stores after the core has.
+    pub(super) fn reset_gui_ui_state(&mut self) {
+        // Step 1: abandon the saved launch restore, then Home.
+        self.launch_restore = GuiLaunchRestore::Done;
+        self.launch_focus_taken = false;
+        self.app.reset_gui_ui_state();
+        // Step 3's core half: the Queue Surface's cursor, marks, and viewport.
+        // The queue's contents and the viewed link stay.
+        self.queue.reset_presentation();
+        // Steps 4 to 6: the overlays and the Settings screen already closed
+        // with the App's steps; the saved launch location goes, then the
+        // counter rises.
+        self.app.clear_gui_launch_state();
+        self.app.bump_gui_ui_reset_epoch();
+    }
     /// Drain the App's pending shell request once per tick (design D2), then
     /// mirror the Settings screen's state onto the core `FocusStack`: opening
     /// pushes `ComponentId::Overlay(OverlayId::Settings)`, closing pops it, so

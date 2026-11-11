@@ -213,9 +213,9 @@ impl std::fmt::Debug for GuiSettingsCommand {
 }
 
 impl App {
-    /// Apply one GUI Settings command (design D5). Rows 4.1's two arms run
-    /// here; every other arm logs its receipt at debug level and changes
-    /// nothing until its row in section 5 replaces it.
+    /// Apply one GUI Settings command (design D5): each variant runs through
+    /// the shared `App` method for its intent, and a command built from a
+    /// stale frame logs its receipt at debug level and changes nothing.
     pub fn apply_gui_settings_command(&mut self, command: GuiSettingsCommand) {
         tracing::debug!(
             name: "gui_settings.command",
@@ -237,44 +237,77 @@ impl App {
             GuiSettingsCommand::SelectSection { section } => {
                 self.select_gui_settings_section(section);
             }
-            // Section 5 replaces each of these arms with its own effect. The
-            // arm is one list of variants, not a wildcard, so a new variant
-            // must declare its handling.
-            command @ (GuiSettingsCommand::Activate { .. }
-            | GuiSettingsCommand::ApplyChoices { .. }
-            | GuiSettingsCommand::AssignRoute { .. }
-            | GuiSettingsCommand::EmbySetup { .. }
-            | GuiSettingsCommand::AudiobookshelfSetup { .. }
-            | GuiSettingsCommand::ServiceAction { .. }
-            | GuiSettingsCommand::CancelSetup { .. }
-            | GuiSettingsCommand::FeedAdd { .. }
-            | GuiSettingsCommand::FeedEdit { .. }
-            | GuiSettingsCommand::FeedRemove { .. }
-            | GuiSettingsCommand::KeysCapture { .. }
-            | GuiSettingsCommand::KeysReset { .. }
-            | GuiSettingsCommand::KeysClear { .. }
-            | GuiSettingsCommand::SelectTarget { .. }
-            | GuiSettingsCommand::PlaylistOpen { .. }
-            | GuiSettingsCommand::PlaylistBack
-            | GuiSettingsCommand::PlaylistRefresh { .. }
-            | GuiSettingsCommand::PlaylistAction { .. }
-            | GuiSettingsCommand::PlaylistItemAction { .. }
-            | GuiSettingsCommand::PlaylistRename { .. }
-            | GuiSettingsCommand::PlaylistDelete { .. }
-            | GuiSettingsCommand::ResetUiState) => {
-                Self::log_pending_gui_settings_command(&command);
+            GuiSettingsCommand::Activate { setting } => {
+                self.apply_gui_settings_activate(setting);
             }
+            GuiSettingsCommand::ApplyChoices { kind, selected } => {
+                self.apply_gui_settings_choices(kind, &selected);
+            }
+            GuiSettingsCommand::AssignRoute { library, endpoint } => {
+                self.apply_gui_settings_route(&library, endpoint);
+            }
+            GuiSettingsCommand::EmbySetup {
+                server_url,
+                username,
+                password,
+            } => self.apply_gui_settings_emby_setup(server_url, username, password),
+            GuiSettingsCommand::AudiobookshelfSetup {
+                server_url,
+                api_key,
+            } => self.apply_gui_settings_audiobookshelf_setup(server_url, api_key),
+            GuiSettingsCommand::ServiceAction { action } => {
+                self.apply_gui_settings_service_action(action);
+            }
+            GuiSettingsCommand::CancelSetup { service } => {
+                self.apply_gui_settings_cancel_setup(service);
+            }
+            GuiSettingsCommand::FeedAdd { name, url, kind } => {
+                self.apply_gui_settings_feed_add(&name, &url, kind);
+            }
+            GuiSettingsCommand::FeedEdit { url, name, kind } => {
+                self.apply_gui_settings_feed_edit(&url, &name, kind);
+            }
+            GuiSettingsCommand::FeedRemove { url } => {
+                self.apply_gui_settings_feed_remove(&url);
+            }
+            GuiSettingsCommand::KeysCapture { target, key } => {
+                self.apply_gui_settings_keys_capture(&target, key);
+            }
+            GuiSettingsCommand::KeysReset { action } => {
+                self.apply_gui_settings_keys_reset(&action);
+            }
+            GuiSettingsCommand::KeysClear { target } => {
+                self.apply_gui_settings_keys_clear(&target);
+            }
+            GuiSettingsCommand::SelectTarget { target } => {
+                self.apply_gui_settings_select_target(&target);
+            }
+            GuiSettingsCommand::PlaylistOpen { id } => {
+                self.apply_gui_settings_playlist_open(id.as_deref());
+            }
+            GuiSettingsCommand::PlaylistBack => self.apply_gui_settings_playlist_back(),
+            GuiSettingsCommand::PlaylistRefresh { id } => {
+                self.apply_gui_settings_playlist_refresh(id.as_deref());
+            }
+            GuiSettingsCommand::PlaylistAction { id, action } => {
+                self.apply_gui_settings_playlist_action(&id, action);
+            }
+            GuiSettingsCommand::PlaylistItemAction {
+                id,
+                item_id,
+                action,
+            } => self.apply_gui_settings_playlist_item_action(&id, &item_id, action),
+            GuiSettingsCommand::PlaylistRename { id, name } => {
+                self.apply_gui_settings_playlist_rename(&id, &name);
+            }
+            GuiSettingsCommand::PlaylistDelete { id } => {
+                self.apply_gui_settings_playlist_delete(&id);
+            }
+            // The reset's steps span the App and the core thread (design D10):
+            // the GUI's tick host applies the whole reset through
+            // `CoreThread::reset_gui_ui_state`, so the App-side arm starts it
+            // by running the App-owned steps in their order.
+            GuiSettingsCommand::ResetUiState => self.reset_gui_ui_state(),
         }
-    }
-
-    /// Log one Settings command the App does not apply yet: the arm its row in
-    /// section 5 replaces.
-    fn log_pending_gui_settings_command(command: &GuiSettingsCommand) {
-        tracing::debug!(
-            name: "gui_settings.command.pending",
-            target: "gui_settings",
-            command = ?command,
-            "the Settings command's arm lands in a later row"
-        );
     }
 }

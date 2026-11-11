@@ -173,8 +173,14 @@ impl App {
     /// Drain the in-flight add-feed fetch result, if any (§6.2). A result
     /// whose id no longer matches the current pending id -- the add was
     /// cancelled (Esc) or superseded by a later submission -- is discarded
-    /// without touching config.
-    pub(in crate::app) fn drain_feed_add_results(&mut self) -> FeedAddDrain {
+    /// without touching config. Both Clients' tick hosts call it: the TUI's
+    /// half then updates its component's stage, and the GUI reads the saved
+    /// list from the config.
+    ///
+    /// # Panics
+    /// Panics if a `config` lock is poisoned: a previous holder panicked while
+    /// holding it.
+    pub fn drain_feed_add_results(&mut self) -> FeedAddDrain {
         let Some(popup) = &self.feeds_manage else {
             return FeedAddDrain::Idle;
         };

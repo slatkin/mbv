@@ -28,13 +28,20 @@ fn capture_round_trips_a_named_key_with_modifiers() {
 #[test]
 fn capture_round_trips_shift_n_in_crossterm_case() {
     // Crossterm delivers Shift+N as Char('N') + SHIFT; `KeyChord::new`
-    // folds it to the lowercase letter with SHIFT kept, the form the
-    // registry's `Shift+N` default normalizes to.
+    // folds it to the lowercase letter with SHIFT kept, and the configured
+    // chord spells the uppercase letter the registry's `Shift+N` default
+    // and a hand-written `[keys]` entry carry — the spelling the load rules
+    // compare against.
     let pressed = KeyChord::new(Key::Char('N'), KeyModifiers::SHIFT);
     let configured = pressed
         .to_keybinds_chord()
         .expect("a character key must convert to a configured chord");
-    assert_eq!(configured.to_string(), "Shift+n");
+    assert_eq!(configured.to_string(), "Shift+N");
+    assert_eq!(
+        configured,
+        mbv_keybinds::Chord::parse("Shift+N").expect("a declared default chord must parse"),
+        "the captured spelling must equal the declared default's"
+    );
     assert_eq!(
         KeyChord::from_keybinds_chord(configured),
         pressed,
