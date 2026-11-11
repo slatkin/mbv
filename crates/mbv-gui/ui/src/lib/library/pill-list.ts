@@ -18,7 +18,7 @@ import { get, writable } from 'svelte/store';
 import type { Writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiLibraryCommand } from '$lib/bridge/types';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { clampScrollTop, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
 import type { GeometryRow, ListMove } from './list';
 import { libraryUi } from './state';
 
@@ -297,25 +297,14 @@ export function createPillList<
 		movePillFocus(step) {
 			const frame = config.frame();
 			const entries = frame === null ? [] : config.pills(frame);
-			if (entries.length === 0) {
-				return;
-			}
 			const focus = get(ui).focusedPill;
-			const focusedKey = focus === null ? null : config.focusKey(focus);
-			const at =
-				focusedKey === null
-					? -1
-					: entries.findIndex(
-							(candidate) => config.pillKey(config.pillOf(candidate)) === focusedKey,
-					  );
-			const next =
-				at === -1
-					? step > 0
-						? 0
-						: entries.length - 1
-					: Math.min(Math.max(at + step, 0), entries.length - 1);
-			const entry = entries[next];
-			if (entry !== undefined) {
+			const entry = stepPillFocus(
+				entries,
+				focus === null ? null : config.focusKey(focus),
+				(candidate) => config.pillKey(config.pillOf(candidate)),
+				step,
+			);
+			if (entry !== null) {
 				const pill = config.pillOf(entry);
 				ui.update((state) => ({ ...state, focusedPill: config.focusOf(pill) }));
 			}

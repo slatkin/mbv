@@ -11,6 +11,7 @@ import { sendLibraryCommand } from '$lib/bridge/library';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiFrame, GuiLibraryTab, GuiPanel, GuiSearchFrame } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
+import { stepPillFocus } from './list';
 import {
 	acceptLibraryFilter,
 	activeLibraryPanes,
@@ -133,19 +134,13 @@ function pills() {
  * Left walk the pills, and the first of them with no pill focused takes the
  * end it walks from. */
 function movePillFocus(step: number): void {
-	const row = pills();
-	if (row.length === 0) {
-		return;
-	}
-	const at = row.findIndex((pill) => pill.groupId === get(libraryUi).focusedPill);
-	const next =
-		at === -1
-			? step > 0
-				? 0
-				: row.length - 1
-			: Math.min(Math.max(at + step, 0), row.length - 1);
-	const pill = row[next];
-	if (pill) {
+	const pill = stepPillFocus(
+		pills(),
+		get(libraryUi).focusedPill,
+		(entry) => entry.groupId,
+		step,
+	);
+	if (pill !== null) {
 		focusLibraryPill(pill.groupId);
 	}
 }

@@ -244,6 +244,56 @@ export function rowsHeight(rows: readonly GeometryRow[]): number {
 	return last === undefined ? 0 : last.top + last.height;
 }
 
+/** One painted row of a flat fixed-height list (design D12): the carried
+ * item under its stable id, at `top` for `height`, so the window and the
+ * scroll geometry read it like every other list's rows. */
+export interface FlatRow<Item> {
+	id: string;
+	top: number;
+	height: number;
+	row: Item;
+}
+
+/**
+ * The painted rows of a flat fixed-height list (design D12): the carried
+ * items in their order — a date-sorted list keeps the order the frame
+ * carried — each `rowHeight` tall, narrowed to the titles that contain
+ * `filter`'s text without case (design D7's filter rule). Every row carries
+ * its top edge and height, so the list paints a window of rows over native
+ * scroll.
+ *
+ * A list whose row union discriminates on `kind` passes it: the Emby
+ * feed-group rows are `item`s beside the plain mode's headings, and the
+ * Shows Latest and Upcoming rows are `flat`s beside the series tree.
+ */
+export function buildFlatRows<Item extends { id: string; title: string }>(
+	rows: readonly Item[],
+	rowHeight: number,
+	filter?: string,
+): FlatRow<Item>[];
+export function buildFlatRows<Item extends { id: string; title: string }, Kind extends string>(
+	rows: readonly Item[],
+	rowHeight: number,
+	filter: string,
+	kind: Kind,
+): Array<FlatRow<Item> & { kind: Kind }>;
+export function buildFlatRows<Item extends { id: string; title: string }>(
+	rows: readonly Item[],
+	rowHeight: number,
+	filter = '',
+	kind?: string,
+): FlatRow<Item>[] {
+	return rows
+		.filter((row) => filterMatch(row.title, filter))
+		.map((row, at) => ({
+			...(kind === undefined ? {} : { kind }),
+			id: row.id,
+			row,
+			top: at * rowHeight,
+			height: rowHeight,
+		}));
+}
+
 /** A cursor movement the design's keys name (design D3): row by row for Up and
  * Down, one viewport for Page Up and Page Down, and the list's ends for Home
  * and End. */
@@ -374,13 +424,83 @@ export interface RailLetter {
 	rowId: string | null;
 }
 
-/** The A–Z rail over the painted rows (design D7): each letter with the first
- * artist row under it, so a press scrolls to that row and moves the cursor
- * there. A letter no visible row carries is disabled. */
-export function letterRail(rows: readonly LibraryRow[]): RailLetter[] {
+/** The A–Z rail over the canvas tree's painted rows (design D7): each letter
+ * with the first artist row under it, so a press scrolls to that row and
+ * moves the cursor there. A letter no visible row carries is disabled. */
+export function letterRail(rows: readonly LibraryRow[]): RailLetter[];
+/** The A–Z rail over a destination's painted rows (design D7, D12, D14):
+ * each letter with the first row `letterOf` anchors under it — a plain
+ * list's item rows, the Shows tree's series rows, never a heading. A letter
+ * no anchor carries is disabled. */
+export function letterRail<Row extends GeometryRow>(
+	rows: readonly Row[],
+	letterOf: (row: Row) => string | null,
+): RailLetter[];
+export function letterRail<Row extends GeometryRow>(
+	rows: readonly Row[],
+	letterOf?: (row: Row) => string | null,
+): RailLetter[] {
+	const anchor: (row: Row) => string | null = letterOf ?? artistAnchor;
 	return [...RAIL_LETTERS].map((letter) => ({
 		letter,
-		rowId:
-			rows.find((row) => row.kind === 'artist' && row.letter === letter)?.id ?? null,
+		rowId: rows.find((row) => anchor(row) === letter)?.id ?? null,
 	}));
+}
+
+/** The rail letter a canvas-tree row anchors (design D7): an artist row's
+ * letter — the rail jumps to artists only — or `null` for the tree's other
+ * rows. The one-argument `letterRail` call is the canvas tree's. */
+function artistAnchor(row: GeometryRow): string | null {
+	const tree = row as LibraryRow;
+	return tree.kind === 'artist' ? tree.letter : null;
+}
+
+/**
+ * The cursor and scroll offset a rail press leaves (design D7): the first
+ * row under `letter`, scrolled so it paints fully — or `null` while no
+ * painted row carries the letter, so the press changes nothing. `view` is
+ * the list's scroll offset and measured viewport height, the fields every
+ * destination's interaction state carries.
+ */
+export function jumpToLetter(
+	rail: readonly RailLetter[],
+	rows: readonly GeometryRow[],
+	letter: string,
+	view: { scrollTop: number; viewportHeight: number },
+): { cursor: string; scrollTop: number } | null {
+	const target = rail.find((entry) => entry.letter === letter)?.rowId;
+	if (target === null || target === undefined) {
+		return null;
+	}
+	return {
+		cursor: target,
+		scrollTop: scrollTopToShowCursor(rows, target, view.scrollTop, view.viewportHeight),
+	};
+}
+
+/**
+ * The pill the pill row's focus steps to (design D6, D12): one pill along in
+ * `step`'s direction, clamped to the row's ends — and the end `step` walks
+ * from while no pill is focused or the stored focus names no carried pill,
+ * so the first Left or Right always lands a focus. `keyOf` names the pill's
+ * stable focus key, the value the interaction state stores; `focused` is
+ * that stored key, or `null`. An empty row focuses nothing.
+ */
+export function stepPillFocus<Pill>(
+	pills: readonly Pill[],
+	focused: string | null,
+	keyOf: (pill: Pill) => string,
+	step: number,
+): Pill | null {
+	if (pills.length === 0) {
+		return null;
+	}
+	const at = focused === null ? -1 : pills.findIndex((pill) => keyOf(pill) === focused);
+	const next =
+		at === -1
+			? step > 0
+				? 0
+				: pills.length - 1
+			: Math.min(Math.max(at + step, 0), pills.length - 1);
+	return pills[next] ?? null;
 }

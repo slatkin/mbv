@@ -20,9 +20,9 @@ import type { RailLetter } from './list';
 import {
 	LETTER_ROW_HEIGHT,
 	NODE_ROW_HEIGHT,
-	RAIL_LETTERS,
 	TRACK_ROW_HEIGHT,
-	filterMatch,
+	buildFlatRows,
+	letterRail,
 	moveCursor,
 } from './list';
 import type { ListMove } from './list';
@@ -184,7 +184,7 @@ export function buildShowsRows(
 ): ShowsListRow[] {
 	return showsSeriesMode(mode)
 		? seriesShowsRows(shows.series, filter, tree)
-		: flatShowsRows(shows.rows.filter((row) => filterMatch(row.title, filter)));
+		: buildFlatRows(shows.rows, SHOWS_FLAT_ROW_HEIGHT, filter, 'flat');
 }
 
 /** A painted row without its geometry: the shape the row builder fills before
@@ -303,18 +303,6 @@ function episodeLeaf(
 	};
 }
 
-/** The Latest and Upcoming modes' rows: the flat rows at one height, with no
- * heading and no letter (design D12). */
-function flatShowsRows(rows: readonly GuiShowsRow[]): ShowsListRow[] {
-	return rows.map((row, at) => ({
-		kind: 'flat',
-		id: row.id,
-		row,
-		top: at * SHOWS_FLAT_ROW_HEIGHT,
-		height: SHOWS_FLAT_ROW_HEIGHT,
-	}));
-}
-
 /** The rows the cursor may rest on: every row but a heading. */
 export function showsSelectableRows(rows: readonly ShowsListRow[]): ShowsItemRow[] {
 	return rows.filter((row): row is ShowsItemRow => row.kind !== 'heading');
@@ -358,9 +346,5 @@ export function moveShowsCursor(
  * first series row under it, so a press moves the cursor there. A letter no
  * painted row carries is disabled, as the Music rail's is. */
 export function showsLetterRail(rows: readonly ShowsListRow[]): RailLetter[] {
-	return [...RAIL_LETTERS].map((letter) => ({
-		letter,
-		rowId:
-			rows.find((row) => row.kind === 'series' && row.letter === letter)?.id ?? null,
-	}));
+	return letterRail(rows, (row) => (row.kind === 'series' ? row.letter : null));
 }

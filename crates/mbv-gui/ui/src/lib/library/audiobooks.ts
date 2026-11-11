@@ -10,7 +10,7 @@
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor } from './list';
 import type { ListMove } from './list';
 import { libraryAudiobooks, libraryUi } from './state';
 import {
@@ -174,15 +174,10 @@ export function moveAudiobooksListCursor(move: ListMove): void {
  * without books changes nothing. */
 export function jumpAudiobooksToLetter(letter: string): void {
 	const list = bookRows();
-	const target = audiobooksLetterRail(list).find((entry) => entry.letter === letter)?.rowId;
-	if (target === null || target === undefined) {
-		return;
-	}
-	audiobooksUi.update((ui) => ({
-		...ui,
-		cursor: target,
-		scrollTop: scrollTopToShowCursor(list, target, ui.scrollTop, ui.viewportHeight),
-	}));
+	audiobooksUi.update((ui) => {
+		const jump = jumpToLetter(audiobooksLetterRail(list), list, letter, ui);
+		return jump === null ? ui : { ...ui, ...jump };
+	});
 }
 
 /** Report the list's measured viewport height (row 9.1): the rows in view

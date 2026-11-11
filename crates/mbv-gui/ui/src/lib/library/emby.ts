@@ -15,7 +15,7 @@
 
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiEmbyFeedGroup, GuiEmbyFrame } from '$lib/bridge/types';
-import { scrollTopToShowCursor } from './list';
+import { jumpToLetter } from './list';
 import type { ListMove } from './list';
 import {
 	buildEmbyRows,
@@ -154,15 +154,10 @@ export function moveEmbyListCursor(move: ListMove): void {
  * rows changes nothing. */
 export function jumpEmbyToLetter(letter: string): void {
 	const list = embyRows();
-	const target = embyLetterRail(list).find((entry) => entry.letter === letter)?.rowId;
-	if (target === null || target === undefined) {
-		return;
-	}
-	embyUi.update((ui) => ({
-		...ui,
-		cursor: target,
-		scrollTop: scrollTopToShowCursor(list, target, ui.scrollTop, ui.viewportHeight),
-	}));
+	embyUi.update((ui) => {
+		const jump = jumpToLetter(embyLetterRail(list), list, letter, ui);
+		return jump === null ? ui : { ...ui, ...jump };
+	});
 }
 
 /** Report the list's measured viewport height (row 8.1): the rows in view

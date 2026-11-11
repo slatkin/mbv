@@ -32,6 +32,7 @@ import {
 	moveListCursor,
 	scrollTopToShowCursor,
 } from './list';
+import { jumpToLetter as railJump } from './list';
 import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
@@ -603,15 +604,8 @@ export function setLibraryFilter(filter: string): void {
 export function jumpToLetter(letter: string): void {
 	libraryUi.update((ui) => {
 		const rows = rowsOf(ui);
-		const target = letterRail(rows).find((entry) => entry.letter === letter)?.rowId;
-		if (target === null || target === undefined) {
-			return ui;
-		}
-		return {
-			...ui,
-			cursor: target,
-			scrollTop: scrollTopToShowCursor(rows, target, ui.scrollTop, ui.viewportHeight),
-		};
+		const jump = railJump(letterRail(rows), rows, letter, ui);
+		return jump === null ? ui : { ...ui, ...jump };
 	});
 }
 

@@ -11,7 +11,7 @@
 
 import type { GuiAudiobooksRow } from '$lib/bridge/types';
 import type { RailLetter } from './list';
-import { LETTER_ROW_HEIGHT, RAIL_LETTERS, filterMatch, moveCursor } from './list';
+import { LETTER_ROW_HEIGHT, filterMatch, letterRail, moveCursor } from './list';
 import type { ListMove } from './list';
 
 /** The letter heading row's height in logical pixels (design D12, row 9.1):
@@ -109,10 +109,5 @@ export function moveAudiobooksCursor(
  * the first book under it, so a press moves the cursor there. A letter no
  * painted row carries is disabled, as the Music rail's is. */
 export function audiobooksLetterRail(rows: readonly AudiobooksListRow[]): RailLetter[] {
-	return [...RAIL_LETTERS].map((letter) => ({
-		letter,
-		rowId:
-			rows.find((row) => row.kind === 'item' && row.row.sortLetter === letter)?.id ??
-			null,
-	}));
+	return letterRail(rows, (row) => (row.kind === 'item' ? row.row.sortLetter : null));
 }

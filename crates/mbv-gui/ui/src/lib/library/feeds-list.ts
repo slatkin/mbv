@@ -7,7 +7,8 @@
 // layout, which jsdom does not have.
 
 import type { GuiFeedsRow } from '$lib/bridge/types';
-import { filterMatch } from './list';
+import { buildFlatRows } from './list';
+import type { FlatRow } from './list';
 
 /** The entry row's height in logical pixels (design D12): the room a
  * two-line entry title and the date gutter paint into, as a Shows flat row. */
@@ -18,18 +19,7 @@ export const FEEDS_ROW_HEIGHT = 48;
  * every painted row is an item row: the `id` is the row's stable identity as
  * one opaque string, the cursor's identity, the each-block's key, and the id
  * the scroll geometry reads. There is no heading and no rail to step over. */
-export interface FeedsItemRow {
-	id: string;
-	top: number;
-	height: number;
-	row: GuiFeedsRow;
-}
-
-/** The painted rows of the Feeds list: every row the model paints is an item
- * row. */
-export type FeedsListRow = FeedsItemRow;
-
-/**
+export type FeedsItemRow = FlatRow<GuiFeedsRow>;
 
 /**
  * The painted rows of the Feeds list (design D12): the frame's entry rows at
@@ -39,11 +29,6 @@ export type FeedsListRow = FeedsItemRow;
  * case (design D7's filter rule). Every row carries its top edge and height,
  * so the list paints a window of rows over native scroll.
  */
-export function buildFeedsRows(rows: readonly GuiFeedsRow[], filter = ''): FeedsListRow[] {
-	return rows.filter((row) => filterMatch(row.title, filter)).map((row, at) => ({
-		id: row.id,
-		row,
-		top: at * FEEDS_ROW_HEIGHT,
-		height: FEEDS_ROW_HEIGHT,
-	}));
+export function buildFeedsRows(rows: readonly GuiFeedsRow[], filter = ''): FeedsItemRow[] {
+	return buildFlatRows(rows, FEEDS_ROW_HEIGHT, filter);
 }

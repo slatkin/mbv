@@ -11,7 +11,7 @@
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiShowsFrame, GuiShowsMode } from '$lib/bridge/types';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
 import type { ListMove } from './list';
 import { libraryShows, libraryUi } from './state';
 import {
@@ -269,15 +269,10 @@ export function moveShowsListCursor(move: ListMove): void {
  * without rows changes nothing. */
 export function jumpShowsToLetter(letter: string): void {
 	const list = showsRows();
-	const target = showsLetterRail(list).find((entry) => entry.letter === letter)?.rowId;
-	if (target === null || target === undefined) {
-		return;
-	}
-	showsUi.update((ui) => ({
-		...ui,
-		cursor: target,
-		scrollTop: scrollTopToShowCursor(list, target, ui.scrollTop, ui.viewportHeight),
-	}));
+	showsUi.update((ui) => {
+		const jump = jumpToLetter(showsLetterRail(list), list, letter, ui);
+		return jump === null ? ui : { ...ui, ...jump };
+	});
 }
 
 /** Report the list's measured viewport height (design D12): the rows in view
@@ -320,19 +315,13 @@ function focusShowsPill(mode: GuiShowsMode | null): void {
  * walk the pills, and the first of them with no pill focused takes the end it
  * walks from. */
 export function moveShowsPillFocus(step: number): void {
-	const row = libraryShows()?.pills ?? [];
-	if (row.length === 0) {
-		return;
-	}
-	const at = row.findIndex((pill) => pill.mode === get(showsUi).focusedPill);
-	const next =
-		at === -1
-			? step > 0
-				? 0
-				: row.length - 1
-			: Math.min(Math.max(at + step, 0), row.length - 1);
-	const pill = row[next];
-	if (pill !== undefined) {
+	const pill = stepPillFocus(
+		libraryShows()?.pills ?? [],
+		get(showsUi).focusedPill,
+		(entry) => entry.mode,
+		step,
+	);
+	if (pill !== null) {
 		focusShowsPill(pill.mode);
 	}
 }

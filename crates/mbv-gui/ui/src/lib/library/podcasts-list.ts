@@ -7,7 +7,8 @@
 // layout, which jsdom does not have.
 
 import type { GuiPodcastsRow } from '$lib/bridge/types';
-import { filterMatch } from './list';
+import { buildFlatRows } from './list';
+import type { FlatRow } from './list';
 
 /** The episode row's height in logical pixels (design D12): the room a
  * two-line episode title and the date gutter paint into, as a Shows flat
@@ -19,16 +20,7 @@ export const PODCASTS_ROW_HEIGHT = 48;
  * every painted row is an item row: the `id` is the row's stable identity as
  * one opaque string, the cursor's identity, the each-block's key, and the id
  * the scroll geometry reads. There is no heading and no rail to step over. */
-export interface PodcastsItemRow {
-	id: string;
-	top: number;
-	height: number;
-	row: GuiPodcastsRow;
-}
-
-/** The painted rows of the Podcasts list: every row the model paints is an
- * item row. */
-export type PodcastsListRow = PodcastsItemRow;
+export type PodcastsItemRow = FlatRow<GuiPodcastsRow>;
 
 /**
  * The painted rows of the Podcasts list (design D12): the frame's episode
@@ -41,11 +33,6 @@ export type PodcastsListRow = PodcastsItemRow;
 export function buildPodcastsRows(
 	rows: readonly GuiPodcastsRow[],
 	filter = '',
-): PodcastsListRow[] {
-	return rows.filter((row) => filterMatch(row.title, filter)).map((row, at) => ({
-		id: row.id,
-		row,
-		top: at * PODCASTS_ROW_HEIGHT,
-		height: PODCASTS_ROW_HEIGHT,
-	}));
+): PodcastsItemRow[] {
+	return buildFlatRows(rows, PODCASTS_ROW_HEIGHT, filter);
 }

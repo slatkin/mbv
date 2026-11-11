@@ -9,7 +9,13 @@
 
 import type { GuiEmbyFeedGroup, GuiEmbyRow } from '$lib/bridge/types';
 import type { RailLetter } from './list';
-import { LETTER_ROW_HEIGHT, RAIL_LETTERS, filterMatch, moveCursor } from './list';
+import {
+	LETTER_ROW_HEIGHT,
+	buildFlatRows,
+	filterMatch,
+	letterRail,
+	moveCursor,
+} from './list';
 import type { ListMove } from './list';
 
 /** The letter heading row's height in logical pixels (design D12): the Music
@@ -61,8 +67,9 @@ export function buildEmbyRows(
 	feedGroup: boolean,
 	filter = '',
 ): EmbyListRow[] {
-	const kept = rows.filter((row) => filterMatch(row.title, filter));
-	return feedGroup ? flatEmbyRows(kept) : headingEmbyRows(kept);
+	return feedGroup
+		? buildFlatRows(rows, EMBY_ROW_HEIGHT, filter, 'item')
+		: headingEmbyRows(rows.filter((row) => filterMatch(row.title, filter)));
 }
 
 /** The plain mode's rows: each row under the letter heading of its rail
@@ -88,18 +95,6 @@ function headingEmbyRows(rows: readonly GuiEmbyRow[]): EmbyListRow[] {
 		top += EMBY_ROW_HEIGHT;
 	}
 	return built;
-}
-
-/** The feed-group mode's rows: the flat date-ordered rows at one height, with
- * no heading and no letter (row 8.1). */
-function flatEmbyRows(rows: readonly GuiEmbyRow[]): EmbyListRow[] {
-	return rows.map((row, at) => ({
-		kind: 'item',
-		id: row.id,
-		row,
-		top: at * EMBY_ROW_HEIGHT,
-		height: EMBY_ROW_HEIGHT,
-	}));
 }
 
 /** The rail letter a painted row belongs to, or `null` on a heading and on the
@@ -132,12 +127,7 @@ export function moveEmbyCursor(
  * painted row carries is disabled, as the Music rail's is. The feed-group mode
  * paints no rail, so its rows carry no letter and the rail stays disabled. */
 export function embyLetterRail(rows: readonly EmbyListRow[]): RailLetter[] {
-	return [...RAIL_LETTERS].map((letter) => ({
-		letter,
-		rowId:
-			rows.find((row) => row.kind === 'item' && row.row.sortLetter === letter)?.id ??
-			null,
-	}));
+	return letterRail(rows, (row) => (row.kind === 'item' ? row.row.sortLetter : null));
 }
 
 /** The stable key a feed-group pill is focused and pressed by (row 8.1): the
