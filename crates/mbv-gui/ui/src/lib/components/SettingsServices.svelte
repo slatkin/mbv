@@ -15,6 +15,7 @@
 	import { sendSettingsCommand } from '$lib/bridge/settings';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
+	import { focusOnMount } from '$lib/settings/focus';
 	import {
 		blurSettingsFieldOnLeave,
 		focusSettingsField,
@@ -26,6 +27,7 @@
 	} from '$lib/settings/state';
 	import SettingsButton from './settings/SettingsButton.svelte';
 	import SettingsCard from './settings/SettingsCard.svelte';
+	import SettingsField from './settings/SettingsField.svelte';
 	import SettingsStatePill from './settings/SettingsStatePill.svelte';
 
 	interface Props {
@@ -51,33 +53,6 @@
 		removeAudiobookshelf: 'destructive',
 	};
 
-	/** The field the form hands the keyboard to when it opens. */
-	function focusFirstField(formEl: HTMLElement | undefined): void {
-		formEl?.querySelector('input')?.focus();
-	}
-
-	let embyFormEl: HTMLElement | undefined = $state();
-	let absFormEl: HTMLElement | undefined = $state();
-	let embyWasOpen = false;
-	let absWasOpen = false;
-
-	// A form opening hands its first field the keyboard, so the user who
-	// picked the setup action by key types without reaching for the pointer
-	// (the spec's *keyboard reachability*).
-	$effect(() => {
-		const open = content.setup?.service === 'emby';
-		if (open && !embyWasOpen) {
-			focusFirstField(embyFormEl);
-		}
-		embyWasOpen = open;
-	});
-	$effect(() => {
-		const open = content.setup?.service === 'audiobookshelf';
-		if (open && !absWasOpen) {
-			focusFirstField(absFormEl);
-		}
-		absWasOpen = open;
-	});
 </script>
 
 {#snippet formActions(service: 'emby' | 'audiobookshelf')}
@@ -130,7 +105,7 @@
 				{@const setup = content.setup}
 				{@const draft = $settingsUi.embySetup}
 				<div
-					bind:this={embyFormEl}
+					use:focusOnMount
 					class="flex flex-col"
 					style:padding="16px"
 					style:gap="12px"
@@ -140,57 +115,29 @@
 					onfocusin={() => focusSettingsField('embySetup')}
 					onfocusout={(event) => blurSettingsFieldOnLeave(event, 'embySetup')}
 				>
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						Server URL
-						<input
-							type="text"
-							placeholder="http://emby:8096"
-							aria-label="Emby server URL"
-							value={draft.serverUrl}
-							data-settings-field="serverUrl"
-							oninput={(event) =>
-								setEmbySetupDraft({ serverUrl: event.currentTarget.value })}
-						/>
-					</label>
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						Username
-						<input
-							type="text"
-							placeholder="Username"
-							aria-label="Emby username"
-							value={draft.username}
-							data-settings-field="username"
-							oninput={(event) =>
-								setEmbySetupDraft({ username: event.currentTarget.value })}
-						/>
-					</label>
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						Password
-						<input
-							type="password"
-							placeholder="Password"
-							aria-label="Emby password"
-							value={draft.password}
-							data-settings-field="password"
-							oninput={(event) =>
-								setEmbySetupDraft({ password: event.currentTarget.value })}
-						/>
-					</label>
+					<SettingsField
+						label="Server URL"
+						field="serverUrl"
+						ariaLabel="Emby server URL"
+						placeholder="http://emby:8096"
+						value={draft.serverUrl}
+						oninput={(serverUrl) => setEmbySetupDraft({ serverUrl })}
+					/>
+					<SettingsField
+						label="Username"
+						field="username"
+						ariaLabel="Emby username"
+						value={draft.username}
+						oninput={(username) => setEmbySetupDraft({ username })}
+					/>
+					<SettingsField
+						label="Password"
+						field="password"
+						ariaLabel="Emby password"
+						type="password"
+						value={draft.password}
+						oninput={(password) => setEmbySetupDraft({ password })}
+					/>
 					{#if setup.error !== ''}
 						<div
 							style:font-size="13px"
@@ -204,7 +151,7 @@
 				{@const setup = content.setup}
 				{@const draft = $settingsUi.audiobookshelfSetup}
 				<div
-					bind:this={absFormEl}
+					use:focusOnMount
 					class="flex flex-col"
 					style:padding="16px"
 					style:gap="12px"
@@ -214,40 +161,22 @@
 					onfocusin={() => focusSettingsField('audiobookshelfSetup')}
 					onfocusout={(event) => blurSettingsFieldOnLeave(event, 'audiobookshelfSetup')}
 				>
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						Server URL
-						<input
-							type="text"
-							placeholder="http://audiobookshelf:13378"
-							aria-label="Audiobookshelf server URL"
-							value={draft.serverUrl}
-							data-settings-field="serverUrl"
-							oninput={(event) =>
-								setAudiobookshelfSetupDraft({ serverUrl: event.currentTarget.value })}
-						/>
-					</label>
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						API key
-						<input
-							type="password"
-							placeholder="API key"
-							aria-label="Audiobookshelf API key"
-							value={draft.apiKey}
-							data-settings-field="apiKey"
-							oninput={(event) =>
-								setAudiobookshelfSetupDraft({ apiKey: event.currentTarget.value })}
-						/>
-					</label>
+					<SettingsField
+						label="Server URL"
+						field="serverUrl"
+						ariaLabel="Audiobookshelf server URL"
+						placeholder="http://audiobookshelf:13378"
+						value={draft.serverUrl}
+						oninput={(serverUrl) => setAudiobookshelfSetupDraft({ serverUrl })}
+					/>
+					<SettingsField
+						label="API key"
+						field="apiKey"
+						ariaLabel="Audiobookshelf API key"
+						type="password"
+						value={draft.apiKey}
+						oninput={(apiKey) => setAudiobookshelfSetupDraft({ apiKey })}
+					/>
 					{#if setup.error !== ''}
 						<div
 							style:font-size="13px"

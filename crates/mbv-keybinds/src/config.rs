@@ -166,10 +166,7 @@ impl Keybinds {
         let mut next = self.clone();
         let bindings = next.section_bindings_mut(action.section);
         bindings.router.retain(|(id, _)| *id != action.id);
-        if bindings.router.is_empty() && bindings.prefix.is_empty() {
-            next.sections
-                .retain(|(section, _)| *section != action.section);
-        }
+        next.prune_empty_section(action.section);
         next
     }
 
@@ -193,10 +190,7 @@ impl Keybinds {
                 bindings.prefix.retain(|(id, _)| *id != action.id);
             }
         }
-        if bindings.router.is_empty() && bindings.prefix.is_empty() {
-            next.sections
-                .retain(|(section, _)| *section != action.section);
-        }
+        next.prune_empty_section(action.section);
         next
     }
 
@@ -211,6 +205,14 @@ impl Keybinds {
 
     /// The entry of this configuration's own section bindings for `section`,
     /// created when absent. Shared by the `with_*` builders.
+    /// Drop `section`'s entry once it holds no router override and no prefix
+    /// assignment, so a reset leaves the configuration as if never edited.
+    fn prune_empty_section(&mut self, section: KeySection) {
+        self.sections.retain(|(candidate, bindings)| {
+            *candidate != section || !(bindings.router.is_empty() && bindings.prefix.is_empty())
+        });
+    }
+
     fn section_bindings_mut(&mut self, section: KeySection) -> &mut SectionBindings {
         let position = self
             .sections

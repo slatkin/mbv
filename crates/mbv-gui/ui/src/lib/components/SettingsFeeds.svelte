@@ -10,6 +10,7 @@
 	import type { GuiSettingsContent } from '$lib/bridge/types';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
+	import { focusOnMount } from '$lib/settings/focus';
 	import {
 		blurSettingsFieldOnLeave,
 		focusSettingsField,
@@ -20,6 +21,7 @@
 	} from '$lib/settings/state';
 	import SettingsButton from './settings/SettingsButton.svelte';
 	import SettingsCard from './settings/SettingsCard.svelte';
+	import SettingsField from './settings/SettingsField.svelte';
 	import SettingsEntryRow from './SettingsEntryRow.svelte';
 
 	interface Props {
@@ -35,19 +37,6 @@
 	const { content, entries, cursorId }: Props = $props();
 
 	const onpress = (id: string) => pressSettingsEntry(entries, id);
-
-	let formEl: HTMLElement | undefined = $state();
-	let formWasOpen = false;
-
-	// A form opening hands its first field the keyboard (the spec's
-	// *keyboard reachability*).
-	$effect(() => {
-		const open = $settingsUi.feedForm !== null;
-		if (open && !formWasOpen) {
-			formEl?.querySelector('input')?.focus();
-		}
-		formWasOpen = open;
-	});
 
 	/** The count line the card's header paints. */
 	const countLabel = $derived(
@@ -106,7 +95,7 @@
 		{@const form = $settingsUi.feedForm}
 		<SettingsCard title={form.identity === null ? 'Add feed' : 'Edit feed'}>
 			<div
-				bind:this={formEl}
+				use:focusOnMount
 				class="flex flex-col"
 				style:padding="16px"
 				style:gap="12px"
@@ -124,39 +113,22 @@
 						data-settings-feed-identity="">{form.identity}</div
 					>
 				{/if}
-				<label
-					class="flex flex-col"
-					style:gap="6px"
-					style:font-size="12px"
-					style:color="var(--canvas-muted)"
-				>
-					Name
-					<input
-						type="text"
-						placeholder="Name"
-						aria-label="Feed name"
-						value={form.name}
-						data-settings-field="name"
-						oninput={(event) => setFeedForm({ name: event.currentTarget.value })}
-					/>
-				</label>
+				<SettingsField
+					label="Name"
+					field="name"
+					ariaLabel="Feed name"
+					value={form.name}
+					oninput={(name) => setFeedForm({ name })}
+				/>
 				{#if form.identity === null}
-					<label
-						class="flex flex-col"
-						style:gap="6px"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-					>
-						Feed URL
-						<input
-							type="text"
-							placeholder="https://example.com/feed.xml"
-							aria-label="Feed URL"
-							value={form.url}
-							data-settings-field="url"
-							oninput={(event) => setFeedForm({ url: event.currentTarget.value })}
-						/>
-					</label>
+					<SettingsField
+						label="Feed URL"
+						field="url"
+						ariaLabel="Feed URL"
+						placeholder="https://example.com/feed.xml"
+						value={form.url}
+						oninput={(url) => setFeedForm({ url })}
+					/>
 				{/if}
 				<label
 					class="flex flex-col"

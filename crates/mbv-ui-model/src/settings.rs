@@ -188,6 +188,19 @@ impl SettingKey {
         })
     }
 
+    /// The multiselect a choice-list row edits: `None` for a row that is no
+    /// choice list. The one map both the GUI projection and the opener read.
+    #[must_use]
+    pub fn multiselect_kind(self) -> Option<crate::context_menu::MultiSelectKind> {
+        use crate::context_menu::MultiSelectKind as M;
+        match self {
+            Self::MyLanguages => Some(M::MyLanguages),
+            Self::HiddenLibraries => Some(M::HiddenLibraries),
+            Self::FeedViewLibraries => Some(M::FeedViewLibraries),
+            _ => None,
+        }
+    }
+
     /// The Clients this setting has an effect in. An exhaustive match with
     /// no wildcard: a new key must declare its scope when it is added.
     #[must_use]

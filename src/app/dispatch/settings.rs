@@ -286,20 +286,8 @@ impl App {
         if key == SettingKey::Panel {
             self.open_panel_settings();
         }
-        if key == SettingKey::HiddenLibraries {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::HiddenLibraries,
-            ));
-        }
-        if key == SettingKey::MyLanguages {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::MyLanguages,
-            ));
-        }
-        if key == SettingKey::FeedViewLibraries {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::FeedViewLibraries,
-            ));
+        if let Some(kind) = key.multiselect_kind() {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(kind));
         }
         if key == SettingKey::LibraryRoutes {
             self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);

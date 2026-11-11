@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::bridge::frame::playback::{GuiTargetKey, chooser_target_key};
 use crate::bridge::frame::settings::GuiSettingsSection;
-use crate::bridge::frame::settings::feeds::GuiFeedKind;
 use crate::bridge::frame::settings::services::{GuiServiceActionIntent, GuiSetupService};
 use crate::bridge::keys::{DomKey, neutral_key};
 
@@ -69,13 +68,13 @@ pub enum GuiSettingsCommand {
     FeedAdd {
         name: String,
         url: String,
-        kind: GuiFeedKind,
+        kind: mbv_queue::FeedKind,
     },
     /// Edit a subscription, addressed by its URL.
     FeedEdit {
         url: String,
         name: String,
-        kind: GuiFeedKind,
+        kind: mbv_queue::FeedKind,
     },
     /// Raise the remove confirmation for a subscription.
     FeedRemove { url: String },
@@ -215,16 +214,12 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         GuiSettingsCommand::CancelSetup { service } => mbv::GuiSettingsCommand::CancelSetup {
             service: service.into(),
         },
-        GuiSettingsCommand::FeedAdd { name, url, kind } => mbv::GuiSettingsCommand::FeedAdd {
-            name,
-            url,
-            kind: kind.into(),
-        },
-        GuiSettingsCommand::FeedEdit { url, name, kind } => mbv::GuiSettingsCommand::FeedEdit {
-            url,
-            name,
-            kind: kind.into(),
-        },
+        GuiSettingsCommand::FeedAdd { name, url, kind } => {
+            mbv::GuiSettingsCommand::FeedAdd { name, url, kind }
+        }
+        GuiSettingsCommand::FeedEdit { url, name, kind } => {
+            mbv::GuiSettingsCommand::FeedEdit { url, name, kind }
+        }
         GuiSettingsCommand::FeedRemove { url } => mbv::GuiSettingsCommand::FeedRemove { url },
         GuiSettingsCommand::KeysCapture { target, key } => mbv::GuiSettingsCommand::KeysCapture {
             target,

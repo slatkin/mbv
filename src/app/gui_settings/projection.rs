@@ -283,7 +283,7 @@ impl App {
                 value: setting_value(key, &cfg, &ui),
                 flag: setting_flag(key, &cfg),
                 choices: gui_settings_row_choices(&state, key),
-                choices_kind: gui_settings_choices_kind(key),
+                choices_kind: key.multiselect_kind(),
                 values: gui_settings_values(key, &cfg.my_languages),
             })
             .collect()
@@ -465,22 +465,10 @@ fn gui_settings_row_choices(
     state: &GuiSettingsState,
     key: SettingKey,
 ) -> Option<Vec<GuiSettingsChoiceProjection>> {
-    let kind = gui_settings_choices_kind(key)?;
+    let kind = key.multiselect_kind()?;
     state
         .choices(kind)
         .map(<[GuiSettingsChoiceProjection]>::to_vec)
-}
-
-/// The multiselect kind a choice-list row edits (design D9, D11): `None` for a
-/// row that is no choice list. The frame carries it, so neither client derives
-/// the kind from the row's name.
-fn gui_settings_choices_kind(key: SettingKey) -> Option<MultiSelectKind> {
-    match key {
-        SettingKey::MyLanguages => Some(MultiSelectKind::MyLanguages),
-        SettingKey::HiddenLibraries => Some(MultiSelectKind::HiddenLibraries),
-        SettingKey::FeedViewLibraries => Some(MultiSelectKind::FeedViewLibraries),
-        _ => None,
-    }
 }
 
 /// How an F2 row is edited (design D9, D13). A boolean row is a toggle, the

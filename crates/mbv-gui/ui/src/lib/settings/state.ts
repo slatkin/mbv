@@ -27,6 +27,11 @@ import type { DomKey } from '$lib/bridge/types';
 import type { SettingsEntry } from './entries';
 import { settingsEntries } from './entries';
 import { togglePickMenu } from './pick-menu';
+import { moveIndex } from '$lib/library/list';
+import type { ListMove } from '$lib/library/list';
+
+/** The rows a Page Up or Page Down step spans in a Settings pane. */
+const SETTINGS_PAGE = 10;
 
 /** The pane the keyboard is on — and the one Mini paints (design D11). */
 export type SettingsPane = 'sidebar' | 'content';
@@ -195,32 +200,16 @@ export function hideSettingsCursor(): void {
 	settingsUi.update((ui) => (ui.keyboard ? { ...ui, keyboard: false } : ui));
 }
 
-/** The key map of one movement name to a step or an end. */
-const CURSOR_STEPS = {
-	up: -1,
-	down: 1,
-	pageUp: -10,
-	pageDown: 10,
-} as const;
-
 /** Move the focused pane's cursor one movement along (design D11): Up and
  * Down a row, Page Up and Page Down a page of rows, Home and End the ends.
  * The cursor stays inside the list the pane paints. */
-export function moveSettingsCursor(move: string, count: number): void {
+export function moveSettingsCursor(move: ListMove, count: number): void {
 	settingsUi.update((ui) => {
 		if (count <= 0) {
 			return ui;
 		}
 		const cursor = ui.pane === 'sidebar' ? ui.sidebarCursor : ui.contentCursor;
-		let next: number;
-		if (move === 'home') {
-			next = 0;
-		} else if (move === 'end') {
-			next = count - 1;
-		} else {
-			const step = CURSOR_STEPS[move as keyof typeof CURSOR_STEPS] ?? 0;
-			next = Math.min(Math.max(cursor + step, 0), count - 1);
-		}
+		const next = moveIndex(count, cursor, move, SETTINGS_PAGE);
 		return ui.pane === 'sidebar'
 			? { ...ui, sidebarCursor: next }
 			: { ...ui, contentCursor: next };

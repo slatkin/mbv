@@ -15,6 +15,23 @@ type LibraryRouteRow = (String, String, Option<String>);
 /// wire form, or `None` when it is not currently routable).
 type DeviceRouteRow = (String, Option<String>);
 
+/// The library rows the F2 picker lists: every view but the playlists view,
+/// each with the route assigned to its lowercased name.
+fn route_rows(
+    views: &[mbv_emby_model::EmbyItem],
+    routes: &std::collections::BTreeMap<String, String>,
+) -> Vec<LibraryRouteRow> {
+    views
+        .iter()
+        .filter(|v| v.collection_type != "playlists")
+        .map(|v| {
+            let lower = v.name.to_lowercase();
+            let assigned = routes.get(&lower).cloned();
+            (lower, v.name.clone(), assigned)
+        })
+        .collect()
+}
+
 impl App {
     /// Fetch the Emby library views and each one's assigned route
     /// (add-gui-settings-screen design D7): the body of the TUI shell's
@@ -44,16 +61,7 @@ impl App {
                 return None;
             }
         };
-        let routes = self.config.lock().unwrap().library_routes.clone();
-        let items: Vec<(String, String, Option<String>)> = all
-            .iter()
-            .filter(|v| v.collection_type != "playlists")
-            .map(|v| {
-                let lower = v.name.to_lowercase();
-                let assigned = routes.get(&lower).cloned();
-                (lower, v.name.clone(), assigned)
-            })
-            .collect();
+        let items = route_rows(&all, &self.config.lock().unwrap().library_routes);
         drop(client);
         Some(items)
     }
@@ -187,16 +195,7 @@ impl App {
                 return None;
             }
         };
-        let routes = cfg.library_routes.clone();
-        let items: Vec<(String, String, Option<String>)> = all
-            .iter()
-            .filter(|v| v.collection_type != "playlists")
-            .map(|v| {
-                let lower = v.name.to_lowercase();
-                let assigned = routes.get(&lower).cloned();
-                (lower, v.name.clone(), assigned)
-            })
-            .collect();
+        let items = route_rows(&all, &cfg.library_routes);
         let restored_cursor = items
             .iter()
             .position(|(lower, _, _)| lower == library_lower)

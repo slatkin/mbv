@@ -8,6 +8,7 @@
 	import type { GuiPlaylistAction, GuiSettingsContent } from '$lib/bridge/types';
 	import { entryId } from '$lib/settings/entries';
 	import type { SettingsEntry } from '$lib/settings/entries';
+	import { focusOnMount } from '$lib/settings/focus';
 	import {
 		blurSettingsFieldOnLeave,
 		focusSettingsField,
@@ -39,19 +40,6 @@
 		{ action: 'shuffle', label: 'Shuffle' },
 		{ action: 'enqueue', label: 'Add' },
 	];
-
-	let renameEl: HTMLInputElement | undefined = $state();
-	let renameWasOpen = false;
-
-	// A rename field opening hands it the keyboard (the spec's *keyboard
-	// reachability*).
-	$effect(() => {
-		const open = $settingsUi.rename !== null;
-		if (open && !renameWasOpen) {
-			renameEl?.focus();
-		}
-		renameWasOpen = open;
-	});
 
 	/** A refresh control's painted text: the load flag while it runs. */
 	function refreshLabel(loading: boolean): string {
@@ -92,7 +80,7 @@
 		onfocusout={(event) => blurSettingsFieldOnLeave(event, 'rename')}
 	>
 		<input
-			bind:this={renameEl}
+			use:focusOnMount
 			type="text"
 			aria-label="New playlist name"
 			style:flex="1"
