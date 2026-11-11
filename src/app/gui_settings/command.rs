@@ -52,6 +52,9 @@ pub enum GuiSettingsCommand {
         library: String,
         endpoint: Option<String>,
     },
+    /// Load the candidate devices of `library` for the Library section's
+    /// routes list (row 5.1, design D9).
+    RouteDevices { library: String },
     /// Fill the Emby setup form and submit it (row 5.2).
     EmbySetup {
         server_url: String,
@@ -132,6 +135,10 @@ impl std::fmt::Debug for GuiSettingsCommand {
                 .debug_struct("AssignRoute")
                 .field("library", library)
                 .field("endpoint", endpoint)
+                .finish(),
+            Self::RouteDevices { library } => f
+                .debug_struct("RouteDevices")
+                .field("library", library)
                 .finish(),
             Self::EmbySetup { server_url, .. } => f
                 .debug_struct("EmbySetup")
@@ -245,6 +252,9 @@ impl App {
             }
             GuiSettingsCommand::AssignRoute { library, endpoint } => {
                 self.apply_gui_settings_route(&library, endpoint);
+            }
+            GuiSettingsCommand::RouteDevices { library } => {
+                self.apply_gui_settings_route_devices(&library);
             }
             GuiSettingsCommand::EmbySetup {
                 server_url,

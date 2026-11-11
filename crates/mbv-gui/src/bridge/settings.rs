@@ -43,6 +43,9 @@ pub enum GuiSettingsCommand {
         library: String,
         endpoint: Option<String>,
     },
+    /// Load the candidate devices of `library` for the Library section's
+    /// routes list.
+    RouteDevices { library: String },
     /// Fill the Emby setup form and submit it.
     EmbySetup {
         server_url: String,
@@ -163,6 +166,9 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         }
         GuiSettingsCommand::AssignRoute { library, endpoint } => {
             mbv::GuiSettingsCommand::AssignRoute { library, endpoint }
+        }
+        GuiSettingsCommand::RouteDevices { library } => {
+            mbv::GuiSettingsCommand::RouteDevices { library }
         }
         GuiSettingsCommand::EmbySetup {
             server_url,

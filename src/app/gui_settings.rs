@@ -23,8 +23,9 @@ pub use self::command::{GuiSettingsCommand, GuiSetupService};
 pub use self::projection::{
     GuiSettingsChoiceProjection, GuiSettingsFeedProjection, GuiSettingsFeedsProjection,
     GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection, GuiSettingsKeysProjection,
-    GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
-    GuiSettingsPlaylistRowProjection, GuiSettingsPlaylistsProjection, GuiSettingsRouteProjection,
+    GuiSettingsLibraryProjection, GuiSettingsOpenPlaylistProjection,
+    GuiSettingsPlaylistItemProjection, GuiSettingsPlaylistRowProjection,
+    GuiSettingsPlaylistsProjection, GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection,
     GuiSettingsRowKind, GuiSettingsRowProjection, GuiSettingsServiceProjection,
     GuiSettingsServicesProjection, GuiSettingsSetupProjection,
 };
@@ -179,6 +180,12 @@ pub struct GuiSettingsState {
     /// The Library section's loaded route rows (design D9), `None` until its
     /// fetch lands and after it fails.
     pub routes: Option<Vec<GuiSettingsRouteProjection>>,
+    /// The library the Library section selected, as the lowercased name
+    /// `routeDevices` carried (design D9), `None` before the first selection.
+    pub route_selection: Option<String>,
+    /// The selected library's candidate devices (design D9), `None` until a
+    /// `routeDevices` fetch for the selection lands and after one fails.
+    pub route_devices: Option<Vec<GuiSettingsRouteDeviceProjection>>,
     /// The last refused Keys edit (design D9): the action's id and the refusal
     /// text, kept until an accepted edit replaces it or the screen closes.
     pub refusal: Option<GuiSettingsKeyRefusalProjection>,
@@ -192,6 +199,8 @@ impl GuiSettingsState {
             section,
             choices: Vec::new(),
             routes: None,
+            route_selection: None,
+            route_devices: None,
             refusal: None,
         }
     }

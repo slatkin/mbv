@@ -89,3 +89,20 @@ fn the_keys_capture_command_translates_its_dom_key() {
         })
     );
 }
+
+/// The library-name payload shape: `routeDevices` carries the routes list's
+/// selected library name, which is the stable identity the core loads devices
+/// for (design D5, design D9).
+#[test]
+fn the_route_devices_command_names_its_library() {
+    let command: GuiSettingsCommand =
+        serde_json::from_str(r#"{"command":"routeDevices","library":"music"}"#)
+            .expect("the wire command parses");
+
+    assert_eq!(
+        neutral(command),
+        Some(mbv::GuiSettingsCommand::RouteDevices {
+            library: "music".to_string()
+        })
+    );
+}

@@ -626,3 +626,99 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
         "the saved launch location is gone"
     );
 }
+
+/// The Emby `VirtualFolders` response that carries one Music library: every
+/// views path the Library section's load reads answers with it.
+const MUSIC_VIEWS: &str = r#"[{"ItemId":"lib-music","Name":"Music","CollectionType":"music"}]"#;
+
+/// The Emby unfiltered `/Sessions` response that carries one peer `mbv` device
+/// advertising a direct-connect port, so the routes list has one routable
+/// candidate to name.
+const PEER_SESSIONS: &str = r#"[{"Id":"sess-1","DeviceId":"device-peer",
+    "DeviceName":"Living Room","Client":"mbv","UserName":"ada",
+    "RemoteEndPoint":"192.168.1.20:8096","SupportsRemoteControl":true,
+    "SupportedCommands":["mbv-direct-tcp-port:47788"],"PlayState":{}}]"#;
+
+/// A `routeDevices` command for a loaded route library fills that library's
+/// device candidates in the frame (row 5.1, design D9's Library content, the
+/// spec's *Selecting a library lists its devices*).
+#[test]
+fn a_route_devices_command_fills_the_library_device_candidates() {
+    let _guard = mbv_config::TestStateDirGuard::new();
+    let http = mbv_net::mock_http::MockHttp::new();
+    // Every request answers by path (never a consumed script): the frame's
+    // playback-metadata workers fetch chapters, segments, and trickplay
+    // grids in no fixed interleaving with the section's own loads, so a
+    // count script runs dry and the unscripted request stalls the step.
+    http.respond_when("/Sessions", 200, PEER_SESSIONS);
+    http.respond_when(" /", 200, MUSIC_VIEWS);
+    let mut test = test_core_with(stub_app_with_queue(2));
+    // The client lands after the core's construction, as the playlist arm's
+    // test seeds it: the shared startup step is not this arm's subject.
+    test.core
+        .app_mut()
+        .set_gui_emby_client_for_test(crate::test_emby_client(&http));
+    open_settings_at(&mut test, mbv::GuiSettingsSection::Library);
+
+    send_settings(
+        &mut test,
+        mbv::GuiSettingsCommand::RouteDevices {
+            library: "music".to_string(),
+        },
+    );
+
+    let frame = newest_frame(&test);
+    let mbv_gui::bridge::frame::settings::GuiSettingsContent::Library {
+        selected, devices, ..
+    } = settings_content(&frame)
+    else {
+        panic!("the Library section carries the Library content");
+    };
+    assert_eq!(selected.as_deref(), Some("music"), "the frame names it");
+    let devices = devices
+        .as_ref()
+        .expect("the candidates ride the frame after the fetch");
+    assert_eq!(devices.len(), 1, "the one routable peer device");
+    assert_eq!(devices[0].name, "Living Room");
+    assert_eq!(
+        devices[0].endpoint.as_deref(),
+        Some("tcp://192.168.1.20:47788"),
+        "the candidate carries its direct-connect endpoint"
+    );
+}
+
+/// The Library section projects its choice rows and routes only: the
+/// `LibraryRoutes` F2 row is absent, because its TUI popup's work lives inline
+/// in this section and its activation would raise an overlay the GUI drops
+/// (design D9).
+#[test]
+fn the_library_section_projects_no_library_routes_row() {
+    let _guard = mbv_config::TestStateDirGuard::new();
+    let http = mbv_net::mock_http::MockHttp::new();
+    // Every request answers by path (see the routeDevices arm's test): the
+    // section's loads interleave with the frame's metadata workers, so a
+    // count script cannot cover them both.
+    http.respond_when(" /", 200, MUSIC_VIEWS);
+    let mut test = test_core_with(stub_app_with_queue(2));
+    // The client lands after the core's construction, as the playlist arm's
+    // test seeds it: the shared startup step is not this row's subject.
+    test.core
+        .app_mut()
+        .set_gui_emby_client_for_test(crate::test_emby_client(&http));
+    open_settings_at(&mut test, mbv::GuiSettingsSection::Library);
+
+    let frame = newest_frame(&test);
+    let mbv_gui::bridge::frame::settings::GuiSettingsContent::Library { rows, routes, .. } =
+        settings_content(&frame)
+    else {
+        panic!("the Library section carries the Library content");
+    };
+    let keys: Vec<&str> = rows.iter().map(|row| row.key.as_str()).collect();
+    assert_eq!(keys, ["hiddenLibraries", "feedViewLibraries"]);
+    assert!(
+        routes
+            .as_ref()
+            .is_some_and(|routes| routes.iter().any(|route| route.library == "music")),
+        "the routable libraries ride the frame's routes"
+    );
+}

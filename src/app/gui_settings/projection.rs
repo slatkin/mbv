@@ -72,6 +72,34 @@ impl From<(String, String, Option<String>)> for GuiSettingsRouteProjection {
     }
 }
 
+/// One candidate device of the selected library (design D9): `name` is the
+/// device the `assignRoute` command names and `endpoint` the direct-connect
+/// endpoint it saves, `None` when the device is not currently routable.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiSettingsRouteDeviceProjection {
+    pub name: String,
+    pub endpoint: Option<String>,
+}
+
+impl From<(String, Option<String>)> for GuiSettingsRouteDeviceProjection {
+    fn from((name, endpoint): (String, Option<String>)) -> Self {
+        Self { name, endpoint }
+    }
+}
+
+/// The Library section's content (design D9): its F2 choice rows, the routable
+/// libraries with their assigned devices, the selected library, and that
+/// library's candidate devices once `routeDevices` ran for it. The
+/// `LibraryRoutes` F2 row is absent: its TUI popup's work lives inline here,
+/// and its activation would raise an overlay the GUI drops.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiSettingsLibraryProjection {
+    pub rows: Vec<GuiSettingsRowProjection>,
+    pub routes: Option<Vec<GuiSettingsRouteProjection>>,
+    pub selected: Option<String>,
+    pub devices: Option<Vec<GuiSettingsRouteDeviceProjection>>,
+}
+
 /// The Services section's content (design D9): each Service's state and the
 /// actions it offers now, plus the open setup form's progress and error.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,7 +210,9 @@ pub struct GuiSettingsPlaylistItemProjection {
 impl App {
     /// The open section's F2 rows (design D9): the shown keys in paint order,
     /// each with its label, kind, value text, toggle flag, and — for a choice
-    /// list — the choices the section's load cached.
+    /// list — the choices the section's load cached. The `LibraryRoutes` row
+    /// is never projected: the GUI's Library section does that work inline
+    /// (design D9).
     #[must_use]
     pub fn gui_settings_rows(&self) -> Vec<GuiSettingsRowProjection> {
         let Some(state) = self.gui_settings() else {
@@ -194,6 +224,7 @@ impl App {
             .section
             .shown_rows()
             .into_iter()
+            .filter(|key| *key != SettingKey::LibraryRoutes)
             .map(|key| GuiSettingsRowProjection {
                 key,
                 label: setting_label(key).to_string(),
@@ -322,6 +353,23 @@ impl App {
     #[must_use]
     pub fn gui_settings_routes(&self) -> Option<Vec<GuiSettingsRouteProjection>> {
         self.gui_settings().and_then(|state| state.routes)
+    }
+
+    /// The Library section's content (design D9): its F2 choice rows, the
+    /// routable libraries, the selected library, and that library's candidate
+    /// devices. The front end sends `routeDevices` when the user selects a
+    /// library, and `assignRoute` for the device the user picks.
+    #[must_use]
+    pub fn gui_settings_library(&self) -> GuiSettingsLibraryProjection {
+        let state = self.gui_settings();
+        GuiSettingsLibraryProjection {
+            rows: self.gui_settings_rows(),
+            routes: state.as_ref().and_then(|state| state.routes.clone()),
+            selected: state
+                .as_ref()
+                .and_then(|state| state.route_selection.clone()),
+            devices: state.and_then(|state| state.route_devices),
+        }
     }
 
     /// The Playlists section's content (design D9): the saved playlists with

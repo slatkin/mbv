@@ -7,7 +7,7 @@
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{SettingKey, SettingScope};
 
-use super::projection::GuiSettingsChoiceProjection;
+use super::projection::{GuiSettingsChoiceProjection, GuiSettingsRouteDeviceProjection};
 use super::{GuiSettingsRouteProjection, GuiSettingsSection};
 use crate::app::App;
 
@@ -173,6 +173,41 @@ impl App {
             .collect();
         if let Some(state) = self.gui_settings.as_mut() {
             state.routes = Some(rows);
+        }
+    }
+
+    /// Row 5.1's `routeDevices` arm (design D5, design D9): load the candidate
+    /// devices of `library` through the shared `App::route_devices`, and cache
+    /// them for the Library section's routes list until the screen closes. The
+    /// library must be one the section's loaded route rows list, so a command
+    /// built from a stale frame changes nothing.
+    pub(super) fn apply_gui_settings_route_devices(&mut self, library: &str) {
+        if !self.gui_settings_is_open() {
+            Self::log_ignored_gui_settings_command("routeDevices", "the Settings screen is closed");
+            return;
+        }
+        let library = library.to_lowercase();
+        let loaded = self
+            .gui_settings
+            .as_ref()
+            .and_then(|state| state.routes.as_ref())
+            .is_some_and(|rows| rows.iter().any(|row| row.library == library));
+        if !loaded {
+            Self::log_ignored_gui_settings_command(
+                "routeDevices",
+                format_args!("`{library}` is not a loaded route library"),
+            );
+            return;
+        }
+        let devices = self.route_devices(&library).map(|(devices, _cursor)| {
+            devices
+                .into_iter()
+                .map(GuiSettingsRouteDeviceProjection::from)
+                .collect::<Vec<_>>()
+        });
+        if let Some(state) = self.gui_settings.as_mut() {
+            state.route_selection = Some(library);
+            state.route_devices = devices;
         }
     }
 }

@@ -69,9 +69,10 @@ pub use self::gui_library::{
 pub use self::gui_settings::{
     GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
     GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
-    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsOpenPlaylistProjection,
-    GuiSettingsPlaylistItemProjection, GuiSettingsPlaylistRowProjection,
-    GuiSettingsPlaylistsProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
+    GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
+    GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
+    GuiSettingsPlaylistRowProjection, GuiSettingsPlaylistsProjection,
+    GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
     GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
     GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
 };

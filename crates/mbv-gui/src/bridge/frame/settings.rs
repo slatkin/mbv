@@ -4,11 +4,12 @@
 //! screen is closed, so the window mounts it only for a frame that carries it.
 //!
 //! The content is a tagged union with one variant per section kind: the F2
-//! rows, Services, Feeds, Keys, Sessions, and Playlists. No variant carries a
-//! password, an API key, or any other Service credential.
+//! rows, Library, Services, Feeds, Keys, Sessions, and Playlists. No variant
+//! carries a password, an API key, or any other Service credential.
 
 pub mod feeds;
 pub mod keys;
+pub mod library;
 pub mod playlists;
 pub mod rows;
 pub mod services;
@@ -19,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use self::feeds::GuiSettingsFeed;
 use self::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};
+use self::library::{GuiSettingsRoute, GuiSettingsRouteDevice};
 use self::playlists::{GuiOpenPlaylist, GuiPlaylistRow};
 use self::rows::GuiSettingRow;
 use self::services::{GuiSettingsService, GuiSettingsSetup};
@@ -122,9 +124,17 @@ impl From<GuiSettingsSection> for CoreSettingsSection {
     rename_all_fields = "camelCase"
 )]
 pub enum GuiSettingsContent {
-    /// The F2 rows of a settings page (Playback, Display, Session, Library,
-    /// Queue, Mpv, Actions).
+    /// The F2 rows of a settings page (Playback, Display, Session, Queue,
+    /// Mpv, Actions).
     Rows { rows: Vec<GuiSettingRow> },
+    /// The Library section: its choice rows, the routable libraries, the
+    /// selected library, and that library's candidate devices (design D9).
+    Library {
+        rows: Vec<GuiSettingRow>,
+        routes: Option<Vec<GuiSettingsRoute>>,
+        selected: Option<String>,
+        devices: Option<Vec<GuiSettingsRouteDevice>>,
+    },
     /// The three Services, their actions, and the open setup form.
     Services {
         services: Vec<GuiSettingsService>,
@@ -163,6 +173,7 @@ impl GuiSettingsContent {
     ) -> Self {
         match section {
             CoreSettingsSection::Services => Self::services(app),
+            CoreSettingsSection::Library => Self::library(app),
             CoreSettingsSection::Feeds => Self::feeds(app),
             CoreSettingsSection::Keys => Self::keys(app),
             CoreSettingsSection::Sessions => Self::Sessions {
@@ -172,7 +183,6 @@ impl GuiSettingsContent {
             CoreSettingsSection::Playback
             | CoreSettingsSection::Display
             | CoreSettingsSection::Session
-            | CoreSettingsSection::Library
             | CoreSettingsSection::Queue
             | CoreSettingsSection::Mpv
             | CoreSettingsSection::Actions => Self::Rows {
@@ -182,6 +192,24 @@ impl GuiSettingsContent {
                     .map(GuiSettingRow::from)
                     .collect(),
             },
+        }
+    }
+
+    /// The Library section's content (design D9): the choice rows, the
+    /// routable libraries, the selected library, and its candidate devices.
+    fn library(app: &App) -> Self {
+        let projection = app.gui_settings_library();
+        Self::Library {
+            rows: projection.rows.iter().map(GuiSettingRow::from).collect(),
+            routes: projection
+                .routes
+                .as_ref()
+                .map(|routes| routes.iter().map(GuiSettingsRoute::from).collect()),
+            selected: projection.selected.clone(),
+            devices: projection
+                .devices
+                .as_ref()
+                .map(|devices| devices.iter().map(GuiSettingsRouteDevice::from).collect()),
         }
     }
 
