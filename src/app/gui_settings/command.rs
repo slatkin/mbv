@@ -21,10 +21,16 @@ pub enum GuiSetupService {
     Audiobookshelf,
 }
 
+/// The text a setup form's secret field shows in the command's `Debug` output.
+/// The GUI Client's log sink is a file, so a `?command` line at debug level
+/// must never carry a typed password or API key (design D9, the spec's
+/// *A failed setup does not echo the password*).
+const REDACTED: &str = "<redacted>";
+
 /// One request from the GUI Settings screen's window content (design D5). The
 /// window content sends intent; every arm that runs calls the existing `App`
 /// action for it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum GuiSettingsCommand {
     /// Close the screen (design D2).
     Close,
@@ -100,6 +106,110 @@ pub enum GuiSettingsCommand {
     PlaylistDelete { id: String },
     /// Reset the GUI's UI state (row 5.6, design D10).
     ResetUiState,
+}
+
+/// The `Debug` form masks the two setup secrets (design D9): every log site
+/// formats the whole command, so the mask must live here and not at those
+/// sites.
+impl std::fmt::Debug for GuiSettingsCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Close => f.write_str("Close"),
+            Self::SelectSection { section } => f
+                .debug_struct("SelectSection")
+                .field("section", section)
+                .finish(),
+            Self::Activate { setting } => f
+                .debug_struct("Activate")
+                .field("setting", setting)
+                .finish(),
+            Self::ApplyChoices { kind, selected } => f
+                .debug_struct("ApplyChoices")
+                .field("kind", kind)
+                .field("selected", selected)
+                .finish(),
+            Self::AssignRoute { library, endpoint } => f
+                .debug_struct("AssignRoute")
+                .field("library", library)
+                .field("endpoint", endpoint)
+                .finish(),
+            Self::EmbySetup { server_url, .. } => f
+                .debug_struct("EmbySetup")
+                .field("server_url", server_url)
+                .field("password", &REDACTED)
+                .finish(),
+            Self::AudiobookshelfSetup { server_url, .. } => f
+                .debug_struct("AudiobookshelfSetup")
+                .field("server_url", server_url)
+                .field("api_key", &REDACTED)
+                .finish(),
+            Self::ServiceAction { action } => f
+                .debug_struct("ServiceAction")
+                .field("action", action)
+                .finish(),
+            Self::CancelSetup { service } => f
+                .debug_struct("CancelSetup")
+                .field("service", service)
+                .finish(),
+            Self::FeedAdd { name, url, kind } => f
+                .debug_struct("FeedAdd")
+                .field("name", name)
+                .field("url", url)
+                .field("kind", kind)
+                .finish(),
+            Self::FeedEdit { url, name, kind } => f
+                .debug_struct("FeedEdit")
+                .field("url", url)
+                .field("name", name)
+                .field("kind", kind)
+                .finish(),
+            Self::FeedRemove { url } => f.debug_struct("FeedRemove").field("url", url).finish(),
+            Self::KeysCapture { target, key } => f
+                .debug_struct("KeysCapture")
+                .field("target", target)
+                .field("key", key)
+                .finish(),
+            Self::KeysReset { action } => {
+                f.debug_struct("KeysReset").field("action", action).finish()
+            }
+            Self::KeysClear { target } => {
+                f.debug_struct("KeysClear").field("target", target).finish()
+            }
+            Self::SelectTarget { target } => f
+                .debug_struct("SelectTarget")
+                .field("target", target)
+                .finish(),
+            Self::PlaylistOpen { id } => f.debug_struct("PlaylistOpen").field("id", id).finish(),
+            Self::PlaylistBack => f.write_str("PlaylistBack"),
+            Self::PlaylistRefresh { id } => {
+                f.debug_struct("PlaylistRefresh").field("id", id).finish()
+            }
+            Self::PlaylistAction { id, action } => f
+                .debug_struct("PlaylistAction")
+                .field("id", id)
+                .field("action", action)
+                .finish(),
+            Self::PlaylistItemAction {
+                id,
+                item_id,
+                action,
+            } => f
+                .debug_struct("PlaylistItemAction")
+                .field("id", id)
+                .field("item_id", item_id)
+                .field("action", action)
+                .finish(),
+            Self::PlaylistRename { id, name } => f
+                .debug_struct("PlaylistRename")
+                .field("id", id)
+                .field("name", name)
+                .finish(),
+            Self::PlaylistDelete { id } => {
+                f.debug_struct("PlaylistDelete").field("id", id).finish()
+            }
+            Self::ResetUiState => f.write_str("ResetUiState"),
+        }
+    }
 }
 
 impl App {

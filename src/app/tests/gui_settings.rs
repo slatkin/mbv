@@ -35,6 +35,33 @@ fn the_open_actions_follow_the_toggle_rule(
     assert_eq!(app.gui_settings().map(|state| state.section), expected);
 }
 
+/// A setup secret never reaches a log line (design D9, the spec's *A failed
+/// setup does not echo the password*): the log sites format the whole command
+/// and the GUI Client's sink is a file, so the command's `Debug` form masks the
+/// password and the API key. One `#[case]` per setup form.
+#[rstest]
+#[case::emby(
+    GuiSettingsCommand::EmbySetup {
+        server_url: "http://emby.test".to_owned(),
+        username: "ada".to_owned(),
+        password: "hunter2".to_owned(),
+    },
+    "hunter2"
+)]
+#[case::audiobookshelf(
+    GuiSettingsCommand::AudiobookshelfSetup {
+        server_url: "http://abs.test".to_owned(),
+        api_key: "abs-key-42".to_owned(),
+    },
+    "abs-key-42"
+)]
+fn the_setup_commands_mask_their_secret(#[case] command: GuiSettingsCommand, #[case] secret: &str) {
+    let logged = format!("{command:?}");
+
+    assert!(!logged.contains(secret));
+    assert!(logged.contains("<redacted>"));
+}
+
 /// The Display section hides the terminal settings the GUI has no effect in
 /// (the spec's *Settings with no effect on the GUI are hidden*): the image
 /// protocol and mouse support rows are `TuiOnly` (design D4), so only the
