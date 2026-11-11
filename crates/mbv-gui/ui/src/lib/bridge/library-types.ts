@@ -6,6 +6,8 @@
 // re-exported below, so every call site keeps importing from the one bridge
 // module.
 
+import type { GuiAudiobooksFrame } from './library-types-audiobooks';
+import type { GuiEmbyFeedGroup, GuiEmbyFrame } from './library-types-emby';
 import type { GuiFeedsFrame, GuiFeedsLibraryCommand } from './library-types-feeds';
 import type { GuiHomeFrame, GuiHomeRowId, GuiHomeRowState } from './library-types-home';
 import type { GuiPodcastsFrame } from './library-types-podcasts';
@@ -585,206 +587,6 @@ export interface GuiShowsEpisodeRow {
 	state: GuiHomeRowState;
 }
 
-/** The feed-group pill a press selects (design D12, row 8.1): `New` (the
- * destination Latest view), `All`, or one root folder by its stable Service
- * id. */
-export type GuiEmbyFeedGroup =
-	| { kind: 'latest' }
-	| { kind: 'all' }
-	| { kind: 'folder'; id: string };
-
-/** The plain Emby-library destination's content (design D12, row 8.1),
- * present while a plain Emby library is the active destination: the
- * feed-group pills, the active list's rows, the core's selected row, and its
- * Hero. */
-export interface GuiEmbyFrame {
-	/** The plain Emby-library index the Emby commands name (design D2). */
-	libIdx: number;
-	/** The library's display name: the list header's title, so the column
-	 * names the library it holds. */
-	libraryName: string;
-	/** The feed-group mode's pills in pill order; empty in plain mode,
-	 * whose letter rail replaces the TUI's pill row. */
-	pills: GuiEmbyPill[];
-	/** The selected collection's name the Library Status bar's location
-	 * reads (design D10); empty in plain mode. */
-	collectionNames: string[];
-	/** Whether the library presents the feed-group mode
-	 * (`feed_view_libraries`). */
-	feedGroup: boolean;
-	/** Whether the active list has not landed yet. */
-	loading: boolean;
-	/** Whether the plain mode's root-list fetch failed. */
-	failed: boolean;
-	/** The active list's rows in the list's order. */
-	rows: GuiEmbyRow[];
-	/** The core's selected row (design D2, D12), as the frame painted it:
-	 * a select command sends it back. The first row is the Hero default. */
-	selected: string | null;
-	/** The selected row's Hero facts; `null` while no row is selected. */
-	hero: GuiEmbyHero | null;
-}
-
-/** One pill of a feed-view library's pill row (design D12, row 8.1):
- * single-select. */
-export interface GuiEmbyPill {
-	/** The group the pill selects: the set-feed-group command carries it. */
-	group: GuiEmbyFeedGroup;
-	/** The pill's label: `All`, or the folder's name. */
-	name: string;
-	/** Whether the feed state's selection is this pill's group. */
-	selected: boolean;
-	/** Whether the pill is a collection pill (multi-select) rather than a
-	 * single-select one. Every Emby-library pill is single-select. */
-	collection: boolean;
-}
-
-/** One row's kind (design D12, row 8.1): `collection` when the row is a
- * folder or a boxset the folder-play rule expands, `media` on a playable
- * leaf. */
-export type GuiEmbyRowKind = 'collection' | 'media';
-
-/** One row of the plain Emby-library list (design D12, row 8.1). The
- * identity is the stable Service id a select or play command sends, never a
- * row position. */
-export interface GuiEmbyRow {
-	/** The row's stable identity. */
-	id: string;
-	/** The row's primary label, with a folder's item-count decoration. */
-	title: string;
-	/** The row's secondary label (plain mode): the year, else the runtime. */
-	subtitle: string | null;
-	/** The gutter date (feed-group mode): the production year. */
-	date: string | null;
-	/** The row's rail letter (design D7), or `#`; set only in plain mode. */
-	sortLetter: string | null;
-	/** The row's kind. */
-	kind: GuiEmbyRowKind;
-}
-
-/** The Hero's facts for the selected row (design D12, row 8.1), with no
- * Workspace: a plain Emby-library Hero carries none. */
-export interface GuiEmbyHero {
-	/** The item's kind word for the Hero's kicker (design D17): `movie`,
-	 * `video`, as the projection carries it. */
-	kind: string;
-	title: string;
-	metaRows: string[];
-	durationRow: number | null;
-	progressRow: number | null;
-	overview: string | null;
-	/** The artwork box the Hero reserves (the artwork policy's declared
-	 * arm). */
-	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
-	/** The movie's credits table (design D17, Q7): the director first,
-	 * then the cast, as the TUI's credits table paints them. */
-	credits: GuiEmbyHeroCredit[];
-	/** The IMDb link's target (design D17, Q7), when the item carries
-	 * one; the `IMDb` meta row links to it. */
-	imdbUrl: string | null;
-}
-
-/** One credit of the Hero's credits table (design D17, Q7), mirroring
- * `GuiEmbyHeroCreditFrame` field for field. */
-export interface GuiEmbyHeroCredit {
-	/** The person's name. */
-	name: string;
-	/** The role painted beside the name: the person's role, else their
-	 * kind (a director's `Director`). */
-	role: string;
-}
-
-/** The Audiobooks destination's content (design D12, row 9.1), present
- * while an Audiobookshelf book library is the active destination: the flat
- * book list with its rail letters, the core's selected book, and its Hero
- * with the chapters Workspace. No pill rides here — the letter rail
- * replaces the TUI's surname buckets. */
-export interface GuiAudiobooksFrame {
-	/** The Audiobooks library index the Audiobooks commands name (design
-	 * D2, D12). */
-	libIdx: number;
-	/** Whether the book catalog has not landed yet. */
-	loading: boolean;
-	/** Whether the catalog fetch failed. */
-	failed: boolean;
-	/** Whether the selected book's detail fetch has not landed yet: the
-	 * Workspace's loading state. */
-	workspaceLoading: boolean;
-	/** The catalog's books in the TUI's sort order: author sort key, then
-	 * title. */
-	rows: GuiAudiobooksRow[];
-	/** The core's selected book (design D2, D12), as the frame painted it:
-	 * a select command sends it back. The first book is the Hero default. */
-	selected: string | null;
-	/** The selected book's Hero facts; `null` while no book is selected. */
-	hero: GuiAudiobooksHero | null;
-}
-
-/** One row of the book list (design D12, row 9.1). The identity is the
- * book's stable `library_item_id` a select or play command sends, never a
- * row position. */
-export interface GuiAudiobooksRow {
-	/** The book's stable `library_item_id`. */
-	id: string;
-	/** The book's display title. */
-	title: string;
-	/** The author display credit. */
-	subtitle: string | null;
-	/** The book's total duration, the TUI row's duration gutter; empty when
-	 * unknown. */
-	duration: string;
-	/** The row's rail letter, or `#` for a digit- or symbol-led author sort
-	 * key. */
-	sortLetter: string;
-}
-
-/** The book Hero's facts (design D12, row 9.1): the TUI's facts — title,
- * author, duration, `Finished` or `N%` — the portrait cover artwork, and
- * the chapters as the Workspace. */
-export interface GuiAudiobooksHero {
-	title: string;
-	/** The meta rows in display order: the author, the duration, and the
-	 * `Finished` or `N%` progress row. */
-	metaRows: string[];
-	durationRow: number | null;
-	progressRow: number | null;
-	/** The cleaned description, when the catalog record carries one: the
-	 * overview the TUI's Hero paints. */
-	overview: string | null;
-	/** The artwork box the Hero reserves: the book artwork policy's
-	 * portrait. */
-	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
-	/** The book's chapter rows; `null` while the book's detail has not
-	 * landed, which the frame's `workspaceLoading` names. */
-	workspace: GuiAudiobooksWorkspace | null;
-}
-
-/** The book Hero's Workspace (design D12, row 9.1): the book's chapter rows
- * — or its `Part N` rows when the book holds no chapters — in the TUI's
- * order. */
-export interface GuiAudiobooksWorkspace {
-	rows: GuiAudiobooksChapterRow[];
-}
-
-/** One chapter row of the Hero's Workspace (design D12, row 9.1). The
- * chapter value is the stable Service discriminator the TUI's chapter
- * activation addresses — the chapter number on a chapter row, the audio-part
- * index on a `Part N` row — never a display position. */
-export interface GuiAudiobooksChapterRow {
-	/** The row's stable Service discriminator. */
-	chapter: number;
-	/** The row's label: the chapter's title, or `Part N`. */
-	title: string;
-	/** The row's duration, the TUI's duration gutter; empty when unknown. */
-	duration: string;
-	/** Whether this chapter is playing. A frame re-carries the content when
-	 * the mark moves, so the Workspace paints what the Queue's active slot
-		 * paints. */
-		current: boolean;
-}
-
 export type {
 	GuiHomeContentId,
 	GuiHomeFrame,
@@ -816,3 +618,21 @@ export type {
 	GuiPodcastsPill,
 	GuiPodcastsRow,
 } from './library-types-podcasts';
+
+export type {
+	GuiEmbyFeedGroup,
+	GuiEmbyFrame,
+	GuiEmbyHero,
+	GuiEmbyHeroCredit,
+	GuiEmbyPill,
+	GuiEmbyRow,
+	GuiEmbyRowKind,
+} from './library-types-emby';
+
+export type {
+	GuiAudiobooksChapterRow,
+	GuiAudiobooksFrame,
+	GuiAudiobooksHero,
+	GuiAudiobooksRow,
+	GuiAudiobooksWorkspace,
+} from './library-types-audiobooks';
