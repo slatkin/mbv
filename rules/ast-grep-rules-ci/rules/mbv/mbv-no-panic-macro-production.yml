@@ -81,11 +81,12 @@ utils:
             - kind: attribute_item
             - kind: line_comment
             - kind: block_comment
-has_fix: false
-tags:
-  - rust
-  - mbv
-  - reliability
+metadata:
+  has_fix: false
+  tags:
+    - rust
+    - mbv
+    - reliability
 files:
   - "src/**"
   - "crates/**"

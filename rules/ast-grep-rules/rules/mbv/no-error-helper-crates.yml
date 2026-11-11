@@ -23,11 +23,12 @@ rule:
         kind: identifier
         regex: '^(anyhow|thiserror|eyre)$'
         stopBy: end
-has_fix: false
-tags:
-  - rust
-  - mbv
-  - error-handling
-examples:
-  bad: "use anyhow::Context;"
-  good: "use crate::mpv_error::MpvError;"
+metadata:
+  has_fix: false
+  tags:
+    - rust
+    - mbv
+    - error-handling
+  examples:
+    bad: "use anyhow::Context;"
+    good: "use crate::mpv_error::MpvError;"

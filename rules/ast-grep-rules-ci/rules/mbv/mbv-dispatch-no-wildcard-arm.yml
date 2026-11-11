@@ -66,11 +66,12 @@ utils:
             - kind: attribute_item
             - kind: line_comment
             - kind: block_comment
-has_fix: false
-tags:
-  - rust
-  - mbv
-  - interactive-architecture
+metadata:
+  has_fix: false
+  tags:
+    - rust
+    - mbv
+    - interactive-architecture
 files:
   - "src/app/dispatch/**"
 ignores:

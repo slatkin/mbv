@@ -71,15 +71,16 @@ utils:
             - kind: attribute_item
             - kind: line_comment
             - kind: block_comment
-has_fix: false
-tags:
-  - rust
-  - mbv
-  - testing
-examples:
-  bad: |-
-    #[test]
-    fn t() { thread::sleep(std::time::Duration::from_millis(50)); }
-  good: |-
-    #[test]
-    fn t() { assert_eq!(seam.observed_attempts(), 3); }
+metadata:
+  has_fix: false
+  tags:
+    - rust
+    - mbv
+    - testing
+  examples:
+    bad: |-
+      #[test]
+      fn t() { thread::sleep(std::time::Duration::from_millis(50)); }
+    good: |-
+      #[test]
+      fn t() { assert_eq!(seam.observed_attempts(), 3); }
