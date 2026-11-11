@@ -1153,3 +1153,15 @@ On some GPU and Wayland setups, WebKitGTK's DMA-BUF renderer shows a blank
 window. The workaround is `WEBKIT_DISABLE_DMABUF_RENDERER=1` in the
 environment that starts `mbv-gui`. The app does not set it by default
 (design, *Risks*).
+
+### Library Hero and list shared pieces
+
+Invariant 30 (`docs/invariants/30-shared-ui-is-never-bent-to-fit-a-consumer.md`)
+governs these. `LibraryHeroFrame` paints the Hero for Music, Shows, Podcasts,
+Audiobooks, and Feeds: a required header band (the largest unit's kicker, title,
+and plain facts), the detail block (art, selected unit, actions, overview), and
+the list band. `LibraryWorkspaceTable` paints the list band's rows,
+`LibraryHeroActions` the Play, Play next, and Add to queue buttons,
+`LibraryPillButton` every pill, `LibraryItemRow` and `LibraryLetterHeading` the
+flat list rows, and `LibraryVirtualList` the scroller of every list. Movies and
+Home still paint `LibraryHeroSummary`.

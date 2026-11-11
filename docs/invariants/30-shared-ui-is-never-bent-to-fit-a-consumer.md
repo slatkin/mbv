@@ -40,8 +40,17 @@ a screen-specific copy.
 
 ## How the code maintains it today
 
-- `LibraryHeroFrame` takes a required `header`. Podcasts, Audiobooks, and Feeds
-  fill it from their own facts, as Shows does for an episode.
+- `LibraryHeroFrame` takes a required `header`. `heroLayout` in
+  `$lib/library/hero.ts` maps a Hero's facts onto the header (the largest unit
+  as the title) and the block (the selected unit), and Podcasts, Audiobooks,
+  Feeds, and Shows Latest use it. The core carries the largest unit as
+  `parent` on the Podcasts, Feeds, and Shows Hero frames.
+- `LibraryHeroActions`, `LibraryWorkspaceTable`, `LibraryPillButton`,
+  `LibraryItemRow`, `LibraryLetterHeading`, and `LibraryVirtualList` are the
+  one painter of their part: the Hero buttons, the Workspace list band (Music's
+  tracklist, Shows' episodes, Audiobooks' chapters, Feeds' entries), the pills
+  (top row and season pills), the flat list row, the letter heading, and the
+  scroller (Music's list too).
 - One test per frame consumer asserts that the header kicker and title paint.
 
 ## Where it currently fails / how it could regress
@@ -53,4 +62,8 @@ Nothing mechanical enforces rules 2 to 4.
 - **Looks that tests cannot see.** Spacing, size, and band order are not
   asserted. A consumer can match the attributes and still differ in look.
 - **Destinations not yet on the shared piece.** Movies (`LibraryEmbyHero`) and
-  Home still paint through `LibraryHeroSummary`, a second layout.
+  Home still paint through `LibraryHeroSummary`, a second layout. Movies are
+  held until the user lifts the hold, and Home is redone after the GUI
+  migration. Home's list and its tree rows (Shows, Music) keep their own markup.
+- **Music has no loading line.** Its tracklist has no loading signal from the
+  core, so the Workspace table paints none for it.
