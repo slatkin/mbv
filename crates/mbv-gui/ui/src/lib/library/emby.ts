@@ -7,11 +7,15 @@
 // is `$lib/library/emby-list`'s; the panel's pane focus and the Hero overlay
 // stay in `./state`'s shared store, and the Hero carries no Workspace and no
 // cursor of its own.
+//
+// The state, the filter, the cursor, the scroll, and the pill focus are the
+// pill-list controller's (`./pill-list`, row 7C.1); this module keeps the Emby
+// frame, the Emby rows and their letter headings, the letter rail, the play-next
+// command, the Emby command shapes, and the Emby names.
 
-import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiEmbyFeedGroup, GuiEmbyFrame } from '$lib/bridge/types';
-import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { scrollTopToShowCursor } from './list';
 import type { ListMove } from './list';
 import {
 	buildEmbyRows,
@@ -20,98 +24,74 @@ import {
 	moveEmbyCursor,
 } from './emby-list';
 import type { EmbyItemRow, EmbyListRow } from './emby-list';
-import { libraryEmby, libraryUi } from './state';
+import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
+import type { PillListUiState } from './pill-list';
+import { libraryEmby } from './state';
 
-/** The Emby list's interaction state. */
-export interface EmbyUiState {
-	/** The cursor's row id, or `null` while no row carries the cursor (row
-	 * 8.1). The cursor moves over the item rows only. */
-	cursor: string | null;
-	/** The list's native scroll offset in pixels (row 8.1). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
-	/** The feed-group pill the pill row's Left and Right move the focus to, as
-	 * the group's stable key (`embyGroupKey`), or `null` while no pill has it
-	 * (design D6, row 8.1). */
-	focusedPill: string | null;
-	/** The group the keys asked for: Space and Enter select the focused pill,
-	 * and the pill row turns it into the set-feed-group command. */
-	pillSelect: GuiEmbyFeedGroup | null;
-	/** The `/` filter's text: the list paints only the rows whose title
-	 * contains it, without case (design D7's filter rule, the rail's keyboard
-	 * path). */
-	filter: string;
-}
+/** The Emby list's interaction state: the shared pill-list state over the
+ * feed-group pill, whose focus the pill row keeps as the group's stable key
+ * (`embyGroupKey`) rather than the group itself (design D6, row 8.1). */
+export type EmbyUiState = PillListUiState<GuiEmbyFeedGroup, string>;
 
 /** The state a freshly mounted Emby list starts with. */
 export function initialEmbyUi(): EmbyUiState {
-	return {
-		cursor: null,
-		scrollTop: 0,
-		viewportHeight: 0,
-		focusedPill: null,
-		pillSelect: null,
-		filter: '',
-	};
+	return initialPillListUi<GuiEmbyFeedGroup, string>();
 }
 
+/** The Emby pill list: the rows the carried frame builds under the filter —
+ * the plain mode's rows under their letter headings, or the feed-group mode's
+ * flat rows — the heading-skipping cursor movement, and the pill focus stored
+ * as the group's key (row 7C.1). */
+const pillList = createPillList<
+	GuiEmbyFrame,
+	EmbyListRow,
+	EmbyItemRow,
+	GuiEmbyFeedGroup,
+	string,
+	GuiEmbyFrame['pills'][number]
+>({
+	frame: libraryEmby,
+	buildRows: (emby, filter) => buildEmbyRows(emby.rows, emby.feedGroup, filter),
+	itemOf: (row) => (row.kind === 'item' ? row : null),
+	move: moveEmbyCursor,
+	pills: (emby) => emby.pills,
+	pillOf: (entry) => entry.group,
+	pillKey: embyGroupKey,
+	focusOf: embyGroupKey,
+	focusKey: (key) => key,
+});
+
 /** The Emby list's interaction state. */
-export const embyUi = writable<EmbyUiState>(initialEmbyUi());
+export const embyUi = pillList.ui;
 
 /** The painted rows of the carried Emby content (row 8.1): the plain mode's
  * rows under their letter headings, or the feed-group mode's flat rows. */
-function embyRows(filter = get(embyUi).filter): EmbyListRow[] {
-	const emby = libraryEmby();
-	return emby === null ? [] : buildEmbyRows(emby.rows, emby.feedGroup, filter);
-}
-
-/** The row the cursor rests on, or `null` while no painted row carries it. */
-function cursorRow(list: readonly EmbyListRow[], cursor: string | null): EmbyItemRow | null {
-	const row = list.find((candidate) => candidate.id === cursor);
-	return row === undefined || row.kind === 'heading' ? null : row;
+function embyRows(): EmbyListRow[] {
+	return pillList.rows();
 }
 
 /** The row the Emby cursor rests on, or `null` (row 8.1): the keys read it to
  * play the row, play it next, or queue it. */
 export function embyCursorRow(): EmbyItemRow | null {
-	return cursorRow(embyRows(), get(embyUi).cursor);
-}
-
-/** The state once the painted rows may have narrowed (row 8.1): the cursor
- * keeps its row while that row still paints, and falls to the first painted
- * row otherwise, with the scroll offset showing it — the Music filter's own
- * resolve (design D7). */
-function resolveEmbyCursor(ui: EmbyUiState): EmbyUiState {
-	const list = embyRows(ui.filter);
-	const cursor = list.some((row) => row.id === ui.cursor)
-		? ui.cursor
-		: moveEmbyCursor(list, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	return pillList.cursorRow();
 }
 
 /** Narrow the list to the titles that contain `filter`, without case (design
  * D7's filter rule): the cursor follows the rows. */
 export function setEmbyFilter(filter: string): void {
-	embyUi.update((ui) => resolveEmbyCursor({ ...ui, filter }));
+	pillList.setFilter(filter);
 }
 
 /** Close the filter with Esc: the text goes with it, so a closed filter
  * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
 export function closeEmbyFilter(): void {
-	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
-	embyUi.update((ui) => resolveEmbyCursor({ ...ui, filter: '' }));
+	pillList.closeFilter();
 }
 
 /** Accept the filter with Enter: the field closes and the list keeps the
  * text (design D3, step 2). */
 export function acceptEmbyFilter(): void {
-	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	pillList.acceptFilter();
 }
 
 /** Select the row (row 8.1): the select command the core stores, whose frame
@@ -119,17 +99,10 @@ export function acceptEmbyFilter(): void {
  * closes an open menu, because the facts they paint belong to the previous row,
  * as a Music pick's do. */
 export function selectEmbyRow(row: EmbyListRow): void {
-	const emby = libraryEmby();
-	if (emby === null || row.kind === 'heading') {
+	if (row.kind === 'heading') {
 		return;
 	}
-	void sendLibraryCommand({ command: 'embySelect', libIdx: emby.libIdx, row: row.row.id });
-	libraryUi.update((ui) => ({
-		...ui,
-		heroDismissed: false,
-		itemMenuOpen: false,
-		rowMenu: null,
-	}));
+	pillList.select((emby) => ({ command: 'embySelect', libIdx: emby.libIdx, row: row.row.id }));
 }
 
 /** Press a row (row 8.1): the press selects the row the Hero shows, as a Home
@@ -143,29 +116,29 @@ export function pressEmbyRow(row: EmbyListRow): void {
  * folder-play rule expands a collection row. The row id is the item's stable
  * Service id. */
 export function playEmbyRow(rowId: string): void {
-	const emby = libraryEmby();
-	if (emby === null) {
-		return;
-	}
-	void sendLibraryCommand({ command: 'embyPlay', libIdx: emby.libIdx, itemId: rowId });
+	sendIfLoaded(libraryEmby(), (emby) => ({
+		command: 'embyPlay',
+		libIdx: emby.libIdx,
+		itemId: rowId,
+	}));
 }
 
 /** Play a row next (row 8.1): `n` on the cursor row. */
 export function playEmbyRowNext(rowId: string): void {
-	const emby = libraryEmby();
-	if (emby === null) {
-		return;
-	}
-	void sendLibraryCommand({ command: 'embyPlayNext', libIdx: emby.libIdx, itemId: rowId });
+	sendIfLoaded(libraryEmby(), (emby) => ({
+		command: 'embyPlayNext',
+		libIdx: emby.libIdx,
+		itemId: rowId,
+	}));
 }
 
 /** Add a row to the queue's tail (row 8.1): `a` on the cursor row. */
 export function queueEmbyRow(rowId: string): void {
-	const emby = libraryEmby();
-	if (emby === null) {
-		return;
-	}
-	void sendLibraryCommand({ command: 'embyQueue', libIdx: emby.libIdx, itemId: rowId });
+	sendIfLoaded(libraryEmby(), (emby) => ({
+		command: 'embyQueue',
+		libIdx: emby.libIdx,
+		itemId: rowId,
+	}));
 }
 
 /** Move the list's cursor one movement along (row 8.1): Up and Down move a row,
@@ -173,18 +146,7 @@ export function queueEmbyRow(rowId: string): void {
  * ends, stepping over the letter headings. The scroll offset follows, so the
  * cursor row stays fully visible. */
 export function moveEmbyListCursor(move: ListMove): void {
-	const list = embyRows();
-	const current = get(embyUi);
-	const view = listWindow(list, current.scrollTop, current.viewportHeight);
-	const cursor = moveEmbyCursor(list, current.cursor, move, view.end - view.start);
-	if (cursor === current.cursor) {
-		return;
-	}
-	embyUi.update((ui) => ({
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	}));
+	pillList.moveCursor(move);
 }
 
 /** Jump to a letter of the rail (row 8.1, design D7): the cursor moves to the
@@ -206,57 +168,32 @@ export function jumpEmbyToLetter(letter: string): void {
 /** Report the list's measured viewport height (row 8.1): the rows in view
  * follow it, and the scroll offset stays inside the narrower range. */
 export function measureEmbyList(viewportHeight: number): void {
-	embyUi.update((ui) => ({
-		...ui,
-		viewportHeight,
-		scrollTop: clampScrollTop(embyRows(), ui.scrollTop, viewportHeight),
-	}));
+	pillList.measure(viewportHeight);
 }
 
 /** Report the list's native scroll offset (row 8.1): a user scroll moves the
  * rows in view, and the offset stays inside the list's range. */
 export function scrollEmbyList(scrollTop: number): void {
-	embyUi.update((ui) => {
-		const top = clampScrollTop(embyRows(), Math.max(scrollTop, 0), ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
-	});
+	pillList.scroll(scrollTop);
 }
 
 /** The pill the pill row's focus holds, resolved against the carried pills so a
  * stale group focuses nothing (row 8.1). */
 export function focusedEmbyPill(emby: GuiEmbyFrame): GuiEmbyFeedGroup | null {
-	const { focusedPill } = get(embyUi);
-	if (focusedPill === null) {
-		return null;
-	}
-	return emby.pills.find((pill) => embyGroupKey(pill.group) === focusedPill)?.group ?? null;
+	return pillList.focusedPill(emby);
 }
 
 /** Move the focused pill one pill along the row (row 8.1): Right and Left walk
  * the pills, and the first of them with no pill focused takes the end it walks
  * from. */
 export function moveEmbyPillFocus(step: number): void {
-	const row = libraryEmby()?.pills ?? [];
-	if (row.length === 0) {
-		return;
-	}
-	const at = row.findIndex((pill) => embyGroupKey(pill.group) === get(embyUi).focusedPill);
-	const next =
-		at === -1
-			? step > 0
-				? 0
-				: row.length - 1
-			: Math.min(Math.max(at + step, 0), row.length - 1);
-	const pill = row[next];
-	if (pill !== undefined) {
-		embyUi.update((ui) => ({ ...ui, focusedPill: embyGroupKey(pill.group) }));
-	}
+	pillList.movePillFocus(step);
 }
 
 /** Ask for the focused pill to be selected: Space and Enter request it (row
  * 8.1). */
 export function requestEmbyPillSelect(group: GuiEmbyFeedGroup): void {
-	embyUi.update((ui) => ({ ...ui, pillSelect: group }));
+	pillList.requestPillSelect(group);
 }
 
 /** Select the feed group `group` of the plain Emby library `libIdx` (row 8.1):
@@ -270,10 +207,8 @@ export function selectEmbyPill(libIdx: number, group: GuiEmbyFeedGroup): void {
 /** Turn the keys' pill request into the set-feed-group command the pill sends
  * (row 8.1). The intent is consumed here, so one key sends one command. */
 export function applyEmbyPillSelect(libIdx: number): void {
-	const { pillSelect } = get(embyUi);
-	if (pillSelect === null) {
-		return;
+	const group = pillList.takePillSelect();
+	if (group !== null) {
+		selectEmbyPill(libIdx, group);
 	}
-	embyUi.update((ui) => ({ ...ui, pillSelect: null }));
-	selectEmbyPill(libIdx, pillSelect);
 }
