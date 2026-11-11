@@ -347,14 +347,6 @@ impl App {
         }
     }
 
-    /// The Library section's routable libraries (design D9): the loaded route
-    /// rows, `None` until the section's fetch lands. The front end paints each
-    /// one's assigned device and sends `assignRoute` for the library it edits.
-    #[must_use]
-    pub fn gui_settings_routes(&self) -> Option<Vec<GuiSettingsRouteProjection>> {
-        self.gui_settings().and_then(|state| state.routes)
-    }
-
     /// The Library section's content (design D9): its F2 choice rows, the
     /// routable libraries, the selected library, and that library's candidate
     /// devices. The front end sends `routeDevices` when the user selects a
