@@ -7,6 +7,9 @@
 	// rail cannot hold the list — and paints no divider. Below the
 	// `libraryArrangement` Mini threshold (measured as the window width
 	// minus that width) only the pane that holds the keyboard shows.
+	// The root carries `min-w-0 flex-1`: `App.svelte` gives it a row of a
+	// flex container, so without them the screen shrinks to its content
+	// width instead of taking the canvas (live finding, Settings screen).
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import type { GuiSettingsFrame, GuiSettingsSection, GuiStatusBar } from '$lib/bridge/types';
 	import { currentSettingsEntries, cursorEntryId, settingsUi } from '$lib/settings/state';
@@ -73,7 +76,7 @@
 </script>
 
 <div
-	class="flex h-full min-h-0 flex-col"
+	class="flex h-full min-h-0 min-w-0 flex-1 flex-col"
 	style:background="var(--canvas-library-column)"
 	data-settings-screen=""
 	data-settings-arrangement={arrangement}
