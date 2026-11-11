@@ -9,6 +9,7 @@
 	// `attr` names the destination's own attributes (`data-library-shows-hero-art`),
 	// so a destination's tests keep their hook.
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import { heroAttr } from '$lib/library/hero';
 	import { canvasVar } from '$lib/bridge/theme';
 
 	/** The artwork box policy's shape, as every Hero's frames carry it. */
@@ -37,7 +38,7 @@
 
 	/** The destination's attribute name for one part of the art box. */
 	function own(name: string): string {
-		return attr === '' ? `data-library-hero-${name}` : `data-library-${attr}-hero-${name}`;
+		return heroAttr(attr, name);
 	}
 
 	/** The canvas's box width: the Music Hero's 300 px side, which the

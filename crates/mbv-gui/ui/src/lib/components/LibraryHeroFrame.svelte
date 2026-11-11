@@ -23,6 +23,7 @@
 	// `data-library-shows-hero-*`, so a destination's tests keep their hooks.
 	import type { Snippet } from 'svelte';
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import { heroAttr } from '$lib/library/hero';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
 
 	interface Props {
@@ -75,8 +76,7 @@
 
 	/** The destination's own attribute for one part. */
 	function own(name: string, value = ''): Record<string, string> {
-		const prefix = attr === '' ? 'data-library-hero' : `data-library-${attr}-hero`;
-		return { [`${prefix}-${name}`]: value };
+		return { [heroAttr(attr, name)]: value };
 	}
 </script>
 

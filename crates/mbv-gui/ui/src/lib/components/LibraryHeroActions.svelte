@@ -4,6 +4,7 @@
 	// destination supplies its handler. The one set every Hero's action row
 	// paints, inside the row `LibraryHeroSummary` or `LibraryHeroFrame` owns.
 	import { Play } from '@lucide/svelte';
+	import { heroAttr } from '$lib/library/hero';
 
 	interface Props {
 		/** The destination's own attribute prefix, as in `shows` or `abs`. */
@@ -19,7 +20,7 @@
 
 	/** The destination's own attribute, so a destination's tests keep their hook. */
 	function own(name: string): Record<string, string> {
-		return { [`data-library-${attr}-hero-${name}`]: '' };
+		return { [heroAttr(attr, name)]: '' };
 	}
 </script>
 

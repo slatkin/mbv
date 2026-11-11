@@ -18,7 +18,7 @@
   cursor — the picked item is the one item the frame's entries are about.
 -->
 <script lang="ts">
-	import { Ellipsis, Play, Shuffle } from '@lucide/svelte';
+	import { Ellipsis, Shuffle } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiMusicFrame } from '$lib/bridge/types';
 	import { albumFacts, artistFacts, artistUnionAlbums, heroKicker } from '$lib/library/hero';
@@ -27,6 +27,7 @@
 		libraryUi,
 		openLibraryItemMenu,
 	} from '$lib/library/state';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryTracklist from './LibraryTracklist.svelte';
 	import QueueRowMenu from './QueueRowMenu.svelte';
@@ -113,61 +114,12 @@
 
 {#if hero !== null}
 	{#snippet actions()}
-		<button
-			type="button"
-			class="flex items-center"
-			style:height="44px"
-			style:padding="0 18px 0 14px"
-			style:gap="8px"
-			style:background="var(--canvas-accent)"
-			style:border="0"
-			style:border-radius="22px"
-			style:color="var(--canvas-ink)"
-			style:font-size="15px"
-			style:font-weight="600"
-			style:cursor="pointer"
-			data-library-hero-play=""
-			onclick={() => play(hero.album.albumId)}
-		>
-			<Play size={16} fill="var(--canvas-ink)" strokeWidth={0} />
-			Play
-		</button>
-		<button
-			type="button"
-			class="flex items-center"
-			style:height="44px"
-			style:padding="0 14px"
-			style:gap="8px"
-			style:background="var(--canvas-library-raise)"
-			style:border="1px solid var(--canvas-library-control)"
-			style:border-radius="22px"
-			style:color="var(--canvas-text)"
-			style:font-size="14px"
-			style:cursor="pointer"
-			data-library-hero-play-next=""
-			onclick={() => playNext(hero.album.albumId)}
-		>
-			Play next
-			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)">n</span>
-		</button>
-		<button
-			type="button"
-			class="flex items-center"
-			style:height="44px"
-			style:padding="0 14px"
-			style:gap="8px"
-			style:background="var(--canvas-library-raise)"
-			style:border="1px solid var(--canvas-library-control)"
-			style:border-radius="22px"
-			style:color="var(--canvas-text)"
-			style:font-size="14px"
-			style:cursor="pointer"
-			data-library-hero-add=""
-			onclick={() => addToQueue(hero.album.albumId)}
-		>
-			Add to queue
-			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-muted)">a</span>
-		</button>
+		<LibraryHeroActions
+			attr=""
+			onplay={() => play(hero.album.albumId)}
+			onplaynext={() => playNext(hero.album.albumId)}
+			onqueue={() => addToQueue(hero.album.albumId)}
+		/>
 		{#if menu.length > 0}
 			<!-- The picked item's More actions: the dropped entries are the ones the
 			Hero's own buttons already send, so an album whose menu left empty paints

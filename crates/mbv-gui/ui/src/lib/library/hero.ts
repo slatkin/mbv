@@ -130,3 +130,12 @@ export function heroMetaRows(facts: {
 					: 'meta',
 	}));
 }
+
+/** The attribute name of one part of a destination's Hero (add-gui-library-panel
+ * design D15): `data-library-hero-<name>` for Music (`attr` empty) and
+ * `data-library-<attr>-hero-<name>` for the rest. The one rule the frame, the
+ * artwork arm, and the action buttons share, so a destination's hooks stay
+ * stable. */
+export function heroAttr(attr: string, name: string): string {
+	return attr === '' ? `data-library-hero-${name}` : `data-library-${attr}-hero-${name}`;
+}
