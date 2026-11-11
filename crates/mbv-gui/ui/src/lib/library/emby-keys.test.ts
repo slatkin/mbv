@@ -99,7 +99,7 @@ const FEED: GuiEmbyRow[] = [
 const EMBY_HERO: GuiEmbyHero = {
 	kind: 'movie',
 	title: 'Alien',
-	metaRows: ['1979 · 1 h 57 m'],
+	metaRows: [[{ text: '1979 · 1 h 57 m', kind: 'time' }]],
 	durationRow: 0,
 	progressRow: null,
 	overview: null,

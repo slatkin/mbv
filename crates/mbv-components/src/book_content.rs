@@ -29,6 +29,7 @@ use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use mbv_ui_msg::{
@@ -322,14 +323,18 @@ impl BookContent {
         let queue_item = audiobookshelf_book_queue_item(&self.state)?;
         let mut data = hero_content_queue(&queue_item);
         if let Some(narrator) = book.narrator.as_deref().filter(|value| !value.is_empty()) {
-            data.facts.meta_rows.push(format!("Read by {narrator}"));
+            data.facts
+                .meta_rows
+                .push(vec![MetaSegment::plain(format!("Read by {narrator}"))]);
         }
         if let Some(year) = book
             .published_year
             .as_deref()
             .filter(|value| !value.is_empty())
         {
-            data.facts.meta_rows.push(year.to_string());
+            data.facts
+                .meta_rows
+                .push(vec![MetaSegment::new(year.to_string(), MetaKind::Date)]);
         }
         data.overview = book
             .description

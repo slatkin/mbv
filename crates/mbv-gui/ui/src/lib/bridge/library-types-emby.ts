@@ -1,7 +1,7 @@
 // The Emby-library destination's wire types (add-gui-library-panel design D12,
 // row 8.1), split out of library-types.ts; re-exported there.
 
-import type { GuiLibraryArt } from './library-types';
+import type { GuiLibraryArt, GuiMetaRow } from './library-types';
 
 /** The feed-group pill a press selects (design D12, row 8.1): `New` (the
  * destination Latest view), `All`, or one root folder by its stable Service
@@ -87,7 +87,7 @@ export interface GuiEmbyHero {
 	 * `video`, as the projection carries it. */
 	kind: string;
 	title: string;
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 	overview: string | null;

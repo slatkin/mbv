@@ -5,7 +5,7 @@
 // `library-types.ts` re-exports this family with the rest of the Library's
 // wire types, so every call site keeps importing from the one bridge module.
 
-import type { GuiLibraryArt } from './library-types';
+import type { GuiLibraryArt, GuiMetaRow } from './library-types';
 
 /** One Home row's stable identity (add-gui-library-panel design D12): the
  * identity the Home paths resolve, addressed by Service ids and never by a
@@ -76,7 +76,7 @@ export interface GuiHomeHero {
 	/** The hero's title. */
 	title: string;
 	/** The meta rows in display order. */
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	/** Which meta row paints the duration role, when one does. */
 	durationRow: number | null;
 	/** Which meta row paints the progress role, when one does. */

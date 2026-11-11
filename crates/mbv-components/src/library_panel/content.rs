@@ -9,6 +9,7 @@ use ratatui::layout::Rect;
 
 use crate::inline_search::InlineSearch;
 use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::meta::{MetaSegment, meta_row_text};
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task
@@ -110,7 +111,8 @@ pub fn painted_shape_for_pixels(width: u32, height: u32) -> ArtworkShape {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HeroFacts {
     pub title: String,
-    pub meta_rows: Vec<String>,
+    /// Typed segments per meta row; the TUI paints each row's joined text.
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     pub duration_row: Option<usize>,
     pub progress_row: Option<usize>,
     pub links: Vec<HeroLink>,
@@ -121,12 +123,13 @@ impl HeroFacts {
     /// Title followed by meta rows, in display order — the raw entry
     /// sequence the Landscape two-column grid packs and positions against
     /// (`hero_header.rs`, `overview_box.rs`).
-    pub fn entries(&self) -> impl Iterator<Item = &String> {
-        std::iter::once(&self.title).chain(self.meta_rows.iter())
+    pub fn entries(&self) -> impl Iterator<Item = String> + '_ {
+        std::iter::once(self.title.clone())
+            .chain(self.meta_rows.iter().map(|row| meta_row_text(row)))
     }
 
     /// [`Self::entries`] with empty rows skipped.
-    pub fn live_entries(&self) -> impl Iterator<Item = &String> {
+    pub fn live_entries(&self) -> impl Iterator<Item = String> + '_ {
         self.entries().filter(|line| !line.is_empty())
     }
 }

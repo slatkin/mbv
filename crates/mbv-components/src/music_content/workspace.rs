@@ -8,6 +8,7 @@ use super::{
     music_album_artwork, trunc_str, wide_album_metadata,
 };
 use crate::now_playing::apply_emby_now_playing;
+use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 pub fn track_row_label(track: &EmbyItem, index: usize) -> String {
     let number = if track.index_number > 0 {
@@ -87,13 +88,16 @@ fn artist_hero_data(
     image: HeroImageState,
 ) -> HeroContentData {
     let summary = &detail.summary;
-    let mut meta_rows = vec![format!(
-        "{} album{}",
-        summary.album_count,
-        if summary.album_count == 1 { "" } else { "s" }
-    )];
+    let mut meta_rows = vec![vec![MetaSegment::new(
+        format!(
+            "{} album{}",
+            summary.album_count,
+            if summary.album_count == 1 { "" } else { "s" }
+        ),
+        MetaKind::Count,
+    )]];
     if let Some(span) = summary.year_span() {
-        meta_rows.push(span);
+        meta_rows.push(vec![MetaSegment::new(span, MetaKind::Date)]);
     }
     artwork.image = image;
     HeroContentData {
@@ -577,10 +581,14 @@ impl MusicContent {
             data.facts.title = title;
             data.facts.meta_rows.clear();
             if !artist.is_empty() && artist != "Unknown Artist" {
-                data.facts.meta_rows.push(artist.clone());
+                data.facts
+                    .meta_rows
+                    .push(vec![MetaSegment::plain(artist.clone())]);
             }
             if year > 0 {
-                data.facts.meta_rows.push(year.to_string());
+                data.facts
+                    .meta_rows
+                    .push(vec![MetaSegment::new(year.to_string(), MetaKind::Date)]);
             }
         }
         data.facts.artwork.image = self.hero_image.clone();

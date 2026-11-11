@@ -19,6 +19,7 @@ use mbv_ui_model::ui_util::fmt_publish_date_short;
 
 use super::GuiLibraryArtwork;
 use crate::app::App;
+use mbv_ui_model::meta::MetaSegment;
 
 /// One Home row's stable identity (design D12): the identity
 /// `App::home_stable_target` resolves, addressed by Service ids and never by
@@ -143,7 +144,7 @@ pub struct GuiHomeHero {
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does. The shared

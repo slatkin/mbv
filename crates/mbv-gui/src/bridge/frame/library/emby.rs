@@ -10,6 +10,7 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use super::{GuiArtShapeFrame, GuiLibraryArt};
 
 /// The plain Emby-library destination's content (row 8.1), present while a
@@ -125,7 +126,7 @@ pub struct GuiEmbyHeroFrame {
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
@@ -219,7 +220,7 @@ impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
         Self {
             kind: hero.kind.clone(),
             title: hero.title.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),

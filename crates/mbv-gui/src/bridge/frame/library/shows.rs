@@ -11,6 +11,7 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryArt};
 
 /// The Shows destination's content (add-gui-library-panel design D12, the
@@ -153,7 +154,7 @@ pub struct GuiShowsHeroFrame {
     /// The name of the largest unit the item belongs to; see the projection.
     pub parent: Option<String>,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
@@ -300,7 +301,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
         Self {
             title: hero.title.clone(),
             parent: hero.parent.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),

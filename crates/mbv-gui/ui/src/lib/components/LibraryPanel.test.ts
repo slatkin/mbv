@@ -185,7 +185,7 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {
 				title: 'Better Call Saul',
-				metaRows: ['1 h 47 m left'],
+				metaRows: [[{ text: '1 h 47 m left', kind: 'time' }]],
 				durationRow: 0,
 				progressRow: null,
 				overview: null,
@@ -316,7 +316,7 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 				? null
 				: {
 						title: 'Atlanta',
-						metaRows: ['4 seasons'],
+						metaRows: [[{ text: '4 seasons', kind: 'count' }]],
 						durationRow: null,
 						progressRow: null,
 						overview: null,
@@ -389,7 +389,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 		emby: null,
 		audiobooks: audiobooks({
 			title: 'Aftermath',
-			metaRows: ['Bill Wyman', '4:32'],
+			metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 			durationRow: 0,
 			progressRow: null,
 			overview: null,
@@ -452,7 +452,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 		emby: null,
 		audiobooks: audiobooks({
 			title: 'Aftermath',
-			metaRows: ['Bill Wyman', '4:32'],
+			metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 			durationRow: 0,
 			progressRow: null,
 			overview: null,
@@ -515,7 +515,7 @@ test('the Feeds content mounts the Feeds pills, list, and Hero and none of the o
 		podcasts: null,
 		feeds: feeds({
 			title: 'Entry A',
-			metaRows: ['Sub One', '12:30'],
+			metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
 			durationRow: 1,
 			progressRow: null,
 			artShape: 'square',
@@ -620,7 +620,7 @@ function emby(feedGroup: boolean): GuiEmbyFrame {
 		hero: {
 			kind: 'movie',
 			title: 'Alien',
-			metaRows: ['1979'],
+			metaRows: [[{ text: '1979', kind: 'date' }]],
 			durationRow: 0,
 			progressRow: null,
 			overview: null,

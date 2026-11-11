@@ -138,7 +138,7 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
     assert_eq!(
-        hero.meta_rows,
+        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
         vec!["Jane Austen", "01:00:00", "50%"],
         "the TUI hero producer's facts ride"
     );
@@ -599,7 +599,7 @@ fn the_book_hero_restores_the_narrator_year_and_description() {
 
     let hero = projection.hero.expect("the Hero paints");
     assert_eq!(
-        hero.meta_rows,
+        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
         vec!["Jane Austen", "30:00", "Read by Anna Fields", "1999"],
         "the catalog's narrator and year ride the producer's rows"
     );

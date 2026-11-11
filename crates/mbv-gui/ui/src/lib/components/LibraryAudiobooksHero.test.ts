@@ -69,7 +69,7 @@ function mountFrame(heroFacts: GuiAudiobooksHero | null, frameLoading = false): 
 function hero(facts: Partial<GuiAudiobooksHero> = {}): GuiAudiobooksHero {
 	return {
 		title: 'The Caves of Steel',
-		metaRows: ['Isaac Asimov', '9 h 51 m', '17%'],
+		metaRows: [[{ text: 'Isaac Asimov', kind: 'plain' }], [{ text: '9 h 51 m', kind: 'time' }], [{ text: '17%', kind: 'plain' }]],
 		durationRow: 1,
 		progressRow: 2,
 		overview: null,

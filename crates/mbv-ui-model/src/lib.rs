@@ -42,6 +42,7 @@ pub mod home_latest;
 pub mod library;
 pub mod library_tab;
 pub mod media_list;
+pub mod meta;
 pub mod music_artist_detail;
 pub mod music_grouping;
 pub mod now_playing;

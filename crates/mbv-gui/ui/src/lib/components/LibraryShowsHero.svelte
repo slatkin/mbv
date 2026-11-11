@@ -22,7 +22,7 @@
 	import LibraryPillButton from './LibraryPillButton.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
-	import { heroLayout } from '$lib/library/hero';
+	import { heroLayout, metaRowText } from '$lib/library/hero';
 	import type { GuiShowsEpisodeRow, GuiShowsFrame } from '$lib/bridge/types';
 	import {
 		episodeProgress,
@@ -166,7 +166,10 @@
 		header={episodeLayout?.header ?? {
 			kicker: 'series',
 			title: hero.title,
-			facts: hero.metaRows.filter((row) => row !== '').join(' · '),
+			facts: hero.metaRows
+				.map(metaRowText)
+				.filter((row) => row !== '')
+				.join(' · '),
 		}}
 		block={episodeLayout?.block ?? {
 			label: hero.title,

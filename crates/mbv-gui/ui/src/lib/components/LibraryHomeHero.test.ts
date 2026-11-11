@@ -33,7 +33,7 @@ const SELECTED = { kind: 'continue', id: 'e1' } as const;
 function hero(artShape: GuiHomeHero['artShape'] = 'landscape'): GuiHomeHero {
 	return {
 		title: 'Better Call Saul',
-		metaRows: ['1 h 47 m left', 'S3E4 · Sabrosito'],
+		metaRows: [[{ text: '1 h 47 m left', kind: 'time' }], [{ text: 'S3E4 · Sabrosito', kind: 'plain' }]],
 		durationRow: 0,
 		progressRow: null,
 		overview: 'Jimmy turns to paying work.',

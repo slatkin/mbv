@@ -51,7 +51,7 @@ function workspace(): GuiShowsWorkspace {
 function hero(overrides: Partial<GuiShowsHero> = {}): GuiShowsHero {
 	return {
 		title: 'Better Call Saul',
-		metaRows: ['TV Series', '5 seasons'],
+		metaRows: [[{ text: 'TV Series', kind: 'plain' }], [{ text: '5 seasons', kind: 'count' }]],
 		durationRow: null,
 		progressRow: null,
 		overview: 'A lawyer turns to the wrong clients.',

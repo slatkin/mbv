@@ -31,6 +31,7 @@ use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
 use super::podcasts::GuiPodcastPill;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
+use mbv_ui_model::meta::MetaSegment;
 
 /// One episode's stable identity across every list view (row 10.1): the
 /// provider's `(library_item_id, episode_id)` pair — the identity the progress
@@ -145,7 +146,7 @@ pub struct GuiPodcastsHero {
     pub parent: Option<String>,
     /// The meta rows in display order: the show title, the duration, and the
     /// publish date, exactly as the producer orders them.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role. The shared producer fills

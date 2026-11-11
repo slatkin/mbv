@@ -10,6 +10,7 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use super::{GuiArtShapeFrame, GuiLibraryArt};
 
 /// The Audiobooks destination's content (add-gui-library-panel design D12,
@@ -64,7 +65,7 @@ pub struct GuiAudiobooksHeroFrame {
     pub title: String,
     /// The meta rows in display order: the author, the duration, and the
     /// `Finished` or `N%` progress row.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
@@ -148,7 +149,7 @@ impl From<&GuiAudiobooksHero> for GuiAudiobooksHeroFrame {
     fn from(hero: &GuiAudiobooksHero) -> Self {
         Self {
             title: hero.title.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),

@@ -10,7 +10,7 @@ test('an item with a parent puts the parent in the header and the item in the bl
 		{
 			title: 'B New',
 			parent: 'Show B',
-			metaRows: ['0 h 54 m', '08 Oct'],
+			metaRows: [[{ text: '0 h 54 m', kind: 'time' }], [{ text: '08 Oct', kind: 'date' }]],
 			durationRow: 0,
 			progressRow: null,
 		},
@@ -26,7 +26,7 @@ test('an item that is its own largest unit titles the header and leaves the bloc
 	const layout = heroLayout(
 		{
 			title: 'The Caves of Steel',
-			metaRows: ['Isaac Asimov', '9 h 51 m', '17%'],
+			metaRows: [[{ text: 'Isaac Asimov', kind: 'plain' }], [{ text: '9 h 51 m', kind: 'time' }], [{ text: '17%', kind: 'plain' }]],
 			durationRow: 1,
 			progressRow: 2,
 		},

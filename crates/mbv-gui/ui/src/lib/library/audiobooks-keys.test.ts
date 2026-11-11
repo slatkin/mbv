@@ -130,7 +130,7 @@ function content(hero: GuiAudiobooksFrame['hero']): GuiLibraryContent {
 /** The selected book's Hero facts with its Workspace's chapter rows. */
 const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 	title: 'Aftermath',
-	metaRows: ['Bill Wyman', '4:32'],
+	metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 	durationRow: 0,
 	progressRow: null,
 	overview: null,

@@ -1,7 +1,7 @@
 // The Audiobooks destination's wire types (add-gui-library-panel design D12,
 // row 9.1), split out of library-types.ts; re-exported there.
 
-import type { GuiLibraryArt } from './library-types';
+import type { GuiLibraryArt, GuiMetaRow } from './library-types';
 
 /** The Audiobooks destination's content (design D12, row 9.1), present
  * while an Audiobookshelf book library is the active destination: the flat
@@ -54,7 +54,7 @@ export interface GuiAudiobooksHero {
 	title: string;
 	/** The meta rows in display order: the author, the duration, and the
 	 * `Finished` or `N%` progress row. */
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 	/** The cleaned description, when the catalog record carries one: the

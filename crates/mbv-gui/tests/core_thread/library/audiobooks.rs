@@ -187,8 +187,13 @@ fn the_frame_carries_the_book_list_after_the_open() {
     );
     let hero = audiobooks.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
+    let texts: Vec<String> = hero
+        .meta_rows
+        .iter()
+        .map(|row| row.iter().map(|segment| segment.text.as_str()).collect())
+        .collect();
     assert_eq!(
-        hero.meta_rows,
+        texts,
         ["Jane Austen", "02:00:00"],
         "the TUI hero producer's facts ride"
     );

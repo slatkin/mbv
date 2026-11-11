@@ -12,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use mbv_render::{WrappedHeroLine, paint_wide_hero_text, render_artwork_placeholder};
 use mbv_theme as palette;
 use mbv_theme::HERO_META_ROLES;
+use mbv_ui_model::meta::meta_row_text;
 use mbv_ui_model::ui_util::trunc_str;
 
 use super::super::content::{HeroContent, HeroFacts, HeroHeader};
@@ -119,14 +120,19 @@ fn paint_title_and_meta(
     link_hits: &mut crate::mouse::hit::HitRegions<usize>,
     grid: Option<(u16, u16)>,
 ) -> u16 {
-    let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
+    let row_texts: Vec<String> = facts
+        .meta_rows
+        .iter()
+        .map(|row| meta_row_text(row))
+        .collect();
+    let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + row_texts.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
         style: ratatui::style::Style::default()
             .fg(palette::Role::TextHeroTitle.color().to_ratatui()),
     });
     let mut cycle = 0usize;
-    for (index, row) in facts.meta_rows.iter().enumerate() {
+    for (index, row) in row_texts.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
             palette::Role::Duration.color().to_ratatui()
         } else if facts.progress_row == Some(index) {
@@ -139,7 +145,7 @@ fn paint_title_and_meta(
             fg
         };
         lines.push(WrappedHeroLine {
-            text: row,
+            text: row.as_str(),
             style: ratatui::style::Style::default().fg(fg),
         });
     }

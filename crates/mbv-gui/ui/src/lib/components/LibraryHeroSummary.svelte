@@ -13,12 +13,13 @@
 	// destination that paints a Hero adopts that rule rather than restating it.
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
-	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import type { GuiLibraryArt, GuiMetaRow } from '$lib/bridge/library-types';
+	import { metaRowText } from '$lib/library/hero';
 
 	/** The facts every Hero carries, as its frame declares them. */
 	interface HeroFacts {
 		title: string;
-		metaRows: string[];
+		metaRows: GuiMetaRow[];
 		durationRow: number | null;
 		progressRow: number | null;
 		/** The description; a destination with none omits it. */
@@ -89,21 +90,21 @@
 						class="font-mono tabular-nums"
 						style:font-size="13px"
 						style:color="var(--canvas-muted)"
-						{...own('role', 'duration')}>{meta}</span
+						{...own('role', 'duration')}>{metaRowText(meta)}</span
 					>
 				{:else if index === hero.progressRow}
 					<span
 						class="font-mono tabular-nums"
 						style:font-size="13px"
 						style:color="var(--canvas-accent)"
-						{...own('role', 'progress')}>{meta}</span
+						{...own('role', 'progress')}>{metaRowText(meta)}</span
 					>
 				{:else}
 					<span
 						class="font-mono"
 						style:font-size="13px"
 						style:color="var(--canvas-muted)"
-						{...own('role', 'meta')}>{meta}</span
+						{...own('role', 'meta')}>{metaRowText(meta)}</span
 					>
 				{/if}
 			{/each}

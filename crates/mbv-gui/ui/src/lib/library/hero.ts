@@ -9,6 +9,7 @@ import type {
 	GuiMusicFrame,
 	GuiMusicHero,
 	GuiMusicTrack,
+	GuiMetaRow,
 	GuiMusicTrackTotal,
 } from '$lib/bridge/types';
 import type { ListMove } from './list';
@@ -112,16 +113,22 @@ export interface HeroMetaRow {
 	role: 'meta' | 'duration' | 'progress';
 }
 
+/** The joined text of one Hero meta row, as the header and block paint it
+ * until a row paints its segments (design D14). */
+export function metaRowText(row: GuiMetaRow): string {
+	return row.map((segment) => segment.text).join('');
+}
+
 /** The meta rows of a Hero that shows one selected row (add-gui-library-panel
  * design D15): each row's text with its duration or progress role, as the
  * core's `durationRow` and `progressRow` indices mark them. */
 export function heroMetaRows(facts: {
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 }): HeroMetaRow[] {
-	return facts.metaRows.map((text, index) => ({
-		text,
+	return facts.metaRows.map((row, index) => ({
+		text: metaRowText(row),
 		role:
 			index === facts.durationRow
 				? 'duration'
@@ -145,7 +152,7 @@ export interface HeroLayoutFacts {
 	title: string;
 	/** The largest unit's name (show, feed, series), when the item has one. */
 	parent?: string | null;
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 	overview?: string | null;

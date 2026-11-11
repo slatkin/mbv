@@ -29,7 +29,7 @@ function hero(artShape: GuiFeedsHero['artShape']): GuiFeedsHero {
 	return {
 		title: 'The Long Road Home',
 		parent: 'Bits and Bites',
-		metaRows: ['0 h 54 m'],
+		metaRows: [[{ text: '0 h 54 m', kind: 'time' }]],
 		durationRow: 0,
 		progressRow: null,
 		artShape,

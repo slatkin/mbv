@@ -591,7 +591,7 @@ function feedsContent(): GuiLibraryContent {
 			selected: 's1::e1',
 			hero: {
 				title: 'Entry A',
-				metaRows: ['Sub One', '12:30'],
+				metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
 				durationRow: 1,
 				progressRow: null,
 				artShape: 'square',
@@ -632,7 +632,7 @@ function podcastsContent(): GuiLibraryContent {
 			selected: 'e1:ep1',
 			hero: {
 				title: 'Episode A',
-				metaRows: ['Show One', '34:00'],
+				metaRows: [[{ text: 'Show One', kind: 'plain' }], [{ text: '34:00', kind: 'time' }]],
 				durationRow: 1,
 				progressRow: null,
 				overview: null,
@@ -676,7 +676,7 @@ function embyContent(): GuiLibraryContent {
 			hero: {
 				kind: 'movie',
 				title: 'Alien',
-				metaRows: ['1979'],
+				metaRows: [[{ text: '1979', kind: 'date' }]],
 				durationRow: 0,
 				progressRow: null,
 				overview: null,
