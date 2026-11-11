@@ -3,7 +3,7 @@
 
 use super::super::{
     DaemonLoop, DaemonOwnerContext, apply_stopped_observation, apply_track_completed_observation,
-    broadcast, next_up_slot, settle_and_redispatch,
+    broadcast, next_up_slot, settle_and_redispatch, submit_queue_slots_for_replace,
 };
 use super::EventOutcome;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
@@ -13,7 +13,13 @@ use mbv_ctrl::{
 };
 use mbv_ids::ItemId;
 use mbv_queue::QueueSlotId;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// The minimum gap between two canonical-queue resubmits: a drift burst
+/// reports several observations for one external surgery, and the burst's
+/// events after the first resubmit coalesce into this window instead of
+/// restarting playback once per observation.
+const QUEUE_RESYNC_COOLDOWN: Duration = Duration::from_secs(2);
 
 impl DaemonLoop {
     /// `PlayerEvent::TrackChanged`: resolve the reported slot against the
@@ -297,6 +303,57 @@ impl DaemonLoop {
         }
     }
 
+    /// `PlayerEvent::QueueDesynced`: the run's mpv playlist and its queue copy
+    /// diverged, so the identity → mpv-index mapping every slot-addressed mpv
+    /// operation reads is gone. The canonical queue is the authority and mpv
+    /// is only its projection (mbv CONTEXT.md: Player owner, mpv), so the
+    /// owner resubmits the canonical queue: the run's copy and mpv's playlist
+    /// are rebuilt from the same slots. The start slot is the canonical
+    /// active slot and its start position is the player's current position,
+    /// so a resync during playback resumes where it was. A drift burst
+    /// reports several observations for one surgery; the resubmit's own
+    /// rebuild runs under the run's drift gate, so the gap guard only has to
+    /// coalesce the burst's remaining events.
+    pub(super) fn handle_queue_desynced(&mut self, reason: String) -> EventOutcome {
+        let now = Instant::now();
+        if now.duration_since(self.last_queue_resync) < QUEUE_RESYNC_COOLDOWN {
+            tracing::debug!(name: "daemon.queue_desync.coalesced", target: "daemon", reason = %reason, "a resync already ran inside the cooldown window");
+            return EventOutcome::CONTINUE;
+        }
+        self.last_queue_resync = now;
+        tracing::warn!(name: "daemon.queue_desync.resyncing", target: "daemon", reason = %reason, "the player run's playlist diverged from its queue copy; resubmitting the canonical queue");
+        let queue = self.owner.core.queue.clone();
+        let start_idx = queue
+            .active_slot_id()
+            .and_then(|slot| queue.slot_index(slot))
+            .unwrap_or(0);
+        let (active, position_ticks) = {
+            let status = self.player.status.lock().unwrap();
+            (status.active, status.position_ticks)
+        };
+        let start_position_secs = active.then(|| mbv_emby_model::ticks_to_seconds(position_ticks));
+        let submitted = submit_queue_slots_for_replace(
+            &self.player,
+            queue.slot_pairs(),
+            start_idx,
+            start_position_secs,
+            &self.client,
+        );
+        if !submitted && !queue.is_empty() {
+            tracing::warn!(name: "daemon.queue_desync.resubmit_rejected", target: "daemon", "the canonical queue's resubmit was rejected");
+            broadcast(
+                &self.ctrl_clients,
+                &CtrlEvent::Player(PlayerEvent::QueueDesynced(reason)),
+            );
+            return EventOutcome::CONTINUE;
+        }
+        // The resubmit re-seeds the run from the canonical queue; the
+        // observation the run reports settles the active slot on the next
+        // TrackChanged, so no observation clear rides here.
+        self.broadcast_owner_queue_state();
+        EventOutcome::CONTINUE
+    }
+
     /// One player observation, routed to the handler that owns it. Every
     /// event that carries queue or Next-Up evidence keeps its explicit arm;
     /// any other player event goes to `handle_player_event`.
@@ -314,6 +371,7 @@ impl DaemonLoop {
             PlayerEvent::QueueNextUp { next_idx } => self.handle_queue_next_up(next_idx),
             PlayerEvent::OutputStarted => self.handle_output_started(),
             pe @ PlayerEvent::TrackCompleted { .. } => self.handle_track_completed(pe),
+            PlayerEvent::QueueDesynced(reason) => self.handle_queue_desynced(reason),
             pe => self.handle_player_event(pe),
         }
     }

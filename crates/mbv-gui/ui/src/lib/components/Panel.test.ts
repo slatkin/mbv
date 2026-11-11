@@ -127,6 +127,7 @@ function frame(
 			dirty: null,
 		},
 		status: { prefixArmed: false, toast: null },
+		library: null,
 		theme: null,
 	};
 }
@@ -144,6 +145,7 @@ test('a tall container renders the expanded artboard', () => {
 	const { container, getByText } = render(Panel, {
 		frame: frame({ collapsed: false, queueFolded: false }),
 		container: TALL,
+		libraryVisible: false,
 	});
 
 	expect(container.querySelector('[data-panel-state="expanded"]')).toBeTruthy();
@@ -163,6 +165,7 @@ test('a container shorter than 520 px renders the compact strip', async () => {
 			{ queue: { ...queue(), rows: [item(2, 'Second track')], active: 1 } },
 		),
 		container: SHORT,
+		libraryVisible: false,
 	});
 
 	expect(container.querySelector('[data-panel-state="compactStrip"]')).toBeTruthy();
@@ -180,6 +183,7 @@ test('the strip paints the parent line alone while no slot follows the playhead'
 	const { getByText, queryByText } = render(Panel, {
 		frame: frame({ collapsed: false, queueFolded: false }, { nextTitle: null }),
 		container: SHORT,
+		libraryVisible: false,
 	});
 
 	expect(getByText('The Show')).toBeTruthy();
@@ -190,6 +194,7 @@ test('the queue-fold toggle replaces the rows with one summary line', async () =
 	const { container, getByText, queryByText } = render(Panel, {
 		frame: frame({ collapsed: false, queueFolded: true }),
 		container: TALL,
+		libraryVisible: false,
 	});
 
 	expect(container.querySelector('[data-panel-state="expandedWithoutQueue"]')).toBeTruthy();
@@ -208,6 +213,7 @@ test('the collapse toggle renders the 72 px rail', async () => {
 	const { container, getByText, queryByText } = render(Panel, {
 		frame: frame({ collapsed: true, queueFolded: false }),
 		container: TALL,
+		libraryVisible: false,
 	});
 
 	expect(container.querySelector('[data-panel-state="rail"]')).toBeTruthy();
@@ -226,4 +232,15 @@ test('the collapse toggle renders the 72 px rail', async () => {
 			'collapse',
 		]),
 	);
+});
+
+test('the collapsed rail paints the dim canvas fill, the TUI BgDim slot', () => {
+	const { container } = render(Panel, {
+		frame: frame({ collapsed: true, queueFolded: false }),
+		container: TALL,
+		libraryVisible: false,
+	});
+
+	const rail = container.querySelector<HTMLElement>('[data-panel-state="rail"]');
+	expect(rail?.style.background).toBe('var(--canvas-dim)');
 });

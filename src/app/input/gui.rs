@@ -124,12 +124,14 @@ impl App {
                 queue_only_idle: false,
                 idle_feed_link_available: self.idle_feed_link_available(),
             },
-            // The GUI's one blocking overlay is the open row menu, track
-            // popover, or playback-target chooser (add-tauri-gui-client rows
-            // 6.2 and 6.4): the same focus fact the TUI's mounted context
-            // menu reports, so the global bindings close while an overlay is
-            // up and the overlay's own key rules consume the chord. No other
-            // overlay mounts in this slice.
+            // The GUI's blocking overlays are the open row menu, track
+            // popover, playback-target chooser, confirmation modal, and
+            // daemon-lost dialog (add-tauri-gui-client rows 6.2 and 6.4, the
+            // last two raised by `ask_confirm` and
+            // `raise_daemon_lost_modal`): the same focus fact the TUI's
+            // mounted context menu reports, so the global bindings close
+            // while an overlay is up and the overlay's own key rules consume
+            // the chord.
             overlays: RouterOverlayState {
                 focus: if self.gui_overlay.is_some() {
                     OverlayFocus::ContextMenu
@@ -182,10 +184,11 @@ impl App {
                 // The open overlay owns the keyboard while it is up: the
                 // router resolved no command, and the overlay — the GUI's
                 // blocking overlay — consumes or drops the chord, never the
-                // panel beneath it.
+                // panel beneath it. The daemon-lost dialog's quit choice
+                // returns the Client's quit decision, which ends the run
+                // exactly as a routed quit key does.
                 if self.gui_overlay.is_some() {
-                    self.apply_gui_overlay_key(key);
-                    return false;
+                    return self.apply_gui_overlay_key(key);
                 }
                 // The queue filter's text entry: its key rules run here, and
                 // a chord they do not consume keeps falling through to the
@@ -269,13 +272,15 @@ impl App {
     /// (a GUI Client presents only the surfaces it has ported).
     fn handle_gui_queue_intent(&mut self, intent: QueueIntent) {
         match intent {
-            // The four intents whose TUI effect opens or reaches a surface
-            // the GUI does not present — the clear confirmation modal, the
-            // TUI's queue-column resize, the save-playlist dialog, and the
-            // Library-panel navigation — stay undelivered
+            // The clear request runs the TUI's own App action: the prompt the
+            // `c` chord raises, which the GUI now presents as its confirm
+            // overlay (the TUI's mounted Confirm modal). The three intents
+            // whose TUI effect opens or reaches a surface the GUI does not
+            // present — the TUI's queue-column resize, the save-playlist
+            // dialog, and the Library-panel navigation — stay undelivered
             // (a GUI Client presents only the surfaces it has ported).
-            QueueIntent::Clear
-            | QueueIntent::ResizeColumn(_)
+            QueueIntent::Clear => self.request_clear_queue(),
+            QueueIntent::ResizeColumn(_)
             | QueueIntent::SavePlaylist
             | QueueIntent::Navigate { .. } => {}
             QueueIntent::PlayNow => {
@@ -354,6 +359,11 @@ impl App {
             // chooser on the selection the sidebar's dismiss carries.
             ShellRequest::SelectSession(key) => {
                 if self.select_target_for_key(&key) {
+                    self.gui_overlay = None;
+                }
+            }
+            ShellRequest::SelectChooserTarget(key) => {
+                if self.select_chooser_target(&key) {
                     self.gui_overlay = None;
                 }
             }

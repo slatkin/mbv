@@ -9,6 +9,15 @@ impl App {
         self.emby_runtime.client.clone()
     }
 
+    /// Whether a Ready Emby client is installed. A Client reads this before
+    /// the shared startup step to tell a client the attach brought (a cached
+    /// client, which starts no Emby startup worker) from a launch that will
+    /// start one (add-gui-library-panel design D11).
+    #[must_use]
+    pub fn has_emby_client(&self) -> bool {
+        self.emby_runtime.client.is_some()
+    }
+
     pub(in crate::app) fn emby_snapshot(&self) -> Option<EmbyClient> {
         self.emby_client()
             .map(|client| client.lock().unwrap().clone())
@@ -39,7 +48,7 @@ impl App {
         match result {
             Ok(startup) => Some(self.apply_emby_startup(startup)),
             Err(error) => {
-                self.reject_emby_fill(&error, delete_secret);
+                self.reject_emby_startup(&error, delete_secret);
                 None
             }
         }
@@ -47,10 +56,8 @@ impl App {
 
     /// The failure half of an Emby startup attempt's completion: classify
     /// the failure into the runtime state, clear the saved credential when
-    /// Emby rejected it, and flash the result. The full startup and the GUI
-    /// Client's minimal client fill share it (add-tauri-gui-client design
-    /// D9's ruled exception).
-    fn reject_emby_fill(
+    /// Emby rejected it, and flash the result.
+    fn reject_emby_startup(
         &mut self,
         error: &mbv_emby::EmbyFailure,
         delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
@@ -75,35 +82,6 @@ impl App {
             self.flash(format!("Emby unavailable: {error}"), ToastSeverity::Warning);
         }
         tracing::warn!(name: "startup.emby.failed", target: "startup", state = ?state, error = %error, "Emby startup failed");
-    }
-
-    /// Apply the GUI Client's minimal Emby fill (add-tauri-gui-client
-    /// design D9's ruled exception): install the authenticated client and
-    /// run the session and cast discovery it feeds — none of the TUI
-    /// startup's bootstrap, websocket, or capability work.
-    pub(in crate::app) fn apply_emby_client_fill(
-        &mut self,
-        completion: crate::app::dispatch::session::service_startup::ClientFillCompletion,
-    ) {
-        if !self.emby_runtime.accepts(completion.generation) {
-            tracing::debug!(name: "startup.emby.stale_fill_completion_ignored", target: "startup", "ignored stale Emby client-fill completion");
-            return;
-        }
-        match completion.result {
-            Ok(client) => {
-                self.emby_runtime.client = Some(Arc::new(Mutex::new(client)));
-                self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
-                // The fill feeds the playback-target choices (design D4a):
-                // the same `/Sessions` fetch and cast browse the TUI
-                // spawns for its session panel.
-                self.spawn_sessions_load();
-                self.spawn_cast_discovery();
-                tracing::info!(name: "startup.emby.fill_completed", target: "startup", "Emby client fill completed");
-            }
-            Err(error) => {
-                self.reject_emby_fill(&error, mbv_config::clear_service_secret_result);
-            }
-        }
     }
 
     /// Applies a successful Emby startup: websocket, client, bootstrap content

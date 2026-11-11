@@ -181,6 +181,9 @@ pub enum ShellRequest {
     RefreshSessions,
     /// Activate the selected session/cast target by kind-qualified identity.
     SelectSession(mbv_ui_model::panel_targets::SessionTargetKey),
+    /// Select a playback-target chooser row: the local output, or a remote
+    /// target. The GUI chooser's rows send it.
+    SelectChooserTarget(mbv_ui_model::panel_targets::ChooserTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
     /// Hand the local Owner's queue off to the selected F3 target (design

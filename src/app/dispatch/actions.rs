@@ -333,6 +333,18 @@ impl App {
     }
 
     pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {
+        self.do_enqueue_folder_before(item, None);
+    }
+
+    /// [`App::do_enqueue_folder`] with the insertion anchor the folder's
+    /// playable items enter at: `before` is the owner slot they precede, and
+    /// `None` admits them at the tail (add-gui-library-panel design D8's play
+    /// next keeps a folder's items next).
+    pub(in crate::app) fn do_enqueue_folder_before(
+        &mut self,
+        item: &mbv_emby_model::EmbyItem,
+        before: Option<u64>,
+    ) {
         tracing::info!(name: "library_route.enqueue.requested", target: "library_route", item = %item.id, item_name = %item.name, "enqueue requested");
         let resolved = self.resolve_route_for_enqueue_folder(item);
         if self.enqueue_route_conflict(resolved.as_ref()) {
@@ -364,6 +376,7 @@ impl App {
                         .into_iter()
                         .map(|item| QueueItem::Emby(Box::new(item)))
                         .collect(),
+                    before,
                 );
             }
             Err(e) => {
@@ -398,7 +411,7 @@ impl App {
         // so both submit shapes target one link.
         let link = self.playing_queue_link();
         if !start_playback {
-            return self.append_on_owner(link, vec![item]);
+            return self.append_on_owner(link, vec![item], None);
         }
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -434,19 +447,18 @@ impl App {
         true
     }
 
+    /// Append `items` to `link`'s owner queue: `before` names the owner slot
+    /// the items enter ahead of, and `None` admits them at the tail (the
+    /// play-next path carries the slot after the active one, add-gui-library-
+    /// panel design D8).
     pub(in crate::app) fn append_on_owner(
         &mut self,
         link: crate::app::QueueLink,
         items: Vec<QueueItem>,
+        before: Option<u64>,
     ) -> bool {
         // Entries appear only when the owner's answered Append is adopted.
-        let sent = self.queue_op(
-            link,
-            mbv_remote_player::QueueOp::Append {
-                items,
-                before: None,
-            },
-        );
+        let sent = self.queue_op(link, mbv_remote_player::QueueOp::Append { items, before });
         if sent == QueueOpEdit::NotApplied {
             return false;
         }

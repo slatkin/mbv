@@ -14,6 +14,7 @@
 	// holds no interaction state).
 	import { onMount } from 'svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
+	import { QUEUE_RAIL_WIDTH_PX } from '$lib/bridge/arrangement';
 	import {
 		elementRegion,
 		observeLayout,
@@ -38,9 +39,10 @@
 	}
 	const { playback, art }: Props = $props();
 
-	/** The rail's width (the spec's 72 px) and the ring's geometry: the ring
-	 * hugs the artwork, and its stroke spans the played fraction. */
-	const RAIL_WIDTH_PX = 72;
+	/** The rail's width is the Queue panel's collapsed width
+	 * (`arrangement.ts`), the same number the window measures the Library column
+	 * against. The ring hugs the artwork, and its stroke spans the played
+	 * fraction. */
 	const RING_SIZE_PX = 52;
 	const RING_STROKE_PX = 3;
 	const RING_RADIUS_PX = (RING_SIZE_PX - RING_STROKE_PX) / 2;
@@ -103,12 +105,12 @@
 	control at the bottom. -->
 <div
 	class="flex h-full shrink-0 flex-col items-center"
-	style:width="{RAIL_WIDTH_PX}px"
+	style:width="{QUEUE_RAIL_WIDTH_PX}px"
 	style:padding="var(--mbv-cell-row) 0"
 	style:gap="var(--mbv-cell-row)"
 	bind:this={railEl}
 	data-panel-state="rail"
-	style:background={playback.shown ? 'var(--mbv-queuePlaybackBand)' : undefined}
+	style:background="var(--canvas-dim)"
 >
 	<!-- The artwork with the played fraction as a ring around it: the track
 		circle in the progress-track role, the arc in the accent. -->

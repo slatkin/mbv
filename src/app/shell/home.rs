@@ -31,14 +31,14 @@ impl Model {
     }
 
     fn home_play_request(&mut self, target: &HomeItemTarget) {
-        if let Some(item) = self.home_stable_target(target) {
+        if let Some(item) = self.app.home_stable_target(target) {
             self.app.home_play_target(item, target.is_continue());
         }
     }
 
     fn home_enqueue_request(&mut self, targets: Vec<HomeItemTarget>) {
         for target in targets {
-            if let Some(item) = self.home_stable_target(&target) {
+            if let Some(item) = self.app.home_stable_target(&target) {
                 self.app.home_enqueue_target(item, target.is_continue());
             }
         }
@@ -75,7 +75,7 @@ impl Model {
     fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
         let resolved: Vec<(QueueItem, bool)> = targets
             .iter()
-            .filter_map(|target| Some((self.home_stable_target(target)?, target.is_continue())))
+            .filter_map(|target| Some((self.app.home_stable_target(target)?, target.is_continue())))
             .collect();
         if resolved.iter().any(|(item, _)| !item.is_emby()) {
             let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
@@ -120,7 +120,7 @@ impl Model {
         let Some(target) = target else {
             return;
         };
-        let Some(item) = self.home_stable_target(&target) else {
+        let Some(item) = self.app.home_stable_target(&target) else {
             return;
         };
         if target.is_continue() {
@@ -162,7 +162,7 @@ impl Model {
         for target in targets {
             match target {
                 HomeItemTarget::Continue(_) => {
-                    if let Some(QueueItem::Emby(item)) = self.home_stable_target(&target) {
+                    if let Some(QueueItem::Emby(item)) = self.app.home_stable_target(&target) {
                         self.app.remove_from_continue_watching(&item);
                     }
                 }
@@ -178,12 +178,12 @@ impl Model {
         for target in targets {
             match target {
                 HomeItemTarget::Continue(_) => {
-                    if let Some(QueueItem::Emby(item)) = self.home_stable_target(&target) {
+                    if let Some(QueueItem::Emby(item)) = self.app.home_stable_target(&target) {
                         self.app.cw_toggle_watched(&item);
                     }
                 }
                 HomeItemTarget::Recent(_) => {
-                    if let Some(item) = self.home_stable_target(&target) {
+                    if let Some(item) = self.app.home_stable_target(&target) {
                         self.app.toggle_recent_item_played_state(&item);
                     }
                 }
@@ -200,63 +200,19 @@ impl Model {
 
     pub(in crate::app) fn push_home_content(&mut self) {
         let continue_items = self
+            .app
             .home_content
             .continue_items
             .iter()
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let loading = self.home_content.loading;
+        let loading = self.app.home_content.loading;
         let now_secs = mbv_render::screens::feeds_model::current_time_secs();
-        let recent_rows = self.home_recent_rows(now_secs);
+        let recent_rows = self.app.home_recent_rows(now_secs);
         self.update_home_owner(|home| {
             home.set_snapshot(continue_items, loading, recent_rows, now_secs);
         });
-    }
-
-    /// The merged, newest-first `Recently added` rows, built at push time
-    /// from the per-source store plus Feeds (`openspec/specs/home-latest-sections`). Feeds has no store entry: its rows derive
-    /// from `all_entries`, filtered to the same 14-day cutoff, with the
-    /// subscription name resolved by the shell. A merged row without a valid
-    /// date has no age branch, so it can never appear.
-    pub(in crate::app) fn home_recent_rows(
-        &self,
-        now_secs: u64,
-    ) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
-        use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
-        use std::cmp::Reverse;
-        let mut rows: Vec<HomeRecentRow> = self
-            .home_recently_added
-            .values()
-            .flatten()
-            .map(|item| HomeRecentRow {
-                item: item.clone(),
-                feed_name: None,
-            })
-            .collect();
-        rows.extend(
-            self.app
-                .feed_tab
-                .all_entries
-                .iter()
-                .filter(|entry| is_home_recent(entry.pub_date_secs, now_secs))
-                .map(|entry| {
-                    let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
-                        self.app
-                            .feed_tab
-                            .subscriptions
-                            .iter()
-                            .find(|subscription| subscription.url == feed_id)
-                            .map(|subscription| subscription.name.clone())
-                    });
-                    HomeRecentRow {
-                        item: QueueItem::Feed(entry.clone()),
-                        feed_name,
-                    }
-                }),
-        );
-        rows.sort_by_cached_key(|row| Reverse(provider_timestamp_secs(&row.item)));
-        rows
     }
 }
 
@@ -319,7 +275,7 @@ mod tests {
         // observed on the wire rather than in an optimistic Client write.
         let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
         let mut model = Model::new(app);
-        model.home_content.continue_items = make_items(3);
+        model.app.home_content.continue_items = make_items(3);
 
         model.handle_home_request(HomeRequest::Enqueue(vec![target("id2")]));
         let appended: Vec<String> = cmd_rx
@@ -343,7 +299,7 @@ mod tests {
     fn continue_watching_context_menu_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
         let item = make_item("cw-target", "Movie");
-        model.home_content.continue_items = vec![item.clone()];
+        model.app.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)], None));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
@@ -381,9 +337,11 @@ mod tests {
         movie.date_added = date_added_iso(i64::try_from(now - 20 * day).unwrap());
         let source = crate::app::DestinationLatestSource::Emby("lib".into());
 
-        model.store_home_recently_added(source.clone(), vec![QueueItem::Emby(Box::new(movie))]);
+        model
+            .app
+            .store_home_recently_added(source.clone(), vec![QueueItem::Emby(Box::new(movie))]);
 
-        assert!(model.home_recently_added[&source].is_empty());
+        assert!(model.app.home_recently_added[&source].is_empty());
     }
 
     /// (`openspec/specs/home-latest-sections`) `push_home_content` sends the
@@ -405,7 +363,7 @@ mod tests {
         old_movie.id = "movie-old".into();
         old_movie.date_added = date_added_iso(i64::try_from(current - 20 * day).unwrap());
         let episode = podcast_episode("episode", current - 2 * day);
-        model.accept_home_recently_added(
+        model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_runtime.generation(),
             vec![
@@ -413,7 +371,7 @@ mod tests {
                 QueueItem::Emby(Box::new(old_movie)),
             ],
         );
-        model.accept_home_recently_added(
+        model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
             model.app.audiobookshelf_runtime.generation(),
             vec![QueueItem::Audiobookshelf(
@@ -540,7 +498,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let current = model.app.home_latest_launch_window.current;
         let episode = podcast_episode("episode", current - 24 * 60 * 60);
-        model.accept_home_recently_added(
+        model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
             model.app.audiobookshelf_runtime.generation(),
             vec![QueueItem::Audiobookshelf(
@@ -571,7 +529,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let current = model.app.home_latest_launch_window.current;
         let day = 24 * 60 * 60;
-        model.accept_home_recently_added(
+        model.app.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_runtime.generation(),
             vec![QueueItem::Emby(Box::new(recent_movie(

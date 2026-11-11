@@ -224,9 +224,11 @@ test('the rows paint the watched, active, and partial-progress states', () => {
 	const watched = getByText('Watched');
 	expect(watched.className).toContain('line-through');
 	expect(watched.style.textDecorationColor).toBe('var(--canvas-strike)');
-	// The active row fills with the canvas's green and weights its title 600.
+	// The playing row keeps its own fill (a highlight is focus only), shows a
+	// play glyph beside its title, and weights the title 600.
 	const playingRow = container.querySelector('[data-slot="2"]') as HTMLElement;
-	expect(playingRow.style.background).toBe('var(--canvas-accent)');
+	expect(playingRow.style.background).toBe('');
+	expect(playingRow.querySelector('svg')).toBeTruthy();
 	expect(getByText('Playing').style.fontWeight).toBe('600');
 	// The track under the title fills to max(percent, 3)%.
 	expect(progressBar(container, 3).style.width).toBe('42%');
@@ -254,7 +256,7 @@ test('the row paints the canvas one-liner: its ordinal, one title line, and the 
 	expect(row.querySelector('svg')).toBeNull();
 });
 
-test('the cursor row paints the canvas picked fill, and the active row wins over it', () => {
+test('the cursor and marked rows paint the canvas picked fill, playing or not', () => {
 	const { container } = renderPanel(
 		queue(
 			[item(1), item(2, { state: { state: 'nowPlaying', progress: null } })],
@@ -267,7 +269,7 @@ test('the cursor row paints the canvas picked fill, and the active row wins over
 		'var(--canvas-selected)',
 	);
 	expect((container.querySelector('[data-slot="2"]') as HTMLElement).style.background).toBe(
-		'var(--canvas-accent)',
+		'var(--canvas-selected)',
 	);
 });
 

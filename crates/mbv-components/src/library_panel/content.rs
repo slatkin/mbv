@@ -81,13 +81,23 @@ impl HeroArtwork {
         let Some((w, h)) = decoded else {
             return self.shape;
         };
-        if w * 4 >= h * 5 {
-            ArtworkShape::Landscape
-        } else if w * 5 > h * 4 {
-            ArtworkShape::Square
-        } else {
-            ArtworkShape::Portrait
-        }
+        painted_shape_for_pixels(w, h)
+    }
+}
+
+/// The arm a decoded image's own pixel size paints (design D5): wider than 5:4
+/// stays Landscape, near-square (between 4:5 and 5:4) is Square, and anything
+/// taller is Portrait. The one rule [`HeroArtwork::painted_shape`] and the
+/// GUI Library's Hero projection both apply, so a Client that reads its own
+/// image cache re-arms the layout by the same arithmetic.
+#[must_use]
+pub fn painted_shape_for_pixels(width: u32, height: u32) -> ArtworkShape {
+    if width * 4 >= height * 5 {
+        ArtworkShape::Landscape
+    } else if width * 5 > height * 4 {
+        ArtworkShape::Square
+    } else {
+        ArtworkShape::Portrait
     }
 }
 

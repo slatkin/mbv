@@ -89,14 +89,14 @@ fn home_harness(count: usize, config: crate::config::Config) -> TickHarness {
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
-    harness.model_mut().home_content.continue_items = (0..count)
+    harness.model_mut().app.home_content.continue_items = (0..count)
         .map(|i| {
             let mut item = make_item(&format!("Home Item {i}"), "Movie");
             item.id = format!("home-{i}");
             item
         })
         .collect();
-    harness.model_mut().home_content.loading = false;
+    harness.model_mut().app.home_content.loading = false;
     harness.model_mut().push_home_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 160, 30);

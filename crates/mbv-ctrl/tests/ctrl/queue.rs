@@ -20,6 +20,7 @@ fn stub_media_item() -> mbv_emby_model::EmbyItem {
         index_number: 0,
         parent_index_number: 0,
         unplayed_item_count: 0,
+        parent_id: String::new(),
         path: String::new(),
         artist: String::new(),
         track_artist: String::new(),

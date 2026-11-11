@@ -11,26 +11,35 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, ClientTickHost, load_config, stub_app_with_armed_emby_fill,
-    stub_app_with_pending_settings_save, stub_app_with_playing_queue, stub_app_with_queue,
+    App, load_config, stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
+    stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
-    load_tui_launch_state, save_tui_launch_state,
+    gui_launch_state_path, load_tui_launch_state, save_tui_launch_state,
 };
+use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows, RegionTarget,
 };
 use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
+use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod home;
+    mod launch;
+    mod library;
     mod overlay;
     mod pointer;
     mod queue;
 }
+
+/// A URL that never leaves the process: the mock transport ignores it, but it
+/// must remain an IP literal so the default resolver never attempts DNS.
+pub(crate) const TEST_URL: &str = "http://127.0.0.1:1";
 
 /// A key press with no modifier held, as the translated `key` command
 /// carries it.
@@ -117,6 +126,12 @@ fn assert_no_frame(frames: &mpsc::Receiver<GuiWindowFrame>) {
 /// the capture end of its frame sink, and the App's waker. The wait cadence
 /// is zeroed, so a step with nothing queued is non-blocking.
 pub(crate) struct TestCore {
+    /// The scratch state directory the construction read: the core thread
+    /// reads the GUI launch state at construction, so a test without its own
+    /// guard must not restore the real machine's saved location — the
+    /// first-group rule would then start a fetch the test never scripted.
+    /// `None` when the test pinned its own guard before building the core.
+    _state_dir: Option<TestStateDirGuard>,
     pub(crate) core: CoreThread,
     pub(crate) tx: mpsc::Sender<CoreInput>,
     waker: mbv::ClientWaker,
@@ -132,22 +147,35 @@ impl TestCore {
             GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
         }
     }
+
+    /// The newest frame the core has emitted, draining the older ones: a
+    /// test that pumps steps between commands reads the frame the last
+    /// emitted state built, never an intermediate one. `None` while the core
+    /// has emitted no frame at all.
+    pub(crate) fn latest_frame(&self) -> Option<GuiFrame> {
+        let mut latest = None;
+        while let Ok(frame) = self.frames.try_recv() {
+            latest = Some(match frame {
+                GuiWindowFrame::Slice(frame) => *frame,
+                GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
+            });
+        }
+        latest
+    }
 }
 
 pub(crate) fn test_core(slots: usize) -> TestCore {
     test_core_with(stub_app_with_queue(slots))
 }
 
-/// The core starts the minimal Emby client fill (design D9's ruled
-/// exception): an `App` whose startup request is armed — the state
-/// `initialize_service_startup` produces for a configured Emby without a
-/// client — has the fill worker in flight after construction, so its
-/// completion installs the client the session list, cast discovery,
-/// artwork, and item-metadata fetches read.
-#[test]
-fn core_thread_starts_the_emby_client_fill() {
-    let mut core = test_core_with(stub_app_with_armed_emby_fill());
-    assert!(core.core.app_mut().emby_client_fill_pending_for_test());
+/// The Emby client the GUI Music tests seed their library with (design D13):
+/// built over the in-memory mock transport, so no request leaves the process.
+pub(crate) fn test_emby_client(http: &MockHttp) -> EmbyClient {
+    EmbyClient::new(mbv::Config {
+        server_url: TEST_URL.into(),
+        ..mbv::Config::default()
+    })
+    .with_test_agent(http.agent())
 }
 
 /// A core thread over a caller-built `App`, for the stubs the queue stub
@@ -163,10 +191,14 @@ pub(crate) fn test_core_with(app: App) -> TestCore {
     let quit: QuitSink = Box::new(move || {
         let _ = quit_tx.send(());
     });
+    // A test that pins its own guard keeps it: the guard installs only when
+    // this thread has none, so an explicitly seeded launch state stands.
+    let state_dir_ownership = TestStateDirGuard::new_if_unset();
     let mut core = CoreThread::new(app, rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
     core.install_waker(tx.clone());
     TestCore {
+        _state_dir: state_dir_ownership,
         core,
         tx,
         waker,
@@ -354,6 +386,42 @@ fn the_window_close_leaves_the_tui_launch_state_untouched() {
     assert_eq!(
         load_tui_launch_state().map(|state| state.tab),
         Some(TabIdentity::Home)
+    );
+}
+
+/// An announced Owner shutdown ends the run through the quit edge
+/// (`daemon-disconnect-handling` "Clients exit cleanly on an announced
+/// shutdown"): the announce's exit arm sets the run-loop quit signal the
+/// TUI's `'outer` loop breaks on (`quit_requested`), and the GUI Client's
+/// run takes the same orderly exit — one quit edge (the window closes),
+/// and the run's exit boundary saves the GUI's launch location before the
+/// teardown. The announce is injected on the stub Owner's event channel; no
+/// live Owner, window, or timer runs.
+///
+/// Regression for the user report of 2026-11-08: an Owner exit left the GUI
+/// window open, the run still ticking a dead Owner link.
+#[test]
+fn an_announced_owner_shutdown_ends_the_run_and_saves_the_launch_location() {
+    let _guard = TestStateDirGuard::new();
+    let (app, events) = stub_app_with_local_daemon_events(2);
+    events
+        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .unwrap();
+    let mut test = test_core_with(app);
+    assert!(
+        !gui_launch_state_path().exists(),
+        "nothing writes the GUI launch location while the window is open"
+    );
+
+    test.core.run();
+
+    test.quits.try_recv().expect("the quit edge fired");
+    test.quits
+        .try_recv()
+        .expect_err("the run ended on one quit edge");
+    assert!(
+        gui_launch_state_path().exists(),
+        "the run's exit boundary saved the GUI launch location"
     );
 }
 

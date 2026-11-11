@@ -7,5 +7,6 @@ pub mod attach;
 pub mod bridge;
 pub mod core_thread;
 mod leaves;
+mod library_frames;
 mod painted_choices;
 pub mod trickplay;

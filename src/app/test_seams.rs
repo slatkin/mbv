@@ -40,6 +40,13 @@ pub(in crate::app) type SessionsLoadFn =
     fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 
+// Test seam for URL opens (the GUI Library `openUrl` command, the Hero's IMDb
+// link): the command path reads it after the scheme gate, so a test observes
+// the url the opener receives without a real `xdg-open`/`open` spawn.
+pub(in crate::app) type OpenUrlFn = fn(&str);
+pub(in crate::app) static OPEN_URL_OVERRIDE: Mutex<Option<OpenUrlFn>> = Mutex::new(None);
+pub(in crate::app) static OPEN_URL_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 /// Convert a crossterm `KeyEvent` to the neutral `KeyEvent` the router
 /// resolves (`extract-client-core` design D4, task 2.2). Test-only: production
 /// input enters through the `TuiRealm` listener and is translated at the

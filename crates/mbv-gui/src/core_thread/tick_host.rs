@@ -6,9 +6,22 @@
 use std::time::Instant;
 
 use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
+use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
+
+/// The Panel a Library command moves focus to (design D4): the two take-focus
+/// commands move it on the core's `FocusStack` too, so the frame's focus and
+/// the App's key gates agree. Every other command moves no focus — a
+/// documented no-op, not a hidden one.
+fn focus_target(command: &mbv::GuiLibraryCommand) -> Option<PanelFocus> {
+    match command {
+        mbv::GuiLibraryCommand::TakeFocus => Some(PanelFocus::Library),
+        mbv::GuiLibraryCommand::TakeQueueFocus => Some(PanelFocus::Queue),
+        _ => None,
+    }
+}
 
 impl ClientTickHost for CoreThread {
     fn app_mut(&mut self) -> &mut App {
@@ -17,8 +30,19 @@ impl ClientTickHost for CoreThread {
 
     fn drain_startup_workers(&mut self) -> bool {
         // The GUI presents no Home panel; a completion's rebuilt Home content
-        // drops here — the App-side handlers already applied the semantics.
-        self.app.drain_startup_workers().events
+        // lands in the App's stored Home content (row 6.1), where the Home
+        // projection of row 6.2 reads it. A startup this drain reports starts
+        // the playback-target discovery the
+        // full Emby startup itself never starts (add-gui-library-panel design
+        // D11), exactly as the deleted client fill did on its completion.
+        let drain = self.app.drain_startup_workers();
+        if drain.emby_started {
+            self.app.start_playback_target_discovery();
+        }
+        // A landed catalog can complete the saved launch location's first
+        // phase (add-gui-library-panel design D9).
+        self.restore_launch_location();
+        drain.events
     }
 
     fn reproject_audiobookshelf_content(&mut self) {
@@ -60,19 +84,28 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_lib_events(&mut self) -> bool {
-        // The App-owned half applies; the GUI keeps no library content state,
-        // so no surface re-projection joins the drain.
+        // The App-owned half applies, including the fetched `Recently added`
+        // rows the arm accepts into the App's store (row 6.2), so the GUI's
+        // next tick reads them from the App like the TUI shell does. The GUI
+        // keeps no library content state, so no surface re-projection joins
+        // the drain.
         let mut had_events = false;
         while self.app.drain_lib_event() {
             had_events = true;
         }
+        // A landed group list can complete the saved launch location's second
+        // phase (add-gui-library-panel design D9).
+        self.restore_launch_location();
         had_events
     }
 
     fn drain_search_results(&mut self) -> bool {
-        // The GUI mounts no search surface, so nothing sends on the search
-        // channel for this Client.
-        false
+        // The GUI mounts no search surface, so no component receives the
+        // search worker's result (add-gui-library-panel design D12, row 12.1).
+        // The top bar's own field reads the App store this App-side drain
+        // fills, and the frame carries it; a landed result reports changed so
+        // the next frame paints it.
+        self.app.drain_gui_search_results()
     }
 
     fn tick_search_clock(&mut self, _now: Instant) -> Option<Msg> {
@@ -161,9 +194,30 @@ impl ClientTickHost for CoreThread {
                 CoreInput::Pointer(event) => {
                     // The gesture resolves against the slice hit map and
                     // routes through `App::route_gui_pointer` with the
-                    // surface that owns the region (design D4).
+                    // surface that owns the region (design D4). A press on
+                    // the daemon-lost dialog's quit choice ends the run
+                    // through the same quit edge a routed quit key uses.
                     outcome.input_received = true;
-                    self.route_pointer(event);
+                    if self.route_pointer(event) {
+                        outcome.quit_requested = true;
+                    }
+                }
+                CoreInput::Library(command) => {
+                    // The Library panel's request (add-gui-library-panel design
+                    // D2): the App applies the semantic intent, and the
+                    // take-focus variants then move the core's `FocusStack`
+                    // with the App's stored focus (design D4), so the frame
+                    // and the App's key gates agree.
+                    outcome.input_received = true;
+                    let focus_target = focus_target(&command);
+                    self.app.apply_gui_library_command(command);
+                    if let Some(panel) = focus_target {
+                        // The take-focus may run in the pre-catalog window
+                        // (design D9): the restore then leaves the taken
+                        // focus alone.
+                        self.note_launch_focus_taken();
+                        self.focus.set_panel_focus(panel);
+                    }
                 }
                 CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,
@@ -178,6 +232,10 @@ impl ClientTickHost for CoreThread {
                     // The reload forgets the front end's artwork too: the
                     // next frame re-carries it, encode-free (design D10).
                     self.artwork.rearm();
+                    // The reloaded window holds no Library content either
+                    // (add-gui-library-panel design D2): the next frame
+                    // re-carries it under the same revision.
+                    self.library.rearm();
                     // The reloaded window holds no trickplay sheet either
                     // (task 6.7): the next frame re-carries the hovered one.
                     self.trickplay.rearm();

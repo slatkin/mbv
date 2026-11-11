@@ -16,9 +16,8 @@ fn receiver(id: &str, name: &str) -> mbv_cast::discovery::CastReceiver {
 }
 
 /// The chooser marks the Owner's attached output: a Cast receiver by its
-/// receiver id, an Emby Session by the output's device id, and nothing while
-/// the output is local (the chooser's rows are remote targets only, design
-/// D4a). The Emby mark rides the session whose device the output names, not
+/// receiver id, an Emby Session by the output's device id, and the local row
+/// only while no remote output holds the playback (design D4a). The Emby mark rides the session whose device the output names, not
 /// a name comparison.
 #[test]
 fn target_choices_mark_the_attached_output() {
@@ -41,10 +40,12 @@ fn target_choices_mark_the_attached_output() {
     app.sessions = vec![local_session, other_session];
     app.cast_receivers = vec![receiver("receiver-9", "Den TV")];
     app.rebuild_panel_targets();
-    // Nothing is attached: no choice marks itself.
+    // Nothing is attached: the local row alone marks itself.
     let choices = app.queue_playback_projection().target_choices;
-    assert_eq!(choices.len(), 3);
-    assert!(choices.iter().all(|choice| !choice.is_active));
+    assert_eq!(choices.len(), 4);
+    assert_eq!(choices[0].key, ChooserTargetKey::Local);
+    assert!(choices[0].is_active);
+    assert!(choices[1..].iter().all(|choice| !choice.is_active));
 
     // A Cast output marks the receiver with its id.
     app.playback_output = Some(mbv_ctrl::OutputState::Cast {
@@ -55,13 +56,16 @@ fn target_choices_mark_the_attached_output() {
     let choices = app.queue_playback_projection().target_choices;
     let cast = choices
         .iter()
-        .find(|choice| choice.key == SessionTargetKey::Cast("receiver-9".to_string()))
+        .find(|choice| {
+            choice.key == ChooserTargetKey::Target(SessionTargetKey::Cast("receiver-9".to_string()))
+        })
         .expect("the cast receiver is a choice");
     assert!(cast.is_active);
     assert!(
         choices
             .iter()
-            .filter(|choice| choice.key != SessionTargetKey::Cast("receiver-9".to_string()))
+            .filter(|choice| choice.key
+                != ChooserTargetKey::Target(SessionTargetKey::Cast("receiver-9".to_string())))
             .all(|choice| !choice.is_active)
     );
 
@@ -76,13 +80,16 @@ fn target_choices_mark_the_attached_output() {
     let choices = app.queue_playback_projection().target_choices;
     let session = choices
         .iter()
-        .find(|choice| choice.key == SessionTargetKey::Emby("session-2".to_string()))
+        .find(|choice| {
+            choice.key == ChooserTargetKey::Target(SessionTargetKey::Emby("session-2".to_string()))
+        })
         .expect("the session is a choice");
     assert!(session.is_active);
     assert!(
         choices
             .iter()
-            .filter(|choice| choice.key != SessionTargetKey::Emby("session-2".to_string()))
+            .filter(|choice| choice.key
+                != ChooserTargetKey::Target(SessionTargetKey::Emby("session-2".to_string())))
             .all(|choice| !choice.is_active)
     );
 }

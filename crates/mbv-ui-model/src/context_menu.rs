@@ -100,6 +100,10 @@ pub enum ContextAction {
     MarkUnplayed(String),
     RemoveFromContinueWatching,
     RemoveFromQueue(usize),
+    /// Empty the whole Bound queue through the same prompt the `c` chord
+    /// raises (`App::request_clear_queue`). The GUI row menu's clear entry
+    /// sends it; the TUI's row menu does not list it today.
+    ClearQueue,
     GoToLibrary(String, String), // (item_id, item_type)
     FeedsPlay(Vec<FeedEntry>),
     FeedsShuffle(Vec<FeedEntry>),

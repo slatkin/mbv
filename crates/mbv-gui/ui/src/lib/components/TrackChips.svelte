@@ -33,7 +33,7 @@
 	import { onMount } from 'svelte';
 	import { AudioLines, Captions, Check, MonitorPlay } from '@lucide/svelte';
 	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleVar } from '$lib/bridge/theme';
+	import { canvasVar, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiOverlayFrame,
 		GuiTrackChip,
@@ -72,11 +72,6 @@
 		return chosen?.label ?? (kind === 'subtitles' ? 'Off' : 'Audio');
 	}
 
-	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
-	 * hexes that name no theme slot (design DR9). */
-	function canvasVar(name: string): string {
-		return `var(--canvas-${name})`;
-	}
 
 	/** One element's painted region for a QueuePlayback target, `null` while
 	 * the element is absent. */

@@ -88,6 +88,6 @@ fn encode(artwork: &QueueCardArtwork) -> GuiCardArtwork {
     }
 }
 
-fn data_url(mime: &str, bytes: &[u8]) -> String {
+pub(crate) fn data_url(mime: &str, bytes: &[u8]) -> String {
     format!("data:{mime};base64,{}", BASE64.encode(bytes))
 }

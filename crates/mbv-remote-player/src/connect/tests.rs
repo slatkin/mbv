@@ -28,6 +28,7 @@ fn make_media_item(id: &str) -> EmbyItem {
         index_number: 0,
         parent_index_number: 0,
         unplayed_item_count: 0,
+        parent_id: String::new(),
         path: String::new(),
         artist: String::new(),
         track_artist: String::new(),

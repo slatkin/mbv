@@ -80,8 +80,45 @@ impl App {
         self.direct_remote_connected && self.direct_remote_session_id.as_deref() == Some(sess_id)
     }
 
+    /// Whether a remote session or a remote output holds the playback: a direct
+    /// remote session, a Cast receiver, or an Emby Session. The chooser's local
+    /// row is attached only while this is false.
+    pub(in crate::app) fn remote_playback_attached(&self) -> bool {
+        self.can_disconnect_remote() || self.output_is_cast() || self.output_is_emby_session()
+    }
+
+    /// Return the playback to this machine: disconnect a direct remote session,
+    /// and hand a remote output back to Local. The Sessions sidebar's detach and
+    /// the chooser's local row share it. The owner tears the Cast receiver app or
+    /// the Emby Session down (design D12, D13).
+    pub(in crate::app) fn detach_to_local(&mut self) {
+        let cast_output = self.output_is_cast();
+        let session_output = self.output_is_emby_session();
+        let remote_output = cast_output || session_output;
+        // Skip disconnect_remote's "No session selected" toast when a remote
+        // output is the detach target; the output hand-back below is the real
+        // action in that case.
+        if self.can_disconnect_remote() || !remote_output {
+            self.disconnect_remote();
+        }
+        if remote_output {
+            self.select_playback_output(mbv_ctrl::OutputSelection::Local);
+            let message = if cast_output {
+                "Detached from cast target"
+            } else {
+                "Detached from Emby Session"
+            };
+            self.flash(message.to_string(), ToastSeverity::Success);
+        }
+    }
+
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.direct_remote_connected {
+            // The user explicitly left this Client's held remote target, so
+            // teardown may clear the saved auto-reconnect record (a Client
+            // that never touched the connection must not) — see
+            // `left_remote_this_run`.
+            self.left_remote_this_run = true;
             // A disconnect cancels the pending transfer without a report
             // (queue-handoff-and-take design D2): both owners keep what they
             // play, and the source keeps playing.

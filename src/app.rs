@@ -4,13 +4,16 @@ mod client_core;
 mod client_drains;
 mod dispatch;
 mod gui_client_state;
+mod gui_library;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_armed_emby_fill,
-    stub_app_with_cast_target, stub_app_with_open_row_menu, stub_app_with_pending_settings_save,
-    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_prefix_and_toast,
-    stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
-    stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
+    stub_app_with_cast_target, stub_app_with_completed_emby_startup,
+    stub_app_with_completed_emby_startup_and_contents, stub_app_with_local_daemon_events,
+    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
+    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;
@@ -35,7 +38,31 @@ pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
 };
 pub use self::gui_client_state::{
-    GuiOverlayProjection, PanelTogglesProjection, RowMenuEntryProjection, TrackPopoverChoice,
+    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
+    RowMenuEntryProjection, TrackPopoverChoice,
+};
+pub use self::gui_library::GuiLibraryCommand;
+pub use self::gui_library::{
+    GuiArtShape, GuiEntryListProjection, GuiEntryRow, GuiHomeHero, GuiHomeItemRow,
+    GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiPillOption,
+};
+pub use self::gui_library::{
+    GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
+    GuiAudiobooksWorkspace,
+};
+pub use self::gui_library::{
+    GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill,
+    GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode,
+    GuiShowsPill, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill,
+    GuiShowsSeries, GuiShowsWorkspace,
+};
+pub use self::gui_library::{
+    GuiFeedEntryId, GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
+    GuiFeedsSelection, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu,
+    GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPodcastEpisodeId, GuiPodcastPill,
+    GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
+    GuiSearchProjection, GuiSearchRow,
 };
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
@@ -69,7 +96,7 @@ mod test_seams;
 #[cfg(test)]
 pub(in crate::app) use self::test_seams::{
     DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
-    DIRECT_CONNECT_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
+    DIRECT_CONNECT_TEST_LOCK, OPEN_URL_OVERRIDE, OPEN_URL_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
 };
 mod shell;
 use self::dispatch::notify::ToastSeverity;
@@ -105,7 +132,7 @@ use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::feed::{
-    FeedHomeVideoSelection, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
+    FeedHomeVideoSelection, FeedHomeVideoState, SavePlaylistDialog, SavePlaylistStage,
 };
 use mbv_ui_model::library_tab::LibraryTab;
 pub(in crate::app) use mbv_ui_model::overlay::SidebarId;

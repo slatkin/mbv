@@ -30,6 +30,13 @@
 	// is empty while the projection holds none of those states, as the
 	// canvas draws it.
 	//
+	// The armed prefix and the live toast are each one fact, and each
+	// paints once a frame (design D10): while the Library panel shows, its
+	// Library Status bar replaces its hints with them, so this line paints
+	// neither and the band under the Library column owns them. While the
+	// Library panel does not show, this line paints them as the TUI's
+	// status row does.
+	//
 	// The band paints the canvas's type and border (mono 12 px, a 1 px top
 	// border in the queue-local `--canvas-border` token) on the frame's
 	// `queueFooterBand` fill, with the canvas's source-text teal
@@ -42,37 +49,31 @@
 	import { onMount } from 'svelte';
 	import { SaveCheck, SaveOff } from '@lucide/svelte';
 	import { observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { toastColor } from '$lib/bridge/status';
 	import { roleVar } from '$lib/bridge/theme';
-	import type {
-		GuiQueueFooter,
-		GuiStatusBar,
-		GuiToastSeverity,
-		LayoutRegion
-	} from '$lib/bridge/types';
+	import type { GuiQueueFooter, GuiStatusBar, LayoutRegion } from '$lib/bridge/types';
 
 	interface Props {
 		footer: GuiQueueFooter;
 		status: GuiStatusBar;
+		/** Whether the Library panel shows (design D10): the Library Status
+		 * bar owns the armed prefix and the live toast then, so this line
+		 * paints neither. */
+		libraryVisible: boolean;
 	}
-	const { footer, status }: Props = $props();
+	const { footer, status, libraryVisible }: Props = $props();
+
+	/** The toast this line paints: the frame's live toast, or `null` while the
+	 * Library panel shows and its Status bar paints it (design D10). */
+	const toast = $derived(libraryVisible ? null : status.toast);
+
+	/** Whether this line paints the armed prefix badge: prefix mode is armed,
+	 * no toast is live (the line's pill-drop rule), and the Library panel does
+	 * not show (design D10). */
+	const prefix = $derived(!libraryVisible && status.prefixArmed && !toast);
 
 	const reportKey = Symbol('queue-footer');
 	let lineEl: HTMLElement | undefined = $state();
-
-	/** The toast text's severity foreground (`toast_spans` in the TUI's
-	 * status bar panel). */
-	function toastColor(severity: GuiToastSeverity): string {
-		switch (severity) {
-			case 'neutral':
-				return 'var(--mbv-textPrimary)';
-			case 'success':
-				return 'var(--mbv-statusAvailable)';
-			case 'warning':
-				return 'var(--mbv-textFocusAccent)';
-			case 'error':
-				return 'var(--mbv-statusError)';
-		}
-	}
 
 	/** The painted regions this frame's DOM reports (design D4): none. The
 	 * line's pills are informational, so a point on it resolves to no
@@ -116,7 +117,7 @@
 		is live, the TUI's pill-drop rule), the autosave indicator, then the
 		queue's source text — no leading icon, as the canvas paints it. -->
 	<div class="flex items-center" style:gap="16px">
-		{#if status.prefixArmed && !status.toast}
+		{#if prefix}
 			<span class="font-bold" style:color="var(--mbv-accent)">PREFIX</span>
 		{/if}
 		{#if footer.autosave}
@@ -134,9 +135,9 @@
 		footer-line toast form the spec permits); empty while none is live. -->
 	<span
 		class="min-w-0 flex-1 truncate px-4 text-center"
-		style:color={status.toast ? toastColor(status.toast.severity) : undefined}
+		style:color={toast ? toastColor(toast.severity) : undefined}
 	>
-		{#if status.toast}{status.toast.text}{/if}
+		{#if toast}{toast.text}{/if}
 	</span>
 	<!-- The right group: the dirty state while present, then the session
 		marker — the owner pill's label then its liveness dot while the shown

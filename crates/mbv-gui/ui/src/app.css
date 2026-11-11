@@ -48,9 +48,10 @@
    queue, the row menu, the popovers, and the drag paint the canvas while
    `mbv-theme`'s slot table and the TUI's palette stay unchanged. */
 :root {
+	--canvas-dim: #1e2326; /* mbv-theme's BgDim slot: the Library top bar's and the collapsed queue rail's fill */
 	--canvas-border: #3d484d; /* the footer's top border */
 	--canvas-selected: #3d484d; /* the picked and hovered row's fill */
-	--canvas-well: #232a2e; /* the right-column switch's recessed track */
+	--canvas-well: #232a2e; /* the recessed dark fill: the right-column switch's track and the modal button pills */
 	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
 	--canvas-segment-active: #475258; /* the switch's active segment */
 	--canvas-ordinal: #7f897d; /* the row ordinal */
@@ -65,6 +66,7 @@
 	--canvas-menu: #343f44; /* the row menu's fill */
 	--canvas-menu-border: #475258; /* the row menu's border and its divider */
 	--canvas-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the row menu's lift */
+	--canvas-modal-scrim: rgb(0 0 0 / 0.5); /* the confirm modal's backdrop */
 	--canvas-popover: #343f44; /* the track popover's fill */
 	--canvas-popover-border: #475258; /* the track popover's border */
 	--canvas-popover-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the track popover's lift */
@@ -76,6 +78,23 @@
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the footer's queue source text */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */
+	/* The Library column's values (add-gui-library-panel design D4): the body
+	   fill the Hero pane and the column paint, and the raised fill of the top
+	   bar and the list column. */
+	--canvas-library-column: #272e33; /* the Library column's body fill */
+	--canvas-library-panel: #2d353b; /* the list column's and the Search dropdown's raised fill */
+	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
+	--canvas-library-control: #475258; /* the Hero's control border */
+	/* The Queue panel column's backdrop beside the Library panel: the dim
+	   tier, so the raised library panel contrasts against it. The focus step
+	   keeps the column focus-reactive, one sub-tier up. */
+	--canvas-queue-column: #1e2326; /* the queue column's resting backdrop */
+	--canvas-queue-column-focused: #232a2e; /* the queue column's focused backdrop */
+	/* The pointer's fill on every interactive control (design D16): the
+	   palette's foreground #d3c6aa veiled over whatever fill the control
+	   paints, so a bare ghost button, a picked row, and an accent Play button
+	   each answer the pointer in their own colour. */
+	--canvas-hover-veil: color-mix(in srgb, #d3c6aa 14%, transparent);
 	/* The canvas header's two lines over the 44 px filter control, between
 	   12 px and 8 px of padding. */
 	--canvas-queue-header-height: 64px;
@@ -122,6 +141,57 @@
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
 	--radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* The scrollbars are filled, not outlined: the thumb paints the canvas
+   scrollbar colour #3D484D on a transparent track, with no border or
+   rounding. The standard properties cover Chromium and Firefox; the WebKit
+   pseudo-elements cover the WebKitGTK window. */
+* {
+	scrollbar-color: #3d484d transparent;
+	scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+	background: transparent;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background: #3d484d;
+	border: 0;
+	border-radius: 0;
+}
+
+/* Every interactive control answers the pointer (design D16): one rule, so a
+   new button cannot be born without the hover, and the glow is a veil rather
+   than a fill because the controls paint their own fills inline. An inset
+   shadow composites over that fill and under the label, which is why a pill, a
+   selected row, and an accent button keep their own colours and still light
+   up. The filter field's frame is a `label` around its `input`, so it takes
+   the same veil while the pointer is on the field. The seekbar is the one
+   control left out: it already answers the pointer with the trickplay tile
+   preview, and a veil over its 60 px box would tint the elapsed and remaining
+   labels with it. */
+button:not(:disabled):hover,
+[role='menuitem']:not([aria-disabled='true']):hover,
+[role='tab']:not([aria-disabled='true']):hover,
+[role='option']:hover,
+label:has(> input:hover) {
+	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
+}
+button:not(:disabled),
+[role='menuitem']:not([aria-disabled='true']),
+[role='tab']:not([aria-disabled='true']),
+[role='option'],
+[role='slider'] {
+	cursor: pointer;
+}
+button:disabled {
+	cursor: default;
 }
 
 @layer base {

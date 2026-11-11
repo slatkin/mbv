@@ -3,10 +3,9 @@
 
 use super::super::{
     Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
-    service_startup,
 };
 use super::pin_swap::PinSwapLink;
-use super::{Duration, IdleFeed, Instant, PollStrategy};
+use super::{Duration, Instant, PollStrategy};
 use crate::app::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, ModelContentEvent, MusicEvent,
     PlayerEventDrain, SeriesEvent,
@@ -99,6 +98,10 @@ impl Model {
                     library_id,
                     items,
                 }) => {
+                    // The App-side half (the Latest root level's fill) runs
+                    // inside `update_emby_latest_snapshot` (row 7.1); this
+                    // Client's half is the shell-owned snapshot store and
+                    // the projection push below it.
                     self.update_emby_latest_snapshot(
                         &library_id,
                         items
@@ -111,11 +114,16 @@ impl Model {
                     library_id,
                     items,
                 }) => {
+                    // The App-side half is the shared acceptance (row 7.1);
+                    // this Client's half is the projection at the loop tail.
                     self.app.accept_tv_upcoming_snapshot(&library_id, items);
                 }
                 LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed {
                     library_id,
                 }) => {
+                    // The App-side half is the shared failed-mark write
+                    // (row 7.1); this Client's half is the projection at the
+                    // loop tail.
                     self.app.tv_upcoming_snapshot_failed(&library_id);
                 }
                 LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
@@ -123,7 +131,11 @@ impl Model {
                     generation,
                     items,
                 }) => {
-                    self.accept_home_recently_added(source, generation, items);
+                    // The fetched rows land on the App's store (row 6.2); this
+                    // Client's half is the projection below, so the merged
+                    // rows reach the Home owner.
+                    self.app
+                        .accept_home_recently_added(source, generation, items);
                     fetched_recently_added = true;
                 }
                 LibEvent::Browse(BrowseEvent::Loaded {
@@ -516,51 +528,12 @@ impl Model {
     }
 
     /// Start the configured Remote Service workers after the first TUI frame
-    /// has rendered, kick off the startup feed fetch, and register client
-    /// capabilities.
+    /// has rendered, kick off the startup feed fetch, create the idle feed,
+    /// and register client capabilities. The shared step is
+    /// `App::start_client_services` (add-gui-library-panel design D11); the
+    /// TUI runs it at the same point it always has, so its order and timing
+    /// do not change.
     pub(super) fn spawn_startup_services(&mut self) {
-        // Only start the configured Remote Service after the first TUI frame
-        // has been rendered. The selected Player owner and UI therefore never
-        // wait for Emby setup, authentication, or connectivity.
-        if let Some(request) = self.app.setup.emby_startup_request.take() {
-            self.app.setup.emby_startup_rx =
-                Some(service_startup::start(request.config, request.generation));
-        }
-        if let Some(request) = self.app.setup.audiobookshelf_startup_request.take() {
-            self.app.setup.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                request.config,
-                request.generation,
-                service_startup::AudiobookshelfCompletionKind::Startup,
-            ));
-        }
-
-        // Auto-fetch configured feeds asynchronously so the Feeds tab and the
-        // Home "Feeds" pill are populated shortly after startup instead
-        // of staying empty until the user presses the manual refresh key.
-        self.app.start_feed_fetch();
-
-        if let Some(client) = self.app.emby_client() {
-            client.lock().unwrap().register_capabilities();
-        }
-    }
-
-    /// Create the idle-feed channel pair and start its first fetch when an
-    /// RSS URL is configured.
-    pub(super) fn init_idle_feed(&mut self) {
-        // Initialize idle feed if configured
-        if self.app.config.lock().unwrap().idle_feed_rss_url.is_empty() {
-            // No RSS URL configured, skip idle feed
-        } else {
-            let (items_tx, items_rx) = std::sync::mpsc::channel();
-            self.app.idle_feed = Some(IdleFeed {
-                items: Vec::new(),
-                current_index: 0,
-                last_rotation: Instant::now(),
-                last_fetch: Instant::now(),
-                items_tx,
-                items_rx,
-            });
-            self.app.spawn_idle_feed_fetch();
-        }
+        self.app.start_client_services();
     }
 }

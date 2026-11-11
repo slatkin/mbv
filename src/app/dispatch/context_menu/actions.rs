@@ -264,6 +264,10 @@ impl App {
                 self.remove_from_queue(pos);
                 None
             }
+            Some(ContextAction::ClearQueue) => {
+                self.request_clear_queue();
+                None
+            }
             Some(ContextAction::FeedsPlay(entries)) => {
                 self.play_feed_entries(entries);
                 None
@@ -418,6 +422,7 @@ impl App {
                 | ContextAction::MarkUnplayed(_)
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
+                | ContextAction::ClearQueue
                 | ContextAction::ShuffleQueue
                 | ContextAction::FeedsPlay(_)
                 | ContextAction::FeedsShuffle(_)
@@ -489,7 +494,7 @@ impl App {
                 if self.tab.is_home() {
                     match self.fetch_home() {
                         Ok(content) => {
-                            // Delivered to Model-owned `home_content` via the
+                            // Delivered to the stored `home_content` via the
                             // lib_tx/ lib_rx drain (task 5.3d).
                             let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
                                 ModelContentEvent::HomeContentRefreshed(Box::new(content)),
@@ -532,7 +537,7 @@ impl App {
 
     pub(in crate::app) fn remove_from_continue_watching(&mut self, item: &EmbyItem) {
         // The shell resolved the target Continue Watching item at the Model
-        // boundary from Model-owned `home_content` (task 5.3d) -- the App no
+        // boundary from the stored `home_content` (task 5.3d) -- the App no
         // longer holds `home.continue_items`/`continue_cursor` to re-read.
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
@@ -545,7 +550,7 @@ impl App {
             Ok(()) => {
                 match self.fetch_home() {
                     Ok(content) => {
-                        // Delivered to Model-owned `home_content` via the
+                        // Delivered to the stored `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
                             ModelContentEvent::HomeContentRefreshed(Box::new(content)),
@@ -582,7 +587,7 @@ impl App {
             Ok(()) => {
                 match self.fetch_home() {
                     Ok(content) => {
-                        // Delivered to Model-owned `home_content` via the
+                        // Delivered to the stored `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
                             ModelContentEvent::HomeContentRefreshed(Box::new(content)),

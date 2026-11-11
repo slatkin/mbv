@@ -435,52 +435,6 @@ pub(in crate::app) struct StartupReceiver {
     pub(in crate::app) rx: mpsc::Receiver<Completion>,
 }
 
-/// One minimal client-fill attempt's completion (add-tauri-gui-client
-/// design D9's ruled exception): the authenticated Emby client, or the
-/// failure the runtime records. Unlike [`Completion`], it carries no
-/// bootstrap: the fill does not fetch library data.
-pub(in crate::app) struct ClientFillCompletion {
-    pub(in crate::app) generation: SetupGeneration,
-    pub(in crate::app) result: Result<EmbyClient, EmbyFailure>,
-}
-
-/// The minimal client-fill worker's receiver (add-tauri-gui-client design
-/// D9's ruled exception).
-pub(in crate::app) struct ClientFillReceiver {
-    pub(in crate::app) generation: SetupGeneration,
-    pub(in crate::app) rx: mpsc::Receiver<ClientFillCompletion>,
-}
-
-/// The GUI Client's minimal Emby fill (add-tauri-gui-client design D9's
-/// ruled exception): the same credential validation [`start`] runs, without
-/// `load_startup_data_bounded`'s library bootstrap. The completion feeds the
-/// session list, cast discovery, artwork, and the item-metadata fetches.
-pub(in crate::app) fn start_client_fill(
-    config: crate::config::Config,
-    generation: SetupGeneration,
-) -> ClientFillReceiver {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let result = config
-            .emby_setup
-            .as_ref()
-            .ok_or_else(|| EmbyFailure::unavailable("missing Emby Service setup"))
-            .and_then(|setup| {
-                load_service_secret(ServiceKind::Emby)
-                    .ok_or_else(|| EmbyFailure::unavailable("missing Emby Service credential"))
-                    .and_then(|token| {
-                        EmbyClient::new(config.clone()).authenticate_service_setup_bounded(
-                            token,
-                            setup,
-                            EmbyClient::AUTHENTICATE_HARD_BOUND,
-                        )
-                    })
-            });
-        let _ = tx.send(ClientFillCompletion { generation, result });
-    });
-    ClientFillReceiver { generation, rx }
-}
-
 pub(in crate::app) fn start(
     config: crate::config::Config,
     generation: SetupGeneration,

@@ -128,7 +128,7 @@ impl App {
                     Ok(content) => {
                         // The fetch runs synchronously (its App-side
                         // side effects are order-sensitive); the
-                        // computed content travels to Model-owned
+                        // computed content travels into the stored
                         // `home_content` via lib_tx (task 5.3d).
                         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
                             ModelContentEvent::HomeContentRefreshed(Box::new(content)),
@@ -359,7 +359,7 @@ impl App {
     /// Without one it is skipped -- not an error -- so Home still populates
     /// from whatever local Sources exist (#543 Part 1). Returns the
     /// computed `HomeContent` instead of writing deleted `App.home`; the
-    /// shell assigns it to `Model.home_content` (directly for shell-side
+    /// shell stores it in `App.home_content` (directly for shell-side
     /// callers, via `LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed)` for App-internal ones)
     /// and preserves the Continue Watching column cursor at the assignment.
     pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, mbv_emby::EmbyFailure> {

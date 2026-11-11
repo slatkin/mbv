@@ -41,6 +41,47 @@ pub enum GuiOverlayFrame {
         cursor: usize,
         choices: Vec<GuiTargetChoice>,
     },
+    /// The shared confirmation modal the App raised: the message and the
+    /// button row, each with the key hint inside its pill and the tone the
+    /// canvas paints it in. The action stays in the core's held state, so a
+    /// press or key answers what the window painted.
+    Confirm {
+        message: String,
+        buttons: Vec<GuiConfirmButton>,
+    },
+    /// The daemon-lost recovery dialog the App raised: the diagnostics the
+    /// TUI's modal paints, and the recovery choices, each with its key hint
+    /// and tone. The dialog stays in the core's held state, so a press or key
+    /// answers what the window painted.
+    DaemonLost {
+        /// The title of whatever was playing right before the Owner vanished;
+        /// `None` when nothing was.
+        last_playing_title: Option<String>,
+        daemon_log_path: String,
+        /// The last restart attempt's failure, painted as the dialog's
+        /// `Restart failed:` line.
+        restart_error: Option<String>,
+        buttons: Vec<GuiConfirmButton>,
+    },
+}
+
+/// One button of the carried confirmation modal: the label, the key hint
+/// the pill paints (`"Enter"`, `"Esc"`), and how the canvas paints it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiConfirmButton {
+    pub label: String,
+    pub keys: String,
+    pub tone: GuiConfirmButtonTone,
+}
+
+/// How a confirm button paints, mirroring `ConfirmButtonTone` variant for
+/// variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiConfirmButtonTone {
+    Affirmative,
+    Cancel,
 }
 
 impl From<&GuiOverlayProjection> for GuiOverlayFrame {
@@ -67,6 +108,45 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
             GuiOverlayProjection::TargetChooser { cursor, choices } => Self::TargetChooser {
                 cursor: *cursor,
                 choices: choices.iter().map(GuiTargetChoice::from).collect(),
+            },
+            GuiOverlayProjection::Confirm { message, buttons } => Self::Confirm {
+                message: message.clone(),
+                buttons: buttons
+                    .iter()
+                    .map(|button| GuiConfirmButton {
+                        label: button.label.clone(),
+                        keys: button.keys.clone(),
+                        tone: match button.tone {
+                            mbv::GuiConfirmButtonTone::Affirmative => {
+                                GuiConfirmButtonTone::Affirmative
+                            }
+                            mbv::GuiConfirmButtonTone::Cancel => GuiConfirmButtonTone::Cancel,
+                        },
+                    })
+                    .collect(),
+            },
+            GuiOverlayProjection::DaemonLost {
+                last_playing_title,
+                daemon_log_path,
+                restart_error,
+                buttons,
+            } => Self::DaemonLost {
+                last_playing_title: last_playing_title.clone(),
+                daemon_log_path: daemon_log_path.clone(),
+                restart_error: restart_error.clone(),
+                buttons: buttons
+                    .iter()
+                    .map(|button| GuiConfirmButton {
+                        label: button.label.clone(),
+                        keys: button.keys.clone(),
+                        tone: match button.tone {
+                            mbv::GuiConfirmButtonTone::Affirmative => {
+                                GuiConfirmButtonTone::Affirmative
+                            }
+                            mbv::GuiConfirmButtonTone::Cancel => GuiConfirmButtonTone::Cancel,
+                        },
+                    })
+                    .collect(),
             },
         }
     }

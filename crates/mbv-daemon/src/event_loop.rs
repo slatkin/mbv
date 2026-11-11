@@ -74,6 +74,9 @@ pub(crate) struct DaemonLoop {
     pub(super) audio_only: bool,
     pub(super) last_keepalive: Instant,
     pub(super) last_capabilities: Instant,
+    /// The last canonical-queue resubmit a `QueueDesynced` raised: a burst
+    /// of drift observations must resubmit once, not once per event.
+    pub(super) last_queue_resync: Instant,
     /// Injected owner-queue persistence, so tests can record snapshots instead
     /// of writing real state files.
     pub(super) store: OwnerQueueStore,

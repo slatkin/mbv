@@ -1,4 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::gui_client_state::GuiOverlay;
 use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
@@ -515,16 +516,23 @@ impl App {
                 .item_at(idx)
                 .map(|item| item.title().to_string())
         };
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DaemonLost(
-            DaemonLostModal {
-                last_playing_title,
-                daemon_log_path: mbv_config::state_dir()
-                    .join("local-daemon.log")
-                    .display()
-                    .to_string(),
-                restart_error: None,
-            },
-        ));
+        let modal = DaemonLostModal {
+            last_playing_title,
+            daemon_log_path: mbv_config::state_dir()
+                .join("local-daemon.log")
+                .display()
+                .to_string(),
+            restart_error: None,
+        };
+        // The GUI Client presents the same dialog as its own blocking overlay
+        // and mounts no TUI modal component, so the raise holds it there too
+        // (the confirmation's `ask_confirm` pattern); the shell request stays
+        // undrained. Raising it replaces whatever overlay was open, as the
+        // TUI's `dismiss_blocking_modals` does.
+        if self.gui_client {
+            self.gui_overlay = Some(GuiOverlay::DaemonLost(modal.clone()));
+        }
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DaemonLost(modal));
     }
 
     /// Look-ahead hint for the Next-Up card (extracted from

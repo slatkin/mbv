@@ -1,7 +1,7 @@
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogReceiver, AudiobookshelfMarkReceiver, AudiobookshelfPendingReplacement,
-    AudiobookshelfSetupCompletion, AudiobookshelfStartupReceiver, ClientFillReceiver,
-    SetupCompletion, Startup, StartupReceiver,
+    AudiobookshelfSetupCompletion, AudiobookshelfStartupReceiver, SetupCompletion, Startup,
+    StartupReceiver,
 };
 use crate::app::dispatch::session::services_settings::{AudiobookshelfSetupForm, EmbySetupForm};
 use std::sync::mpsc;
@@ -18,10 +18,6 @@ pub(in crate::app) struct ServiceSetup {
     pub(in crate::app) emby_startup_rx: Option<StartupReceiver>,
     /// Config and generation queued for Emby startup.
     pub(in crate::app) emby_startup_request: Option<StartupRequest>,
-    /// Worker for the GUI Client's minimal Emby client fill
-    /// (add-tauri-gui-client design D9's ruled exception): authentication
-    /// only, no library bootstrap.
-    pub(in crate::app) emby_client_fill_rx: Option<ClientFillReceiver>,
     /// Worker for an Audiobookshelf startup attempt, initial or retried.
     pub(in crate::app) audiobookshelf_startup_rx: Option<AudiobookshelfStartupReceiver>,
     /// Config and generation queued for Audiobookshelf startup.
@@ -52,7 +48,6 @@ impl ServiceSetup {
         Self {
             emby_startup_rx: None,
             emby_startup_request: None,
-            emby_client_fill_rx: None,
             audiobookshelf_startup_rx: None,
             audiobookshelf_startup_request: None,
             audiobookshelf_catalog_rx: None,

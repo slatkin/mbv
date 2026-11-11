@@ -2,20 +2,17 @@ use mbv_theme as palette;
 use std::time::Duration;
 
 use super::{
-    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
+    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, LibEvent, PanelFocus,
     PanelMode, QueueLink, SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection,
     ToastSeverity,
 };
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
-use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
 #[cfg(test)]
 use crate::app::state::home_latest::current_launch_secs;
-use crate::app::state::playback::{
-    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
-};
+use crate::app::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
@@ -50,7 +47,7 @@ mod library_panel;
 mod messages;
 mod modal_actions;
 mod music_workspace;
-mod now_playing;
+pub(in crate::app) mod now_playing;
 mod overlays;
 mod playback;
 mod playlists;
@@ -164,10 +161,6 @@ pub struct Model {
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
     /// from here each tick; the mpsc cannot live in the component.
     pub(in crate::app) feeds_manage: Option<FeedsManagePopup>,
-    /// Model-owned Home content (task 5.3d): the sole snapshot pushed to
-    /// `HomeComponent`; App-internal writers deliver computed snapshots via
-    /// `lib_tx`; `loading` mirrors the deleted `App.home_loading`.
-    pub(in crate::app) home_content: HomeContent,
     /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
     pub(in crate::app) acknowledged_home_latest_sources:
         std::collections::HashSet<DestinationLatestSource>,
@@ -179,14 +172,6 @@ pub struct Model {
     /// (mirrors `App.audiobookshelf_shelf_requested`; spec
     /// `destination-latest-modes`, "Destination Latest lists load lazily").
     pub(in crate::app) emby_destination_latest_requested: std::collections::HashSet<String>,
-    /// Home's per-source Recently added rows (spec
-    /// `home-latest-sections`, "Recently added combines every Latest-bearing
-    /// destination"): each Service's fetch items already
-    /// filtered to the 14-day cutoff at store time. Feeds has no entry; its
-    /// rows are derived at push time. Nothing re-uses destination Latest
-    /// data, and a destination fetch never fills Home.
-    pub(in crate::app) home_recently_added:
-        std::collections::HashMap<DestinationLatestSource, Vec<mbv_queue::QueueItem>>,
     pub(in crate::app) home_context_item: Option<mbv_emby_model::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
@@ -324,11 +309,9 @@ impl Model {
             pending_music_track_selection: None,
             pending_music_reanchor: None,
             feeds_manage: None,
-            home_content: HomeContent::new(),
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
             emby_destination_latest_requested: std::collections::HashSet::new(),
-            home_recently_added: std::collections::HashMap::new(),
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,

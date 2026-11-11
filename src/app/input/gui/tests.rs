@@ -1,6 +1,7 @@
 use std::sync::mpsc::Receiver;
 
 use mbv_ctrl::{CtrlCmd, WireCommand};
+use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest, TrackChipKind};
 
@@ -223,7 +224,14 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
     let hints: Vec<Option<&str>> = menu.entries.iter().map(|entry| entry.key_hint).collect();
     assert_eq!(
         hints,
-        vec![Some("Enter"), Some("n"), Some("w"), Some("g"), Some("dd")]
+        vec![
+            Some("Enter"),
+            Some("n"),
+            Some("w"),
+            Some("g"),
+            Some("dd"),
+            Some("c")
+        ]
     );
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert_eq!(
@@ -233,7 +241,8 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
             "Play next",
             "Mark watched",
             "Go to episode",
-            "Remove from queue"
+            "Remove from queue",
+            "Clear queue"
         ]
     );
 }
@@ -261,7 +270,7 @@ fn the_row_menu_projects_only_the_remove_entry_as_destructive() {
         panic!("the row menu projects");
     };
     let destructive: Vec<bool> = entries.iter().map(|entry| entry.destructive).collect();
-    assert_eq!(destructive, [false, false, false, false, true]);
+    assert_eq!(destructive, [false, false, false, false, true, true]);
 }
 
 // Enter on the open row menu executes the cursor entry and closes the menu:
@@ -451,6 +460,33 @@ fn open_sessions_request_toggles_the_target_chooser() {
     assert!(app.gui_overlay.is_none());
 }
 
+// The chooser's local row returns a remote output to this machine: the same
+// hand-back the Sessions sidebar's detach sends, reached from the chooser.
+#[test]
+fn the_local_chooser_row_returns_a_cast_output_to_local() {
+    let (mut app, cmd_rx) = cast_target_app();
+    app.playback_output = Some(mbv_ctrl::OutputState::Cast {
+        receiver_id: "receiver-1".to_string(),
+        name: "Living Room".to_string(),
+        connection: mbv_ctrl::OutputConnection::Connected,
+    });
+
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
+        mbv_ui_model::panel_targets::ChooserTargetKey::Local,
+    ))));
+
+    let selections: Vec<_> = cmd_rx
+        .try_iter()
+        .filter(|cmd| matches!(cmd, CtrlCmd::SelectPlaybackOutput(_)))
+        .collect();
+    assert!(matches!(
+        selections.as_slice(),
+        [CtrlCmd::SelectPlaybackOutput(
+            mbv_ctrl::OutputSelection::Local
+        )]
+    ));
+}
+
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
 // no TUI default binds `r`, and Esc — the overlay's own key rule — closes
 // it.
@@ -478,11 +514,16 @@ fn gui_context_r_opens_the_target_chooser() {
 // dispatch the TUI's Sessions sidebar applies: the cast receiver's stable
 // key resolves against the target snapshot and the Owner receives the
 // `SelectPlaybackOutput` the F3 selection sends (add-tauri-gui-client row
-// 6.4).
+// 6.4). The cursor starts on the local row, so the test moves it to the cast
+// receiver first.
 #[test]
 fn target_chooser_enter_selects_the_cursor_choice() {
     let (mut app, cmd_rx) = cast_target_app();
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)),
+        None,
+    );
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
@@ -572,4 +613,180 @@ fn gui_context_popover_chords_toggle_the_matching_popover() {
 
     app.route_gui_input(key('s'), None);
     assert_eq!(open_chip(&app), Some(TrackChipKind::Subtitles));
+}
+
+// The GUI's QueueIntent::Clear runs the TUI's own App action: the `c`
+// chord's request, which raises the shared clear-queue confirmation the
+// GUI now presents as its own overlay (add-gui-library-panel queue fixes —
+// the prompt used to be a documented no-op, so the GUI had no clear at
+// all). Enter on the overlay answers the confirm, and the owner receives
+// the answered clear op the TUI's confirm sends.
+#[test]
+fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
+    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    app.enable_gui_client();
+    app.playback_queue_mut().adopt_items(make_items(2), 0);
+
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::QueueIntent(
+        mbv_ui_msg::QueueIntent::Clear,
+    ))));
+
+    let playback = app.queue_playback_projection();
+    let Some(GuiOverlayProjection::Confirm { message, buttons }) =
+        app.gui_overlay_projection(&playback)
+    else {
+        panic!("the clear confirm presented");
+    };
+    assert_eq!(message, "Clear the queue?");
+    assert_eq!(buttons.len(), 2);
+
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+        None,
+    );
+
+    assert!(app.gui_overlay.is_none());
+    let cleared = cmd_rx.try_recv().is_ok_and(|cmd| {
+        matches!(
+            cmd,
+            CtrlCmd::UnifiedQueueClearOp { .. } | CtrlCmd::UnifiedQueueClear
+        )
+    });
+    assert!(cleared, "the owner received the clear op");
+}
+
+// The row menu's Clear queue entry raises the same confirm the `c` chord
+// does, through the shared `ContextAction::ClearQueue` execution — one App
+// action, no GUI-only route.
+#[test]
+fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
+    let mut app = make_app_stub();
+    app.enable_gui_client();
+    app.playback_queue_mut().adopt_items(make_items(2), 0);
+    let row = app
+        .displayed_queue()
+        .slot_id_at(0)
+        .expect("row 0 has a slot");
+
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        None,
+    ))));
+    let index = match &app.gui_overlay {
+        Some(GuiOverlay::RowMenu(menu)) => menu
+            .entries
+            .iter()
+            .position(|entry| matches!(entry.action, Some(ContextAction::ClearQueue)))
+            .expect("the clear entry listed"),
+        _ => panic!("the row menu did not open"),
+    };
+
+    app.select_gui_row_menu_entry(index);
+
+    match &app.gui_overlay {
+        Some(GuiOverlay::Confirm(modal)) => {
+            assert_eq!(modal.message, "Clear the queue?");
+        }
+        _ => panic!("the clear confirm did not present"),
+    }
+}
+
+// A multi-selection's row menu is the shared selection menu the TUI's
+// right-click builds, so its bulk Remove names every marked slot — the
+// GUI's own per-row builder used to drop all but the first (the
+// select-and-delete finding). Executing it sends the owner one RemoveSlots
+// edit carrying exactly those slots.
+#[test]
+fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
+    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    app.enable_gui_client();
+    app.playback_queue_mut().adopt_items(make_items(3), 0);
+    // The stub's player reports slot 0 as the now-playing row, whose removal
+    // owns its own confirmation; the selection under test is the two rows
+    // behind it, so the edit goes out without a prompt.
+    let slots: Vec<mbv_queue::QueueSlotId> = (1..3)
+        .filter_map(|index| app.displayed_queue().slot_id_at(index))
+        .collect();
+
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots.clone()),
+        None,
+    ))));
+    let index = match &app.gui_overlay {
+        Some(GuiOverlay::RowMenu(menu)) => menu
+            .entries
+            .iter()
+            .position(|entry| matches!(entry.action, Some(ContextAction::RemoveSelection(_))))
+            .expect("the bulk remove entry listed"),
+        _ => panic!("the selection menu did not open"),
+    };
+
+    app.select_gui_row_menu_entry(index);
+
+    let removed: Vec<u64> = cmd_rx
+        .try_recv()
+        .ok()
+        .and_then(|cmd| match cmd {
+            CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, .. } => Some(slot_ids),
+            _ => None,
+        })
+        .expect("the owner received one RemoveSlots edit");
+    assert_eq!(
+        removed,
+        slots.iter().map(|slot| slot.raw()).collect::<Vec<_>>()
+    );
+    assert!(app.gui_overlay.is_none());
+}
+
+// An unannounced local-Owner loss raises the recovery dialog
+// (`daemon-disconnect-handling`: "An unannounced connection loss raises a
+// recovery dialog"). The App's own raise presents it as the GUI's blocking
+// overlay, the frame carries the same diagnostics and the three recovery
+// choices the TUI's hint line offers, and the dialog blocks every other
+// input — Esc and an outside press included — until a choice runs.
+#[test]
+fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
+    let mut app = make_app_stub();
+    app.enable_gui_client();
+    app.playback_queue_mut().adopt_items(make_items(2), 0);
+
+    app.raise_daemon_lost_modal();
+
+    let playback = app.queue_playback_projection();
+    let Some(GuiOverlayProjection::DaemonLost {
+        last_playing_title,
+        daemon_log_path,
+        restart_error,
+        buttons,
+    }) = app.gui_overlay_projection(&playback)
+    else {
+        panic!("the unannounced loss raised the dialog");
+    };
+    assert_eq!(last_playing_title.as_deref(), Some("Item 0"));
+    assert!(daemon_log_path.ends_with("local-daemon.log"));
+    assert!(restart_error.is_none(), "no restart has failed yet");
+    let choices: Vec<(&str, &str)> = buttons
+        .iter()
+        .map(|button| (button.label.as_str(), button.keys.as_str()))
+        .collect();
+    assert_eq!(
+        choices,
+        [
+            ("Restart and resume", "R"),
+            ("Restart, don't resume", "S"),
+            ("Quit", "Q"),
+        ]
+    );
+
+    // No chord but the three choices does anything: the dialog's own key
+    // rules bind no default answer, and Esc must not dismiss it back to a
+    // dead Owner.
+    for code in [Key::Esc, Key::Enter, Key::Char('x')] {
+        app.route_gui_input(GuiInput::Key(KeyEvent::new(code, KeyModifiers::NONE)), None);
+        assert!(app.gui_overlay_is_open(), "{code:?} left the dialog up");
+    }
+    // An outside press leaves it up too (the confirm modal's opposite: the
+    // recovery choice is the only way out).
+    app.dismiss_open_gui_overlay();
+    assert!(app.gui_overlay_is_open());
 }

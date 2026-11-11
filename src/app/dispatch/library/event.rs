@@ -12,39 +12,51 @@ use mbv_ui_model::ui_util::sort_audio_tracks;
 mod audiobookshelf;
 mod browse_loads;
 
-/// Each variant keeps its own documented no-op arm so a future
+/// Each variant keeps its own documented arm so a future
 /// `ModelContentEvent` variant that must reach the shell drain cannot
 /// silently fall through here.
-fn handle_model_content_event(ev: ModelContentEvent) {
-    match ev {
-        // The shell drain applies the fetched snapshot: the Latest variant
-        // into the shell-owned latest snapshot, the TV Upcoming variant into
-        // the per-session Upcoming store.
-        ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
-            drop((library_id, items));
-        }
-        ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
-            drop((library_id, items));
-        }
-        // The shell drain clears the per-session request mark and unsets a
-        // waiting Upcoming root level's loading flag.
-        ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
-            drop(library_id);
-        }
-        // The shell drain stores the fetched items under their source.
-        ModelContentEvent::HomeRecentlyAddedFetched {
-            source,
-            generation,
-            items,
-        } => drop((source, generation, items)),
-        // The shell drain applies the Model-owned refreshed content.
-        ModelContentEvent::HomeContentRefreshed(content) => drop(content),
-        // Clearing Model-owned content is handled by the shell drain.
-        ModelContentEvent::HomeContentCleared => {}
-    }
-}
-
 impl App {
+    pub(in crate::app) fn handle_model_content_event(&mut self, ev: ModelContentEvent) {
+        match ev {
+            // The App-side half fills the TV library's Latest root level
+            // (row 7.1): the same write the presenting Client's shell drain
+            // runs in `update_emby_latest_snapshot`, whose own half is the
+            // shell-owned snapshot store and the projection push.
+            ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
+                self.apply_tv_latest_snapshot(&library_id, items);
+            }
+            // The App-side half accepts the per-session Upcoming snapshot
+            // and fills a waiting Upcoming root level (row 7.1): the same
+            // acceptance the presenting Client's shell drain runs.
+            ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
+                self.accept_tv_upcoming_snapshot(&library_id, items);
+            }
+            // The App-side half marks the per-session request `Failed` and
+            // unsets a waiting Upcoming root level's loading flag (row 7.1):
+            // the same write the presenting Client's shell drain runs.
+            ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
+                self.tv_upcoming_snapshot_failed(&library_id);
+            }
+            // The App stores the fetched rows under their source (row 6.2):
+            // the same acceptance the presenting Client's shell drain runs,
+            // so a Client that keeps no shell state (the GUI) stores the
+            // rows too through this drain arm.
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source,
+                generation,
+                items,
+            } => self.accept_home_recently_added(source, generation, items),
+            // A Home content write lands in the App's stored snapshot
+            // (row 6.2): the same acceptance the presenting Client's shell
+            // drain runs, so a Client that keeps no shell state (the GUI)
+            // applies the write too through this drain arm.
+            ModelContentEvent::HomeContentRefreshed(content) => {
+                self.apply_home_content(Some(*content));
+            }
+            ModelContentEvent::HomeContentCleared => self.apply_home_content(None),
+        }
+    }
+
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Browse(event) => self.handle_browse_event(event),
@@ -52,8 +64,20 @@ impl App {
             LibEvent::Series(event) => self.handle_series_event(event),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
-            // The shell drain applies Model-owned content.
-            LibEvent::ModelContent(event) => handle_model_content_event(event),
+            // The GUI Library's collection store owns this event (add-gui-
+            // library-panel design D5); the TUI never starts one.
+            LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
+            // The GUI Library's root-list store owns this event (add-gui-
+            // library-panel design D12, row 8.1); the TUI never starts one.
+            LibEvent::GuiEmbyRootItems(event) => self.handle_gui_emby_root_items(event),
+            // The GUI Library's destination-Latest store owns this event (row
+            // 8.1); the TUI never starts one.
+            LibEvent::GuiEmbyLatestItems(event) => self.handle_gui_emby_latest_items(event),
+            // A `ModelContent` event's App-side half is
+            // `handle_model_content_event`: the GUI's drain runs it, and the
+            // shell drain joins only its projection work around the same
+            // semantics.
+            LibEvent::ModelContent(event) => self.handle_model_content_event(event),
             LibEvent::Error(error) => self.handle_error(&error),
         }
     }

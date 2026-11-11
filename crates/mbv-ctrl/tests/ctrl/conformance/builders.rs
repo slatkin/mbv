@@ -78,6 +78,7 @@ pub(crate) fn emby_queue_item() -> QueueItem {
         index_number: 1,
         parent_index_number: 1,
         unplayed_item_count: 0,
+        parent_id: String::new(),
         path: String::new(),
         artist: String::new(),
         track_artist: String::new(),

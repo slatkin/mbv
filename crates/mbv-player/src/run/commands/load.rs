@@ -141,6 +141,19 @@ impl PlaybackRun {
         }
         let start_idx = start_idx.min(items.len() - 1);
         self.close_prepared_source();
+        // The rebuild's own mpv surgery (the `stop`, then the no-play loads)
+        // moves `playlist-count` while the run's queue copy still holds the
+        // outgoing queue: the drift handler must read none of it as external
+        // (design D3's load-then-play window). The gate stays armed past this
+        // synchronous handler — mpv's count observations arrive on later run
+        // loop iterations — and disarms when the rebuild settles: the first
+        // observed count equal to the copy's length
+        // (`on_playlist_count_changed`), or the start item's PlaybackRestart
+        // (`on_playback_restart`). A synchronous disarm here would leave the
+        // gate down exactly when the rebuild's own count events land, and the
+        // drift handler would then delete the copy the plan just replaced
+        // (local-daemon.log 2026-11-08T19:33:53, the GUI queue fix).
+        self.pending_initial_playlist_layout = true;
 
         // Loading new items should always start playing, even if mpv was
         // left paused on the previous item (reused-window fast path).
@@ -240,7 +253,8 @@ impl PlaybackRun {
         // slot; the outgoing session's stop report above already ran under the
         // previous span (design D5).
         self.rebuild_playback_span();
-        self.pending_initial_playlist_layout = false;
+        // No gate disarm here: the rebuild's count observations have not
+        // arrived yet (see the arming comment in `cmd_submit_queue`).
         if join_progress {
             progress.stop_and_join(Self::progress_join_budget());
         }

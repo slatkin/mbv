@@ -63,6 +63,63 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     );
 }
 
+// Owns the auto-reconnect teardown rule (the local-Client exit must not
+// erase the saved target): an exit that merely had no remote at the moment --
+// the App never attached a remote this run and never explicitly left one --
+// keeps the record a previous run saved, exactly as a Client that never
+// changed the connection this run must not clear it.
+#[test]
+fn teardown_without_a_remote_keeps_the_saved_target() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _ = crate::config::save_last_remote_connection(Some(
+        &crate::config::LastRemoteConnection::DirectSession {
+            device_name: "music".to_string(),
+        },
+    ));
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().auto_reconnect = true;
+
+    app.teardown(
+        Duration::from_secs(1),
+        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
+    );
+
+    assert_eq!(
+        crate::config::load_last_remote_connection().unwrap(),
+        Some(crate::config::LastRemoteConnection::DirectSession {
+            device_name: "music".to_string(),
+        })
+    );
+}
+
+// The other side of the same rule: the user explicitly left the remote this
+// run (`disconnect_remote` under Direct remote control), so teardown clears
+// the record the previous run saved and the next launch stays local.
+#[test]
+fn teardown_after_an_explicit_disconnect_clears_the_saved_target() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _ = crate::config::save_last_remote_connection(Some(
+        &crate::config::LastRemoteConnection::DirectSession {
+            device_name: "music".to_string(),
+        },
+    ));
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().auto_reconnect = true;
+    app.direct_remote_connected = true;
+    // The Local endpoint puts `restore_local_mode` on its own local-baseline
+    // early return, so the detach needs no owner connection.
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+
+    app.disconnect_remote();
+
+    app.teardown(
+        Duration::from_secs(1),
+        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
+    );
+
+    assert_eq!(crate::config::load_last_remote_connection().unwrap(), None);
+}
+
 // Owns daemon-lifecycle "Swapped-out TUI with Stay Alive off" (tray-pin-swap
 // 4.4, shell layer per docs/architecture/tui-frontend.md): a `SwapQuit` marks
 // the shell exit swapped-out, and teardown then sends no coordinated shutdown

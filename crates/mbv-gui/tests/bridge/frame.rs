@@ -40,6 +40,7 @@ fn frame_with_playback_surface(app: &mut App, playback: &QueuePlaybackSurface) -
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     })
 }
 
@@ -65,6 +66,7 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     })
 }
 
@@ -263,7 +265,8 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
             "Play next",
             "Mark watched",
             "Go to episode",
-            "Remove from queue"
+            "Remove from queue",
+            "Clear queue"
         ]
     );
     let hints: Vec<Option<&str>> = entries
@@ -272,7 +275,14 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         .collect();
     assert_eq!(
         hints,
-        [Some("Enter"), Some("n"), Some("w"), Some("g"), Some("dd")]
+        [
+            Some("Enter"),
+            Some("n"),
+            Some("w"),
+            Some("g"),
+            Some("dd"),
+            Some("c")
+        ]
     );
 }
 
@@ -642,6 +652,7 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     });
 
     let hover = frame.playback.hover.expect("the frame carries the hover");
@@ -660,6 +671,7 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     });
     assert!(frame.playback.hover.is_none());
 }

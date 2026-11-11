@@ -1,8 +1,7 @@
 //! Tests for the Client-side item-metadata fetches (add-tauri-gui-client
 //! design D4a): the fetch seams map each kind's response into the
 //! decorations, failures project as empty, the drain lands completions in
-//! the cache, and the projection reads it. The fill's own tests live in
-//! `crate::app::tests::emby_client_fill`.
+//! the cache, and the projection reads it.
 
 use super::*;
 

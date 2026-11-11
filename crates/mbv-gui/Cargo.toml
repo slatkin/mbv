@@ -46,6 +46,11 @@ mbv = { path = "../..", features = ["test"] }
 # The core-thread tests assert the ctrl commands a selection or transport
 # request records on the stub player's command channel.
 mbv-ctrl = { path = "../mbv-ctrl" }
+# The startup tests build the attach's cached client and answer its Emby
+# requests from the in-memory mock transport, so no request leaves the
+# process.
+mbv-emby = { path = "../mbv-emby" }
+mbv-net = { path = "../mbv-net", features = ["test"] }
 # The core-thread test seeds the card image cache with a decoded image.
 image = { workspace = true, features = ["png"] }
 rstest.workspace = true

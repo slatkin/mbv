@@ -37,6 +37,7 @@
 		Check,
 		ChevronDown,
 		Maximize2,
+		Monitor,
 		Pause,
 		Play,
 		SkipBack,
@@ -324,9 +325,11 @@
 		chooser row is its own `targetChoice` region; Esc and an outside press
 		close the popover in the core. The canvas paints no queue-fold control
 		here (`main` audit 4): `q` stays a chord. -->
+	<!-- The header is as tall as the Library top bar (56 px), so the two bottom
+		borders line up across the window; its controls centre vertically. -->
 	<div
 		class="relative flex items-center justify-between whitespace-nowrap"
-		style:height="44px"
+		style:height="56px"
 		style:padding="0 8px 0 4px"
 		style:border-bottom="1px solid var(--mbv-border)"
 	>
@@ -399,6 +402,9 @@
 								<Check size={14} color={roleVar('accent')} />
 							{/if}
 						</span>
+						{#if choice.key.kind === 'local'}
+							<Monitor size={14} color={roleVar('playbackTargetLocalFg')} />
+						{/if}
 						<span class="truncate">{choice.label}</span>
 					</button>
 				{/each}

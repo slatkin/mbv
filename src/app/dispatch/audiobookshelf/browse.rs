@@ -46,6 +46,30 @@ impl App {
         self.start_audiobookshelf_detail_inner(library_item_id, false);
     }
 
+    /// The one-shot destination Latest shelf fetch for `library_id` (design
+    /// D12, row 10.1, spec `destination-latest-modes`, "Destination Latest
+    /// lists load lazily"): the fetch runs once per session while that
+    /// library's Latest pill is selected — from the TUI's projection pass and
+    /// from the GUI's frame path — so both Clients' App data hold the same
+    /// shelf. The request set is the single-flight guard, so a repeated pass
+    /// loads nothing and returns `false`; `true` means this call started the
+    /// fetch.
+    pub(in crate::app) fn ensure_audiobookshelf_latest_shelf(&mut self, library_id: &str) -> bool {
+        if !self
+            .audiobookshelf_shelf_requested
+            .insert(library_id.to_string())
+        {
+            return false;
+        }
+        crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
+            self.config.lock().unwrap().clone(),
+            self.audiobookshelf_runtime.generation(),
+            library_id.to_string(),
+            self.channels.lib_tx.clone(),
+        );
+        true
+    }
+
     /// `force` (design D2 refresh) issues a fresh request even when the show
     /// already has a cached entry or an in-flight fetch: the old episodes stay
     /// published until the fresh result replaces them, and the new serial
@@ -502,7 +526,7 @@ pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
 }
-pub(super) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
+pub(in crate::app) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0).then(|| {
         let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).round());
         u64::try_from(ticks).unwrap_or(0)

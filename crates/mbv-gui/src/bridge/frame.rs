@@ -10,6 +10,7 @@
 
 pub mod chrome;
 pub mod focus;
+pub mod library;
 pub mod overlay;
 pub mod playback;
 pub mod queue;
@@ -23,6 +24,7 @@ use serde::Serialize;
 
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
+use self::library::GuiLibraryFrame;
 use self::overlay::GuiOverlayFrame;
 use self::playback::{GuiCardArtwork, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile};
 use self::queue::{GuiQueue, GuiQueueSummary};
@@ -106,6 +108,11 @@ pub struct GuiFrame {
     pub footer: GuiQueueFooter,
     /// The Status bar projection.
     pub status: GuiStatusBar,
+    /// The Library panel's section (add-gui-library-panel design D2): the
+    /// active destination's content under its revision. `None` while no
+    /// presented Library destination is active — the front end mounts the
+    /// Library panel only for a frame that carries the section.
+    pub library: Option<GuiLibraryFrame>,
     /// The role-to-colour map (design D7). `None` unless the theme changed for
     /// this window.
     pub theme: Option<GuiTheme>,
@@ -142,6 +149,11 @@ pub struct FrameSources<'a> {
     /// value the core thread's memo built, `None` when the last frame already
     /// carried it.
     pub artwork: Option<GuiCardArtwork>,
+    /// The Library panel's section (add-gui-library-panel design D2): the
+    /// core thread's memo builds it, so a frame carries the content only when
+    /// its revision changed. `None` while no presented Library destination is
+    /// active.
+    pub library: Option<GuiLibraryFrame>,
 }
 
 impl GuiFrame {
@@ -174,6 +186,7 @@ impl GuiFrame {
             },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
+            library: sources.library.clone(),
             theme: sources.theme_changed.then(GuiTheme::current),
         }
     }

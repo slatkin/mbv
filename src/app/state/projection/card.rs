@@ -142,7 +142,11 @@ fn item_kind(item: &QueueItem) -> &str {
     }
 }
 
-fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
+/// The artwork chain the fetch issues for `item` (the queue card's
+/// conventions), re-read by the GUI Home projection's own art (design D12:
+/// the same chain the now-playing card fetches, so a Home row whose item
+/// plays shares its cache entry).
+pub(in crate::app) fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
     match item.item_type.as_str() {
         "MusicAlbum" => MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
@@ -209,7 +213,9 @@ fn overlay_logo_source(item: &EmbyItem) -> Option<OverlayLogoSource> {
 /// Movie-only: the artwork policy also classifies an Episode as Landscape
 /// through its series tags, but an episode's card shows the episode's own
 /// still, so it keeps the portrait `{id}:P` key (user-reported regression).
-fn card_cache_key(item: &EmbyItem) -> String {
+/// The artwork cache key the card fetch issues for `item` (the queue card's
+/// conventions), re-read by the GUI Home projection's own art (design D12).
+pub(in crate::app) fn card_cache_key(item: &EmbyItem) -> String {
     if item.item_type == "Audio" {
         mbv_images::emby_card_cache_key(&item.id, &item.album_id)
     } else if item.item_type == "Movie" {

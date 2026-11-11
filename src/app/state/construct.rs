@@ -1,4 +1,5 @@
 use crate::app::state::app_struct::LaunchRestore;
+use crate::app::state::playback::HomeContent;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
 use indexmap::IndexMap;
@@ -91,6 +92,8 @@ impl App {
         let mut app = App {
             #[cfg(any(test, feature = "test"))]
             _test_state_dir_guard: test_state_dir_guard,
+            #[cfg(any(test, feature = "test"))]
+            cast_discovery_starts: 0,
             config: init.config,
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,
@@ -183,6 +186,17 @@ impl App {
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
+            // The GUI Client sets this before its first step; a TUI Client
+            // keeps the TUI's panel rules.
+            gui_client: false,
+            // The GUI Library panel's Client-core state starts empty:
+            // the window content's first command selects a destination's
+            // collections and an item's detail (add-gui-library-panel
+            // design D2, D5).
+            gui_library_groups: std::collections::HashMap::new(),
+            gui_music_albums: std::collections::HashMap::new(),
+            gui_library_picks: std::collections::HashMap::new(),
+            gui_library_row_menu_target: None,
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.
@@ -205,6 +219,18 @@ impl App {
             visualizer_glyph: init.visualizer_glyph,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
             card_artwork_encoded: None,
+            gui_library_art_encoded: None,
+            gui_home_selection: None,
+            gui_tv_shows: std::collections::HashMap::new(),
+            gui_emby_libs: std::collections::HashMap::new(),
+            gui_emby_roots: std::collections::HashMap::new(),
+            gui_emby_latest: std::collections::HashMap::new(),
+            gui_abs_libs: std::collections::HashMap::new(),
+            gui_podcast_libs: std::collections::HashMap::new(),
+            gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),
+            gui_search: crate::app::gui_library::GuiSearchStore::default(),
+            gui_home_art_encoded: std::collections::HashMap::new(),
+            gui_hero_art_encoded: std::collections::HashMap::new(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
@@ -235,6 +261,7 @@ impl App {
             direct_remote_session_id: None,
             suspended_local: None,
             active_route: None,
+            left_remote_this_run: false,
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             prefix_armed: false,
@@ -276,6 +303,8 @@ impl App {
             pending_series_season_expansions: std::collections::HashSet::new(),
             player_endpoint: None,
             idle_feed: init.idle_feed,
+            home_content: HomeContent::default(),
+            home_recently_added: std::collections::HashMap::new(),
             feed_seek_pending_slot: None,
             feed_tab: mbv_ui_model::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_feed::FeedEntryStore::load(),

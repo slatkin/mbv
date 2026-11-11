@@ -433,7 +433,7 @@ test('an open target chooser reports one region per row', async () => {
 test('an open chooser reports its rows after the queue and footer regions', async () => {
 	const { rerender } = renderPanel();
 	render(QueuePanel, { queue: queue(), focused: false, panelFocused: false });
-	render(QueueFooter, { footer, status: idle });
+	render(QueueFooter, { footer, status: idle, libraryVisible: false });
 
 	await rerender({ playback: playing(), overlay: chooserOverlay() });
 

@@ -46,10 +46,11 @@ impl App {
     /// active Tab selection, "Remove from Continue Watching" appears exactly
     /// when the Home component has Continue Watching selected.
     ///
-    /// `cw_item` is the resolved Continue Watching column item (Model-owned
-    /// `home_content.continue_items[continue_cursor]`, resolved at the Model
-    /// boundary, task 5.3d) that the Home arm builds its entries from — the
-    /// App no longer holds the deleted `home.continue_items` to re-read.
+    /// `cw_item` is the resolved Continue Watching column item (the
+    /// App-stored `home_content.continue_items[continue_cursor]`, resolved at
+    /// the Model boundary, task 5.3d) that the Home arm builds its entries
+    /// from — the App no longer holds the deleted `home.continue_items` to
+    /// re-read.
     fn build_context_menu(
         &mut self,
         home_cw_selected: bool,
@@ -63,7 +64,11 @@ impl App {
     /// focused, the shell resolves the track (the component owns the cursor)
     /// and passes it here so '.' targets the focused track instead of the
     /// album row. All other arms resolve exactly as `build_context_menu`.
-    fn build_context_menu_for(
+    ///
+    /// The GUI Library panel calls it for its picked item (add-gui-library-
+    /// panel design D8) and never raises the result through `pending_overlay`:
+    /// the frame carries the entries to the window content.
+    pub(in crate::app) fn build_context_menu_for(
         &mut self,
         tracked_item: Option<EmbyItem>,
         home_cw_selected: bool,
@@ -546,11 +551,80 @@ impl App {
         capabilities: Vec<ItemCapabilities>,
         remove_targets: Vec<BulkRemoveTarget>,
     ) {
-        let Some(capabilities) =
-            crate::app::state::context_menu_capabilities::intersect(capabilities)
-        else {
-            return;
-        };
+        if let Some(menu) =
+            Self::build_selection_menu(capabilities, items, remove_targets, focus, anchor)
+        {
+            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        }
+    }
+
+    /// The selection menu without the shell raise: the same entries
+    /// `open_context_menu_for_selection` builds, returned instead of raised
+    /// through `pending_overlay`. The GUI Client's queue row menu takes it for
+    /// a multi-selection right-click (its canvas menu is a per-row menu, so
+    /// the shared builder is the only bulk-entry source), and never raises
+    /// it — the frame carries the entries to the window content, which
+    /// anchors the menu on the first selected slot itself.
+    pub(in crate::app) fn build_queue_selection_menu(
+        &mut self,
+        slot_ids: &[mbv_queue::QueueSlotId],
+    ) -> Option<ContextMenu> {
+        self.build_queue_selection_menu_at(slot_ids, None)
+    }
+
+    /// [`build_queue_selection_menu`](Self::build_queue_selection_menu) with
+    /// the opening gesture's pointer anchor: the TUI's multi-selection
+    /// right-click raises the menu at the pointer, exactly as its single-row
+    /// right-click does.
+    pub(in crate::app) fn build_queue_selection_menu_at(
+        &mut self,
+        slot_ids: &[mbv_queue::QueueSlotId],
+        anchor: Option<(u16, u16)>,
+    ) -> Option<ContextMenu> {
+        let link = self.playing_queue_link();
+        let (items, remove_targets, capabilities) = slot_ids
+            .iter()
+            .filter_map(|sid| {
+                let slot = self.queue_for_link(link).slot(*sid)?;
+                let item = slot.item.as_emby().cloned();
+                let remove = mbv_ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
+                let capability =
+                    crate::app::state::context_menu_capabilities::queue_item_capabilities(
+                        &slot.item,
+                    );
+                Some((item, remove, capability))
+            })
+            .fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut items, mut removes, mut capabilities), (item, remove, capability)| {
+                    if let Some(item) = item {
+                        items.push(item);
+                    }
+                    removes.push(remove);
+                    capabilities.push(capability);
+                    (items, removes, capabilities)
+                },
+            );
+        Self::build_selection_menu(
+            capabilities,
+            &items,
+            remove_targets,
+            mbv_ui_model::settings::PanelFocus::Queue,
+            anchor,
+        )
+    }
+
+    /// The common multi-selection menu's entries, without the shell raise:
+    /// capability derivation is an intersection — an action is present only
+    /// when every selected item has the corresponding backend.
+    pub(in crate::app) fn build_selection_menu(
+        capabilities: Vec<ItemCapabilities>,
+        items: &[EmbyItem],
+        remove_targets: Vec<BulkRemoveTarget>,
+        focus: PanelFocus,
+        anchor: Option<(u16, u16)>,
+    ) -> Option<ContextMenu> {
+        let capabilities = crate::app::state::context_menu_capabilities::intersect(capabilities)?;
         let mut entries = Vec::new();
         if matches!(focus, PanelFocus::Library)
             && capabilities.playable
@@ -595,14 +669,14 @@ impl App {
             );
         }
         if entries.is_empty() {
-            return;
+            return None;
         }
-        self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
+        Some(ContextMenu {
             anchor: menu_anchor(anchor, focus),
             cursor: 0,
             entries,
             bounds: None,
-        }));
+        })
     }
 
     /// [`open_context_menu_for`](Self::open_context_menu_for) anchored at a

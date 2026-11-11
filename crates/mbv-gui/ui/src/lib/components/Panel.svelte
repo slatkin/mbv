@@ -39,8 +39,12 @@
 		/** The panel container's measured painted size (design D10), as `App`
 		 * measures and reports it. */
 		container: LayoutSize;
+		/** Whether the Library panel shows beside this one (design D10): the
+		 * Library Status bar owns the frame's armed prefix and live toast then,
+		 * so the queue footer line paints neither. */
+		libraryVisible: boolean;
 	}
-	const { frame, container }: Props = $props();
+	const { frame, container, libraryVisible }: Props = $props();
 
 	/** The artwork the window carries for the active item (design D10). */
 	let carriedArt = $state<GuiCardArtwork | null>(null);
@@ -118,6 +122,6 @@
 				/>
 			{/if}
 		</div>
-		<QueueFooter footer={frame.footer} status={frame.status} />
+		<QueueFooter footer={frame.footer} status={frame.status} {libraryVisible} />
 	</div>
 {/if}

@@ -1,7 +1,72 @@
 // The wire types of the GUI bridge contract (openspec change
 // add-tauri-gui-client, design D4). Each type mirrors one serde DTO in
 // crates/mbv-gui/src/bridge/ field for field: the names are the serde wire
-// names, so a rename on the Rust side is a rename here.
+// names, so a rename on the Rust side is a rename here. The Library family
+// lives in `library-types.ts`; this module re-exports it so every consumer
+// keeps importing from the one bridge module.
+
+import type { GuiLibraryFrame } from './library-types';
+
+export type {
+	GuiArtistKey,
+	GuiAudiobooksChapterRow,
+	GuiAudiobooksFrame,
+	GuiAudiobooksHero,
+	GuiAudiobooksRow,
+	GuiAudiobooksWorkspace,
+	GuiHomeContentId,
+	GuiHomeFrame,
+	GuiHomeHero,
+	GuiHomeRow,
+	GuiHomeRowId,
+	GuiHomeRowKind,
+	GuiHomeRowState,
+	GuiLibraryArt,
+	GuiLibraryCommand,
+	GuiLibraryContent,
+	GuiLibraryFrame,
+	GuiLibraryTab,
+	GuiMusicAlbum,
+	GuiMusicArtist,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiMusicMenuEntryFrame,
+	GuiMusicPill,
+	GuiLibraryRowMenu,
+	GuiMusicTrack,
+	GuiMusicTrackTotal,
+	GuiPodcastPill,
+	GuiPodcastsFrame,
+	GuiPodcastsHero,
+	GuiPodcastsPill,
+	GuiPodcastsRow,
+	GuiEmbyFeedGroup,
+	GuiEmbyFrame,
+	GuiEmbyHero,
+	GuiEmbyHeroCredit,
+	GuiEmbyPill,
+	GuiEmbyRow,
+	GuiFeedPill,
+	GuiFeedsFrame,
+	GuiFeedsHero,
+	GuiFeedsLibraryCommand,
+	GuiFeedsPill,
+	GuiFeedsRow,
+	GuiSearchFrame,
+	GuiSearchLibraryCommand,
+	GuiSearchRow,
+	GuiEmbyRowKind,
+	GuiShowsEpisodeRow,
+	GuiShowsFrame,
+	GuiShowsHero,
+	GuiShowsMode,
+	GuiShowsPill,
+	GuiShowsRow,
+	GuiShowsSeasonNode,
+	GuiShowsSeasonPill,
+	GuiShowsSeries,
+	GuiShowsWorkspace,
+} from './library-types';
 
 /** One `mbv://frame` payload: the attached slice's frame, or the state of a window whose Owner attach has not finished (design D9). */
 export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
@@ -20,6 +85,10 @@ export interface GuiFrame {
 	playback: GuiQueuePlayback;
 	footer: GuiQueueFooter;
 	status: GuiStatusBar;
+	/** The Library panel's section (add-gui-library-panel design D2): the
+	 * active destination's content under its revision. `null` while no Library
+	 * panel shows. */
+	library: GuiLibraryFrame | null;
 	/** `null` unless the theme changed for this window (design D7). */
 	theme: GuiTheme | null;
 }
@@ -116,7 +185,42 @@ export type GuiOverlayFrame =
 			kind: 'targetChooser';
 			cursor: number;
 			choices: GuiTargetChoice[];
+	  }
+	| {
+			/** The shared confirmation modal the App raised: the message and
+			 * the button row, each with its key hint and tone. The action
+			 * stays in the core's held state, so a press or key answers what
+			 * the window painted. */
+			kind: 'confirm';
+			message: string;
+			buttons: GuiConfirmButton[];
+	  }
+	| {
+			/** The daemon-lost recovery dialog the App raised
+			 * (`daemon-disconnect-handling`: an unannounced connection loss
+			 * raises a recovery dialog): the diagnostics the TUI's modal
+			 * paints and the recovery choices, each with its key hint and
+			 * tone. The dialog stays in the core's held state, so a press or
+			 * key answers what the window painted. */
+			kind: 'daemonLost';
+			/** The title of whatever was playing right before the Owner
+			 * vanished; `null` when nothing was. */
+			lastPlayingTitle: string | null;
+			/** Where the local daemon's own log lives. */
+			daemonLogPath: string;
+			/** The last restart attempt's failure: the dialog's
+			 * `Restart failed:` line. */
+			restartError: string | null;
+			buttons: GuiConfirmButton[];
 	  };
+
+/** One button of the confirm overlay: the label, the key hint inside the
+ * pill (`Enter`, `Esc`), and how the canvas paints it. */
+export interface GuiConfirmButton {
+	label: string;
+	keys: string;
+	tone: 'affirmative' | 'cancel';
+}
 
 /** One row-menu entry: the label, the key hint that selects it directly
  * when it has one, and whether the entry is destructive (the canvas paints
@@ -403,9 +507,12 @@ export interface GuiTargetChoice {
 	isActive: boolean;
 }
 
-/** A playback target's stable identity: the Emby session id, or the cast
- * receiver id. */
-export type GuiTargetKey = { kind: 'emby'; id: string } | { kind: 'cast'; id: string };
+/** A playback target's stable identity: this machine's local output, the Emby
+ * session id, or the cast receiver id. */
+export type GuiTargetKey =
+	| { kind: 'local' }
+	| { kind: 'emby'; id: string }
+	| { kind: 'cast'; id: string };
 
 /** One status indicator of the queue band's cluster: the uppercased label
  * and the foreground role its text paints in. */
@@ -628,7 +735,12 @@ export type RegionTarget =
 	| { surface: 'queue'; id: QueueTargetId }
 	| { surface: 'queuePlayback'; id: QueuePlaybackTargetId }
 	| { surface: 'statusBar'; id: StatusBarTargetId }
-	| { surface: 'attach'; id: AttachTargetId };
+	| { surface: 'attach'; id: AttachTargetId }
+	/** The confirm overlay's button, by index in the overlay's `buttons`. */
+	| { surface: 'confirm'; id: { button: number } }
+	/** The daemon-lost dialog's button, by index in the overlay's
+	 * `buttons`. */
+	| { surface: 'daemonLost'; id: { button: number } };
 
 /** The pre-attach screen's button targets (design D9). */
 export type AttachTargetId = 'restart' | 'quit';

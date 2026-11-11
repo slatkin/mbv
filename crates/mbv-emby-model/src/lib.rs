@@ -123,6 +123,12 @@ pub struct EmbyItem {
     pub index_number: i64,
     pub parent_index_number: i64,
     pub unplayed_item_count: u32,
+    /// The containing item's Service id: the folder a homevideos video sits
+    /// in, an episode's season. Empty when the payload declares none.
+    /// `Default` so legacy serialized queue items (which predate the field)
+    /// deserialize unchanged; an older Owner ignores the field on decode.
+    #[serde(default)]
+    pub parent_id: String,
     pub path: String,
     pub artist: String,
     /// The track-level artist from the payload's `Artists` list (first
@@ -311,6 +317,7 @@ impl EmbyItem {
             index_number: 0,
             parent_index_number: 0,
             unplayed_item_count: 0,
+            parent_id: String::new(),
             path: String::new(),
             artist: String::new(),
             track_artist: String::new(),

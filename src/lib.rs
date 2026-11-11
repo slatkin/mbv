@@ -21,16 +21,28 @@ mod startup;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
-    ClientTickHost, ClientWaker, Command, FooterPill, GuiInput, GuiOverlayProjection,
-    GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
-    PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
-    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
-    QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, ShellCommand, StartupWorkerDrain, StatusBarProjection,
-    TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, TrickplayGrid,
-    TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent, WorkspaceRelayout,
-    resolve_router_outcome_with_focused,
+    ClientTickHost, ClientWaker, Command, FooterPill, GuiArtShape, GuiAudiobooksChapterRow,
+    GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow, GuiAudiobooksWorkspace,
+    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiDestinationKind, GuiEmbyFeedGroup,
+    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+    GuiEntryListProjection, GuiEntryRow, GuiFeedEntryId, GuiFeedPill, GuiFeedsHero,
+    GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection, GuiHomeHero,
+    GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState,
+    GuiInput, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryCommand, GuiLibraryMenuItem,
+    GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
+    GuiMusicPill, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiOverlayProjection,
+    GuiPillOption, GuiPodcastEpisodeId, GuiPodcastPill, GuiPodcastsHero, GuiPodcastsPillOption,
+    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow, GuiShowsEpisodeRow,
+    GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
+    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace, GuiSurfaceLeaf, HomeContent,
+    HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent, PanelTogglesProjection,
+    PlaybackChapter, PlaybackDecorations, PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain,
+    QueueCardArtwork, QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn,
+    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
+    RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SegmentMark,
+    ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
+    TrackChoice, TrackPopoverChoice, TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey,
+    TrickplayTile, VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
@@ -45,9 +57,11 @@ pub use mbv_ui_msg::TrackChipKind;
 /// `test` feature, which no shipped build enables.
 #[cfg(feature = "test")]
 pub use self::app::{
-    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_armed_emby_fill,
-    stub_app_with_cast_target, stub_app_with_open_row_menu, stub_app_with_pending_settings_save,
-    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_prefix_and_toast,
-    stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
-    stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
+    stub_app_with_cast_target, stub_app_with_completed_emby_startup,
+    stub_app_with_completed_emby_startup_and_contents, stub_app_with_local_daemon_events,
+    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
+    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };

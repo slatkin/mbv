@@ -1,0 +1,790 @@
+// The Library panel's own state (add-gui-library-panel design D1): what the
+// window content owns and the core never reads there. Two stores keep the two kinds
+// apart — the content the frame carries, kept from the last frame that carried
+// it, and the interaction state the panel's keys and controls move.
+//
+// The core owns the data selection (which collections are selected, the picked
+// item), so nothing here mirrors it: the pill toggle the keys request is an
+// intent the pill row turns into the set-collections command (design D6).
+
+import { get, writable } from 'svelte/store';
+import type { GuiArrangement } from '$lib/bridge/arrangement';
+import { sendLibraryCommand } from '$lib/bridge/library';
+import type {
+	GuiAudiobooksFrame,
+	GuiEmbyFrame,
+	GuiHomeFrame,
+	GuiLibraryContent,
+	GuiLibraryFrame,
+	GuiMusicFrame,
+	GuiMusicPill,
+	GuiPodcastsFrame,
+	GuiShowsFrame,
+} from '$lib/bridge/types';
+import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
+import {
+	albumRowId,
+	artistRowId,
+	buildLibraryRows,
+	clampScrollTop,
+	letterRail,
+	listWindow,
+	moveListCursor,
+	scrollTopToShowCursor,
+} from './list';
+import { jumpToLetter as railJump } from './list';
+import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
+
+/** The panes Tab moves focus across (design D3, step 3). The Queue panel is
+ * the pane past the Hero, but it takes Panel focus through the core's focus
+ * stack, which no key command reaches (design D4). */
+export type LibraryPane = 'pills' | 'list' | 'hero';
+
+/** The order Tab and Shift+Tab walk the panes in (design D3, step 3). */
+const PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+
+/** The Library panel's interaction state. */
+export interface LibraryUiState {
+	/** The pane the window content focuses. */
+	pane: LibraryPane;
+	/** Whether a text field of the panel holds the keyboard (design D3,
+	 * step 2). */
+	filterOpen: boolean;
+	/** The filter's text: the `/` field types it, and it narrows the list
+	 * without case (design D7). */
+	filter: string;
+	/** The pill Left and Right move the focus to, or `null` while no pill has
+	 * it (design D6). */
+	focusedPill: string | null;
+	/** The pill selection the keys asked for: Space and Enter select the
+	 * focused pill (design D6). The pill row turns it into the
+	 * select-collection command. */
+	pillSelect: { groupId: string } | null;
+	/** The list's cursor row id, or `null` while no row carries the cursor
+	 * (design D7). The cursor and the picked item are different: the cursor
+	 * moves by keys, and the picked album is the core's. */
+	cursor: string | null;
+	/** The list's open tree node row ids (design D7): an artist and an album
+	 * each open and close on their own. */
+	openNodes: string[];
+	/** The node row ids the user closed while the filter narrowed the rows:
+	 * the filter opens a node that holds a match, so the close half needs an
+	 * override to stay shut (design D7's open and close). A new filter and a
+	 * cleared one drop it. */
+	filterClosed: string[];
+	/** The list's native scroll offset in pixels (design D7). */
+	scrollTop: number;
+	/** The list's measured viewport height in pixels: `0` until the list
+	 * measures, and then the rows that paint are the rows in view. */
+	viewportHeight: number;
+	/** The tracklist's cursor track id (design D3): the Hero's tracklist row
+	 * the movement keys rest on while the Hero pane has the pane focus. */
+	trackCursor: string | null;
+	/** Whether the Narrow arrangement's Hero overlay is dismissed (design D4,
+	 * D3): a pick paints it again, and Esc or a press on its backdrop closes
+	 * it. */
+	heroDismissed: boolean;
+	/** Whether the picked item's menu is open (design D8): More actions opens
+	 * it, a chosen entry runs and closes it, and Esc closes it. */
+	itemMenuOpen: boolean;
+	/** The right-click item menu (the row-menu command): the item a row
+	 * right-press named with the pointer position it opened at. `null` while
+	 * no right-click menu is up. The menu paints only while the frame carries
+	 * that item's entries, so a stale open state paints nothing. */
+	rowMenu: { itemId: string; x: number; y: number } | null;
+	/** The arrangement the panel paints, reported by the panel (design D4): the
+	 * keys close the Narrow Hero overlay only where one paints, so Esc in Wide
+	 * stays the core's. `null` until the panel reports. */
+	arrangement: GuiArrangement | null;
+}
+
+/** The Library panel's panes on Home (design D12): the flat list and the
+ * Hero. Home paints no pill row and no letter rail, so the pane walk skips
+ * them. */
+export const HOME_PANES: readonly LibraryPane[] = ['list', 'hero'];
+
+/** The Library panel's panes on Shows (design D12, row 7.1): the mode pills,
+ * the list, and the Hero. The Upcoming mode paints no Hero, so the walk skips
+ * it there. */
+export const SHOWS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const SHOWS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
+/** The Library panel's panes on the Audiobooks destination (design D12, row
+ * 9.1): the book list and the Hero. No pill row rides on the destination — the
+ * letter rail replaces the TUI's surname buckets — and the Hero's chapter
+ * Workspace belongs to the Hero pane. */
+export const AUIB_PANES: readonly LibraryPane[] = ['list', 'hero'];
+export const AUIB_PANES_NO_HERO: readonly LibraryPane[] = ['list'];
+
+/** The Library panel's panes on a plain Emby library (design D12, row 8.1):
+ * the list and the Hero, because a plain library paints no pills — its letter
+ * rail replaces the TUI's letter-range pill row. */
+export const EMBY_PANES: readonly LibraryPane[] = ['list', 'hero'];
+export const EMBY_PANES_NO_HERO: readonly LibraryPane[] = ['list'];
+
+/** The Library panel's panes on a feed-group Emby library (design D12, row
+ * 8.1): the feed-group pills, the list, and the Hero. */
+export const EMBY_FEED_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const EMBY_FEED_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
+/** The Library panel's panes on the Podcasts destination (design D12, row
+ * 10.1): the episode pills, the date-gutter list, and the Hero. A frame
+ * without a Hero leaves the walk on the pills and the list. */
+export const PODCASTS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const PODCASTS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
+/** The Library panel's panes on the Feeds destination (design D12, row
+ * 11.1): the view pills, the date-gutter list, and the Hero. A frame
+ * without a Hero leaves the walk on the pills and the list. */
+export const FEEDS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const FEEDS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
+/** The panes the active destination paints (design D12): the one walk on
+ * Home skips the panes it does not paint, on Shows it skips the Hero the
+ * Upcoming mode does not paint, and on an Emby library it skips the pill row a
+ * plain library does not paint and the Hero a frame without one does not. */
+export function activeLibraryPanes(): readonly LibraryPane[] {
+	if (libraryHome() !== null) {
+		return HOME_PANES;
+	}
+	const shows = libraryShows();
+	if (shows !== null) {
+		return shows.hero === null ? SHOWS_PANES_NO_HERO : SHOWS_PANES;
+	}
+	const emby = libraryEmby();
+	if (emby !== null) {
+		return embyPanes(emby);
+	}
+	const audiobooks = libraryAudiobooks();
+	if (audiobooks !== null) {
+		return audiobooks.hero === null ? AUIB_PANES_NO_HERO : AUIB_PANES;
+	}
+	const podcasts = libraryPodcasts();
+	if (podcasts !== null) {
+		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
+	}
+	const feeds = get(libraryContent)?.feeds ?? null;
+	if (feeds !== null) {
+		return feeds.hero === null ? FEEDS_PANES_NO_HERO : FEEDS_PANES;
+	}
+	return PANES;
+}
+
+/** The Emby walk's panes: the feed-group mode's pill row and the Hero ride
+ * only where the frame paints them (row 8.1). */
+function embyPanes(emby: GuiEmbyFrame): readonly LibraryPane[] {
+	if (emby.feedGroup) {
+		return emby.hero === null ? EMBY_FEED_PANES_NO_HERO : EMBY_FEED_PANES;
+	}
+	return emby.hero === null ? EMBY_PANES_NO_HERO : EMBY_PANES;
+}
+
+/** The state a freshly mounted window content starts with. */
+export function initialLibraryUi(): LibraryUiState {
+	return {
+		pane: 'pills',
+		filterOpen: false,
+		filter: '',
+		focusedPill: null,
+		pillSelect: null,
+		cursor: null,
+		openNodes: [],
+		filterClosed: [],
+		scrollTop: 0,
+		viewportHeight: 0,
+		trackCursor: null,
+		heroDismissed: false,
+		itemMenuOpen: false,
+		rowMenu: null,
+		arrangement: null,
+	};
+}
+
+/** The Library panel's interaction state. */
+export const libraryUi = writable<LibraryUiState>(initialLibraryUi());
+
+/** The last Library content the core carried (design D2). A frame re-carries
+ * it only when its revision changes, so the window keeps what the last
+ * carrying frame held. */
+export const libraryContent = writable<GuiLibraryContent | null>(null);
+
+/** Keep the content of a frame that carries it (design D2). */
+export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
+	if (frame?.content) {
+		libraryContent.set(frame.content);
+	}
+}
+
+/** Whether the Library panel shows (design D2, D10, D12): the frame carries
+ * the Library section and the window holds the active destination's content
+ * — Music's, Home's, Shows', or an Emby library's — to paint. The window
+ * mounts the panel on this one fact and the key router gates on it, so no
+ * Library key acts while the panel paints nothing. */
+export function libraryShown(
+	library: GuiLibraryFrame | null,
+	content: GuiLibraryContent | null,
+): boolean {
+	return (
+		library !== null &&
+		content !== null &&
+		(content.music !== null ||
+			content.home !== null ||
+			content.shows !== null ||
+			content.emby !== null ||
+			content.audiobooks !== null ||
+			content.podcasts !== null ||
+			content.feeds !== null)
+	);
+}
+
+/** Open the list's filter: `/` with Library Panel focus (design D3, step 4). */
+export function openLibraryFilter(): void {
+	libraryUi.update((ui) => ({ ...ui, filterOpen: true }));
+}
+
+/** Close the filter with Esc: the text goes with it, so a closed filter
+ * narrows nothing (design D3, step 2). The cursor and the scroll follow the
+ * widened rows, and the filter's own open and close over the nodes goes with
+ * the text. */
+export function closeLibraryFilter(): void {
+	libraryUi.update((ui) =>
+		resolveCursor({ ...ui, filterOpen: false, filter: '', filterClosed: [] }),
+	);
+}
+
+/** Accept the filter with Enter: the field closes and the list keeps the text
+ * (design D3, step 2). The cursor and the scroll follow the rows the same way
+ * a text change moves them. */
+export function acceptLibraryFilter(): void {
+	libraryUi.update((ui) => resolveCursor({ ...ui, filterOpen: false }));
+}
+
+/** Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3).
+ * Taking the Hero's pane paints the Hero again where the arrangement overlays
+ * it, so the keys never act on a pane that paints nothing. */
+export function focusLibraryPane(pane: LibraryPane): void {
+	libraryUi.update((ui) => withHeroPane({ ...ui, pane }));
+}
+
+/** Move the pane focus `step` panes along, wrapping at the ends. The walk
+ * skips the panes the active destination does not paint (design D12): Home
+ * walks the list and the Hero only. */
+export function moveLibraryPane(step: number): void {
+	libraryUi.update((ui) => {
+		const panes = activeLibraryPanes();
+		const at = panes.indexOf(activeLibraryPane(ui.pane, panes));
+		const next = (at + step + panes.length) % panes.length;
+		return withHeroPane({ ...ui, pane: panes[next] });
+	});
+}
+
+/** The pane of `ui` the walk starts from: the pane itself while the active
+ * destination paints it, and the walk's first pane otherwise — a destination
+ * switch that leaves the last destination's pane never walks from a pane
+ * that paints nothing. */
+function activeLibraryPane(pane: LibraryPane, panes: readonly LibraryPane[]): LibraryPane {
+	return panes.includes(pane) ? pane : panes[0];
+}
+
+/** Focus a pill, or no pill while `groupId` is `null`. */
+export function focusLibraryPill(groupId: string | null): void {
+	libraryUi.update((ui) => ({ ...ui, focusedPill: groupId }));
+}
+
+/** Ask for the focused pill to be selected: Space and Enter request it (design
+ * D6). */
+export function requestLibraryPillSelect(groupId: string): void {
+	libraryUi.update((ui) => ({ ...ui, pillSelect: { groupId } }));
+}
+
+/** Select the collection pill `groupId` of the Grouped Music library `libIdx`
+ * (design D6): one group is always selected, as in the TUI. The core stores the
+ * choice per destination and loads the group, and the pills paint the core's
+ * choice back, so the row and the list cannot disagree. */
+export function selectLibraryPill(libIdx: number, groupId: string): void {
+	void sendLibraryCommand({ command: 'selectCollection', libIdx, groupId });
+}
+
+/** Turn the keys' pill request into the select-collection command the pill
+ * sends (design D6). The intent is consumed here, so one key sends one
+ * command. */
+export function applyLibraryPillSelect(libIdx: number): void {
+	const { pillSelect } = get(libraryUi);
+	if (pillSelect === null) {
+		return;
+	}
+	libraryUi.update((ui) => ({ ...ui, pillSelect: null }));
+	selectLibraryPill(libIdx, pillSelect.groupId);
+}
+
+/** The carried Music content, or `null` while the active destination carries
+ * none. */
+export function libraryMusic(): GuiMusicFrame | null {
+	return get(libraryContent)?.music ?? null;
+}
+
+/** The carried Home content (design D12), or `null` while any other
+ * destination is active. The top bar marks the Home icon current exactly
+ * while this is present. */
+export function libraryHome(): GuiHomeFrame | null {
+	return get(libraryContent)?.home ?? null;
+}
+
+/** The carried Shows content (design D12, row 7.1), or `null` while any other
+ * destination is active. */
+export function libraryShows(): GuiShowsFrame | null {
+	return get(libraryContent)?.shows ?? null;
+}
+
+/** The carried plain Emby-library content (design D12, row 8.1), or `null`
+ * while any other destination is active. */
+export function libraryEmby(): GuiEmbyFrame | null {
+	return get(libraryContent)?.emby ?? null;
+}
+
+/** The carried Audiobooks destination's content (design D12, row 9.1), or
+ * `null` while any other destination is active. */
+export function libraryAudiobooks(): GuiAudiobooksFrame | null {
+	return get(libraryContent)?.audiobooks ?? null;
+}
+
+/** The carried Podcasts destination's content (design D12, row 10.1), or
+ * `null` while any other destination is active. */
+export function libraryPodcasts(): GuiPodcastsFrame | null {
+	return get(libraryContent)?.podcasts ?? null;
+}
+
+/** The row model under one interaction state (design D7): the carried union,
+ * the open nodes, and the filter text. */
+function rowsOf(ui: LibraryUiState): LibraryRow[] {
+	return buildLibraryRows(libraryTree(ui));
+}
+
+function libraryTree(ui: LibraryUiState): LibraryTree {
+	return {
+		artists: libraryMusic()?.artists ?? [],
+		open: ui.openNodes,
+		closed: ui.filterClosed,
+		filter: ui.filter,
+	};
+}
+
+/** The interaction state once the painted rows may have changed: the cursor
+ * keeps its row while that row still paints, and falls to the first painted row
+ * otherwise, with the scroll offset showing it (design D7). A filter's text
+ * change and its clear both run this, so the cursor never rests on a row that
+ * no longer paints. */
+function resolveCursor(ui: LibraryUiState): LibraryUiState {
+	const rows = rowsOf(ui);
+	const cursor = rows.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveListCursor(rows, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
+	};
+}
+
+/** The cursor's row, or `null` while no painted row carries the cursor. */
+function cursorRow(ui: LibraryUiState): LibraryRow | null {
+	return rowsOf(ui).find((row) => row.id === ui.cursor) ?? null;
+}
+
+/** Send the detail of the item a row picks (design D7): the core stores it and
+ * the next frame carries the Hero. No command for a row that names no item. A
+ * pick paints the Narrow arrangement's Hero overlay again (design D4), closes
+ * the item menu the previous item opened, and starts the tracklist's cursor
+ * over, because the tracks it rested on belong to the previous album. */
+function showDetail(itemId: string | null): void {
+	if (itemId === null) {
+		return;
+	}
+	void sendLibraryCommand({ command: 'showDetail', itemId });
+	libraryUi.update((ui) => ({
+		...ui,
+		heroDismissed: false,
+		itemMenuOpen: false,
+		rowMenu: null,
+		trackCursor: null,
+	}));
+}
+
+/** The item a row picks (design D7, D5): an album's own id, and a track's album
+ * — a picked track picks its album. An artist row picks nothing: the Hero is
+ * album-scoped (design D5), so an artist's detail would empty it. */
+function pickedItemId(row: LibraryRow): string | null {
+	switch (row.kind) {
+		case 'letter':
+			return null;
+		case 'artist':
+			return null;
+		case 'album':
+			return row.albumId;
+		case 'track':
+			return row.albumId;
+	}
+}
+
+/** The item an action on the cursor names (design D3, D8): an artist row's
+ * Service item, an album's own id, and a track's id, so the play-next and
+ * add-to-queue keys act on what the cursor rests on. */
+function actionItemId(row: LibraryRow): string | null {
+	switch (row.kind) {
+		case 'letter':
+			return null;
+		case 'artist':
+			return row.itemId;
+		case 'album':
+			return row.albumId;
+		case 'track':
+			return row.trackId;
+	}
+}
+
+/** Open or close one tree node (design D7): opening an album whose tracklist
+ * the carried content does not hold asks the core to load it (design D5). While
+ * the filter narrows the rows, the press overrides the filter's auto-open for
+ * that node instead of the stored open state, so the node the user closed stays
+ * closed until the filter changes. */
+function setNodeOpen(row: LibraryNodeRow, open: boolean): void {
+	libraryUi.update((ui) =>
+		ui.filter.trim() === ''
+			? {
+					...ui,
+					openNodes: withId(ui.openNodes, row.id, open),
+				}
+			: {
+					...ui,
+					// The closed set names the nodes to keep shut, so it takes the id
+					// when the press closes the node.
+					filterClosed: withId(ui.filterClosed, row.id, !open),
+				},
+	);
+	if (open && row.kind === 'album' && !row.tracksLoaded) {
+		void sendLibraryCommand({ command: 'openAlbum', albumId: row.albumId });
+	}
+}
+
+/** The id list with `id` present when `present` and absent otherwise, keeping
+ * the other ids' order. */
+function withId(ids: string[], id: string, present: boolean): string[] {
+	const rest = ids.filter((candidate) => candidate !== id);
+	return present ? [...rest, id] : rest;
+}
+
+/** The album row a reveal waits to scroll into view, until the list is measured. */
+let pendingRevealRow: string | null = null;
+
+/** Reveal the Hero's picked album in the list. The cursor takes the album's row
+ * and its artist opens, so the row shows. An album whose tracks are not loaded
+ * is opened through the same command a press sends, which is what loads them.
+ * A restored pick and a pill's last pick reach the Hero this way. */
+export function revealPickedAlbum(music: GuiMusicFrame): void {
+	const album = music.hero?.album;
+	if (!album) {
+		return;
+	}
+	const artist = music.artists.find((candidate) =>
+		candidate.albums.some((row) => row.albumId === album.albumId),
+	);
+	if (!artist) {
+		return;
+	}
+	const albumRow = albumRowId(album.albumId);
+	libraryUi.update((ui) => {
+		const next = {
+			...ui,
+			openNodes: withId(ui.openNodes, artistRowId(artist), true),
+			cursor: albumRow,
+		};
+		if (ui.viewportHeight <= 0) {
+			// The list is not measured yet, so the row cannot scroll into view.
+			// The first measurement takes the scroll.
+			pendingRevealRow = albumRow;
+			return next;
+		}
+		return {
+			...next,
+			scrollTop: scrollTopToShowCursor(rowsOf(next), albumRow, ui.scrollTop, ui.viewportHeight),
+		};
+	});
+	if (album.tracks === null) {
+		void sendLibraryCommand({ command: 'openAlbum', albumId: album.albumId });
+	}
+}
+
+/** Play a track (add-gui-library-panel, the user's double-click contract): the
+ * track's own stable id, through the same play command Enter sends. The Owner's
+ * queue is replaced, and with the library playback policy's autoload on, the
+ * album's tracks replace it from the played track onward. The list's track rows
+ * and the Hero's tracklist rows both send it, so one gesture cannot drift from
+ * the other. */
+export function playLibraryTrack(trackId: string): void {
+	void sendLibraryCommand({ command: 'play', itemId: trackId });
+}
+
+/** Press a track row in the Hero's tracklist: the cursor moves onto it, as the
+ * list's track press does. */
+export function pressLibraryTrack(trackId: string): void {
+	libraryUi.update((ui) => (ui.trackCursor === trackId ? ui : { ...ui, trackCursor: trackId }));
+}
+
+/** Press a row (design D7): an artist or album row opens or closes and is
+ * picked; a track row moves the cursor onto itself and is picked — the pick's
+ * album shows in the Hero, and the cursor is the press's visible half, as the
+ * Queue panel's click moves the queue cursor. The row's painted open state is
+ * the half to flip, so a press under a filter closes the node the filter
+ * opened. A press on an artist or album row moves no cursor — that is the
+ * keys' work. */
+export function pressLibraryRow(row: LibraryRow): void {
+	if (row.kind === 'letter') {
+		return;
+	}
+	if (row.kind === 'track') {
+		libraryUi.update((ui) => {
+			const rows = rowsOf(ui);
+			return {
+				...ui,
+				cursor: row.id,
+				scrollTop: scrollTopToShowCursor(rows, row.id, ui.scrollTop, ui.viewportHeight),
+			};
+		});
+		showDetail(pickedItemId(row));
+		return;
+	}
+	setNodeOpen(row, !row.open);
+	showDetail(pickedItemId(row));
+}
+
+/** Move the list's cursor one movement along (design D3, D7): Up and Down
+ * move a row, Page Up and Page Down move the rows in view, and Home and End
+ * take the list's ends. The scroll offset follows, so the cursor row stays
+ * fully visible. */
+export function moveLibraryCursor(move: ListMove): void {
+	libraryUi.update((ui) => {
+		const rows = rowsOf(ui);
+		const view = listWindow(rows, ui.scrollTop, ui.viewportHeight);
+		const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
+		return {
+			...ui,
+			cursor,
+			scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
+		};
+	});
+}
+
+/** Open or close the cursor's node (design D7's Right and Left). */
+export function setLibraryCursorOpen(open: boolean): void {
+	const row = cursorRow(get(libraryUi));
+	if (row !== null && (row.kind === 'artist' || row.kind === 'album')) {
+		setNodeOpen(row, open);
+	}
+}
+
+/** Narrow the list to the names that contain `filter`, without case (design
+ * D7). The cursor keeps its row while that row stays painted, and otherwise
+ * falls to the first painted row; the scroll offset follows the narrower list.
+ * New text starts the filter's own open and close over: the nodes the user
+ * closed under the old text open again. */
+export function setLibraryFilter(filter: string): void {
+	libraryUi.update((ui) => {
+		const next = {
+			...ui,
+			filter,
+			filterClosed: filter === ui.filter ? ui.filterClosed : [],
+		};
+		return resolveCursor(next);
+	});
+}
+
+/** Jump to a letter of the rail (design D7): the cursor moves to the first row
+ * under the letter and that row scrolls into view. A letter without rows
+ * changes nothing. */
+export function jumpToLetter(letter: string): void {
+	libraryUi.update((ui) => {
+		const rows = rowsOf(ui);
+		const jump = railJump(letterRail(rows), rows, letter, ui);
+		return jump === null ? ui : { ...ui, ...jump };
+	});
+}
+
+/** Report the list's measured viewport height (design D7): the rows in view
+ * follow it, and the scroll offset stays inside the narrower range. */
+export function measureLibraryList(viewportHeight: number): void {
+	libraryUi.update((ui) => {
+		const next = { ...ui, viewportHeight };
+		if (pendingRevealRow !== null && viewportHeight > 0) {
+			const row = pendingRevealRow;
+			pendingRevealRow = null;
+			return {
+				...next,
+				scrollTop: scrollTopToShowCursor(rowsOf(next), row, next.scrollTop, viewportHeight),
+			};
+		}
+		return {
+			...next,
+			scrollTop: clampScrollTop(rowsOf(next), next.scrollTop, viewportHeight),
+		};
+	});
+}
+
+/** Report the list's native scroll offset (design D7): a user scroll moves the
+ * rows in view, and the offset stays inside the list's range. */
+export function scrollLibraryList(scrollTop: number): void {
+	libraryUi.update((ui) => {
+		const top = clampScrollTop(rowsOf(ui), scrollTop, ui.viewportHeight);
+		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	});
+}
+
+/** The pill the pill row's focus holds, resolved against the carried content
+ * so a stale id focuses nothing. */
+export function focusedLibraryPill(
+	pills: readonly GuiMusicPill[],
+	ui: LibraryUiState,
+): GuiMusicPill | null {
+	if (ui.pane !== 'pills' || ui.focusedPill === null) {
+		return null;
+	}
+	return pills.find((pill) => pill.groupId === ui.focusedPill) ?? null;
+}
+
+/** The state with the Hero pane ready while it takes the pane focus (design
+ * D3, D4): the Narrow arrangement paints the Hero again, so the keys never act
+ * on a pane that paints nothing, and the tracklist's cursor is derived from the
+ * tracks that paint rather than seeded here. */
+function withHeroPane(ui: LibraryUiState): LibraryUiState {
+	return ui.pane === 'hero' ? { ...ui, heroDismissed: false } : ui;
+}
+
+/** Move the Hero's tracklist cursor one movement along (design D3): the
+ * movement keys move the tracklist's cursor, not the list's, while the Hero
+ * pane has the pane focus. The movement starts from the cursor the painted
+ * tracklist shows, so the first key lands beside it. */
+export function moveLibraryTrackCursor(move: ListMove): void {
+	libraryUi.update((ui) => {
+		const tracks = heroTracks(libraryMusic()?.hero ?? null);
+		const cursor = moveTrackCursor(
+			tracks,
+			resolveTrackCursor(tracks, ui.trackCursor),
+			move,
+		);
+		return cursor === ui.trackCursor ? ui : { ...ui, trackCursor: cursor };
+	});
+}
+
+/** The item the focused pane's cursor names (design D3, D8): the tracklist's
+ * track while the Hero pane has the pane focus, and the list's row while the
+ * list has it. `null` while no cursor rests on an item, so the key that acts
+ * on it sends no command. The Hero pane's track is the one the painted
+ * tracklist shows, so Enter acts before any movement key has moved the
+ * cursor. */
+export function focusedItemId(): string | null {
+	const ui = get(libraryUi);
+	if (ui.pane === 'hero') {
+		return resolveTrackCursor(
+			heroTracks(libraryMusic()?.hero ?? null),
+			ui.trackCursor,
+		);
+	}
+	if (ui.pane === 'list') {
+		const row = cursorRow(ui);
+		return row === null ? null : actionItemId(row);
+	}
+	return null;
+}
+
+/** Report the arrangement the panel paints (design D4): the panel measures it
+ * from the Library column, and the keys read it to close the Narrow Hero
+ * overlay only where one paints. */
+export function reportLibraryArrangement(arrangement: GuiArrangement): void {
+	libraryUi.update((ui) =>
+		ui.arrangement === arrangement ? ui : { ...ui, arrangement },
+	);
+}
+
+/** Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
+ * a picked item, an arrangement that overlays rather than splits, and no
+ * dismissal since that pick. The Hero is the Music Hero, the Home Hero, the
+ * Shows Hero, or a plain Emby library's Hero (design D12), whichever
+ * destination is active. Esc and a press on the backdrop close it. */
+export function heroOverlayOpen(ui: LibraryUiState): boolean {
+	return (
+		ui.arrangement === 'narrow' &&
+		!ui.heroDismissed &&
+		((libraryMusic()?.hero ?? null) !== null ||
+			(libraryHome()?.hero ?? null) !== null ||
+			(libraryShows()?.hero ?? null) !== null ||
+			(libraryEmby()?.hero ?? null) !== null ||
+			(libraryAudiobooks()?.hero ?? null) !== null ||
+			(libraryPodcasts()?.hero ?? null) !== null ||
+			(get(libraryContent)?.feeds?.hero ?? null) !== null)
+	);
+}
+
+/** Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
+ * on its backdrop. A later pick, or a Tab onto the Hero's pane, paints it
+ * again. While the Hero pane held the pane focus, the focus falls back to the
+ * list, so the keys never rest on a pane that paints nothing. */
+export function closeLibraryHero(): void {
+	libraryUi.update((ui) => ({
+		...ui,
+		pane: ui.pane === 'hero' ? 'list' : ui.pane,
+		heroDismissed: true,
+		itemMenuOpen: false,
+	}));
+}
+
+/** Open the picked item's menu (design D8): More actions paints the entries the
+ * frame carries. */
+export function openLibraryItemMenu(): void {
+	libraryUi.update((ui) =>
+		ui.itemMenuOpen ? ui : { ...ui, itemMenuOpen: true, rowMenu: null },
+	);
+}
+
+/** Close the picked item's menu (design D8): a chosen entry closes it, and so
+ * does Esc. */
+export function closeLibraryItemMenu(): void {
+	libraryUi.update((ui) => (ui.itemMenuOpen ? { ...ui, itemMenuOpen: false } : ui));
+}
+
+/** Open the right-click item menu for `itemId` (the row-menu command): the
+ * next frame carries the item's full entries for the menu to paint at the
+ * pointer position, and a chosen entry sends its index for that item. The
+ * Hero's own menu closes with it — one menu is up at a time. */
+export function openLibraryRowMenu(itemId: string, x: number, y: number): void {
+	void sendLibraryCommand({ command: 'rowMenu', itemId });
+	libraryUi.update((ui) => ({ ...ui, itemMenuOpen: false, rowMenu: { itemId, x, y } }));
+}
+
+/** Open a row's item menu from its right-click (design D8, D15): the row's own
+ * stable id, or nothing when the row names no item — a letter heading, a spacer,
+ * or a node the Service does not resolve. Every destination's list opens its
+ * menu through this one call, so the pointer rule cannot drift between tabs. */
+export function openRowMenuAt(event: MouseEvent, itemId: string | null): void {
+	event.preventDefault();
+	if (itemId !== null) {
+		openLibraryRowMenu(itemId, event.clientX, event.clientY);
+	}
+}
+
+/** Close the right-click item menu: a chosen entry closes it, and so do Esc,
+ * a press outside it, and a scroll of the surface the row painted in. */
+export function closeLibraryRowMenu(): void {
+	libraryUi.update((ui) => (ui.rowMenu === null ? ui : { ...ui, rowMenu: null }));
+}
+
+/** Run the right-click menu's entry at `index` for the item it opened on: the
+ * same menu-entry command the Hero's menu sends, resolved by that item's
+ * stable id in the core. The menu closes behind the press. */
+export function runLibraryRowMenuEntry(index: number): void {
+	const { rowMenu } = get(libraryUi);
+	const itemId = rowMenu?.itemId;
+	closeLibraryRowMenu();
+	if (itemId === undefined) {
+		return;
+	}
+	void sendLibraryCommand({ command: 'menuEntry', itemId, index });
+}

@@ -53,6 +53,12 @@ core reaches both Clients with no change to either Client's code. A row below
 names its Surface state where one exists; a surface whose state is still
 component-private keeps it until its migration moves it.
 
+The GUI Library panel is the GUI Client's only surface that holds no Surface
+state: it keeps its interaction state in its own window content. It shares no
+interaction rule with the TUI, so there is nothing for `mbv-surfaces` to own
+(ADR 0036). Its pointer input never reaches a `HitMap` or a
+`GuiSurfaceLeaf`, and it has no `[keys]` action.
+
 ## Panel ledger
 
 | Root Panel | Owned surface and state | Painter / content source | Placement and input | Verification |
@@ -65,6 +71,7 @@ component-private keeps it until its migration moves it.
 | Status bar panel | `StatusBarSurface` (`mbv_surfaces::status_bar`): the prefix-armed display and the toast presentation | `StatusBarPanel`, the TuiRealm adapter over `StatusBarSurface` | Library column only; owns control hits | status component and tick tests |
 | Pane boundaries | Live split gesture state | boundary Interactive Components | Root-placed only where the corresponding split is painted | resize tick tests |
 | Overlay stack | Overlay presence, focus and z-order | `UiRootComponent` plus mounted overlay Components | Root-composed above Panels; each overlay owns its surface | overlay tick tests |
+| GUI Library panel | GUI-owned interaction state in the GUI Client's window content (`crates/mbv-gui/ui/src/lib/library/state.ts`): cursor, hover, scroll, open tree nodes, pane focus, filter text, the open Hero overlay and item menu. The GUI Client core holds the data selection (the active destination, each destination's selected collections, the Hero's item). No `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, no `[keys]` action (ADR 0036) | `LibraryPanel.svelte` and its children (`LibraryTopBar`, `LibraryPills`, `LibraryList`, `LibraryLetterRail`, `LibraryHero`, `LibraryTracklist`, `LibraryStatusBar`) | GUI window only, in the Library column beside the Queue panel; the window content takes its own keys before the forwarder and handles its own pointer input | key routing: `$lib/library/keys.test.ts`; commands and frames: `crates/mbv-gui/tests/core_thread/library.rs`, `crates/mbv-gui/tests/core_thread/launch.rs`; paint: `LibraryPanel.test.ts`, `LibraryList.test.ts`, `LibraryPills.test.ts`, `LibraryHero.test.ts`, `LibraryStatusBar.test.ts` |
 
 ## Embedded content owners
 

@@ -23,6 +23,15 @@ export function roleVar(role: string): string {
 }
 
 /**
+ * The `var(--canvas-<name>)` value a part paints in: the Library and queue
+ * canvas hexes, which name no theme role slot. Every painter reads them from
+ * here, so the palette's canvas names live in one place.
+ */
+export function canvasVar(name: string): string {
+	return `var(--canvas-${name})`;
+}
+
+/**
  * A transport glyph's colour: its role while actionable, the muted role when
  * not — the availability gate the TUI's glyph colours carry.
  */

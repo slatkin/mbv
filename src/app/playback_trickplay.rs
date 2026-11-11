@@ -155,7 +155,7 @@ impl App {
 
     /// Issue the sheet's fetch when the cache lacks it, none is in flight,
     /// and its last fetch did not fail in transport (task 6.7). A no-op while
-    /// the Emby client fill is absent, so the next frame retries a transient
+    /// no Emby client is installed, so the next frame retries a transient
     /// absence instead of caching it.
     fn issue_trickplay_sheet_fetch(&mut self, key: &TrickplaySheetKey, media_source_id: String) {
         if self.trickplay_sheets_loading.contains(key)

@@ -334,6 +334,11 @@
         "overview": {
           "type": "string"
         },
+        "parent_id": {
+          "default": "",
+          "description": "The containing item's Service id: the folder a homevideos video sits\nin, an episode's season. Empty when the payload declares none.\n`Default` so legacy serialized queue items (which predate the field)\ndeserialize unchanged; an older Owner ignores the field on decode.",
+          "type": "string"
+        },
         "parent_index_number": {
           "format": "int64",
           "type": "integer"

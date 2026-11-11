@@ -33,15 +33,21 @@ use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::playback::GuiScrubberTile;
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
-    LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
+    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
+    RegionTarget, hit_map,
 };
 use crate::leaves::{
     PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
     seekbar_region,
 };
+use crate::library_frames::LibraryFrames;
 use crate::painted_choices::PaintedChoices;
 
+mod launch_restore;
+mod overlays;
 mod tick_host;
+
+use self::launch_restore::GuiLaunchRestore;
 
 /// The viewport height before the first `report_layout` measures the window:
 /// the frame carries every row the queue holds. The front end reports the
@@ -64,6 +70,12 @@ pub enum CoreInput {
     /// whether or not a tick changed state (design D3); the report applies
     /// to the Surface state's capacity and hit map first.
     Layout(LayoutReport),
+    /// One Library panel request (add-gui-library-panel design D2): the
+    /// window content's `library` command. The core applies it through
+    /// [`App::apply_gui_library_command`], and the take-focus variant also
+    /// moves the core's `FocusStack` with the App's stored focus (design D4),
+    /// so the frame paints the focus the App's key gates use.
+    Library(mbv::GuiLibraryCommand),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,
@@ -212,6 +224,9 @@ pub struct CoreThread {
     /// The frames' artwork memo (design D10): the value a frame arms, and
     /// the encoded artwork a re-armed frame re-carries encode-free.
     artwork: ArtworkFrames,
+    /// The frames' Library section memo (add-gui-library-panel design D2): the
+    /// content revision, and the content a re-armed frame re-carries.
+    library: LibraryFrames,
     /// The frames' trickplay memo (task 6.7): the hovered sheet's encoded
     /// image, re-carried only when the hovered sheet changes.
     trickplay: crate::trickplay::TrickplayFrames,
@@ -223,6 +238,12 @@ pub struct CoreThread {
     /// The wait between ticks. Production keeps `CLIENT_IDLE_CADENCE`; the
     /// step test zeroes it.
     idle_cadence: Duration,
+    /// The saved GUI launch location and its restore phase (design D9).
+    launch_restore: GuiLaunchRestore,
+    /// A take-focus ran while the restore was pending (design D9): the user
+    /// moved Panel focus in the pre-catalog window, so the first phase skips
+    /// the saved Panel-focus re-apply.
+    launch_focus_taken: bool,
 }
 
 impl CoreThread {
@@ -230,20 +251,46 @@ impl CoreThread {
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
     pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
+        // The GUI Client's App rules come first (add-gui-library-panel design
+        // D4, D9): the GUI arranges its own panels from its measured size and
+        // keeps its own launch location, so the TUI's Mini check, its hidden
+        // empty queue column, and its launch state never apply here.
+        app.enable_gui_client();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
-        // and the Status bar (design D4), and the Queue side holds focus.
+        // and the Status bar (design D4), and the Queue side holds focus. The
+        // Library panel mounts beside the Queue (add-gui-library-panel task
+        // row 2.1) and takes Panel focus on the take-focus command.
         focus.mount(ComponentId::Queue);
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
-        focus.set_panel_focus(PanelFocus::Queue);
-        // The minimal Emby client fill (design D9's ruled exception): the
-        // armed startup request becomes an authentication-only worker — no
-        // library bootstrap — whose completion installs the client the
-        // session list, cast discovery, artwork, and item-metadata fetches
-        // read. Its drain is the tick's `drain_startup_workers` phase.
-        app.start_emby_client_fill();
-        Self {
+        focus.mount(ComponentId::Library);
+        // The shared Service startup step every Client runs once after the
+        // attach (add-gui-library-panel design D11): the Service startup
+        // workers, the startup feed fetch, capability registration, and the
+        // idle feed. Then the launch Home load, whose content the App
+        // stores for the Home projection that lands in row 6.2. A client the
+        // attach brought (`owner_link`'s
+        // `cached_emby_client`) starts neither startup worker, so the GUI
+        // starts the playback-target discovery it feeds here; a startup the
+        // drain reports starts it in the drain host instead.
+        let cached_emby_client = app.has_emby_client();
+        app.start_client_services();
+        let _home = app.load_home_at_startup();
+        if cached_emby_client {
+            app.start_playback_target_discovery();
+        }
+        // The GUI's own launch location (design D9), read once before the
+        // first step: the TUI's launch state never moves this Client's tab or
+        // Panel focus, and this file is the only location it restores. A start
+        // with no saved location — or one that fails to load — restores the
+        // Client's first-choice rules through the same restore path: the first
+        // presented destination, Library Panel focus, and no saved collection
+        // sets, so the Library panel is reachable from the first launch.
+        let launch_restore = GuiLaunchRestore::Destination(
+            mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
+        );
+        let mut core = Self {
             app,
             focus,
             queue: QueueSurface::new(),
@@ -265,10 +312,32 @@ impl CoreThread {
             last_frame: Instant::now(),
             theme_pending: true,
             artwork: ArtworkFrames::default(),
+            library: LibraryFrames::default(),
             trickplay: crate::trickplay::TrickplayFrames::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
-        }
+            launch_restore,
+            launch_focus_taken: false,
+        };
+        // The core sets its `FocusStack` and the App's stored Panel focus
+        // together (design D4), so the frame the window paints and the gates
+        // the keys meet agree from the first frame. The Queue side holds
+        // focus until the take-focus command moves it.
+        core.take_panel_focus(PanelFocus::Queue);
+        // The saved location applies over that default (design D9): a launch
+        // the attach brought a catalog for restores here, and a launch whose
+        // catalog lands through the startup worker restores on that drain.
+        core.restore_launch_location();
+        core
+    }
+
+    /// Move Panel focus on both authorities together (add-gui-library-panel
+    /// design D4): the App's stored Panel focus, which its key gates read,
+    /// through its public GUI entry, then the core's `FocusStack`, which
+    /// derives the frame's focus.
+    fn take_panel_focus(&mut self, focus: PanelFocus) {
+        self.app.set_gui_panel_focus(focus);
+        self.focus.set_panel_focus(focus);
     }
 
     /// Install the wake the App's relays invoke (design D3): every wake feeds
@@ -365,7 +434,7 @@ impl CoreThread {
     /// to nothing (`client-interaction-core`: pointer targets resolve from a
     /// semantic hit map); the disarm precedes all of it, so every pointer
     /// event cancels an armed prefix even when nothing resolves.
-    fn route_pointer(&mut self, event: PointerEvent) {
+    fn route_pointer(&mut self, event: PointerEvent) -> bool {
         // Any pointer event disarms prefix mode first — the shared contract
         // `App::route_gui_input`'s pointer arm carries, the same silent
         // disarm every terminal mouse event applies in the TUI. The call
@@ -383,7 +452,7 @@ impl CoreThread {
             self.queue.cancel_row_drag();
             self.queue.set_hover(None);
             self.playback.set_scrubber_hover(None);
-            return;
+            return false;
         }
         self.pointer_at = Some(event.position);
         // A new press while a row drag is armed discards the stale drag
@@ -408,22 +477,16 @@ impl CoreThread {
         // outside its own targets dismisses it and does not reach what is
         // painted beneath (the canvas's outside press; the TUI's blocking
         // context menu dismisses the same way).
-        if matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
-            && self.app.gui_overlay_is_open()
-            && !self
-                .regions
-                .resolve(event.position)
-                .is_some_and(RegionTarget::owns_gui_overlay)
-        {
+        if self.press_outside_open_overlay(&event) {
             self.app.dismiss_open_gui_overlay();
-            return;
+            return false;
         }
         let now = Instant::now();
         let Some(gesture) =
             self.gestures
                 .recognize(event.kind, event.modifiers, event.position, now)
         else {
-            return;
+            return false;
         };
         // The row drag's motion and release address the Queue Surface state
         // directly (add-tauri-gui-client row 6.5, design D5): motion only
@@ -435,10 +498,10 @@ impl CoreThread {
             PointerGesture::Drag { .. } | PointerGesture::DragEnd
         ) && self.route_row_drag_gesture(gesture)
         {
-            return;
+            return false;
         }
         let Some(point) = gesture_point(&gesture) else {
-            return;
+            return false;
         };
         match self.regions.resolve(point) {
             Some(RegionTarget::Queue(target)) => {
@@ -511,8 +574,21 @@ impl CoreThread {
             // A pre-attach button region is the attach campaign's target: the
             // attached slice resolves nothing for it, even when a stale
             // report carried one — and so does a point in no reported region.
+            // A confirm button's press answers the modal through the same
+            // execution the button's key hint applies; the outside-press
+            // dismissal above already left confirm regions un-dismissed.
+            Some(RegionTarget::Confirm(ConfirmTargetId::Button(index))) => {
+                self.confirm_button_press(gesture, *index);
+            }
+            // The daemon-lost dialog's buttons answer through the same
+            // execution their key hints apply; the press that lands outside
+            // them left the dialog up (it is not dismissible).
+            Some(RegionTarget::DaemonLost(DaemonLostTargetId::Button(index))) => {
+                return self.daemon_lost_button_press(gesture, *index);
+            }
             Some(RegionTarget::Attach(_)) | None => {}
         }
+        false
     }
 
     /// Deliver a gesture the row drag owns to the Queue leaf: motion previews
@@ -537,18 +613,26 @@ impl CoreThread {
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
     /// then tick. The loop ends when the window closes — its close arrives
-    /// as a [`CoreInput::Close`], and a routed quit key answers the same
-    /// way — or when the channel itself ends.
+    /// as a [`CoreInput::Close`], a routed quit key answers the same way,
+    /// and an announced exit path the App's drains recorded — the Owner
+    /// shutdown's quit signal (`daemon-disconnect-handling`: "Clients exit
+    /// cleanly on an announced shutdown", the TUI run loop's `'outer` break
+    /// on `QUIT_REQUESTED`) ends it through the quit edge — or when the
+    /// channel itself ends.
     ///
-    /// The run's exit boundary runs the shared Client exit teardown once,
-    /// after the loop, whichever edge ended it — a routed quit, the window's
-    /// close, or a channel end: the deferred settings save flushes, the
-    /// auto-reconnect record persists, and the daemon-lifetime policy applies
-    /// (daemon-lifecycle "Quitting a client follows Stay Alive and offers no
-    /// detach"). The join in `main` holds the process until it completes, so
-    /// the teardown survives the window's close.
+    /// The run's exit boundary saves the GUI's launch location first (design
+    /// D9: the orderly exit's save, and the only write of that file), then
+    /// runs the shared Client exit teardown once, after the loop, whichever
+    /// edge ended it — a routed quit, the window's close, the Owner's
+    /// announced shutdown, or a channel end: the deferred settings save
+    /// flushes, the auto-reconnect record persists, and the daemon-lifetime
+    /// policy applies (daemon-lifecycle "Quitting a client follows Stay
+    /// Alive and offers no detach"). The join in `main`
+    /// holds the process until it completes, so the teardown survives the
+    /// window's close.
     pub fn run(&mut self) {
         while self.step() {}
+        self.save_launch_location();
         self.app.client_exit_teardown();
     }
 
@@ -566,7 +650,19 @@ impl CoreThread {
             Err(RecvTimeoutError::Disconnected) => return false,
         }
         let outcome = ClientCore::tick(self, Instant::now());
-        if outcome.quit_requested {
+        // The run-loop quit signal the TUI's `'outer` loop breaks on
+        // (`shell/run.rs`): an announced Owner shutdown sets it from the
+        // App's drain half, and the GUI Client takes the same orderly exit
+        // — the quit edge closes the window, and the run's exit boundary in
+        // `run` saves the launch location and tears the shared state down.
+        if outcome.quit_requested || self.app.quit_requested() {
+            tracing::info!(
+                name: "gui_core.run_quit",
+                target: "gui_core",
+                input_quit = outcome.quit_requested,
+                reason = ?self.app.exit_message(),
+                "the GUI run ends through the quit edge"
+            );
             // The routed quit closes the window through the same edge the
             // mismatch state's Quit uses (design D9).
             (self.quit)();
@@ -622,6 +718,11 @@ impl CoreThread {
         let hover_tile = self.hover_tile(&playback);
         let artwork = self.app.queue_card_artwork();
         let artwork = self.artwork.frame_value(&artwork);
+        // The Library section builds from the App's Service data (add-gui-
+        // library-panel design D2): the memo re-carries it only on a changed
+        // revision, and the reload's `report_layout` re-arms it. `None` while
+        // no presented destination is active.
+        let library = self.library.frame(&mut self.app);
         let theme_changed = std::mem::take(&mut self.theme_pending);
         let frame = GuiFrame::build(&FrameSources {
             app: &self.app,
@@ -633,6 +734,7 @@ impl CoreThread {
             viewport_rows: self.viewport_rows,
             theme_changed,
             artwork,
+            library,
         });
         // The frame the window is about to paint becomes the choice lists a
         // pointer press resolves against (add-tauri-gui-client row 6.5).

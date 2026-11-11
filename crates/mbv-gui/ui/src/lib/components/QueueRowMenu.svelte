@@ -1,11 +1,13 @@
 <script lang="ts">
 	// The queue row's menu (add-tauri-gui-client row 6.5, design D15): the
-	// frame's `rowMenu` overlay entries, each with the key hint that
-	// selects it directly, and the core's cursor row highlighted. The
-	// window holds no open, cursor, or hover state; a press on an entry
-	// forwards like every other pointer event and the core resolves it
-	// against the hit map, Esc and the hint chords resolve in the core's
-	// overlay key rules.
+	// frame's `rowMenu` overlay entries, each with the key hint that selects it
+	// directly, and the core's cursor row highlighted. The window holds no open,
+	// cursor, or hover state; a press on an entry forwards like every other
+	// pointer event and the core resolves it against the hit map, Esc and the
+	// hint chords resolve in the core's overlay key rules. The Library Hero's
+	// item menu paints the same face (add-gui-library-panel design D8): its
+	// entries are front-end state, so it passes `onSelect` and a press sends the
+	// menu-entry command instead of reaching the core's hit map.
 	//
 	// The menu paints the Menus artboard's chrome (align-gui-with-design-
 	// canvas B.2): a 230 px card over its anchor row's bottom edge, the
@@ -26,19 +28,50 @@
 	// frame already carries the open menu: a child's mount effect runs
 	// before the parent's, so a child-held key would land first and the
 	// entries would lose to the rows beneath them.
-	import type { GuiRowMenuEntry } from '$lib/bridge/types';
 
 	interface Props {
-		/** The menu cursor the core holds. */
+		/** The menu cursor the core holds; `-1` while no entry carries it. */
 		cursor: number;
-		/** The overlay's entries, in the frame's order. */
-		entries: GuiRowMenuEntry[];
+		/** The overlay's entries, in the frame's order: the queue's entries
+		 * carry the destructive flag, the Library's carry none. An entry's own
+		 * `index` is the core's shared-builder order, carried so a front end
+		 * that paints only some entries (the Hero's More actions) still sends
+		 * the index of the entry it painted. */
+		entries: {
+			label: string;
+			keyHint: string | null;
+			destructive?: boolean;
+			index?: number;
+		}[];
 		/** The menu's top edge as a CSS length, measured from the containing
 		 * block's top edge; the parent places it over the anchor row's
 		 * bottom edge, as the canvas draws it. */
 		top: string;
+		/** The menu's left edge from the containing block's left edge, for a
+		 * menu the front end anchors at a pointer position (the Library's
+		 * right-click item menu). When it is set, `right` stays unset. */
+		left?: string;
+		/** The menu's right edge from the containing block's right edge: the
+		 * queue anchors it to its value column, the Library's to its actions
+		 * row. */
+		right?: string;
+		/** The press on an entry, for a menu the front end owns: the Library's
+		 * item menu sends its own command. The queue's menu passes none, so its
+		 * presses reach the core's hit map as every other pointer event does.
+		 * The index a press reports is the entry's own `index` when it carries
+		 * one (the core's shared-builder order), else this enumeration — so a
+		 * front end that paints only some entries still sends the index of the
+		 * entry it painted. */
+		onSelect?: (index: number) => void;
 	}
-	const { cursor, entries, top }: Props = $props();
+	const {
+		cursor,
+		entries,
+		top,
+		left,
+		right = 'var(--mbv-cell-col)',
+		onSelect,
+	}: Props = $props();
 
 	/** The painted hint: the canvas draws `⏎` where the core's hint chord is
 	 * the `Enter` key name. The map is paint-only, so the core's
@@ -54,7 +87,8 @@
 	role="menu"
 	aria-label="Row actions"
 	style:top
-	style:right="var(--mbv-cell-col)"
+	style:left
+	style:right
 	style:width="230px"
 	style:padding="6px"
 	style:gap="2px"
@@ -88,7 +122,8 @@
 				: index === cursor
 					? 'var(--canvas-heading)'
 					: 'var(--canvas-text)'}
-			data-menu-entry={index}
+			data-menu-entry={entry.index ?? index}
+			onclick={() => onSelect?.(entry.index ?? index)}
 		>
 			<span class="flex-1 truncate">{entry.label}</span>
 			{#if entry.keyHint}

@@ -10,7 +10,7 @@
 //! re-resolves that identity against its live state, so a vanished choice
 //! applies nothing.
 
-use mbv_ui_model::panel_targets::SessionTargetKey;
+use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::GuiTargetKey;
@@ -20,7 +20,7 @@ use crate::bridge::frame::playback::GuiTargetKey;
 #[derive(Debug, Default)]
 pub(crate) struct PaintedChoices {
     /// The playback-target chooser's choices, in paint order.
-    target_keys: Vec<SessionTargetKey>,
+    target_keys: Vec<ChooserTargetKey>,
     /// The open track popover's choice track ids, in paint order. `None`
     /// while no popover is open.
     popover_track_ids: Option<Vec<i64>>,
@@ -44,13 +44,21 @@ impl PaintedChoices {
                 let ids = choices.iter().map(|choice| choice.id).collect();
                 self.popover_track_ids = Some(ids);
             }
-            Some(GuiOverlayFrame::RowMenu { .. }) | None => {}
+            // The confirm and the daemon-lost dialog name no choice list:
+            // their buttons resolve through their own regions, not through
+            // painted choice indexes.
+            Some(
+                GuiOverlayFrame::RowMenu { .. }
+                | GuiOverlayFrame::Confirm { .. }
+                | GuiOverlayFrame::DaemonLost { .. },
+            )
+            | None => {}
         }
     }
 
     /// The chooser target the painted row at `index` names: `None` when the
     /// last frame painted no chooser or fewer rows than that.
-    pub(crate) fn target_key(&self, index: usize) -> Option<&SessionTargetKey> {
+    pub(crate) fn target_key(&self, index: usize) -> Option<&ChooserTargetKey> {
         self.target_keys.get(index)
     }
 
@@ -68,9 +76,10 @@ impl PaintedChoices {
 /// a painted chooser row names, back in the shared vocabulary the selection
 /// request carries. A function, not a `From` impl: the conversion is this
 /// bridge's, and an impl on the shared key type would spread it crate-wide.
-fn painted_target_key(key: &GuiTargetKey) -> SessionTargetKey {
+fn painted_target_key(key: &GuiTargetKey) -> ChooserTargetKey {
     match key {
-        GuiTargetKey::Emby(id) => SessionTargetKey::Emby(id.clone()),
-        GuiTargetKey::Cast(id) => SessionTargetKey::Cast(id.clone()),
+        GuiTargetKey::Local => ChooserTargetKey::Local,
+        GuiTargetKey::Emby(id) => ChooserTargetKey::Target(SessionTargetKey::Emby(id.clone())),
+        GuiTargetKey::Cast(id) => ChooserTargetKey::Target(SessionTargetKey::Cast(id.clone())),
     }
 }

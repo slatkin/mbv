@@ -3,7 +3,11 @@
 /// `PlayerEvent::Stopped` handling and `render/overlays/daemon_lost_modal.rs`.
 /// Only one blocking modal can be active at a time:
 /// `Option<DaemonLostModal>`), mirroring `ConfirmModal`'s convention.
-#[derive(Debug)]
+///
+/// `Clone` because the GUI Client holds its own copy: it presents the same
+/// modal as a blocking overlay while the shell's `OverlayRequest` slot keeps
+/// the raise, exactly as `ConfirmModal` is held twice.
+#[derive(Debug, Clone)]
 pub struct DaemonLostModal {
     /// The label of whatever was playing right before the daemon vanished,
     /// if known.

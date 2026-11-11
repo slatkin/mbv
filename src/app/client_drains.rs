@@ -79,13 +79,32 @@ pub struct StartupWorkerDrain {
     pub events: bool,
     /// Home content a completion rebuilt, for the Client that presents Home.
     pub home: Option<HomeContent>,
+    /// The drain applied a successful Emby startup, so the client is installed
+    /// and Ready. The GUI Client starts its playback-target discovery on this
+    /// fact (add-gui-library-panel design D11); the TUI Client's tick is
+    /// unaffected and ignores it.
+    pub emby_started: bool,
+}
+
+/// The startup-drain contract: the App stores its own copy so the
+/// presenting Client's assignment is the same facts; a Client that keeps no
+/// shell state (the GUI) reads the stored one. A prior completion's snapshot
+/// is replaced only when a rebuild ran (row 6.1). Both paths evict the
+/// Recently added sources a rebuilt library set dropped (row 6.2): the
+/// eviction is App-neutral, the shell's own assignment just re-runs it.
+fn store_drained_home(app: &mut App, drain: &mut StartupWorkerDrain, home: Option<HomeContent>) {
+    if let Some(content) = home {
+        app.home_content = content.clone();
+        let _ = app.evict_gone_home_recently_added();
+        drain.home = Some(content);
+    }
 }
 
 impl App {
     /// Drain the Emby startup and Emby setup worker channels. Each channel
     /// delivers its one completion to this drain, which applies it through the
     /// App-side completion handlers; the rebuilt Home content is handed back
-    /// for the Client that presents Home.
+    /// for the Client that presents Home, and the App stores its own copy.
     pub fn drain_startup_workers(&mut self) -> StartupWorkerDrain {
         let mut drain = StartupWorkerDrain::default();
         if let Some(worker) = self.setup.emby_startup_rx.take() {
@@ -95,7 +114,9 @@ impl App {
                 // completion returns None.
                 Ok(completion) => {
                     drain.events = true;
-                    drain.home = self.apply_emby_completion(completion).or(drain.home);
+                    let home = self.apply_emby_completion(completion);
+                    drain.emby_started |= home.is_some();
+                    store_drained_home(self, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_startup_rx = Some(worker),
                 Err(TryRecvError::Disconnected) => {
@@ -110,29 +131,14 @@ impl App {
             match rx.try_recv() {
                 Ok(completion) => {
                     drain.events = true;
-                    drain.home = self.apply_emby_setup_completion(completion).or(drain.home);
+                    let home = self.apply_emby_setup_completion(completion);
+                    drain.emby_started |= home.is_some();
+                    store_drained_home(self, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_setup_rx = Some(rx),
                 Err(TryRecvError::Disconnected) => {
                     drain.events = true;
                     self.handle_emby_setup_worker_disconnect();
-                }
-            }
-        }
-        // The GUI Client's minimal Emby client fill (add-tauri-gui-client
-        // design D9's ruled exception) lands on the same drain; the TUI
-        // never arms its receiver.
-        if let Some(worker) = self.setup.emby_client_fill_rx.take() {
-            let generation = worker.generation;
-            match worker.rx.try_recv() {
-                Ok(completion) => {
-                    drain.events = true;
-                    self.apply_emby_client_fill(completion);
-                }
-                Err(TryRecvError::Empty) => self.setup.emby_client_fill_rx = Some(worker),
-                Err(TryRecvError::Disconnected) => {
-                    drain.events = true;
-                    self.handle_emby_startup_worker_disconnect(generation);
                 }
             }
         }

@@ -45,6 +45,22 @@ const ARTWORK_ENCODE_BOX: u32 = 448;
 /// order of magnitude under a lossless PNG's.
 const ARTWORK_ENCODE_QUALITY: u8 = 85;
 
+/// JPEG-encode a decoded image at the display quality.
+///
+/// # Panics
+///
+/// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
+/// cannot fail to write, so a failure is a bug.
+pub(in crate::app) fn encode_jpeg(img: &image::DynamicImage) -> Vec<u8> {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    let mut encoder =
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, ARTWORK_ENCODE_QUALITY);
+    encoder
+        .encode_image(img)
+        .expect("JPEG encode of an in-memory cursor cannot fail");
+    buf.into_inner()
+}
+
 impl App {
     /// Project the Queue playback visual slot's artwork (design D10). The
     /// sync the TUI's queue-column sync pass runs — `Model::sync_queue`'s
@@ -153,17 +169,11 @@ impl App {
 ///
 /// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
 /// cannot fail to write, so a failure is a bug.
-fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
+pub(in crate::app) fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
     let resized = img.resize(
         ARTWORK_ENCODE_BOX,
         ARTWORK_ENCODE_BOX,
         image::imageops::FilterType::Triangle,
     );
-    let mut buf = std::io::Cursor::new(Vec::new());
-    let mut encoder =
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, ARTWORK_ENCODE_QUALITY);
-    encoder
-        .encode_image(&resized)
-        .expect("JPEG encode of an in-memory cursor cannot fail");
-    buf.into_inner()
+    encode_jpeg(&resized)
 }

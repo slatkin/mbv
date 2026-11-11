@@ -334,21 +334,23 @@ pub enum ModelContentEvent {
     /// `home-latest-sections`, "Recently added loads at launch independent of
     /// destinations"): Emby through its Latest rules,
     /// Audiobookshelf through the podcast `Newest Episodes` shelf, Feeds
-    /// derived at push time (never fetched). The shell accepts the event
-    /// only under the source's live Service generation and stores the items
-    /// against the source.
+    /// derived at merge time (never fetched). The App accepts the event only
+    /// under the source's live Service generation and stores the items
+    /// against the source; the Client that presents Home joins its
+    /// projection (row 6.2).
     HomeRecentlyAddedFetched {
         source: DestinationLatestSource,
         generation: SetupGeneration,
         items: Vec<QueueItem>,
     },
     /// A freshly computed Continue Watching snapshot delivered by an
-    /// App-internal writer. App-internal callers cannot touch Model-owned
-    /// `home_content`, so the result travels here for shell assignment.
+    /// App-internal writer. App-internal callers cannot run the shell's
+    /// assignment side (eviction and the owner push), so the result travels
+    /// here for the assignment that lands in the App's `home_content`.
     HomeContentRefreshed(Box<HomeContent>),
     /// The Emby service has been cleared (removed/replaced); the shell
-    /// resets the Model-owned Continue Watching items and re-projects. The
-    /// `loading` flag is intentionally untouched,
+    /// resets the stored Continue Watching items in the App's `home_content`
+    /// and re-projects. The `loading` flag is intentionally untouched,
     /// matching the legacy `clear_emby_memory` which never reset it.
     HomeContentCleared,
 }
@@ -363,6 +365,19 @@ pub enum LibEvent {
     Audiobookshelf(AudiobookshelfEvent),
     Playlist(PlaylistEvent),
     ModelContent(ModelContentEvent),
+    /// The GUI Library's group album fetch completed (add-gui-library-panel
+    /// design D5). Only the GUI Client's collection store starts one, so the
+    /// TUI never receives it.
+    GuiGroupAlbums(crate::app::gui_library::GuiGroupAlbumsEvent),
+    /// The GUI Library's plain Emby library's root-list fetch completed
+    /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
+    /// root-list store starts one, so the TUI never receives it.
+    GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
+    /// The GUI Library's destination-Latest store's fetch completed (row
+    /// 8.1): the New pill's snapshot lands in the store the way the root-list
+    /// completion lands in its store. Only the GUI Client's Latest store
+    /// starts one, so the TUI never starts or receives it.
+    GuiEmbyLatestItems(crate::app::gui_library::GuiEmbyLatestItemsEvent),
     Error(String),
 }
 

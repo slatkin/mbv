@@ -30,6 +30,7 @@ impl super::super::Model {
             request @ (ShellRequest::DismissSessions
             | ShellRequest::RefreshSessions
             | ShellRequest::SelectSession(_)
+            | ShellRequest::SelectChooserTarget(_)
             | ShellRequest::DetachSessions
             | ShellRequest::HandOffSession(_)
             | ShellRequest::TakeSession(_)) => {
@@ -167,30 +168,11 @@ impl super::super::Model {
                     self.app.select_panel_target(target);
                 }
             }
+            ShellRequest::SelectChooserTarget(key) => {
+                self.app.select_chooser_target(&key);
+            }
             ShellRequest::DetachSessions => {
-                // The owner's output decides (design D13): when a cast target is
-                // the output, detach sends `SelectPlaybackOutput(Local)` and the
-                // owner tears the receiver app down (D12). An Emby Session output
-                // detaches the same way (emby-session-owner-output design D12).
-                let cast_output = self.app.output_is_cast();
-                let session_output = self.app.output_is_emby_session();
-                let remote_output = cast_output || session_output;
-                // Skip disconnect_remote's "No session selected" toast when a
-                // remote output is the detach target; the output hand-back
-                // below is the real action in that case.
-                if self.app.can_disconnect_remote() || !remote_output {
-                    self.app.disconnect_remote();
-                }
-                if remote_output {
-                    self.app
-                        .select_playback_output(mbv_ctrl::OutputSelection::Local);
-                    let message = if cast_output {
-                        "Detached from cast target"
-                    } else {
-                        "Detached from Emby Session"
-                    };
-                    self.app.flash(message.to_string(), ToastSeverity::Success);
-                }
+                self.app.detach_to_local();
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }
             // The Client-run Hand off sequence lands here in row 7.2 and

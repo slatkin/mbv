@@ -239,7 +239,7 @@ impl App {
     // Continue Watching section, so these act on the column's own
     // `continue_cursor` item directly (task 5.3d, Home effect decoupling):
     // the shell resolves the item under `continue_cursor` from
-    // Model-owned `home_content` and passes it into the item-targeted
+    // the stored `home_content` and passes it into the item-targeted
     // effect helper, instead of the App re-reading a (now deleted)
     // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
     // sole, unchanged authoritative target.

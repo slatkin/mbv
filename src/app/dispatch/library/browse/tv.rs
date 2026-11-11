@@ -164,7 +164,7 @@ impl App {
     pub(in crate::app) fn refresh_after_stop(&mut self) {
         if let Ok(content) = self.fetch_home() {
             // The fetch runs synchronously (order-sensitive side
-            // effects); the computed content travels to Model-owned
+            // effects); the computed content travels into the stored
             // `home_content` via lib_tx (task 5.3d).
             let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
                 ModelContentEvent::HomeContentRefreshed(Box::new(content)),
@@ -381,6 +381,36 @@ impl App {
                 }
             }
         });
+    }
+
+    /// The App-side half of an `EmbyLatestSnapshotFetched` completion
+    /// (add-gui-library-panel row 7.1): the TV library's Latest root level
+    /// fills from the snapshot — the same write the presenting Client's
+    /// shell drain runs inside `update_emby_latest_snapshot`, so a Client
+    /// that keeps no shell state (the GUI) fills the level too through its
+    /// own drain arm. A library whose Latest root is not the level in wait
+    /// (no TV library, no root level, another mode) keeps it unchanged.
+    pub(in crate::app) fn apply_tv_latest_snapshot(
+        &mut self,
+        library_id: &str,
+        items: Vec<EmbyItem>,
+    ) {
+        let Some(lib) = self
+            .libs
+            .iter_mut()
+            .find(|lib| lib.library.id == library_id && lib.library.collection_type == "tvshows")
+        else {
+            return;
+        };
+        let Some(level) = lib.nav_stack.last_mut() else {
+            return;
+        };
+        if level.tv_content_mode != Some(mbv_queue::TvContentMode::Latest) {
+            return;
+        }
+        level.items = items;
+        level.rows = ServerRows::complete(level.items.len());
+        level.loading = false;
     }
 
     /// Accept one eager TV Upcoming completion: store the per-session

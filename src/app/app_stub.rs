@@ -60,6 +60,20 @@ pub fn stub_app_with_queue(n: usize) -> App {
 pub fn stub_app_with_queue_and_cmd_rx(
     n: usize,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut app, cmd_rx) = app_with_cmd_rx();
+    app.local_view = queue_view(n);
+    app.player.update_status(|status| status.active = false);
+    (app, cmd_rx)
+}
+
+/// The stub `App` over a player whose command channel records what an action
+/// sends (add-tauri-gui-client row 6.5): the stub owner advertises no
+/// `answered-queue-ops`, so a queue edit sends without waiting for an answer.
+/// The construction's own preference sync lands on the channel before the
+/// caller starts, so it is drained here and a test sees only what its actions
+/// send.
+#[cfg(feature = "test")]
+fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
@@ -68,10 +82,6 @@ pub fn stub_app_with_queue_and_cmd_rx(
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
     let mut app = built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
-    app.local_view = queue_view(n);
-    app.player.update_status(|status| status.active = false);
-    // The construction's preference sync lands on the channel before the
-    // test starts; drain it so the test sees only commands its actions send.
     while cmd_rx.try_recv().is_ok() {}
     (app, cmd_rx)
 }
@@ -371,21 +381,138 @@ pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl
     (app, cmd_rx)
 }
 
-/// The `App` a GUI Client's test drives with the Emby startup request
-/// armed, as `initialize_service_startup` arms it for an attached session
-/// whose Emby is configured without a client, so the test reads the
-/// minimal client fill the core starts (add-tauri-gui-client design D9's
-/// ruled exception). The request's worker resolves against the isolated
-/// state dir, where no credential exists.
+/// The `App` a GUI Client's test drives with the Emby client an attach
+/// brings (`owner_link`'s `cached_emby_client`): the runtime is Ready and
+/// holds `client`, so the shared startup step starts no Emby startup worker
+/// (add-gui-library-panel design D11). The test builds the client over an
+/// isolated mock transport, so no request leaves the process.
 #[cfg(feature = "test")]
 #[must_use]
-pub fn stub_app_with_armed_emby_fill() -> App {
+pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
     let mut app = make_app_stub();
-    app.setup.emby_startup_request = Some(crate::app::state::service_setup::StartupRequest {
-        config: crate::config::Config::default(),
-        generation: app.emby_runtime.generation(),
-    });
+    app.emby_runtime =
+        crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
     app
+}
+
+/// The library id the seeded Music library tab holds.
+#[cfg(feature = "test")]
+pub const GUI_MUSIC_LIBRARY_ID: &str = "lib-music";
+
+/// The library id the seeded Shows library tab holds.
+#[cfg(feature = "test")]
+pub const GUI_TV_LIBRARY_ID: &str = "lib-tv";
+
+/// A music group level: the library root's children, its cursor on the first.
+#[cfg(feature = "test")]
+fn music_group_level(groups: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
+    use mbv_ui_model::browse::{BrowseResting, ServerRows};
+
+    mbv_ui_model::browse::BrowseLevel {
+        parent_id: GUI_MUSIC_LIBRARY_ID.to_string(),
+        title: "Music".to_string(),
+        items: groups,
+        rows: ServerRows::new(0),
+        resting: BrowseResting::new(0, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".to_string(),
+        sort_order: "Ascending".to_string(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    }
+}
+
+/// A group's album level: the group's children, its cursor on the first.
+#[cfg(feature = "test")]
+fn music_album_level(albums: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
+    let mut level = music_group_level(albums);
+    level.parent_id = "grp-hiphop".to_string();
+    level.title = "Hip-Hop".to_string();
+    level
+}
+
+/// A group row of the music group level.
+#[cfg(feature = "test")]
+fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
+    let mut item = mbv_emby_model::test_support::make_item(name, "MusicArtist");
+    item.id = id.to_string();
+    item.is_folder = true;
+    item
+}
+
+/// An album row of a group's album level: a folder with no playable media of
+/// its own, as Emby returns a `MusicAlbum`.
+#[cfg(feature = "test")]
+fn album_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
+    let mut item = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
+    item.id = id.to_string();
+    item.is_folder = true;
+    item.media_type.clear();
+    item
+}
+
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_completed_emby_startup_and_contents(
+    views: Vec<mbv_emby_model::EmbyItem>,
+    continue_items: Vec<mbv_emby_model::EmbyItem>,
+) -> App {
+    let mut app = make_app_stub();
+    let generation = app.emby_runtime.generation();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _ = tx.send(crate::app::dispatch::session::service_startup::Completion {
+        generation,
+        result: Ok(crate::app::dispatch::session::service_startup::Startup {
+            client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
+            bootstrap: mbv_emby::EmbyBootstrap {
+                continue_items,
+                views,
+            },
+            setup: mbv_config::EmbySetup::default(),
+        }),
+    });
+    app.setup.emby_startup_rx =
+        Some(crate::app::dispatch::session::service_startup::StartupReceiver { generation, rx });
+    app
+}
+
+/// The `App` a GUI Client's test drives with a successful Emby startup
+/// completion already queued for the startup drain, over `views` as the
+/// bootstrap's library catalog. The worker's thread never runs: the test
+/// hands the drain the one completion a worker would send (add-gui-library-panel
+/// design D11).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>) -> App {
+    stub_app_with_completed_emby_startup_and_contents(views, Vec::new())
+}
+
+/// The Client tests' test-only reads and seeds of an `App`'s state
+/// (`app_stub::test_reads`).
+#[cfg(any(test, feature = "test"))]
+pub(in crate::app) mod test_reads;
+
+/// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
+/// `handling` "Clients exit cleanly on an announced shutdown"): the stub
+/// queue's App attached at the local endpoint — the route the announce's
+/// exit path checks — with the returned sender feeding its player-event
+/// channel, because the channel itself is behind `pub(in crate::app)` and
+/// a Client's cross-crate test injects through this seam. The constructor
+/// sends no player event, so a test's sends are the first ones.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_local_daemon_events(
+    n: usize,
+) -> (App, std::sync::mpsc::Sender<mbv_ctrl::player::PlayerEvent>) {
+    let mut app = stub_app_with_queue(n);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.player_rx = rx;
+    (app, tx)
 }
 
 /// The ordinary `App::build` construction over stub channels: no live

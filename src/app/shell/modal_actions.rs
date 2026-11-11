@@ -1,4 +1,5 @@
 use super::Model;
+use crate::app::dispatch::session::daemon_lost::DaemonLostAnswer;
 use mbv_components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_msg::{ComponentId, Key, KeyEvent, ModalId};
@@ -32,21 +33,24 @@ impl Model {
         self.app.apply_confirm_action(action, key);
     }
 
+    /// The `DaemonLost` modal's answer, from its component's key intent: the
+    /// answer's effect is the shared `App::apply_daemon_lost_intent`, and
+    /// this handler owns only where the dialog and its diagnostic line live
+    /// in the TUI (the mounted component).
     pub(in crate::app) fn handle_daemon_lost_intent(&mut self, intent: DaemonLostIntent) -> bool {
         let id = ComponentId::Modal(ModalId::DaemonLost);
         if !self.application.mounted(&id) {
             return false;
         }
-        match intent {
-            DaemonLostIntent::RestartWithTray | DaemonLostIntent::RestartWithoutTray => {
-                if let Err(error) = self.app.restart_local_daemon() {
-                    self.set_daemon_lost_restart_error(error.to_string());
-                }
+        match self.app.apply_daemon_lost_intent(intent) {
+            DaemonLostAnswer::Restarted => false,
+            DaemonLostAnswer::RestartFailed(error) => {
+                self.set_daemon_lost_restart_error(error);
                 false
             }
-            DaemonLostIntent::Quit => {
+            DaemonLostAnswer::Quit(quit) => {
                 self.dismiss_modal(&id);
-                self.app.try_quit()
+                quit
             }
         }
     }

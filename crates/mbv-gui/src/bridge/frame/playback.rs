@@ -5,7 +5,7 @@ use mbv::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid,
 };
-use mbv_ui_model::panel_targets::SessionTargetKey;
+use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::Serialize;
@@ -305,13 +305,24 @@ impl From<&PlaybackTargetChoice> for GuiTargetChoice {
     }
 }
 
-/// A playback target's stable identity, mirroring `SessionTargetKey` variant
-/// for variant: the Emby session id, or the cast receiver id.
+/// A playback target's stable identity, mirroring `ChooserTargetKey`: the local
+/// output, the Emby session id, or the cast receiver id. The local output is a
+/// unit kind (`{ "kind": "local" }`) with no id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
 pub enum GuiTargetKey {
+    Local,
     Emby(String),
     Cast(String),
+}
+
+impl From<&ChooserTargetKey> for GuiTargetKey {
+    fn from(key: &ChooserTargetKey) -> Self {
+        match key {
+            ChooserTargetKey::Local => Self::Local,
+            ChooserTargetKey::Target(target) => Self::from(target),
+        }
+    }
 }
 
 impl From<&SessionTargetKey> for GuiTargetKey {

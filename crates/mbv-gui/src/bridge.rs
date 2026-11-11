@@ -4,4 +4,5 @@
 pub mod frame;
 pub mod keys;
 pub mod layout;
+pub mod library;
 pub mod pointer;

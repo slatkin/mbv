@@ -48,6 +48,7 @@ pub(crate) fn make_media_item(id: &str) -> mbv_emby_model::EmbyItem {
         index_number: 2,
         parent_index_number: 1,
         unplayed_item_count: 0,
+        parent_id: String::new(),
         path: String::new(),
         artist: String::new(),
         track_artist: String::new(),

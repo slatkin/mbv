@@ -1,4 +1,5 @@
 mod consume;
+mod play_next;
 mod playlist_owner_link;
 mod queue_op;
 mod transfer_handoff;
