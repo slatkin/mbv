@@ -18,6 +18,7 @@
 	// position.
 	import { ListEnd, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
@@ -103,6 +104,18 @@
 		});
 	}
 
+	/** The item the Hero's buttons act on (Q6 of the Hero look audit): the
+	 * selected season on a series Hero, and the episode on a Latest Hero. A
+	 * season is a folder, so the shared folder paths expand it. */
+	const actionTarget = $derived(workspace === null ? shows.selected : workspace.selectedSeason);
+
+	/** Send a Shows command for the Hero's target; nothing while it names none. */
+	function actOn(command: 'showsPlay' | 'showsPlayNext' | 'showsQueue'): void {
+		if (actionTarget !== null) {
+			void sendLibraryCommand({ command, libIdx: shows.libIdx, itemId: actionTarget });
+		}
+	}
+
 	/** The Workspace table's rows: each episode with its played state and its
 	 * resume percent. */
 	const episodeRows = $derived(
@@ -164,6 +177,14 @@
 		art={hero.art ?? null}
 		artTitle={hero.title}
 	>
+		{#snippet actions()}
+			<LibraryHeroActions
+				attr="shows"
+				onplay={() => actOn('showsPlay')}
+				onplaynext={() => actOn('showsPlayNext')}
+				onqueue={() => actOn('showsQueue')}
+			/>
+		{/snippet}
 	{#if workspace !== null}
 		<!-- The series Hero's Workspace (design D12): the season pills, then
 		the selected season's episodes. -->

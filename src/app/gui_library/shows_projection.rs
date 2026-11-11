@@ -533,11 +533,20 @@ impl App {
         {
             return Some(item.clone());
         }
-        self.series_detail_cache
-            .values()
-            .flat_map(|detail| detail.episodes.values().flatten())
-            .find(|episode| episode.id == item_id)
-            .cloned()
+        // A season is a folder item the Hero's season buttons name: the shared
+        // folder play, play-next, and enqueue expand it, as they do a series.
+        let details = self.series_detail_cache.values();
+        let season = details
+            .clone()
+            .flat_map(|detail| detail.seasons.iter())
+            .find(|season| season.id == item_id)
+            .cloned();
+        season.or_else(|| {
+            details
+                .flat_map(|detail| detail.episodes.values().flatten())
+                .find(|episode| episode.id == item_id)
+                .cloned()
+        })
     }
 }
 

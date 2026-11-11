@@ -236,3 +236,26 @@ test('a press on an episode moves the cursor onto its row', async () => {
 
 	expect(get(showsWorkspace).cursor).toBe('ep2');
 });
+
+// The Hero's buttons act on the selected season of a series, and on the
+// episode of a Latest Hero (Q6 of the Hero look audit): a season is a folder
+// the core's shared folder paths expand.
+test('the series Hero Play sends the play command for the selected season', async () => {
+	const container = mount();
+
+	await fireEvent.click(container.querySelector('[data-library-shows-hero-play]') as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showsPlay', libIdx: 2, itemId: 's1' },
+	});
+});
+
+test('the Latest Hero Add to queue sends the queue command for the selected episode', async () => {
+	const container = mount(hero({ workspace: null }));
+
+	await fireEvent.click(container.querySelector('[data-library-shows-hero-add]') as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showsQueue', libIdx: 2, itemId: 'series1' },
+	});
+});
