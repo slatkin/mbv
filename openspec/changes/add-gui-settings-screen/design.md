@@ -91,6 +91,7 @@ Every other action is `AllClients`. The Keys section lists only `AllClients` act
 | `activate` | `setting` (the `SettingKey` name) | `App::handle_settings_activate`, refused for a key whose scope is not `AllClients` |
 | `applyChoices` | `kind`, `selected` (choice ids) | `App::commit_settings_choices` (D7) |
 | `assignRoute` | `library` (lowercased name), `endpoint` or none | `App::assign_library_route` (D7) |
+| `routeDevices` | `library` (lowercased name) | `App::route_devices(library)` (D7); the candidates are cached in `GuiSettingsState` and projected until the section closes |
 | `embySetup` | `serverUrl`, `username`, `password` | fill `EmbySetupForm`, then `App::submit_emby_setup` |
 | `audiobookshelfSetup` | `serverUrl`, `apiKey` | fill the form, then `App::submit_audiobookshelf_setup` |
 | `serviceAction` | `ServiceActionIntent` name | `App::route_service_action`, except `ManageFeeds`, which selects the Feeds section: routing it would raise `OpenFeedsManage`, which the D2 drain drops |
@@ -144,7 +145,8 @@ Each move keeps the TUI's behaviour. The TUI shell keeps only its component work
 
 `GuiFrame.settings: Option<GuiSettingsFrame>` is `None` while the screen is closed. While it is open, it carries `section`, `sections` (the shown list from D3 and D4), and `content`, a tagged union with one variant for each section:
 
-- **F2 rows**: each row's `SettingKey` name, its kind (toggle, cycle, choice list, or action), its value text or flag, and, for a choice list, its choices once loaded.
+- **F2 rows**: each row's `SettingKey` name, its kind (toggle, cycle, choice list, or action), its value text or flag, and, for a choice list, its choices once loaded. Every F2 section except Library uses this variant.
+- **Library**: the section's choice rows (`HiddenLibraries`, `FeedViewLibraries`) with their choices once loaded, plus `routes`: the routable libraries with each one's assigned device, the selected library, and its device candidates once `routeDevices` runs for it. The `LibraryRoutes` F2 row is not projected in the GUI: its TUI popup's work lives inline in this section, and its `activate` would raise `OpenLibraryRoutes`, which the D2 drain drops.
 - **Services**: each Service's state label, its action labels and intents, and the setup form's `busy`, `error`, and server URL. The form never carries a password or an API key. The same rule covers logs: a file-backed debug log, the GUI Client log included, never carries a setup secret — a password, an API key, or a Service credential — such as through a `Debug` formatting of a command that carries one.
 - **Feeds**: the subscriptions (name, URL, kind) and the pending-add flag.
 - **Keys**: the prefix chord, then one row for each `AllClients` action. Each row has the id, the label, the section, the effective router chords, the prefix-namespace chord, the changed-from-default flag, and the prefix-addressable flag. The frame also carries the last refusal (action and text) until the next edit.
@@ -154,7 +156,7 @@ Each move keeps the TUI's behaviour. The TUI shell keeps only its component work
 The section's load starts on `selectSection` and when the screen opens:
 
 - Playlists runs `App::spawn_load_playlists`.
-- Library runs `App::route_libraries` and `App::settings_choices` for its two library kinds.
+- Library runs `App::route_libraries` and `App::settings_choices` for its two library kinds. Selecting a library in the routes list sends `routeDevices`, which runs `App::route_devices(library)`; the candidates are cached until the section closes.
 - Playback runs `App::settings_choices(MyLanguages)`.
 
 The results are cached in `GuiSettingsState` until the screen closes. The status line paints from the frame's existing `status` field (the shared Status bar projection). So the screen shows toasts and the prefix-armed state with no new projection.

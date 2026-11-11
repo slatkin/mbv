@@ -160,6 +160,12 @@ The Library section SHALL list the routable libraries with each one's assigned d
 - **WHEN** the user assigns a routable device to a library
 - **THEN** the route is saved and playback of that library goes to the device
 
+#### Scenario: Selecting a library lists its devices
+
+- **GIVEN** the Library section shows the routable libraries
+- **WHEN** the user selects a library in the routes list
+- **THEN** the section lists that library's candidate devices
+
 #### Scenario: A device with no endpoint
 
 - **WHEN** the user assigns a device that has no direct-connect endpoint
