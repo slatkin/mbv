@@ -5,16 +5,20 @@
 // installs a router. The pane focus decides the control a key acts on: the
 // book list, or the Hero's chapter Workspace.
 //
-// Everything else matches the Emby router: the movements and Enter never reach
-// the core, Esc's overlay and menu handling runs before this, `/` opens the
-// list's filter, and Space stays the core's play and pause — Audiobooks paints
-// no pill row. A book has no play-next: `n` is consumed and does nothing, and
-// `a` sends the queue command.
+// The routing itself is the shared panel key handler's (`./keys-shared`,
+// row 7C.2): the movements and Enter never reach the core, Esc's overlay and
+// menu handling runs before this, `/` opens the list's filter, and Space
+// stays the core's play and pause — Audiobooks paints no pill row. This
+// module keeps only the Audiobooks facts it routes over: the Hero's own
+// chapter-Workspace router, and `a`'s queue command. A book has no
+// play-next: `n` is consumed and does nothing.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
+import type { GuiAudiobooksFrame } from '$lib/bridge/types';
+import { CURSOR_MOVES, LIST_AND_HERO_KEYS, routePanelListKey } from './keys-shared';
+import type { PanelKeys } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryAudiobooks, openLibraryFilter } from './state';
+import { libraryAudiobooks } from './state';
 import {
 	audiobooksCursorRow,
 	moveAudiobooksListCursor,
@@ -28,109 +32,35 @@ import {
 	queueAbsBook,
 } from '$lib/library/audiobooks-workspace';
 
-/** Whether no modifier is held. */
-function bare(event: KeyboardEvent): boolean {
-	return !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
-}
+/** The Audiobooks facts the shared panel key handler routes over (row 7C.2):
+ * no pill row rides on the destination, the item the play and queue commands
+ * name is the book the cursor row carries, the Hero routes its own chapter
+ * Workspace, and there is no play-next. */
+const AUDIOBOOKS_KEYS: PanelKeys<GuiAudiobooksFrame, AudiobooksItemRow> = {
+	frame: libraryAudiobooks,
+	hasHero: (audiobooks) => audiobooks.hero !== null,
+	selectedItemId: (audiobooks) => audiobooks.selected,
+	cursorRow: audiobooksCursorRow,
+	itemId: (row) => row.row.id,
+	moveListCursor: moveAudiobooksListCursor,
+	playItem: playAudiobooksRow,
+	queueItem: queueAudiobooksRow,
+	routeHero: routeWorkspaceKey,
+};
 
-/**
- * Route a key to the Audiobooks keys (row 9.1): the book list's cursor moves
- * and Enter plays the book it rests on — which the Owner replaces the queue
- * with at the book's saved position — and the Hero's Workspace cursor moves
- * over the selected book's chapters. `a` queues the book the focused pane
- * names, and `n` is consumed and does nothing, because books have no
- * play-next. Every one of them is consumed, so no Library key reaches the
- * core's playback chords from any pane.
- */
+/** Route a key to the Audiobooks keys (row 9.1): the shared handler over the
+ * Audiobooks facts. Enter on the book list's cursor plays the book it rests
+ * on — which the Owner replaces the queue with at the book's saved
+ * position. */
 export function routeAudiobooksPanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
-	const audiobooks = libraryAudiobooks();
-	if (audiobooks === null) {
-		return 'core';
-	}
-	// `/` opens the list's filter (design D3, D7): the rail's keyboard path.
-	if (event.key === '/' && bare(event)) {
-		openLibraryFilter();
-		return 'handled';
-	}
-	// No pill row rides on the destination, so no Space is a pill select:
-	// Space stays the core's play and pause.
-	if (event.key === ' ' && !event.ctrlKey && !event.metaKey) {
-		return 'core';
-	}
-	if (!bare(event)) {
-		return 'core';
-	}
-	if (ui.pane === 'list') {
-		return routeListKey(event);
-	}
-	if (ui.pane === 'hero' && audiobooks.hero !== null) {
-		return orRemaining(routeWorkspaceKey(event, audiobooks), event);
-	}
-	// The Hero pane a frame without a Hero does not paint, and any pane that
-	// left a key unclaimed, still keep the Library's keys from the core: the
-	// movements and Enter change nothing, `n` changes nothing, and `a` queues
-	// the list's cursor book.
-	return routeRemainingKey(event);
-}
-
-/** The key's answer, or the remaining Library keys' answer when the pane left
- * it unclaimed: a pane that does not act on a key never passes it to the
- * core's playback chords (design D3, step 4). */
-function orRemaining(outcome: KeyOutcome, event: KeyboardEvent): KeyOutcome {
-	return outcome === 'core' ? routeRemainingKey(event) : outcome;
-}
-
-/** The Library's own keys no Audiobooks pane claims (design D3, step 4): `a`
- * queues the list's cursor book, as the Emby router's item key acts from every
- * pane, and `n` is consumed and does nothing — books have no play-next. The
- * movements and Enter change nothing at all. Every one of them is consumed, so
- * a playback chord never runs from an Audiobooks key. */
-function routeRemainingKey(event: KeyboardEvent): KeyOutcome {
-	if (event.key === 'n' || event.key === 'a') {
-		routeBookKey(event, audiobooksCursorRow());
-		return 'handled';
-	}
-	return LIST_AND_HERO_KEYS.has(event.key) ? 'handled' : 'core';
-}
-
-/** Route a key to the book list's cursor (row 9.1): the arrows, Page Up, Page
- * Down, Home, and End move the cursor, Enter plays the book it rests on, and
- * `a` queues it. `n` is consumed and does nothing. */
-function routeListKey(event: KeyboardEvent): KeyOutcome {
-	const move = CURSOR_MOVES[event.key];
-	if (move !== undefined) {
-		moveAudiobooksListCursor(move);
-		return 'handled';
-	}
-	if (event.key === 'Enter') {
-		const row = audiobooksCursorRow();
-		if (row !== null) {
-			playAudiobooksRow(row.row.id);
-		}
-		return 'handled';
-	}
-	if (event.key === 'n' || event.key === 'a') {
-		routeBookKey(event, audiobooksCursorRow());
-		return 'handled';
-	}
-	return LIST_AND_HERO_KEYS.has(event.key) ? 'handled' : 'core';
-}
-
-/** Route `n` and `a` to one book (row 9.1): the list's cursor book. `n`
- * queues nothing, because a book has no play-next; `a` sends the queue
- * command. A cursor on no book sends nothing. */
-function routeBookKey(event: KeyboardEvent, row: AudiobooksItemRow | null): void {
-	if (event.key !== 'a' || row === null) {
-		return;
-	}
-	queueAudiobooksRow(row.row.id);
+	return routePanelListKey(event, ui, AUDIOBOOKS_KEYS);
 }
 
 /** Route a key to the Hero's chapter Workspace (row 9.1): the movement keys
  * move the chapter cursor, Enter plays or seeks from the chapter, and `a`
  * queues the selected book. `n` is consumed and does nothing, because books
  * have no play-next. */
-function routeWorkspaceKey(event: KeyboardEvent, audiobooks: NonNullable<ReturnType<typeof libraryAudiobooks>>): KeyOutcome {
+function routeWorkspaceKey(event: KeyboardEvent, audiobooks: GuiAudiobooksFrame): KeyOutcome {
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
 		moveAbsChapterCursor(move, audiobooks);
