@@ -26,6 +26,7 @@ import {
 	sendKeysCapture,
 	settingsEscape,
 	settingsUi,
+	showSettingsCursor,
 	spaceActivates,
 	submitSettingsForm,
 	switchSettingsPane,
@@ -78,6 +79,9 @@ export function routeSettingsKey(event: KeyboardEvent, settings: GuiSettingsFram
 		}
 		return 'text';
 	}
+	// A screen key shows the cursor; a pointer press hides it again (the
+	// `keyboard` fact in `$lib/settings/state`).
+	showSettingsCursor();
 	// (4) An open pick menu takes its own keys (design D13): Up and Down walk
 	// its values, Enter sends `setValue` for the cursor value, and Esc closes
 	// it with no change. Any other key closes it and falls through, so the

@@ -14,7 +14,12 @@
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { SETTINGS_SIDEBAR_WIDTH_PX } from '$lib/bridge/arrangement';
 	import type { GuiSettingsFrame, GuiSettingsSection, GuiStatusBar } from '$lib/bridge/types';
-	import { currentSettingsEntries, cursorEntryId, settingsUi } from '$lib/settings/state';
+	import {
+		currentSettingsEntries,
+		cursorEntryId,
+		hideSettingsCursor,
+		settingsUi,
+	} from '$lib/settings/state';
 	import SettingsSidebar from './SettingsSidebar.svelte';
 	import SettingsStatusBar from './SettingsStatusBar.svelte';
 	import SettingsRows from './SettingsRows.svelte';
@@ -59,7 +64,7 @@
 	const pane = $derived($settingsUi.pane);
 	const entries = $derived(currentSettingsEntries(settings.content, $settingsUi));
 	const cursorId = $derived(
-		pane === 'content' ? cursorEntryId(entries, $settingsUi) : null,
+		pane === 'content' && $settingsUi.keyboard ? cursorEntryId(entries, $settingsUi) : null,
 	);
 
 	let contentEl: HTMLElement | undefined = $state();
@@ -76,6 +81,9 @@
 		}
 	});
 </script>
+
+<!-- A pointer press hides the keyboard cursor, like `:focus-visible`. -->
+<svelte:window onpointerdown={hideSettingsCursor} />
 
 <div
 	class="flex h-full min-h-0 min-w-0 flex-1 flex-col"

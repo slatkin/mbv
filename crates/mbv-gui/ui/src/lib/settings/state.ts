@@ -73,6 +73,10 @@ export interface SettingsUiState {
 	sidebarCursor: number;
 	/** The content pane's cursor, an index into the section's entries. */
 	contentCursor: number;
+	/** Whether the cursor paints: a screen key shows it and a pointer press
+	 * hides it, like `:focus-visible`. A pointer user sees no row that looks
+	 * picked. */
+	keyboard: boolean;
 	/** The section the last frame showed: a change re-anchors the sidebar
 	 * cursor and drops the content cursor and every draft. `null` before the
 	 * first open frame. */
@@ -106,6 +110,7 @@ export function initialSettingsUi(): SettingsUiState {
 		pane: 'sidebar',
 		sidebarCursor: 0,
 		contentCursor: 0,
+		keyboard: false,
 		section: null,
 		capture: null,
 		choiceMarks: {},
@@ -186,6 +191,16 @@ export function switchSettingsPane(): void {
 		...ui,
 		pane: ui.pane === 'sidebar' ? 'content' : 'sidebar',
 	}));
+}
+
+/** Show the cursor (a screen key ran). */
+export function showSettingsCursor(): void {
+	settingsUi.update((ui) => (ui.keyboard ? ui : { ...ui, keyboard: true }));
+}
+
+/** Hide the cursor (a pointer press on the screen). */
+export function hideSettingsCursor(): void {
+	settingsUi.update((ui) => (ui.keyboard ? { ...ui, keyboard: false } : ui));
 }
 
 /** Put the keyboard on one pane (a pointer press on it). */

@@ -11,10 +11,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiSettingsFrame, GuiSettingsSection } from '$lib/bridge/types';
-import { initialSettingsUi, settingsUi } from '$lib/settings/state';
+import { hideSettingsCursor, initialSettingsUi, settingsUi, showSettingsCursor } from '$lib/settings/state';
 import SettingsSidebar from './SettingsSidebar.svelte';
 
 const invokeMock = vi.mocked(invoke);
@@ -89,4 +90,21 @@ test('a press on Back closes the screen', async () => {
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: { command: 'close' },
 	});
+});
+
+// A pointer user sees no row that looks picked: the cursor paints only after a
+// screen key, like `:focus-visible` (the first row looked selected at open).
+test('the sidebar cursor row paints only while the keyboard shows it', async () => {
+	const { container } = render(SettingsSidebar, { props: { settings: frame() } });
+	const painted = () => container.querySelector('[data-settings-cursor]') !== null;
+
+	const atOpen = painted();
+	showSettingsCursor();
+	await tick();
+	const afterKey = painted();
+	hideSettingsCursor();
+	await tick();
+	const afterPointer = painted();
+
+	expect([atOpen, afterKey, afterPointer]).toEqual([false, true, false]);
 });

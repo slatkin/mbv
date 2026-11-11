@@ -3,7 +3,9 @@
 	// the canvas row): 60 px high, the label on the left at the canvas's
 	// 14 px heading colour, the control on the right, and the canvas's
 	// divider under every row but its card's last one. The cursor row takes
-	// the picked row's fill while the content pane holds the keyboard.
+	// the picked row's fill while the content pane holds the keyboard: a 6 px
+	// rounded fill that reaches 12 px past the row's text edges (the canvas's
+	// picked-row radius) and hides the divider beneath it.
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -26,8 +28,11 @@
 	class="flex items-center justify-between"
 	style:height="60px"
 	style:gap="16px"
+	style:margin="0 -12px"
+	style:padding="0 12px"
+	style:border-radius="6px"
 	style:background={cursor ? 'var(--canvas-selected)' : undefined}
-	style:border-bottom={divider ? '1px solid var(--canvas-border)' : undefined}
+	style:border-bottom={divider ? `1px solid ${cursor ? 'transparent' : 'var(--canvas-border)'}` : undefined}
 	data-settings-setting-row=""
 	data-settings-cursor={cursor ? '' : undefined}
 >
