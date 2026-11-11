@@ -76,6 +76,50 @@ fn expanding_an_uncached_show_starts_the_detail_fetch() {
 }
 
 #[test]
+fn season_pill_click_arms_the_selected_seasons_lazy_episode_fetch() {
+    // Guards the blank-season-pill regression: only the first season's
+    // episodes arrive with the series detail, so a clicked pill must arm
+    // the same lazy fetch a keyboard season move (`TvSeasonMove`) arms --
+    // otherwise every other pill's workspace stays empty forever.
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+    let mut season_one = mbv_emby_model::test_support::make_item("Season 1", "Season");
+    season_one.id = "season-1".into();
+    let mut season_two = mbv_emby_model::test_support::make_item("Season 2", "Season");
+    season_two.id = "season-2".into();
+    let mut episodes = std::collections::HashMap::new();
+    episodes.insert("season-1".into(), Vec::new());
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        mbv_ui_model::browse::SeriesDetail {
+            seasons: vec![season_one, season_two],
+            episodes,
+        },
+    );
+    model.push_tv_workspace_content();
+    // The owner moves its season cursor before the shell sees the click
+    // (what a real pill click does in `apply_pane_click`).
+    model.test_tv_owner_mut().move_season(1);
+
+    model.handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::TvHitClick {
+            hit: mbv_ui_msg::TvHit::SeasonTab(1),
+        })),
+        &mut false,
+        &mut false,
+    );
+
+    assert!(
+        model
+            .app
+            .series_season_loading
+            .contains(&("movie-focused".into(), "season-2".into())),
+        "the clicked pill's season must be fetching, not blank"
+    );
+}
+
+#[test]
 fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
     let http = MockHttp::new();
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
