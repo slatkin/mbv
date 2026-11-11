@@ -172,7 +172,9 @@
    shadow composites over that fill and under the label, which is why a pill, a
    selected row, and an accent button keep their own colours and still light
    up. The filter field's frame is a `label` around its `input`, so it takes
-   the same veil while the pointer is on the field. The seekbar is the one
+   the same veil while the pointer is on the field; the Settings forms' fields
+   join through their `data-settings-field` marker (design
+   add-gui-settings-screen D11 *Pointer contract*). The seekbar is the one
    control left out: it already answers the pointer with the trickplay tile
    preview, and a veil over its 60 px box would tint the elapsed and remaining
    labels with it. */
@@ -180,6 +182,7 @@ button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,
 [role='tab']:not([aria-disabled='true']):hover,
 [role='option']:hover,
+[data-settings-field]:not(:disabled):hover,
 label:has(> input:hover) {
 	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
 }

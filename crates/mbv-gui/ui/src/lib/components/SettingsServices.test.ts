@@ -8,10 +8,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiSettingsContent } from '$lib/bridge/types';
+import type { GuiSettingsCommand, GuiSettingsContent } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
-import { initialSettingsUi, settingsUi } from '$lib/settings/state';
+import { cursorEntryId, initialSettingsUi, settingsUi } from '$lib/settings/state';
 import SettingsServices from './SettingsServices.svelte';
 
 const invokeMock = vi.mocked(invoke);
@@ -93,4 +94,51 @@ test('a submit sends embySetup with the three fields, then the password field is
 	) as HTMLInputElement;
 	expect(password.type).toBe('password');
 	expect(password.value).toBe('');
+});
+
+test.each<[string, GuiSettingsCommand]>([
+	['service:emby:setupEmby', { command: 'serviceAction', action: 'setupEmby' }],
+	[
+		'service:audiobookshelf:setupAudiobookshelf',
+		{ command: 'serviceAction', action: 'setupAudiobookshelf' },
+	],
+	['service:feeds:manageFeeds', { command: 'serviceAction', action: 'manageFeeds' }],
+])(
+	'a press on %s sends its serviceAction and moves the content cursor to it',
+	async (id, command) => {
+		const content = servicesContent();
+		const entries = settingsEntries(content, {});
+		const { container } = render(SettingsServices, {
+			props: { content, entries, cursorId: null },
+		});
+
+		await fireEvent.click(
+			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
+		);
+
+		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
+		const ui = get(settingsUi);
+		expect(ui.pane).toBe('content');
+		expect(cursorEntryId(entries, ui)).toBe(id);
+	},
+);
+
+test('the setup form\'s Cancel sends cancelSetup for the form\'s service', async () => {
+	const content = servicesContent();
+	settingsUi.update((ui) => ({
+		...ui,
+		embySetup: { serverUrl: 'http://emby', username: '', password: '' },
+	}));
+	const { container } = render(SettingsServices, {
+		props: { content, entries: settingsEntries(content, {}), cursorId: null },
+	});
+	await tick();
+
+	await fireEvent.click(
+		container.querySelector('[data-settings-setup-cancel]') as HTMLElement,
+	);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'cancelSetup', service: 'emby' },
+	});
 });

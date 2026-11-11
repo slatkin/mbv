@@ -125,7 +125,8 @@
 					style:border-radius="4px"
 					style:border="0"
 					style:background="var(--canvas-well)"
-					style:color="var(--canvas-accent)"
+					style:color={content.adding ? 'var(--canvas-ordinal)' : 'var(--canvas-accent)'}
+					style:opacity={content.adding ? '0.7' : undefined}
 					data-settings-feed-submit=""
 					onclick={() => submitSettingsForm(content)}
 					>{content.adding ? 'Adding…' : form.identity === null ? 'Add' : 'Save'}</button

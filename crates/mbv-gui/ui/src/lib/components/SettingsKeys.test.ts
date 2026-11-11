@@ -6,10 +6,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiSettingsContent } from '$lib/bridge/types';
+import type { GuiSettingsCommand, GuiSettingsContent } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
-import { initialSettingsUi, settingsUi } from '$lib/settings/state';
+import { cursorEntryId, initialSettingsUi, settingsUi } from '$lib/settings/state';
 import SettingsKeys from './SettingsKeys.svelte';
 
 const invokeMock = vi.mocked(invoke);
@@ -26,9 +27,9 @@ function keysContent(): Extract<GuiSettingsContent, { kind: 'keys' }> {
 				label: 'Stop',
 				section: 'Playback',
 				chords: ['x'],
-				prefixChord: null,
+				prefixChord: 'p',
 				changed: true,
-				prefixAddressable: false,
+				prefixAddressable: true,
 			},
 			{
 				id: 'toggle_play_pause',
@@ -78,4 +79,43 @@ test('a reset sends keysReset with the action id', async () => {
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: { command: 'keysReset', action: 'stop' },
 	});
+});
+
+test.each<[string, GuiSettingsCommand]>([
+	['keyClear:prefix', { command: 'keysClear', target: 'prefix' }],
+	['keyClear:prefix:stop', { command: 'keysClear', target: 'prefix:stop' }],
+])('a press on %s sends its keysClear and moves the content cursor to it', async (id, command) => {
+	const content = keysContent();
+	const entries = settingsEntries(content, {});
+	const { container } = render(SettingsKeys, {
+		props: { content, entries, cursorId: null },
+	});
+
+	await fireEvent.click(
+		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
+	);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', { command });
+	const ui = get(settingsUi);
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe(id);
+});
+
+test('a press on a chord arms its capture and sends no command', async () => {
+	const content = keysContent();
+	const entries = settingsEntries(content, {});
+	const { container } = render(SettingsKeys, {
+		props: { content, entries, cursorId: null },
+	});
+
+	const id = 'keyTarget:stop';
+	await fireEvent.click(
+		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
+	);
+
+	expect(invokeMock).not.toHaveBeenCalled();
+	const ui = get(settingsUi);
+	expect(ui.capture).toEqual({ target: 'stop', sent: false });
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe(id);
 });

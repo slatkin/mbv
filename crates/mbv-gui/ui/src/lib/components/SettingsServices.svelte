@@ -153,7 +153,8 @@
 						style:border-radius="4px"
 						style:border="0"
 						style:background="var(--canvas-well)"
-						style:color="var(--canvas-accent)"
+						style:color={setup.busy ? 'var(--canvas-ordinal)' : 'var(--canvas-accent)'}
+						style:opacity={setup.busy ? '0.7' : undefined}
 						data-settings-setup-submit=""
 						onclick={() => submitSettingsForm(content)}
 						>{setup.busy ? 'Checking…' : 'Set up'}</button
@@ -220,7 +221,8 @@
 						style:border-radius="4px"
 						style:border="0"
 						style:background="var(--canvas-well)"
-						style:color="var(--canvas-accent)"
+						style:color={setup.busy ? 'var(--canvas-ordinal)' : 'var(--canvas-accent)'}
+						style:opacity={setup.busy ? '0.7' : undefined}
 						data-settings-setup-submit=""
 						onclick={() => submitSettingsForm(content)}
 						>{setup.busy ? 'Checking…' : 'Set up'}</button

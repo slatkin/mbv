@@ -5,15 +5,18 @@
 // so the keyboard looked dead. After Cancel a movement key must reach the
 // screen's router again.
 
+import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
-import { beforeEach, expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiSettingsContent, GuiSettingsFrame } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
 import { routeSettingsKey } from '$lib/settings/keys';
-import { initialSettingsUi, settingsUi } from '$lib/settings/state';
+import { cursorEntryId, initialSettingsUi, settingsUi } from '$lib/settings/state';
 import SettingsFeeds from './SettingsFeeds.svelte';
+
+const invokeMock = vi.mocked(invoke);
 
 /** The Feeds content with two subscriptions. */
 function feedsContent(): Extract<GuiSettingsContent, { kind: 'feeds' }> {
@@ -41,7 +44,107 @@ function press(key: string): string {
 }
 
 beforeEach(() => {
+	invokeMock.mockClear();
 	settingsUi.set(initialSettingsUi());
+});
+
+test.each<[string, string | null]>([
+	['feedAdd', null],
+	['feed:https://a', 'https://a'],
+])(
+	'a press on %s opens the feed form in place and moves the content cursor to it',
+	async (id, identity) => {
+		const content = feedsContent();
+		const entries = settingsEntries(content, {});
+		const { container } = render(SettingsFeeds, {
+			props: { content, entries, cursorId: null },
+		});
+
+		await fireEvent.click(
+			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
+		);
+
+		expect(invokeMock).not.toHaveBeenCalled();
+		const ui = get(settingsUi);
+		expect(ui.feedForm?.identity ?? null).toBe(identity);
+		expect(ui.pane).toBe('content');
+		expect(cursorEntryId(entries, ui)).toBe(id);
+	},
+);
+
+test('a press on a remove row sends feedRemove with the subscription URL', async () => {
+	const content = feedsContent();
+	const entries = settingsEntries(content, {});
+	const { container } = render(SettingsFeeds, {
+		props: { content, entries, cursorId: null },
+	});
+
+	const id = 'feedRemove:https://a';
+	await fireEvent.click(
+		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
+	);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'feedRemove', url: 'https://a' },
+	});
+	const ui = get(settingsUi);
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe(id);
+});
+
+test('the add form\'s submit sends feedAdd with the typed fields', async () => {
+	const content = feedsContent();
+	const { container } = render(SettingsFeeds, {
+		props: { content, entries: settingsEntries(content, {}), cursorId: null },
+	});
+	await fireEvent.click(
+		container.querySelector('[data-settings-entry="feedAdd"]') as HTMLElement,
+	);
+	await tick();
+
+	await fireEvent.focusIn(
+		container.querySelector('[data-settings-field="name"]') as Element,
+	);
+	await fireEvent.input(container.querySelector('[data-settings-field="name"]') as Element, {
+		target: { value: 'C feed' },
+	});
+	await fireEvent.input(container.querySelector('[data-settings-field="url"]') as Element, {
+		target: { value: 'https://c' },
+	});
+	await fireEvent.click(
+		container.querySelector('[data-settings-feed-submit]') as HTMLElement,
+	);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'feedAdd', name: 'C feed', url: 'https://c', kind: 'audio' },
+	});
+	expect(get(settingsUi).feedForm).toBeNull();
+});
+
+test('the edit form\'s submit sends feedEdit with the subscription URL as the identity', async () => {
+	const content = feedsContent();
+	const { container } = render(SettingsFeeds, {
+		props: { content, entries: settingsEntries(content, {}), cursorId: null },
+	});
+	await fireEvent.click(
+		container.querySelector('[data-settings-entry="feed:https://a"]') as HTMLElement,
+	);
+	await tick();
+
+	await fireEvent.focusIn(
+		container.querySelector('[data-settings-field="name"]') as Element,
+	);
+	await fireEvent.input(container.querySelector('[data-settings-field="name"]') as Element, {
+		target: { value: 'Renamed' },
+	});
+	await fireEvent.click(
+		container.querySelector('[data-settings-feed-submit]') as HTMLElement,
+	);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'feedEdit', url: 'https://a', name: 'Renamed', kind: 'audio' },
+	});
+	expect(get(settingsUi).feedForm).toBeNull();
 });
 
 test('Cancel drops the text-field hold, so a movement key reaches the screen router', async () => {
@@ -68,6 +171,7 @@ test('Cancel drops the text-field hold, so a movement key reaches the screen rou
 
 	await fireEvent.click(container.querySelector('[data-settings-feed-cancel]') as HTMLElement);
 
+	expect(invokeMock).not.toHaveBeenCalled();
 	expect(get(settingsUi).feedForm).toBeNull();
 	expect(get(settingsUi).textField).toBeNull();
 	expect(press('ArrowDown')).toBe('handled');
