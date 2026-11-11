@@ -466,6 +466,10 @@ GUI Library panel:
 The GUI Client's Library panel, beside its Queue panel. The design canvas specifies it, not the TUI's *Library panel*. The GUI front end holds its interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter text) and handles its keys while it has Panel focus. The Client core holds its data selection (destination, selected collections, the Hero's item), its Service data, and its actions (ADR 0036).
 _Avoid_: GUI library screen, Library panel (bare, for the GUI's)
 
+Settings screen:
+The GUI Client's one Settings screen: the full-window arrangement that replaces the player panel and the *Library panel* while it is open, with a sidebar of sections (Services, Playback, Display, Session, Library, Queue, Mpv, Feeds, Actions, Keys, Sessions, Playlists) and the selected section's content. The GUI front end holds its interaction state (sidebar cursor, keyboard position, form drafts, choice marks, capture state); the *Client core* holds the open section, the section's data, and the actions (ADR 0037). The rebindable function-key open actions reach it through the core's Keyboard Router. It is not the TUI's *Settings sidebar*, and it is not the *Services view* the TUI sidebar presents.
+_Avoid_: Settings sidebar (for the GUI's), settings overlay, F2 screen, settings page
+
 Collection pill:
 A *GUI Library panel* pill that narrows the list to one content set that the Service holds: a Music group, a Podcast show, a Feeds subscription, or an Emby feed group. Collection pills are multi-select; the list is the de-duplicated union of the selected collections. Latest, filter, and letter-bucket pills are single pills.
 _Avoid_: multi-pill, filter pill (for a collection)
