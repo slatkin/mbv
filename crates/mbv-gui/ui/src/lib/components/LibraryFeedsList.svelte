@@ -30,6 +30,7 @@
 	} from '$lib/library/feeds';
 	import LibraryFilterField from './LibraryFilterField.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
+	import LibraryItemRow from './LibraryItemRow.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import { canvasVar } from '$lib/bridge/theme';
 
@@ -97,63 +98,23 @@
 		onscroll={scrollFeedsList}
 	>
 		{#snippet row(row)}
-			<button
-				type="button"
-				class="relative flex w-full items-center overflow-hidden"
-				style:height="{FEEDS_ROW_HEIGHT}px"
-				style:padding="0 10px"
-				style:gap="10px"
-				style:border="0"
-				style:border-radius="4px"
-				style:text-align="left"
-				style:font-size="14px"
-				style:background={rowBackground(row)}
-				style:cursor="pointer"
-				data-library-feeds-row="entry"
-				data-library-feeds-row-id={row.id}
-				data-library-feeds-cursor={row.id === $feedsUi.cursor ? '' : undefined}
-				data-library-feeds-selected={row.id === feeds.selected ? '' : undefined}
-				onclick={() => pressFeedsRow(row)}
-				ondblclick={() => playFeedsRow(row.id)}
-			>
-				<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
-					<span
-						class="truncate"
-						style:color={nameColor(row)}
-						style:font-weight={row.id === feeds.selected ? 600 : 400}
-						data-library-feeds-title="">{row.row.title}</span
-					>
-					{#if row.row.subtitle !== null}
-						<span
-							class="truncate"
-							style:font-size="12px"
-							style:color="var(--canvas-muted)"
-							data-library-feeds-subtitle="">{row.row.subtitle}</span
-						>
-					{/if}
-				</span>
-				{#if row.row.date !== null}
-					<span
-						class="flex-none font-mono tabular-nums"
-						style:font-size="12px"
-						style:color="var(--canvas-muted)"
-						data-library-feeds-date="">{row.row.date}</span
-					>
-				{/if}
-				{#if rowProgress(row) !== null}
-					<!-- The resume position (row 11.1): a thin accent run under the
-						row's bottom edge, at the frame's bounded percent. -->
-					<span
-						class="absolute"
-						style:left="0"
-						style:bottom="0"
-						style:height="2px"
-						style:width="{rowProgress(row)}%"
-						style:background="var(--canvas-accent)"
-						data-library-feeds-progress=""
-					></span>
-				{/if}
-			</button>
+			<LibraryItemRow
+				attr="feeds"
+				kind="entry"
+				id={row.id}
+				height={FEEDS_ROW_HEIGHT}
+				title={row.row.title}
+				subtitle={row.row.subtitle}
+				trail={row.row.date}
+				trailPart="date"
+				titleColor={nameColor(row)}
+				background={rowBackground(row)}
+				cursor={row.id === $feedsUi.cursor}
+				selected={row.id === feeds.selected}
+				progress={rowProgress(row)}
+				onpress={() => pressFeedsRow(row)}
+				onplay={() => playFeedsRow(row.row.id)}
+			/>
 		{/snippet}
 	</LibraryVirtualList>
 </div>

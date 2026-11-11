@@ -29,6 +29,7 @@
 		setPodcastsFilter,
 	} from '$lib/library/podcasts';
 	import { openRowMenuAt } from '$lib/library/state';
+	import LibraryItemRow from './LibraryItemRow.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
@@ -126,64 +127,24 @@
 		onscroll={scrollPodcastsList}
 	>
 		{#snippet row(row)}
-				<button
-					type="button"
-					class="relative flex w-full items-center overflow-hidden"
-					style:height="{PODCASTS_ROW_HEIGHT}px"
-					style:padding="0 10px"
-					style:gap="10px"
-					style:border="0"
-					style:border-radius="4px"
-					style:text-align="left"
-					style:font-size="14px"
-					style:background={rowBackground(row)}
-					style:cursor="pointer"
-					data-library-podcasts-row="episode"
-					data-library-podcasts-row-id={row.id}
-					data-library-podcasts-cursor={row.id === $podcastsUi.cursor ? '' : undefined}
-					data-library-podcasts-selected={row.id === podcasts.selected ? '' : undefined}
-					onclick={() => pressPodcastsRow(row)}
-					ondblclick={() => playPodcastsRow(row.row.id)}
-					oncontextmenu={(event) => rowMenu(event, row)}
-				>
-					<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
-						<span
-							class="truncate"
-							style:color={nameColor(row)}
-							style:font-weight={row.id === podcasts.selected ? 600 : 400}
-							data-library-podcasts-title="">{row.row.title}</span
-						>
-						{#if row.row.subtitle !== null}
-							<span
-								class="truncate"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-podcasts-subtitle="">{row.row.subtitle}</span
-							>
-						{/if}
-					</span>
-					{#if row.row.date !== null}
-						<span
-							class="flex-none font-mono tabular-nums"
-							style:font-size="12px"
-							style:color="var(--canvas-muted)"
-							data-library-podcasts-date="">{row.row.date}</span
-						>
-					{/if}
-					{#if rowProgress(row) !== null}
-						<!-- The resume position (row 10.1): a thin accent run under the
-							row's bottom edge, at the frame's bounded percent. -->
-						<span
-							class="absolute"
-							style:left="0"
-							style:bottom="0"
-							style:height="2px"
-							style:width="{rowProgress(row)}%"
-							style:background="var(--canvas-accent)"
-							data-library-podcasts-progress=""
-						></span>
-					{/if}
-				</button>
+			<LibraryItemRow
+				attr="podcasts"
+				kind="episode"
+				id={row.id}
+				height={PODCASTS_ROW_HEIGHT}
+				title={row.row.title}
+				subtitle={row.row.subtitle}
+				trail={row.row.date}
+				trailPart="date"
+				titleColor={nameColor(row)}
+				background={rowBackground(row)}
+				cursor={row.id === $podcastsUi.cursor}
+				selected={row.id === podcasts.selected}
+				progress={rowProgress(row)}
+				onpress={() => pressPodcastsRow(row)}
+				onplay={() => playPodcastsRow(row.row.id)}
+				oncontext={(event) => rowMenu(event, row)}
+			/>
 		{/snippet}
 	</LibraryVirtualList>
 </div>

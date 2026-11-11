@@ -40,6 +40,8 @@
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import LibraryItemRow from './LibraryItemRow.svelte';
+	import LibraryLetterHeading from './LibraryLetterHeading.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
 	import { canvasVar } from '$lib/bridge/theme';
 
@@ -139,65 +141,29 @@
 		onscroll={scrollAudiobooksList}
 	>
 		{#snippet row(row)}
-					{#if row.kind === 'heading'}
-					<div
-						class="flex items-end font-mono"
-						style:height="{row.height}px"
-						style:padding="0 8px 2px"
-						style:font-size="12px"
-						style:color="var(--canvas-source)"
-						data-library-abs-letter={row.letter}
-					>
-						{row.letter}
-					</div>
-				{:else}
-					<button
-						type="button"
-						class="flex w-full items-center overflow-hidden"
-						style:height="{row.height}px"
-						style:padding="0 12px"
-						style:gap="10px"
-						style:border="0"
-						style:border-radius="4px"
-						style:text-align="left"
-						style:font-size="14px"
-						style:background={rowBackground(row)}
-						style:cursor="pointer"
-						data-library-abs-row="book"
-						data-library-abs-row-id={row.id}
-						data-library-abs-cursor={row.id === $audiobooksUi.cursor ? '' : undefined}
-						data-library-abs-selected={row.id === audiobooks.selected ? '' : undefined}
-						onclick={() => pressAudiobooksRow(row)}
-						ondblclick={() => playAudiobooksRow(row.row.id)}
-						oncontextmenu={(event) => rowMenu(event, row)}
-					>
-						<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
-							<span
-								class="truncate"
-								style:color={canvasVar('text')}
-								style:font-weight={row.id === audiobooks.selected ? 600 : 400}
-								data-library-abs-title="">{row.row.title}</span
-							>
-							{#if row.row.subtitle !== null}
-								<span
-									class="truncate"
-									style:font-size="12px"
-									style:color="var(--canvas-muted)"
-									data-library-abs-subtitle="">{row.row.subtitle}</span
-								>
-							{/if}
-						</span>
-						{#if row.row.duration !== ''}
-							<span
-								class="flex-none font-mono tabular-nums"
-								style:font-size="12px"
-								style:color="var(--canvas-muted)"
-								data-library-abs-duration="">{row.row.duration}</span
-							>
-						{/if}
-					</button>
-				{/if}
-			{/snippet}
+			{#if row.kind === 'heading'}
+				<LibraryLetterHeading attr="abs" letter={row.letter} height={row.height} />
+			{:else}
+				<LibraryItemRow
+					attr="abs"
+					kind="book"
+					id={row.id}
+					height={row.height}
+					title={row.row.title}
+					subtitle={row.row.subtitle}
+					trail={row.row.duration}
+					trailPart="duration"
+					titleColor={canvasVar('text')}
+					background={rowBackground(row)}
+					cursor={row.id === $audiobooksUi.cursor}
+					selected={row.id === audiobooks.selected}
+					progress={null}
+					onpress={() => pressAudiobooksRow(row)}
+					onplay={() => playAudiobooksRow(row.row.id)}
+					oncontext={(event) => rowMenu(event, row)}
+				/>
+			{/if}
+		{/snippet}
 	</LibraryVirtualList>
 		<LibraryLetterRail letters={rail} {marked} jump={jumpAudiobooksToLetter} />
 	</div>
