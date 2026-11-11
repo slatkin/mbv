@@ -75,13 +75,8 @@ impl Model {
             ShellRequest::TvSeasonMove { .. } => {
                 // The owner moves its season cursor first; use that
                 // authoritative selection to lazily fetch uncached episodes.
-                let selected_season = self
-                    .tv_owner()
-                    .and_then(mbv_components::tv_content::TvContent::selected_season);
-                if let Some((series_id, season_id)) = selected_season {
-                    self.app.fetch_series_season_episodes(series_id, season_id);
-                    self.push_tv_workspace_content();
-                }
+                self.fetch_selected_tv_season_episodes();
+                self.push_tv_workspace_content();
             }
             // unreachable: shell/messages.rs routes only the Tv* group
             // (TreeExpand/MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
@@ -255,6 +250,20 @@ impl Model {
                 }
             }
             Step::Absent => self.pending_episode_selection = None,
+        }
+    }
+
+    /// Lazily arm the selected season's episode fetch: the owner already
+    /// moved its season cursor, so its selection is authoritative. Shared by
+    /// the keyboard `TvSeasonMove` and a season-pill click (`TvHitClick`) --
+    /// only the first season's episodes come with the series detail, so a
+    /// season that skips this fetch shows an empty workspace forever.
+    pub(super) fn fetch_selected_tv_season_episodes(&mut self) {
+        if let Some((series_id, season_id)) = self
+            .tv_owner()
+            .and_then(mbv_components::tv_content::TvContent::selected_season)
+        {
+            self.app.fetch_series_season_episodes(series_id, season_id);
         }
     }
 

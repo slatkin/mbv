@@ -173,23 +173,14 @@ impl App {
         }
     }
 
-    /// Connecting to a new target severs the current one: the watched
-    /// session, direct remote, and library-route slots are mutually
-    /// exclusive, so a new connect tears the old target down instead of
-    /// holding both. The owner's remote output is handed back to Local first
-    /// (`hand_remote_output_back_to_local`); a severed cast receiver is left
-    /// as it is ("the receiver owns what it plays"). No-op when nothing
-    /// else is connected.
-    pub(in crate::app) fn sever_active_connection(&mut self) {
-        self.hand_remote_output_back_to_local();
-        self.sever_connections_without_output_change();
-    }
-
     /// The same severing without the Cast-output hand-back, used when the
     /// new target is itself a Cast receiver: the owner performs the
     /// Cast-to-Cast hand-off, and a prior `Stop` here would clear the active
     /// slot the new receiver must continue (spec scenario "A different cast
-    /// target is selected while one is attached").
+    /// target is selected while one is attached"). Every session-switch
+    /// caller shares it: severing a connection stops no playback — the prior
+    /// target's owner keeps playing whatever it plays, and a hand-off is
+    /// always the owner's own output selection, asked for separately.
     pub(in crate::app) fn sever_connections_without_output_change(&mut self) {
         if self.active_route.is_some() {
             self.restore_local_mode("Local playback restored before connecting");

@@ -538,6 +538,9 @@ fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
 /// emby-session-owner-output row 7.1, design D12: a Session that advertises a
 /// direct endpoint reports a failed direct connect and then, when the owner
 /// advertises `emby-session-output`, selects the same Session as its output.
+/// With a slot active on the owner's output the activation first raises the
+/// hand-off fork; declining it (Esc) runs the plain switch whose failed
+/// connect falls back to the output selection.
 #[test]
 fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_owner_output() {
     use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
@@ -552,7 +555,7 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
     session.device_id = "device-direct".into();
     session.host = "192.168.1.20".into();
     session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
-    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(session.clone()))];
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
@@ -563,6 +566,23 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
         Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
         &mut music_resize,
         &mut tv_resize,
+    );
+
+    // The stub owner's status is active, so the fork is raised first.
+    let modal = match &harness.model().app.pending_overlay {
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.clone(),
+        other => panic!("the fork must be raised first, got {other:?}"),
+    };
+    assert_eq!(
+        modal.on_confirm,
+        mbv_ui_model::confirm::ConfirmAction::HandOffPlaybackToSession {
+            device_id: "device-direct".into(),
+            name: "remote-host".into(),
+        }
+    );
+    harness.model_mut().app.apply_confirm_action(
+        modal.on_confirm.clone(),
+        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Esc, mbv_ui_msg::KeyModifiers::NONE),
     );
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
 

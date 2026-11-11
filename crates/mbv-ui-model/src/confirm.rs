@@ -49,6 +49,20 @@ pub enum ConfirmAction {
     /// any link opened to read the target queue — confirming attaches that
     /// link, cancelling drops it.
     ConfirmQueueTransfer(SessionTargetKey),
+    /// The session-switch hand-off fork (user decision: switching sessions
+    /// must present the hand-off option; without it the prior playback
+    /// continues). Enter selects the named Session as the local Owner's
+    /// playback output — the Owner stops the old output and continues the
+    /// active slot on the Session at its position; Esc instead switches to
+    /// the Session's direct endpoint and leaves the prior playback running
+    /// (either answer warns when the Session has left the snapshot).
+    /// The Session resolves against the current snapshot at answer time, so
+    /// the payload carries only its stable device identity and the display
+    /// name the prompt showed (for the no-longer-available notice).
+    HandOffPlaybackToSession {
+        device_id: String,
+        name: String,
+    },
 }
 
 /// How a modal button reads: the affirmative choice in the accent green, the

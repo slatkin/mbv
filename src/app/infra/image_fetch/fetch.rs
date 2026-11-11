@@ -84,8 +84,10 @@ impl App {
         });
     }
 
-    /// Fetches one season only after the complete ordered Series detail is in
-    /// the cache. The detail event handler calls this for every uncached pill.
+    /// Fetches one season only after the complete ordered Series detail is
+    /// in the cache. The detail event handler arms the first season and any
+    /// pending expansions; a season-pill click or a keyboard season move
+    /// arms the selected pill the same way.
     pub(in crate::app) fn fetch_series_season_episodes(
         &mut self,
         series_id: String,

@@ -8,8 +8,9 @@ use mbv_ui_msg::{Key, KeyEvent};
 impl App {
     /// Shared dispatcher for the confirmation modal: matches on which
     /// `ConfirmAction` is pending and re-uses each action's existing effect.
-    /// Only Enter (and `d`/Esc on the dirty-playlist prompt) answers; every
-    /// other key is a no-op that leaves the modal mounted.
+    /// Only Enter (and `d`/Esc on the dirty-playlist prompt, Esc on the
+    /// session-switch hand-off fork) answers; every other key is a no-op
+    /// that leaves the modal mounted.
     pub(in crate::app) fn apply_confirm_action(
         &mut self,
         action: ConfirmAction,
@@ -57,6 +58,12 @@ impl App {
                 Key::Enter => self.run_staged_queue_transfer(),
                 _ => self.cancel_staged_queue_transfer(),
             },
+            // The session-switch hand-off fork: Enter selects the Session as
+            // the owner's playback output; Esc runs the plain switch, which
+            // stops no playback.
+            ConfirmAction::HandOffPlaybackToSession { device_id, name } => {
+                self.confirm_hand_off_playback_to_session(&device_id, &name, key);
+            }
         }
         false
     }

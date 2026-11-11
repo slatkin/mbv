@@ -350,7 +350,7 @@ impl Model {
             | ShellRequest::TvTreeExpand { .. }) => {
                 self.handle_tv_request(request);
             }
-            ShellRequest::TvHitClick { hit } => self.handle_tv_hit_click(hit),
+            ShellRequest::TvHitClick { hit } => self.handle_tv_hit_click(&hit),
             ShellRequest::TvHitDoubleClick { hit } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     self.app.handle_mouse_double_click_tv(lib_idx, hit);
@@ -609,10 +609,17 @@ impl Model {
 
     /// The `TvHitClick` arm: single-click the TV hit, acknowledge the Latest
     /// marker for letter pills, and always repaint the TV owner.
-    fn handle_tv_hit_click(&mut self, hit: mbv_ui_msg::TvHit) {
+    fn handle_tv_hit_click(&mut self, hit: &mbv_ui_msg::TvHit) {
         let acknowledge_latest = matches!(hit, mbv_ui_msg::TvHit::LetterPill(0));
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            self.app.handle_mouse_single_click_tv(lib_idx, hit);
+            self.app.handle_mouse_single_click_tv(lib_idx, hit.clone());
+        }
+        // A season-pill click selects the season in the owner (its cursor
+        // move already ran) and must arm the same lazy season-episodes fetch
+        // the keyboard `TvSeasonMove` arms: only the first season's episodes
+        // arrive with the series detail, so an unfetched pill stays blank.
+        if matches!(hit, mbv_ui_msg::TvHit::SeasonTab(_)) {
+            self.fetch_selected_tv_season_episodes();
         }
         if acknowledge_latest {
             self.acknowledge_active_tv_latest();
