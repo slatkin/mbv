@@ -44,9 +44,9 @@
 	<LibraryHeroFrame
 		attr="podcasts"
 		root="data-library-podcasts-hero"
+		header={{ kicker: 'episode', title: hero.title, facts: '' }}
 		block={{
 			label: hero.title,
-			name: hero.title,
 			meta: heroMetaRows(hero),
 			overview: hero.overview ?? null,
 		}}

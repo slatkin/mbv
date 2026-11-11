@@ -92,9 +92,9 @@
 	<LibraryHeroFrame
 		attr="abs"
 		root="data-library-abs-hero"
+		header={{ kicker: 'audiobook', title: hero.title, facts: '' }}
 		block={{
 			label: hero.title,
-			name: hero.title,
 			meta: heroMetaRows(hero),
 			overview: hero.overview ?? null,
 		}}

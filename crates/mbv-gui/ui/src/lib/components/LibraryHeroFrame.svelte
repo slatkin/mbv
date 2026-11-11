@@ -8,8 +8,8 @@
 	//   2. the detail block — the artwork box and, beside it, the picked
 	//      item's eyebrow, name, facts, action row, and overview (Music's
 	//      album, Shows' selected season with the series' overview). A Hero of one
-	//      selected row (Podcasts, Audiobooks, Feeds) has no parent item: it omits
-	//      the header, and the block's name is its title;
+	//      selected row (Podcasts, Audiobooks, Feeds) paints its kicker and title
+	//      here, as Shows does for an episode, and keeps its meta rows in the block;
 	//   3. the list — the destination's rows (Music's tracklist, Shows'
 	//      season pills over the episodes), passed as the children.
 	//
@@ -30,10 +30,8 @@
 		attr: string;
 		/** The root's own attribute, the hook the panel's tests take. */
 		root: string;
-		/** The header band: the parent item the block and rows belong to. A Hero
-		 * with no parent item (one selected row) omits it, and the block's name
-		 * paints as the Hero's title. */
-		header?: { kicker: string; title: string; facts: string };
+		/** The header band: always painted, so every Hero shares the one look. */
+		header: { kicker: string; title: string; facts: string };
 		/** The header band's trailing control, when the destination has one. */
 		headerAction?: Snippet;
 		/** The detail block's text: each line paints only when it is non-empty. */
@@ -88,8 +86,7 @@
 	style:gap="28px"
 	{...{ [root]: '' }}
 >
-	<!-- The header band; a Hero with no parent item omits it. -->
-	{#if header !== undefined}
+	<!-- The header band. -->
 	<div
 		class="flex items-end justify-between"
 		style:gap="24px"
@@ -123,7 +120,6 @@
 		</div>
 		{@render headerAction?.()}
 	</div>
-	{/if}
 
 	<!-- The detail block: the artwork and the picked item's text. -->
 	<section
@@ -160,7 +156,7 @@
 							style:font-size="24px"
 							style:font-weight="600"
 							style:color="var(--canvas-heading)"
-							{...own(header === undefined ? 'title' : 'block-name')}>{block.name}</h2
+							{...own('block-name')}>{block.name}</h2
 						>
 					{/if}
 					{#if (block.facts ?? '') !== ''}

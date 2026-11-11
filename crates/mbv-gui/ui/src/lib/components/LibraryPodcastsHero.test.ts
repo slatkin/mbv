@@ -155,3 +155,12 @@ test('the Hero paints no play-next control', () => {
 		container.querySelector('[data-library-podcasts-hero-block]')?.textContent,
 	).not.toContain('Play next');
 });
+
+// The Hero paints the frame's header band, as Music and Shows do: the kicker
+// over the title, above the artwork (the frame is one look for every Hero).
+test('the Hero paints the frame header above its artwork', () => {
+	const container = mount();
+
+	expect(container.querySelector('[data-library-podcasts-hero-kicker]')?.textContent).toBe('episode');
+	expect(container.querySelector('[data-library-podcasts-hero-title]')?.tagName).toBe('H1');
+});

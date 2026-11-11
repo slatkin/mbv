@@ -211,3 +211,12 @@ test('Add to queue sends the enqueue command for the selected book', async () =>
 		command: { command: 'absQueue', libIdx: LIB_IDX, itemId: 'book1' },
 	});
 });
+
+// The Hero paints the frame's header band, as Music and Shows do: the kicker
+// over the title, above the artwork (the frame is one look for every Hero).
+test('the Hero paints the frame header above its artwork', () => {
+	const container = mountFrame(hero());
+
+	expect(container.querySelector('[data-library-abs-hero-kicker]')?.textContent).toBe('audiobook');
+	expect(container.querySelector('[data-library-abs-hero-title]')?.tagName).toBe('H1');
+});

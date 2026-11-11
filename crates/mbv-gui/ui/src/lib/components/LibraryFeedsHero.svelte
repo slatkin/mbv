@@ -45,9 +45,9 @@
 	<LibraryHeroFrame
 		attr="feeds"
 		root="data-library-feeds-hero"
+		header={{ kicker: 'entry', title: hero.title, facts: '' }}
 		block={{
 			label: hero.title,
-			name: hero.title,
 			meta: heroMetaRows(hero),
 		}}
 		artShape={hero.artShape}
