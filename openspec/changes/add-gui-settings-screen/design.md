@@ -145,7 +145,7 @@ Each move keeps the TUI's behaviour. The TUI shell keeps only its component work
 `GuiFrame.settings: Option<GuiSettingsFrame>` is `None` while the screen is closed. While it is open, it carries `section`, `sections` (the shown list from D3 and D4), and `content`, a tagged union with one variant for each section:
 
 - **F2 rows**: each row's `SettingKey` name, its kind (toggle, cycle, choice list, or action), its value text or flag, and, for a choice list, its choices once loaded.
-- **Services**: each Service's state label, its action labels and intents, and the setup form's `busy`, `error`, and server URL. The form never carries a password or an API key.
+- **Services**: each Service's state label, its action labels and intents, and the setup form's `busy`, `error`, and server URL. The form never carries a password or an API key. The same rule covers logs: a file-backed debug log, the GUI Client log included, never carries a setup secret — a password, an API key, or a Service credential — such as through a `Debug` formatting of a command that carries one.
 - **Feeds**: the subscriptions (name, URL, kind) and the pending-add flag.
 - **Keys**: the prefix chord, then one row for each `AllClients` action. Each row has the id, the label, the section, the effective router chords, the prefix-namespace chord, the changed-from-default flag, and the prefix-addressable flag. The frame also carries the last refusal (action and text) until the next edit.
 - **Sessions**: the `GuiTargetChoice` list that the chooser uses.
