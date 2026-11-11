@@ -235,6 +235,7 @@ impl App {
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,
+            feeds_manage: None,
             mouse_capture_pending: None,
             confirm_logout: false,
             notif_failed: false,

@@ -67,6 +67,23 @@ pub struct FeedAddResult {
     pub result: Result<(), crate::UiModelError>,
 }
 
+/// Outcome of one `App::drain_feed_add_results` step (§6.2): what the
+/// caller must project onto its surface after the drain.
+#[derive(Debug)]
+pub enum FeedAddDrain {
+    /// No result was waiting.
+    Idle,
+    /// A result was drained but discarded as stale (its id no longer
+    /// matches the current pending add): no state changed.
+    Discarded,
+    /// A matching result was applied; carries the refreshed subscription
+    /// list the surface should paint.
+    Applied(Vec<FeedSubscription>),
+    /// A matching result failed; nothing was saved and the pending marker
+    /// was cleared.
+    Failed,
+}
+
 /// Shell-side state for the feeds management overlay (§6), opened from F2
 /// Settings. The component owns the interaction state (stage/cursor/form
 /// edits); this holds only the background add-feed channel, the in-flight

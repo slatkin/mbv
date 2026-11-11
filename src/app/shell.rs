@@ -14,7 +14,6 @@ pub(in crate::app) use crate::app::input::router::RouterOutcome;
 use crate::app::state::home_latest::current_launch_secs;
 use crate::app::state::playback::{DestinationLatestSnapshot, DestinationLatestSource};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
-use mbv_ui_model::feeds_manage::FeedsManagePopup;
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_msg::AlbumCursorKind;
@@ -156,11 +155,6 @@ pub struct Model {
     /// changes, and async completions, and startup restores only through
     /// `reanchor_launch_state`.
     pub(in crate::app) pending_music_reanchor: Option<PendingMusicReanchor>,
-    /// Shell-owned mirror of the feeds-management popup's interaction state
-    /// plus its background add-feed channel (task 5.3c). The
-    /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
-    /// from here each tick; the mpsc cannot live in the component.
-    pub(in crate::app) feeds_manage: Option<FeedsManagePopup>,
     /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
     pub(in crate::app) acknowledged_home_latest_sources:
         std::collections::HashSet<DestinationLatestSource>,
@@ -308,7 +302,6 @@ impl Model {
             pending_episode_selection: None,
             pending_music_track_selection: None,
             pending_music_reanchor: None,
-            feeds_manage: None,
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
             emby_destination_latest_requested: std::collections::HashSet::new(),

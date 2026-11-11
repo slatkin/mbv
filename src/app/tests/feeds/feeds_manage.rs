@@ -74,14 +74,14 @@ fn stale_add_result_is_dropped() {
         })
         .unwrap();
     popup.pending_add = Some(5); // a newer submission is the current one
-    model.feeds_manage = Some(popup);
+    model.app.feeds_manage = Some(popup);
 
     let had_events = model.drain_feed_add_results();
 
     assert!(had_events, "the stale message should still be drained");
     assert!(model.app.config.lock().unwrap().feeds.is_empty());
     assert_eq!(
-        model.feeds_manage.as_ref().unwrap().pending_add,
+        model.app.feeds_manage.as_ref().unwrap().pending_add,
         Some(5),
         "the still-current pending id must be untouched"
     );
@@ -108,7 +108,7 @@ fn add_fetch_failure_does_not_save() {
             result: Err(mbv_ui_model::UiModelError::operation("connection refused")),
         })
         .unwrap();
-    model.feeds_manage = Some(popup);
+    model.app.feeds_manage = Some(popup);
 
     model.drain_feed_add_results();
 
