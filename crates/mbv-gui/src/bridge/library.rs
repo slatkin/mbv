@@ -148,6 +148,11 @@ pub enum GuiLibraryCommand {
     SearchActivate { id: String, item_type: String },
     /// Close the Search results (row 12.1): the Esc in the field.
     SearchClose,
+    /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
+    /// parity): the scheme gate runs in the core, because the url comes
+    /// from the webview — only an http or https URL reaches the opener, and
+    /// any other scheme changes nothing.
+    OpenUrl { url: String },
 }
 
 /// One Feeds pill (add-gui-library-panel design D12, row 11.1): the merged
@@ -385,6 +390,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::SearchActivate { id, item_type }
             }
             GuiLibraryCommand::SearchClose => Self::SearchClose,
+            GuiLibraryCommand::OpenUrl { url } => Self::OpenUrl { url },
         }
     }
 }

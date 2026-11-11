@@ -703,3 +703,34 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
     assert!(!labels.iter().any(|label| label.contains("Mark")));
     assert_eq!(labels, ["Play", "Add to Queue"]);
 }
+
+/// The opener the openUrl seam stages: it records the url the core handed
+/// the opener, so the test observes the open without a real browser spawn.
+static OPENED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn record_open(url: &str) {
+    OPENED.lock().unwrap().push(url.to_string());
+}
+
+/// The `openUrl` command's trust boundary: the core opens an http or https
+/// url through the shared opener, and any other scheme — the url comes from
+/// the webview — reaches no opener.
+#[test]
+fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
+    let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();
+    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
+    let mut app = make_app_stub();
+    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
+        url: "https://www.imdb.com/title/tt0088763/".to_string(),
+    });
+    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
+        url: "javascript:alert(1)".to_string(),
+    });
+    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = None;
+
+    assert_eq!(
+        *OPENED.lock().unwrap(),
+        vec!["https://www.imdb.com/title/tt0088763/".to_string()],
+        "the https url opened and the javascript url dropped"
+    );
+}

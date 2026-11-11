@@ -253,6 +253,11 @@ pub enum GuiLibraryCommand {
     SearchActivate { id: String, item_type: String },
     /// Close the Search results (design D12, row 12.1): Esc in the field.
     SearchClose,
+    /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
+    /// parity): the scheme gate runs in the core, because the url comes
+    /// from the webview — only an http or https URL reaches the opener, and
+    /// any other scheme changes nothing.
+    OpenUrl { url: String },
 }
 
 /// The command's row identity for a stale-frame log: a play or enqueue
@@ -375,6 +380,7 @@ impl App {
             command @ (GuiLibraryCommand::SearchQuery { .. }
             | GuiLibraryCommand::SearchActivate { .. }
             | GuiLibraryCommand::SearchClose) => self.apply_gui_search_command(command),
+            GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
         }
     }
 
@@ -517,6 +523,28 @@ impl App {
             self.home_enqueue_target(item, from_cw);
         } else {
             Self::log_stale_library_item(name, &logged);
+        }
+    }
+
+    /// Open the URL `openUrl` carries (the Hero's `IMDb` link): the scheme
+    /// gate runs first — the url comes from the webview, so only an http or
+    /// https URL reaches the opener, and any other scheme is logged and
+    /// dropped. A failed spawn logs and changes nothing else.
+    fn open_gui_library_url(url: &str) {
+        if mbv_components::library_panel::sanitize_url(url).is_none() {
+            Self::log_ignored_library_command(
+                "openUrl",
+                format_args!("the url's scheme is not http or https"),
+            );
+            return;
+        }
+        if let Err(error) = open_url(url) {
+            tracing::warn!(
+                name: "gui_library.command.open_url.failed",
+                target: "gui_library",
+                error = %error,
+                "failed to open the link"
+            );
         }
     }
 
@@ -773,4 +801,15 @@ impl App {
             })
             .flatten()
     }
+}
+
+/// The URL opener the `openUrl` command runs: the shared `open_url` spawn,
+/// behind the test seam that observes the open without a real browser.
+fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(open) = *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() {
+        open(url);
+        return Ok(());
+    }
+    crate::app::open_url(url)
 }

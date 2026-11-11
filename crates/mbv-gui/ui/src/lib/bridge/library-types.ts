@@ -277,6 +277,13 @@ export type GuiLibraryCommand =
 			libIdx: number;
 			itemId: string;
 	  }
+	| {
+			/** Open the URL in the user's browser (the Hero's `IMDb` link, TUI
+			 * parity): the core opens only an http or https URL — the url
+			 * comes from the webview, so any other scheme changes nothing. */
+			command: 'openUrl';
+			url: string;
+	  }
 	| GuiSearchLibraryCommand
 	| GuiFeedsLibraryCommand;
 
