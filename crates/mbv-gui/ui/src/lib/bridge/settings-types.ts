@@ -85,10 +85,18 @@ export interface GuiSettingRow {
 	 * read here, never derived from `key`. `null` for a row that is no choice
 	 * list. */
 	choicesKind: GuiChoicesKind | null;
+	/** The values a pick row lists (design D13); `null` for a row that is no
+	 * pick. The `setValue` command accepts only one of these. */
+	values: string[] | null;
 }
 
-/** How an F2 row is edited (design D9). */
-export type GuiSettingRowKind = 'toggle' | 'cycle' | 'choiceList' | 'action';
+/** How an F2 row is edited (design D9, D13). */
+export type GuiSettingRowKind =
+	| 'toggle'
+	| 'cycle'
+	| 'pick'
+	| 'choiceList'
+	| 'action';
 
 /** One choice of a choice-list row (design D9): `id` is the value the apply
  * command sends back. */
@@ -234,6 +242,13 @@ export type GuiSettingsCommand =
 			/** Activate an F2 row: `setting` is the row's stable setting name. */
 			command: 'activate';
 			setting: string;
+	  }
+	| {
+			/** Pick one value for a value setting: `value` is one entry of the
+			 * row's projected list (design D13). */
+			command: 'setValue';
+			setting: string;
+			value: string;
 	  }
 	| {
 			/** Apply a choice list's marked ids. */

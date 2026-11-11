@@ -60,6 +60,7 @@ test('Space on a toggle sends activate with the row key', () => {
 			flag: true,
 			choices: null,
 			choicesKind: null,
+			values: null,
 		},
 	]);
 	cursorAt(0);
@@ -88,6 +89,7 @@ test('applying a choice list sends applyChoices with the row-carried kind', () =
 				{ id: 'deu', label: 'German', selected: false },
 			],
 			choicesKind: 'hiddenLibraries',
+			values: null,
 		},
 	]);
 	cursorAt(1);

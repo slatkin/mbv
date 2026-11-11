@@ -21,16 +21,44 @@ pub enum GuiSetupService {
     Audiobookshelf,
 }
 
-/// The text a setup form's secret field shows in the command's `Debug` output.
-/// The GUI Client's log sink is a file, so a `?command` line at debug level
-/// must never carry a typed password or API key (design D9, the spec's
-/// *A failed setup does not echo the password*).
+/// The text a setup form's secret field shows in the command's `Debug` output
+/// and so in every log line that formats the command. The GUI Client's log
+/// sink is a file, so a `?command` line at debug level must never carry a
+/// typed password or API key (design D9, the spec's *A failed setup does not
+/// echo the password*).
 const REDACTED: &str = "<redacted>";
+
+/// A setup secret as a command carries it (design D9). `Debug` prints the
+/// masking text, so the command's derived `Debug` never shows a password or an
+/// API key, and a future secret-carrying field cannot forget the mask the way
+/// a hand-written `Debug` arm could.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SetupSecret(String);
+
+impl SetupSecret {
+    /// Wrap the secret the window content typed.
+    #[must_use]
+    pub fn new(secret: String) -> Self {
+        Self(secret)
+    }
+
+    /// The typed secret, for the setup submit that carries it.
+    #[must_use]
+    pub(crate) fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for SetupSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{REDACTED:?}"))
+    }
+}
 
 /// One request from the GUI Settings screen's window content (design D5). The
 /// window content sends intent; every arm that runs calls the existing `App`
 /// action for it.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiSettingsCommand {
     /// Close the screen (design D2).
     Close,
@@ -39,6 +67,13 @@ pub enum GuiSettingsCommand {
     /// Activate an F2 row through `App::handle_settings_activate` (row 5.1).
     Activate {
         setting: mbv_ui_model::settings::SettingKey,
+    },
+    /// Pick one value for a value setting through `App::set_settings_value`
+    /// (row 9.2, design D13): a key whose scope is not `AllClients`, and a
+    /// value outside the row's projected list, change nothing.
+    SetValue {
+        setting: mbv_ui_model::settings::SettingKey,
+        value: String,
     },
     /// Apply a choice list's marked ids through `App::commit_settings_choices`
     /// (row 5.1).
@@ -59,10 +94,13 @@ pub enum GuiSettingsCommand {
     EmbySetup {
         server_url: String,
         username: String,
-        password: String,
+        password: SetupSecret,
     },
     /// Fill the Audiobookshelf setup form and submit it (row 5.2).
-    AudiobookshelfSetup { server_url: String, api_key: String },
+    AudiobookshelfSetup {
+        server_url: String,
+        api_key: SetupSecret,
+    },
     /// Run one Service action (row 5.2).
     ServiceAction { action: ServiceActionIntent },
     /// Cancel the named setup form (row 5.2).
@@ -111,114 +149,6 @@ pub enum GuiSettingsCommand {
     ResetUiState,
 }
 
-/// The `Debug` form masks the two setup secrets (design D9): every log site
-/// formats the whole command, so the mask must live here and not at those
-/// sites.
-impl std::fmt::Debug for GuiSettingsCommand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Close => f.write_str("Close"),
-            Self::SelectSection { section } => f
-                .debug_struct("SelectSection")
-                .field("section", section)
-                .finish(),
-            Self::Activate { setting } => f
-                .debug_struct("Activate")
-                .field("setting", setting)
-                .finish(),
-            Self::ApplyChoices { kind, selected } => f
-                .debug_struct("ApplyChoices")
-                .field("kind", kind)
-                .field("selected", selected)
-                .finish(),
-            Self::AssignRoute { library, endpoint } => f
-                .debug_struct("AssignRoute")
-                .field("library", library)
-                .field("endpoint", endpoint)
-                .finish(),
-            Self::RouteDevices { library } => f
-                .debug_struct("RouteDevices")
-                .field("library", library)
-                .finish(),
-            Self::EmbySetup { server_url, .. } => f
-                .debug_struct("EmbySetup")
-                .field("server_url", server_url)
-                .field("password", &REDACTED)
-                .finish(),
-            Self::AudiobookshelfSetup { server_url, .. } => f
-                .debug_struct("AudiobookshelfSetup")
-                .field("server_url", server_url)
-                .field("api_key", &REDACTED)
-                .finish(),
-            Self::ServiceAction { action } => f
-                .debug_struct("ServiceAction")
-                .field("action", action)
-                .finish(),
-            Self::CancelSetup { service } => f
-                .debug_struct("CancelSetup")
-                .field("service", service)
-                .finish(),
-            Self::FeedAdd { name, url, kind } => f
-                .debug_struct("FeedAdd")
-                .field("name", name)
-                .field("url", url)
-                .field("kind", kind)
-                .finish(),
-            Self::FeedEdit { url, name, kind } => f
-                .debug_struct("FeedEdit")
-                .field("url", url)
-                .field("name", name)
-                .field("kind", kind)
-                .finish(),
-            Self::FeedRemove { url } => f.debug_struct("FeedRemove").field("url", url).finish(),
-            Self::KeysCapture { target, key } => f
-                .debug_struct("KeysCapture")
-                .field("target", target)
-                .field("key", key)
-                .finish(),
-            Self::KeysReset { action } => {
-                f.debug_struct("KeysReset").field("action", action).finish()
-            }
-            Self::KeysClear { target } => {
-                f.debug_struct("KeysClear").field("target", target).finish()
-            }
-            Self::SelectTarget { target } => f
-                .debug_struct("SelectTarget")
-                .field("target", target)
-                .finish(),
-            Self::PlaylistOpen { id } => f.debug_struct("PlaylistOpen").field("id", id).finish(),
-            Self::PlaylistBack => f.write_str("PlaylistBack"),
-            Self::PlaylistRefresh { id } => {
-                f.debug_struct("PlaylistRefresh").field("id", id).finish()
-            }
-            Self::PlaylistAction { id, action } => f
-                .debug_struct("PlaylistAction")
-                .field("id", id)
-                .field("action", action)
-                .finish(),
-            Self::PlaylistItemAction {
-                id,
-                item_id,
-                action,
-            } => f
-                .debug_struct("PlaylistItemAction")
-                .field("id", id)
-                .field("item_id", item_id)
-                .field("action", action)
-                .finish(),
-            Self::PlaylistRename { id, name } => f
-                .debug_struct("PlaylistRename")
-                .field("id", id)
-                .field("name", name)
-                .finish(),
-            Self::PlaylistDelete { id } => {
-                f.debug_struct("PlaylistDelete").field("id", id).finish()
-            }
-            Self::ResetUiState => f.write_str("ResetUiState"),
-        }
-    }
-}
-
 impl App {
     /// Apply one GUI Settings command (design D5): each variant runs through
     /// the shared `App` method for its intent, and a command built from a
@@ -247,6 +177,9 @@ impl App {
             GuiSettingsCommand::Activate { setting } => {
                 self.apply_gui_settings_activate(setting);
             }
+            GuiSettingsCommand::SetValue { setting, value } => {
+                self.apply_gui_settings_set_value(setting, &value);
+            }
             GuiSettingsCommand::ApplyChoices { kind, selected } => {
                 self.apply_gui_settings_choices(kind, &selected);
             }
@@ -260,11 +193,16 @@ impl App {
                 server_url,
                 username,
                 password,
-            } => self.apply_gui_settings_emby_setup(server_url, username, password),
+            } => self.apply_gui_settings_emby_setup(
+                server_url,
+                username,
+                password.expose().to_string(),
+            ),
             GuiSettingsCommand::AudiobookshelfSetup {
                 server_url,
                 api_key,
-            } => self.apply_gui_settings_audiobookshelf_setup(server_url, api_key),
+            } => self
+                .apply_gui_settings_audiobookshelf_setup(server_url, api_key.expose().to_string()),
             GuiSettingsCommand::ServiceAction { action } => {
                 self.apply_gui_settings_service_action(action);
             }

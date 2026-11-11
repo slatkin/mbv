@@ -433,6 +433,7 @@ function settingsFrame(): GuiFrame['settings'] {
 					flag: true,
 					choices: null,
 					choicesKind: null,
+					values: null,
 				},
 			],
 		},

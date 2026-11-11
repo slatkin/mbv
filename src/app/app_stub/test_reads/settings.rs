@@ -114,6 +114,21 @@ impl App {
             .collect();
     }
 
+    /// Seed My languages (row 9.2): a configuration that already holds them
+    /// projects the Subtitle language and Audio language pick lists as `""`
+    /// (Any) plus these entries.
+    ///
+    /// # Panics
+    /// Panics if the `config` lock is poisoned: a previous holder panicked
+    /// while holding it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_my_languages_for_test(&mut self, languages: &[&str]) {
+        self.config.lock().unwrap().my_languages = languages
+            .iter()
+            .map(|language| (*language).to_string())
+            .collect();
+    }
+
     /// Seed the saved playlist list with `(id, name)` rows (row 5.5), as the
     /// Playlists section lists them.
     #[cfg(feature = "test")]

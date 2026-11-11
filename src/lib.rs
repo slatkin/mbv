@@ -48,10 +48,10 @@ pub use self::app::{
     PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
     QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
     RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, ShellCommand, StartupWorkerDrain, StatusBarProjection,
-    TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, TrickplayGrid,
-    TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent, WorkspaceRelayout,
-    resolve_router_outcome_with_focused,
+    RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
+    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
+    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
+    WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{

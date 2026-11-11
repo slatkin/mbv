@@ -29,6 +29,9 @@ pub struct GuiSettingRow {
     /// the window reads it here and never derives it from `key`. `None` for a
     /// row that is no choice list.
     pub choices_kind: Option<GuiChoicesKind>,
+    /// The values a pick row lists (design D13), and `None` for a row that is
+    /// no pick. The `setValue` command accepts only one of these.
+    pub values: Option<Vec<String>>,
 }
 
 impl From<&GuiSettingsRowProjection> for GuiSettingRow {
@@ -44,16 +47,18 @@ impl From<&GuiSettingsRowProjection> for GuiSettingRow {
                 .as_ref()
                 .map(|choices| choices.iter().map(GuiSettingChoice::from).collect()),
             choices_kind: row.choices_kind.map(GuiChoicesKind::from),
+            values: row.values.clone(),
         }
     }
 }
 
-/// The four ways an F2 row is edited (design D9).
+/// How an F2 row is edited (design D9, D13).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GuiSettingRowKind {
     Toggle,
     Cycle,
+    Pick,
     ChoiceList,
     Action,
 }
@@ -63,6 +68,7 @@ impl From<mbv::GuiSettingsRowKind> for GuiSettingRowKind {
         match kind {
             mbv::GuiSettingsRowKind::Toggle => Self::Toggle,
             mbv::GuiSettingsRowKind::Cycle => Self::Cycle,
+            mbv::GuiSettingsRowKind::Pick => Self::Pick,
             mbv::GuiSettingsRowKind::ChoiceList => Self::ChoiceList,
             mbv::GuiSettingsRowKind::Action => Self::Action,
         }

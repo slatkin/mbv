@@ -31,6 +31,7 @@ function settings(): GuiSettingsFrame {
 					flag: true,
 					choices: null,
 					choicesKind: null,
+					values: null,
 				},
 				{
 					key: 'alwaysPlayNext',
@@ -40,6 +41,7 @@ function settings(): GuiSettingsFrame {
 					flag: false,
 					choices: null,
 					choicesKind: null,
+					values: null,
 				},
 			],
 		},

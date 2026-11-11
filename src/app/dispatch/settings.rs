@@ -109,6 +109,37 @@ impl App {
         }
     }
 
+    /// Set one value setting directly (`add-gui-settings-screen` design D13):
+    /// the chosen value lands in the configuration, the player's prefs take
+    /// it as the cycle handler's update does, and the deferred save is armed
+    /// as an activation arms it. The three cycle handlers call this with the
+    /// next value they compute, so the TUI's cycle and the GUI's pick share
+    /// one effect. A key that is no value setting changes nothing.
+    pub(crate) fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+        match key {
+            SettingKey::SubtitleMode => {
+                self.config.lock().unwrap().subtitle_mode = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.mode = value.to_string());
+            }
+            SettingKey::SubtitleLanguage => {
+                self.config.lock().unwrap().subtitle_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.subtitle_lang = value.to_string());
+            }
+            SettingKey::AudioLanguage => {
+                self.config.lock().unwrap().audio_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.audio_lang = value.to_string());
+            }
+            // The pick and cycle paths never call here for another row, and a
+            // stale GUI command for one changes nothing.
+            _ => return,
+        }
+        self.push_subtitle_prefs();
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+    }
+
     /// Apply and persist one Panel value change: an activate steps the row up
     /// by one step (`Side`
     /// cycles and ignores the delta), a step applies the component's signed
@@ -373,38 +404,24 @@ impl App {
     }
 
     fn apply_subtitle_mode(&mut self) {
-        let new_mode = {
-            let mut c = self.config.lock().unwrap();
-            c.subtitle_mode = next_subtitle_mode(&c.subtitle_mode).to_string();
-            c.subtitle_mode.clone()
-        };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.mode = new_mode);
-        self.push_subtitle_prefs();
+        let next = next_subtitle_mode(&self.config.lock().unwrap().subtitle_mode).to_string();
+        self.set_settings_value(SettingKey::SubtitleMode, &next);
     }
 
     fn cycle_subtitle_language(&mut self) {
-        let new_lang = {
-            let mut c = self.config.lock().unwrap();
-            let new = cycle_lang(&c.my_languages, &c.subtitle_lang);
-            c.subtitle_lang.clone_from(&new);
-            new
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.subtitle_lang)
         };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.subtitle_lang = new_lang);
-        self.push_subtitle_prefs();
+        self.set_settings_value(SettingKey::SubtitleLanguage, &next);
     }
 
     fn cycle_audio_language(&mut self) {
-        let new_lang = {
-            let mut c = self.config.lock().unwrap();
-            let new = cycle_lang(&c.my_languages, &c.audio_lang);
-            c.audio_lang.clone_from(&new);
-            new
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.audio_lang)
         };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.audio_lang = new_lang);
-        self.push_subtitle_prefs();
+        self.set_settings_value(SettingKey::AudioLanguage, &next);
     }
 
     /// Flip the stored config flag of a `ConfigToggle` row. Rows of any

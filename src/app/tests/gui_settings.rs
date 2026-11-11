@@ -44,14 +44,14 @@ fn the_open_actions_follow_the_toggle_rule(
     GuiSettingsCommand::EmbySetup {
         server_url: "http://emby.test".to_owned(),
         username: "ada".to_owned(),
-        password: "hunter2".to_owned(),
+        password: crate::app::gui_settings::SetupSecret::new("hunter2".to_owned()),
     },
     "hunter2"
 )]
 #[case::audiobookshelf(
     GuiSettingsCommand::AudiobookshelfSetup {
         server_url: "http://abs.test".to_owned(),
-        api_key: "abs-key-42".to_owned(),
+        api_key: crate::app::gui_settings::SetupSecret::new("abs-key-42".to_owned()),
     },
     "abs-key-42"
 )]

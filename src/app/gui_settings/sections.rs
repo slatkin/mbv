@@ -7,7 +7,9 @@
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{SettingKey, SettingScope};
 
-use super::projection::{GuiSettingsChoiceProjection, GuiSettingsRouteDeviceProjection};
+use super::projection::{
+    GuiSettingsChoiceProjection, GuiSettingsRouteDeviceProjection, gui_settings_values,
+};
 use super::{GuiSettingsRouteProjection, GuiSettingsSection};
 use crate::app::App;
 
@@ -108,6 +110,35 @@ impl App {
             return;
         }
         self.handle_settings_activate(setting);
+    }
+
+    /// Row 9.2's `setValue` arm (design D5, design D13): pick one value for a
+    /// value setting. The key's scope must be `AllClients`, and the value must
+    /// be one the row's projected list carries, so a command built from a
+    /// stale frame — or a value the list does not offer — changes nothing.
+    pub(super) fn apply_gui_settings_set_value(&mut self, setting: SettingKey, value: &str) {
+        if !self.gui_settings_is_open() {
+            Self::log_ignored_gui_settings_command("setValue", "the Settings screen is closed");
+            return;
+        }
+        if setting.scope() != SettingScope::AllClients {
+            Self::log_ignored_gui_settings_command(
+                "setValue",
+                format_args!("`{}` is not an all-clients setting", setting.name()),
+            );
+            return;
+        }
+        let my_languages = self.config.lock().unwrap().my_languages.clone();
+        let listed = gui_settings_values(setting, &my_languages)
+            .is_some_and(|values| values.iter().any(|listed| listed == value));
+        if !listed {
+            Self::log_ignored_gui_settings_command(
+                "setValue",
+                format_args!("`{value}` is not a value `{}` lists", setting.name()),
+            );
+            return;
+        }
+        self.set_settings_value(setting, value);
     }
 
     /// Row 5.1's `applyChoices` arm (design D5, design D7): run the shared

@@ -12,10 +12,52 @@ use mbv_ui_model::settings::{
     SERVICE_ENTRIES, ServiceActionIntent, ServiceEntry, SettingKey, SettingValueKind, setting_flag,
     setting_kind, setting_label, setting_value,
 };
+use mbv_ui_model::ui_util::{SUBTITLE_MODES, lang_cycle};
 
 use crate::app::App;
 
 use super::{GuiSettingsState, GuiSetupService};
+
+/// The value settings the GUI picks from a list (`add-gui-settings-screen`
+/// design D13): the subtitle mode and the two language preferences. This is the
+/// one declaration the pick row's kind, its projected value list, and the
+/// `setValue` arm's acceptance share.
+const PICK_KEYS: [SettingKey; 3] = [
+    SettingKey::SubtitleMode,
+    SettingKey::SubtitleLanguage,
+    SettingKey::AudioLanguage,
+];
+
+/// Whether `key` is a value setting the GUI picks from a list (design D13).
+#[must_use]
+fn is_pick_key(key: SettingKey) -> bool {
+    PICK_KEYS.contains(&key)
+}
+
+/// The values a pick row lists (design D13): the subtitle modes in the order
+/// the TUI cycles through them, or `""` (painted as Any) plus My languages.
+/// `None` for a row that is no pick, so the frame carries no list for it and
+/// `setValue` accepts no value.
+#[must_use]
+pub fn gui_settings_values(key: SettingKey, my_languages: &[String]) -> Option<Vec<String>> {
+    if !is_pick_key(key) {
+        return None;
+    }
+    if key == SettingKey::SubtitleMode {
+        return Some(
+            SUBTITLE_MODES
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+        );
+    }
+    Some(
+        lang_cycle(my_languages)
+            .into_iter()
+            .map(std::string::ToString::to_string)
+            .collect(),
+    )
+}
 
 /// One F2 row the Settings frame carries (design D9): the setting's stable
 /// name, its label, how the row edits it, its value text, and — for a toggle —
@@ -34,14 +76,19 @@ pub struct GuiSettingsRowProjection {
     /// *Choice kind*): `None` for a row that is no choice list. Each client
     /// reads this kind from the frame instead of deriving it from `key`.
     pub choices_kind: Option<MultiSelectKind>,
+    /// The values a pick row lists (design D13), `None` for a row that is no
+    /// pick. The row's current value is one of these entries, and the
+    /// `setValue` command accepts only one of them.
+    pub values: Option<Vec<String>>,
 }
 
-/// The four ways an F2 row is edited (design D9): a toggle, a cycle, a choice
-/// list, or an action.
+/// The four ways an F2 row is edited (design D9, D13): a toggle, a cycle, a
+/// pick from a value list, a choice list, or an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuiSettingsRowKind {
     Toggle,
     Cycle,
+    Pick,
     ChoiceList,
     Action,
 }
@@ -237,6 +284,7 @@ impl App {
                 flag: setting_flag(key, &cfg),
                 choices: gui_settings_row_choices(&state, key),
                 choices_kind: gui_settings_choices_kind(key),
+                values: gui_settings_values(key, &cfg.my_languages),
             })
             .collect()
     }
@@ -435,11 +483,15 @@ fn gui_settings_choices_kind(key: SettingKey) -> Option<MultiSelectKind> {
     }
 }
 
-/// How an F2 row is edited (design D9). A boolean row is a toggle, a text or
-/// stepper row a cycle, and a collection row a choice list — except the three
-/// collection rows that run an action. The two navigation keys (`Services`,
-/// `Keys`) never reach a row: their sections carry their own content.
+/// How an F2 row is edited (design D9, D13). A boolean row is a toggle, the
+/// three value rows are picks from their list, a stepper row a cycle, and a
+/// collection row a choice list — except the three collection rows that run an
+/// action. The two navigation keys (`Services`, `Keys`) never reach a row:
+/// their sections carry their own content.
 fn gui_settings_row_kind(key: SettingKey) -> GuiSettingsRowKind {
+    if is_pick_key(key) {
+        return GuiSettingsRowKind::Pick;
+    }
     match setting_kind(key) {
         SettingValueKind::Boolean => GuiSettingsRowKind::Toggle,
         SettingValueKind::Text | SettingValueKind::Stepper => GuiSettingsRowKind::Cycle,

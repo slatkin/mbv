@@ -66,24 +66,47 @@ pub fn fmt_publish_date_short(secs: u64) -> String {
     format!("{} {month}", date.day())
 }
 
-/// Advance subtitle mode through the standard cycle.
+/// The subtitle modes in the order [`next_subtitle_mode`] steps through them
+/// (`add-gui-settings-screen` design D13). The TUI's cycle and the GUI's pick
+/// both read this list, so the two Clients cannot disagree on a mode's order
+/// or its values.
+pub const SUBTITLE_MODES: [&str; 6] = [
+    "Default",
+    "Always",
+    "Smart",
+    "OnlyForced",
+    "None",
+    "HearingImpaired",
+];
+
+/// Advance subtitle mode through the standard cycle: the next entry of
+/// [`SUBTITLE_MODES`], wrapping from the last mode back to the first. An
+/// empty (never set) mode reads as the first step, and a mode this list does
+/// not declare steps to the default.
 #[must_use]
 pub fn next_subtitle_mode(current: &str) -> &'static str {
-    match current {
-        "Default" | "" => "Always",
-        "Always" => "Smart",
-        "Smart" => "OnlyForced",
-        "OnlyForced" => "None",
-        "None" => "HearingImpaired",
-        _ => "Default",
+    let position = SUBTITLE_MODES.iter().position(|&mode| mode == current);
+    match position {
+        Some(index) => SUBTITLE_MODES[(index + 1) % SUBTITLE_MODES.len()],
+        None if current.is_empty() => "Always",
+        None => "Default",
     }
 }
 
-/// Advance a language preference through `["" (any)] + my_languages`.
-pub fn cycle_lang(my_languages: &[String], current: &str) -> String {
-    let cycle: Vec<&str> = std::iter::once("")
+/// The language preference cycle (`add-gui-settings-screen` design D13): `""`
+/// (Any) first, then `my_languages` in order. [`cycle_lang`] steps through it
+/// and the GUI's pick paints it, so both Clients share the one list.
+#[must_use]
+pub fn lang_cycle(my_languages: &[String]) -> Vec<&str> {
+    std::iter::once("")
         .chain(my_languages.iter().map(String::as_str))
-        .collect();
+        .collect()
+}
+
+/// Advance a language preference through `["" (any)] + my_languages`.
+#[must_use]
+pub fn cycle_lang(my_languages: &[String], current: &str) -> String {
+    let cycle = lang_cycle(my_languages);
     let idx = cycle.iter().position(|&l| l == current).unwrap_or(0);
     cycle[(idx + 1) % cycle.len()].to_string()
 }

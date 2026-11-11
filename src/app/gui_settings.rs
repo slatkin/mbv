@@ -19,7 +19,7 @@ mod reset;
 mod sections;
 mod services;
 
-pub use self::command::{GuiSettingsCommand, GuiSetupService};
+pub use self::command::{GuiSettingsCommand, GuiSetupService, SetupSecret};
 pub use self::projection::{
     GuiSettingsChoiceProjection, GuiSettingsFeedProjection, GuiSettingsFeedsProjection,
     GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection, GuiSettingsKeysProjection,

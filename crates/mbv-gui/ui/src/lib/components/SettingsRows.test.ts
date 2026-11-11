@@ -31,6 +31,7 @@ function rowsContent(): Extract<GuiSettingsContent, { kind: 'rows' }> {
 				flag: false,
 				choices: null,
 				choicesKind: null,
+				values: null,
 			},
 			{
 				key: 'hiddenLibraries',
@@ -43,6 +44,7 @@ function rowsContent(): Extract<GuiSettingsContent, { kind: 'rows' }> {
 					{ id: 'shows', label: 'Shows', selected: true },
 				],
 				choicesKind: 'hiddenLibraries',
+				values: null,
 			},
 		],
 	};

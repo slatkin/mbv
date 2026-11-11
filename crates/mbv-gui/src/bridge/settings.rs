@@ -33,6 +33,9 @@ pub enum GuiSettingsCommand {
     SelectSection { section: GuiSettingsSection },
     /// Activate an F2 row: `setting` is the row's stable setting name.
     Activate { setting: String },
+    /// Pick one value for a value setting: `setting` is the row's stable
+    /// setting name and `value` one entry of the row's projected list.
+    SetValue { setting: String, value: String },
     /// Apply a choice list's marked ids.
     ApplyChoices {
         kind: GuiChoicesKind,
@@ -169,6 +172,10 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         GuiSettingsCommand::Activate { setting } => mbv::GuiSettingsCommand::Activate {
             setting: rows::setting_key(&setting)?,
         },
+        GuiSettingsCommand::SetValue { setting, value } => mbv::GuiSettingsCommand::SetValue {
+            setting: rows::setting_key(&setting)?,
+            value,
+        },
         GuiSettingsCommand::ApplyChoices { kind, selected } => {
             mbv::GuiSettingsCommand::ApplyChoices {
                 kind: kind.into(),
@@ -188,14 +195,14 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         } => mbv::GuiSettingsCommand::EmbySetup {
             server_url,
             username,
-            password,
+            password: mbv::SetupSecret::new(password),
         },
         GuiSettingsCommand::AudiobookshelfSetup {
             server_url,
             api_key,
         } => mbv::GuiSettingsCommand::AudiobookshelfSetup {
             server_url,
-            api_key,
+            api_key: mbv::SetupSecret::new(api_key),
         },
         GuiSettingsCommand::ServiceAction { action } => mbv::GuiSettingsCommand::ServiceAction {
             action: action.into(),
