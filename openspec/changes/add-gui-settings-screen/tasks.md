@@ -111,7 +111,7 @@ The PR 998 review found three blocking or edge defects in the front end and one 
 - [x] 11.2 Choice-list marks live in one store (review finding 2). The grid's boxes and Apply run their entries' activations, the grid holds no marks, and the cursor paints on choice and Apply entries. Verify: `pnpm test`. Test contract: the spec's *Choice-list settings are edited in place*, as a pointer mark saved by a keyboard Apply, and a Space mark saved by a pointer Apply.
 - [x] 11.3 Esc from the sidebar closes the screen while a setup form is open (review finding 3). The form's cancel steps run only while the content holds the keyboard. Verify: `pnpm test`. Test contract: the spec's *Esc closes the screen from the sidebar*.
 - [x] 11.4 The Settings status line shows the armed prefix and the live toast together (review, minor). Verify: `pnpm test`. Test contract: the spec's *The Settings screen shows the toasts*.
-- [ ] 11.5 Per-playlist loaded flag (design D9). Rust, separate worker: not part of this front-end pass.
+- [x] 11.5 Per-playlist loaded flag (design D9, review minor): dropped from D9, not built. No requirement reads it, and the frame's loading flags and the open playlist's items already cover the fetch. Verify: `openspec validate add-gui-settings-screen --strict`.
 
 ## Workflow follow-up
 

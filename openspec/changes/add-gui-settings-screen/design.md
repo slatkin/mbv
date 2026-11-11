@@ -155,7 +155,7 @@ Each move keeps the TUI's behaviour. The TUI shell keeps only its component work
 - **Feeds**: the subscriptions (name, URL, kind) and the pending-add flag.
 - **Keys**: the prefix chord, then one row for each `AllClients` action. Each row has the id, the label, the section, the effective router chords, the prefix-namespace chord, the changed-from-default flag, and the prefix-addressable flag. The frame also carries the last refusal (action and text) until the next edit.
 - **Sessions**: the `GuiTargetChoice` list that the chooser uses.
-- **Playlists**: the list (id, name, item count, loaded flag), the open playlist and its items, and the loading flags.
+- **Playlists**: the list (id, name, item count), the open playlist and its items, and the loading flags. A per-playlist loaded flag is not carried: no requirement reads it, because only the open playlist shows items and the loading flags cover that fetch.
 
 The section's load starts on `selectSection` and when the screen opens:
 
