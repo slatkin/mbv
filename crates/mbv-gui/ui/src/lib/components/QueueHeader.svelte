@@ -36,7 +36,7 @@
 <div
 	class="flex items-center justify-between overflow-hidden whitespace-nowrap"
 	style:height="var(--canvas-queue-header-height)"
-	style:padding="12px 8px 8px 16px"
+	style:padding="0 8px 0 16px"
 	data-queue-header
 >
 	<!-- The canvas's two heading lines, 2 px apart: the count over the

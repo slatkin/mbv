@@ -95,9 +95,9 @@
 	   paints, so a bare ghost button, a picked row, and an accent Play button
 	   each answer the pointer in their own colour. */
 	--canvas-hover-veil: color-mix(in srgb, #d3c6aa 14%, transparent);
-	/* The canvas header's two lines over the 44 px filter control, between
-	   12 px and 8 px of padding. */
-	--canvas-queue-header-height: 64px;
+	/* The Queue header is as tall as the Library top bar (56 px), and its content
+	   centres vertically in it. */
+	--canvas-queue-header-height: 56px;
 }
 
 @theme inline {
