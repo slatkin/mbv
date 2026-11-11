@@ -4,7 +4,7 @@ DATA_DIR    := $(HOME)/.local/share/mbv
 CONFIG_DIR  := $(HOME)/.config/mbv
 UI_DIR      := crates/mbv-gui/ui
 
-.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines ui-install ui-build ui-check ui-lint ui-test dev
+.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines ui-install ui-build ui-check ui-lint ui-format-check ui-test dev
 
 all: build
 
@@ -29,6 +29,9 @@ ui-check: ui-install
 
 ui-lint: ui-install
 	pnpm -C $(UI_DIR) lint
+
+ui-format-check: ui-install
+	pnpm -C $(UI_DIR) format:check
 
 ui-test: ui-install
 	pnpm -C $(UI_DIR) test
