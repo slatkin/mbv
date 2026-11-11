@@ -1,0 +1,153 @@
+mbv — colour-by-data-type pass (mockup .dc.html files: queue = Main, library = Library, settings = Settings)
+
+Rule: weight/size carry hierarchy; colour carries data type. Titles and body text stay cream/grey.
+  time/duration  #a7c080 (green)   -> 0.65 opacity when repeated in a list
+  year/date      #7fbbb3 (blue)    -> 0.65 opacity when repeated in a list
+  meta/count     #e69875 (orange)
+  section label  #83c092 (aqua)
+  secondary title (series/show) #d699b6 (purple)
+  role/character #dbbc7f (yellow)  -- not used in these mockups
+  link #7fbbb3, danger #e67e80
+
+diff -ru a/Library.dc.html b/Library.dc.html
+--- a/Library.dc.html	2026-11-11 20:31:08.917363095 +0000
++++ b/Library.dc.html	2026-11-11 20:31:08.865710494 +0000
+@@ -69,7 +69,7 @@
+           <sc-for list="{{artists}}" as="a" hint-placeholder-count="20">
+             <li>
+               <sc-if value="{{a.showLetter}}" hint-placeholder-val="{{ false }}">
+-                <div style="height: 24px; display: flex; align-items: flex-end; padding: 0 8px 2px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7fbbb3">{{a.letter}}</div>
++                <div style="height: 24px; display: flex; align-items: flex-end; padding: 0 8px 2px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #83c092">{{a.letter}}</div>
+               </sc-if>
+               <button onClick="{{a.toggle}}" style="{{a.style}}"><span style="{{a.leadStyle}}"><sc-if value="{{a.hasChev}}" hint-placeholder-val="{{ true }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{a.chevStyle}}"><path d="m9 5 7 7-7 7"/></svg></sc-if><sc-if value="{{a.hasNum}}" hint-placeholder-val="{{ false }}">{{a.num}}</sc-if></span><span style="{{a.nameStyle}}">{{a.name}}</span><span style="{{a.yearStyle}}">{{a.year}}</span></button>
+             </li>
+@@ -89,9 +89,9 @@
+       <!-- Artist header -->
+       <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid #3d484d">
+         <div style="display: flex; flex-direction: column; gap: 6px">
+-          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">ARTIST · HIP-HOP</span>
++          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #83c092">ARTIST · HIP-HOP</span>
+           <h1 style="margin: 0; font-size: 32px; font-weight: 600; color: #e9e1cc; letter-spacing: -0.01em">Beastie Boys</h1>
+-          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">1 album · 13 tracks · 44:25</span>
++          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0"><span style="color: #e69875">1</span> album · <span style="color: #e69875">13</span> tracks · <span style="color: #a7c080">44:25</span></span>
+         </div>
+         <div style="display: flex; gap: 8px">
+           <button style="height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; background: none; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Shuffle artist</button>
+@@ -103,9 +103,9 @@
+         <div style="width: 300px; height: 300px; flex: 0 0 auto; background: #343f44; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">[Album art · Emby Primary]</div>
+         <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding-top: 8px">
+           <div style="display: flex; flex-direction: column; gap: 6px">
+-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">1986</span>
++            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #7fbbb3">1986</span>
+             <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #e9e1cc">Licensed to Ill</h2>
+-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">13 tracks · 44:25</span>
++            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0"><span style="color: #e69875">13</span> tracks · <span style="color: #a7c080">44:25</span></span>
+           </div>
+           <div style="display: flex; flex-wrap: wrap; gap: 8px">
+             <button style="height: 44px; padding: 0 18px 0 14px; display: flex; align-items: center; gap: 8px; background: #a7c080; border: 0; border-radius: 22px; color: #232a2e; font-size: 14px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Play</button>
+@@ -118,7 +118,7 @@
+ 
+       <!-- Tracklist -->
+       <section aria-label="Tracklist" style="display: flex; flex-direction: column">
+-        <div style="height: 32px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 88px 64px; align-items: center; padding: 0 8px; border-bottom: 1px solid #3d484d; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">
++        <div style="height: 32px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 88px 64px; align-items: center; padding: 0 8px; border-bottom: 1px solid #3d484d; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #83c092">
+           <span>#</span><span>TITLE</span><span></span><span style="text-align: right">TIME</span>
+         </div>
+         <ol style="list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column">
+@@ -135,7 +135,7 @@
+                   <button aria-label="Add to queue" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: none; border: 0; border-radius: 4px; color: #d3c6aa; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                 </sc-if>
+               </span>
+-              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0; text-align: right; font-variant-numeric: tabular-nums">{{t.dur}}</span>
++              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a7c080; opacity: 0.65; text-align: right; font-variant-numeric: tabular-nums">{{t.dur}}</span>
+             </li>
+           </sc-for>
+         </ol>
+@@ -193,7 +193,7 @@
+         leadStyle: `width: 18px; flex: 0 0 auto; display: flex; align-items: center; justify-content: ${depth === 2 ? 'flex-end' : 'center'}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: ${on ? '#232a2e' : '#7f897d'};`,
+         chevStyle: `transform: rotate(${isOpen ? 90 : 0}deg); transition: transform 120ms ease; color: ${on ? '#232a2e' : '#9da9a0'};`,
+         nameStyle: `flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${fg}; font-weight: ${on || depth === 0 ? 600 : 400};`,
+-        yearStyle: `flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: ${on ? '#232a2e' : '#9da9a0'};`
++        yearStyle: `flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: ${on ? '#232a2e' : '#7fbbb3'}; opacity: ${on ? 1 : 0.65};`
+       };
+     };
+     let prev = '';
+diff -ru a/Main.dc.html b/Main.dc.html
+--- a/Main.dc.html	2026-11-11 20:31:08.917107790 +0000
++++ b/Main.dc.html	2026-11-11 20:31:08.865618023 +0000
+@@ -37,14 +37,14 @@
+   <div style="position: relative; height: 225px; background: #343f44; display: flex; align-items: center; justify-content: center">
+     <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">[Episode still · Emby Primary / Thumb]</span>
+     <span style="position: absolute; left: 12px; bottom: 10px; display: flex; gap: 6px">
+-      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #232a2e; color: #d3c6aa; padding: 3px 6px; border-radius: 4px">S4 · E1</span>
++      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #232a2e; color: #e69875; padding: 3px 6px; border-radius: 4px">S4 · E1</span>
+     </span>
+   </div>
+ 
+   <!-- Title -->
+   <div style="padding: 14px 16px 6px; display: flex; flex-direction: column; gap: 2px">
+     <div style="font-size: 18px; font-weight: 600; color: #e9e1cc">Nether Zone</div>
+-    <a href="#" style="font-size: 13px; text-decoration: none">Peep Show</a>
++    <a href="#" style="font-size: 13px; text-decoration: none; color: #d699b6">Peep Show</a>
+   </div>
+ 
+   <!-- Scrubber -->
+@@ -66,7 +66,7 @@
+       <div style="position: absolute; left: 10px; top: 17px; width: 16px; height: 16px; border-radius: 8px; background: #e9e1cc; box-shadow: 0 0 0 3px #2d353b"></div>
+       <div style="position: absolute; left: 0; right: 0; top: 42px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums">
+         <span style="color: #a7c080">1:03</span>
+-        <span style="color: #9da9a0">−22:14</span>
++        <span style="color: #a7c080; opacity: 0.75">−22:14</span>
+       </div>
+     </div>
+   </div>
+@@ -90,8 +90,8 @@
+   <!-- Queue header -->
+   <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 8px 16px">
+     <div style="display: flex; flex-direction: column; gap: 2px">
+-      <div style="font-size: 13px; font-weight: 600; color: #e9e1cc">Up next · {{remainingCount}}</div>
+-      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0">{{queueTotal}} total</div>
++      <div style="font-size: 13px; font-weight: 600; color: #e9e1cc">Up next · <span style="font-family: 'JetBrains Mono', monospace; color: #e69875">{{remainingCount}}</span></div>
++      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0"><span style="color: #a7c080">{{queueTotal}}</span> total</div>
+     </div>
+     <div style="display: flex; align-items: center; gap: 4px">
+       <button aria-label="Filter queue" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #9da9a0; cursor: pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+@@ -118,7 +118,7 @@
+ 
+   <!-- Footer -->
+   <div style="display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 16px; border-top: 1px solid #3d484d; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+-    <span style="color: #7fbbb3">Peep Show · Series 1–6</span>
++    <span style="color: #d699b6">Peep Show · Series 1–6</span>
+     <span style="color: #dbbc7f">woims ●</span>
+   </div>
+ </div>
+@@ -166,7 +166,7 @@
+         titleStyle: `font-size: 13.5px; font-weight: ${cur ? 600 : 400}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${w ? 'text-decoration: line-through; text-decoration-color: #56635f;' : ''}`,
+         trackStyle: `display: block; height: 2px; border-radius: 1px; background: ${cur ? '#7d9460' : '#414b50'};`,
+         fillStyle: `display: block; height: 2px; width: ${Math.max(pct, 3)}%; background: ${cur ? '#232a2e' : '#e69875'}; border-radius: 1px;`,
+-        rightStyle: `${mono} font-size: 12px; flex: 0 0 auto; color: ${cur ? '#232a2e' : '#9da9a0'};`,
++        rightStyle: `${mono} font-size: 12px; flex: 0 0 auto; color: ${cur ? '#232a2e' : '#a7c080'}; opacity: ${cur ? 1 : 0.65};`,
+         pick: () => this.setState({ picked: i })
+       };
+     });
+diff -ru a/Settings.dc.html b/Settings.dc.html
+--- a/Settings.dc.html	2026-11-11 20:31:08.917466493 +0000
++++ b/Settings.dc.html	2026-11-11 20:31:08.865777592 +0000
+@@ -52,7 +52,7 @@
+             <section aria-label="Feeds" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+               <div style="display: flex; align-items: center; justify-content: space-between">
+                 <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">Feeds</h2>
+-                <span style="font-size: 12px; color: #9da9a0">Always present · <span style="font-family: 'JetBrains Mono', monospace">4</span> subscriptions</span>
++                <span style="font-size: 12px; color: #9da9a0">Always present · <span style="font-family: 'JetBrains Mono', monospace; color: #e69875">4</span> subscriptions</span>
+               </div>
+               <div style="display: flex; gap: 8px">
+                 <button style="height: 36px; padding: 0 14px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">Manage feeds</button>
+@@ -102,7 +102,7 @@
+             <section aria-label="My languages" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+               <div style="display: flex; align-items: baseline; justify-content: space-between">
+                 <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">My languages</h2>
+-                <span style="font-size: 12px; color: #9da9a0">{{langCount}}</span>
++                <span style="font-size: 12px; color: #e69875">{{langCount}}</span>
+               </div>
+               <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+                 <sc-for list="{{langs}}" as="l" hint-placeholder-count="20">
