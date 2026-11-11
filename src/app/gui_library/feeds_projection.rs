@@ -18,6 +18,9 @@ use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::ui_util::fmt_publish_date_short;
 
 use super::GuiFeedPill;
+use super::entry_list::{
+    GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
+};
 use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
 use crate::app::App;
 
@@ -87,42 +90,16 @@ impl GuiFeedEntryId {
 }
 
 /// One pill of the Feeds pill row (row 11.1): Latest first, then one pill per
-/// configured subscription in the tab's order. The pill row is single-select,
-/// as the TUI owner's one-valued group selection is; the state pills are
-/// dropped.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiFeedsPillOption {
-    /// The pill's selection: the set-pill command carries it back.
-    pub pill: GuiFeedPill,
-    /// The pill's label: `Latest`, or the subscription's name.
-    pub name: String,
-    /// Whether the core's stored pill is this one.
-    pub selected: bool,
-}
+/// configured subscription in the tab's order — the shared pill option over
+/// the Feeds pill. The pill row is single-select, as the TUI owner's
+/// one-valued group selection is; the state pills are dropped.
+pub type GuiFeedsPillOption = GuiPillOption<GuiFeedPill>;
 
-/// One row of the Feeds list (row 11.1). The identity is the entry's
-/// `(subscription url, guid)` pair, encoded as one opaque string a select,
-/// play, or enqueue command sends, never a row position.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiFeedsRow {
-    /// The entry identity, as [`GuiFeedEntryId::encode`] writes it.
-    pub id: String,
-    /// The entry's display title, the row's primary label.
-    pub title: String,
-    /// The subscription's name, the row's secondary label — the fact that
-    /// names the row's subscription in the merged Latest view. `None` on an
-    /// entry whose subscription the tab no longer holds.
-    pub subtitle: Option<String>,
-    /// The gutter date: the TUI row's fixed right-aligned `day month` text
-    /// (`fmt_publish_date_short` over the publish instant). `None` on an
-    /// undated entry, and `Some("")` never rides here — the TUI's rows drop an
-    /// empty gutter too.
-    pub date: Option<String>,
-    /// The row's played state: the TUI feed row's arm — `Played` for a
-    /// finished entry, `Active` with the resume percent while some of it is
-    /// played, otherwise `Ordinary`.
-    pub state: GuiHomeRowState,
-}
+/// One row of the Feeds list (row 11.1) — the shared pill-scoped entry-list
+/// row. The identity is the entry's `(subscription url, guid)` pair, encoded
+/// as one opaque string a select, play, or enqueue command sends, never a row
+/// position.
+pub type GuiFeedsRow = GuiEntryRow;
 
 /// The selected entry's Hero facts (row 11.1): the shared `hero_content_feed`
 /// producer's title and duration, the subscription name ahead of them, and the
@@ -151,34 +128,11 @@ pub struct GuiFeedsHero {
     pub art_shape: GuiArtShape,
 }
 
-/// The Feeds projection the GUI Library panel paints (row 11.1): the
+/// The Feeds projection the GUI Library panel paints (row 11.1) — the shared
+/// pill-scoped entry-list projection over the Feeds pill and Hero: the
 /// single-select pill row, the active pill's entry rows, the core's selected
 /// entry, and its Hero. No letter rail rides here and no state filter.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct GuiFeedsProjection {
-    /// The pill row in paint order: Latest, then each configured subscription
-    /// in the tab's order. The selected pill is the core's stored one; a
-    /// stored subscription pill the tab no longer holds falls back to Latest.
-    pub pills: Vec<GuiFeedsPillOption>,
-    /// Whether the tab's fetch results are still landing.
-    pub loading: bool,
-    /// Whether a fetch failed. The tab keeps no failure state — a failed
-    /// subscription flashes the TUI's toast and keeps its previous entries —
-    /// so this is always `false`, carried so every destination's frame keeps
-    /// one shape.
-    pub failed: bool,
-    /// The active pill's entry rows: Latest merges every subscription's
-    /// entries, and a subscription pill holds that one subscription's, both
-    /// newest first with undated entries last.
-    pub rows: Vec<GuiFeedsRow>,
-    /// The core's selected entry (row 11.1), as the frame painted it: the
-    /// pick the select command last named while the active list still carries
-    /// it, else that list's first row — the Hero default, so the Hero paints
-    /// as soon as a list lands. `None` while the list holds no row.
-    pub selected: Option<String>,
-    /// The selected entry's Hero facts; `None` while no entry is selected.
-    pub hero: Option<GuiFeedsHero>,
-}
+pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedPill, GuiFeedsHero>;
 
 impl App {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the pill
@@ -212,22 +166,16 @@ impl App {
     /// subscription by its name in the tab's order, with the effective pill
     /// selected.
     fn gui_feeds_pills(&self, pill: &GuiFeedPill) -> Vec<GuiFeedsPillOption> {
-        let mut pills = vec![GuiFeedsPillOption {
-            pill: GuiFeedPill::Latest,
-            name: "Latest".to_string(),
-            selected: matches!(pill, GuiFeedPill::Latest),
-        }];
-        pills.extend(
-            self.feed_tab
-                .subscriptions
-                .iter()
-                .map(|subscription| GuiFeedsPillOption {
-                    pill: GuiFeedPill::Subscription(subscription.url.clone()),
-                    name: subscription.name.clone(),
-                    selected: matches!(pill, GuiFeedPill::Subscription(url) if url == &subscription.url),
-                }),
-        );
-        pills
+        pill_options(
+            &GuiFeedPill::Latest,
+            pill,
+            self.feed_tab.subscriptions.iter().map(|subscription| {
+                (
+                    GuiFeedPill::Subscription(subscription.url.clone()),
+                    subscription.name.clone(),
+                )
+            }),
+        )
     }
 
     /// The active pill's entry rows (row 11.1): the order is the App's own,
@@ -264,10 +212,11 @@ impl App {
     /// The entry the Hero shows (row 11.1): the core's pick while the active
     /// list still carries it, else that list's first row — the Hero default.
     fn gui_feeds_selected(&self, rows: &[GuiFeedsRow]) -> Option<String> {
-        self.gui_feeds_picked_entry()
-            .filter(|picked| rows.iter().any(|row| row.id == *picked))
-            .map(str::to_string)
-            .or_else(|| rows.first().map(|row| row.id.clone()))
+        picked_or_first(
+            self.gui_feeds_picked_entry().map(str::to_string),
+            |picked| rows.iter().any(|row| row.id == picked),
+            || rows.first().map(|row| row.id.clone()),
+        )
     }
 
     /// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
@@ -316,20 +265,17 @@ pub(in crate::app::gui_library) fn feed_entry_matches(
     entry.feed_id.as_deref().unwrap_or_default() == id.feed_id() && entry.guid == id.guid()
 }
 
-/// One row's played state (row 11.1): the TUI feed row's rule — a finished
-/// entry is `Played`, an unfinished one with a resume position is `Active`
-/// with the percent of its duration (no percent when the duration is
-/// unknown), and every other entry is `Ordinary`.
+/// One row's played state (row 11.1): the TUI feed row's rule through the
+/// shared `from_progress` arm — a finished entry is `Played`, an unfinished
+/// one with a resume position is `Active` with the percent of its duration
+/// (no percent when the duration is unknown, but still `Active`), and every
+/// other entry is `Ordinary`.
 fn feed_row_state(entry: &FeedEntry) -> GuiHomeRowState {
-    if entry.played {
-        return GuiHomeRowState::Played;
-    }
-    if entry.position_ticks > 0 {
-        return GuiHomeRowState::Active {
-            progress: resume_percent(entry.position_ticks, entry.duration_ticks),
-        };
-    }
-    GuiHomeRowState::Ordinary
+    GuiHomeRowState::from_progress(
+        entry.played,
+        entry.position_ticks > 0,
+        resume_percent(entry.position_ticks, entry.duration_ticks),
+    )
 }
 
 /// The bounded resume percent of a partly played entry, the TUI row's

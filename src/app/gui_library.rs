@@ -10,6 +10,7 @@ mod audiobooks;
 mod audiobooks_projection;
 mod emby;
 mod emby_projection;
+mod entry_list;
 mod feeds;
 mod feeds_projection;
 mod home;

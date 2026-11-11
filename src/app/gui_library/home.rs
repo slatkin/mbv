@@ -63,6 +63,30 @@ pub enum GuiHomeRowState {
     Active { progress: Option<u8> },
 }
 
+impl GuiHomeRowState {
+    /// The row state from a provider's play-progress facts, the shared arm
+    /// every pill-scoped entry list's row builder applies (rows 10.1, 11.1):
+    /// a finished entry is `Played`, an entry with a resume position is
+    /// `Active` with the bounded resume percent — `None` when the duration is
+    /// unknown, which is still `Active` — and every other entry is `Ordinary`.
+    /// The percent rides separately from the resume-position fact because a
+    /// position without a known duration has no percent to name.
+    #[must_use]
+    pub(in crate::app::gui_library) fn from_progress(
+        played: bool,
+        in_progress: bool,
+        percent: Option<u8>,
+    ) -> Self {
+        if played {
+            return Self::Played;
+        }
+        if in_progress {
+            return Self::Active { progress: percent };
+        }
+        Self::Ordinary
+    }
+}
+
 /// One item row's kind: `Collection` when the row targets a container — a
 /// folder-shaped Home item the play path refuses — and `Media` when it
 /// targets a playable leaf, which is every other row.

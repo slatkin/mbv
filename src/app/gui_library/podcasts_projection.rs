@@ -24,6 +24,9 @@ use mbv_ui_model::ui_util::fmt_publish_date_short;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
+use super::entry_list::{
+    GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
+};
 use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
 use super::podcasts::GuiPodcastPill;
 use crate::app::App;
@@ -116,40 +119,16 @@ impl From<&PodcastEpisodeTarget> for GuiPodcastEpisodeId {
 }
 
 /// One pill of the Podcasts pill row (row 10.1): Latest first, then one pill
-/// per show in the show list's title order. The pill row is single-select, as
-/// the TUI's one-valued `PillSelection` is; the state pills are dropped.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiPodcastsPillOption {
-    /// The pill's selection: the set-pill command carries it back.
-    pub pill: GuiPodcastPill,
-    /// The pill's label: `Latest`, or the show's title.
-    pub name: String,
-    /// Whether the core's stored pill is this one.
-    pub selected: bool,
-}
+/// per show in the show list's title order — the shared pill option over the
+/// Podcasts pill. The pill row is single-select, as the TUI's one-valued
+/// `PillSelection` is; the state pills ride between the two.
+pub type GuiPodcastsPillOption = GuiPillOption<GuiPodcastPill>;
 
-/// One row of the Podcasts list (row 10.1). The identity is the episode's
-/// stable `(library_item_id, episode_id)` pair, encoded as one opaque string a
+/// One row of the Podcasts list (row 10.1) — the shared pill-scoped
+/// entry-list row. The identity is the episode's stable
+/// `(library_item_id, episode_id)` pair, encoded as one opaque string a
 /// select, play, or enqueue command sends, never a row position.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiPodcastsRow {
-    /// The episode identity, as [`GuiPodcastEpisodeId::encode`] writes it.
-    pub id: String,
-    /// The episode's display title, the row's primary label.
-    pub title: String,
-    /// The parent show's title, the row's secondary label — the one fact that
-    /// names the row's show in the merged Latest view.
-    pub subtitle: Option<String>,
-    /// The gutter date: the TUI row's fixed right-aligned `day month` text
-    /// (`fmt_publish_date_short` over the publish instant). `None` on an
-    /// undated episode, and `Some("")` never rides here — the TUI's rows drop
-    /// an empty gutter too.
-    pub date: Option<String>,
-    /// The row's played state: the TUI podcast row's arm — `Played` for a
-    /// finished episode, `Active` with the resume percent while some of it is
-    /// played, otherwise `Ordinary`.
-    pub state: GuiHomeRowState,
-}
+pub type GuiPodcastsRow = GuiEntryRow;
 
 /// The selected episode's Hero facts (row 10.1): the shared
 /// `hero_content_abs_episode` producer's facts — the episode title, the show
@@ -183,34 +162,12 @@ pub struct GuiPodcastsHero {
     pub art: Option<GuiLibraryArtwork>,
 }
 
-/// The Podcasts projection the GUI Library panel paints (row 10.1): the
-/// single-select pill row, the active pill's episode rows, the core's selected
-/// episode, and its Hero. No letter rail rides here — the list is sorted by
-/// date — and no Workspace.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct GuiPodcastsProjection {
-    /// The pill row in paint order: Latest, then each show in the show list's
-    /// title order. The selected pill is the core's stored one; a stored show
-    /// pill the published show list no longer carries falls back to Latest.
-    pub pills: Vec<GuiPodcastsPillOption>,
-    /// Whether the active view's episodes are still landing: the show
-    /// catalog's pages or that view's own episode fetches.
-    pub loading: bool,
-    /// Whether the catalog fetch failed, the browse state's error. The
-    /// published episodes keep serving when they can.
-    pub failed: bool,
-    /// The active pill's episode rows: Latest merges every listed show's
-    /// episodes, and a show pill holds that one show's, both newest first
-    /// with undated episodes last.
-    pub rows: Vec<GuiPodcastsRow>,
-    /// The core's selected episode (row 10.1), as the frame painted it: the
-    /// pick the select command last named while the active list still carries
-    /// it, else that list's first row — the Hero default, so the Hero paints
-    /// as soon as a list lands. `None` while the list holds no row.
-    pub selected: Option<String>,
-    /// The selected episode's Hero facts; `None` while no episode is selected.
-    pub hero: Option<GuiPodcastsHero>,
-}
+/// The Podcasts projection the GUI Library panel paints (row 10.1) — the
+/// shared pill-scoped entry-list projection over the Podcasts pill and Hero:
+/// the single-select pill row, the active pill's episode rows, the core's
+/// selected episode, and its Hero. No letter rail rides here — the list is
+/// sorted by date — and no Workspace.
+pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastPill, GuiPodcastsHero>;
 
 impl App {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
@@ -270,29 +227,24 @@ impl App {
         lib_idx: usize,
         pill: &GuiPodcastPill,
     ) -> Vec<GuiPodcastsPillOption> {
-        let mut pills = vec![GuiPodcastsPillOption {
-            pill: GuiPodcastPill::Latest,
-            name: "Latest".to_string(),
-            selected: matches!(pill, GuiPodcastPill::Latest),
-        }];
-        pills.extend(AudiobookshelfEpisodeFilter::ALL.into_iter().map(|filter| {
-            GuiPodcastsPillOption {
-                pill: GuiPodcastPill::State(filter),
-                name: filter.label().to_string(),
-                selected: matches!(pill, GuiPodcastPill::State(stored) if *stored == filter),
-            }
-        }));
         let shows = self
             .audiobookshelf_browse
             .get(lib_idx)
             .map(|state| state.shows.as_slice())
             .unwrap_or_default();
-        pills.extend(shows.iter().map(|show| GuiPodcastsPillOption {
-            pill: GuiPodcastPill::Show(show.library_item_id.clone()),
-            name: show.title.clone(),
-            selected: matches!(pill, GuiPodcastPill::Show(id) if id == &show.library_item_id),
-        }));
-        pills
+        pill_options(
+            &GuiPodcastPill::Latest,
+            pill,
+            AudiobookshelfEpisodeFilter::ALL
+                .into_iter()
+                .map(|filter| (GuiPodcastPill::State(filter), filter.label().to_string()))
+                .chain(shows.iter().map(|show| {
+                    (
+                        GuiPodcastPill::Show(show.library_item_id.clone()),
+                        show.title.clone(),
+                    )
+                })),
+        )
     }
 
     /// The active pill's episode rows with the view's loading and failure
@@ -340,13 +292,13 @@ impl App {
     /// The episode the Hero shows (row 10.1): the core's pick while the active
     /// list still carries it, else that list's first row — the Hero default.
     fn gui_podcast_selected(&self, lib_idx: usize, rows: &[GuiPodcastsRow]) -> Option<String> {
-        let picked = self
-            .gui_podcast_picked_episode(lib_idx)
-            .map(GuiPodcastEpisodeId::from)
-            .map(|episode| episode.encode());
-        picked
-            .filter(|picked| rows.iter().any(|row| &row.id == picked))
-            .or_else(|| rows.first().map(|row| row.id.clone()))
+        picked_or_first(
+            self.gui_podcast_picked_episode(lib_idx)
+                .map(GuiPodcastEpisodeId::from)
+                .map(|episode| episode.encode()),
+            |picked| rows.iter().any(|row| row.id == picked),
+            || rows.first().map(|row| row.id.clone()),
+        )
     }
 
     /// The selected episode's Hero (row 10.1): the shared
@@ -466,20 +418,22 @@ fn show_of<'a>(
         .find(|show| show.library_item_id == library_item_id)
 }
 
-/// One row's played state (row 10.1): the TUI podcast row's rule — a finished
-/// episode is `Played`, an unfinished one with a resume position is `Active`
-/// with the percent of its duration (no percent when the duration is unknown),
-/// and every other episode is `Ordinary`.
+/// One row's played state (row 10.1): the TUI podcast row's rule through the
+/// shared `from_progress` arm — a finished episode is `Played`, an unfinished
+/// one with a resume position is `Active` with the percent of its duration
+/// (no percent when the duration is unknown, but still `Active`), and every
+/// other episode is `Ordinary`.
 fn episode_row_state(
     progress: Option<&AudiobookshelfProgress>,
     duration_seconds: Option<f64>,
 ) -> GuiHomeRowState {
     match progress {
-        Some(progress) if progress.is_finished => GuiHomeRowState::Played,
-        Some(progress) if progress.current_time_seconds > 0.0 => GuiHomeRowState::Active {
-            progress: resume_percent(progress.current_time_seconds, duration_seconds),
-        },
-        Some(_) | None => GuiHomeRowState::Ordinary,
+        Some(progress) => GuiHomeRowState::from_progress(
+            progress.is_finished,
+            progress.current_time_seconds > 0.0,
+            resume_percent(progress.current_time_seconds, duration_seconds),
+        ),
+        None => GuiHomeRowState::Ordinary,
     }
 }
 

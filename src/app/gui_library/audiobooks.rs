@@ -11,6 +11,7 @@ use mbv_queue::QueueItem;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_for_id;
 
+use super::entry_list::picked_or_first;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 
@@ -121,25 +122,22 @@ impl App {
     /// The book the Hero shows (row 9.1): the stored pick while the published
     /// catalog still carries it, else the catalog's first book — the Hero
     /// default, so the Hero paints as soon as the catalog lands. `None` while
-    /// the catalog holds no book.
+    /// the catalog holds no book. The selection arm is the shared
+    /// `picked_or_first` rule every destination's list applies (row 7C.4).
     pub(in crate::app) fn gui_abs_effective_pick(&self, lib_idx: usize) -> Option<String> {
         let state = self.audiobookshelf_book_browse.get(lib_idx)?;
-        self.gui_abs_libs
-            .get(&lib_idx)
-            .and_then(|selection| selection.picked_book.as_deref())
-            .filter(|picked| {
+        picked_or_first(
+            self.gui_abs_libs
+                .get(&lib_idx)
+                .and_then(|selection| selection.picked_book.clone()),
+            |picked| {
                 state
                     .books
                     .iter()
-                    .any(|book| &book.library_item_id == picked)
-            })
-            .or_else(|| {
-                state
-                    .books
-                    .first()
-                    .map(|book| book.library_item_id.as_str())
-            })
-            .map(str::to_string)
+                    .any(|book| book.library_item_id == picked)
+            },
+            || state.books.first().map(|book| book.library_item_id.clone()),
+        )
     }
 
     /// Whether the published catalog can still name `book_id` (row 9.1): a
