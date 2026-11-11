@@ -11,7 +11,7 @@
 	// `pillAttr` names the destination's own attribute (`'shows'` paints
 	// `data-library-shows-pill`), so a destination's tests keep a per-tab hook
 	// beside the shared `data-library-pill`.
-	import { roleVar } from '$lib/bridge/theme';
+	import LibraryPillButton from './LibraryPillButton.svelte';
 
 	/** One painted pill: its stable key (the press names it), its name, and
 	 * whether the core carries it as the selected one. */
@@ -54,29 +54,16 @@
 	style:border-bottom="1px solid var(--canvas-border)"
 >
 	{#each pills as pill (pill.key)}
-		<button
-			type="button"
-			class="flex flex-none items-center whitespace-nowrap"
-			style:height="32px"
-			style:gap="5px"
-			style:padding="0 12px"
-			style:border-radius="16px"
-			style:font-size="14px"
-			style:font-weight={pill.selected ? 600 : 400}
-			style:border={pill.selected
-				? '1px solid var(--canvas-source)'
-				: '1px solid var(--canvas-border)'}
-			style:background={pill.selected ? 'var(--canvas-source)' : 'none'}
-			style:color={pill.selected ? 'var(--canvas-ink)' : 'var(--canvas-text)'}
-			style:outline={pill.key === focused ? `2px solid ${roleVar('accentActive')}` : 'none'}
-			style:outline-offset="1px"
-			aria-pressed={pill.selected}
-			{...tabAttr(pill)}
-			data-library-pill={pill.key}
-			data-library-pill-focused={pill.key === focused ? '' : undefined}
-			onclick={() => onpress(pill.key)}
-		>
-			{pill.name}
-		</button>
+		<LibraryPillButton
+			name={pill.name}
+			selected={pill.selected}
+			focused={pill.key === focused}
+			attrs={{
+				...tabAttr(pill),
+				'data-library-pill': pill.key,
+				'data-library-pill-focused': pill.key === focused ? '' : undefined,
+			}}
+			onpress={() => onpress(pill.key)}
+		/>
 	{/each}
 </div>

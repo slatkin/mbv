@@ -19,6 +19,7 @@
 	import { ListEnd, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
+	import LibraryPillButton from './LibraryPillButton.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
@@ -196,26 +197,12 @@
 				style:gap="6px"
 			>
 				{#each workspace.seasons as season (season.seasonId)}
-					<button
-						type="button"
-						class="flex flex-none items-center whitespace-nowrap"
-						style:height="28px"
-						style:padding="0 12px"
-						style:border-radius="14px"
-						style:font-size="13px"
-						style:font-weight={season.selected ? 600 : 400}
-						style:border={season.selected
-							? '1px solid var(--canvas-source)'
-							: '1px solid var(--canvas-border)'}
-						style:background={season.selected ? 'var(--canvas-source)' : 'none'}
-						style:color={season.selected ? 'var(--canvas-ink)' : 'var(--canvas-text)'}
-						style:cursor="pointer"
-						aria-pressed={season.selected}
-						data-library-shows-season={season.seasonId}
-						onclick={() => selectSeason(season.seasonId)}
-					>
-						{season.name}
-					</button>
+					<LibraryPillButton
+						name={season.name}
+						selected={season.selected}
+						attrs={{ 'data-library-shows-season': season.seasonId }}
+						onpress={() => selectSeason(season.seasonId)}
+					/>
 				{/each}
 			</div>
 			<LibraryWorkspaceTable
