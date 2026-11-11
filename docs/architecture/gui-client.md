@@ -1137,8 +1137,8 @@ only pushes `CoreInput::Settings` into the core channel, as the other commands
 do. `src/bridge/settings.rs` translates the wire variants and
 `App::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
 each one through the existing `App` method, so the TUI's own paths do not
-change. The variants are `close`, `selectSection` (`section`), `activate`
-(`setting`, the `SettingKey` name), `applyChoices` (`kind`, `selected`),
+change. The variants are `open`, `close`, `selectSection` (`section`), `activate`
+(`setting`, the `SettingKey` name), `setValue` (`setting`, `value`), `applyChoices` (`kind`, `selected`),
 `assignRoute` (`library`, `endpoint` or none), `embySetup` (`serverUrl`,
 `username`, `password`), `audiobookshelfSetup` (`serverUrl`, `apiKey`),
 `serviceAction` (`action`), `cancelSetup` (`service`), `feedAdd` (`name`,
@@ -1163,7 +1163,7 @@ and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
 frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the
 sidebar lists, and `content`, a tagged union with `rows` (an F2 page's rows),
 `services`, `feeds`, `keys`, `sessions`, and `playlists`. Each F2 row carries
-its stable setting name, its label, its kind (toggle, cycle, choice list, or
+its stable setting name, its label, its kind (toggle, cycle, pick with its value list, choice list, or
 action), its value text, its toggle flag, and its choices once the section's
 load lands. The Services content carries each Service's state and the actions
 the TUI offers for it, with the open setup form's progress and error; the Keys
@@ -1212,6 +1212,29 @@ the sidebar, one component per section kind, and the status line, and
 `App.svelte` mounts `SettingsScreen` in place of the two columns while
 `frame.settings` is present. Commands go through `sendSettingsCommand`
 (`ui/src/lib/bridge/settings.ts`) to the `settings` bridge command.
+
+The screen paints the design canvas `canvas/Settings.dc.html` of the
+`add-gui-settings-screen` change (design D13). The pointer is the primary
+path and keys give parity (design D11, *Mouse-centric*). The Library top bar's
+Lucide `Settings` button, right of the Search field, sends `open`, which opens
+the screen at Services and does nothing while it is open. The sidebar's
+`ArrowLeft` Back button sends `close`. The sidebar is a fixed 260 px
+(`SETTINGS_SIDEBAR_WIDTH_PX`), independent of the Queue column, and Mini
+measures the window width minus it. The sidebar's rows carry one Lucide icon
+each, and the Services section is labelled Sources (a UI label only; the
+code and the domain keep Service). Every section paints only through the
+shared parts in `ui/src/lib/components/settings/`: `SettingsCard`,
+`SettingsRow`, `SettingsSwitch` (every toggle), `SettingsButton` (secondary,
+primary, destructive, ghost), `SettingsCheckboxGrid` (the choice lists, with
+their Apply), `SettingsStatePill` (a Service's state), and
+`SettingsPickButton`. The pick button serves Subtitle mode, Subtitle
+language, and Audio language: it opens a value menu in the row menu's chrome,
+which the Settings key router owns while it is open, and an entry sends
+`setValue`. `App::set_settings_value` sets the value with the cycle handler's
+player update and deferred save, and the TUI's cycle calls it with its next
+value, so the two Clients share one effect. The value lists come from
+`mbv-ui-model` (`SUBTITLE_MODES`, `lang_cycle`), and the empty language
+paints as Any.
 
 The ACL grant rule (design D5). Tauri's ACL sits between `invoke` and the
 command: a command that `generate_handler!` registers but that
