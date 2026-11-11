@@ -309,7 +309,7 @@ pub struct GuiMusicMenuEntryFrame {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
 pub enum GuiLibraryArt {
-    /// The cached artwork's display encode, as a `data:image/jpeg` URL.
+    /// The cached artwork's display encode, as a `data:image/webp` URL.
     Image(String),
     /// The bundled placeholder, as a `data:image/webp` URL.
     Placeholder(String),
@@ -459,7 +459,9 @@ impl From<&ArtistKey> for GuiArtistKey {
 impl From<&GuiLibraryArtwork> for GuiLibraryArt {
     fn from(artwork: &GuiLibraryArtwork) -> Self {
         match artwork {
-            GuiLibraryArtwork::Image { jpeg, .. } => Self::Image(data_url("image/jpeg", jpeg)),
+            GuiLibraryArtwork::Image { source, .. } => {
+                Self::Image(data_url(source.mime, &source.bytes))
+            }
             GuiLibraryArtwork::Placeholder => {
                 Self::Placeholder(data_url("image/webp", QUEUE_CARD_PLACEHOLDER_BYTES))
             }

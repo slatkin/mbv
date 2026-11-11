@@ -113,6 +113,10 @@ pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
 pub struct CachedImage {
     /// `None` marks a fetch that resolved without artwork.
     pub img: Option<image::DynamicImage>,
+    /// The bytes `img` decoded from, as the server sent them. `Some` for a
+    /// fetched image, `None` for an entry the app derived itself (a composed
+    /// title overlay, the bundled placeholder) or a fetch with no artwork.
+    pub source: Option<SourceImage>,
     pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
     /// The hero artwork box (cells) the current protocols were built from
     /// (task 5.10, design D5's cover fit): the panel hero projection
@@ -133,6 +137,7 @@ impl CachedImage {
     pub fn empty() -> Self {
         Self {
             img: None,
+            source: None,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
@@ -140,10 +145,33 @@ impl CachedImage {
     }
 }
 
+/// An image exactly as the server sent it: its bytes and the MIME type those
+/// bytes declare. A Client that paints no terminal protocol hands these to
+/// its own image pipeline unchanged, so the pixels it shows are the pixels
+/// the terminal protocols decode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceImage {
+    pub bytes: Vec<u8>,
+    pub mime: &'static str,
+}
+
+impl SourceImage {
+    /// The image `bytes` hold, or `None` when they are not a recognised image
+    /// format.
+    #[must_use]
+    pub fn sniff(bytes: Vec<u8>) -> Option<Self> {
+        let mime = image::guess_format(&bytes).ok()?.to_mime_type();
+        Some(Self { bytes, mime })
+    }
+}
+
 /// What a card-image fetch concluded (invariant 27).
 #[derive(Debug)]
 pub enum ImageFetchOutcome {
-    Image(image::DynamicImage),
+    Image {
+        img: image::DynamicImage,
+        source: SourceImage,
+    },
     /// The server answered and no usable image exists. Final.
     Empty,
     /// No answer: a timeout, a transport failure, or no client yet. This says

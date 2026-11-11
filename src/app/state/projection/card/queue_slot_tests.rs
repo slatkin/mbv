@@ -28,6 +28,7 @@ fn card_image(width: u32, height: u32) -> image::DynamicImage {
 fn cached(img: Option<image::DynamicImage>) -> CachedImage {
     CachedImage {
         img,
+        source: None,
         protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,

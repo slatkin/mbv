@@ -227,10 +227,11 @@ impl App {
     /// a frame test observes the art with no request and no thread.
     #[cfg(feature = "test")]
     pub fn complete_card_image_for_test(&self, key: &str, img: image::DynamicImage) {
-        let _ = self
-            .images
-            .card_image_tx()
-            .send((key.to_string(), mbv_images::ImageFetchOutcome::Image(img)));
+        let source = crate::app::queue_card_artwork::test_source(&img);
+        let _ = self.images.card_image_tx().send((
+            key.to_string(),
+            mbv_images::ImageFetchOutcome::Image { img, source },
+        ));
     }
 
     /// The Grouped Music library's selected group ids in pill order

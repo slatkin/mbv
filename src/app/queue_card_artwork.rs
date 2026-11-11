@@ -1,28 +1,28 @@
 //! The Queue playback visual slot's artwork projection every Client
 //! consumes (`add-tauri-gui-client` design D10): the paint state the
 //! queue-only Panel mode's visual slot holds, with the cached image it
-//! paints encoded for a window's display. The TUI's slot paints the same
-//! cached image through its terminal protocol; a Client that paints no
-//! terminal protocols reads the state here and encodes it for its own
-//! presentation.
+//! paints. The TUI's slot paints the cached image through its terminal
+//! protocol; a Client that paints no terminal protocols reads the state here
+//! and hands the server's bytes to its own image pipeline.
 
 use crate::app::App;
+use mbv_images::SourceImage;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 /// What the Queue playback visual slot paints for one sync (design D10).
 ///
-/// The image variant carries the slot's cached artwork encoded for display:
-/// the same decoded pixels the TUI's slot paints, downscaled to the
-/// [`ARTWORK_ENCODE_BOX`] box, so a frame's payload stays bounded whatever
-/// the source's resolution. The placeholder variant paints the bundled
+/// The image variant carries the slot's cached artwork as the server sent it
+/// ([`SourceImage`]): the bytes the TUI's slot decodes and paints, so a
+/// Client shows the same pixels with no re-encode between. The fetch's own
+/// size cap bounds a frame's payload. The placeholder variant paints the bundled
 /// [`mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES`] — the visual slot's
 /// placeholder is not a cache entry in a Client that builds no terminal
 /// protocols, so the bytes travel to the frame instead.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QueueCardArtwork {
-    /// The slot paints the cached artwork under `key`, display-encoded.
-    Image { key: String, jpeg: Vec<u8> },
+    /// The slot paints the cached artwork under `key`.
+    Image { key: String, source: SourceImage },
     /// The slot paints the bundled placeholder: a fetch resolved empty, or
     /// the slot's item carries no resolvable artwork.
     Placeholder,
@@ -32,33 +32,6 @@ pub enum QueueCardArtwork {
     /// The slot paints nothing: idle, the user's hide toggle, images off,
     /// or the visualizer owning the slot.
     Hidden,
-}
-
-/// The display encode box: the artwork encodes to fit within this square
-/// (logical points at the GUI's reference density, covering a 2x scale
-/// factor), so the encode's cost and a frame's payload stay bounded
-/// whatever the source's resolution.
-const ARTWORK_ENCODE_BOX: u32 = 448;
-
-/// The JPEG quality the display encode writes: photographic artwork at the
-/// display box keeps no visible loss above it, and the payload stays an
-/// order of magnitude under a lossless PNG's.
-const ARTWORK_ENCODE_QUALITY: u8 = 85;
-
-/// JPEG-encode a decoded image at the display quality.
-///
-/// # Panics
-///
-/// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
-/// cannot fail to write, so a failure is a bug.
-pub(in crate::app) fn encode_jpeg(img: &image::DynamicImage) -> Vec<u8> {
-    let mut buf = std::io::Cursor::new(Vec::new());
-    let mut encoder =
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, ARTWORK_ENCODE_QUALITY);
-    encoder
-        .encode_image(img)
-        .expect("JPEG encode of an in-memory cursor cannot fail");
-    buf.into_inner()
 }
 
 impl App {
@@ -90,12 +63,12 @@ impl App {
         let Some(cache_key) = self.queue_card_projection.cache_key.clone() else {
             return QueueCardArtwork::Placeholder;
         };
-        let decoded = self
+        let source = self
             .images
             .image(&cache_key)
-            .and_then(|entry| entry.img.as_ref());
-        if decoded.is_none() {
-            // The slot's key has no decoded art yet: a fetch in flight or
+            .and_then(|entry| entry.source.clone());
+        let Some(source) = source else {
+            // The slot's key has no fetched art yet: a fetch in flight or
             // awaiting its retry paints the loading fill, and a fetch that
             // resolved empty paints the placeholder — the TUI's slot's
             // resolution (`render_queue_playback_slot`).
@@ -103,38 +76,10 @@ impl App {
                 return QueueCardArtwork::Loading;
             }
             return QueueCardArtwork::Placeholder;
-        }
-        self.encode_card_artwork(&cache_key)
-    }
-
-    /// The display-encoded artwork for `cache_key`'s cached image, encoded
-    /// once per key and memoized (`card_artwork_encoded`).
-    fn encode_card_artwork(&mut self, cache_key: &str) -> QueueCardArtwork {
-        if self
-            .card_artwork_encoded
-            .as_ref()
-            .is_none_or(|(key, _)| key != cache_key)
-        {
-            let Some(entry) = self
-                .images
-                .image(cache_key)
-                .and_then(|entry| entry.img.clone())
-            else {
-                return QueueCardArtwork::Placeholder;
-            };
-            let encoded = encode_for_display(&entry);
-            self.card_artwork_encoded = Some((cache_key.to_owned(), encoded));
-        }
-        let Some((key, encoded)) = self
-            .card_artwork_encoded
-            .as_ref()
-            .filter(|(key, _)| key == cache_key)
-        else {
-            return QueueCardArtwork::Placeholder;
         };
         QueueCardArtwork::Image {
-            key: key.clone(),
-            jpeg: encoded.clone(),
+            key: cache_key,
+            source,
         }
     }
 
@@ -153,6 +98,7 @@ impl App {
         self.images.insert_image(
             key,
             mbv_images::CachedImage {
+                source: Some(test_source(&img)),
                 img: Some(img),
                 protocols: std::collections::HashMap::new(),
                 cover_box: None,
@@ -162,18 +108,12 @@ impl App {
     }
 }
 
-/// Encode `img` for display: downscaled to fit the [`ARTWORK_ENCODE_BOX`]
-/// box with the card's render filter, then JPEG-encoded.
-///
-/// # Panics
-///
-/// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
-/// cannot fail to write, so a failure is a bug.
-pub(in crate::app) fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
-    let resized = img.resize(
-        ARTWORK_ENCODE_BOX,
-        ARTWORK_ENCODE_BOX,
-        image::imageops::FilterType::Triangle,
-    );
-    encode_jpeg(&resized)
+/// The server-bytes stand-in for a test's decoded image: its PNG encode.
+#[cfg(any(test, feature = "test"))]
+#[must_use]
+pub(crate) fn test_source(img: &image::DynamicImage) -> SourceImage {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png)
+        .expect("PNG encode of an in-memory cursor cannot fail");
+    SourceImage::sniff(buf.into_inner()).expect("an encoded PNG is a recognised image")
 }

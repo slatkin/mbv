@@ -1,7 +1,7 @@
 use super::super::App;
-use super::{FetchedBytes, first_image, request_failure};
+use super::{FetchedBytes, decode_fetched, first_image, request_failure};
 use crate::app::tests::make_app_stub;
-use mbv_images::CachedImage;
+use mbv_images::{CachedImage, ImageFetchOutcome};
 use ratatui_image::picker::{Picker, ProtocolType};
 
 const BASE_KEY: &str = "hero-base";
@@ -18,6 +18,7 @@ fn image(width: u32, height: u32) -> image::DynamicImage {
 fn cached(img: Option<image::DynamicImage>) -> CachedImage {
     CachedImage {
         img,
+        source: None,
         protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,
@@ -249,4 +250,20 @@ fn resize_drag_hold_paints_a_box_matching_the_kept_encoding() {
 
     assert!(app.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, true));
     assert_eq!(build_count(&app), baseline);
+}
+
+/// The GUI paints the server's bytes, not a re-encode of the decoded pixels
+/// (commit 8957f2ccf's lossy-on-lossy regression): the fetch outcome carries
+/// the bytes it decoded, unchanged, with the MIME type they declare.
+#[test]
+fn a_fetched_image_carries_the_servers_bytes_unchanged() {
+    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 4)).bytes;
+
+    let outcome = decode_fetched(bytes.clone());
+
+    let ImageFetchOutcome::Image { source, .. } = outcome else {
+        panic!("a decodable image yields an image outcome: {outcome:?}");
+    };
+    assert_eq!(source.bytes, bytes);
+    assert_eq!(source.mime, "image/png");
 }

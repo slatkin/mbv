@@ -2,7 +2,7 @@ use super::super::super::{App, MusicEvent};
 use super::CardImageDrain;
 use mbv_images::{
     ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
-    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, cover_fill_hero_box,
+    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage, cover_fill_hero_box,
 };
 use mbv_theme as palette;
 use ratatui_image::picker::Picker;
@@ -96,6 +96,7 @@ impl App {
         let entry = self.images.build_cached_image(
             QUEUE_CARD_PLACEHOLDER_KEY,
             Some(img),
+            None,
             self.current_protocol_suffix(),
         );
         self.images
@@ -350,7 +351,9 @@ impl App {
             text,
         );
         let suffix = self.current_protocol_suffix();
-        let entry = self.images.build_cached_image(key, Some(composed), suffix);
+        let entry = self
+            .images
+            .build_cached_image(key, Some(composed), None, suffix);
         self.images.insert_derived_image(key.to_owned(), entry);
         tracing::debug!(
             name: "queue.title_overlay.built",
@@ -502,13 +505,16 @@ impl App {
             drained.series_key_changed |=
                 cache_key.contains(mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX);
             let interrupted = matches!(outcome, ImageFetchOutcome::Interrupted);
-            let img_opt = match outcome {
-                ImageFetchOutcome::Image(img) => Some(img),
-                ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => None,
+            let (img_opt, source) = match outcome {
+                ImageFetchOutcome::Image { img, source } => (Some(img), Some(source)),
+                ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => (None, None),
             };
-            let entry =
-                self.images
-                    .build_cached_image(&cache_key, img_opt, self.current_protocol_suffix());
+            let entry = self.images.build_cached_image(
+                &cache_key,
+                img_opt,
+                source,
+                self.current_protocol_suffix(),
+            );
             // Artist artwork: a fetch reserved through the typed artist
             // request identity completes as its own typed event; the generic
             // image cache stays provider/generic.
@@ -562,8 +568,7 @@ impl App {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 // Decode off the UI thread; the main loop only builds the protocol.
                 let outcome = match fetch_image_bytes(req, &server_url, &token) {
-                    FetchedBytes::Bytes(bytes) => image::load_from_memory(&bytes)
-                        .map_or(ImageFetchOutcome::Empty, ImageFetchOutcome::Image),
+                    FetchedBytes::Bytes(bytes) => decode_fetched(bytes),
                     FetchedBytes::Missing => ImageFetchOutcome::Empty,
                     FetchedBytes::Interrupted => ImageFetchOutcome::Interrupted,
                 };
@@ -574,6 +579,17 @@ impl App {
             }
         });
     }
+}
+
+/// The decoded image and the server bytes it came from, or `Empty` when the
+/// bytes are no image.
+fn decode_fetched(bytes: Vec<u8>) -> ImageFetchOutcome {
+    let Ok(img) = image::load_from_memory(&bytes) else {
+        return ImageFetchOutcome::Empty;
+    };
+    SourceImage::sniff(bytes).map_or(ImageFetchOutcome::Empty, |source| {
+        ImageFetchOutcome::Image { img, source }
+    })
 }
 
 /// One image request's result (invariant 27).
@@ -640,6 +656,19 @@ fn fetch_audiobookshelf_image(
     }
 }
 
+/// The Emby image fetch's long-side cap. Every Client shows the cached bytes
+/// as they are — the TUI decodes them for its terminal protocol, and the GUI
+/// hands them to the window unchanged — so this one cap is the pixel budget
+/// of every surface: the GUI Hero at a 2x scale factor, and the card and row
+/// art that share its cache entry. A smaller cap leaves the Hero's browser
+/// upscaling the server's pixels, and a larger one costs fetch time and frame
+/// payload for pixels no surface paints.
+const IMAGE_FETCH_MAX_SIDE: u32 = 1280;
+
+/// The Emby image fetch's JPEG quality. The server's encode is the only lossy
+/// generation any Client paints, so it stays high.
+const IMAGE_FETCH_QUALITY: u8 = 90;
+
 fn fetch_emby_image(
     cache_key: &str,
     item_id: &str,
@@ -656,7 +685,8 @@ fn fetch_emby_image(
     let fetched = first_image(types, |kind| {
         fetch_emby_image_type(kind, item_id, series_id, server_url, token)
     });
-    // Cache original server bytes as-is; Emby already resized these to maxHeight=400.
+    // Cache original server bytes as-is; Emby already resized these to
+    // `IMAGE_FETCH_MAX_SIDE`.
     if let FetchedBytes::Bytes(ref bytes) = fetched {
         crate::config::write_image_disk_cache(cache_key, bytes);
     }
@@ -700,7 +730,7 @@ fn fetch_emby_image_type(
             return FetchedBytes::Missing;
         };
         let url = format!(
-            "{server_url}/Items/{child_id}/Images/Primary?maxHeight=400&quality=80&api_key={token}"
+            "{server_url}/Items/{child_id}/Images/Primary?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
         );
         return fetch_url(&url);
     }
@@ -716,7 +746,7 @@ fn fetch_emby_image_type(
         _ => "Primary",
     };
     let url = format!(
-        "{server_url}/Items/{src}/Images/{image_kind}?maxHeight=400&quality=80&api_key={token}"
+        "{server_url}/Items/{src}/Images/{image_kind}?maxWidth={IMAGE_FETCH_MAX_SIDE}&maxHeight={IMAGE_FETCH_MAX_SIDE}&quality={IMAGE_FETCH_QUALITY}&api_key={token}"
     );
     fetch_url(&url)
 }
