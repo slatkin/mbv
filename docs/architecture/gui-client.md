@@ -104,8 +104,8 @@ build from: the frame carries each uppercased label with its foreground
 role, and the field is `None` while the local player is inactive. The canvas
 player panel paints no cluster, so the field travels unused in the slice. The
 visual slot's artwork (`artwork`) follows the theme's arming rule (design
-D10): `src/artwork.rs` memoizes the slot's encoded art per state — the
-cached art's display encode, the bundled placeholder, a loading fill, or
+D10): `src/artwork.rs` memoizes the slot's `data:` URL per state — the
+cached art's own bytes, the bundled placeholder, a loading fill, or
 hidden — and a frame carries the value again only when the slot's art
 changed, while a window-content reload's `report_layout` re-arms it and the
 front end keeps the last carried value between frames. The payload is a
@@ -784,8 +784,10 @@ some entries still executes the one it painted). `GuiMusicFrame` also
 carries `row_menu` (`Option`): the item of the `rowMenu` command with the
 TUI menu builder's full entries for it, which the right-click item menu
 paints. `GuiLibraryArt`
-is the cached artwork's display encode or the bundled placeholder as a
-`data:` URL, or `Loading`. The window fetches no Library image: every byte is
+is the cached artwork's own bytes or the bundled placeholder as a
+`data:` URL, or `Loading`. The core never re-encodes artwork: the image fetch's
+1280-pixel cap bounds the payload, and the window's `object-fit: cover` crops
+the Hero's art. The window fetches no Library image: every byte is
 the core's image cache.
 
 The core warms that cache around the pick. Each destination's projection ends

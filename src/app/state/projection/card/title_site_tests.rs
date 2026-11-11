@@ -51,6 +51,7 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
         img: Some(image::DynamicImage::ImageRgba8(
             image::RgbaImage::from_pixel(width, height, image::Rgba([20, 40, 60, 255])),
         )),
+        source: None,
         protocols: std::collections::HashMap::new(),
         cover_box: None,
         applied_logo_key: None,

@@ -14,6 +14,7 @@
 	// paints that state and reports the two facts only the DOM holds. A press
 	// selects the row, and a double-click plays it (design D12): the keys'
 	// Enter plays the cursor row, and the press is the selection's half.
+	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import type { GuiHomeFrame } from '$lib/bridge/types';
 	import {
 		buildHomeRows,
@@ -171,7 +172,12 @@
 							data-library-home-art={row.art.kind}
 						>
 							{#if row.art.kind !== 'loading'}
-								<img class="h-full w-full object-cover" src={row.art.detail} alt="" />
+								<img
+									class="h-full w-full object-cover"
+									src={row.art.detail}
+									alt=""
+									use:capToNaturalSize
+								/>
 							{/if}
 						</span>
 					{/if}

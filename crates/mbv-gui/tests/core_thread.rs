@@ -426,7 +426,7 @@ fn an_announced_owner_shutdown_ends_the_run_and_saves_the_launch_location() {
 }
 
 /// The visual slot's artwork rides the frame when the image is cached
-/// (design D10): the first frame carries the lossless WebP display encode as
+/// (design D10): the first frame carries the cached image's own bytes as
 /// a `data:` URL, and a later frame arms it again only when the art changed.
 #[test]
 fn a_cached_artwork_rides_the_frame_once() {
@@ -441,7 +441,7 @@ fn a_cached_artwork_rides_the_frame_once() {
     let frame = test.next_frame();
     match frame.playback.artwork {
         Some(GuiCardArtwork::Image(detail)) => {
-            assert!(detail.starts_with("data:image/webp;base64,"));
+            assert!(detail.starts_with("data:image/png;base64,"));
         }
         artwork => panic!("the frame carries the cached artwork: {artwork:?}"),
     }

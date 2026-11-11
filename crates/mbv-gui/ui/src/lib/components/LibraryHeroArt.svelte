@@ -8,6 +8,7 @@
 	//
 	// `attr` names the destination's own attributes (`data-library-shows-hero-art`),
 	// so a destination's tests keep their hook.
+	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
 	import { heroAttr } from '$lib/library/hero';
 	import { canvasVar } from '$lib/bridge/theme';
@@ -65,7 +66,12 @@
 	{...{ [own('art-shape')]: shape }}
 >
 	{#if art !== null && art.kind !== 'loading'}
-		<img class="h-full w-full object-cover" src={art.detail} alt={title} />
+		<img
+			class="h-full w-full object-cover"
+			src={art.detail}
+			alt={title}
+			use:capToNaturalSize
+		/>
 	{:else}
 		<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
 			>{placeholder}</span

@@ -247,7 +247,7 @@ impl App {
     /// hero art runs. `None` when no Audiobookshelf server is configured.
     fn gui_abs_hero_artwork(&mut self, library_item_id: &str) -> Option<GuiLibraryArtwork> {
         let cache_key = self.audiobookshelf_book_cover_key(library_item_id)?;
-        Some(self.resolve_gui_hero_art(&cache_key))
+        Some(self.resolve_gui_art(&cache_key))
     }
 
     /// The book Hero's Workspace (row 9.1): the book's chapter rows in the

@@ -1,5 +1,5 @@
 use super::cache::ImageCache;
-use super::{CachedImage, mem_key};
+use super::{CachedImage, SourceImage, mem_key};
 use ratatui_image::picker::Picker;
 
 impl ImageCache {
@@ -65,10 +65,12 @@ impl ImageCache {
         &self,
         bare_key: &str,
         img: Option<image::DynamicImage>,
+        source: Option<SourceImage>,
         suffix: &'static str,
     ) -> CachedImage {
         let mut entry = CachedImage {
             img,
+            source,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,

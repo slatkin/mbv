@@ -12,6 +12,7 @@
 	// and the footer belong to the expanded artboard, and the core keeps
 	// their state while the rail is up (the `gui-client` spec: the window
 	// holds no interaction state).
+	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
 	import { QUEUE_RAIL_WIDTH_PX } from '$lib/bridge/arrangement';
@@ -152,6 +153,7 @@
 				class="rounded-full object-cover"
 				alt=""
 				src={image}
+				use:capToNaturalSize
 				style:width="{ART_SIZE_PX}px"
 				style:height="{ART_SIZE_PX}px"
 			/>

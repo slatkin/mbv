@@ -379,7 +379,7 @@ impl App {
     /// configured.
     fn gui_podcast_episode_artwork(&mut self, show_id: &str) -> Option<GuiLibraryArtwork> {
         let cache_key = self.audiobookshelf_cover_key(show_id)?;
-        Some(self.resolve_gui_hero_art(&cache_key))
+        Some(self.resolve_gui_art(&cache_key))
     }
 }
 

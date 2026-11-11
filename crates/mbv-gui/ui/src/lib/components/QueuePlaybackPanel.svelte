@@ -31,6 +31,7 @@
 	// holds no open, cursor, or hover state; Esc and a press elsewhere close
 	// the popover through the core's key and pointer paths. The track chips
 	// row and its popover live in `TrackChips` below the transport.
+	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
 	import {
 		Cast,
@@ -430,6 +431,7 @@
 						class="h-full w-full object-contain"
 						alt=""
 						src={art.detail}
+						use:capToNaturalSize
 					/>
 				{:else}
 					<!-- The canvas's source caption while no image lands

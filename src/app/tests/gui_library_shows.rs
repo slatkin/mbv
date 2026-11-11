@@ -355,12 +355,16 @@ fn the_episode_heroes_art_box_follows_the_fetched_images_own_aspect() {
     let mut app = shows_app(TvContentMode::Latest, vec![episode]);
     // The Primary image, seeded with a portrait poster: the policy's arm is
     // Landscape, the fetched image's own aspect is Portrait.
+    let poster = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        300,
+        450,
+        image::Rgba([20, 40, 60, 255]),
+    ));
     app.images.insert_image(
         "ep-new:Primary".to_string(),
         mbv_images::CachedImage {
-            img: Some(image::DynamicImage::ImageRgba8(
-                image::RgbaImage::from_pixel(300, 450, image::Rgba([20, 40, 60, 255])),
-            )),
+            source: Some(crate::app::queue_card_artwork::test_source(&poster)),
+            img: Some(poster),
             protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,

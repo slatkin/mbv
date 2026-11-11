@@ -459,7 +459,9 @@ impl From<&ArtistKey> for GuiArtistKey {
 impl From<&GuiLibraryArtwork> for GuiLibraryArt {
     fn from(artwork: &GuiLibraryArtwork) -> Self {
         match artwork {
-            GuiLibraryArtwork::Image { bytes, .. } => Self::Image(data_url("image/webp", bytes)),
+            GuiLibraryArtwork::Image { source, .. } => {
+                Self::Image(data_url(source.mime, &source.bytes))
+            }
             GuiLibraryArtwork::Placeholder => {
                 Self::Placeholder(data_url("image/webp", QUEUE_CARD_PLACEHOLDER_BYTES))
             }

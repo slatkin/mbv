@@ -9,6 +9,7 @@
 	// own control brings the panel back. Both controls report the
 	// `QueuePlayback` target ids, so a press resolves through the same core
 	// arms as the expanded header's controls.
+	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
 	import { Pause, Play, SkipForward } from '@lucide/svelte';
 	import {
@@ -106,14 +107,14 @@
 	style:background="var(--mbv-queuePlaybackBand)"
 >
 	<div
-		class="shrink-0 overflow-hidden rounded-sm"
+		class="flex shrink-0 items-center justify-center overflow-hidden rounded-sm"
 		style:width="{STILL_WIDTH_PX}px"
 		style:height="{STILL_HEIGHT_PX}px"
 		bind:this={stillEl}
 		data-target="visualSlot"
 	>
 		{#if image}
-			<img class="h-full w-full object-cover" alt="" src={image} />
+			<img class="h-full w-full object-cover" alt="" src={image} use:capToNaturalSize />
 		{:else}
 			<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
 		{/if}

@@ -1,6 +1,6 @@
 //! The GUI Library Hero's artwork (add-gui-library-panel design D5): the
-//! picked item's art from the image cache, display-encoded for the window,
-//! and the neighbour warm that fills the cache around the pick. The fetches
+//! picked item's art from the image cache, as the server sent it, and the
+//! neighbour warm that fills the cache around the pick. The fetches
 //! are issued here, as the TUI's hero projection issues its own, so the window
 //! content never requests an image itself.
 
@@ -10,8 +10,8 @@ use mbv_components::library_panel::content::{
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
-use super::super::queue_card_artwork::{encode_for_display, encode_webp};
 use crate::app::App;
+use mbv_images::SourceImage;
 
 /// The neighbour warm window's bounds (the TUI's grouped-Music rule,
 /// `openspec/specs/music-library-hero/spec.md`): one entry behind the picked
@@ -56,8 +56,10 @@ fn emby_fetch_parts(source: ArtworkSource) -> Option<(String, String, String, Ve
 /// What the Library Hero paints as its square artwork (design D5).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiLibraryArtwork {
-    /// The album's cached artwork under `key`, display-encoded.
-    Image { key: String, bytes: Vec<u8> },
+    /// The album's cached artwork under `key`, as the server sent it. The
+    /// window sizes and crops it: the TUI crops at its artwork box, and the
+    /// window's `object-fit: cover` crops at the Hero's.
+    Image { key: String, source: SourceImage },
     /// The album has no cached art and no fetch in flight.
     Placeholder,
     /// The album's art fetch is in flight or awaits its retry.
@@ -101,56 +103,10 @@ impl App {
         }
     }
 
-    /// The Hero display encode's long side: the artwork encodes to cover
-    /// this box at the Hero's painted aspect, from the full-size source —
-    /// the TUI's `cover_fill_hero_box` rule at the Hero pane's painted sizes
-    /// (logical points at the GUI's reference density, covering a 2x scale
-    /// factor), so the browser never upscales the Hero's art. The image
-    /// fetch's own cap is the same 1280 long side, so the cache holds
-    /// enough pixels for this encode. The queue card's smaller
-    /// [`encode_for_display`] box stays the row and card art's bound.
-    const HERO_ENCODE_LONG_SIDE: u32 = 1280;
-
-    /// Encode `img` for the Library Hero's display: cover-cropped to the
-    /// aspect the image's own pixels paint (the one rule the Hero's shape
-    /// re-arm and the TUI's `cover_fill_hero_box` both apply — landscape
-    /// 16:9, square 1:1, portrait 2:3), scaled from the full-size source
-    /// with the hero fill's filter, then losslessly WebP-encoded. The Hero
-    /// paints the result uncropped: the crop the TUI applies at its artwork
-    /// box happens here, at the Hero's own box sizes.
-    ///
-    /// The encode is lossless for the reason the card encode is
-    /// ([`encode_webp`]): the cached source is already lossy, and a second
-    /// lossy generation is what the TUI's own paint never applies.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the in-memory WebP encode fails: a `Cursor` over a `Vec`
-    /// cannot fail to write, so a failure is a bug.
-    fn encode_hero_for_display(img: &image::DynamicImage) -> Vec<u8> {
-        let shape = painted_shape_for_pixels(img.width(), img.height());
-        let (box_w, box_h) = match shape {
-            ArtworkShape::Landscape => (
-                Self::HERO_ENCODE_LONG_SIDE,
-                Self::HERO_ENCODE_LONG_SIDE * 9 / 16,
-            ),
-            ArtworkShape::Square => (
-                Self::HERO_ENCODE_LONG_SIDE * 2 / 3,
-                Self::HERO_ENCODE_LONG_SIDE * 2 / 3,
-            ),
-            ArtworkShape::Portrait => (
-                Self::HERO_ENCODE_LONG_SIDE * 2 / 3,
-                Self::HERO_ENCODE_LONG_SIDE,
-            ),
-        };
-        let resized = img.resize_to_fill(box_w, box_h, image::imageops::FilterType::Lanczos3);
-        encode_webp(&resized)
-    }
-
     /// Project the Hero's artwork for the album `album_id` (design D5): the
     /// `AudioChild` album chain under the album's `{id}:P` key, fetched here
-    /// and encoded from the image cache once per key. A Client that paints no
-    /// terminal protocols reads this state and encodes it for its own
+    /// and read from the image cache. A Client that paints no terminal
+    /// protocols reads this state and hands the server's bytes to its own
     /// presentation, as [`App::queue_card_artwork`] does for the visual slot.
     #[must_use]
     pub fn gui_library_artwork(&mut self, album_id: &str) -> GuiLibraryArtwork {
@@ -164,58 +120,14 @@ impl App {
         };
         let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
         self.fetch_card_image(cache_key.clone(), item_id, series_id, &types);
-        if self
-            .images
-            .image(&cache_key)
-            .is_none_or(|entry| entry.img.is_none())
-        {
-            // No decoded art yet: a fetch in flight or awaiting its retry
-            // paints the loading fill, and a fetch that resolved empty paints
-            // the placeholder — the queue card's resolution.
-            if self.images.is_loading(&cache_key) || self.images.is_fetch_interrupted(&cache_key) {
-                return GuiLibraryArtwork::Loading;
-            }
-            return GuiLibraryArtwork::Placeholder;
-        }
-        self.encode_gui_library_art(&cache_key)
-    }
-
-    /// The display-encoded artwork for `cache_key`'s cached image, encoded
-    /// once per key and memoized (`gui_library_art_encoded`).
-    fn encode_gui_library_art(&mut self, cache_key: &str) -> GuiLibraryArtwork {
-        if self
-            .gui_library_art_encoded
-            .as_ref()
-            .is_none_or(|(key, _)| key != cache_key)
-        {
-            let Some(entry) = self
-                .images
-                .image(cache_key)
-                .and_then(|entry| entry.img.as_ref())
-            else {
-                return GuiLibraryArtwork::Placeholder;
-            };
-            let encoded = Self::encode_hero_for_display(entry);
-            self.gui_library_art_encoded = Some((cache_key.to_owned(), encoded));
-        }
-        let Some((key, encoded)) = self
-            .gui_library_art_encoded
-            .as_ref()
-            .filter(|(key, _)| key == cache_key)
-        else {
-            return GuiLibraryArtwork::Placeholder;
-        };
-        GuiLibraryArtwork::Image {
-            key: key.clone(),
-            bytes: encoded.clone(),
-        }
+        self.resolve_gui_art(&cache_key)
     }
 
     /// One Home row's card art (add-gui-library-panel design D12, the
     /// USER-APPROVED GUI Home design): the queue card's chain and cache
     /// key for `item` — the now-playing card's conventions, so a Home row
-    /// whose item plays shares its cache entry — fetched here and encoded
-    /// from the image cache once per key. A fetch in flight paints the
+    /// whose item plays shares its cache entry — fetched here and read from
+    /// the image cache. A fetch in flight paints the
     /// loading fill, and a fetch that resolved empty paints the
     /// placeholder — the queue card's resolution.
     pub(in crate::app::gui_library) fn gui_home_row_artwork(
@@ -230,7 +142,7 @@ impl App {
             item.series_id.clone(),
             types,
         );
-        self.resolve_gui_home_art(&cache_key)
+        self.resolve_gui_art(&cache_key)
     }
 
     /// The Hero's art box: the declared policy arm, re-armed by the fetched
@@ -277,9 +189,7 @@ impl App {
 
     /// The Home Hero's artwork under the artwork policy's declared source
     /// (add-gui-library-panel design D12): the policy chain and cache key
-    /// the TUI hero fetches, fetched here and hero-encoded from the image
-    /// cache once per key. The row art's resolution runs the smaller plain
-    /// encode; the Hero's runs the hero-scoped one.
+    /// the TUI hero fetches, fetched here and read from the image cache.
     pub(in crate::app::gui_library) fn gui_home_hero_artwork(
         &mut self,
         cache_key: &str,
@@ -294,89 +204,33 @@ impl App {
             series_id.to_owned(),
             &types,
         );
-        self.resolve_gui_hero_art(cache_key)
+        self.resolve_gui_art(cache_key)
     }
 
-    /// The cached art under `cache_key`, hero-encoded once per key
-    /// (`gui_hero_art_encoded`), or the empty fetch's placeholder and the
-    /// in-flight fetch's loading state — the queue card's resolution, at the
-    /// Hero's own encode. The crop the TUI's hero applies at its artwork box
-    /// happens in the encode, so the window paints the result uncropped.
-    pub(in crate::app::gui_library) fn resolve_gui_hero_art(
-        &mut self,
+    /// The cached art under `cache_key`, as the server sent it, or the empty
+    /// fetch's placeholder and the in-flight fetch's loading state — the
+    /// queue card's resolution. One resolution for every Library art: the
+    /// Hero's box and a row's box differ only in how the window sizes the
+    /// image, never in the bytes it holds.
+    pub(in crate::app::gui_library) fn resolve_gui_art(
+        &self,
         cache_key: &str,
     ) -> GuiLibraryArtwork {
-        if self
+        let source = self
             .images
             .image(cache_key)
-            .is_none_or(|entry| entry.img.is_none())
-        {
-            if self.images.is_loading(cache_key) || self.images.is_fetch_interrupted(cache_key) {
-                return GuiLibraryArtwork::Loading;
+            .and_then(|entry| entry.source.clone());
+        match source {
+            Some(source) => GuiLibraryArtwork::Image {
+                key: cache_key.to_owned(),
+                source,
+            },
+            None if self.images.is_loading(cache_key)
+                || self.images.is_fetch_interrupted(cache_key) =>
+            {
+                GuiLibraryArtwork::Loading
             }
-            return GuiLibraryArtwork::Placeholder;
+            None => GuiLibraryArtwork::Placeholder,
         }
-        if !self.gui_hero_art_encoded.contains_key(cache_key) {
-            let Some(entry) = self
-                .images
-                .image(cache_key)
-                .and_then(|entry| entry.img.as_ref())
-            else {
-                return GuiLibraryArtwork::Placeholder;
-            };
-            let encoded = Self::encode_hero_for_display(entry);
-            self.gui_hero_art_encoded
-                .insert(cache_key.to_owned(), encoded);
-        }
-        self.gui_hero_art_encoded
-            .get(cache_key)
-            .map_or(GuiLibraryArtwork::Placeholder, |bytes| {
-                GuiLibraryArtwork::Image {
-                    key: cache_key.to_owned(),
-                    bytes: bytes.clone(),
-                }
-            })
-    }
-
-    /// The cached art under `cache_key`, display-encoded once per key
-    /// (`gui_home_art_encoded`), or the empty fetch's placeholder and the
-    /// in-flight fetch's loading state — the queue card's resolution, at the
-    /// row art's smaller encode. The Hero sources run the hero-scoped
-    /// [`Self::resolve_gui_hero_art`] instead: one cache entry carries the
-    /// Hero's crop or a row's plain encode, never both.
-    pub(in crate::app::gui_library) fn resolve_gui_home_art(
-        &mut self,
-        cache_key: &str,
-    ) -> GuiLibraryArtwork {
-        if self
-            .images
-            .image(cache_key)
-            .is_none_or(|entry| entry.img.is_none())
-        {
-            if self.images.is_loading(cache_key) || self.images.is_fetch_interrupted(cache_key) {
-                return GuiLibraryArtwork::Loading;
-            }
-            return GuiLibraryArtwork::Placeholder;
-        }
-        if !self.gui_home_art_encoded.contains_key(cache_key) {
-            let Some(entry) = self
-                .images
-                .image(cache_key)
-                .and_then(|entry| entry.img.as_ref())
-            else {
-                return GuiLibraryArtwork::Placeholder;
-            };
-            let encoded = encode_for_display(entry);
-            self.gui_home_art_encoded
-                .insert(cache_key.to_owned(), encoded);
-        }
-        self.gui_home_art_encoded
-            .get(cache_key)
-            .map_or(GuiLibraryArtwork::Placeholder, |bytes| {
-                GuiLibraryArtwork::Image {
-                    key: cache_key.to_owned(),
-                    bytes: bytes.clone(),
-                }
-            })
     }
 }

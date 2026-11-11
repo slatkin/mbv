@@ -692,6 +692,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
                 img: Some(image::DynamicImage::ImageRgba8(
                     image::RgbaImage::from_pixel(200, 200, image::Rgba([20, 40, 60, 255])),
                 )),
+                source: None,
                 protocols: std::collections::HashMap::new(),
                 cover_box: None,
                 applied_logo_key: None,
