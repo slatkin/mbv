@@ -4,12 +4,14 @@
 //! episode, and the Hero with the parent show's Square cover. A command names
 //! an episode by the opaque identity the row carries — the provider's
 //! `(library_item_id, episode_id)` pair encoded in one place — never by
-//! position.
+//! position. The pill and row frames are the shared entry-list ones
+//! (`entry_list.rs`); the Hero and the frame struct are the destination's own.
 
-use mbv::{GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow};
+use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
 use serde::Serialize;
 
-use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryArt};
+use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+use super::{GuiArtShapeFrame, GuiLibraryArt};
 use crate::bridge::library::GuiPodcastPill;
 
 /// The Podcasts destination's content (add-gui-library-panel design D12, row
@@ -23,7 +25,7 @@ pub struct GuiPodcastsFrame {
     /// the library whose content this is.
     pub lib_idx: usize,
     /// The pill row in paint order: Latest, then each show by title.
-    pub pills: Vec<GuiPodcastsPillFrame>,
+    pub pills: Vec<GuiPillFrame<GuiPodcastPill>>,
     /// Whether the active view's episodes are still landing: the show
     /// catalog's pages or that view's own episode fetches.
     pub loading: bool,
@@ -32,49 +34,13 @@ pub struct GuiPodcastsFrame {
     /// The active pill's episode rows: Latest merges every listed show's
     /// episodes, a show pill holds that one show's, both newest first with
     /// undated episodes last.
-    pub rows: Vec<GuiPodcastsRowFrame>,
+    pub rows: Vec<GuiEntryRowFrame>,
     /// The core's selected episode (design D2, D12), as the frame painted it:
     /// a select, play, or enqueue command sends it back. The first row is the
     /// Hero default.
     pub selected: Option<String>,
     /// The selected episode's Hero facts; `None` while no episode is selected.
     pub hero: Option<GuiPodcastsHeroFrame>,
-}
-
-/// One pill of the Podcasts pill row (row 10.1): single-select, as the TUI's
-/// one-valued `PillSelection` is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiPodcastsPillFrame {
-    /// The pill's selection: the set-pill command carries it back.
-    pub pill: GuiPodcastPill,
-    /// The pill's label: `Latest`, or the show's title.
-    pub name: String,
-    /// Whether the core's stored pill is this one.
-    pub selected: bool,
-    /// Whether the pill is a collection pill (multi-select) rather than a
-    /// single-select one. Every Podcasts pill is single-select.
-    pub collection: bool,
-}
-
-/// One row of the Podcasts list (row 10.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiPodcastsRowFrame {
-    /// The episode's stable identity (design D2, D12): the provider's
-    /// `(library_item_id, episode_id)` pair as one opaque string
-    /// (`GuiPodcastEpisodeId::encode`), which the play, queue, and select
-    /// commands send back. Never a row position.
-    pub id: String,
-    /// The episode's display title.
-    pub title: String,
-    /// The parent show's title.
-    pub subtitle: Option<String>,
-    /// The gutter date, `day month`; `None` on an undated episode.
-    pub date: Option<String>,
-    /// The row's played state, with the resume percent on a partly played
-    /// episode.
-    pub state: GuiHomeRowStateFrame,
 }
 
 /// The selected episode's Hero facts (row 10.1): the shared
@@ -112,43 +78,12 @@ impl GuiPodcastsFrame {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
         Self {
             lib_idx,
-            pills: projection
-                .pills
-                .iter()
-                .map(GuiPodcastsPillFrame::from)
-                .collect(),
+            pills: projection.pills.iter().map(GuiPillFrame::from).collect(),
             loading: projection.loading,
             failed: projection.failed,
-            rows: projection
-                .rows
-                .iter()
-                .map(GuiPodcastsRowFrame::from)
-                .collect(),
+            rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiPodcastsHeroFrame::from),
-        }
-    }
-}
-
-impl From<&GuiPodcastsPillOption> for GuiPodcastsPillFrame {
-    fn from(pill: &GuiPodcastsPillOption) -> Self {
-        Self {
-            pill: GuiPodcastPill::from(&pill.pill),
-            name: pill.name.clone(),
-            selected: pill.selected,
-            collection: false,
-        }
-    }
-}
-
-impl From<&GuiPodcastsRow> for GuiPodcastsRowFrame {
-    fn from(row: &GuiPodcastsRow) -> Self {
-        Self {
-            id: row.id.clone(),
-            title: row.title.clone(),
-            subtitle: row.subtitle.clone(),
-            date: row.date.clone(),
-            state: GuiHomeRowStateFrame::from(&row.state),
         }
     }
 }

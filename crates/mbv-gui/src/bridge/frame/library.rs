@@ -23,6 +23,7 @@ use mbv::GuiLibraryTab;
 
 mod audiobooks;
 mod emby;
+mod entry_list;
 mod feeds;
 mod podcasts;
 mod search;
@@ -36,10 +37,9 @@ pub use self::emby::{
     GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
     GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
 };
-pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame, GuiFeedsPillFrame, GuiFeedsRowFrame};
-pub use self::podcasts::{
-    GuiPodcastsFrame, GuiPodcastsHeroFrame, GuiPodcastsPillFrame, GuiPodcastsRowFrame,
-};
+pub use self::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame};
+pub use self::podcasts::{GuiPodcastsFrame, GuiPodcastsHeroFrame};
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
     GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,

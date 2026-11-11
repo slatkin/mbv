@@ -165,15 +165,11 @@ pub enum GuiFeedPill {
     Subscription(String),
 }
 
-impl From<GuiFeedPill> for mbv::GuiFeedPill {
-    fn from(pill: GuiFeedPill) -> Self {
-        match pill {
-            GuiFeedPill::Latest => Self::Latest,
-            GuiFeedPill::Subscription(feed_id) => Self::Subscription(feed_id),
-        }
-    }
-}
-
+/// The pill's core form the frame's pill row paints, the one conversion the
+/// bridge keeps for the Pill DTO: the set-pill command arm resolves the
+/// command's wire pill to the core form inline (the
+/// `GuiEmbyFeedGroup` arm's pattern), so the variant names are hand-written
+/// once per direction.
 impl From<&mbv::GuiFeedPill> for GuiFeedPill {
     fn from(pill: &mbv::GuiFeedPill) -> Self {
         match pill {
@@ -227,16 +223,11 @@ impl From<mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter> for 
     }
 }
 
-impl From<GuiPodcastPill> for mbv::GuiPodcastPill {
-    fn from(pill: GuiPodcastPill) -> Self {
-        match pill {
-            GuiPodcastPill::Latest => Self::Latest,
-            GuiPodcastPill::State(state) => Self::State(state.into()),
-            GuiPodcastPill::Show(show_id) => Self::Show(show_id),
-        }
-    }
-}
-
+/// The pill's core form the frame's pill row paints, the one conversion the
+/// bridge keeps for the Pill DTO; the state pill's own pair below is the
+/// leaf arm both directions share. The set-pill command arm resolves the
+/// command's wire pill to the core form inline (the `GuiEmbyFeedGroup`
+/// arm's pattern), so the variant names are hand-written once per direction.
 impl From<&mbv::GuiPodcastPill> for GuiPodcastPill {
     fn from(pill: &mbv::GuiPodcastPill) -> Self {
         match pill {
@@ -309,18 +300,10 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
             GuiLibraryCommand::MenuEntry { item_id, index } => Self::MenuEntry { item_id, index },
             GuiLibraryCommand::RowMenu { item_id } => Self::RowMenu { item_id },
-            GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect {
-                row: mbv::GuiHomeRowId::from(&row),
-            },
-            GuiLibraryCommand::HomePlay { row } => Self::HomePlay {
-                row: mbv::GuiHomeRowId::from(&row),
-            },
-            GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext {
-                row: mbv::GuiHomeRowId::from(&row),
-            },
-            GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue {
-                row: mbv::GuiHomeRowId::from(&row),
-            },
+            GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect { row: row.into() },
+            GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
+            GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext { row: row.into() },
+            GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue { row: row.into() },
             GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => Self::ShowsSetMode {
                 lib_idx,
                 mode: mbv::GuiShowsMode::from(mode),
@@ -368,7 +351,11 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
             GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => Self::PodcastsSetPill {
                 lib_idx,
-                pill: mbv::GuiPodcastPill::from(pill),
+                pill: match pill {
+                    GuiPodcastPill::Latest => mbv::GuiPodcastPill::Latest,
+                    GuiPodcastPill::State(state) => mbv::GuiPodcastPill::State(state.into()),
+                    GuiPodcastPill::Show(show_id) => mbv::GuiPodcastPill::Show(show_id),
+                },
             },
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
                 Self::PodcastsSelect { lib_idx, row }
@@ -380,7 +367,10 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::PodcastsQueue { lib_idx, item_id }
             }
             GuiLibraryCommand::FeedsSetPill { pill } => Self::FeedsSetPill {
-                pill: mbv::GuiFeedPill::from(pill),
+                pill: match pill {
+                    GuiFeedPill::Latest => mbv::GuiFeedPill::Latest,
+                    GuiFeedPill::Subscription(feed_id) => mbv::GuiFeedPill::Subscription(feed_id),
+                },
             },
             GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },
             GuiLibraryCommand::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
@@ -397,12 +387,19 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
 
 /// One row id's core identity, resolving the wire type the front end sends.
 /// The frame mirrors the same shape on the way out, so a command built from
-/// a carried row addresses exactly that row.
+/// a carried row addresses exactly that row. The owned form is the ref
+/// form's delegate, so the variant names are hand-written once.
 impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
     fn from(row: &GuiHomeRowId) -> Self {
         match row {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
         }
+    }
+}
+
+impl From<GuiHomeRowId> for mbv::GuiHomeRowId {
+    fn from(row: GuiHomeRowId) -> Self {
+        Self::from(&row)
     }
 }
