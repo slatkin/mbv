@@ -25,7 +25,13 @@ While the Settings screen is open, the GUI Client SHALL show the Settings sideba
 
 ### Requirement: The Settings screen fills the window
 
-While the Settings screen is open, the sidebar SHALL take its column width and the section content SHALL take the rest of the window's width and height. Outside Mini, no part of the window SHALL stay empty beside the content.
+While the Settings screen is open, the sidebar SHALL take one fixed width that does not follow the Queue column's width, and the section content SHALL take the rest of the window's width and height. Outside Mini, no part of the window SHALL stay empty beside the content.
+
+#### Scenario: A dragged Queue width does not move the sidebar
+
+- **GIVEN** the user dragged the Queue column wider
+- **WHEN** the Settings screen opens
+- **THEN** the sidebar has the same width it has with the default Queue column
 
 #### Scenario: The content takes the remaining width
 
@@ -185,6 +191,32 @@ Changing a shown setting SHALL have the same effect, the same refusal rules, and
 - **GIVEN** Stay alive is on
 - **WHEN** the user turns off the systray icon setting
 - **THEN** the setting stays as it was and the GUI shows the same refusal notice as the TUI
+
+### Requirement: Value settings are picked from their list
+
+Subtitle mode, Subtitle language, and Audio language SHALL each show their current value and SHALL open the list of their values when pressed or activated. Picking a value SHALL set that value directly, with the TUI's effect and save. The mode list SHALL be the subtitle modes the TUI cycles through. A language list SHALL be Any followed by My languages.
+
+#### Scenario: Picking a subtitle language
+
+- **GIVEN** My languages holds English and Chinese and the subtitle language is English
+- **WHEN** the user opens Subtitle language and picks Chinese
+- **THEN** the subtitle language is Chinese, the player uses it, and the setting is saved
+
+#### Scenario: Closing the list picks nothing
+
+- **GIVEN** the Subtitle mode list is open
+- **WHEN** the user presses Esc or presses outside the list
+- **THEN** the list closes and the mode is unchanged
+
+### Requirement: The section content has a title and grouped settings
+
+The section content SHALL show the section's name as its title and SHALL group the section's settings into one or more cards. A setting that is on or off SHALL show as a switch. Each Service SHALL have its own card, which shows the Service's state, its actions, and its setup form when that form is open.
+
+#### Scenario: A Service's setup form opens in its card
+
+- **GIVEN** Audiobookshelf is Not configured
+- **WHEN** the user presses its setup action
+- **THEN** the setup form opens inside the Audiobookshelf card
 
 ### Requirement: Choice-list settings are edited in place
 
