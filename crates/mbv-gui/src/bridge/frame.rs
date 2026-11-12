@@ -91,7 +91,9 @@ fn covering_chapter(
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10), mirroring
-/// `PanelTogglesProjection`.
+/// `PanelTogglesProjection`, with the UI-reset counter the window resets its
+/// interaction stores and panel widths on (docs/architecture/gui-client.md).
+/// The counter rides this section so a reset moves the section's revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiPanelToggles {
@@ -100,13 +102,20 @@ pub struct GuiPanelToggles {
     /// The `q` toggle: the expanded panel's queue folded to its one-line
     /// summary.
     pub queue_folded: bool,
+    /// The UI-reset counter (design D10): it rises on each reset, so the front
+    /// end resets its interaction stores when the value changes.
+    pub ui_reset_epoch: u64,
 }
 
-impl From<&mbv::PanelTogglesProjection> for GuiPanelToggles {
-    fn from(toggles: &mbv::PanelTogglesProjection) -> Self {
+impl GuiPanelToggles {
+    /// The panel section's value: the projection's toggles and the App's
+    /// UI-reset counter, read in the same tick.
+    #[must_use]
+    pub fn new(toggles: &mbv::PanelTogglesProjection, ui_reset_epoch: u64) -> Self {
         Self {
             collapsed: toggles.collapsed,
             queue_folded: toggles.queue_folded,
+            ui_reset_epoch,
         }
     }
 }

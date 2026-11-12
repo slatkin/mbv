@@ -23,6 +23,7 @@ use mbv_config::{
     gui_launch_state_path, load_tui_launch_state, save_tui_launch_state,
 };
 use mbv_emby::EmbyClient;
+use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
 use mbv_gui::bridge::frame::focus::GuiFocus;
 use mbv_gui::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
@@ -174,6 +175,11 @@ impl Held {
         held.library = batch.library.or(held.library.take());
         held.search = batch.search.or(held.search.take());
         held.settings = batch.settings.or(held.settings.take());
+    }
+
+    /// The panel section's value: the toggles and the UI-reset counter.
+    pub(crate) fn panel(&self) -> &GuiPanelToggles {
+        section_value(self.batch.panel.as_ref(), "panel")
     }
 
     /// The Queue section's value.

@@ -244,8 +244,10 @@ impl SectionLedger {
         self.queue
             .adopt(GuiQueue::from_surface(queue, viewport_rows, &summary));
         self.summary.adopt(GuiQueueSummary::from(&summary));
-        self.panel
-            .adopt(GuiPanelToggles::from(&app.panel_toggles_projection()));
+        self.panel.adopt(GuiPanelToggles::new(
+            &app.panel_toggles_projection(),
+            app.gui_ui_reset_epoch(),
+        ));
         self.overlay.adopt(
             app.gui_overlay_projection(&playback)
                 .as_ref()

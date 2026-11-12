@@ -58,7 +58,8 @@ pub struct GuiSectionBatch {
     /// column's mode, and the filter.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<GuiSection<GuiQueueSummary>>,
-    /// The panel toggles the front end picks the layout with.
+    /// The panel toggles the front end picks the layout with, and the UI-reset
+    /// counter that resets its interaction stores.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub panel: Option<GuiSection<GuiPanelToggles>>,
     /// The open menu or popover, `null` while none is open.

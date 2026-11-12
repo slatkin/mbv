@@ -477,12 +477,10 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
         2,
         "the queue's slots are unchanged"
     );
-    // The reset counter rides no batch section yet (design D1 names none for it),
-    // so the App holds the check.
     assert_eq!(
-        test.core.app_mut().gui_ui_reset_epoch(),
+        frame.panel().ui_reset_epoch,
         epoch_before + 1,
-        "the reset counter rose"
+        "the reset counter rode the panel section and rose"
     );
     let app = test.core.app_mut();
     assert_eq!(
