@@ -173,7 +173,7 @@ mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal prog
 
 ### Requirement: The GUI program ships beside the terminal program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the runtime libraries that the GUI program loads: the Vulkan loader, the EGL library, the Wayland client library, and xkbcommon. No artifact SHALL declare a web engine. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the runtime libraries that the GUI program loads: the Vulkan loader, the EGL library, the Wayland client library, xkbcommon, and the font configuration library. No artifact SHALL declare a web engine. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
 
 #### Scenario: A package installs both programs
 
@@ -183,7 +183,7 @@ Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL in
 #### Scenario: A package declares the GUI runtime
 
 - **WHEN** the `.deb` or an Arch package is inspected
-- **THEN** it declares the Vulkan loader, the EGL library, the Wayland client library, and xkbcommon
+- **THEN** it declares the Vulkan loader, the EGL library, the Wayland client library, xkbcommon, and the font configuration library
 - **AND** it declares no WebKitGTK package
 
 ### Requirement: The GUI Client uses the typography and colours of the canvas

@@ -17,7 +17,7 @@ GPUI is the GPU UI framework of the Zed editor. It is Rust, it draws with wgpu o
 - **Zed's `ui` and `theme` crates paint the common widgets.** mbv maps its palette roles and canvas tokens into a Zed `Theme`, so no widget shows Zed's colours. mbv adds its own single-line text field, because Zed's `ui_input` needs Zed's editor.
 - **The GUI binary becomes GPL.** `crates/mbv-gui` is licensed `GPL-3.0-or-later`, because Zed's `ui` and `theme` crates are GPL. Every other crate stays MIT.
 - **Wayland only.** GPUI is built with its Wayland backend and without X11.
-- **Packaging.** The packages drop WebKitGTK 4.1 and declare the Vulkan loader and EGL. The builds drop Node and pnpm.
+- **Packaging.** The packages drop WebKitGTK 4.1 and declare the Vulkan loader, EGL, and fontconfig. The builds drop Node and pnpm.
 
 ## Prerequisite
 
@@ -42,6 +42,6 @@ None.
 - `src/app/`: two read-only queries for the art path, keyed by the image cache key and by `TrickplaySheetKey`.
 - `mbv-config`: a GUI window state file for the dragged panel widths, beside the GUI launch-state file. The widths that the Tauri window kept in WebKit's `localStorage` reset once at the upgrade.
 - Dependencies: `gpui`, `gpui_platform`, `ui`, and `theme` from one pinned Zed git revision. Three `[patch.crates-io]` entries copied from Zed's workspace (`async-task`, `calloop`, `khronos-egl`). `flume` (already in the workspace) for the batch channel. `tauri`, `tauri-build`, `base64`, and `serde` leave `mbv-gui`.
-- Build and release: the `Makefile` `ui-*` targets and `make dev`, the CI jobs, `PKGBUILD`, `PKGBUILD-git`, and the `.deb` dependency list (WebKitGTK out; the Vulkan loader and EGL in).
+- Build and release: the `Makefile` `ui-*` targets and `make dev`, the CI jobs, `PKGBUILD`, `PKGBUILD-git`, and the `.deb` dependency list (WebKitGTK out; the Vulkan loader and EGL in; fontconfig stays).
 - Docs: `docs/architecture/gui-client.md` (rewritten for the GPUI window), `AGENTS.md` (the `mbv-gui` repository map entry, and the tokio rule, which no longer names `mbv-gui`), `CONTEXT.md` (the *GUI Client* entry says GPUI), a new ADR 0039 that records GPUI and amends the webview rationale and the reload consequences of ADR 0036 and ADR 0037, and `docs/architecture/interactive-surface-ledger.md` (the GUI Library panel row).
 - Open work that this change makes moot: PR 999 (`chore/add-ui-prettier`).
