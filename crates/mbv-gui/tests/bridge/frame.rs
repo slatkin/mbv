@@ -102,6 +102,7 @@ fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -
         queue,
         playback_surface: playback,
         viewport_rows: VIEWPORT_ROWS,
+        now: std::time::Instant::now(),
     });
     Built(batch.expect("the first collect builds every section"))
 }

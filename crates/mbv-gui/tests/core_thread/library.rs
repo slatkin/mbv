@@ -62,9 +62,8 @@ fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
                 .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
             "no library completion landed while waiting for {what}"
         );
-        test.core.mark_library_completion_for_test();
-        // The applied completion frames on the next step: an input the core
-        // answers with a frame, as the drain's own arm does.
+        // The next step drains the requeued completion, which marks its sections
+        // (design D3 rule 2), and the wake makes that step run at once.
         test.waker.wake();
     }
 }

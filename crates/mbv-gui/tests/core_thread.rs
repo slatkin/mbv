@@ -303,6 +303,9 @@ pub(crate) fn test_core_with(app: App) -> TestCore {
     let state_dir_ownership = TestStateDirGuard::new_if_unset();
     let mut core = CoreThread::new(app, rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
+    // Every core-thread test audits its section marks (design D3): a clean
+    // gated section must match its fresh build, so a missed mark fails here.
+    core.set_section_audit_for_test(true);
     core.install_waker(tx.clone());
     TestCore {
         _state_dir: state_dir_ownership,

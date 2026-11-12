@@ -344,11 +344,28 @@ impl CoreThread {
         self.idle_cadence = cadence;
     }
 
-    /// Mark what a library completion marks (design D3 rule 2), for a test
-    /// that applied the completion through the App's test seam. That seam
-    /// runs the App arm outside the tick, so the tick's `drain_lib_events`
-    /// hook never reports the completion. Production never calls this.
-    pub fn mark_library_completion_for_test(&mut self) {
+    /// Turn the section audit on or off (design D3): with it on, every tick
+    /// builds each clean gated section and panics when the build differs from
+    /// the last built value, which names a missed mark. The core-thread tests
+    /// run with it on; production never turns it on.
+    pub fn set_section_audit_for_test(&mut self, on: bool) {
+        self.ledger.set_audit_for_test(on);
+    }
+
+    /// Mark the sections a catalog landing marks (design D3 rule 2), for a test
+    /// whose seed lands the catalog between ticks. The startup drain marks every
+    /// gated section when it lands a catalog (`DrainHook::DrainStartupWorkers`), and
+    /// this call marks the same rows. Production never calls it.
+    pub fn mark_startup_landing_for_test(&mut self) {
+        self.mark_hook(crate::sections::DrainHook::DrainStartupWorkers);
+    }
+
+    /// Mark the sections a library completion marks (design D3 rule 2), for a
+    /// test whose seed stands in for completions the library drain applies. The
+    /// drain marks these rows when it reports a completion
+    /// (`DrainHook::DrainLibEvents`), and this call marks the same rows. Production
+    /// never calls it.
+    pub fn mark_library_landing_for_test(&mut self) {
         self.mark_hook(crate::sections::DrainHook::DrainLibEvents);
     }
 
@@ -705,6 +722,7 @@ impl CoreThread {
             queue: &self.queue,
             playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,
+            now: Instant::now(),
         });
         let Some(batch) = batch else {
             return;

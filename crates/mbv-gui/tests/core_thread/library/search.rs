@@ -38,17 +38,23 @@ const MOVIE: &str = r#"{"Id":"m-blue","Name":"Blue Train","Type":"Movie","MediaT
 
 /// A core over an App whose Search field has sent `QUERY`, with the Emby
 /// Service attached and a Movies library beside the seeded Music one. The
-/// query lands while no Service is attached, so the production worker starts
-/// nothing and the seam owns the result the test asserts.
+/// query applies after the Service attaches, so the production search worker
+/// starts one request. The mock answers it with no script, so the worker stalls
+/// and its result never lands: the seam owns the result the test asserts.
 fn search_core(http: &MockHttp) -> TestCore {
     let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SearchQuery {
-            query: QUERY.into(),
-        },
-    );
+    // The query is queued before the libraries are seeded, and the step that
+    // applies it runs after the seeds: every App change lands inside a tick that
+    // carries an input, so the section audit sees each change marked.
+    test.tx
+        .send(mbv_gui::core_thread::CoreInput::Library(
+            GuiLibraryCommand::SearchQuery {
+                query: QUERY.into(),
+            }
+            .into(),
+        ))
+        .unwrap();
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
     core.push_gui_library_tab_for_test(EmbyItem::folder(
@@ -56,6 +62,7 @@ fn search_core(http: &MockHttp) -> TestCore {
         "Movies".into(),
         "movies".into(),
     ));
+    assert!(test.core.step());
     test
 }
 
@@ -114,7 +121,6 @@ fn pump_until_movies_destination(test: &mut TestCore) {
                 .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
             "no library completion landed while waiting for the activated row's destination"
         );
-        test.core.mark_library_completion_for_test();
         test.waker.wake();
     }
 }

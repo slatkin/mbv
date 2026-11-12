@@ -66,7 +66,6 @@ fn pump_until_root_rows(test: &mut TestCore) {
                 .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
             "the All series mode's root load sent no further completion"
         );
-        test.core.mark_library_completion_for_test();
     }
 }
 

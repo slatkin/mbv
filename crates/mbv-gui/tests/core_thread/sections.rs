@@ -145,9 +145,6 @@ fn show_album(test: &mut TestCore) {
             ("alb-paul", "Paul's Boutique"),
         ],
     );
-    // The Emby agent must outlive this function, as the Library frame tests keep
-    // their mock for the whole test.
-    std::mem::forget(http);
     test.tx
         .send(CoreInput::Library(
             GuiLibraryCommand::SelectCollection {
@@ -257,4 +254,108 @@ fn the_startup_drain_sends_the_music_tab_in_the_library_section() {
         .value
         .expect("the catalog builds a library frame");
     assert!(content.tabs.iter().any(|tab| tab.label == "Music"));
+}
+
+/// Past the navigation-idle delay (`NAV_IDLE_DELAY` is 150 ms): one second is
+/// long enough, and the test moves the clock instead of waiting.
+const IDLE_PAST_THE_GATE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Seed one Music group of six albums, `alb-0` through `alb-5`. The default pick
+/// is `alb-0`, and its first build warms `alb-1` through `alb-3` while the gate
+/// is still open at construction. So the last album's only unwarmed neighbour is
+/// `alb-4`, and a test of the gate's opening needs that one.
+fn seed_six_albums(test: &mut TestCore) {
+    let http = MockHttp::new();
+    let albums: Vec<(String, String)> = (0..6)
+        .map(|index| (format!("alb-{index}"), format!("Album {index}")))
+        .collect();
+    let albums: Vec<(&str, &str)> = albums
+        .iter()
+        .map(|(id, name)| (id.as_str(), name.as_str()))
+        .collect();
+    let app = test.core.app_mut();
+    app.seed_gui_music_library_for_test(test_emby_client(&http));
+    app.seed_gui_music_albums_for_test(0, "grp-hiphop", &albums);
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::SelectCollection {
+                lib_idx: 0,
+                group_id: "grp-hiphop".into(),
+            }
+            .into(),
+        ))
+        .unwrap();
+}
+
+/// A passed navigation gate starts the Hero neighbour warm with no input
+/// (design D3 rule 3). The pick closes the gate, so its warm starts nothing. The
+/// next tick, with no input, sees the gate open, marks the Library section, and
+/// the rebuilt Library starts the neighbour's fetch (`alb-4` is one behind the
+/// picked `alb-5`). The audit is off: an audit build would start the same fetch,
+/// so only the mark can be the cause (design D3).
+#[test]
+fn a_passed_navigation_gate_starts_the_hero_neighbour_fetch_with_no_input() {
+    let mut test = test_core_with(empty_app());
+    test.core.set_section_audit_for_test(false);
+    test.core.app_mut().enable_card_images_for_test();
+    seed_six_albums(&mut test);
+    assert!(test.core.step());
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::ShowDetail {
+                item_id: "alb-5".into(),
+            }
+            .into(),
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    let neighbour = mbv_images::emby_card_cache_key("alb-4", "");
+    assert!(!test.core.app_mut().card_image_loading_for_test(&neighbour));
+
+    test.core
+        .app_mut()
+        .backdate_navigation_for_test(IDLE_PAST_THE_GATE);
+    assert!(test.core.step());
+
+    assert!(test.core.app_mut().card_image_loading_for_test(&neighbour));
+}
+
+/// One Music track's playing item, as the Owner's queue carries it.
+fn playing_track(id: &str) -> mbv_queue::QueueItem {
+    let mut item = make_item(id, "Audio");
+    item.id = id.into();
+    item.media_type = "Audio".into();
+    mbv_queue::QueueItem::Emby(Box::new(item))
+}
+
+/// A playing-track change with no input sends the Library section (design D3
+/// rule 4). The Owner's active slot moves to the second track, and the next
+/// tick, with no input, marks the Library and sends the Music frame with the
+/// new playing row. `libraryDetail` is not a section until the Library section
+/// splits in group 6, so the one gated `library` section carries the change.
+#[test]
+fn a_playing_track_change_with_no_input_sends_the_library_section() {
+    let http = MockHttp::new();
+    let app =
+        mbv::stub_app_with_playing_items(vec![playing_track("trk-1"), playing_track("trk-2")]);
+    let mut test = test_core_with(app);
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(&http));
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
+    test.tx
+        .send(CoreInput::Library(GuiLibraryCommand::TakeFocus.into()))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_batch();
+
+    test.core.app_mut().set_playing_index_for_test(1);
+    assert!(test.core.step());
+
+    assert_eq!(carried_gated(&test.next_batch()), [Section::Library]);
+    let held = test.held();
+    let music = held
+        .library()
+        .and_then(|content| content.music.as_ref())
+        .expect("the Music frame is presented");
+    assert_eq!(music.playing_track_id.as_deref(), Some("trk-2"));
 }

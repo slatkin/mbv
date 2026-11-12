@@ -734,3 +734,27 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
         "the https url opened and the javascript url dropped"
     );
 }
+
+/// An interrupted art fetch's retry comes due once, after its retry time
+/// (design D3 rule 3, invariant 27): the core learns of it from the first ask
+/// past that time, and a later ask does not report the same retry again.
+#[test]
+fn an_interrupted_art_retry_comes_due_once_after_its_time() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.images.fetch_interrupted("alb-1:P".to_owned());
+    let later = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+
+    assert!(
+        !app.gui_art_retry_due(std::time::Instant::now()),
+        "the retry time has not passed yet"
+    );
+    assert!(
+        app.gui_art_retry_due(later),
+        "the retry time passed since the last ask"
+    );
+    assert!(
+        !app.gui_art_retry_due(later),
+        "a retry the core already reported is not reported again"
+    );
+}

@@ -555,6 +555,10 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     // The catalog lands: the destination jump still runs, and the saved
     // Queue focus does not replace the taken Library focus.
     test.core.app_mut().seed_gui_music_library_tab_for_test();
+    // The startup drain marks every gated section when it lands a catalog
+    // (design D3 rule 2); this seed lands it between ticks, so it marks what that
+    // drain would.
+    test.core.mark_startup_landing_for_test();
     assert!(test.core.step());
 
     assert_eq!(

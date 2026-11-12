@@ -13,12 +13,14 @@
 //! restart (design D2), and sends the batch it returns. The ledger is the only
 //! builder of the sections.
 
+mod deadlines;
 pub(crate) mod library;
 mod marks;
 
 pub(crate) use marks::{DrainHook, marks_for_hook};
 
 use std::collections::HashSet;
+use std::time::Instant;
 
 use mbv::{App, QueuePlaybackProjection};
 use mbv_surfaces::FocusStack;
@@ -38,6 +40,8 @@ use crate::bridge::frame::theme::GuiTheme;
 use crate::bridge::frame::{GuiPanelToggles, scrubber_hover, scrubber_ticks};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::trickplay::TrickplayFrames;
+
+use self::deadlines::DeadlineMarks;
 
 /// One section of the window (design D1). The compared sections build on every
 /// tick, so a mark on one of them changes nothing; the gated sections need a
@@ -97,6 +101,9 @@ pub struct SectionSources<'a> {
     pub playback_surface: &'a QueuePlaybackSurface,
     /// The whole Queue rows the viewport fits.
     pub viewport_rows: usize,
+    /// The tick's clock: the deadline reads compare against it (design D3 rule
+    /// 3).
+    pub now: Instant,
 }
 
 /// The ledger's state for one section (design D2): the last built value, its
@@ -161,6 +168,16 @@ impl<T> Slot<T> {
     }
 }
 
+/// The audit's check of one clean gated section (design D3): its fresh build
+/// must equal the last built value. A difference is a source that changed with
+/// no mark, so the section would stay stale in production.
+fn audit_clean<T: PartialEq>(section: Section, slot: &Slot<T>, built: &T) {
+    assert!(
+        slot.value.as_ref() == Some(built),
+        "section {section:?} changed without a mark: a drain hook or an input misses its mark"
+    );
+}
+
 /// The section ledger (design D2). Each field is one section's slot. The marks
 /// name the gated sections whose sources changed since the last collect.
 #[derive(Debug)]
@@ -180,6 +197,12 @@ pub struct SectionLedger {
     search: Slot<Option<GuiSearchFrame>>,
     settings: Slot<Option<GuiSettingsFrame>>,
     marked: HashSet<Section>,
+    /// The deadline and playhead values the last tick sampled (design D3 rules
+    /// 3 and 4).
+    deadlines: DeadlineMarks,
+    /// Whether the audit runs (design D3). Production never turns it on; the
+    /// core-thread tests do, through `CoreThread::set_section_audit_for_test`.
+    audit: bool,
     artwork: ArtworkFrames,
     trickplay: TrickplayFrames,
 }
@@ -207,6 +230,8 @@ impl Default for SectionLedger {
             search: Slot::default(),
             settings: Slot::default(),
             marked: HashSet::new(),
+            deadlines: DeadlineMarks::default(),
+            audit: false,
             artwork: ArtworkFrames::default(),
             trickplay: TrickplayFrames::default(),
         };
@@ -228,6 +253,13 @@ impl SectionLedger {
         for section in GATED_SECTIONS {
             self.mark(*section);
         }
+    }
+
+    /// Turn the audit on or off (design D3). With it on, `collect` builds every
+    /// clean gated section and panics when the build differs from the last
+    /// built value, which names a missed mark.
+    pub fn set_audit_for_test(&mut self, on: bool) {
+        self.audit = on;
     }
 
     /// Continue the revisions the attach campaign sent (design D4), so the
@@ -266,11 +298,14 @@ impl SectionLedger {
             queue,
             playback_surface,
             viewport_rows,
+            now,
         } = sources;
-        let marked = std::mem::take(&mut self.marked);
+        let mut marked = std::mem::take(&mut self.marked);
         // One playback projection read feeds the playback section, the overlay,
-        // the hover's tick, and the settings build, so they cannot disagree.
+        // the hover's tick, the settings build, and the target-choice compare,
+        // so they cannot disagree.
         let playback = app.queue_playback_projection();
+        self.deadlines.sample(app, &playback, now, &mut marked);
         let summary = app.queue_summary_projection();
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
@@ -304,7 +339,40 @@ impl SectionLedger {
         self.status
             .adopt(GuiStatusBar::from(&app.status_bar_projection()));
         self.adopt_marked_gated(app, &marked, &playback);
+        if self.audit {
+            self.audit_clean_gated(app, &marked, &playback);
+        }
         self.take_batch()
+    }
+
+    /// The audit of design D3: build each clean gated section (one without a
+    /// mark this collect) and check that the build equals its last built value.
+    /// A mismatch means a source changed with no mark, so the section would stay
+    /// stale in production.
+    fn audit_clean_gated(
+        &self,
+        app: &mut App,
+        marked: &HashSet<Section>,
+        playback: &QueuePlaybackProjection,
+    ) {
+        if !marked.contains(&Section::Theme) {
+            audit_clean(Section::Theme, &self.theme, &GuiTheme::current());
+        }
+        if !marked.contains(&Section::Library) {
+            audit_clean(
+                Section::Library,
+                &self.library,
+                &library::build_content(app),
+            );
+        }
+        if !marked.contains(&Section::Search) {
+            let search = GuiSearchFrame::carried(&app.gui_search_projection());
+            audit_clean(Section::Search, &self.search, &search);
+        }
+        if !marked.contains(&Section::Settings) {
+            let settings = GuiSettingsFrame::build(app, playback);
+            audit_clean(Section::Settings, &self.settings, &settings);
+        }
     }
 
     /// Build each gated section that carries a mark (design D2). A mark that

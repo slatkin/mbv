@@ -76,6 +76,10 @@ fn seed_podcast_catalog(test: &mut crate::TestCore) {
             Some(1200.0),
         )],
     );
+    // The seed stands in for the per-show completions, which the library drain
+    // applies and marks (design D3 rule 2). The seed writes the App's store
+    // between ticks, so the test marks the rows that drain would.
+    test.core.mark_library_landing_for_test();
 }
 
 /// The newest frame the core emitted, draining the older ones: the frames the
