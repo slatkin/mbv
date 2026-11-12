@@ -5,11 +5,18 @@
 //! owner; this crate defines the vocabulary and never drives playback.
 
 mod attached_clients;
+mod build_info;
 mod commands;
 mod events;
 mod output;
 mod owner_action;
 mod protocol;
+mod wire_identity;
+
+#[doc(inline)]
+pub use build_info::BuildInfo;
+#[doc(inline)]
+pub use wire_identity::wire_id;
 
 #[doc(inline)]
 pub use attached_clients::{AttachedClients, AttachedClientsCell};

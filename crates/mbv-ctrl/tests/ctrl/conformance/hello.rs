@@ -12,6 +12,7 @@ use super::*;
 /// call `CtrlHello::current()`.
 const APP_VERSION: &str = "1.2.3";
 const BUILD_ID: &str = "4f2a1c9";
+const WIRE_ID: &str = "5a3c9e1f0b7d2468";
 const CONTROL_TOKEN: &str = "conformance-control-token";
 const SWAP_TOKEN: &str = "conformance-swap-token";
 
@@ -63,6 +64,7 @@ fn hello(capabilities: Vec<String>) -> CtrlHello {
         protocol_version: CTRL_PROTOCOL_VERSION,
         app_version: APP_VERSION.to_owned(),
         build_id: BUILD_ID.to_owned(),
+        wire_id: WIRE_ID.to_owned(),
         capabilities,
         control_token: None,
         swap_token: None,

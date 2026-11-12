@@ -1,20 +1,53 @@
+use rstest::rstest;
+
 use super::*;
 
-// emby-session-output-followups task 4.1: `build_id` is additive (design
-// D2 keeps CTRL_PROTOCOL_VERSION at 10), so it must round-trip and a peer
-// that predates the field must decode an empty value.
+// emby-session-output-followups task 4.1: `build_id` and `wire_id` are
+// additive (design D2 keeps CTRL_PROTOCOL_VERSION at 10), so they must
+// round-trip and a peer that predates the fields must decode empty values.
 #[test]
-fn hello_build_id_round_trips_and_a_missing_field_decodes_empty() {
+fn hello_identity_fields_round_trip_and_missing_fields_decode_empty() {
     let hello = CtrlHello::current();
 
     let wire = serde_json::to_string(&hello).unwrap();
     let decoded: CtrlHello = serde_json::from_str(&wire).unwrap();
     assert_eq!(decoded.build_id, BUILD_ID);
+    assert_eq!(decoded.wire_id, wire_id());
 
     let stale: CtrlHello =
         serde_json::from_str(r#"{"protocol_version":10,"app_version":"0.0.0","capabilities":[]}"#)
             .unwrap();
     assert_eq!(stale.build_id, "");
+    assert_eq!(stale.wire_id, "");
+}
+
+fn identity(app_version: &str, build_id: &str, wire_id: &str) -> BuildInfo {
+    BuildInfo {
+        app_version: app_version.to_owned(),
+        build_id: build_id.to_owned(),
+        wire_id: wire_id.to_owned(),
+    }
+}
+
+// `ctrl-protocol` and `local-daemon-single-instance` deltas: the local gate
+// compares the application version and the wire identity, never the build
+// identity alone; an empty wire identity always differs.
+#[rstest]
+#[case::identical(identity("1.0", "abc", "w1"), identity("1.0", "abc", "w1"), false)]
+#[case::a_different_build_id_alone(
+    identity("1.0", "abc", "w1"),
+    identity("1.0", "xyz", "w1"),
+    false
+)]
+#[case::a_different_app_version(identity("1.0", "abc", "w1"), identity("1.1", "abc", "w1"), true)]
+#[case::a_different_wire_id(identity("1.0", "abc", "w1"), identity("1.0", "abc", "w2"), true)]
+#[case::an_empty_wire_id(identity("1.0", "abc", "w1"), identity("1.0", "abc", ""), true)]
+fn gate_compares_version_and_wire_identity_only(
+    #[case] local: BuildInfo,
+    #[case] owner: BuildInfo,
+    #[case] expected: bool,
+) {
+    assert_eq!(local.differs_for_gate(&owner), expected);
 }
 
 #[test]
