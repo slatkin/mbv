@@ -57,8 +57,8 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 
 ## 7. Projection fixes
 
-- [ ] 7.1 Make `gui_search_projection` return `None` at once for an empty or blank query with no rows, and build `GuiSearchFrame` by moving the rows (design D10). Re-run bench fixture 6 and add its median to `measurements.md`; revert the change if it gains nothing beyond noise. Verify: `cargo nextest run -p mbv -p mbv-gui`. Test contract, in the existing Search projection test file under `src/app/tests`: an empty query projects nothing.
-- [ ] 7.2 Replace `config_snapshot` with `App::with_config`, make `App::gui_settings()` return `Option<&GuiSettingsState>`, and make `gui_settings_row_choices` return a borrowed slice (design D10). Re-run bench fixture 7 and add its median to `measurements.md`; revert a part that gains nothing beyond noise. Verify: `cargo nextest run -p mbv -p mbv-gui`; `cargo clippy --workspace --all-targets -- -D warnings`. Test contract: none (no behavior change; the existing Settings tests cover it).
+- [x] 7.1 Make `gui_search_projection` return `None` at once for an empty or blank query with no rows, and build `GuiSearchFrame` by moving the rows (design D10). Re-run bench fixture 6 and add its median to `measurements.md`; revert the change if it gains nothing beyond noise. Verify: `cargo nextest run -p mbv -p mbv-gui`. Test contract, in the existing Search projection test file under `src/app/tests`: an empty query projects nothing.
+- [x] 7.2 Replace `config_snapshot` with `App::with_config`, make `App::gui_settings()` return `Option<&GuiSettingsState>`, and make `gui_settings_row_choices` return a borrowed slice (design D10). Re-run bench fixture 7 and add its median to `measurements.md`; revert a part that gains nothing beyond noise. Verify: `cargo nextest run -p mbv -p mbv-gui`; `cargo clippy --workspace --all-targets -- -D warnings`. Test contract: none (no behavior change; the existing Settings tests cover it).
 
 ## 8. The Library scroll store (#997 item 1)
 
