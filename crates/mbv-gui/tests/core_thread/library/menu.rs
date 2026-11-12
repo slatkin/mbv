@@ -32,8 +32,7 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
         },
     );
 
-    let menu = library_of(picked)
-        .content
+    let menu = library_of(&picked)
         .and_then(|content| content.music)
         .and_then(|music| music.hero)
         .expect("the picked album has a Hero")
@@ -86,8 +85,7 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
         },
     );
 
-    let row_menu = library_of(frame)
-        .content
+    let row_menu = library_of(&frame)
         .and_then(|content| content.row_menu)
         .expect("the right-clicked item has a menu");
     assert_eq!(row_menu.item_id, "alb-ill");
@@ -115,8 +113,7 @@ fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
     );
 
     assert!(
-        library_of(frame)
-            .content
+        library_of(&frame)
             .and_then(|content| content.row_menu)
             .is_none(),
         "a stale right-click carries no menu"

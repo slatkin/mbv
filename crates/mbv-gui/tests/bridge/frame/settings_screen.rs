@@ -18,7 +18,7 @@ fn a_closed_settings_screen_carries_no_frame_section() {
 
     let frame = frame_after_tick(&mut app);
 
-    assert_eq!(frame.settings, None);
+    assert_eq!(frame.settings(), None);
 }
 
 /// The F2 row of `rows` whose stable name is `key`.
@@ -38,13 +38,16 @@ fn an_open_f2_section_carries_its_rows_with_values() {
     app.open_gui_settings_at(mbv::GuiSettingsSection::Queue);
 
     let frame = frame_after_tick(&mut app);
-    let settings = frame.settings.expect("the open screen carries its section");
+    let settings = frame
+        .settings()
+        .expect("the open screen carries its section");
 
     assert_eq!(
         settings.section,
         mbv_gui::bridge::frame::settings::GuiSettingsSection::Queue
     );
-    let mbv_gui::bridge::frame::settings::GuiSettingsContent::Rows { rows } = settings.content
+    let mbv_gui::bridge::frame::settings::GuiSettingsContent::Rows { rows } =
+        settings.content.clone()
     else {
         panic!("the Queue section carries its F2 rows")
     };
@@ -76,7 +79,8 @@ fn an_open_f2_section_carries_its_rows_with_values() {
 
     app.open_gui_settings_at(mbv::GuiSettingsSection::Session);
     let frame = frame_after_tick(&mut app);
-    let Some(GuiSettingsContent::Rows { rows }) = frame.settings.map(|settings| settings.content)
+    let Some(GuiSettingsContent::Rows { rows }) =
+        frame.settings().map(|settings| settings.content.clone())
     else {
         panic!("the Session section carries its F2 rows")
     };
@@ -101,8 +105,7 @@ fn a_failed_emby_setup_frame_carries_no_password() {
 
     let frame = frame_after_tick(&mut app);
     let settings = frame
-        .settings
-        .as_ref()
+        .settings()
         .expect("the open screen carries its section");
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Services { services, setup } =
         &settings.content
@@ -115,8 +118,8 @@ fn a_failed_emby_setup_frame_carries_no_password() {
     assert_eq!(setup.error, "Invalid username or password");
     assert!(!setup.busy);
 
-    let json = serde_json::to_value(&frame).expect("the frame serializes");
-    let setup = &json["settings"]["content"]["setup"];
+    let json = serde_json::to_value(&frame.0).expect("the frame serializes");
+    let setup = &json["settings"]["value"]["content"]["setup"];
     let mut fields: Vec<&str> = setup
         .as_object()
         .expect("the setup form is an object")

@@ -1,11 +1,7 @@
-//! The frame's Queue playback artwork (design D10): the App projection's
-//! state encoded into the `data:` URL the webview paints, armed per window.
-//!
-//! The memo holds the value the last frame carried, so a frame carries the
-//! artwork again only when the slot's art changed — the theme's arming rule
-//! (design D7). A window reload forgets the front end's copy; the core
-//! re-arms on the reload's `report_layout`, and the next frame re-carries
-//! the value with no re-encode behind it.
+//! The Queue playback artwork (design D10): the App projection's state encoded
+//! into the `data:` URL the webview paints. The memo encodes once per state
+//! class; the section ledger compares each value it builds, so an unchanged
+//! artwork sends nothing.
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -35,32 +31,19 @@ impl ArtworkClass {
     }
 }
 
-/// The frames' artwork memo (design D10): the value encoded per state class
-/// and the value the last frame carried.
+/// The artwork memo (design D10): the encoded value for the current state
+/// class.
 #[derive(Debug, Default)]
 pub(crate) struct ArtworkFrames {
     /// The encoded value for the current class: an encode runs once per
-    /// class change, so a re-armed frame re-carries without one.
+    /// class change.
     encoded: Option<(ArtworkClass, GuiCardArtwork)>,
-    /// The value the last frame carried; `None` arms the next frame.
-    sent: Option<GuiCardArtwork>,
 }
 
 impl ArtworkFrames {
-    /// The frame's artwork value for `artwork`: `None` when the last frame
-    /// already carried it.
-    pub(crate) fn frame_value(&mut self, artwork: &QueueCardArtwork) -> Option<GuiCardArtwork> {
-        let value = self.current_value(artwork);
-        if self.sent.as_ref() == Some(&value) {
-            return None;
-        }
-        self.sent = Some(value.clone());
-        Some(value)
-    }
-
-    /// The artwork value for `artwork`, encoded once per state class. Unlike
-    /// [`Self::frame_value`] it never arms: the section ledger carries the
-    /// value and compares it, so it always reports the current state.
+    /// The artwork value for `artwork`, encoded once per state class. The
+    /// section ledger carries the value and compares it, so it always reports
+    /// the current state.
     pub(crate) fn current_value(&mut self, artwork: &QueueCardArtwork) -> GuiCardArtwork {
         let class = ArtworkClass::of(artwork);
         match self.encoded.as_ref() {
@@ -71,12 +54,6 @@ impl ArtworkFrames {
                 value
             }
         }
-    }
-
-    /// Arm the next frame: a window reload's `report_layout` re-carries the
-    /// current artwork, exactly as it re-arms the theme (design D7).
-    pub(crate) fn rearm(&mut self) {
-        self.sent = None;
     }
 }
 

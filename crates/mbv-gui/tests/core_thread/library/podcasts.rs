@@ -84,14 +84,14 @@ fn seed_podcast_catalog(test: &mut crate::TestCore) {
 /// fetch completion emits a frame as well, and the Library memo re-carries its
 /// content only on a changed revision (design D2), so that frame carries no
 /// section content and would shadow the frame under test.
-fn newest_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
-    test.latest_frame().expect("the core emitted a frame")
+fn newest_frame(test: &mut crate::TestCore) -> crate::Held {
+    test.held()
 }
 
 /// Report a layout, as a window content reload does, so the Library section
 /// re-carries the content it built from the seeded data: the reload re-arms
 /// the memo, and the report's own step emits the frame that carries it.
-fn reloaded_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
+fn reloaded_frame(test: &mut crate::TestCore) -> crate::Held {
     test.tx
         .send(crate::measured_layout(10, Vec::new()))
         .unwrap();
@@ -100,9 +100,8 @@ fn reloaded_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFram
 }
 
 /// The Podcasts section a frame carries (row 10.1).
-fn podcasts_of(frame: mbv_gui::bridge::frame::GuiFrame) -> GuiPodcastsFrame {
+fn podcasts_of(frame: &crate::Held) -> GuiPodcastsFrame {
     library_of(frame)
-        .content
         .and_then(|content| content.podcasts)
         .expect("the frame carries the Podcasts section")
 }
@@ -140,7 +139,7 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
         TabSelection::AudiobookshelfLibrary(1),
         "the Podcasts destination is active"
     );
-    let podcasts = podcasts_of(reloaded_frame(&mut test));
+    let podcasts = podcasts_of(&reloaded_frame(&mut test));
     assert_eq!(podcasts.lib_idx, 1);
     let titles: Vec<&str> = podcasts.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(
@@ -192,7 +191,7 @@ fn the_pill_command_changes_the_rows() {
         },
     );
 
-    let podcasts = podcasts_of(newest_frame(&mut test));
+    let podcasts = podcasts_of(&newest_frame(&mut test));
     let titles: Vec<&str> = podcasts.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["A Old", "A Undated"]);
     let selected: Vec<&str> = podcasts
@@ -211,7 +210,7 @@ fn the_select_command_moves_the_hero() {
     let (mut test, _cmd_rx) = seeded_podcasts_core();
     open_podcasts(&mut test);
     seed_podcast_catalog(&mut test);
-    let row = podcasts_of(reloaded_frame(&mut test))
+    let row = podcasts_of(&reloaded_frame(&mut test))
         .rows
         .get(1)
         .map(|row| row.id.clone())
@@ -225,7 +224,7 @@ fn the_select_command_moves_the_hero() {
         },
     );
 
-    let podcasts = podcasts_of(newest_frame(&mut test));
+    let podcasts = podcasts_of(&newest_frame(&mut test));
     assert_eq!(podcasts.selected.as_deref(), Some(row.as_str()));
     let hero = podcasts.hero.expect("the Hero paints");
     assert_eq!(hero.title, "A Old");
@@ -239,7 +238,7 @@ fn the_play_and_queue_commands_reach_the_owner() {
     let (mut test, cmd_rx) = seeded_podcasts_core();
     open_podcasts(&mut test);
     seed_podcast_catalog(&mut test);
-    let row = podcasts_of(reloaded_frame(&mut test))
+    let row = podcasts_of(&reloaded_frame(&mut test))
         .rows
         .first()
         .map(|row| row.id.clone())
@@ -290,5 +289,5 @@ fn a_stale_podcast_row_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(newest_frame(&mut test).status.toast.is_none());
+    assert!(newest_frame(&mut test).status().toast.is_none());
 }

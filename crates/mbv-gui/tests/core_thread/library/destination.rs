@@ -88,9 +88,9 @@ fn the_take_focus_command_puts_the_library_in_the_next_frame() {
     let mut test = crate::test_core(2);
     send_library(&mut test, GuiLibraryCommand::TakeFocus);
 
-    let frame = test.next_frame();
-    assert_eq!(frame.focus.panel, GuiPanel::Library);
-    assert_eq!(frame.focus.surface, Some(GuiSurface::Library));
+    let frame = test.held();
+    assert_eq!(frame.focus().panel, GuiPanel::Library);
+    assert_eq!(frame.focus().surface, Some(GuiSurface::Library));
 }
 
 /// The take-queue-focus command returns Panel focus to the Queue panel on
@@ -104,10 +104,10 @@ fn the_take_queue_focus_command_moves_both_focus_authorities_to_the_queue() {
     send_library(&mut test, GuiLibraryCommand::TakeFocus);
     send_library(&mut test, GuiLibraryCommand::TakeQueueFocus);
 
-    let _library_frame = test.next_frame();
-    let frame = test.next_frame();
-    assert_eq!(frame.focus.panel, GuiPanel::Queue);
-    assert_eq!(frame.focus.surface, Some(GuiSurface::Queue));
+    let _library_frame = test.held();
+    let frame = test.held();
+    assert_eq!(frame.focus().panel, GuiPanel::Queue);
+    assert_eq!(frame.focus().surface, Some(GuiSurface::Queue));
     assert_eq!(
         test.core.app_mut().gui_panel_focus(),
         mbv_ui_model::settings::PanelFocus::Queue

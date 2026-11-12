@@ -62,15 +62,4 @@ impl App {
             Duration::from_secs(1)
         }
     }
-
-    /// Whether a repaint fell due on the cadence alone — the TUI's
-    /// `wants_terminal_render` with no events and no force-clear, the rule a
-    /// Client that paints on the shared cadence applies to its timeout
-    /// ticks. The Owner broadcasts the playhead's progress without an event
-    /// a Client's drains see, so the cadence check is what keeps a frame
-    /// moving while the Client takes no input.
-    #[must_use]
-    pub fn frame_cadence_due(&self, last_frame: Instant) -> bool {
-        last_frame.elapsed() >= self.render_interval()
-    }
 }

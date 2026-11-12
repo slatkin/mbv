@@ -316,10 +316,7 @@ fn a_saved_destination_the_catalog_lost_applies_the_saved_focus_and_opens_nothin
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.latest_frame()
-            .expect("the step emitted a frame")
-            .focus
-            .panel,
+        test.held().focus().panel,
         GuiPanel::Library,
         "the saved focus reaches the frame too"
     );
@@ -553,7 +550,7 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     // lands, and the frame carries it.
     send_library(&mut test, GuiLibraryCommand::TakeFocus);
     assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
-    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
+    assert_eq!(test.held().focus().panel, GuiPanel::Library);
 
     // The catalog lands: the destination jump still runs, and the saved
     // Queue focus does not replace the taken Library focus.
@@ -574,5 +571,5 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     );
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
+    assert_eq!(test.held().focus().panel, GuiPanel::Library);
 }

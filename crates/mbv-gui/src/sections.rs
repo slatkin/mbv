@@ -9,9 +9,9 @@
 //! window does not hold its revision. The result is one [`GuiSectionBatch`],
 //! or `None` when the window already holds everything.
 //!
-//! Until the step cuts over (row 2.3 of the change), the frame path still runs
-//! and nothing calls `collect` yet. The ledger's builds share the frame path's
-//! Library builder and its memos.
+//! The Client core's step calls `collect` once per tick that did not ask for a
+//! restart (design D2), and sends the batch it returns. The ledger is the only
+//! builder of the sections.
 
 pub(crate) mod library;
 
@@ -282,7 +282,13 @@ impl SectionLedger {
             self.theme.adopt(GuiTheme::current());
         }
         if marked.contains(&Section::Library) {
+            let before = self.library.revision;
             self.library.adopt(library::build_content(app));
+            if self.library.revision != before
+                && let Some(Some(content)) = self.library.value.as_ref()
+            {
+                library::log_built(self.library.revision, content);
+            }
         }
         if marked.contains(&Section::Search) {
             self.search

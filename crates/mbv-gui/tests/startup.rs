@@ -14,7 +14,7 @@ use mbv::{
 use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
+use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
 use mbv_net::mock_http::MockHttp;
 
 /// A URL that never leaves the process: the mock transport ignores it, but it
@@ -39,7 +39,7 @@ fn music_view() -> EmbyItem {
 fn core_over(app: App) -> CoreThread {
     let _state_dir = TestStateDirGuard::new_if_unset();
     let (_tx, rx) = mpsc::channel::<CoreInput>();
-    let sink: FrameSink = Box::new(|_| {});
+    let sink: SectionSink = Box::new(|_| {});
     let quit: QuitSink = Box::new(|| {});
     CoreThread::new(app, rx, sink, quit)
 }

@@ -3,7 +3,7 @@
 //!
 //! Each fixture builds one `CoreThread` over an `mbv` `test`-feature stub,
 //! seeds the stores the fixture names outside the timed loop, and times one
-//! `CoreThread::step` after one input. The step's emitted payload is measured
+//! `CoreThread::step` after one input. The batch the step sent is measured
 //! once, outside the timed loop, as its `serde_json` size and reported as
 //! `Throughput::Bytes`. Benches are manual runs, never part of nextest.
 
@@ -22,9 +22,9 @@ use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::GuiWindowFrame;
 use mbv_gui::bridge::library::GuiLibraryCommand;
-use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
+use mbv_gui::bridge::sections::GuiSectionBatch;
+use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
@@ -43,7 +43,7 @@ const RECENT_ROWS: usize = 100;
 const SEARCH_RESULTS: usize = 200;
 /// The query the Search fixture types.
 const QUERY: &str = "bench";
-/// A key with no default binding: the timed input whose step emits a frame
+/// A key with no default binding: the timed input whose step runs no command
 /// and runs no command.
 const TIMED_KEY: Key = Key::Function(12);
 
@@ -59,7 +59,7 @@ struct Harness {
     _http: Option<MockHttp>,
     core: CoreThread,
     tx: Sender<CoreInput>,
-    frames: Receiver<GuiWindowFrame>,
+    batches: Receiver<GuiSectionBatch>,
     _quits: Receiver<()>,
 }
 
@@ -67,9 +67,9 @@ impl Harness {
     fn new(app: App, http: Option<MockHttp>) -> Self {
         let state_dir = TestStateDirGuard::new_at(env!("CARGO_TARGET_TMPDIR"));
         let (tx, rx) = mpsc::channel();
-        let (frame_tx, frames) = mpsc::channel();
-        let sink: FrameSink = Box::new(move |frame| {
-            let _ = frame_tx.send(frame);
+        let (batch_tx, batches) = mpsc::channel();
+        let sink: SectionSink = Box::new(move |batch| {
+            let _ = batch_tx.send(batch);
         });
         let (quit_tx, quits) = mpsc::channel();
         let quit: QuitSink = Box::new(move || {
@@ -83,7 +83,7 @@ impl Harness {
             _http: http,
             core,
             tx,
-            frames,
+            batches,
             _quits: quits,
         }
     }
@@ -100,27 +100,18 @@ impl Harness {
             .expect("the core thread's channel stays connected");
     }
 
-    /// Run one step, asserting the core keeps running.
-    fn step(&mut self) {
+    /// Run one step, asserting the core keeps running, and return the batch it
+    /// sent. A step that changes no section sends none, so the default batch
+    /// (empty) is the answer.
+    fn step(&mut self) -> GuiSectionBatch {
         assert!(self.core.step(), "the core thread quit during the bench");
+        self.batches.try_iter().last().unwrap_or_default()
     }
 
-    /// The frame the last step emitted. Frames from earlier steps (the setup
-    /// steps) are drained and dropped, so the channel never grows across the
-    /// timed loop and the payload is the newest step's. A step that emits
-    /// nothing fails the bench rather than timing a no-op.
-    fn take_frame(&self) -> GuiWindowFrame {
-        self.frames
-            .try_iter()
-            .last()
-            .expect("the step emitted a frame")
-    }
-
-    /// One input, then one step, then the emitted frame: the timed unit.
-    fn input_then_step(&mut self) -> GuiWindowFrame {
+    /// One input, then one step, then the batch that step sent: the timed unit.
+    fn input_then_step(&mut self) -> GuiSectionBatch {
         self.send(CoreInput::Key(KeyEvent::new(TIMED_KEY, KeyModifiers::NONE)));
-        self.step();
-        self.take_frame()
+        self.step()
     }
 
     /// The emitted payload's serialized size in bytes at steady state,
@@ -130,8 +121,8 @@ impl Harness {
     /// carries none of it. The bytes describe the timed unit.
     fn payload_bytes(&mut self) -> u64 {
         let _settled = self.input_then_step();
-        let frame = self.input_then_step();
-        let len = serde_json::to_vec(&frame)
+        let batch = self.input_then_step();
+        let len = serde_json::to_vec(&batch)
             .expect("the frame serializes")
             .len();
         u64::try_from(len).expect("a payload length fits in u64")

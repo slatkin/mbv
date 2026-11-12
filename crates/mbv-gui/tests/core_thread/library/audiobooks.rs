@@ -6,7 +6,7 @@
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::GuiLibraryFrame;
+use mbv_gui::bridge::frame::library::GuiLibraryContent;
 use mbv_queue::AudiobookshelfItem;
 use mbv_ui_model::tab_selection::TabSelection;
 
@@ -65,9 +65,10 @@ fn seeded_audiobooks_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlC
 }
 
 /// The Audiobooks section a frame carries (row 9.1).
-fn audiobooks_of(frame: GuiLibraryFrame) -> mbv_gui::bridge::frame::library::GuiAudiobooksFrame {
+fn audiobooks_of(
+    frame: Option<GuiLibraryContent>,
+) -> mbv_gui::bridge::frame::library::GuiAudiobooksFrame {
     frame
-        .content
         .and_then(|content| content.audiobooks)
         .expect("the frame carries the Audiobooks section")
 }
@@ -165,7 +166,7 @@ fn the_frame_carries_the_book_list_after_the_open() {
         mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position },
     );
 
-    let audiobooks = audiobooks_of(library_of(test.next_frame()));
+    let audiobooks = audiobooks_of(library_of(&test.held()));
     assert_eq!(audiobooks.lib_idx, 0);
     assert!(!audiobooks.loading && !audiobooks.failed);
     let ids: Vec<&str> = audiobooks.rows.iter().map(|row| row.id.as_str()).collect();
@@ -214,7 +215,7 @@ fn the_select_command_moves_the_hero_and_workspace() {
         },
     );
 
-    let audiobooks = audiobooks_of(library_of(test.next_frame()));
+    let audiobooks = audiobooks_of(library_of(&test.held()));
     assert_eq!(audiobooks.selected.as_deref(), Some("book-b"));
     let hero = audiobooks.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Bovary");
@@ -280,9 +281,10 @@ fn a_denied_owner_submits_nothing_and_flashes_the_owner_unavailable_toast() {
     );
 
     let toast = test
-        .next_frame()
-        .status
+        .held()
+        .status()
         .toast
+        .clone()
         .expect("the refusal flashed a toast");
     assert_eq!(toast.text, "Audiobookshelf playback owner is unavailable");
 }
@@ -302,5 +304,5 @@ fn a_stale_book_id_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(test.next_frame().status.toast.is_none());
+    assert!(test.held().status().toast.is_none());
 }

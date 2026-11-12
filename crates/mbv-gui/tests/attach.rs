@@ -14,11 +14,12 @@ use std::time::Duration;
 use mbv::{App, OwnerState, exclusive_owner_refusal_text, stub_app_with_queue};
 use mbv_daemon::SignalOwnerError;
 use mbv_gui::attach::{AttachCampaign, CampaignEnd, OwnerSteps, OwnerWait};
-use mbv_gui::bridge::frame::{GuiAttachState, GuiWindowFrame};
+use mbv_gui::bridge::frame::GuiAttachState;
 use mbv_gui::bridge::layout::{
     AttachTargetId, LayoutRect, LayoutRegion, LayoutReport, LayoutSize, RegionTarget,
 };
-use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
+use mbv_gui::bridge::sections::GuiSectionBatch;
+use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
 use mbv_remote_player::RemotePlayerError;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
@@ -205,9 +206,9 @@ fn mock_for(outcome: InjectedOutcome) -> MockSteps {
 /// window's close — the input the runs end on — or the inputs a state
 /// answers.
 struct Harness {
-    sink: FrameSink,
+    sink: SectionSink,
     quit: QuitSink,
-    frames: mpsc::Receiver<GuiWindowFrame>,
+    frames: mpsc::Receiver<GuiSectionBatch>,
     quits: mpsc::Receiver<()>,
 }
 
@@ -218,8 +219,8 @@ impl Harness {
         let (tx, rx) = mpsc::channel();
         let (frame_tx, frames) = mpsc::channel();
         let (quit_tx, quits) = mpsc::channel();
-        let sink: FrameSink = Box::new(move |frame| {
-            let _ = frame_tx.send(frame);
+        let sink: SectionSink = Box::new(move |batch| {
+            let _ = frame_tx.send(batch);
         });
         let quit: QuitSink = Box::new(move || {
             let _ = quit_tx.send(());
@@ -240,10 +241,7 @@ impl Harness {
     fn attach_states(&self) -> Vec<GuiAttachState> {
         self.drain()
             .into_iter()
-            .filter_map(|frame| match frame {
-                GuiWindowFrame::Attach(attach) => Some(attach.state),
-                GuiWindowFrame::Slice(_) => None,
-            })
+            .filter_map(|batch| batch.attach.and_then(|section| section.value))
             .collect()
     }
 
@@ -251,11 +249,8 @@ impl Harness {
     /// tick loop.
     fn assert_no_slice_frames(&self) {
         assert!(
-            !self
-                .drain()
-                .iter()
-                .any(|frame| matches!(frame, GuiWindowFrame::Slice(_))),
-            "the campaign emitted a slice frame"
+            !self.drain().iter().any(|batch| batch.attach.is_none()),
+            "the campaign sent a batch with no attach section"
         );
     }
 
@@ -264,7 +259,7 @@ impl Harness {
         self.quits.try_recv().expect("the quit edge fired");
     }
 
-    fn drain(&self) -> Vec<GuiWindowFrame> {
+    fn drain(&self) -> Vec<GuiSectionBatch> {
         std::iter::from_fn(|| self.frames.try_recv().ok()).collect()
     }
 }
@@ -273,7 +268,7 @@ impl Harness {
 /// end, and the injected steps. The wait's poll interval is zeroed, so a
 /// poll step never blocks.
 fn campaign<'a>(
-    sink: &'a FrameSink,
+    sink: &'a SectionSink,
     quit: &'a QuitSink,
     rx: &'a mpsc::Receiver<CoreInput>,
     steps: &'a dyn OwnerSteps,
@@ -645,9 +640,6 @@ fn a_report_re_arms_the_attach_theme() {
     let frames = harness.drain();
     assert_eq!(frames.len(), 2);
     let (first, second) = (&frames[0], &frames[1]);
-    let (GuiWindowFrame::Attach(first), GuiWindowFrame::Attach(second)) = (first, second) else {
-        panic!("the campaign emitted only attach frames");
-    };
     assert!(first.theme.is_some());
     assert!(second.theme.is_some());
 }

@@ -64,17 +64,17 @@ fn an_outside_press_dismisses_the_open_overlay(#[case] kind: Overlay) {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let opened = test.next_frame();
-    assert!(opened.overlay.is_some(), "the opener opened its overlay");
+    let opened = test.held();
+    assert!(opened.overlay().is_some(), "the opener opened its overlay");
 
     test.tx.send(press_at(10.0, 110.0)).unwrap();
     assert!(test.core.step());
     assert!(
-        test.next_frame().overlay.is_none(),
+        test.held().overlay().is_none(),
         "the outside press dismissed the overlay"
     );
 }
@@ -95,17 +95,21 @@ fn the_dismissing_press_does_not_activate_the_row_beneath() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().overlay.is_some());
+    assert!(test.held().overlay().is_some());
 
     test.tx.send(press_at(10.0, 110.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert!(frame.overlay.is_none());
-    assert_eq!(frame.queue.cursor, Some(1), "the row beneath took no press");
+    let frame = test.held();
+    assert!(frame.overlay().is_none());
+    assert_eq!(
+        frame.queue().cursor,
+        Some(1),
+        "the row beneath took no press"
+    );
 }
 
 /// A cast receiver's id and name, as the replacement helper takes them.
@@ -156,13 +160,13 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // The chooser opens over the local row and the one receiver the frame
     // paints; the receiver's row (index 1) is reported as painted.
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx
         .send(measured_layout(
             4,
@@ -174,7 +178,7 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // A receiver arrives ahead of the painted one; the window has painted
     // neither it nor a new region yet.
@@ -182,7 +186,7 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().overlay.is_none());
+    assert!(test.held().overlay().is_none());
     assert_eq!(
         cast_selections(&cmd_rx),
         vec!["receiver-1"],
@@ -207,11 +211,11 @@ fn a_chooser_press_selects_nothing_when_the_painted_choice_is_gone() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx
         .send(measured_layout(
             4,
@@ -223,13 +227,13 @@ fn a_chooser_press_selects_nothing_when_the_painted_choice_is_gone() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     set_cast_receivers_for_test(test.core.app_mut(), vec![]);
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(cast_selections(&cmd_rx), Vec::<String>::new());
 }
 
@@ -254,11 +258,11 @@ fn a_popover_press_selects_the_painted_track_after_the_list_grows() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx
         .send(measured_layout(
             4,
@@ -270,7 +274,7 @@ fn a_popover_press_selects_the_painted_track_after_the_list_grows() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // A track arrives ahead of the painted one: index 1 is a different
     // track in the live list.
@@ -281,7 +285,7 @@ fn a_popover_press_selects_the_painted_track_after_the_list_grows() {
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().overlay.is_none());
+    assert!(test.held().overlay().is_none());
     assert_eq!(
         subtitle_switches(&cmd_rx),
         vec![7],
@@ -307,11 +311,11 @@ fn a_popover_press_switches_nothing_when_the_painted_track_is_gone() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx
         .send(measured_layout(
             4,
@@ -323,12 +327,12 @@ fn a_popover_press_switches_nothing_when_the_painted_track_is_gone() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     set_subtitle_tracks_for_test(test.core.app_mut(), vec![]);
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(subtitle_switches(&cmd_rx), Vec::<i64>::new());
 }

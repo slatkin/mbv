@@ -71,10 +71,8 @@ fn pump_until_root_rows(test: &mut TestCore) {
 
 /// The Shows section a frame carries, present only while a Shows
 /// destination presents.
-fn shows_section(
-    frame: &mbv_gui::bridge::frame::GuiFrame,
-) -> Option<&mbv_gui::bridge::frame::library::GuiShowsFrame> {
-    frame.library.as_ref()?.content.as_ref()?.shows.as_ref()
+fn shows_section(frame: &crate::Held) -> Option<&mbv_gui::bridge::frame::library::GuiShowsFrame> {
+    frame.library()?.shows.as_ref()
 }
 
 /// Pump GUI ticks until the Shows section a frame carries satisfies `want`,
@@ -161,7 +159,7 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
     // presented destination is the Shows library, and the launch restore's
     // first-presented open activates it.
     assert!(test.core.step());
-    let frame = test.latest_frame().expect("the bootstrap's frame emitted");
+    let frame = test.held();
     let shows = shows_section(&frame).expect("the open Shows destination presents its content");
 
     assert_eq!(
@@ -199,7 +197,7 @@ fn open_shows_destination(test: &mut TestCore, position: usize, lib_idx: usize) 
         test,
         mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position },
     );
-    let frame = test.latest_frame().expect("the open's frame emitted");
+    let frame = test.held();
     let shows = shows_section(&frame).expect("the open's frame carries the Shows content");
     assert_eq!(
         shows.lib_idx, lib_idx,
@@ -287,7 +285,7 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
             row: "series-b".into(),
         },
     );
-    let frame = test.latest_frame().expect("the select's frame emitted");
+    let frame = test.held();
     let shows = shows_section(&frame).expect("the frame carries the Shows content");
     assert_eq!(
         shows.selected.as_deref(),

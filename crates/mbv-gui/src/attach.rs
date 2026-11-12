@@ -26,10 +26,11 @@ use mbv_surfaces::HitMap;
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, Position};
 
+use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::theme::GuiTheme;
-use crate::bridge::frame::{GuiAttachFrame, GuiAttachState, GuiWindowFrame};
 use crate::bridge::layout::{AttachTargetId, RegionTarget, hit_map};
-use crate::core_thread::{CoreInput, FrameSink, QuitSink};
+use crate::bridge::sections::{GuiSection, GuiSectionBatch};
+use crate::core_thread::{CoreInput, QuitSink, SectionSink};
 use crate::leaves::gesture_point;
 
 /// The wait between the shutting-down Owner's polls, as the TUI's run waits
@@ -116,7 +117,7 @@ enum PromptOutcome {
 /// succeeds, the user quits, or the window's channel disconnects.
 pub struct AttachCampaign<'a> {
     rx: &'a Receiver<CoreInput>,
-    sink: &'a FrameSink,
+    sink: &'a SectionSink,
     quit: &'a QuitSink,
     steps: &'a dyn OwnerSteps,
     /// The wait between the shutting-down Owner's polls. Production keeps
@@ -132,6 +133,11 @@ pub struct AttachCampaign<'a> {
     /// The frame the next attach emission carries the theme in (design D7):
     /// the first emission, and the first after a report re-arms it.
     theme_pending: bool,
+    /// The revision the next attach section carries: it steps on each
+    /// emission, so the window replaces its attach state each time.
+    attach_revision: u64,
+    /// The revision the next theme section carries.
+    theme_revision: u64,
 }
 
 impl<'a> AttachCampaign<'a> {
@@ -140,7 +146,7 @@ impl<'a> AttachCampaign<'a> {
     #[must_use]
     pub fn new(
         rx: &'a Receiver<CoreInput>,
-        sink: &'a FrameSink,
+        sink: &'a SectionSink,
         quit: &'a QuitSink,
         steps: &'a dyn OwnerSteps,
     ) -> Self {
@@ -153,6 +159,8 @@ impl<'a> AttachCampaign<'a> {
             gestures: PointerGestureState::new(),
             regions: HitMap::new(),
             theme_pending: true,
+            attach_revision: 0,
+            theme_revision: 0,
         }
     }
 
@@ -424,10 +432,22 @@ impl<'a> AttachCampaign<'a> {
     /// a report re-arms it.
     fn show(&mut self, state: &GuiAttachState) {
         let theme_changed = std::mem::take(&mut self.theme_pending);
-        (self.sink)(GuiWindowFrame::Attach(GuiAttachFrame {
-            state: state.clone(),
-            theme: theme_changed.then(GuiTheme::current),
-        }));
+        self.attach_revision = self.attach_revision.wrapping_add(1);
+        let theme = theme_changed.then(|| {
+            self.theme_revision = self.theme_revision.wrapping_add(1);
+            GuiSection {
+                revision: self.theme_revision,
+                value: GuiTheme::current(),
+            }
+        });
+        (self.sink)(GuiSectionBatch {
+            attach: Some(GuiSection {
+                revision: self.attach_revision,
+                value: Some(state.clone()),
+            }),
+            theme,
+            ..GuiSectionBatch::default()
+        });
     }
 }
 

@@ -5,9 +5,9 @@
 //! Owner, Service, or webview runs; the state directory is a
 //! `TestStateDirGuard` scratch path (design D13).
 
+use crate::Held;
 use mbv::{ClientTickHost, stub_app_with_completed_emby_startup_and_contents};
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 
@@ -41,13 +41,12 @@ fn home_core_with_open() -> crate::TestCore {
 }
 
 /// The Home section a frame carries, present only while Home presents.
-fn home_section(frame: GuiFrame) -> mbv_gui::bridge::frame::library::GuiHomeFrame {
+fn home_section(frame: &Held) -> mbv_gui::bridge::frame::library::GuiHomeFrame {
     frame
-        .library
-        .expect("the slice carries the Library section")
-        .content
-        .expect("the open's frame carries the changed content")
+        .library()
+        .expect("the window holds the Library section")
         .home
+        .clone()
         .expect("the open's frame carries the Home content")
 }
 
@@ -80,7 +79,7 @@ fn an_emby_startup_completion_stores_the_continue_watching_for_the_next_frame() 
     // The zeroed-cadence step drains the queued completion and emits the
     // frame that follows it.
     assert!(test.core.step());
-    let _frame = test.next_frame();
+    let _frame = test.held();
 
     let home = test.core.app_mut().home_content_for_test();
     let names: Vec<&str> = home
@@ -131,7 +130,7 @@ fn a_recently_added_fetch_result_lands_in_the_app_on_the_next_tick() {
     // The step drains the queued completion and then the queued fetch
     // result, so one tick accepts the rows.
     assert!(test.core.step());
-    let _frame = test.next_frame();
+    let _frame = test.held();
 
     let ids = test.core.app_mut().home_recently_added_ids_for_test();
     assert_eq!(ids, vec!["recent-episode"]);
@@ -161,7 +160,7 @@ fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
     // The zeroed-cadence step drains the queued refresh, opens Home, and
     // emits the frame that follows both.
     assert!(test.core.step());
-    let home = home_section(test.next_frame());
+    let home = home_section(&test.held());
 
     let titles: Vec<&str> = home
         .rows
@@ -193,13 +192,13 @@ fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
 fn a_home_content_cleared_event_empties_the_next_home_frame() {
     let mut test = home_core_with_open();
     assert!(
-        !home_section(test.next_frame()).rows.is_empty(),
+        !home_section(&test.held()).rows.is_empty(),
         "the seeded snapshot painted rows before the clear"
     );
 
     test.core.app_mut().queue_home_content_cleared_for_test();
     assert!(test.core.step());
-    let home = home_section(test.next_frame());
+    let home = home_section(&test.held());
 
     assert!(
         home.rows.is_empty(),
@@ -221,7 +220,7 @@ fn an_open_home_destination_finds_the_home_frame() {
         "the position-0 open made Home the active destination"
     );
 
-    let home = home_section(test.next_frame());
+    let home = home_section(&test.held());
 
     assert_eq!(
         home.rows.len(),
@@ -253,7 +252,7 @@ fn an_open_home_destination_finds_the_home_frame() {
 #[test]
 fn a_home_select_command_moves_the_hero() {
     let mut test = home_core_with_open();
-    let home = home_section(test.next_frame());
+    let home = home_section(&test.held());
     let second = match &home.rows[2] {
         mbv_gui::bridge::frame::library::GuiHomeRowFrame::Item(item) => item.id.clone(),
         _ => panic!("the second item row carries an identity"),
@@ -268,7 +267,7 @@ fn a_home_select_command_moves_the_hero() {
         ))
         .unwrap();
     assert!(test.core.step());
-    let home = home_section(test.next_frame());
+    let home = home_section(&test.held());
 
     assert_eq!(
         home.selected,

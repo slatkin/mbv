@@ -33,23 +33,21 @@ fn open_settings_at(test: &mut TestCore, section: mbv::GuiSettingsSection) {
 }
 
 /// The newest frame the core emitted.
-fn newest_frame(test: &TestCore) -> mbv_gui::bridge::frame::GuiFrame {
-    test.latest_frame().expect("the core emitted a frame")
+fn newest_frame(test: &mut TestCore) -> crate::Held {
+    test.held()
 }
 
 /// The Settings content the newest frame carries.
-fn settings_content(
-    frame: &mbv_gui::bridge::frame::GuiFrame,
-) -> &mbv_gui::bridge::frame::settings::GuiSettingsContent {
+fn settings_content(frame: &crate::Held) -> &mbv_gui::bridge::frame::settings::GuiSettingsContent {
     &frame
-        .settings
+        .settings()
         .as_ref()
         .expect("the frame carries the Settings screen")
         .content
 }
 
 /// One Keys row of the frame by action id: its effective chords.
-fn key_row_chords(frame: &mbv_gui::bridge::frame::GuiFrame, action: &str) -> Vec<String> {
+fn key_row_chords(frame: &crate::Held, action: &str) -> Vec<String> {
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Keys { rows, .. } =
         settings_content(frame)
     else {
@@ -214,7 +212,7 @@ fn a_remove_emby_action_raises_the_removal_confirm() {
         },
     );
 
-    match newest_frame(&test).overlay {
+    match newest_frame(&mut test).overlay() {
         Some(mbv_gui::bridge::frame::overlay::GuiOverlayFrame::Confirm { message, .. }) => assert!(
             message.contains("Remove Emby"),
             "the confirmation asks about Emby: {message}"
@@ -284,7 +282,7 @@ fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
             key: KeyEvent::new(Key::Char('j'), KeyModifiers::CONTROL),
         },
     );
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     assert_eq!(
         key_row_chords(&frame, "toggle_play_pause"),
         vec!["Ctrl+j".to_string()],
@@ -302,9 +300,13 @@ fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
 
     send_key(&mut test, Key::Char('j'), KeyModifiers::CONTROL);
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     assert_eq!(
-        frame.status.toast.as_ref().map(|toast| toast.text.as_str()),
+        frame
+            .status()
+            .toast
+            .as_ref()
+            .map(|toast| toast.text.as_str()),
         Some("Pause requested"),
         "the captured chord fired its action"
     );
@@ -328,7 +330,7 @@ fn a_capture_to_another_actions_default_is_refused_naming_that_action() {
         },
     );
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     assert_eq!(
         key_row_chords(&frame, "toggle_mute"),
         vec!["m".to_string()],
@@ -359,7 +361,7 @@ fn the_keys_frame_lists_no_tui_only_action() {
     let mut test = test_core_with(stub_app_with_queue(2));
     open_settings_at(&mut test, mbv::GuiSettingsSection::Keys);
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Keys { rows, .. } =
         settings_content(&frame)
     else {
@@ -468,11 +470,17 @@ fn a_reset_returns_to_home_and_clears_the_launch_location() {
 
     send_settings(&mut test, mbv::GuiSettingsCommand::ResetUiState);
 
-    let frame = newest_frame(&test);
-    assert!(frame.settings.is_none(), "the reset closed the screen");
-    assert_eq!(frame.queue.rows.len(), 2, "the queue's slots are unchanged");
+    let frame = newest_frame(&mut test);
+    assert!(frame.settings().is_none(), "the reset closed the screen");
     assert_eq!(
-        frame.ui_reset_epoch,
+        frame.queue().rows.len(),
+        2,
+        "the queue's slots are unchanged"
+    );
+    // The reset counter rides no batch section yet (design D1 names none for it),
+    // so the App holds the check.
+    assert_eq!(
+        test.core.app_mut().gui_ui_reset_epoch(),
         epoch_before + 1,
         "the reset counter rose"
     );
@@ -537,7 +545,7 @@ fn a_route_devices_command_fills_the_library_device_candidates() {
         },
     );
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Library {
         selected, devices, ..
     } = settings_content(&frame)
@@ -578,7 +586,7 @@ fn the_library_section_projects_no_library_routes_row() {
         .set_gui_emby_client_for_test(crate::test_emby_client(&http));
     open_settings_at(&mut test, mbv::GuiSettingsSection::Library);
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Library { rows, routes, .. } =
         settings_content(&frame)
     else {
@@ -620,7 +628,7 @@ fn a_set_value_sets_a_listed_value_and_refuses_an_unlisted_one() {
         .seed_gui_my_languages_for_test(&["English", "Chinese"]);
     open_settings_at(&mut test, mbv::GuiSettingsSection::Playback);
 
-    let frame = newest_frame(&test);
+    let frame = newest_frame(&mut test);
     let mbv_gui::bridge::frame::settings::GuiSettingsContent::Rows { rows } =
         settings_content(&frame)
     else {

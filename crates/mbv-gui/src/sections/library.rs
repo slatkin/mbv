@@ -14,7 +14,7 @@ use crate::bridge::frame::library::{
 /// The Library content of the active destination (design D2): the destination
 /// tabs the top bar paints, and the one active destination's section. `None`
 /// while no presented destination is active. The ensures run before their
-/// section is built, as the frame path always ran them.
+/// section is built, as the step always ran them.
 pub(crate) fn build_content(app: &mut App) -> Option<GuiLibraryContent> {
     // No presented destination is active (design D2): the section is absent.
     let destination = app.gui_active_destination();
@@ -213,4 +213,46 @@ fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
 fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
     let projection = app.gui_feeds_projection();
     GuiFeedsFrame::from_projection(&projection)
+}
+
+/// The Library content's one built-differently fact per change (design D2):
+/// the section is sent only when its revision changes, so the log rides the
+/// same changes the window repaints. The line names the selection's shape and
+/// the list's size, so a live session's empty list and its unselected pills
+/// are visible in the GUI log.
+pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
+    let music = content.music.as_ref();
+    let pills = music.map_or(0, |music| music.pills.len());
+    let selected = music.map_or(0, |music| music.pills.iter().filter(|p| p.selected).count());
+    let artists = music.map_or(0, |music| music.artists.len());
+    let home_rows = content.home.as_ref().map_or(0, |home| home.rows.len());
+    let shows_rows = content.shows.as_ref().map_or(0, |shows| shows.rows.len());
+    let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.rows.len());
+    let abs_rows = content
+        .audiobooks
+        .as_ref()
+        .map_or(0, |audiobooks| audiobooks.rows.len());
+    let podcasts_rows = content
+        .podcasts
+        .as_ref()
+        .map_or(0, |podcasts| podcasts.rows.len());
+    let feeds_rows = content.feeds.as_ref().map_or(0, |feeds| feeds.rows.len());
+    tracing::info!(
+        name: "gui_library.content.built",
+        target: "gui_library",
+        revision,
+        pills,
+        selected,
+        artists,
+        hero = music.is_some_and(|music| music.hero.is_some())
+            || content.home.as_ref().is_some_and(|home| home.hero.is_some())
+            || content.shows.as_ref().is_some_and(|shows| shows.hero.is_some()),
+        home_rows,
+        shows_rows,
+        emby_rows,
+        audiobooks_rows = abs_rows,
+        podcasts_rows,
+        feeds_rows,
+        "the Library content changed"
+    );
 }

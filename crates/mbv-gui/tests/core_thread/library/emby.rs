@@ -6,9 +6,9 @@
 //! transport, so no request leaves the process, and no live Owner, Service,
 //! or webview runs (design D13).
 
+use crate::Held;
 use mbv::ClientTickHost;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
@@ -37,8 +37,8 @@ fn movie(id: &str, name: &str) -> EmbyItem {
 
 /// The plain Emby-library section a frame carries, present only while a
 /// plain Emby-library destination presents.
-fn emby_section(frame: &GuiFrame) -> Option<&mbv_gui::bridge::frame::library::GuiEmbyFrame> {
-    frame.library.as_ref()?.content.as_ref()?.emby.as_ref()
+fn emby_section(frame: &Held) -> Option<&mbv_gui::bridge::frame::library::GuiEmbyFrame> {
+    frame.library()?.emby.as_ref()
 }
 
 /// Pump GUI ticks until the plain Emby-library section a frame carries
@@ -70,7 +70,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     // presented destination is the Movies library, and the launch restore's
     // first-presented open activates it.
     assert!(test.core.step());
-    let frame = test.latest_frame().expect("the bootstrap's frame emitted");
+    let frame = test.held();
     let emby = emby_section(&frame).expect("the open Movies destination presents its content");
     assert_eq!(
         emby.lib_idx, 0,
@@ -96,7 +96,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
             row: "m-2".into(),
         },
     );
-    let frame = test.latest_frame().expect("the select's frame emitted");
+    let frame = test.held();
     let emby = emby_section(&frame).expect("the frame carries the Emby content");
     assert_eq!(
         emby.selected.as_deref(),
@@ -228,7 +228,7 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
 
 /// Opens the mocked Movies destination with `items` as its root list and
 /// selects the first one, so the next frame carries that item's Hero.
-fn movies_hero_frame(items: Vec<EmbyItem>) -> GuiFrame {
+fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
     let view = EmbyItem::folder(
         "lib-movies".to_string(),
         "Movies".to_string(),
@@ -245,7 +245,7 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> GuiFrame {
             row: "m-1".into(),
         },
     );
-    test.latest_frame().expect("the select's frame emitted")
+    test.held()
 }
 
 /// An Emby Hero's duration row reaches the frame as a `time` segment, so the

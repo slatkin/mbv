@@ -103,14 +103,14 @@ fn open_feeds(test: &mut crate::TestCore) -> usize {
 /// The newest frame the core emitted, draining the older ones: the frames the
 /// core emitted before the seed stay queued, so a test reads the frame its last
 /// step built. The read takes no step of its own.
-fn newest_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
-    test.latest_frame().expect("the core emitted a frame")
+fn newest_frame(test: &mut crate::TestCore) -> crate::Held {
+    test.held()
 }
 
 /// Report a layout, as a window content reload does, so the Library section
 /// re-carries the content it built from the seeded data: the reload re-arms the
 /// memo, and the report's own step emits the frame that carries it.
-fn reloaded_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
+fn reloaded_frame(test: &mut crate::TestCore) -> crate::Held {
     test.tx
         .send(crate::measured_layout(10, Vec::new()))
         .unwrap();
@@ -119,9 +119,8 @@ fn reloaded_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFram
 }
 
 /// The Feeds section a frame carries (row 11.1).
-fn feeds_of(frame: mbv_gui::bridge::frame::GuiFrame) -> GuiFeedsFrame {
+fn feeds_of(frame: &crate::Held) -> GuiFeedsFrame {
     library_of(frame)
-        .content
         .and_then(|content| content.feeds)
         .expect("the frame carries the Feeds section")
 }
@@ -163,7 +162,7 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         TabSelection::Feeds,
         "the Feeds destination is active"
     );
-    let feeds = feeds_of(reloaded_frame(&mut test));
+    let feeds = feeds_of(&reloaded_frame(&mut test));
     let titles: Vec<&str> = feeds.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(
         titles,
@@ -209,7 +208,7 @@ fn the_pill_command_changes_the_rows() {
         },
     );
 
-    let feeds = feeds_of(newest_frame(&mut test));
+    let feeds = feeds_of(&newest_frame(&mut test));
     let titles: Vec<&str> = feeds.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["b-mid", "b-undated"]);
     let selected: Vec<&str> = feeds
@@ -228,7 +227,7 @@ fn the_select_command_moves_the_hero() {
     let (mut test, _cmd_rx) = seeded_feeds_core();
     open_feeds(&mut test);
     land_fetches(&mut test);
-    let row = feeds_of(reloaded_frame(&mut test))
+    let row = feeds_of(&reloaded_frame(&mut test))
         .rows
         .get(1)
         .map(|row| row.id.clone())
@@ -239,7 +238,7 @@ fn the_select_command_moves_the_hero() {
         mbv_gui::bridge::library::GuiLibraryCommand::FeedsSelect { row: row.clone() },
     );
 
-    let feeds = feeds_of(newest_frame(&mut test));
+    let feeds = feeds_of(&newest_frame(&mut test));
     assert_eq!(feeds.selected.as_deref(), Some(row.as_str()));
     let hero = feeds.hero.expect("the Hero paints");
     assert_eq!(hero.title, "b-mid");
@@ -254,7 +253,7 @@ fn the_play_and_queue_commands_reach_the_owner() {
     let (mut test, cmd_rx) = seeded_feeds_core();
     open_feeds(&mut test);
     land_fetches(&mut test);
-    let row = feeds_of(reloaded_frame(&mut test))
+    let row = feeds_of(&reloaded_frame(&mut test))
         .rows
         .first()
         .map(|row| row.id.clone())
@@ -306,7 +305,7 @@ fn a_source_less_entry_flashes_and_submits_nothing() {
         }],
     );
     assert!(test.core.step(), "the core thread never quits mid-drain");
-    let row = feeds_of(reloaded_frame(&mut test))
+    let row = feeds_of(&reloaded_frame(&mut test))
         .rows
         .first()
         .map(|row| row.id.clone())
@@ -318,7 +317,10 @@ fn a_source_less_entry_flashes_and_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "the refusal submits nothing");
-    assert!(newest_frame(&mut test).status.toast.is_some(), "it flashes");
+    assert!(
+        newest_frame(&mut test).status().toast.is_some(),
+        "it flashes"
+    );
 }
 
 /// Stale Feeds row ids change nothing (row 11.1): a play of a row id of no
@@ -338,7 +340,7 @@ fn a_stale_feed_row_submits_nothing() {
         },
     );
     assert!(cmd_rx.try_recv().is_err(), "a malformed id submits nothing");
-    assert!(newest_frame(&mut test).status.toast.is_none());
+    assert!(newest_frame(&mut test).status().toast.is_none());
 
     let absent = mbv::GuiFeedEntryId::new(FEED_A.into(), "gone".into()).encode();
     send_library(
@@ -349,5 +351,5 @@ fn a_stale_feed_row_submits_nothing() {
         cmd_rx.try_recv().is_err(),
         "an id no list holds submits nothing"
     );
-    assert!(newest_frame(&mut test).status.toast.is_none());
+    assert!(newest_frame(&mut test).status().toast.is_none());
 }

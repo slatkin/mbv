@@ -103,7 +103,7 @@ fn the_open_command_opens_at_services_and_leaves_an_open_screen_alone() {
         "the closed screen opened at Services"
     );
     assert!(
-        test.next_frame().settings.is_some(),
+        test.held().settings().is_some(),
         "the frame carries the open screen"
     );
 
@@ -151,9 +151,13 @@ fn space_toggles_playback_behind_the_screen() {
         .unwrap();
     assert!(test.core.step());
 
-    let frame = test.latest_frame().expect("the core emitted a frame");
+    let frame = test.held();
     assert_eq!(
-        frame.status.toast.as_ref().map(|toast| toast.text.as_str()),
+        frame
+            .status()
+            .toast
+            .as_ref()
+            .map(|toast| toast.text.as_str()),
         Some("Pause requested"),
         "the transport toggle fired behind the screen"
     );
@@ -186,8 +190,8 @@ fn the_clear_queue_chord_opens_no_prompt_behind_the_screen() {
         .unwrap();
     assert!(test.core.step());
 
-    let frame = test.latest_frame().expect("the core emitted a frame");
-    assert!(frame.overlay.is_none(), "no clear-queue prompt opened");
+    let frame = test.held();
+    assert!(frame.overlay().is_none(), "no clear-queue prompt opened");
     assert_eq!(
         test.core.gui_settings_section_for_test(),
         Some(mbv::GuiSettingsSection::Services),
@@ -216,28 +220,29 @@ fn a_press_at_a_retracted_queue_row_runs_no_queue_action() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx
         .send(press(Key::Function(2), KeyModifiers::NONE))
         .unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().settings.is_some(), "the screen opened");
+    assert!(test.held().settings().is_some(), "the screen opened");
 
     // The screen unmounted the panels, so the front end reported no regions.
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
-    let before = test.next_frame().queue.cursor;
+    let before = test.held().queue().cursor;
 
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
 
-    let frame = test.next_frame();
+    let frame = test.held();
     assert_eq!(
-        frame.queue.cursor, before,
+        frame.queue().cursor,
+        before,
         "the press at the former row point ran no queue action"
     );
-    assert!(frame.settings.is_some(), "the screen stays open");
+    assert!(frame.settings().is_some(), "the screen stays open");
     assert_eq!(
         test.core.gui_settings_section_for_test(),
         Some(mbv::GuiSettingsSection::Services),

@@ -14,10 +14,10 @@
 
 use std::sync::mpsc::Receiver;
 
+use crate::Held;
 use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::GuiFrame;
-use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame};
+use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryContent};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -50,10 +50,10 @@ const LIB_EVENT_BOUND: std::time::Duration = std::time::Duration::from_secs(30);
 /// workers never starve behind a spinning test and a passing pump spends no
 /// real time; the bound only fires when the pipeline has stopped, and the
 /// panic then names `what`.
-fn pump_until(test: &mut TestCore, want: impl Fn(&GuiFrame) -> bool, what: &str) {
+fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
     loop {
         assert!(test.core.step(), "the core thread never quits mid-drain");
-        if test.latest_frame().as_ref().is_some_and(&want) {
+        if want(&test.held()) {
             return;
         }
         assert!(
@@ -150,22 +150,19 @@ fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
 }
 
 /// Send one Library command and read the frame its step emitted.
-fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> GuiFrame {
+fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> Held {
     send_library(test, command);
-    test.next_frame()
+    test.held()
 }
 
 /// The Library section a frame carries (design D2).
-fn library_of(frame: GuiFrame) -> GuiLibraryFrame {
-    frame
-        .library
-        .expect("the slice carries the Library section")
+fn library_of(frame: &Held) -> Option<GuiLibraryContent> {
+    frame.library().cloned()
 }
 
 /// The Hero's artwork value of a frame that carries the Library content.
-fn hero_art(frame: GuiFrame) -> GuiLibraryArt {
+fn hero_art(frame: &Held) -> GuiLibraryArt {
     library_of(frame)
-        .content
         .and_then(|content| content.music)
         .and_then(|music| music.art)
         .expect("the frame carries the Hero's art")

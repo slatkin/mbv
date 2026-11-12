@@ -4,7 +4,7 @@
 //!
 //! Search is cross-destination — its rows name items in any destination and
 //! the activate command opens the one the row names — so it rides the
-//! `GuiLibraryFrame` itself, beside the revision-gated content and never
+//! the Search section of the batch, beside the Library content and never
 //! inside it: a result that lands between two content changes still reaches
 //! the window, and a closed field rides as the section's `null`.
 

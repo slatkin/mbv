@@ -5,11 +5,11 @@
 //! Tauri command handlers never touch the `App`. They push a [`CoreInput`]
 //! value into the thread's channel, and the thread waits on that channel with
 //! a timeout of `CLIENT_IDLE_CADENCE`, so an input, a `ClientWaker` wake, or
-//! the idle cadence each produce one tick. Every tick that changed state, and
-//! every `report_layout` changed or not, emits one `GuiFrame` through the
-//! frame sink. `main` wires that sink to `AppHandle::emit`, the `mbv://frame`
-//! event, and the commands push into the channel; the tests mock both, so no
-//! Tauri runtime or tokio runs here (design D12).
+//! the idle cadence each produce one tick. Each tick sends the batch of the
+//! sections it changed through the section sink, and sends nothing when no
+//! section changed (design D2). `main` wires that sink to `AppHandle::emit`,
+//! and the commands push into the channel; the tests mock both, so no Tauri
+//! runtime or tokio runs here (design D12).
 
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -28,20 +28,18 @@ use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
-use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
-use crate::bridge::frame::playback::GuiScrubberTile;
-use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
     ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
     RegionTarget, hit_map,
 };
+use crate::bridge::sections::GuiSectionBatch;
 use crate::leaves::{
     PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
     seekbar_region,
 };
-use crate::library_frames::LibraryFrames;
 use crate::painted_choices::PaintedChoices;
+use crate::sections::{SectionLedger, SectionSources};
 
 mod launch_restore;
 mod overlays;
@@ -51,7 +49,7 @@ mod tick_host;
 use self::launch_restore::GuiLaunchRestore;
 
 /// The viewport height before the first `report_layout` measures the window:
-/// the frame carries every row the queue holds. The front end reports the
+/// the queue section carries every row the queue holds. The front end reports the
 /// real capacity when it mounts (design D5), so the placeholder never
 /// survives the first report.
 const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
@@ -67,9 +65,9 @@ pub enum CoreInput {
     /// A pointer event, translated on the Rust side (design D4) and resolved
     /// against the slice hit map.
     Pointer(PointerEvent),
-    /// A layout report from the front end. The frame it triggers emits
-    /// whether or not a tick changed state (design D3); the report applies
-    /// to the Surface state's capacity and hit map first.
+    /// A layout report from the front end. The report applies to the Surface
+    /// state's capacity and hit map; it marks no section and forces no batch
+    /// (design D4).
     Layout(LayoutReport),
     /// One Library panel request (add-gui-library-panel design D2): the
     /// window content's `library` command. The core applies it through
@@ -95,10 +93,10 @@ pub enum CoreInput {
     Close,
 }
 
-/// The sink every emitted frame goes through (design D3). Production wires
+/// The sink every sent batch goes through (design D1). Production wires
 /// `AppHandle::emit` as the `mbv://frame` event; the tests mock it with a
 /// channel.
-pub type FrameSink = Box<dyn Fn(GuiWindowFrame) + Send + 'static>;
+pub type SectionSink = Box<dyn Fn(GuiSectionBatch) + Send + 'static>;
 
 /// The edge that closes the window (design D9): the mismatch state's Quit and
 /// a routed quit key's close, wired by `main` to the window's close. The tests
@@ -118,7 +116,7 @@ pub type QuitSink = Box<dyn Fn() + Send + 'static>;
 /// join holds the process until it completes, so a quit or a window close
 /// persists its state before the process exits.
 #[must_use]
-pub fn spawn(sink: FrameSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandle<()>) {
+pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
     // The waker's clone stays inside the `App`; the returned sender goes to
     // the commands' managed state.
@@ -197,7 +195,7 @@ pub struct CoreThread {
     /// report the hover chrome's own regions cause does not clear the hover.
     pointer_at: Option<Position>,
     /// The whole Queue rows the viewport fits. Row 2.4 sets it from the
-    /// `LayoutReport`; until then the frame carries every row.
+    /// `LayoutReport`; until then the queue section carries every row.
     viewport_rows: usize,
     /// The panel container's painted size from the last `LayoutReport`
     /// (design D10). The front end picks the panel state from the panel
@@ -206,36 +204,16 @@ pub struct CoreThread {
     /// and regions already measure the layout that size painted.
     container_size: LayoutSize,
     rx: Receiver<CoreInput>,
-    sink: FrameSink,
+    sink: SectionSink,
     /// The edge that closes the window (design D9): a routed quit key closes
     /// the window through it, as the mismatch state's Quit does.
     quit: QuitSink,
     /// The inputs one step's wait collected, for the tick's input phase.
     pending: Vec<CoreInput>,
-    /// A `report_layout` arrived this tick: the frame emits changed or not
-    /// (design D3).
-    frame_requested: bool,
-    /// When the last frame emitted. A timeout tick with no input repaints
-    /// once the shared render cadence's interval elapsed (design D3's
-    /// changed-state rule): the Owner broadcasts the playhead's progress as
-    /// a status apply the drains never see as an event, so the cadence is
-    /// what keeps the frame moving while the window takes no input — the
-    /// TUI's `wants_terminal_render` rule on the same shared interval.
-    last_frame: Instant,
-    /// The frame that finds it armed carries the theme (design D7): the
-    /// first frame, and every frame a `report_layout` triggers — the front
-    /// end sends the report when it mounts, so a reload re-arms it.
-    theme_pending: bool,
-    /// The frames' artwork memo (design D10): the value a frame arms, and
-    /// the encoded artwork a re-armed frame re-carries encode-free.
-    artwork: ArtworkFrames,
-    /// The frames' Library section memo (add-gui-library-panel design D2): the
-    /// content revision, and the content a re-armed frame re-carries.
-    library: LibraryFrames,
-    /// The frames' trickplay memo (task 6.7): the hovered sheet's encoded
-    /// image, re-carried only when the hovered sheet changes.
-    trickplay: crate::trickplay::TrickplayFrames,
-    /// The open overlay's choice lists as the last emitted frame painted them
+    /// The section ledger (design D2): the last built value of each section,
+    /// the revision it carries, and what the window holds.
+    ledger: SectionLedger,
+    /// The open overlay's choice lists as the last sent batch painted them
     /// (add-tauri-gui-client row 6.5): a chooser or popover row's press
     /// resolves its painted index against these, so a list change between the
     /// paint and the press selects the painted choice or nothing.
@@ -255,7 +233,7 @@ impl CoreThread {
     /// A core over an attached `App` (design D3): it owns the first slice's
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
-    pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
+    pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: SectionSink, quit: QuitSink) -> Self {
         // The GUI Client's App rules come first (add-gui-library-panel design
         // D4, D9): the GUI arranges its own panels from its measured size and
         // keeps its own launch location, so the TUI's Mini check, its hidden
@@ -310,15 +288,7 @@ impl CoreThread {
             sink,
             quit,
             pending: Vec::new(),
-            // The frame the attach hands over emits on the first step, changed
-            // or not (design D9): the window must not keep the attach state it
-            // showed before the attach succeeded.
-            frame_requested: true,
-            last_frame: Instant::now(),
-            theme_pending: true,
-            artwork: ArtworkFrames::default(),
-            library: LibraryFrames::default(),
-            trickplay: crate::trickplay::TrickplayFrames::default(),
+            ledger: SectionLedger::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
             launch_restore,
@@ -359,14 +329,6 @@ impl CoreThread {
     /// non-blocking.
     pub fn set_idle_cadence_for_test(&mut self, cadence: Duration) {
         self.idle_cadence = cadence;
-    }
-
-    /// Backdate the last frame's stamp a test pins, so a step's cadence
-    /// check observes an elapsed interval with no real wait — inject the
-    /// outcome, not the delay.
-    #[doc(hidden)]
-    pub fn set_last_frame_for_test(&mut self, stamp: Instant) {
-        self.last_frame = stamp;
     }
 
     /// The Settings screen's open section, for a Client's test that asserts a
@@ -651,8 +613,8 @@ impl CoreThread {
         self.app.client_exit_teardown();
     }
 
-    /// One step: wait for the next input, run one tick, and emit the frame a
-    /// changed state or a `report_layout` asks for. Returns whether the loop
+    /// One step: wait for the next input, run one tick, and send the batch of
+    /// the sections the tick changed (design D2). Returns whether the loop
     /// continues.
     pub fn step(&mut self) -> bool {
         match self.rx.recv_timeout(self.idle_cadence) {
@@ -684,15 +646,9 @@ impl CoreThread {
             return false;
         }
         // A restart re-reads the landed Owner snapshot next iteration; the
-        // frame waits for it, as the TUI's run loop does. An input tick, a
-        // report, or a cadence-due repaint emits.
-        let due = self.frame_requested
-            || outcome.input_received
-            || self.app.frame_cadence_due(self.last_frame);
-        if !outcome.restart_requested && due {
-            self.frame_requested = false;
-            self.emit_frame();
-            self.last_frame = Instant::now();
+        // sections wait for it, as the TUI's run loop does.
+        if !outcome.restart_requested {
+            self.send_sections();
         }
         true
     }
@@ -715,64 +671,33 @@ impl CoreThread {
         self.queue.set_link(update.link);
     }
 
-    /// Build and emit the frame the window paints (design D4): the frame
-    /// carries the theme when armed — the first frame, and every
-    /// `report_layout`-triggered frame (design D7) — the visual slot's
-    /// artwork when the slot's art changed for this window (design D10), and
-    /// the scrubber hover's trickplay tile (task 6.7).
-    fn emit_frame(&mut self) {
+    /// Run the per-tick prologue and send the batch of the sections this tick
+    /// changed (design D2). The Queue Surface sync and the active item's
+    /// metadata fetch run first, because the ledger's sections read what they
+    /// adopt or start; the sink gets a batch only when the ledger has one.
+    fn send_sections(&mut self) {
         self.sync_queue_surface();
-        // The active item's metadata fetch (design D4a) issues from the
-        // frame path, deduped on its own loading set; a landed completion
-        // rides the next frame.
         self.app.fetch_playback_metadata();
-        // One playback projection read feeds the frame's playback section,
-        // its overlay, and the hover's tick resolution, so they cannot
-        // disagree inside one frame.
-        let playback = self.app.queue_playback_projection();
-        let hover_tile = self.hover_tile(&playback);
-        let artwork = self.app.queue_card_artwork();
-        let artwork = self.artwork.frame_value(&artwork);
-        // The Library section builds from the App's Service data (add-gui-
-        // library-panel design D2): the memo re-carries it only on a changed
-        // revision, and the reload's `report_layout` re-arms it. `None` while
-        // no presented destination is active.
-        let library = self.library.frame(&mut self.app);
-        let theme_changed = std::mem::take(&mut self.theme_pending);
-        let frame = GuiFrame::build(&FrameSources {
-            app: &self.app,
+        // Interim until row 2.6 (design D3): every gated section carries a mark
+        // each tick. A gated build compares with its last built value, so only
+        // a changed section is sent; the drain-hook marks replace this line.
+        self.ledger.mark_all_gated();
+        let batch = self.ledger.collect(SectionSources {
+            app: &mut self.app,
             focus: &self.focus,
             queue: &self.queue,
-            playback: &self.playback,
-            playback_projection: &playback,
-            hover_tile,
+            playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,
-            theme_changed,
-            artwork,
-            library,
         });
-        // The frame the window is about to paint becomes the choice lists a
-        // pointer press resolves against (add-tauri-gui-client row 6.5).
-        self.painted.adopt(frame.overlay.as_ref());
-        (self.sink)(GuiWindowFrame::Slice(Box::new(frame)));
-    }
-
-    /// The trickplay tile the hover preview paints (task 6.7): the hovered
-    /// position resolved against the active item's grid, with the sheet's
-    /// fetch issued from here as the metadata fetch is. `None` while the
-    /// pointer is away from the bar, while no sheet is cached yet, and for an
-    /// item with no trickplay source.
-    fn hover_tile(&mut self, playback: &mbv::QueuePlaybackProjection) -> Option<GuiScrubberTile> {
-        let Some(fraction) = self.playback.scrubber_hover() else {
-            // Leaving the bar ends the hover episode: a transient sheet
-            // failure's hold must not outlive the hover that met it
-            // (task 6.7 fix), or a single-sheet item never retries.
-            self.app.trickplay_hover_ended();
-            return None;
+        let Some(batch) = batch else {
+            return;
         };
-        let ticks = scrubber_ticks(playback, fraction);
-        let preview = self.app.trickplay_preview_tile(ticks);
-        self.trickplay.frame_value(preview.as_ref())
+        // The overlay the window now holds is the choice list a pointer press
+        // resolves against (add-tauri-gui-client row 6.5).
+        if let Some(overlay) = batch.overlay.as_ref() {
+            self.painted.adopt(overlay.value.as_ref());
+        }
+        (self.sink)(batch);
     }
 }
 
@@ -788,8 +713,6 @@ impl fmt::Debug for CoreThread {
             .field("viewport_rows", &self.viewport_rows)
             .field("container_size", &self.container_size)
             .field("pending", &self.pending.len())
-            .field("frame_requested", &self.frame_requested)
-            .field("theme_pending", &self.theme_pending)
             .field("painted", &self.painted)
             .finish_non_exhaustive()
     }

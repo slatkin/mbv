@@ -240,25 +240,11 @@ impl ClientTickHost for CoreThread {
                     }
                 }
                 CoreInput::Layout(report) => {
-                    // A `report_layout` always emits the current frame,
-                    // changed or not (design D3), and re-arms the theme: the
-                    // front end sends the report when it mounts, so the
-                    // frame after a reload carries the theme again (design
-                    // D7). The report applies to the capacity and the hit
-                    // map first.
+                    // A `report_layout` applies the layout and marks no
+                    // section: a section the layout moves changes through the
+                    // ledger's compare, and a report that moves nothing sends
+                    // nothing (design D4).
                     self.apply_layout(&report);
-                    self.frame_requested = true;
-                    self.theme_pending = true;
-                    // The reload forgets the front end's artwork too: the
-                    // next frame re-carries it, encode-free (design D10).
-                    self.artwork.rearm();
-                    // The reloaded window holds no Library content either
-                    // (add-gui-library-panel design D2): the next frame
-                    // re-carries it under the same revision.
-                    self.library.rearm();
-                    // The reloaded window holds no trickplay sheet either
-                    // (task 6.7): the next frame re-carries the hovered one.
-                    self.trickplay.rearm();
                 }
                 CoreInput::Close => {
                     // The window closed (design D9): the run ends as a quit

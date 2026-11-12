@@ -9,13 +9,13 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use mbv_gui::bridge::frame::GuiWindowFrame;
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::pointer::{DomPointer, neutral_pointer};
+use mbv_gui::bridge::sections::GuiSectionBatch;
 use mbv_gui::bridge::settings::GuiSettingsCommand;
-use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
+use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
 use mimalloc::MiMalloc;
 use tauri::{Emitter, Manager, State};
 
@@ -141,8 +141,8 @@ fn main() -> tauri::Result<()> {
             // The frames emit from the core thread, any thread, through the
             // window event loop (design D3).
             let handle = app.handle().clone();
-            let sink: FrameSink = Box::new(move |frame: GuiWindowFrame| {
-                if let Err(error) = handle.emit(FRAME_EVENT, frame) {
+            let sink: SectionSink = Box::new(move |batch: GuiSectionBatch| {
+                if let Err(error) = handle.emit(FRAME_EVENT, batch) {
                     tracing::warn!(
                         target: "gui_commands",
                         error = %error,

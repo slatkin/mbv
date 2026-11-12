@@ -48,29 +48,6 @@ pub use self::shows::{
     GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
 };
 
-/// The Library panel's frame section (design D2): the content revision, and
-/// the content itself when this frame carries it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiLibraryFrame {
-    /// The revision of the content the window holds. It changes when any part
-    /// of the content changes, the art included.
-    pub revision: u64,
-    /// The content this frame carries. `None` while the revision is the one
-    /// the window already holds: the front end keeps its last carried value.
-    /// A window-content reload's `report_layout` re-carries it. Boxed, so an
-    /// unchanged frame's payload keeps only the revision.
-    pub content: Option<Box<GuiLibraryContent>>,
-    /// The Search section (add-gui-library-panel design D12, row 12.1): the
-    /// query the top bar's field answers, and the rows it found. `None` while
-    /// the field is closed — no query and no row.
-    ///
-    /// Search is cross-destination, so it rides the frame and not the content:
-    /// the revision gates the content alone, and a result that lands between
-    /// two content changes still reaches the window.
-    pub search: Option<GuiSearchFrame>,
-}
-
 /// The content of the Library panel (design D2): the destination tabs the
 /// top bar paints, and the active destination's pills, list rows, Hero facts,
 /// and Hero artwork.
