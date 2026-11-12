@@ -1163,9 +1163,14 @@ and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
 frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the
 sidebar lists, and `content`, a tagged union with `rows` (an F2 page's rows),
 `services`, `feeds`, `keys`, `sessions`, and `playlists`. Each F2 row carries
-its stable setting name, its label, its kind (toggle, cycle, pick with its value list, choice list, or
-action), its value text, its toggle flag, and its choices once the section's
-load lands. The Services content carries each Service's state and the actions
+its stable setting name, its label, its kind (toggle, cycle, pick with its value list, choice list,
+action, or info), its value text, its toggle flag, and its choices once the section's
+load lands. The `info` kind is the read-only row: the Session section's
+"This client" and "Owner" version rows use it. An `info` row paints a label
+and a value with no control. Its value does not come from configuration;
+`App::version_row_value` formats it, so both Clients show the same text.
+An Enter or a click on an `info` row sends no `settings` command. The
+Services content carries each Service's state and the actions
 the TUI offers for it, with the open setup form's progress and error; the Keys
 content the prefix chord, one row per `AllClients` action, and the last
 refusal; the Sessions content the same playback-target choices the header's
@@ -1251,8 +1256,13 @@ names a command, so a new one cannot ship without its grant.
 Before the attach there is no `App`, so `src/attach.rs` (`AttachCampaign`)
 owns the pre-attach phase on the core thread. It emits `GuiAttachFrame`
 states — the two refusal texts, the waiting state while an Owner shuts
-down, the build mismatch, and the attach-failed text — the same texts
-`startup::run_local_instance` gives the TUI Client. The mismatch state
+down, the version-or-wire mismatch, and the attach-failed text — the same
+texts `startup::run_local_instance` gives the TUI Client. The attach gate
+compares the application version and the wire identity from the Owner's
+hello with this Client's; a different build identity alone no longer
+refuses, and the build identity is display only (the Settings rows show
+it). The refusal is `RemotePlayerErrorKind::OwnerMismatch`, code
+`remote-player.owner_mismatch`. The mismatch state
 answers key R (Restart) and key Q (Quit) and resolves presses on the
 reported `Attach` button regions against its own hit map. Dead-end states
 park the window: they serve only `report_layout` (re-showing the state with
