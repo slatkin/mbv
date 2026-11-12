@@ -30,9 +30,9 @@ Each row names its test contract and its owning layer (`docs/architecture/tui-fr
 
 ## 5. Integration checks
 
-- [ ] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Verify: both pass with no new `allow` or `expect` attribute.
-- [ ] 5.2 Run `cargo nextest run --workspace`. Verify: it passes.
-- [ ] 5.3 Run `make check-code-file-lines` and split any file over 800 lines that this change touched, along a responsibility seam. Verify: the target passes.
+- [x] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Verify: both pass with no new `allow` or `expect` attribute.
+- [x] 5.2 Run `cargo nextest run --workspace`. Verify: it passes.
+- [x] 5.3 Run `make check-code-file-lines` and split any file over 800 lines that this change touched, along a responsibility seam. Verify: the target passes.
 
 ## Workflow follow-up
 
