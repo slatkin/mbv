@@ -12,7 +12,7 @@ impl App {
     #[cfg(feature = "test")]
     #[must_use]
     pub fn gui_settings_config_for_test(&self) -> mbv_config::Config {
-        self.config_snapshot()
+        self.with_config(Clone::clone)
     }
 
     /// Whether the deferred settings save is armed (row 5.1): an accepted

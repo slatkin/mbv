@@ -117,3 +117,31 @@ cloned them again. Now the projection clones once and the frame moves the rows.
 Fixture 7 was measured at the post-7.1 state as the before for Task 7.2. Its
 median was 7.17 µs. Criterion reported −1.1% against the prior run, within the
 noise threshold, so the Search change does not move the Settings step.
+
+## Task 7.2: the Settings projection
+
+Run at HEAD `4c7c93efb` (task 7.1 committed, task 7.2 uncommitted) and then with
+task 7.2 applied, on the same machine, with
+`timeout 900 cargo bench -p mbv-gui --bench sections -- settings_f2`. Each state
+was run twice in one session. The medians are `median.point_estimate` in
+`target/criterion/sections/settings_f2/new/estimates.json`. The table holds
+fixture 7, the Settings step.
+
+| Fixture | Before median step (two runs) | Median step (two runs) | Bytes per step |
+| --- | --- | --- | --- |
+| `settings_f2` (Settings on its F2 section) | 7.18 µs, 7.11 µs | 6.97 µs, 6.96 µs | 2 |
+
+The bytes column has the same meaning as in Task 5.5: the timed step is steady
+state, so the batch is empty and serializes to 2 bytes.
+
+Criterion's change line, after against before, is time −2.9% (p = 0.00), with
+"Performance has improved". Two runs of the same code gave a change line of
+−1.1% (within the noise threshold) for the before state, and "No change in
+performance detected" for the after state. The gain is about 2.7% of the step,
+and each state reproduces within about 1%, so the gain is kept.
+
+The three parts were not measured one at a time. `App::with_config` and
+`App::gui_settings()` borrow the configuration and the state where they used to
+clone them, which removes clones from the Settings path. `gui_settings_row_choices`
+returns a borrowed slice, but the row DTO still copies it once, as before, so it
+saves no copy by itself. It is kept because design D10 names that shape.

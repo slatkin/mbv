@@ -2,15 +2,20 @@ use super::super::App;
 use std::time::{Duration, Instant};
 
 impl App {
-    /// The App's configuration, cloned for a projection that reads it
-    /// (`add-gui-settings-screen` design D9's Settings content).
+    /// Run `read` on the App's configuration, borrowed under the config lock
+    /// (`add-gui-settings-screen` design D9's Settings content). A projection
+    /// reads the configuration in place rather than cloning it (design D10).
+    /// `read` must not lock the configuration again.
     ///
     /// # Panics
     ///
     /// Panics when the config lock is poisoned: a thread panicked while it
     /// held the lock, which no projection path expects.
-    pub(in crate::app) fn config_snapshot(&self) -> crate::config::Config {
-        self.config.lock().unwrap().clone()
+    pub(in crate::app) fn with_config<R>(
+        &self,
+        read: impl FnOnce(&crate::config::Config) -> R,
+    ) -> R {
+        read(&self.config.lock().unwrap())
     }
 
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
