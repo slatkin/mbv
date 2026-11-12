@@ -16,10 +16,12 @@ import {
 	libraryUi,
 	measureLibraryList,
 } from '$lib/library/state';
+import { initialListScroll, musicScroll } from '$lib/library/scroll';
 import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
+	musicScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 
@@ -79,5 +81,5 @@ test('a press on a letter moves the cursor to its first row and shows that row',
 	await fireEvent.click(container.querySelector('[data-library-rail-letter="B"]') as HTMLElement);
 
 	expect(get(libraryUi).cursor).toBe('artist:service:a1');
-	expect(get(libraryUi).scrollTop).toBe(14);
+	expect(get(musicScroll).scrollTop).toBe(14);
 });

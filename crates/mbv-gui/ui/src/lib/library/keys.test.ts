@@ -34,12 +34,14 @@ import {
 	reportLibraryArrangement,
 	setLibraryFilter,
 } from './state';
+import { initialListScroll, musicScroll } from './scroll';
 
 const invokeMock = vi.mocked(invoke);
 
 beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
+	musicScroll.set(initialListScroll());
 	homeUi.set(initialHomeUi());
 	carryLibrary(null);
 });
@@ -377,7 +379,7 @@ test('a cursor move below the rows in view scrolls its row into view', () => {
 	press('ArrowDown');
 
 	expect(get(libraryUi).cursor).toBe('artist:service:a2');
-	expect(get(libraryUi).scrollTop).toBe(44);
+	expect(get(musicScroll).scrollTop).toBe(44);
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 

@@ -14,10 +14,12 @@ import { podcastsUi, initialPodcastsUi } from './podcasts';
 import { feedsUi, initialFeedsUi } from './feeds';
 import { librarySearch, initialLibrarySearch } from './search';
 import { initialLibraryUi, libraryUi } from './state';
+import { initialListScroll, musicScroll } from './scroll';
 
 /** Reset every Library interaction store to its mounted value. */
 export function resetLibraryInteraction(): void {
 	libraryUi.set(initialLibraryUi());
+	musicScroll.set(initialListScroll());
 	librarySearch.set(initialLibrarySearch());
 	homeUi.set(initialHomeUi());
 	showsUi.set(initialShowsUi());

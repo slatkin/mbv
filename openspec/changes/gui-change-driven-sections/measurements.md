@@ -145,3 +145,22 @@ The three parts were not measured one at a time. `App::with_config` and
 clone them, which removes clones from the Settings path. `gui_settings_row_choices`
 returns a borrowed slice, but the row DTO still copies it once, as before, so it
 saves no copy by itself. It is kept because design D10 names that shape.
+
+## Task 8.1: the Library scroll store
+
+Run at HEAD `89edf1b53` (before) and with task 8.1 applied (after), on the same
+machine, with `timeout 600 pnpm vitest bench --run --reporter=verbose` in
+`crates/mbv-gui/ui`. The bench is the one in `rows.bench.ts`. Vitest reports a
+mean, not a median; this is the bench's only statistic. Before, the run took 64
+samples with a relative margin of error of ±1.19%. After, the two runs took
+about 21,500 samples each, at ±0.20%.
+
+| Bench | Before mean per pass | Mean per pass | Per scroll step (after) |
+| --- | --- | --- | --- |
+| 100 scroll steps over 5,000 rows | 34.48 ms | 0.046 ms | ≈ 0.46 µs |
+
+The before run was taken in this session, so it differs from the 39.8 ms
+baseline above, which was taken on an earlier run. Before this task, each step
+rebuilt the 5,000 canvas rows (≈ 0.34 ms per step). After it, a step moves only
+the scroll store, and the rows come back from the memo, so the clamp is the
+only work left.

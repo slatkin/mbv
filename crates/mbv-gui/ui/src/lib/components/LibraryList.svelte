@@ -7,9 +7,10 @@
 	// native scroll, and only the rows in view paint, so a long artist list
 	// stays fast.
 	//
-	// The cursor, the open nodes, the scroll offset, and the filter text are
-	// window-content state in `$lib/library/state` (design D1), and the row
-	// model is `$lib/library/list`'s. This component paints that state and
+	// The cursor, the open nodes, and the filter text are window-content state
+	// in `$lib/library/state` (design D1), the scroll offset and the measured
+	// viewport are the list's own store in `$lib/library/scroll` (design D9), and
+	// the row model is `$lib/library/list`'s. This component paints that state and
 	// reports the two facts only the DOM holds — its measured viewport height
 	// and its native scroll offset. A press picks and opens: an artist or album
 	// row opens or closes and picks, an album without a cached tracklist asks
@@ -26,13 +27,14 @@
 		LETTER_ROW_HEIGHT,
 		NODE_ROW_HEIGHT,
 		TRACK_ROW_HEIGHT,
-		buildLibraryRows,
 		letterRail,
 	} from '$lib/library/list';
+	import { musicScroll } from '$lib/library/scroll';
 	import type { LibraryRow } from '$lib/library/list';
 	import {
 		acceptLibraryFilter,
 		playLibraryTrack,
+		libraryRowsOf,
 		libraryUi,
 		measureLibraryList,
 		openLibraryRowMenu,
@@ -72,7 +74,7 @@
 	 * `$lib/library/state` builds from the carried content, over the open nodes
 	 * and the filter this component paints. */
 	const rows = $derived(
-		buildLibraryRows({
+		libraryRowsOf({
 			artists: list.artists,
 			open: $libraryUi.openNodes,
 			closed: $libraryUi.filterClosed,
@@ -213,8 +215,8 @@
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
 			{rows}
-			scrollTop={$libraryUi.scrollTop}
-			viewportHeight={$libraryUi.viewportHeight}
+			scrollTop={$musicScroll.scrollTop}
+			viewportHeight={$musicScroll.viewportHeight}
 			attr=""
 			padding="0 0 0 8px"
 			onmeasure={measureLibraryList}

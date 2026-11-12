@@ -18,9 +18,11 @@ import {
 	measureLibraryList,
 	revealPickedAlbum,
 } from './state';
+import { initialListScroll, musicScroll } from './scroll';
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
+	musicScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 
@@ -82,5 +84,5 @@ test('a reveal scrolls the picked album row into view once the list is measured'
 	revealPickedAlbum(music(), musicDetail());
 	measureLibraryList(40);
 
-	expect(get(libraryUi).scrollTop).toBeGreaterThan(0);
+	expect(get(musicScroll).scrollTop).toBeGreaterThan(0);
 });

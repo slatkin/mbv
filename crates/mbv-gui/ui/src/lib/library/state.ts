@@ -36,6 +36,7 @@ import {
 } from './list';
 import { jumpToLetter as railJump } from './list';
 import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
+import { musicScroll } from './scroll';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
  * the pane past the Hero, but it takes Panel focus through the core's focus
@@ -74,11 +75,6 @@ export interface LibraryUiState {
 	 * override to stay shut (design D7's open and close). A new filter and a
 	 * cleared one drop it. */
 	filterClosed: string[];
-	/** The list's native scroll offset in pixels (design D7). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The tracklist's cursor track id (design D3): the Hero's tracklist row
 	 * the movement keys rest on while the Hero pane has the pane focus. */
 	trackCursor: string | null;
@@ -190,8 +186,6 @@ export function initialLibraryUi(): LibraryUiState {
 		cursor: null,
 		openNodes: [],
 		filterClosed: [],
-		scrollTop: 0,
-		viewportHeight: 0,
 		trackCursor: null,
 		heroDismissed: false,
 		itemMenuOpen: false,
@@ -221,16 +215,16 @@ export function openLibraryFilter(): void {
  * widened rows, and the filter's own open and close over the nodes goes with
  * the text. */
 export function closeLibraryFilter(): void {
-	libraryUi.update((ui) =>
-		resolveCursor({ ...ui, filterOpen: false, filter: '', filterClosed: [] }),
-	);
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false, filter: '', filterClosed: [] }));
+	settleCursor();
 }
 
 /** Accept the filter with Enter: the field closes and the list keeps the text
  * (design D3, step 2). The cursor and the scroll follow the rows the same way
  * a text change moves them. */
 export function acceptLibraryFilter(): void {
-	libraryUi.update((ui) => resolveCursor({ ...ui, filterOpen: false }));
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	settleCursor();
 }
 
 /** Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3).
@@ -294,7 +288,30 @@ export function applyLibraryPillSelect(libIdx: number): void {
 /** The row model under one interaction state (design D7): the carried union,
  * the open nodes, and the filter text. */
 function rowsOf(ui: LibraryUiState): LibraryRow[] {
-	return buildLibraryRows(libraryTree(ui));
+	return libraryRowsOf(libraryTree(ui));
+}
+
+/** The row model the last call built. A scroll step and a cursor move read the
+ * same tree, so they read the same rows (design D9). */
+let rowMemo: { tree: LibraryTree; rows: LibraryRow[] } | null = null;
+
+/** The canvas tree's painted rows (design D9). The same array comes back while
+ * the content, the open nodes, the filter text, and the closed nodes keep their
+ * identity, so a scroll step never rebuilds the rows it clamps against. */
+export function libraryRowsOf(tree: LibraryTree): LibraryRow[] {
+	const memo = rowMemo;
+	if (memo !== null && sameTree(memo.tree, tree)) {
+		return memo.rows;
+	}
+	const rows = buildLibraryRows(tree);
+	rowMemo = { tree, rows };
+	return rows;
+}
+
+function sameTree(a: LibraryTree, b: LibraryTree): boolean {
+	return (
+		a.artists === b.artists && a.open === b.open && a.closed === b.closed && a.filter === b.filter
+	);
 }
 
 function libraryTree(ui: LibraryUiState): LibraryTree {
@@ -306,21 +323,30 @@ function libraryTree(ui: LibraryUiState): LibraryTree {
 	};
 }
 
-/** The interaction state once the painted rows may have changed: the cursor
- * keeps its row while that row still paints, and falls to the first painted row
- * otherwise, with the scroll offset showing it (design D7). A filter's text
- * change and its clear both run this, so the cursor never rests on a row that
- * no longer paints. */
-function resolveCursor(ui: LibraryUiState): LibraryUiState {
+/** Settle the cursor and the scroll once the painted rows may have changed
+ * (design D7): the cursor keeps its row while that row still paints, and falls
+ * to the first painted row otherwise. The scroll store then shows the cursor. A
+ * filter's text change and its clear both run this, so the cursor never rests on
+ * a row that no longer paints. */
+function settleCursor(): void {
+	const ui = get(libraryUi);
 	const rows = rowsOf(ui);
 	const cursor = rows.some((row) => row.id === ui.cursor)
 		? ui.cursor
 		: moveListCursor(rows, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	if (cursor !== ui.cursor) {
+		libraryUi.update((current) => ({ ...current, cursor }));
+	}
+	followCursor(rows, cursor);
+}
+
+/** Scroll the list so the cursor's row paints fully, in the scroll store (design
+ * D7, D9). */
+function followCursor(rows: readonly LibraryRow[], cursor: string | null): void {
+	musicScroll.update((scroll) => {
+		const scrollTop = scrollTopToShowCursor(rows, cursor, scroll.scrollTop, scroll.viewportHeight);
+		return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+	});
 }
 
 /** The cursor's row, or `null` while no painted row carries the cursor. */
@@ -429,23 +455,18 @@ export function revealPickedAlbum(list: GuiMusicList, detail: GuiMusicDetail): v
 		return;
 	}
 	const albumRow = albumRowId(album.albumId);
-	libraryUi.update((ui) => {
-		const next = {
-			...ui,
-			openNodes: withId(ui.openNodes, artistRowId(artist), true),
-			cursor: albumRow,
-		};
-		if (ui.viewportHeight <= 0) {
-			// The list is not measured yet, so the row cannot scroll into view.
-			// The first measurement takes the scroll.
-			pendingRevealRow = albumRow;
-			return next;
-		}
-		return {
-			...next,
-			scrollTop: scrollTopToShowCursor(rowsOf(next), albumRow, ui.scrollTop, ui.viewportHeight),
-		};
-	});
+	libraryUi.update((ui) => ({
+		...ui,
+		openNodes: withId(ui.openNodes, artistRowId(artist), true),
+		cursor: albumRow,
+	}));
+	if (get(musicScroll).viewportHeight <= 0) {
+		// The list is not measured yet, so the row cannot scroll into view.
+		// The first measurement takes the scroll.
+		pendingRevealRow = albumRow;
+	} else {
+		followCursor(rowsOf(get(libraryUi)), albumRow);
+	}
 	if (album.tracks === null) {
 		void sendLibraryCommand({ command: 'openAlbum', albumId: album.albumId });
 	}
@@ -479,14 +500,8 @@ export function pressLibraryRow(row: LibraryRow): void {
 		return;
 	}
 	if (row.kind === 'track') {
-		libraryUi.update((ui) => {
-			const rows = rowsOf(ui);
-			return {
-				...ui,
-				cursor: row.id,
-				scrollTop: scrollTopToShowCursor(rows, row.id, ui.scrollTop, ui.viewportHeight),
-			};
-		});
+		libraryUi.update((ui) => ({ ...ui, cursor: row.id }));
+		followCursor(rowsOf(get(libraryUi)), row.id);
 		showDetail(pickedItemId(row));
 		return;
 	}
@@ -499,16 +514,13 @@ export function pressLibraryRow(row: LibraryRow): void {
  * take the list's ends. The scroll offset follows, so the cursor row stays
  * fully visible. */
 export function moveLibraryCursor(move: ListMove): void {
-	libraryUi.update((ui) => {
-		const rows = rowsOf(ui);
-		const view = listWindow(rows, ui.scrollTop, ui.viewportHeight);
-		const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
-		return {
-			...ui,
-			cursor,
-			scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
-		};
-	});
+	const ui = get(libraryUi);
+	const rows = rowsOf(ui);
+	const scroll = get(musicScroll);
+	const view = listWindow(rows, scroll.scrollTop, scroll.viewportHeight);
+	const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
+	libraryUi.update((current) => ({ ...current, cursor }));
+	followCursor(rows, cursor);
 }
 
 /** Open or close the cursor's node (design D7's Right and Left). */
@@ -525,53 +537,51 @@ export function setLibraryCursorOpen(open: boolean): void {
  * New text starts the filter's own open and close over: the nodes the user
  * closed under the old text open again. */
 export function setLibraryFilter(filter: string): void {
-	libraryUi.update((ui) => {
-		const next = {
-			...ui,
-			filter,
-			filterClosed: filter === ui.filter ? ui.filterClosed : [],
-		};
-		return resolveCursor(next);
-	});
+	libraryUi.update((ui) => ({
+		...ui,
+		filter,
+		filterClosed: filter === ui.filter ? ui.filterClosed : [],
+	}));
+	settleCursor();
 }
 
 /** Jump to a letter of the rail (design D7): the cursor moves to the first row
  * under the letter and that row scrolls into view. A letter without rows
  * changes nothing. */
 export function jumpToLetter(letter: string): void {
-	libraryUi.update((ui) => {
-		const rows = rowsOf(ui);
-		const jump = railJump(letterRail(rows), rows, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const rows = rowsOf(get(libraryUi));
+	const jump = railJump(letterRail(rows), rows, letter, get(musicScroll));
+	if (jump === null) {
+		return;
+	}
+	libraryUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	musicScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (design D7): the rows in view
  * follow it, and the scroll offset stays inside the narrower range. */
 export function measureLibraryList(viewportHeight: number): void {
-	libraryUi.update((ui) => {
-		const next = { ...ui, viewportHeight };
-		if (pendingRevealRow !== null && viewportHeight > 0) {
-			const row = pendingRevealRow;
-			pendingRevealRow = null;
-			return {
-				...next,
-				scrollTop: scrollTopToShowCursor(rowsOf(next), row, next.scrollTop, viewportHeight),
-			};
-		}
-		return {
-			...next,
-			scrollTop: clampScrollTop(rowsOf(next), next.scrollTop, viewportHeight),
-		};
-	});
+	musicScroll.update((scroll) => ({ ...scroll, viewportHeight }));
+	const rows = rowsOf(get(libraryUi));
+	if (pendingRevealRow !== null && viewportHeight > 0) {
+		const row = pendingRevealRow;
+		pendingRevealRow = null;
+		followCursor(rows, row);
+		return;
+	}
+	musicScroll.update((scroll) => ({
+		...scroll,
+		scrollTop: clampScrollTop(rows, scroll.scrollTop, viewportHeight),
+	}));
 }
 
 /** Report the list's native scroll offset (design D7): a user scroll moves the
  * rows in view, and the offset stays inside the list's range. */
 export function scrollLibraryList(scrollTop: number): void {
-	libraryUi.update((ui) => {
-		const top = clampScrollTop(rowsOf(ui), scrollTop, ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	const rows = rowsOf(get(libraryUi));
+	musicScroll.update((scroll) => {
+		const top = clampScrollTop(rows, scrollTop, scroll.viewportHeight);
+		return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 	});
 }
 

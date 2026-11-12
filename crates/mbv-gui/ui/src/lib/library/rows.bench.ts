@@ -1,7 +1,8 @@
 // The Library list's row derivation under scrolling (task 1.3 of
 // `gui-change-driven-sections`, design D12): every scroll step through
-// `scrollLibraryList` rebuilds the canvas rows from the carried content and
-// clamps the offset to them, so the step's cost is the derivation's cost. The
+// `scrollLibraryList` clamps the offset against the canvas rows, which are
+// memoized on the content, the open nodes, and the filter (design D9), so the
+// step's cost is the clamp's cost. The
 // fixture holds 5,000 closed artists, one row each, under 26 letter headings.
 //
 // Run with `pnpm vitest bench --run` in `crates/mbv-gui/ui`. A bench is not a
