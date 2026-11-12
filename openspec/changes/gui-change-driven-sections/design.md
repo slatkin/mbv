@@ -88,7 +88,7 @@ Direction point 4 asked for "each App projection rebuilds only when its source r
    - `drain_card_image_completions`: `libraryList`, `libraryDetail`.
    - `drain_resize_responses`, `drain_transport_events`: none (documented no-ops).
 3. **Deadlines.** Two Library facts change with time alone: the navigation-idle gate of `warm_gui_hero_neighbours`, and the retry time of an interrupted art fetch (invariant 27). `App` gets two read-only queries. `App::gui_navigation_idle() -> bool` wraps the crate-private `navigation_idle` (`last_nav_at` plus `NAV_IDLE_DELAY`), so every path that calls `stamp_navigation` feeds it and `mbv-gui` copies no constant. The core compares it on each tick like rule 4: a change from not idle to idle is the passed deadline. The core needs only that change, not the deadline's `Instant`. `App::gui_art_retry_due(now) -> bool` is true when an interrupted key's retry time passed since the last call. A passed deadline marks `libraryList` and `libraryDetail`.
-4. **Playhead marks.** `App` gets one read-only query, `App::gui_playhead_marks() -> GuiPlayheadMarks`, with the playing Music track id and the current Audiobooks chapter, computed by the derivations the projections already call. The step compares it on each tick. A change marks `libraryDetail` and `libraryList`. A change of the `playback` section's target choices marks `settings`, because the Sessions section reads them.
+4. **Playhead marks.** `App` gets one read-only query, `App::gui_playhead_marks() -> GuiPlayheadMarks`, with the playing Music track id and the playing Audiobooks book id, computed by the derivations the projections already call. Both change only with the active slot. The book id is `None` while the slot is pending, as `playing_book_chapter` rules today, so a pending book marks no chapter. The current chapter is not a mark: the window derives it (D5). The step compares it on each tick. A change marks `libraryDetail` and `libraryList`. A change of the `playback` section's target choices marks `settings`, because the Sessions section reads them.
 
 `App`-side drains with no host hook (`drain_session_events`, `drain_cast_events`, `drain_playback_metadata_events`, `drain_trickplay_sheet_events`, `drain_notif_actions`, `drain_pinned_requests`, `settle_pending_queue_transfer`) feed compared sections, or reach a gated section through rule 4.
 
@@ -123,9 +123,20 @@ A seek moves the position far from the prediction, so it re-anchors at once. Onl
 
 **What the front end derives.** `ui/src/lib/bridge/playhead.ts` keeps the anchor and a `now` store that `requestAnimationFrame` drives while the anchor is active and not paused, and that stops otherwise. Derived stores give the position (clamped to `[0, runtime]`), the elapsed clock, the remaining clock, and the played fraction. The scrubber fill, the scrubber clocks, the rail ring, the rail's remaining time, and the compact strip's progress line read them. `ui/src/lib/bridge/time.ts` gets `formatDurationShort`, a port of `mbv_ui_model::ui_util::fmt_duration_short` (`H:MM:SS` from one hour, else `M:SS`).
 
-**What stays in Rust.** Facts with a minute or percent grain: the transport's finish clock, the queue header's finish clock, the rows' "Ends at" value, the queue rows' progress percent, the Music playing track, and the Audiobooks current chapter. Their sections are compared (or marked through D3 rule 4), so they send when the value changes: about once a minute for a clock, once per percent for a row. A finish clock is the time now plus the remaining time, so it also moves each minute while playback is paused. Thus a paused window gets the `playback`, `summary`, and `queue` sections once each minute. This change keeps that behavior; it does not freeze the finish clocks while paused. This keeps local-time formatting and the queue's runtime chain in one place (Rust), and it costs a few small updates per minute. `GuiQueuePlayback` loses `playback`, `elapsed_clock`, and `remaining_clock`. The hover keeps its Rust `time_label`, because the pointer drives it, not the clock.
+**What moves to the window.** Every value that follows the position or the wall clock. Rust sends only durations, and these change only on a discontinuity or a queue edit:
 
-**Alternative rejected: Rust sends the clocks at 1 Hz.** It keeps a timer-driven update for every playing second, which is the cost this change removes.
+- **The transport's finish time.** The window shows the wall clock now plus the remaining time.
+- **The queue header's finish time and the rows' "Ends at" values.** A new pure function `queue_end_offsets(slots, active_index)` in `src/app/queue_summary_projection.rs` gives each pending slot's end as seconds after the end of the active item (`0` for the active row), and the queue's tail (`None` when a pending runtime breaks the chain). `finish_chain` adds the anchor to these offsets, so the TUI's values do not change. A read-only query, `App::gui_queue_end_offsets()`, gives the offsets to the `summary` and `queue` sections. They carry `tailSecs` and each row's `endsAfterSecs` in place of the clock strings. The window shows now plus the remaining time plus the offset. It adds ` +1d` to the queue's finish time when its local date is after today, as `queue_finish_clock` does.
+- **The active queue row's progress.** The GUI row DTO drops the `NowPlaying` progress. The window reads the playhead's played fraction for the row whose slot is the active slot.
+- **The current Audiobooks chapter.** The chapter rows carry `startTicks` and `endTicks` in place of `current`, and `libraryDetail` carries the playing book id (D3 rule 4). The window marks the chapter row whose span holds the position while the Hero's book is the playing book.
+
+`time.ts` also gets `formatWallClock`, a port of `fmt_wall_clock` (zero-padded 24-hour `HH:MM` in the window's local zone). `playhead.ts` gets a `minute` store that changes at each wall-clock minute, through one `setTimeout` to the next minute boundary. Thus the finish times move while playback is paused, with no update from the core. A paused window gets no update: the playhead does not change, and no section holds a value that changes with time.
+
+**What stays in Rust.** Facts that change only on a discontinuity: the Music playing track and the playing book (D3 rule 4). The hover keeps its Rust `time_label`, because the pointer drives it, not the clock. `GuiQueuePlayback` loses `playback`, `elapsed_clock`, `remaining_clock`, and `finish_clock`.
+
+**Alternative rejected: Rust sends the elapsed and remaining times at 1 Hz.** It keeps a timer-driven update for every playing second, which is the cost this change removes.
+
+**Alternative rejected: Rust keeps the finish times, the row progress, and the current chapter.** They change each minute or each percent, and the finish times change also while playback is paused. A window would then get updates only because time passed.
 
 ### D6. Front-end section stores
 
@@ -205,6 +216,10 @@ The baseline runs before any change. The medians go in `openspec/changes/gui-cha
 | The attach phase answers `sync` with its state and theme | `tests/attach.rs` |
 | `applyBatch` writes only the named stores and skips a held revision | `ui/src/lib/bridge/sections.test.ts` |
 | The playhead advances while playing and holds while paused | `ui/src/lib/bridge/playhead.test.ts` (time injected, no real wait) |
+| While paused, the finish times move with the wall clock and the position holds | `ui/src/lib/bridge/playhead.test.ts` (time injected) |
+| The current chapter follows the predicted position | `ui/src/lib/library/audiobooks-workspace.test.ts` |
+| `formatWallClock` pads to `HH:MM` | `ui/src/lib/bridge/time.test.ts` |
+| The queue offsets give the TUI's finish chain unchanged | `src/app` (the existing finish-chain tests move to `queue_end_offsets`, no new case) |
 | `formatDurationShort` matches the Rust formatter's two forms | `ui/src/lib/bridge/time.test.ts` |
 | A scroll does not rebuild the rows | `ui/src/lib/library/scroll.test.ts` |
 | The empty Search query projects nothing | `src/app/tests` (the existing Search projection test file) |
@@ -224,7 +239,8 @@ These terms go into `CONTEXT.md` with the code (task 2.11):
 - [A missed dirty mark leaves a section stale until the next input] → The test-only audit (D3) fails every core-thread test that exercises the missed source. The mark table is one exhaustive `match`. Invariant 32 records the rule.
 - [The compared tier builds on every 50 ms tick, more often than today's idle frame] → Its sections are small, and the build sends nothing when nothing changed. The idle-step bench records the cost against the baseline idle frame, which also built the whole Library content.
 - [A held key repeats at about 30 Hz and marks every gated section on each repeat] → This is today's cost (a full frame per key), not a new one. A key can run any `[keys]` binding, so a narrower mark would need a per-action table, which this change does not add.
-- [The window's predicted position differs from mpv's by up to the tolerance] → 1 s is below what the clocks can show without a visible jump, and a new sample past it re-anchors. The finish clocks stay in Rust and are not affected.
+- [The window's predicted position differs from mpv's by up to the tolerance] → 1 s is below what the elapsed and remaining times can show without a visible jump, and a new sample past it re-anchors. The finish times follow the predicted position with the same error.
+- [The window's local zone and the core's zone can differ] → `UtcOffset::current_local_offset` can fail in a multi-thread process, and the core then falls back to UTC. The webview always knows the local zone, so the window's finish times are the correct ones.
 - [An art URL can name an entry the image cache evicted] → The core answers 404 and the window paints the loading fill. A later mark rebuilds the section, and the art reference becomes `loading` while the fetch runs again.
 - [A custom URI scheme is a new input surface into the core thread] → The handler accepts only the three path forms and answers only from the cache. It runs no fetch, reads no file, and takes no other parameter. The CSP admits only `mbv-art:` beside `'self'`.
 - [Every component that reads `$frames` changes] → `App.svelte` is the one place that unpacks the frame today (five non-test files read `frames`), so the change is mostly prop wiring.

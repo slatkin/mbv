@@ -4,21 +4,14 @@
 
 ### Requirement: The window updates only the sections that changed
 
-The Client core SHALL send the window an update only when the content of at least one window section changed. An update SHALL carry only the changed sections, each with its own revision. The window SHALL replace only the sections that an update names and SHALL keep every other section as it was. The Client core SHALL NOT send an update only because a timer fired. When only time passed, it SHALL send only the sections whose content changed with time.
+The Client core SHALL send the window an update only when the content of at least one window section changed. An update SHALL carry only the changed sections, each with its own revision. The window SHALL replace only the sections that an update names and SHALL keep every other section as it was. The Client core SHALL NOT send an update only because a timer fired. When only time passed, it SHALL send an update only when a toast expires or a Library deadline passes.
 
 #### Scenario: Nothing changes while the window is idle
 
-- **GIVEN** playback is stopped and no toast is shown
+- **GIVEN** playback is paused or stopped and no toast is shown
 - **AND** no Library deadline is pending
 - **WHEN** the user gives no input and no Service or Owner event arrives
 - **THEN** the window receives no update
-
-#### Scenario: Playback is paused
-
-- **GIVEN** playback is paused and no toast is shown
-- **WHEN** the user gives no input for one minute and no Service or Owner event arrives
-- **THEN** the window receives only the sections whose finish clocks changed
-- **AND** the window receives no playhead update
 
 #### Scenario: A Library deadline passes
 
@@ -76,20 +69,20 @@ The Client core SHALL send the playhead (the active slot, the position, the runt
 
 - **GIVEN** an item plays
 - **WHEN** the user gives no input for ten seconds
-- **THEN** the scrubber and the elapsed and remaining clocks advance with playback
+- **THEN** the scrubber and the elapsed and remaining times advance with playback
 - **AND** the window receives no playhead update
 
 #### Scenario: The user pauses
 
 - **WHEN** the user pauses playback
 - **THEN** the window receives the playhead with the paused state and the position at the pause
-- **AND** the scrubber and the clocks stop
+- **AND** the scrubber and the elapsed and remaining times stop
 
 #### Scenario: The user seeks
 
 - **WHEN** the user seeks forward 30 seconds
 - **THEN** the window receives the playhead with the new position
-- **AND** the scrubber and the clocks continue from it
+- **AND** the scrubber and the elapsed and remaining times continue from it
 
 #### Scenario: The reported position drifts
 
@@ -103,6 +96,24 @@ The Client core SHALL send the playhead (the active slot, the position, the runt
 - **WHEN** no new report arrives
 - **THEN** the window keeps advancing its predicted position
 - **AND** the window receives no playhead update
+
+### Requirement: The window derives the values that follow the position or the wall clock
+
+The window SHALL derive every value that follows the playback position or the wall clock from the last playhead and its own clock: the elapsed and remaining times, the finish times, the active queue row's progress, and the current Audiobooks chapter. The Client core SHALL send none of these values.
+
+#### Scenario: A minute passes
+
+- **GIVEN** an item plays or is paused
+- **WHEN** the wall clock passes to the next minute and the user gives no input
+- **THEN** the finish times show the new minute
+- **AND** the window receives no update
+
+#### Scenario: Playback enters the next chapter
+
+- **GIVEN** the Hero shows the playing book
+- **WHEN** the playback position passes into the next chapter
+- **THEN** the Hero marks the next chapter as the current chapter
+- **AND** the window receives no update
 
 ## RENAMED Requirements
 

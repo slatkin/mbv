@@ -28,8 +28,10 @@ image cache.
 - **The playhead is predicted in the window.** The core sends a *Playhead
   anchor* only on a discontinuity: a track change, a pause or resume, a runtime
   change, or a new position sample past a fixed tolerance. The window stamps the
-  anchor on receipt and advances it. Facts with a minute or percent grain stay
-  Rust projections.
+  anchor on receipt and advances it. The window derives every value that
+  follows the position or the wall clock: the elapsed, remaining, and finish
+  times, the active row's progress, and the current chapter. Rust sends only
+  durations, which change on a discontinuity or a queue edit.
 - **Artwork is a URL.** Sections carry an art reference. The core serves the
   bytes through the `mbv-art` URI scheme from its image cache. The window makes
   no network request, and no event carries image bytes.
@@ -67,14 +69,14 @@ listed the per-frame costs.
 
 ## Consequences
 
-- A window with stopped playback gets no events, except when a toast expires
-  or a Library deadline passes. A paused window also gets the finish clocks
-  when their minute changes. A playing window gets an event only when a section
+- A window with paused or stopped playback gets no events, except when a
+  toast expires or a Library deadline passes. A playing window gets an event only when a section
   changes, not on every render interval.
 - A missed dirty mark shows as a stale section until the next input.
   Invariant 32 owns the rule, and the audit runs in every core-thread test.
-- The window formats the elapsed and remaining clocks itself, with a port of
-  the shared duration formatter. The finish clocks stay in Rust.
+- The window formats the elapsed, remaining, and finish times itself, with
+  ports of the shared duration and wall-clock formatters. The TUI keeps its
+  Rust finish clocks; both read one runtime chain.
 - The `mbv-art` scheme is a new input into the core thread. It answers only
   from the image cache, and the CSP admits only that scheme beside `'self'`.
 - `openspec/specs/gui-client/spec.md` owns the window's update contract.
