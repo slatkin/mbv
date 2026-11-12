@@ -1,4 +1,4 @@
-//! The Queue playback section of a frame: the transport band's facts (design
+//! The Queue playback section: the transport band's facts (design
 //! D4). Each field mirrors one fact of `QueuePlaybackProjection`.
 
 use mbv::{
@@ -11,7 +11,7 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::{Deserialize, Serialize};
 
 use super::theme::GuiRole;
-/// The Queue playback band's facts for one frame.
+/// The Queue playback band's facts for one build.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueuePlayback {
@@ -132,7 +132,7 @@ pub struct GuiScrubberTile {
     pub column: u32,
     /// The thumbnail's row in the sheet.
     pub row: u32,
-    /// The sheet image as a `data:image/jpeg` URL. `None` when the frame does
+    /// The sheet image as a `data:image/jpeg` URL. `None` when the section does
     /// not re-carry it — the hovered sheet is the one the window already
     /// holds — as the artwork's arming rule works (design D10).
     pub sheet: Option<String>,
@@ -148,7 +148,7 @@ pub struct GuiStatusIndicator {
     pub role: GuiRole,
 }
 
-/// The Queue playback visual slot's artwork one frame carries (design D10).
+/// The Queue playback visual slot's artwork one build carries (design D10).
 /// The image and placeholder payloads are `data:` URLs: the artwork the
 /// window paints is the core's encoded cache bytes, never a fetch the
 /// webview makes (the CSP allows a `data:` image source for exactly this).
@@ -311,7 +311,7 @@ pub enum GuiTargetKey {
     Cast(String),
 }
 
-/// The reverse of the frame's `GuiTargetKey` projection (the `selectTarget`
+/// The reverse of the `GuiTargetKey` projection (the `selectTarget`
 /// command, and a painted chooser row's press): the stable identity a painted
 /// row names, back in the shared vocabulary the selection request carries. A
 /// function, not a `From` impl: the conversion is this bridge's, and an impl on

@@ -406,7 +406,7 @@ impl SectionLedger {
 
     /// The scrubber's hover tile this tick (task 6.7's rule, with the sheet
     /// image always carried). Leaving the bar ends the hover episode, as the
-    /// frame path's `hover_tile` does.
+    /// tick's `hover_tile` does.
     fn hover_tile(
         &mut self,
         app: &mut App,

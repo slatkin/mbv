@@ -1,11 +1,11 @@
-//! The Library section of a frame (add-gui-library-panel design D2): the
+//! The Library section (add-gui-library-panel design D2): the
 //! active destination's content, carried whole only when its revision changes,
 //! with the Hero's artwork as the `data:` URLs the window paints.
 //!
 //! A Library list can hold thousands of rows, so the section carries a
-//! revision and a frame re-carries the content only when that revision
+//! revision and a rebuild re-carries the content only when that revision
 //! changes; the front end keeps the last carried value. The art is part of the
-//! content, so a landed image bumps the revision and rides the same frame as
+//! content, so a landed image bumps the revision and rides the same batch as
 //! the facts it belongs to.
 
 use mbv::{
@@ -464,7 +464,7 @@ pub struct GuiHomeFrame {
     /// builds (a heading only above its rows, empty sections omitted, the
     /// spacer only between two non-empty sections).
     pub rows: Vec<GuiHomeRowFrame>,
-    /// The core's selected row (design D2, D12), as the frame painted it:
+    /// The core's selected row (design D2, D12), as the window painted it:
     /// a select, play, or enqueue command sends it back.
     pub selected: Option<GuiHomeRowIdFrame>,
     /// The selected row's Hero facts; `None` while no row is selected — an
@@ -493,7 +493,7 @@ pub enum GuiHomeRowFrame {
 #[serde(rename_all = "camelCase")]
 pub struct GuiHomeItemRowFrame {
     /// The row's stable identity (design D2, D12): a command names it, the
-    /// frame's `selected` carries it, never a row position.
+    /// section's `selected` carries it, never a row position.
     pub id: GuiHomeRowIdFrame,
     /// The row's primary label (a `Recently added` episode's show, or the
     /// item's own title on an unsplit row).

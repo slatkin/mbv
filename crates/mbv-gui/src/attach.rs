@@ -140,7 +140,7 @@ pub struct AttachCampaign<'a> {
 }
 
 impl<'a> AttachCampaign<'a> {
-    /// A campaign over the window's channel, frame sink, and quit edge, with
+    /// A campaign over the window's channel, section sink, and quit edge, with
     /// the Owner steps that resolve its states (design D9).
     #[must_use]
     pub fn new(

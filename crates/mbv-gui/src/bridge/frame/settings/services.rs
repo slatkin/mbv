@@ -1,4 +1,4 @@
-//! The Services section's frame content (`add-gui-settings-screen` design D9):
+//! The Services section's content (`add-gui-settings-screen` design D9):
 //! each Service's state and the actions it offers, and the open setup form's
 //! progress and error. No field carries a password, an API key, or any other
 //! Service credential — the setup form carries the server URL only.

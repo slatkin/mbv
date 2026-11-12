@@ -57,7 +57,7 @@ impl ArtworkFrames {
     }
 }
 
-/// The frame's artwork value for one projection state: the image bytes as a
+/// The artwork value for one projection state: the image bytes as a
 /// `data:` URL. The webview never fetches artwork — the bytes are the
 /// core's cache reads — so the URL needs only the CSP's `data:` image
 /// source. The bytes are the server's own, as the image cache holds them,

@@ -1,4 +1,4 @@
-//! The Queue section of a frame: the rows inside the viewport, and the cursor,
+//! The Queue section: the rows inside the viewport, and the cursor,
 //! marks, and active slot (design D4). A slot id travels as its raw number, as
 //! `layout.rs` does. The summary section carries the queue header's remaining
 //! count, finish clock, right-column mode, and filter text.
@@ -12,7 +12,7 @@ use mbv_ui_model::media_list::{
 };
 use serde::Serialize;
 
-/// The Queue section of one frame.
+/// The Queue section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueue {
@@ -34,7 +34,7 @@ pub struct GuiQueue {
     pub drag: Option<GuiQueueDrag>,
 }
 
-/// The row drag one frame paints (add-tauri-gui-client row 6.5, design D5):
+/// The row drag the window paints (add-tauri-gui-client row 6.5, design D5):
 /// the dragged row's content as the ghost, the final index the drop would
 /// leave it at, and the insertion line's anchor. `None` while no drag runs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -50,7 +50,7 @@ pub struct GuiQueueDrag {
     pub insertion: GuiQueueInsertion,
 }
 
-/// One frame's insertion line (add-tauri-gui-client row 6.5): the row it
+/// One row drag's insertion line (add-tauri-gui-client row 6.5): the row it
 /// anchors on and the side it paints. A stable slot anchors it, so the line
 /// keeps its place while the rows above it move.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -214,7 +214,7 @@ fn row_matches_filter(matcher: &WordMatcher, row: &MediaListRow<QueueSlotId>, qu
 
 /// The viewport over the kept rows that keeps the cursor row fully visible:
 /// the window opens at the top and scrolls only far enough to hold the
-/// cursor, the filter's fresh re-anchor each frame it changes. Returns the
+/// cursor, the filter's fresh re-anchor each time it changes. Returns the
 /// offset and height the kept list slices with.
 fn filtered_viewport(
     kept: &[&MediaListRow<QueueSlotId>],
@@ -281,7 +281,7 @@ pub enum GuiQueueRow {
 /// The queue summary the header paints (design D4): the remaining count, the
 /// queue finish clock, the right column's mode, and the filter text with its
 /// caret fact. Mirrors `QueueSummaryProjection`, whose finish arithmetic the
-/// frame reads per frame; the mode, filter text, and caret fact are the
+/// section reads on each build; the mode, filter text, and caret fact are the
 /// Client-core state the projections carry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

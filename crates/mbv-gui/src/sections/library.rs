@@ -1,6 +1,6 @@
 //! The Library content build (add-gui-library-panel design D2), the one builder
 //! of the gated Library section (`gui-change-driven-sections` design D2). The
-//! destination's frame-path ensures run inside the build, so a build starts the
+//! destination's ensures run inside the build, so a build starts the
 //! loads its section waits on (design D12 of add-gui-library-panel).
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
@@ -18,7 +18,7 @@ use crate::bridge::frame::library::{
 pub(crate) fn build_content(app: &mut App) -> Option<GuiLibraryContent> {
     // No presented destination is active (design D2): the section is absent.
     let destination = app.gui_active_destination();
-    // The Podcasts destination's frame-path ensure (add-gui-library-panel
+    // The Podcasts destination's ensure (add-gui-library-panel
     // design D12, row 10.1): the selected pill's own loads — the Latest
     // shelf and every show's episodes, or one show's episodes — start
     // before any command does, as the Audiobooks ensure starts its
@@ -27,14 +27,14 @@ pub(crate) fn build_content(app: &mut App) -> Option<GuiLibraryContent> {
     if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
         app.ensure_gui_podcast_selection(lib_idx);
     }
-    // The Feeds destination's frame-path ensure (add-gui-library-panel
+    // The Feeds destination's ensure (add-gui-library-panel
     // design D12, row 11.1): the stored pill converges on the subscription
     // set the tab holds. The entries arrive from the shared startup fetch,
     // so the ensure starts no load.
     if matches!(destination, Some(GuiDestinationKind::Feeds)) {
         app.ensure_gui_feeds_selection();
     }
-    // The Audiobooks destination's frame-path ensure (add-gui-library-panel
+    // The Audiobooks destination's ensure (add-gui-library-panel
     // design D12, row 9.1) sits in its match arm below: the default pick's
     // detail load starts before any select does.
     let music = match destination {
@@ -155,7 +155,7 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
 
 /// The Home destination's content (design D12, the USER-APPROVED GUI Home
 /// design): the flat list's projection rows, the core's selected row, and
-/// its Hero, fetched and built here per frame so an unchanged frame's
+/// its Hero, fetched and built here on each rebuild so an unchanged build's
 /// revision carries nothing (the memo's content compare).
 fn home_frame(app: &mut App) -> GuiHomeFrame {
     let projection = app.gui_home_projection();
@@ -164,8 +164,8 @@ fn home_frame(app: &mut App) -> GuiHomeFrame {
 
 /// The Shows destination's content (design D14): the mode pills, the active
 /// mode's rows — the All series tree or the flat lists — the selected row,
-/// and its Hero, fetched and built here per frame so an unchanged frame's
-/// revision carries nothing (the memo's content compare). The ensure loads
+/// and its Hero, fetched and built here on each rebuild so an unchanged
+/// build's revision carries nothing (the memo's content compare). The ensure loads
 /// the selected series' detail **and its selected season's episodes**, so the
 /// Hero's Workspace paints on arrival.
 fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
@@ -176,8 +176,8 @@ fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
 
 /// The plain Emby-library destination's content (design D12, row 8.1): the
 /// feed pills, the active list's rows, the selected row, and its Hero,
-/// fetched and built here per frame so an unchanged frame's revision carries
-/// nothing (the memo's content compare). The frame path's ensure is the
+/// fetched and built here on each rebuild so an unchanged build's revision
+/// carries nothing (the memo's content compare). The build's ensure is the
 /// shown-pass trigger the TUI projection pass's lazy-fetch arm mirrors.
 fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
     app.ensure_gui_emby_selection(lib_idx);
@@ -187,7 +187,7 @@ fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
 
 /// The Audiobooks destination's content (design D12, row 9.1): the book
 /// list, the selected book, and its Hero with its chapters Workspace, built
-/// here per frame so an unchanged frame's revision carries nothing (the
+/// here on each rebuild so an unchanged build's revision carries nothing (the
 /// memo's content compare). The ensure above the content build is the
 /// default pick's detail-load trigger.
 fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
@@ -197,8 +197,8 @@ fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
 
 /// The Podcasts destination's content (design D12, row 10.1): the pill row,
 /// the active pill's episode rows, the selected episode, and its Hero, built
-/// here per frame so an unchanged frame's revision carries nothing (the memo's
-/// content compare). The ensure above the content build is the selected pill's
+/// here on each rebuild so an unchanged build's revision carries nothing (the
+/// memo's content compare). The ensure above the content build is the selected pill's
 /// load trigger.
 fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
     let projection = app.gui_podcasts_projection(lib_idx);
@@ -207,9 +207,9 @@ fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
 
 /// The Feeds destination's content (design D12, row 11.1): the pill row, the
 /// active pill's entry rows, the selected entry, and its Hero, built here per
-/// frame so an unchanged frame's revision carries nothing (the memo's content
+/// rebuild so an unchanged build's revision carries nothing (the memo's content
 /// compare). The entries arrive from the shared startup fetch, so the build
-/// starts no load; the frame path's ensure has already settled the pill.
+/// starts no load; the ensure has already settled the pill.
 fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
     let projection = app.gui_feeds_projection();
     GuiFeedsFrame::from_projection(&projection)

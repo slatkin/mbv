@@ -1,8 +1,8 @@
 //! The `mbv-gui` program: a native window Client of the Owner process. The
 //! core thread (design D3 of `add-tauri-gui-client`) attaches to the Owner
 //! and runs behind the window; the three bridge commands push into its
-//! channel, and the `mbv://frame` event carries its frames to the window
-//! (design D4, task row 2.5).
+//! channel, and the `mbv://sections` event carries its section batches to the
+//! window (design D4, task row 2.9).
 
 use std::ops::Deref;
 use std::sync::mpsc::Sender;
@@ -22,8 +22,9 @@ use tauri::{Emitter, Manager, State};
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-/// The event the core thread's frames reach the window through (design D4).
-const FRAME_EVENT: &str = "mbv://frame";
+/// The event the core thread's section batches reach the window through
+/// (design D4).
+const SECTIONS_EVENT: &str = "mbv://sections";
 
 /// The managed sender of the core thread's channel (design D3): every
 /// command pushes through it and never touches the `App`. The window's
@@ -83,7 +84,7 @@ fn library(channel: State<'_, CoreChannel>, command: GuiLibraryCommand) {
 /// screen's window content sends one semantic request, the bridge translates it
 /// to the neutral command, and it pushes into the core channel as a
 /// [`CoreInput::Settings`]. A request this build cannot address — a setting
-/// name no key declares — logs and drops, so a stale frame's edit reaches
+/// name no key declares — logs and drops, so a stale window's edit reaches
 /// nothing.
 #[tauri::command]
 fn settings(channel: State<'_, CoreChannel>, command: GuiSettingsCommand) {
@@ -146,15 +147,15 @@ fn main() -> tauri::Result<()> {
             }
         })
         .setup(move |app| {
-            // The frames emit from the core thread, any thread, through the
-            // window event loop (design D3).
+            // The section batches emit from the core thread, any thread,
+            // through the window event loop (design D3).
             let handle = app.handle().clone();
             let sink: SectionSink = Box::new(move |batch: GuiSectionBatch| {
-                if let Err(error) = handle.emit(FRAME_EVENT, batch) {
+                if let Err(error) = handle.emit(SECTIONS_EVENT, batch) {
                     tracing::warn!(
                         target: "gui_commands",
                         error = %error,
-                        "the frame emit failed"
+                        "the section batch emit failed"
                     );
                 }
             });

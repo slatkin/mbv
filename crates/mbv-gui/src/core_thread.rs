@@ -73,7 +73,7 @@ pub enum CoreInput {
     /// window content's `library` command. The core applies it through
     /// [`App::apply_gui_library_command`], and the take-focus variant also
     /// moves the core's `FocusStack` with the App's stored focus (design D4),
-    /// so the frame paints the focus the App's key gates use.
+    /// so the window paints the focus the App's key gates use.
     Library(mbv::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
     /// window content's `settings` command. The core applies it through
@@ -98,7 +98,7 @@ pub enum CoreInput {
 }
 
 /// The sink every sent batch goes through (design D1). Production wires
-/// `AppHandle::emit` as the `mbv://frame` event; the tests mock it with a
+/// `AppHandle::emit` as the `mbv://sections` event; the tests mock it with a
 /// channel.
 pub type SectionSink = Box<dyn Fn(GuiSectionBatch) + Send + 'static>;
 
@@ -301,8 +301,8 @@ impl CoreThread {
             launch_focus_taken: false,
         };
         // The core sets its `FocusStack` and the App's stored Panel focus
-        // together (design D4), so the frame the window paints and the gates
-        // the keys meet agree from the first frame. The Queue side holds
+        // together (design D4), so the sections the window paints and the gates
+        // the keys meet agree from the first batch. The Queue side holds
         // focus until the take-focus command moves it.
         core.take_panel_focus(PanelFocus::Queue);
         // The saved location applies over that default (design D9): a launch
@@ -315,7 +315,7 @@ impl CoreThread {
     /// Move Panel focus on both authorities together (add-gui-library-panel
     /// design D4): the App's stored Panel focus, which its key gates read,
     /// through its public GUI entry, then the core's `FocusStack`, which
-    /// derives the frame's focus.
+    /// derives the window's focus.
     fn take_panel_focus(&mut self, focus: PanelFocus) {
         self.app.set_gui_panel_focus(focus);
         self.focus.set_panel_focus(focus);
@@ -371,8 +371,8 @@ impl CoreThread {
 
     /// The Settings screen's open section, for a Client's test that asserts a
     /// key opened, closed, or switched it (`add-gui-settings-screen` rows
-    /// 3.2, 3.3). The frame carries the section from the change's section 4
-    /// on; until then this is the only read a Client's test has.
+    /// 3.2, 3.3). The settings section carries it to the window; this is the
+    /// read a Client's test has.
     #[doc(hidden)]
     #[must_use]
     pub fn gui_settings_section_for_test(&self) -> Option<mbv::GuiSettingsSection> {
@@ -484,7 +484,7 @@ impl CoreThread {
             .and_then(|bar| self.playback.seek_target(bar, event.position.x));
         self.playback.set_scrubber_hover(hover);
         // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row
-        // the pointer rests on, its chrome regions included. A frame paints
+        // the pointer rests on, its chrome regions included. The window paints
         // the hovered row's grip and actions button.
         let row_hover = self.queue_row_at(event.position);
         self.queue.set_hover(row_hover);
@@ -525,7 +525,7 @@ impl CoreThread {
                 // click's effects, one of which focuses the Queue panel. The
                 // dispatched `QueueRowClick` and `QueueRowActivate` apply the
                 // App-side half; the core mirrors the panel focus on its own
-                // stack — whose derived focus the frame carries and the next
+                // stack — whose derived focus the window paints and the next
                 // keys' routing reads — because the right click's
                 // `RowContextMenu` dispatch is the documented no-op. The pill
                 // and the wheel take no focus, exactly as the TUI's matching
@@ -558,7 +558,7 @@ impl CoreThread {
                 // panel holds focus (design D4). The projection's
                 // availability gates the transport; the chooser and popover
                 // rows resolve their painted indexes against the last
-                // emitted frame's choice lists, not this read.
+                // sent choice lists, not this read.
                 let projection = self.app.queue_playback_projection();
                 let availability = projection.availability;
                 let Self {
@@ -693,7 +693,7 @@ impl CoreThread {
 
     /// Adopt the Queue projection into the Queue Surface state (design D5),
     /// the consumption the TUI's sync pass runs once per pass, before the
-    /// frame that reads the Surface state builds.
+    /// section that reads the Surface state builds.
     fn sync_queue_surface(&mut self) {
         let update = self.app.queue_surface_projection();
         if let Some(slots) = update.slots {

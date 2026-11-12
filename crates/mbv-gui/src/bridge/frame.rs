@@ -41,9 +41,9 @@ pub enum GuiAttachState {
     Failed(String),
 }
 
-/// The scrubber's hover preview one frame carries (design D4; task 6.7 for
-/// the tile): the Surface state's hover fraction resolved to the time and
-/// chapter it names against the playback projection the frame reads, plus
+/// The scrubber's hover preview the playback section carries (design D4; task
+/// 6.7 for the tile): the Surface state's hover fraction resolved to the time
+/// and chapter it names against the playback projection the tick reads, plus
 /// the tile the core thread resolved for the same position. `None` while the
 /// pointer is away from the bar.
 pub(crate) fn scrubber_hover(

@@ -1,4 +1,4 @@
-//! The Keys section's frame content (`add-gui-settings-screen` design D9): the
+//! The Keys section's content (`add-gui-settings-screen` design D9): the
 //! prefix chord, one row for each `AllClients` action with its effective
 //! chords, and the last refused edit.
 

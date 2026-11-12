@@ -2,7 +2,7 @@
 //! Library panel's window content sends one semantic request, and the neutral
 //! [`mbv::GuiLibraryCommand`] this module builds from it is what the Client
 //! core applies. Item identities are stable Service ids, never row positions,
-//! so a command built from a stale frame addresses the item that frame painted
+//! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
 use mbv_queue::QueueItemContentId;
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
     rename_all_fields = "camelCase"
 )]
 pub enum GuiLibraryCommand {
-    /// Open the destination at `position`: the tab position the frame's
+    /// Open the destination at `position`: the tab position the section's
     /// destination tabs carry, where 0 is Home.
     OpenDestination { position: usize },
     /// Select the one collection group of the Grouped Music library `libIdx`.
@@ -44,10 +44,10 @@ pub enum GuiLibraryCommand {
     ShuffleArtist { album_ids: Vec<String> },
     /// Run the item menu's entry at `index`.
     MenuEntry { item_id: String, index: usize },
-    /// Carry the item's full menu in the frame (the right-click item menu).
+    /// Carry the item's full menu in the section (the right-click item menu).
     RowMenu { item_id: String },
     /// Select a Home row (add-gui-library-panel design D12): the row the
-    /// Hero shows. The core keeps the selection, so the frame paints it.
+    /// Hero shows. The core keeps the selection, so the window paints it.
     HomeSelect { row: GuiHomeRowId },
     /// Play a Home row (design D12).
     HomePlay { row: GuiHomeRowId },
@@ -120,7 +120,7 @@ pub enum GuiLibraryCommand {
         pill: GuiPodcastPill,
     },
     /// Select the Podcasts episode the Hero shows (row 10.1): the row id the
-    /// frame carried — the episode's opaque identity.
+    /// window carried — the episode's opaque identity.
     PodcastsSelect { lib_idx: usize, row: String },
     /// Play a Podcasts episode (row 10.1): Enter on the row, or the
     /// double-click a front end sends with this same command.
@@ -131,7 +131,7 @@ pub enum GuiLibraryCommand {
     /// row 11.1): Latest, or one subscription by its URL. A Client holds one
     /// feed tab, so no library index rides here.
     FeedsSetPill { pill: GuiFeedPill },
-    /// Select the Feeds entry the Hero shows (row 11.1): the row id the frame
+    /// Select the Feeds entry the Hero shows (row 11.1): the row id the window
     /// carried — the entry's opaque identity.
     FeedsSelect { row: String },
     /// Play a Feeds entry (row 11.1): Enter on the row, or the double-click a
@@ -165,7 +165,7 @@ pub enum GuiFeedPill {
     Subscription(String),
 }
 
-/// The pill's core form the frame's pill row paints, the one conversion the
+/// The pill's core form the pill row paints, the one conversion the
 /// bridge keeps for the Pill DTO: the set-pill command arm resolves the
 /// command's wire pill to the core form inline (the
 /// `GuiEmbyFeedGroup` arm's pattern), so the variant names are hand-written
@@ -223,7 +223,7 @@ impl From<mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter> for 
     }
 }
 
-/// The pill's core form the frame's pill row paints, the one conversion the
+/// The pill's core form the pill row paints, the one conversion the
 /// bridge keeps for the Pill DTO; the state pill's own pair below is the
 /// leaf arm both directions share. The set-pill command arm resolves the
 /// command's wire pill to the core form inline (the `GuiEmbyFeedGroup`
@@ -386,7 +386,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
 }
 
 /// One row id's core identity, resolving the wire type the front end sends.
-/// The frame mirrors the same shape on the way out, so a command built from
+/// The window mirrors the same shape on the way out, so a command built from
 /// a carried row addresses exactly that row. The owned form is the ref
 /// form's delegate, so the variant names are hand-written once.
 impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {

@@ -1,7 +1,7 @@
 //! The Settings screen's frame section (`add-gui-settings-screen` design D9):
 //! the open section's identity, the sidebar's shown sections, and the content
-//! of the section the user has open. `GuiFrame.settings` is `None` while the
-//! screen is closed, so the window mounts it only for a frame that carries it.
+//! of the section the user has open. The settings section's value is `None`
+//! while the screen is closed, so the window mounts it only for a `Some` value.
 //!
 //! The content is a tagged union with one variant per section kind: the F2
 //! rows, Library, Services, Feeds, Keys, Sessions, and Playlists. No variant
@@ -26,7 +26,7 @@ use self::rows::GuiSettingRow;
 use self::services::{GuiSettingsService, GuiSettingsSetup};
 use crate::bridge::frame::playback::GuiTargetChoice;
 
-/// The Settings screen's frame section (design D9). `None` while the screen is
+/// The Settings screen's section value (design D9). `None` while the screen is
 /// closed.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,9 +41,9 @@ pub struct GuiSettingsFrame {
 }
 
 impl GuiSettingsFrame {
-    /// The frame section the App's open Settings screen projects, `None` while
+    /// The section value the App's open Settings screen projects, `None` while
     /// the screen is closed (design D9). The Sessions section reads the
-    /// playback projection the frame already carries, so the Settings
+    /// playback projection the same tick already read, so the Settings
     /// chooser's targets and the header's chooser targets are one read.
     #[must_use]
     pub fn build(app: &App, playback: &QueuePlaybackProjection) -> Option<GuiSettingsFrame> {
@@ -165,7 +165,7 @@ pub enum GuiSettingsContent {
 impl GuiSettingsContent {
     /// The content the section shows (design D9). The F2 pages carry their
     /// rows; the five sections with their own data carry theirs, and Sessions
-    /// reads the frame's one playback projection.
+    /// reads the tick's one playback projection.
     fn for_section(
         app: &App,
         playback: &QueuePlaybackProjection,

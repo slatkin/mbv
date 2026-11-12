@@ -17,7 +17,7 @@ use super::{CoreInput, CoreThread};
 use crate::sections::{DrainHook, marks_for_hook};
 
 /// The Panel a Library command moves focus to (design D4): the two take-focus
-/// commands move it on the core's `FocusStack` too, so the frame's focus and
+/// commands move it on the core's `FocusStack` too, so the window's focus and
 /// the App's key gates agree. Every other command moves no focus — a
 /// documented no-op, not a hidden one.
 fn focus_target(command: &mbv::GuiLibraryCommand) -> Option<PanelFocus> {
@@ -115,7 +115,7 @@ impl ClientTickHost for CoreThread {
                 false
             }
             PlayerEventDrain::Handled { restart } => {
-                // The snapshot adoption ran App-side; the next frame's Queue
+                // The snapshot adoption ran App-side; the next tick's Queue
                 // sync re-projects the adopted state (design D5). The adopted
                 // snapshot can change the gated sources, so it marks them.
                 *input_received = true;
@@ -148,8 +148,8 @@ impl ClientTickHost for CoreThread {
         // The GUI mounts no search surface, so no component receives the
         // search worker's result (add-gui-library-panel design D12, row 12.1).
         // The top bar's own field reads the App store this App-side drain
-        // fills, and the frame carries it; a landed result reports changed so
-        // the next frame paints it.
+        // fills, and the top bar's section carries it; a landed result reports
+        // changed so the next batch sends it.
         let landed = self.app.drain_gui_search_results();
         if landed {
             self.mark_hook(DrainHook::DrainSearchResults);
@@ -184,7 +184,7 @@ impl ClientTickHost for CoreThread {
     fn drain_feed_add_results(&mut self) -> bool {
         // The feed add this Client started from the Settings screen's Feeds
         // section (design D5, row 5.3) lands here: the App drain owns the
-        // channel and the config write, and the frame reads the subscription
+        // channel and the config write, and the section reads the subscription
         // list from the App. The GUI mounts no feed-manage component, so no
         // stage follows the outcome.
         let landed = !matches!(
@@ -200,7 +200,7 @@ impl ClientTickHost for CoreThread {
     fn drain_card_image_completions(&mut self) -> bool {
         // The visual slot's artwork paints now (design D10): the slot's
         // fetches resolve through this drain, so a completion's decoded
-        // image lands in the cache and the next frame carries it. The GUI
+        // image lands in the cache and the next batch carries it. The GUI
         // paints no TV workspace, so a Series key's re-push is the TUI's.
         let drained = self.app.drain_card_image_completions().drained;
         if drained {
@@ -297,7 +297,7 @@ impl ClientTickHost for CoreThread {
                     // The Library panel's request (add-gui-library-panel design
                     // D2): the App applies the semantic intent, and the
                     // take-focus variants then move the core's `FocusStack`
-                    // with the App's stored focus (design D4), so the frame
+                    // with the App's stored focus (design D4), so the window
                     // and the App's key gates agree.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();

@@ -185,13 +185,13 @@ pub enum QueueTargetId {
     Slot(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
-    /// The row's drag grip, which the frame paints on the hovered row. A
+    /// The row's drag grip, which the window paints on the hovered row. A
     /// press starts the row drag; the number is the row's `QueueSlotId::raw`.
     RowGrip(u64),
-    /// The row's actions button, which the frame paints on the hovered row.
+    /// The row's actions button, which the window paints on the hovered row.
     /// A press opens the row menu for that slot.
     RowActions(u64),
-    /// One entry of the open row menu: the entry's index in the frame's
+    /// One entry of the open row menu: the entry's index in the section's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),
     /// The queue header's Length / Ends-at switch: a press runs the `t`
@@ -230,7 +230,7 @@ pub enum QueuePlaybackTargetId {
     /// The header's queue-fold control: the `q` toggle's pointer target.
     QueueFold,
     /// One row of the open playback-target chooser: the choice's index in
-    /// the frame's `targetChoices` list.
+    /// the `targetChoices` list.
     TargetChoice(usize),
     /// The audio chip: a press toggles its track popover.
     AudioChip,

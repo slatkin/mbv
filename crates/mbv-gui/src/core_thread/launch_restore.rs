@@ -102,7 +102,7 @@ impl CoreThread {
 
     /// Apply the saved Panel focus on both authorities (design D9): the App's
     /// stored focus, which its key gates read, and the core's `FocusStack`,
-    /// which the frame paints. A focus the user took while the restore was
+    /// which the window paints. A focus the user took while the restore was
     /// pending stands, so the save never replaces it.
     fn apply_launch_panel_focus(&mut self, state: &mbv_config::GuiLaunchState) {
         if self.launch_focus_taken {
