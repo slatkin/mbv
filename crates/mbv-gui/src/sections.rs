@@ -421,7 +421,9 @@ impl SectionLedger {
             audit_clean(Section::Library, &self.row_menu, &pass.row_menu);
         }
         if !marked.contains(&Section::Search) {
-            let search = GuiSearchFrame::carried(&app.gui_search_projection());
+            let search = app
+                .gui_search_projection()
+                .map(GuiSearchFrame::from_projection);
             audit_clean(Section::Search, &self.search, &search);
         }
         if !marked.contains(&Section::Settings) {
@@ -458,8 +460,10 @@ impl SectionLedger {
             }
         }
         if marked.contains(&Section::Search) {
-            self.search
-                .adopt(GuiSearchFrame::carried(&app.gui_search_projection()));
+            self.search.adopt(
+                app.gui_search_projection()
+                    .map(GuiSearchFrame::from_projection),
+            );
         }
         if marked.contains(&Section::Settings) {
             self.settings.adopt(GuiSettingsFrame::build(app, playback));

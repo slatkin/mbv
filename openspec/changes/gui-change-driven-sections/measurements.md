@@ -91,3 +91,29 @@ over the baseline. Criterion's change line compares with the last saved run in
 the Shows rise is not a regression between the last two runs. The step times
 include the compared sections from rows 2.x to 6.x, so the change is not the
 effect of task 6.6 alone.
+
+## Task 7.1: the Search projection
+
+Run at HEAD `dbcc74804` (before) and with task 7.1 applied (after), on the same
+machine, with `timeout 900 cargo bench -p mbv-gui --bench sections -- search_open`.
+The before run was taken in the same session, because the medians that earlier
+runs saved no longer match this machine's timings. The table holds fixture 6,
+the one that reads the Search section. The fixture's query is open, so the
+empty-query `None` does not run in it. The timed change here is the rows moved
+into the frame instead of cloned a second time.
+
+| Fixture | Before median step | Median step | Bytes per step |
+| --- | --- | --- | --- |
+| `search_open` (query `bench`, 200 results) | 49.3 µs | 29.4 µs | 2 |
+
+The bytes column has the same meaning as in Task 5.5: the timed step is steady
+state, so the batch is empty and serializes to 2 bytes.
+
+Criterion's change line, after against before, is time −39.6% (p = 0.00), with
+"Performance has improved" outside the noise threshold. The gain is kept. Before
+this task, `gui_search_projection` cloned the rows, and `GuiSearchFrame::carried`
+cloned them again. Now the projection clones once and the frame moves the rows.
+
+Fixture 7 was measured at the post-7.1 state as the before for Task 7.2. Its
+median was 7.17 µs. Criterion reported −1.1% against the prior run, within the
+noise threshold, so the Search change does not move the Settings step.

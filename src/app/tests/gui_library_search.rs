@@ -35,6 +35,13 @@ fn landed_app(query: &str, items: Vec<EmbyItem>) -> App {
     app
 }
 
+/// The projection of a store that holds a query or rows. An empty store projects
+/// nothing, so a test that expects a projection reads it through here.
+fn projected(app: &App) -> GuiSearchProjection {
+    app.gui_search_projection()
+        .expect("the store holds a query or rows")
+}
+
 /// Contract: the drain applies a landed result for the live query to the
 /// store, and the projection carries its rows in the provider's order with the
 /// item identity the activate command needs (row 12.1).
@@ -48,7 +55,7 @@ fn a_landed_result_for_the_live_query_projects_its_rows() {
         ],
     );
 
-    let projection = app.gui_search_projection();
+    let projection = projected(&app);
     assert_eq!(projection.query, "blue");
     assert!(!projection.loading);
     assert!(!projection.failed);
@@ -77,7 +84,7 @@ fn a_landed_result_keeps_only_navigable_rows() {
         ],
     );
 
-    let projection = app.gui_search_projection();
+    let projection = projected(&app);
     assert_eq!(projection.rows.len(), 1);
     assert_eq!(projection.rows[0].id, "m-1");
 }
@@ -91,7 +98,7 @@ fn a_stale_result_changes_nothing() {
 
     assert!(!app.drain_gui_search_results(), "the stale result applied");
 
-    let projection = app.gui_search_projection();
+    let projection = projected(&app);
     assert_eq!(projection.query, "jazz");
     assert_eq!(projection.rows, vec![]);
 }
@@ -103,7 +110,7 @@ fn the_drain_reports_no_change_when_the_channel_is_empty() {
     let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
 
     assert!(!app.drain_gui_search_results(), "the channel held nothing");
-    assert_eq!(app.gui_search_projection().rows.len(), 1);
+    assert_eq!(projected(&app).rows.len(), 1);
 }
 
 /// Contract: an activate navigates from the stored row and leaves no overlay
@@ -119,7 +126,7 @@ fn activating_a_result_navigates_and_leaves_the_overlay_request_unset() {
     assert!(app.pending_overlay.is_none(), "no overlay request after");
     assert_eq!(
         app.gui_search_projection(),
-        GuiSearchProjection::default(),
+        None,
         "the results close, as the TUI's dismiss unmounts them"
     );
 }
@@ -133,7 +140,7 @@ fn activating_an_unknown_row_changes_nothing() {
     app.gui_search_activate("m-404".to_string(), "Movie".to_string());
 
     assert!(app.pending_overlay.is_none(), "no overlay request");
-    assert_eq!(app.gui_search_projection().rows.len(), 1, "the rows stay");
+    assert_eq!(projected(&app).rows.len(), 1, "the rows stay");
 }
 
 /// Contract: an empty query closes the results, and a close clears the live
@@ -142,11 +149,11 @@ fn activating_an_unknown_row_changes_nothing() {
 fn an_empty_query_and_a_close_both_clear_the_store() {
     let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
     app.gui_search_query(String::new());
-    assert_eq!(app.gui_search_projection(), GuiSearchProjection::default());
+    assert_eq!(app.gui_search_projection(), None);
 
     let mut app = landed_app("blue", vec![searchable("m-1", "Blue Train", "Movie")]);
     app.gui_search_close();
-    assert_eq!(app.gui_search_projection(), GuiSearchProjection::default());
+    assert_eq!(app.gui_search_projection(), None);
 }
 
 /// Contract: a failed result ends the load, records the failure, and keeps no
@@ -157,7 +164,7 @@ fn a_failed_result_records_the_failure_and_keeps_no_row() {
     app.send_gui_search_failure_for_test("blue", EmbyError::resolve("search failed"));
     assert!(app.drain_gui_search_results(), "the failure applied");
 
-    let projection = app.gui_search_projection();
+    let projection = projected(&app);
     assert!(projection.failed);
     assert!(!projection.loading);
     assert_eq!(projection.rows, vec![]);
