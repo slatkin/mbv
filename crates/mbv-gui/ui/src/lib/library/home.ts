@@ -1,6 +1,7 @@
 // The Home destination's interaction state (add-gui-library-panel design D1,
-// D12): what the window content owns and the core never reads — the cursor,
-// the scroll offset, and the measured viewport. The core owns the selection
+// D12): what the window content owns and the core never reads — the cursor.
+// The scroll offset and the measured viewport live in `./scroll` (design D9).
+// The core owns the selection
 // (the frame's `selected` row), so nothing here mirrors it: a press and the
 // cursor's settle send the select command, and the frame carries the
 // selection back. The row model is `$lib/library/home-list`'s; the panel's

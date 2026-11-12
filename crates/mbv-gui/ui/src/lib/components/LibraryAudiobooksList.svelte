@@ -7,8 +7,9 @@
 	// `$lib/library/audiobooks-list` over native scroll, and only the rows in
 	// view paint, so a long catalog stays fast.
 	//
-	// The cursor, the scroll offset, and the viewport are the window content's
-	// own in `$lib/library/audiobooks` (design D1); this component paints that
+	// The cursor is the window content's own in `$lib/library/audiobooks`
+	// (design D1). The scroll offset and the viewport are in
+	// `$lib/library/scroll` (design D9); this component paints that
 	// state and reports the two facts only the DOM holds. A press selects the
 	// book the Hero shows, and a double-click plays it from its saved position —
 	// the same play command the keys' Enter sends. A book has no play-next: `n`

@@ -6,8 +6,9 @@
 	// heights of `$lib/library/feeds-list` over native scroll, and only the
 	// rows in view paint, so a long Latest merge stays fast.
 	//
-	// The cursor, the scroll offset, and the viewport are the window content's
-	// own in `$lib/library/feeds` (design D1); this component paints that
+	// The cursor is the window content's own in `$lib/library/feeds`
+	// (design D1). The scroll offset and the viewport are in
+	// `$lib/library/scroll` (design D9); this component paints that
 	// state and reports the two facts only the DOM holds. A press selects the
 	// entry the Hero shows, and a double-click plays it (design D12): the
 	// keys' Enter plays the cursor row, and the press is the selection's half.

@@ -1,6 +1,7 @@
 // The Audiobooks destination's interaction state (add-gui-library-panel
 // design D12, row 9.1): what the window content owns and the core never reads
-// — the cursor, the scroll offset, and the measured viewport. The core owns
+// — the cursor. The scroll offset and the measured viewport live in
+// `./scroll` (design D9). The core owns
 // the selected book (the frame's `selected` and its Hero), so nothing here
 // mirrors it: a press sends the select command, and the frame carries the
 // choice back. The row model is `$lib/library/audiobooks-list`'s; the Hero's

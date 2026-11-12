@@ -6,8 +6,9 @@
 	// `$lib/library/emby-list` over native scroll, and only the rows in view
 	// paint, so a long library stays fast.
 	//
-	// The cursor, the scroll offset, and the viewport are the window content's
-	// own in `$lib/library/emby` (design D1); this component paints that state
+	// The cursor is the window content's own in `$lib/library/emby` (design
+	// D1). The scroll offset and the viewport are in `$lib/library/scroll`
+	// (design D9); this component paints that state
 	// and reports the two facts only the DOM holds. A press selects the row the
 	// Hero shows, a double-click plays it, and the keys' Enter plays the row
 	// under the cursor — every row is playable, because the core's folder-play

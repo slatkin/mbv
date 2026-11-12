@@ -1,8 +1,9 @@
 // The pill-list controller the Feeds, Podcasts, and Emby destinations share
 // (add-gui-library-panel row 7C.1, the /simplify review of PR 993): the
 // interaction state the window content owns and the core never reads — the
-// cursor, the scroll offset, the measured viewport, the pill row's focus, and
-// the `/` filter's text — plus the actions over it. The core owns the pill
+// cursor, the pill row's focus, and the `/` filter's text — plus the actions
+// over it. The scroll offset and the measured viewport live in the list's
+// scroll store (`./scroll`, design D9), which the controller is given. The core owns the pill
 // selection and the selected row (the frame's `pills` and `selected`), so
 // nothing here mirrors them: a press sends the select command, and the frame
 // carries the choice back. The panel's pane focus and the Hero overlay stay in

@@ -4,7 +4,7 @@
 	// over native scroll, the spacers that hold the scroll range of the rows
 	// outside the window, and the two facts only the DOM holds, the measured
 	// viewport and the native scroll offset, which it reports to the
-	// destination's own state.
+	// destination's scroll store (design D9).
 	//
 	// A destination supplies its rows, the two state values it owns (design D1),
 	// its attribute prefix, and a row snippet. Nothing here knows a destination,
@@ -17,9 +17,9 @@
 	interface Props {
 		/** The painted rows of the destination's model. */
 		rows: readonly Row[];
-		/** The scroll offset the destination's state holds, in pixels. */
+		/** The scroll offset the destination's scroll store holds, in pixels. */
 		scrollTop: number;
-		/** The viewport height the destination's state holds, in pixels. */
+		/** The viewport height the destination's scroll store holds, in pixels. */
 		viewportHeight: number;
 		/** The destination's own attribute prefix, as in `podcasts` or `abs`; empty for
 		 * Music, whose hook is `data-library-list`. */
@@ -73,7 +73,7 @@
 		onscroll((event.currentTarget as HTMLElement).scrollTop);
 	}
 
-	// The scroller mirrors the state: a key that moved the cursor set the
+	// The scroller mirrors the scroll store: a key that moved the cursor set the
 	// offset, and the element follows it. A user scroll already wrote the offset
 	// back, so this assignment is a no-op for it.
 	$effect(() => {

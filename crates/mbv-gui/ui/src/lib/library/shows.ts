@@ -1,7 +1,7 @@
 // The Shows destination's interaction state (add-gui-library-panel design D1,
 // D14): what the window content owns and the core never reads — the cursor,
-// the tree's open and closed nodes, the scroll offset, the measured viewport,
-// and the pill row's focus. The core owns the view mode and the selection (the
+// the tree's open and closed nodes, and the pill row's focus. The scroll offset
+// and the measured viewport live in `./scroll` (design D9). The core owns the view mode and the selection (the
 // frame's `pills` and `selected`), so nothing here mirrors them: a press and
 // an Enter send the select command, and the frame carries the selection back.
 // The row model is `$lib/library/shows-list`'s; the Hero's episode cursor

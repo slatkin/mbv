@@ -1,14 +1,14 @@
 // The plain Emby-library destination's interaction state (add-gui-library-panel
 // design D12, row 8.1): what the window content owns and the core never reads —
-// the cursor, the scroll offset, the measured viewport, and the feed-group pill
-// row's focus. The core owns the selected row and the feed-group selection (the
+// the cursor and the feed-group pill row's focus. The scroll offset and the
+// measured viewport live in `./scroll` (design D9). The core owns the selected row and the feed-group selection (the
 // frame's `selected` and `pills`), so nothing here mirrors them: a press and an
 // Enter send the command, and the frame carries the choice back. The row model
 // is `$lib/library/emby-list`'s; the panel's pane focus and the Hero overlay
 // stay in `./state`'s shared store, and the Hero carries no Workspace and no
 // cursor of its own.
 //
-// The state, the filter, the cursor, the scroll, and the pill focus are the
+// The state, the filter, the cursor, the scroll store, and the pill focus are the
 // pill-list controller's (`./pill-list`, row 7C.1); this module keeps the Emby
 // frame, the Emby rows and their letter headings, the letter rail, the play-next
 // command, the Emby command shapes, and the Emby names.

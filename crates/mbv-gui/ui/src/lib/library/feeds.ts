@@ -1,6 +1,7 @@
 // The Feeds destination's interaction state (add-gui-library-panel design
 // D12, row 11.1): what the window content owns and the core never reads — the
-// cursor, the scroll offset, the measured viewport, and the pill row's focus.
+// cursor and the pill row's focus. The scroll offset and the measured viewport
+// live in `./scroll` (design D9).
 // The core owns the pill selection and the selected entry (the frame's
 // `pills` and `selected`), so nothing here mirrors them: a press sends the
 // select command, and the frame carries the choice back. The row model is
@@ -9,7 +10,7 @@
 // and does nothing. A Client holds one feed tab,
 // so no library index rides the commands.
 //
-// The state, the filter, the cursor, the scroll, and the pill focus are the
+// The state, the filter, the cursor, the scroll store, and the pill focus are the
 // pill-list controller's (`./pill-list`, row 7C.1); this module keeps the
 // Feeds frame, the Feeds rows, the Feeds command shapes, and the Feeds names.
 

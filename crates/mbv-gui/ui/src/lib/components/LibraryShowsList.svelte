@@ -9,9 +9,10 @@
 	// `$lib/library/shows-list` over native scroll, and only the rows in view
 	// paint, so a long series list stays fast.
 	//
-	// The cursor, the open and closed nodes, the scroll offset, the viewport,
-	// and the filter text are the window content's own in `$lib/library/shows`
-	// (design D1); this component paints that state and reports the two facts
+	// The cursor, the open and closed nodes, and the filter text are the window
+	// content's own in `$lib/library/shows` (design D1). The scroll offset and
+	// the viewport are in `$lib/library/scroll` (design D9); this component
+	// paints that state and reports the two facts
 	// only the DOM holds. A press on a node opens or closes it and selects it
 	// for the Hero, a press on a leaf or a flat row selects it, a double-click
 	// on an episode plays it, and a right-click opens the item menu, as the
