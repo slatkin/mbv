@@ -6,6 +6,12 @@
 //! sample is compared, so an output that reports its position from time to
 //! time does not re-anchor between reports, and a rate change is no trigger —
 //! mbv has no playback-rate fact.
+//!
+//! Sync does not replay the anchor either: a replay would rewind the window's
+//! position by the anchor's age, because the front end stamps the anchor on
+//! receipt and has no other clock for it. `release_all` forgets the anchor,
+//! and the next collect takes the first-send path — a fresh anchor at a new
+//! revision.
 
 use std::time::{Duration, Instant};
 
@@ -85,6 +91,14 @@ impl PlayheadAnchor {
     fn send(&mut self, slot: &mut Slot<GuiPlayhead>, anchor: GuiPlayhead, now: Instant) {
         slot.adopt(anchor);
         self.sent_at = now;
+    }
+
+    /// Drop the anchor state's memory (design D5's sync rule): no last
+    /// observed position and a re-stamped send clock, so the next collect
+    /// predicts nothing and takes the first-send path.
+    pub(super) fn reset(&mut self) {
+        self.last_observed = None;
+        self.sent_at = Instant::now();
     }
 
     /// Move the send instant back by `by`, so a core-thread test's next

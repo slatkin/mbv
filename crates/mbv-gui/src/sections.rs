@@ -169,6 +169,14 @@ impl<T> Slot<T> {
     fn release(&mut self) {
         self.held = false;
     }
+
+    /// Drop the built value, so the next adopt starts over: it treats the
+    /// section as never built and mints a new revision (the playhead's `sync`
+    /// path, design D5).
+    fn forget(&mut self) {
+        self.value = None;
+        self.held = false;
+    }
 }
 
 /// The audit's check of one clean gated section (design D3): its fresh build
@@ -290,6 +298,12 @@ impl SectionLedger {
 
     /// Forget every section the window holds (design D4, the `sync` path). The
     /// next collect sends every present section at its current revision.
+    ///
+    /// The playhead is the one exception (design D5): its value is a
+    /// position-at-send sample the front end stamps on receipt, so replaying
+    /// it would rewind the position by the age of the anchor. Sync forgets it
+    /// instead, and the next collect re-adopts a fresh anchor — current
+    /// position, fresh send instant — at a new revision.
     pub fn release_all(&mut self) {
         self.attach.release();
         self.theme.release();
@@ -305,7 +319,8 @@ impl SectionLedger {
         self.library.release();
         self.search.release();
         self.settings.release();
-        self.playhead.release();
+        self.playhead.forget();
+        self.playhead_anchor.reset();
     }
 
     /// Build the sections this tick reads and return the batch of the sections

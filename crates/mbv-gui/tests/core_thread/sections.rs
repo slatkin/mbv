@@ -50,7 +50,11 @@ fn the_attached_core_continues_the_campaign_revisions() {
 }
 
 /// After a batch, `sync` re-sends every present section at the revision it
-/// held (design D4): the second batch equals the first one.
+/// held (design D4) — except the playhead (design D5): its value is a
+/// position-at-send sample the front end stamps on receipt, so a replay would
+/// rewind the position. Sync forgets the anchor, and the next collect
+/// re-adopts a fresh one at a new revision, so the playhead rides the sync
+/// batch with a revision strictly past the first batch's.
 #[test]
 fn sync_re_sends_every_present_section_at_its_revision() {
     let mut test = test_core(2);
@@ -59,7 +63,18 @@ fn sync_re_sends_every_present_section_at_its_revision() {
 
     test.tx.send(CoreInput::Sync).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_batch(), first);
+    let second = test.next_batch();
+
+    let mut held_at_its_revision = second.clone();
+    held_at_its_revision.playhead = None;
+    let mut expected = first.clone();
+    expected.playhead = None;
+    assert_eq!(held_at_its_revision, expected);
+    let first_playhead = first.playhead.expect("the first batch carries the anchor");
+    let second_playhead = second
+        .playhead
+        .expect("the sync batch re-adopts the anchor");
+    assert!(second_playhead.revision > first_playhead.revision);
 }
 
 /// A queue cursor move sends `queue` with a new revision and no other section
