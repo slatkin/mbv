@@ -7,12 +7,14 @@
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::GuiPodcastsFrame;
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiLibraryDetail, GuiPodcastsDetail, GuiPodcastsList,
+};
 use mbv_gui::bridge::library::GuiPodcastPill;
 use mbv_queue::AudiobookshelfItem;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{library_of, send_library};
+use super::{detail_of, list_of, send_library};
 
 /// The seeded podcasts core over the recording stub Owner the queue commands'
 /// tests read.
@@ -104,10 +106,16 @@ fn reloaded_frame(test: &mut crate::TestCore) -> crate::Held {
 }
 
 /// The Podcasts section a frame carries (row 10.1).
-fn podcasts_of(frame: &crate::Held) -> GuiPodcastsFrame {
-    library_of(frame)
-        .and_then(|content| content.podcasts)
-        .expect("the frame carries the Podcasts section")
+fn podcasts_parts(frame: &crate::Held) -> (GuiPodcastsList, GuiPodcastsDetail) {
+    let Some(GuiDestinationList::Podcasts(list)) =
+        list_of(frame).map(|section| section.destination)
+    else {
+        panic!("the frame carries the Podcasts list");
+    };
+    let Some(GuiLibraryDetail::Podcasts(detail)) = detail_of(frame) else {
+        panic!("the frame carries the Podcasts detail");
+    };
+    (list, detail)
 }
 
 /// The episode a queue command named, from the recording stub Owner's channel.
@@ -143,36 +151,26 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
         TabSelection::AudiobookshelfLibrary(1),
         "the Podcasts destination is active"
     );
-    let podcasts = podcasts_of(&reloaded_frame(&mut test));
-    assert_eq!(podcasts.list.lib_idx, 1);
-    let titles: Vec<&str> = podcasts
-        .list
-        .rows
-        .iter()
-        .map(|row| row.title.as_str())
-        .collect();
+    let (list, detail) = podcasts_parts(&reloaded_frame(&mut test));
+    assert_eq!(list.lib_idx, 1);
+    let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(
         titles,
         ["B New", "A Old", "A Undated"],
         "Latest merges both shows newest first with the undated episode last"
     );
-    let names: Vec<&str> = podcasts
-        .list
-        .pills
-        .iter()
-        .map(|pill| pill.name.as_str())
-        .collect();
+    let names: Vec<&str> = list.pills.iter().map(|pill| pill.name.as_str()).collect();
     assert_eq!(
         names,
         ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
         "the pill row carries the TUI's state pills between Latest and the shows"
     );
     assert_eq!(
-        podcasts.detail.selected.as_deref(),
-        podcasts.list.rows.first().map(|row| row.id.as_str()),
+        detail.selected.as_deref(),
+        list.rows.first().map(|row| row.id.as_str()),
         "the first row is the Hero default"
     );
-    let hero = podcasts.detail.hero.expect("the Hero paints");
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "B New");
     assert_eq!(hero.parent.as_deref(), Some("Show B"));
     assert_eq!(
@@ -201,16 +199,10 @@ fn the_pill_command_changes_the_rows() {
         },
     );
 
-    let podcasts = podcasts_of(&newest_frame(&mut test));
-    let titles: Vec<&str> = podcasts
-        .list
-        .rows
-        .iter()
-        .map(|row| row.title.as_str())
-        .collect();
+    let (list, _) = podcasts_parts(&newest_frame(&mut test));
+    let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["A Old", "A Undated"]);
-    let selected: Vec<&str> = podcasts
-        .list
+    let selected: Vec<&str> = list
         .pills
         .iter()
         .filter(|pill| pill.selected)
@@ -226,8 +218,8 @@ fn the_select_command_moves_the_hero() {
     let (mut test, _cmd_rx) = seeded_podcasts_core();
     open_podcasts(&mut test);
     seed_podcast_catalog(&mut test);
-    let row = podcasts_of(&reloaded_frame(&mut test))
-        .list
+    let row = podcasts_parts(&reloaded_frame(&mut test))
+        .0
         .rows
         .get(1)
         .map(|row| row.id.clone())
@@ -241,9 +233,9 @@ fn the_select_command_moves_the_hero() {
         },
     );
 
-    let podcasts = podcasts_of(&newest_frame(&mut test));
-    assert_eq!(podcasts.detail.selected.as_deref(), Some(row.as_str()));
-    let hero = podcasts.detail.hero.expect("the Hero paints");
+    let (_, detail) = podcasts_parts(&newest_frame(&mut test));
+    assert_eq!(detail.selected.as_deref(), Some(row.as_str()));
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "A Old");
 }
 
@@ -255,8 +247,8 @@ fn the_play_and_queue_commands_reach_the_owner() {
     let (mut test, cmd_rx) = seeded_podcasts_core();
     open_podcasts(&mut test);
     seed_podcast_catalog(&mut test);
-    let row = podcasts_of(&reloaded_frame(&mut test))
-        .list
+    let row = podcasts_parts(&reloaded_frame(&mut test))
+        .0
         .rows
         .first()
         .map(|row| row.id.clone())

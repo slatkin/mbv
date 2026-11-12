@@ -26,7 +26,9 @@ use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
 use mbv_gui::bridge::frame::focus::GuiFocus;
-use mbv_gui::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
+use mbv_gui::bridge::frame::library::{
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
+};
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
 use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
@@ -174,7 +176,9 @@ impl Held {
         held.hover = batch.hover.or(held.hover.take());
         held.footer = batch.footer.or(held.footer.take());
         held.status = batch.status.or(held.status.take());
-        held.library = batch.library.or(held.library.take());
+        held.library_list = batch.library_list.or(held.library_list.take());
+        held.library_detail = batch.library_detail.or(held.library_detail.take());
+        held.row_menu = batch.row_menu.or(held.row_menu.take());
         held.search = batch.search.or(held.search.take());
         held.settings = batch.settings.or(held.settings.take());
         held.playhead = batch.playhead.or(held.playhead.take());
@@ -220,9 +224,21 @@ impl Held {
         section_value(self.batch.status.as_ref(), "status")
     }
 
-    /// The Library content, `None` while no presented destination is active.
-    pub(crate) fn library(&self) -> Option<&GuiLibraryContent> {
-        optional_value(self.batch.library.as_ref())
+    /// The Library list section (design D8), `None` while no presented
+    /// destination is active.
+    pub(crate) fn library_list(&self) -> Option<&GuiLibraryList> {
+        optional_value(self.batch.library_list.as_ref())
+    }
+
+    /// The Library detail section (design D8), `None` while no presented
+    /// destination is active.
+    pub(crate) fn library_detail(&self) -> Option<&GuiLibraryDetail> {
+        optional_value(self.batch.library_detail.as_ref())
+    }
+
+    /// The right-click item menu section, `None` while no menu is open.
+    pub(crate) fn row_menu(&self) -> Option<&GuiLibraryRowMenuFrame> {
+        optional_value(self.batch.row_menu.as_ref())
     }
 
     /// The Search section, `None` while the field is closed.

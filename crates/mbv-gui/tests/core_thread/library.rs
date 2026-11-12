@@ -18,7 +18,9 @@ use crate::Held;
 use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
-use mbv_gui::bridge::frame::library::GuiLibraryContent;
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiMusicDetail, GuiMusicList,
+};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -156,16 +158,38 @@ fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> Held {
     test.held()
 }
 
-/// The Library section a frame carries (design D2).
-fn library_of(frame: &Held) -> Option<GuiLibraryContent> {
-    frame.library().cloned()
+/// The Library list section a frame carries (design D8).
+fn list_of(frame: &Held) -> Option<GuiLibraryList> {
+    frame.library_list().cloned()
 }
 
-/// The Hero's artwork value of a frame that carries the Library content.
+/// The Library detail section a frame carries (design D8).
+fn detail_of(frame: &Held) -> Option<GuiLibraryDetail> {
+    frame.library_detail().cloned()
+}
+
+/// The Music list part a frame carries, `None` while another destination is
+/// active.
+fn music_list(frame: &Held) -> Option<GuiMusicList> {
+    let GuiDestinationList::Music(list) = list_of(frame)?.destination else {
+        return None;
+    };
+    Some(list)
+}
+
+/// The Music detail part a frame carries, `None` while another destination is
+/// active.
+fn music_detail(frame: &Held) -> Option<GuiMusicDetail> {
+    let GuiLibraryDetail::Music(detail) = detail_of(frame)? else {
+        return None;
+    };
+    Some(detail)
+}
+
+/// The Hero's artwork value of a frame that carries the Music detail.
 fn hero_art(frame: &Held) -> GuiArtRef {
-    library_of(frame)
-        .and_then(|content| content.music)
-        .and_then(|music| music.detail.art)
+    music_detail(frame)
+        .and_then(|detail| detail.art)
         .expect("the frame carries the Hero's art")
 }
 

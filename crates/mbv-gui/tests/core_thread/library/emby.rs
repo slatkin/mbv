@@ -9,12 +9,15 @@
 use crate::Held;
 use mbv::ClientTickHost;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_gui::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiLibraryDetail, GuiMetaKindFrame,
+    GuiMetaSegmentFrame,
+};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
-use super::{TestCore, pump_until, send_library};
+use super::{TestCore, detail_of, list_of, pump_until, send_library};
 use crate::{test_core_with, test_emby_client};
 
 /// The library's one listing, as the mock transport returns it: the body the
@@ -35,10 +38,16 @@ fn movie(id: &str, name: &str) -> EmbyItem {
     item
 }
 
-/// The plain Emby-library section a frame carries, present only while a
-/// plain Emby-library destination presents.
-fn emby_section(frame: &Held) -> Option<&mbv_gui::bridge::frame::library::GuiEmbyFrame> {
-    frame.library()?.emby.as_ref()
+/// The plain Emby-library list and detail parts a frame carries, present only
+/// while a plain Emby-library destination presents.
+fn emby_parts(frame: &Held) -> Option<(GuiEmbyList, GuiEmbyDetail)> {
+    let GuiDestinationList::Emby(list) = list_of(frame)?.destination else {
+        return None;
+    };
+    let GuiLibraryDetail::Emby(detail) = detail_of(frame)? else {
+        return None;
+    };
+    Some((list, detail))
 }
 
 /// Pump GUI ticks until the plain Emby-library section a frame carries
@@ -46,10 +55,14 @@ fn emby_section(frame: &Held) -> Option<&mbv_gui::bridge::frame::library::GuiEmb
 /// (the fetch workers' own progress) instead of sleeping between them.
 fn pump_until_emby(
     test: &mut TestCore,
-    want: impl Fn(&mbv_gui::bridge::frame::library::GuiEmbyFrame) -> bool,
+    want: impl Fn(&GuiEmbyList, &GuiEmbyDetail) -> bool,
     what: &str,
 ) {
-    pump_until(test, |frame| emby_section(frame).is_some_and(&want), what);
+    pump_until(
+        test,
+        |frame| emby_parts(frame).is_some_and(|(list, detail)| want(&list, &detail)),
+        what,
+    );
 }
 
 /// The mocked bootstrap's catalog presents the Movies destination, and the
@@ -71,23 +84,21 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     // first-presented open activates it.
     assert!(test.core.step());
     let frame = test.held();
-    let emby = emby_section(&frame).expect("the open Movies destination presents its content");
+    let (list, detail) =
+        emby_parts(&frame).expect("the open Movies destination presents its content");
     assert_eq!(
-        emby.list.lib_idx, 0,
+        list.lib_idx, 0,
         "the frame names the library the commands carry"
     );
+    assert!(!list.feed_group, "the Movies library is the plain mode");
     assert!(
-        !emby.list.feed_group,
-        "the Movies library is the plain mode"
-    );
-    assert!(
-        emby.list.pills.is_empty() && emby.list.rows.is_empty() && emby.detail.hero.is_none(),
+        list.pills.is_empty() && list.rows.is_empty() && detail.hero.is_none(),
         "the root list has not landed rows yet"
     );
     // The no-URL stub client's root-list fetch fails; the frame names the
     // failure once it lands, and a later frame build re-issues nothing
     // behind the seed below.
-    pump_until_emby(&mut test, |emby| emby.list.failed, "the failed root fetch");
+    pump_until_emby(&mut test, |list, _| list.failed, "the failed root fetch");
 
     test.core
         .app_mut()
@@ -100,14 +111,14 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
         },
     );
     let frame = test.held();
-    let emby = emby_section(&frame).expect("the frame carries the Emby content");
+    let (_, detail) = emby_parts(&frame).expect("the frame carries the Emby content");
     assert_eq!(
-        emby.detail.selected.as_deref(),
+        detail.selected.as_deref(),
         Some("m-2"),
         "the frame paints the core's selection"
     );
     assert_eq!(
-        emby.detail.hero.as_ref().expect("the Hero moved").title,
+        detail.hero.as_ref().expect("the Hero moved").title,
         "B Movie",
         "the Hero's facts follow the selected row"
     );
@@ -134,7 +145,7 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        |emby| emby.list.pills.len() == 3 && !emby.list.loading,
+        |list, _| list.pills.len() == 3 && !list.loading,
         "the counted folder pill",
     );
 
@@ -147,10 +158,9 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     );
     pump_until_emby(
         &mut test,
-        |emby| {
-            emby.list.rows.iter().any(|row| row.id == "vid-1")
-                && emby
-                    .list
+        |list, _| {
+            list.rows.iter().any(|row| row.id == "vid-1")
+                && list
                     .pills
                     .iter()
                     .find(|pill| pill.selected)
@@ -187,7 +197,7 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
 
     pump_until_emby(
         &mut test,
-        |emby| emby.list.pills.len() == 3 && !emby.list.loading,
+        |list, _| list.pills.len() == 3 && !list.loading,
         "the counted folder pill",
     );
 
@@ -201,31 +211,30 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
     let new_view = std::cell::RefCell::new(None);
     pump_until_emby(
         &mut test,
-        |emby| {
-            let ready = emby
-                .list
+        |list, detail| {
+            let ready = list
                 .pills
                 .iter()
                 .find(|pill| pill.selected)
                 .is_some_and(|pill| pill.name == "New")
-                && emby.list.rows.iter().any(|row| row.id == "vid-new");
+                && list.rows.iter().any(|row| row.id == "vid-new");
             if ready {
-                *new_view.borrow_mut() = Some(emby.clone());
+                *new_view.borrow_mut() = Some((list.clone(), detail.clone()));
             }
             ready
         },
         "the Latest snapshot's rows",
     );
-    let emby = new_view
+    let (list, _detail) = new_view
         .into_inner()
         .expect("the New view's frame carried its content");
     assert_eq!(
-        emby.list.collection_names,
+        list.collection_names,
         vec!["New".to_string()],
         "the location names the New pill"
     );
     assert_eq!(
-        emby.list.rows[0].subtitle,
+        list.rows[0].subtitle,
         Some("Channel 1".to_string()),
         "the row names the programme (root folder) the video sits in"
     );
@@ -241,7 +250,7 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
     );
     let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
     assert!(test.core.step());
-    pump_until_emby(&mut test, |emby| emby.list.failed, "the failed root fetch");
+    pump_until_emby(&mut test, |list, _| list.failed, "the failed root fetch");
     test.core.app_mut().seed_gui_emby_roots_for_test(0, items);
     send_library(
         &mut test,
@@ -260,8 +269,8 @@ fn an_emby_heros_duration_row_arrives_as_a_time_segment() {
     let mut item = movie("m-1", "A Movie");
     item.runtime_ticks = 5_400 * TICKS_PER_SECOND;
     let frame = movies_hero_frame(vec![item]);
-    let hero = emby_section(&frame)
-        .and_then(|emby| emby.detail.hero.as_ref())
+    let hero = emby_parts(&frame)
+        .and_then(|(_, detail)| detail.hero)
         .expect("the Hero paints");
     let duration = hero.duration_row.expect("the Hero names its duration row");
     assert_eq!(

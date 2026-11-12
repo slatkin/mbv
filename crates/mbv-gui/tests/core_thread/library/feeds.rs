@@ -10,12 +10,14 @@
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::GuiFeedsFrame;
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiFeedsDetail, GuiFeedsList, GuiLibraryDetail,
+};
 use mbv_gui::bridge::library::GuiFeedPill;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{library_of, send_library};
+use super::{detail_of, list_of, send_library};
 
 /// The two subscriptions the tests configure: the feed identity is the URL, as
 /// the fetch stamps it on every entry.
@@ -119,10 +121,15 @@ fn reloaded_frame(test: &mut crate::TestCore) -> crate::Held {
 }
 
 /// The Feeds section a frame carries (row 11.1).
-fn feeds_of(frame: &crate::Held) -> GuiFeedsFrame {
-    library_of(frame)
-        .and_then(|content| content.feeds)
-        .expect("the frame carries the Feeds section")
+fn feeds_parts(frame: &crate::Held) -> (GuiFeedsList, GuiFeedsDetail) {
+    let Some(GuiDestinationList::Feeds(list)) = list_of(frame).map(|section| section.destination)
+    else {
+        panic!("the frame carries the Feeds list");
+    };
+    let Some(GuiLibraryDetail::Feeds(detail)) = detail_of(frame) else {
+        panic!("the frame carries the Feeds detail");
+    };
+    (list, detail)
 }
 
 /// The entry ids a queue command named, from the recording stub Owner's
@@ -162,22 +169,15 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         TabSelection::Feeds,
         "the Feeds destination is active"
     );
-    let feeds = feeds_of(&reloaded_frame(&mut test));
-    let titles: Vec<&str> = feeds
-        .list
-        .rows
-        .iter()
-        .map(|row| row.title.as_str())
-        .collect();
+    let (list, detail) = feeds_parts(&reloaded_frame(&mut test));
+    let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(
         titles,
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
         "Latest merges both subscriptions newest first with nothing dated last"
     );
     assert_eq!(
-        feeds
-            .list
-            .pills
+        list.pills
             .iter()
             .map(|pill| (pill.name.as_str(), pill.selected))
             .collect::<Vec<_>>(),
@@ -185,11 +185,11 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         "the pill row is Latest first, then each subscription by name"
     );
     assert_eq!(
-        feeds.detail.selected.as_deref(),
-        feeds.list.rows.first().map(|row| row.id.as_str()),
+        detail.selected.as_deref(),
+        list.rows.first().map(|row| row.id.as_str()),
         "the first row is the Hero default"
     );
-    let hero = feeds.detail.hero.expect("the Hero paints");
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "a-new");
     assert_eq!(hero.parent.as_deref(), Some("Feed A"));
     assert_eq!(
@@ -214,16 +214,10 @@ fn the_pill_command_changes_the_rows() {
         },
     );
 
-    let feeds = feeds_of(&newest_frame(&mut test));
-    let titles: Vec<&str> = feeds
-        .list
-        .rows
-        .iter()
-        .map(|row| row.title.as_str())
-        .collect();
+    let (list, _) = feeds_parts(&newest_frame(&mut test));
+    let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["b-mid", "b-undated"]);
-    let selected: Vec<&str> = feeds
-        .list
+    let selected: Vec<&str> = list
         .pills
         .iter()
         .filter(|pill| pill.selected)
@@ -239,8 +233,8 @@ fn the_select_command_moves_the_hero() {
     let (mut test, _cmd_rx) = seeded_feeds_core();
     open_feeds(&mut test);
     land_fetches(&mut test);
-    let row = feeds_of(&reloaded_frame(&mut test))
-        .list
+    let row = feeds_parts(&reloaded_frame(&mut test))
+        .0
         .rows
         .get(1)
         .map(|row| row.id.clone())
@@ -251,9 +245,9 @@ fn the_select_command_moves_the_hero() {
         mbv_gui::bridge::library::GuiLibraryCommand::FeedsSelect { row: row.clone() },
     );
 
-    let feeds = feeds_of(&newest_frame(&mut test));
-    assert_eq!(feeds.detail.selected.as_deref(), Some(row.as_str()));
-    let hero = feeds.detail.hero.expect("the Hero paints");
+    let (_, detail) = feeds_parts(&newest_frame(&mut test));
+    assert_eq!(detail.selected.as_deref(), Some(row.as_str()));
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "b-mid");
     assert_eq!(hero.parent.as_deref(), Some("Feed B"));
 }
@@ -266,8 +260,8 @@ fn the_play_and_queue_commands_reach_the_owner() {
     let (mut test, cmd_rx) = seeded_feeds_core();
     open_feeds(&mut test);
     land_fetches(&mut test);
-    let row = feeds_of(&reloaded_frame(&mut test))
-        .list
+    let row = feeds_parts(&reloaded_frame(&mut test))
+        .0
         .rows
         .first()
         .map(|row| row.id.clone())
@@ -319,8 +313,8 @@ fn a_source_less_entry_flashes_and_submits_nothing() {
         }],
     );
     assert!(test.core.step(), "the core thread never quits mid-drain");
-    let row = feeds_of(&reloaded_frame(&mut test))
-        .list
+    let row = feeds_parts(&reloaded_frame(&mut test))
+        .0
         .rows
         .first()
         .map(|row| row.id.clone())

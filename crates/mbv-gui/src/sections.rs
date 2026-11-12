@@ -32,7 +32,9 @@ use crate::art::{GuiArtRef, art_url, trickplay_path};
 use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::focus::GuiFocus;
-use crate::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
+use crate::bridge::frame::library::{
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
+};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, card_artwork_ref,
@@ -203,7 +205,13 @@ pub struct SectionLedger {
     hover: Slot<Option<GuiScrubberHover>>,
     footer: Slot<GuiQueueFooter>,
     status: Slot<GuiStatusBar>,
-    library: Slot<Option<GuiLibraryContent>>,
+    /// The `libraryList` section (design D8): the tabs and the list part. One
+    /// gated Library pass builds it with `library_detail` and `row_menu`.
+    library_list: Slot<Option<GuiLibraryList>>,
+    /// The `libraryDetail` section (design D8): the detail part.
+    library_detail: Slot<Option<GuiLibraryDetail>>,
+    /// The `rowMenu` section: the right-click item menu.
+    row_menu: Slot<Option<GuiLibraryRowMenuFrame>>,
     search: Slot<Option<GuiSearchFrame>>,
     settings: Slot<Option<GuiSettingsFrame>>,
     /// The playhead anchor (design D5): the last sent anchor, the revision it
@@ -241,7 +249,9 @@ impl Default for SectionLedger {
             hover: Slot::default(),
             footer: Slot::default(),
             status: Slot::default(),
-            library: Slot::default(),
+            library_list: Slot::default(),
+            library_detail: Slot::default(),
+            row_menu: Slot::default(),
             search: Slot::default(),
             settings: Slot::default(),
             playhead: Slot::default(),
@@ -311,7 +321,9 @@ impl SectionLedger {
         self.hover.release();
         self.footer.release();
         self.status.release();
-        self.library.release();
+        self.library_list.release();
+        self.library_detail.release();
+        self.row_menu.release();
         self.search.release();
         self.settings.release();
         self.playhead.forget();
@@ -403,11 +415,10 @@ impl SectionLedger {
             audit_clean(Section::Theme, &self.theme, &GuiTheme::current());
         }
         if !marked.contains(&Section::Library) {
-            audit_clean(
-                Section::Library,
-                &self.library,
-                &library::build_content(app),
-            );
+            let pass = library::build(app);
+            audit_clean(Section::Library, &self.library_list, &pass.list);
+            audit_clean(Section::Library, &self.library_detail, &pass.detail);
+            audit_clean(Section::Library, &self.row_menu, &pass.row_menu);
         }
         if !marked.contains(&Section::Search) {
             let search = GuiSearchFrame::carried(&app.gui_search_projection());
@@ -431,12 +442,19 @@ impl SectionLedger {
             self.theme.adopt(GuiTheme::current());
         }
         if marked.contains(&Section::Library) {
-            let before = self.library.revision;
-            self.library.adopt(library::build_content(app));
-            if self.library.revision != before
-                && let Some(Some(content)) = self.library.value.as_ref()
-            {
-                library::log_built(self.library.revision, content);
+            let before = (self.library_list.revision, self.library_detail.revision);
+            let pass = library::build(app);
+            self.library_list.adopt(pass.list);
+            self.library_detail.adopt(pass.detail);
+            self.row_menu.adopt(pass.row_menu);
+            let after = (self.library_list.revision, self.library_detail.revision);
+            if after != before {
+                library::log_built(
+                    after.0,
+                    after.1,
+                    self.library_list.value.as_ref().and_then(Option::as_ref),
+                    self.library_detail.value.as_ref().and_then(Option::as_ref),
+                );
             }
         }
         if marked.contains(&Section::Search) {
@@ -490,7 +508,9 @@ impl SectionLedger {
             hover: self.hover.take(),
             footer: self.footer.take(),
             status: self.status.take(),
-            library: self.library.take(),
+            library_list: self.library_list.take(),
+            library_detail: self.library_detail.take(),
+            row_menu: self.row_menu.take(),
             search: self.search.take(),
             settings: self.settings.take(),
             playhead: self.playhead.take(),

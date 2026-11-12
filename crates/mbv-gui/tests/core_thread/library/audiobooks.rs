@@ -6,11 +6,14 @@
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::GuiLibraryContent;
+use mbv_gui::bridge::frame::library::{
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiLibraryDetail,
+};
 use mbv_queue::AudiobookshelfItem;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{library_of, send_library};
+use super::{detail_of, list_of, send_library};
+use crate::Held;
 
 /// A core thread over an App whose catalog holds one Audiobookshelf book
 /// library and one podcast library, with no Emby library: the Audiobooks and
@@ -64,13 +67,17 @@ fn seeded_audiobooks_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlC
     (test, cmd_rx)
 }
 
-/// The Audiobooks section a frame carries (row 9.1).
-fn audiobooks_of(
-    frame: Option<GuiLibraryContent>,
-) -> mbv_gui::bridge::frame::library::GuiAudiobooksFrame {
-    frame
-        .and_then(|content| content.audiobooks)
-        .expect("the frame carries the Audiobooks section")
+/// The Audiobooks list and detail parts a frame carries (row 9.1).
+fn audiobooks_parts(frame: &Held) -> (GuiAudiobooksList, GuiAudiobooksDetail) {
+    let Some(GuiDestinationList::Audiobooks(list)) =
+        list_of(frame).map(|section| section.destination)
+    else {
+        panic!("the frame carries the Audiobooks list");
+    };
+    let Some(GuiLibraryDetail::Audiobooks(detail)) = detail_of(frame) else {
+        panic!("the frame carries the Audiobooks detail");
+    };
+    (list, detail)
 }
 
 /// The Audiobooks book id a queue command names, from the recording stub
@@ -166,37 +173,27 @@ fn the_frame_carries_the_book_list_after_the_open() {
         mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position },
     );
 
-    let audiobooks = audiobooks_of(library_of(&test.held()));
-    assert_eq!(audiobooks.list.lib_idx, 0);
-    assert!(!audiobooks.list.loading && !audiobooks.list.failed);
-    let ids: Vec<&str> = audiobooks
-        .list
-        .rows
-        .iter()
-        .map(|row| row.id.as_str())
-        .collect();
+    let (list, detail) = audiobooks_parts(&test.held());
+    assert_eq!(list.lib_idx, 0);
+    assert!(!list.loading && !list.failed);
+    let ids: Vec<&str> = list.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
         ["book-a", "book-b"],
         "the rows are the catalog in its order"
     );
-    let letters: Vec<char> = audiobooks
-        .list
-        .rows
-        .iter()
-        .map(|row| row.sort_letter)
-        .collect();
+    let letters: Vec<char> = list.rows.iter().map(|row| row.sort_letter).collect();
     assert_eq!(
         letters,
         ['A', 'F'],
         "the rail letters read the author sort keys"
     );
     assert_eq!(
-        audiobooks.detail.selected.as_deref(),
+        detail.selected.as_deref(),
         Some("book-a"),
         "the first book is the Hero default"
     );
-    let hero = audiobooks.detail.hero.expect("the Hero paints");
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
     let texts: Vec<String> = hero
         .meta_rows
@@ -225,9 +222,9 @@ fn the_select_command_moves_the_hero_and_workspace() {
         },
     );
 
-    let audiobooks = audiobooks_of(library_of(&test.held()));
-    assert_eq!(audiobooks.detail.selected.as_deref(), Some("book-b"));
-    let hero = audiobooks.detail.hero.expect("the Hero paints");
+    let (_, detail) = audiobooks_parts(&test.held());
+    assert_eq!(detail.selected.as_deref(), Some("book-b"));
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Bovary");
     let workspace = hero
         .workspace
@@ -247,7 +244,7 @@ fn the_select_command_moves_the_hero_and_workspace() {
     assert_eq!(workspace.rows[1].start_ticks, 30 * minutes);
     assert_eq!(workspace.rows[1].end_ticks, 60 * minutes);
     assert_eq!(
-        audiobooks.detail.playing_book_id, None,
+        detail.playing_book_id, None,
         "no book plays, so the frame names no playing book"
     );
 }

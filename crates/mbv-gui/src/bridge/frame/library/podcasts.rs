@@ -51,20 +51,6 @@ pub struct GuiPodcastsDetail {
     pub hero: Option<GuiPodcastsHeroFrame>,
 }
 
-/// The Podcasts destination's content as the current `library` section carries
-/// it (design D8): the list part and the detail part, flattened so the wire keys
-/// stay the ones the window reads today.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiPodcastsFrame {
-    /// The list part (design D8).
-    #[serde(flatten)]
-    pub list: GuiPodcastsList,
-    /// The detail part (design D8).
-    #[serde(flatten)]
-    pub detail: GuiPodcastsDetail,
-}
-
 /// The selected episode's Hero facts (row 10.1): the shared
 /// `hero_content_abs_episode` producer's facts, the cleaned description, and
 /// the parent show's Square cover.
@@ -114,17 +100,6 @@ impl GuiPodcastsDetail {
         Self {
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiPodcastsHeroFrame::from),
-        }
-    }
-}
-
-impl GuiPodcastsFrame {
-    /// The Podcasts destination's content for `projection` (row 10.1), with
-    /// the library index the Podcasts commands name.
-    pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
-        Self {
-            list: GuiPodcastsList::from_projection(lib_idx, projection),
-            detail: GuiPodcastsDetail::from_projection(projection),
         }
     }
 }

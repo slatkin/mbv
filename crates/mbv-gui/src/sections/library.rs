@@ -1,142 +1,91 @@
-//! The Library content build (add-gui-library-panel design D2), the one builder
-//! of the gated Library section (`gui-change-driven-sections` design D2). The
-//! destination's ensures run inside the build, so a build starts the
-//! loads its section waits on (design D12 of add-gui-library-panel).
+//! The Library build (add-gui-library-panel design D2, split by
+//! `gui-change-driven-sections` design D8): one gated pass that builds the three
+//! Library sections, `libraryList`, `libraryDetail`, and `rowMenu`. Each
+//! destination makes one App projection call, and that call feeds both its list
+//! part and its detail part. The destination's ensures run inside the pass, so
+//! a build starts the loads its sections wait on (design D12 of
+//! add-gui-library-panel). The ledger compares each section on its own.
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryContent,
-    GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame, GuiShowsFrame,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiEmbyDetail, GuiEmbyList,
+    GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicDetail, GuiMusicList, GuiPodcastsDetail,
+    GuiPodcastsList, GuiShowsDetail, GuiShowsList,
 };
 
-/// The Library content of the active destination (design D2): the destination
-/// tabs the top bar paints, and the one active destination's section. `None`
-/// while no presented destination is active. The ensures run before their
-/// section is built, as the step always ran them.
-pub(crate) fn build_content(app: &mut App) -> Option<GuiLibraryContent> {
-    // No presented destination is active (design D2): the section is absent.
+/// The three Library sections one gated pass builds (design D8). The list and
+/// the detail are `None` while no presented destination is active, and the row
+/// menu goes with them, as the menu rode the content before the split.
+#[derive(Debug, Default)]
+pub(crate) struct LibraryPass {
+    /// The `libraryList` section's value.
+    pub(crate) list: Option<GuiLibraryList>,
+    /// The `libraryDetail` section's value.
+    pub(crate) detail: Option<GuiLibraryDetail>,
+    /// The `rowMenu` section's value.
+    pub(crate) row_menu: Option<GuiLibraryRowMenuFrame>,
+}
+
+/// The Library sections of the active destination (design D8): the tabs the top
+/// bar paints with the destination's list part, the detail part, and the right-
+/// click menu. Every section is `None` while no presented destination is active.
+pub(crate) fn build(app: &mut App) -> LibraryPass {
     let destination = app.gui_active_destination();
-    // The Podcasts destination's ensure (add-gui-library-panel
-    // design D12, row 10.1): the selected pill's own loads — the Latest
-    // shelf and every show's episodes, or one show's episodes — start
-    // before any command does, as the Audiobooks ensure starts its
-    // default pick's detail. The section itself is built with the content
-    // below.
+    // The Podcasts destination's ensure (add-gui-library-panel design D12,
+    // row 10.1): the selected pill's own loads start before any command does.
     if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
         app.ensure_gui_podcast_selection(lib_idx);
     }
-    // The Feeds destination's ensure (add-gui-library-panel
-    // design D12, row 11.1): the stored pill converges on the subscription
-    // set the tab holds. The entries arrive from the shared startup fetch,
-    // so the ensure starts no load.
+    // The Feeds destination's ensure (row 11.1): the stored pill converges on
+    // the subscription set the tab holds. The entries arrive from the shared
+    // startup fetch, so the ensure starts no load.
     if matches!(destination, Some(GuiDestinationKind::Feeds)) {
         app.ensure_gui_feeds_selection();
     }
-    // The Audiobooks destination's ensure (add-gui-library-panel
-    // design D12, row 9.1) sits in its match arm below: the default pick's
-    // detail load starts before any select does.
-    let music = match destination {
-        Some(GuiDestinationKind::Music { lib_idx }) => Some(music_frame(app, lib_idx)),
-        _ => None,
+    let Some((list, detail)) = destination_parts(app, destination) else {
+        return LibraryPass::default();
     };
-    let shows = match destination {
-        Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_frame(app, lib_idx)),
-        _ => None,
-    };
-    let emby = match destination {
-        Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_frame(app, lib_idx)),
-        _ => None,
-    };
-    let audiobooks = match destination {
-        Some(GuiDestinationKind::Audiobooks { lib_idx }) => {
-            app.ensure_gui_abs_selection(lib_idx);
-            Some(audiobooks_frame(app, lib_idx))
-        }
-        _ => None,
-    };
-    let podcasts = match destination {
-        Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_frame(app, lib_idx)),
-        _ => None,
-    };
-    let feeds = matches!(destination, Some(GuiDestinationKind::Feeds)).then(|| feeds_frame(app));
-    // Home presents while no library destination presents content (design
-    // D12): the destinations are exclusive, so no two fields of the content
-    // set themselves at once.
-    let home = matches!(destination, Some(GuiDestinationKind::Home)).then(|| home_frame(app));
-    let sections = DestinationSections {
-        music,
-        home,
-        shows,
-        emby,
-        audiobooks,
-        podcasts,
-        feeds,
-    };
-    sections.any().then(|| content(app, sections))
-}
-
-/// The active destination's section, computed by the gate above (design D2):
-/// exactly one field is present, because the destinations are exclusive. The
-/// struct keeps the content build's argument count in hand as the presented
-/// destinations grow.
-#[derive(Debug, Default)]
-struct DestinationSections {
-    music: Option<GuiMusicFrame>,
-    home: Option<GuiHomeFrame>,
-    shows: Option<GuiShowsFrame>,
-    emby: Option<GuiEmbyFrame>,
-    audiobooks: Option<GuiAudiobooksFrame>,
-    podcasts: Option<GuiPodcastsFrame>,
-    feeds: Option<GuiFeedsFrame>,
-}
-
-impl DestinationSections {
-    /// Whether any destination presents content: the gate's condition, and the
-    /// one the section's absence names.
-    fn any(&self) -> bool {
-        self.music.is_some()
-            || self.home.is_some()
-            || self.shows.is_some()
-            || self.emby.is_some()
-            || self.audiobooks.is_some()
-            || self.podcasts.is_some()
-            || self.feeds.is_some()
-    }
-}
-
-/// The Library panel's content for the active destination (design D2): the
-/// destination tabs the top bar paints, and the one active destination's
-/// section — the Music destination's pills, list, and Hero while a Grouped
-/// Music library is active, Home's flat list and Hero while Home is active
-/// (design D12), the Shows destination's mode pills, list, and Hero while a
-/// Shows library is active (design D12, row 7.1), and the Feeds destination's
-/// pill row, entry rows, and Hero while Feeds is active (row 11.1). The gate
-/// above computes the section, so the gate and the content cannot disagree.
-fn content(app: &mut App, sections: DestinationSections) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     // The right-click item menu is the Library's, not one destination's (design
-    // D8, D15): a row of any destination opens it, so it rides the content.
+    // D8, D15): a row of any destination opens it.
     let row_menu = app.gui_library_row_menu();
-    GuiLibraryContent {
-        tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
-        current_tab: current,
-        music: sections.music,
-        home: sections.home,
-        shows: sections.shows,
-        emby: sections.emby,
-        audiobooks: sections.audiobooks,
-        podcasts: sections.podcasts,
-        feeds: sections.feeds,
+    LibraryPass {
+        list: Some(GuiLibraryList {
+            tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
+            current_tab: current,
+            destination: list,
+        }),
+        detail: Some(detail),
         row_menu: row_menu.as_ref().map(GuiLibraryRowMenuFrame::from),
     }
 }
 
-/// The Music destination's content (design D5): the projection's facts with
-/// the Hero's artwork projected beside them, the picked item's menu, and the
+/// The list and detail parts of the active destination, or `None` while no
+/// presented destination is active. The match names every destination, so a new
+/// destination forces a row here.
+fn destination_parts(
+    app: &mut App,
+    destination: Option<GuiDestinationKind>,
+) -> Option<(GuiDestinationList, GuiLibraryDetail)> {
+    match destination {
+        None => None,
+        Some(GuiDestinationKind::Home) => Some(home_parts(app)),
+        Some(GuiDestinationKind::Music { lib_idx }) => Some(music_parts(app, lib_idx)),
+        Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_parts(app, lib_idx)),
+        Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_parts(app, lib_idx)),
+        Some(GuiDestinationKind::Audiobooks { lib_idx }) => Some(audiobooks_parts(app, lib_idx)),
+        Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_parts(app, lib_idx)),
+        Some(GuiDestinationKind::Feeds) => Some(feeds_parts(app)),
+    }
+}
+
+/// The Music destination's parts (design D5): the projection's list facts, and
+/// the detail facts with the Hero's artwork, the picked item's menu, and the
 /// playing track's id.
-fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
+fn music_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     app.ensure_gui_music_selection(lib_idx);
     let projection = app.gui_music_projection(lib_idx);
     let picked = projection
@@ -150,120 +99,127 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
     let playing_track_id = app.gui_playing_track_id();
-    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu, playing_track_id)
+    (
+        GuiDestinationList::Music(GuiMusicList::from_projection(lib_idx, &projection)),
+        GuiLibraryDetail::Music(GuiMusicDetail::from_projection(
+            &projection,
+            art,
+            &menu,
+            playing_track_id,
+        )),
+    )
 }
 
-/// The Home destination's content (design D12, the USER-APPROVED GUI Home
-/// design): the flat list's projection rows, the core's selected row, and
-/// its Hero, fetched and built here on each rebuild so an unchanged build's
-/// revision carries nothing (the memo's content compare).
-fn home_frame(app: &mut App) -> GuiHomeFrame {
+/// The Home destination's parts (design D12).
+fn home_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = app.gui_home_projection();
-    GuiHomeFrame::from_projection(&projection)
+    (
+        GuiDestinationList::Home(GuiHomeList::from_projection(&projection)),
+        GuiLibraryDetail::Home(GuiHomeDetail::from_projection(&projection)),
+    )
 }
 
-/// The Shows destination's content (design D14): the mode pills, the active
-/// mode's rows — the All series tree or the flat lists — the selected row,
-/// and its Hero, fetched and built here on each rebuild so an unchanged
-/// build's revision carries nothing (the memo's content compare). The ensure loads
-/// the selected series' detail **and its selected season's episodes**, so the
-/// Hero's Workspace paints on arrival.
-fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
+/// The Shows destination's parts (design D14). The ensure loads the selected
+/// series' detail and its selected season's episodes, so the Hero's Workspace
+/// paints on arrival.
+fn shows_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     app.ensure_gui_shows_workspace(lib_idx);
     let projection = app.gui_shows_projection(lib_idx);
-    GuiShowsFrame::from_projection(lib_idx, &projection)
+    (
+        GuiDestinationList::Shows(GuiShowsList::from_projection(lib_idx, &projection)),
+        GuiLibraryDetail::Shows(GuiShowsDetail::from_projection(&projection)),
+    )
 }
 
-/// The plain Emby-library destination's content (design D12, row 8.1): the
-/// feed pills, the active list's rows, the selected row, and its Hero,
-/// fetched and built here on each rebuild so an unchanged build's revision
-/// carries nothing (the memo's content compare). The build's ensure is the
-/// shown-pass trigger the TUI projection pass's lazy-fetch arm mirrors.
-fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
+/// The plain Emby-library destination's parts (design D12, row 8.1). The
+/// ensure is the shown-pass trigger the TUI projection pass's lazy-fetch arm
+/// mirrors.
+fn emby_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     app.ensure_gui_emby_selection(lib_idx);
     let projection = app.gui_emby_projection(lib_idx);
-    GuiEmbyFrame::from_projection(lib_idx, &projection)
+    (
+        GuiDestinationList::Emby(GuiEmbyList::from_projection(lib_idx, &projection)),
+        GuiLibraryDetail::Emby(GuiEmbyDetail::from_projection(&projection)),
+    )
 }
 
-/// The Audiobooks destination's content (design D12, row 9.1): the book
-/// list, the selected book, and its Hero with its chapters Workspace, built
-/// here on each rebuild so an unchanged build's revision carries nothing (the
-/// memo's content compare). The ensure above the content build is the
+/// The Audiobooks destination's parts (design D12, row 9.1). The ensure is the
 /// default pick's detail-load trigger.
-fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
+fn audiobooks_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
+    app.ensure_gui_abs_selection(lib_idx);
     let projection = app.gui_audiobooks_projection(lib_idx);
-    GuiAudiobooksFrame::from_projection(lib_idx, &projection)
+    (
+        GuiDestinationList::Audiobooks(GuiAudiobooksList::from_projection(lib_idx, &projection)),
+        GuiLibraryDetail::Audiobooks(GuiAudiobooksDetail::from_projection(&projection)),
+    )
 }
 
-/// The Podcasts destination's content (design D12, row 10.1): the pill row,
-/// the active pill's episode rows, the selected episode, and its Hero, built
-/// here on each rebuild so an unchanged build's revision carries nothing (the
-/// memo's content compare). The ensure above the content build is the selected pill's
-/// load trigger.
-fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
+/// The Podcasts destination's parts (design D12, row 10.1). The build's ensure
+/// above is the selected pill's load trigger.
+fn podcasts_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = app.gui_podcasts_projection(lib_idx);
-    GuiPodcastsFrame::from_projection(lib_idx, &projection)
+    (
+        GuiDestinationList::Podcasts(GuiPodcastsList::from_projection(lib_idx, &projection)),
+        GuiLibraryDetail::Podcasts(GuiPodcastsDetail::from_projection(&projection)),
+    )
 }
 
-/// The Feeds destination's content (design D12, row 11.1): the pill row, the
-/// active pill's entry rows, the selected entry, and its Hero, built here per
-/// rebuild so an unchanged build's revision carries nothing (the memo's content
-/// compare). The entries arrive from the shared startup fetch, so the build
-/// starts no load; the ensure has already settled the pill.
-fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
+/// The Feeds destination's parts (design D12, row 11.1). The entries arrive
+/// from the shared startup fetch, so the build starts no load.
+fn feeds_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = app.gui_feeds_projection();
-    GuiFeedsFrame::from_projection(&projection)
+    (
+        GuiDestinationList::Feeds(GuiFeedsList::from_projection(&projection)),
+        GuiLibraryDetail::Feeds(GuiFeedsDetail::from_projection(&projection)),
+    )
 }
 
-/// The Library content's one built-differently fact per change (design D2):
-/// the section is sent only when its revision changes, so the log rides the
-/// same changes the window repaints. The line names the selection's shape and
-/// the list's size, so a live session's empty list and its unselected pills
-/// are visible in the GUI log.
-pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
-    let music = content.music.as_ref();
-    let pills = music.map_or(0, |music| music.list.pills.len());
-    let selected = music.map_or(0, |music| {
-        music.list.pills.iter().filter(|p| p.selected).count()
-    });
-    let artists = music.map_or(0, |music| music.list.artists.len());
-    let home_rows = content.home.as_ref().map_or(0, |home| home.list.rows.len());
-    let shows_rows = content
-        .shows
-        .as_ref()
-        .map_or(0, |shows| shows.list.rows.len());
-    let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.list.rows.len());
-    let abs_rows = content
-        .audiobooks
-        .as_ref()
-        .map_or(0, |audiobooks| audiobooks.list.rows.len());
-    let podcasts_rows = content
-        .podcasts
-        .as_ref()
-        .map_or(0, |podcasts| podcasts.list.rows.len());
-    let feeds_rows = content
-        .feeds
-        .as_ref()
-        .map_or(0, |feeds| feeds.list.rows.len());
+/// The Library sections' revisions and the active destination's shape, logged
+/// when either section's revision changes (the GUI log names the selection's
+/// shape and the list's size, so an empty list is visible in a live session).
+pub(crate) fn log_built(
+    list_revision: u64,
+    detail_revision: u64,
+    list: Option<&GuiLibraryList>,
+    detail: Option<&GuiLibraryDetail>,
+) {
+    let (kind, pills, rows) = list.map_or(("none", 0, 0), |list| list_size(&list.destination));
+    let hero = detail.is_some_and(detail_has_hero);
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
-        revision,
+        list_revision,
+        detail_revision,
+        kind,
         pills,
-        selected,
-        artists,
-        hero = music.is_some_and(|music| music.detail.hero.is_some())
-            || content
-                .home
-                .as_ref()
-                .is_some_and(|home| home.detail.hero.is_some())
-            || content.shows.as_ref().is_some_and(|shows| shows.detail.hero.is_some()),
-        home_rows,
-        shows_rows,
-        emby_rows,
-        audiobooks_rows = abs_rows,
-        podcasts_rows,
-        feeds_rows,
-        "the Library content changed"
+        rows,
+        hero,
+        "the Library sections changed"
     );
+}
+
+/// The destination's kind word, its pill count, and its row count, for the log.
+fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
+    match list {
+        GuiDestinationList::Music(list) => ("music", list.pills.len(), list.artists.len()),
+        GuiDestinationList::Home(list) => ("home", 0, list.rows.len()),
+        GuiDestinationList::Shows(list) => ("shows", list.pills.len(), list.rows.len()),
+        GuiDestinationList::Emby(list) => ("emby", list.pills.len(), list.rows.len()),
+        GuiDestinationList::Audiobooks(list) => ("audiobooks", 0, list.rows.len()),
+        GuiDestinationList::Podcasts(list) => ("podcasts", list.pills.len(), list.rows.len()),
+        GuiDestinationList::Feeds(list) => ("feeds", list.pills.len(), list.rows.len()),
+    }
+}
+
+/// Whether the detail carries a Hero, for the log.
+fn detail_has_hero(detail: &GuiLibraryDetail) -> bool {
+    match detail {
+        GuiLibraryDetail::Music(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Home(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Shows(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Emby(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Audiobooks(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Podcasts(detail) => detail.hero.is_some(),
+        GuiLibraryDetail::Feeds(detail) => detail.hero.is_some(),
+    }
 }

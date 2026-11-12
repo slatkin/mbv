@@ -52,20 +52,6 @@ pub struct GuiAudiobooksDetail {
     pub hero: Option<GuiAudiobooksHeroFrame>,
 }
 
-/// The Audiobooks destination's content as the current `library` section
-/// carries it (design D8): the list part and the detail part, flattened so the
-/// wire keys stay the ones the window reads today.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiAudiobooksFrame {
-    /// The list part (design D8).
-    #[serde(flatten)]
-    pub list: GuiAudiobooksList,
-    /// The detail part (design D8).
-    #[serde(flatten)]
-    pub detail: GuiAudiobooksDetail,
-}
-
 /// One row of the book list (row 9.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -170,17 +156,6 @@ impl GuiAudiobooksDetail {
             selected: projection.selected.clone(),
             playing_book_id: projection.playing_book_id.clone(),
             hero: projection.hero.as_ref().map(GuiAudiobooksHeroFrame::from),
-        }
-    }
-}
-
-impl GuiAudiobooksFrame {
-    /// The Audiobooks destination's content for `projection` (row 9.1), with
-    /// the library index the Audiobooks commands name.
-    pub(crate) fn from_projection(lib_idx: usize, projection: &GuiAudiobooksProjection) -> Self {
-        Self {
-            list: GuiAudiobooksList::from_projection(lib_idx, projection),
-            detail: GuiAudiobooksDetail::from_projection(projection),
         }
     }
 }

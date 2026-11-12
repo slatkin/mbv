@@ -5,9 +5,8 @@
 //! "unchanged". A section whose content can be absent carries an `Option`
 //! value, so `null` clears it.
 //!
-//! The playhead, the Library list and detail, and the row menu join the batch
-//! in the later groups of the change. Until then the Library rides one gated
-//! `library` section whose value is the existing content.
+//! The Library list, detail, and row menu ride the batch as three gated
+//! sections, built in one Library pass (design D8).
 
 use serde::Serialize;
 
@@ -15,7 +14,9 @@ use super::frame::GuiAttachState;
 use super::frame::GuiPanelToggles;
 use super::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use super::frame::focus::GuiFocus;
-use super::frame::library::{GuiLibraryContent, GuiSearchFrame};
+use super::frame::library::{
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
+};
 use super::frame::overlay::GuiOverlayFrame;
 use super::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
 use super::frame::queue::{GuiQueue, GuiQueueSummary};
@@ -79,11 +80,18 @@ pub struct GuiSectionBatch {
     /// The Status bar projection.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<GuiSection<GuiStatusBar>>,
-    /// The Library content of the active destination, `null` while no
-    /// presented destination is active. Until the Library groups split it, the
-    /// section carries the whole content, row menu included.
+    /// The Library list: the destination tabs and the active destination's list
+    /// part, `null` while no presented destination is active.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub library: Option<GuiSection<Option<GuiLibraryContent>>>,
+    pub library_list: Option<GuiSection<Option<GuiLibraryList>>>,
+    /// The Library detail: the active destination's selection, Hero, Workspace,
+    /// and playing marks, `null` while no presented destination is active.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_detail: Option<GuiSection<Option<GuiLibraryDetail>>>,
+    /// The right-click item menu the window last opened, `null` while no
+    /// destination is active or no row has named an item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_menu: Option<GuiSection<Option<GuiLibraryRowMenuFrame>>>,
     /// The Search section: the query the top bar answers and its rows, `null`
     /// while the field is closed.
     #[serde(skip_serializing_if = "Option::is_none")]

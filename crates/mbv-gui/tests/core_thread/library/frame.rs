@@ -12,8 +12,8 @@ use mbv_net::mock_http::MockHttp;
 use crate::{layout_report, test_core_with, test_emby_client};
 
 use super::{
-    assert_image, assert_placeholder, hero_art, library_of, seeded_music_core, send_library,
-    send_library_frame,
+    assert_image, assert_placeholder, hero_art, list_of, music_detail, music_list,
+    seeded_music_core, send_library, send_library_frame,
 };
 
 /// The section carries the playing track's id (add-gui-library-panel, the
@@ -32,12 +32,9 @@ fn the_music_frame_carries_the_playing_track_id() {
     core.seed_gui_music_library_for_test(test_emby_client(&http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
 
-    let content = library_of(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus));
-
-    let music = content
-        .and_then(|content| content.music)
+    let music = music_detail(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus))
         .expect("the Music destination is active");
-    assert_eq!(music.detail.playing_track_id.as_deref(), Some("trk-1"));
+    assert_eq!(music.playing_track_id.as_deref(), Some("trk-1"));
 }
 
 /// The section's destination facts (row 4.3, design D2): the Library section
@@ -49,18 +46,18 @@ fn the_library_section_carries_the_destination_tabs_and_the_lib_idx() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
 
-    let content = library_of(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus))
-        .expect("the first batch carries the content");
+    let list = list_of(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus))
+        .expect("the first batch carries the list");
     assert_eq!(
-        content.tabs,
+        list.tabs,
         [GuiLibraryTabFrame {
             position: 1,
             label: "Music".to_string(),
         }]
     );
-    assert_eq!(content.current_tab, Some(1));
-    let music = content.music.expect("the Music destination is active");
-    assert_eq!(music.list.lib_idx, 0);
+    assert_eq!(list.current_tab, Some(1));
+    let music = music_list(&test.held()).expect("the Music destination is active");
+    assert_eq!(music.lib_idx, 0);
 }
 
 /// The section carries the selected collection names in pill order once for
@@ -81,17 +78,15 @@ fn the_music_frame_carries_the_selected_collection_names() {
         },
     );
 
-    let music = library_of(&test.held())
-        .and_then(|content| content.music)
-        .expect("the Music destination is active");
-    assert_eq!(music.list.collection_names, ["Hip-Hop"]);
+    let music = music_list(&test.held()).expect("the Music destination is active");
+    assert_eq!(music.collection_names, ["Hip-Hop"]);
 }
 
-/// The Library section rides a batch only when its content changes (design D2):
-/// a tick that changes nothing sends no batch, a layout report moves no
-/// content, and a picked album that changes the Hero sends the new content.
+/// The Library list section rides a batch only when its value changes (design
+/// D2): a tick that changes nothing sends no batch, and a layout report moves
+/// no list.
 #[test]
-fn the_library_section_rides_only_a_changed_content() {
+fn the_library_list_rides_only_a_changed_value() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
     send_library(
@@ -101,8 +96,10 @@ fn the_library_section_rides_only_a_changed_content() {
             group_id: "grp-hiphop".into(),
         },
     );
-    let first = test.held().library().cloned();
-    assert!(first.is_some(), "the first content rides its section");
+    assert!(
+        list_of(&test.held()).is_some(),
+        "the first list rides its section"
+    );
 
     test.waker.wake();
     assert!(test.core.step());
@@ -111,16 +108,40 @@ fn the_library_section_rides_only_a_changed_content() {
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
     crate::assert_no_batch(&test.batches);
+}
 
-    // Picking the other album moves the Hero off its default first album, so the
-    // content changes.
+/// A pick sends `libraryDetail` and no `libraryList` (task 6.3, design D8): the
+/// picked album moves the Hero and the selection, and the list part holds the
+/// same rows, so the list section's compare sends nothing.
+#[test]
+fn a_pick_sends_the_detail_and_no_list() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::SelectCollection {
+            lib_idx: 0,
+            group_id: "grp-hiphop".into(),
+        },
+    );
+    // Read the batches the select sent, so the pick's batch stands alone.
+    test.held();
+
     send_library(
         &mut test,
         GuiLibraryCommand::ShowDetail {
             item_id: "alb-paul".into(),
         },
     );
-    assert_ne!(test.held().library().cloned(), first);
+    let batch = test.next_batch();
+    assert!(batch.library_detail.is_some(), "the pick sends the detail");
+    assert!(batch.library_list.is_none(), "the pick sends no list");
+    let hero = music_detail(&test.held()).and_then(|detail| detail.hero);
+    assert_eq!(
+        hero.map(|hero| hero.album.album_id),
+        Some("alb-paul".to_string()),
+        "the Hero moved to the picked album"
+    );
 }
 
 /// The Hero's art comes through the section from the image cache (row 3.4,

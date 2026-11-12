@@ -2,8 +2,7 @@
 //! D6, D7): the group pills, the artist and album tree, and the Hero of the
 //! picked album. `gui-change-driven-sections` design D8 splits the destination
 //! into a list part ([`GuiMusicList`]) and a detail part ([`GuiMusicDetail`]).
-//! [`GuiMusicFrame`] composes both for the current `library` section until the
-//! Library sections replace it (task 6.3).
+//! Both ride the `libraryList` and `libraryDetail` sections.
 
 use mbv::{
     GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection,
@@ -58,20 +57,6 @@ pub struct GuiMusicDetail {
     pub playing_track_id: Option<String>,
 }
 
-/// The Music destination's content as the current `library` section carries
-/// it (design D8): the list part and the detail part, flattened so the wire
-/// keys stay the ones the window reads today.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiMusicFrame {
-    /// The list part (design D8).
-    #[serde(flatten)]
-    pub list: GuiMusicList,
-    /// The detail part (design D8).
-    #[serde(flatten)]
-    pub detail: GuiMusicDetail,
-}
-
 impl GuiMusicList {
     /// The Music list part for `projection` with the library index the
     /// set-collections command names.
@@ -120,25 +105,6 @@ impl GuiMusicDetail {
             hero,
             art,
             playing_track_id,
-        }
-    }
-}
-
-impl GuiMusicFrame {
-    /// The Music destination's content for `projection`, with the library
-    /// index the set-collections command names, the Hero's artwork `art`, the
-    /// picked item's menu `menu`, and the playing track's id
-    /// `playing_track_id`.
-    pub(crate) fn from_projection(
-        lib_idx: usize,
-        projection: &GuiMusicProjection,
-        art: Option<GuiArtRef>,
-        menu: &[GuiLibraryMenuItem],
-        playing_track_id: Option<String>,
-    ) -> Self {
-        Self {
-            list: GuiMusicList::from_projection(lib_idx, projection),
-            detail: GuiMusicDetail::from_projection(projection, art, menu, playing_track_id),
         }
     }
 }

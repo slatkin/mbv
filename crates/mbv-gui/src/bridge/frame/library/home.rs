@@ -2,8 +2,7 @@
 //! the USER-APPROVED GUI Home design): the flat list's rows, the core's
 //! selected row, and its Hero. `gui-change-driven-sections` design D8 splits
 //! the destination into a list part ([`GuiHomeList`]) and a detail part
-//! ([`GuiHomeDetail`]). [`GuiHomeFrame`] composes both for the current
-//! `library` section until the Library sections replace it (task 6.3).
+//! ([`GuiHomeDetail`]). The `libraryList` and `libraryDetail` sections carry them.
 
 use mbv::{
     GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
@@ -44,20 +43,6 @@ pub struct GuiHomeDetail {
     pub hero: Option<GuiHomeHeroFrame>,
 }
 
-/// The Home destination's content as the current `library` section carries it
-/// (design D8): the list part and the detail part, flattened so the wire keys
-/// stay the ones the window reads today.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiHomeFrame {
-    /// The list part (design D8).
-    #[serde(flatten)]
-    pub list: GuiHomeList,
-    /// The detail part (design D8).
-    #[serde(flatten)]
-    pub detail: GuiHomeDetail,
-}
-
 impl GuiHomeList {
     /// The Home list part for `projection` (design D12).
     pub(crate) fn from_projection(projection: &GuiHomeProjection) -> Self {
@@ -75,17 +60,6 @@ impl GuiHomeDetail {
         Self {
             selected: projection.selected.as_ref().map(GuiHomeRowIdFrame::from),
             hero: projection.hero.as_ref().map(GuiHomeHeroFrame::from),
-        }
-    }
-}
-
-impl GuiHomeFrame {
-    /// The Home content for `projection` (design D12): the rows, the
-    /// selection, and the Hero's facts beside their artwork.
-    pub(crate) fn from_projection(projection: &GuiHomeProjection) -> Self {
-        Self {
-            list: GuiHomeList::from_projection(projection),
-            detail: GuiHomeDetail::from_projection(projection),
         }
     }
 }

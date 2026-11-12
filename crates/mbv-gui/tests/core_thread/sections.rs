@@ -8,6 +8,7 @@ use mbv::{
 };
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
+use mbv_gui::bridge::frame::library::GuiLibraryDetail;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::core_thread::CoreInput;
@@ -114,7 +115,12 @@ fn a_queue_cursor_move_sends_only_the_queue_section() {
 fn carried_gated(batch: &GuiSectionBatch) -> Vec<Section> {
     [
         (Section::Theme, batch.theme.is_some()),
-        (Section::Library, batch.library.is_some()),
+        (
+            Section::Library,
+            batch.library_list.is_some()
+                || batch.library_detail.is_some()
+                || batch.row_menu.is_some(),
+        ),
         (Section::Search, batch.search.is_some()),
         (Section::Settings, batch.settings.is_some()),
     ]
@@ -262,13 +268,13 @@ fn the_startup_drain_sends_the_music_tab_in_the_library_section() {
     let mut test = test_core_with(stub_app_with_completed_emby_startup(vec![music]));
     assert!(test.core.step());
 
-    let content = test
+    let list = test
         .next_batch()
-        .library
+        .library_list
         .expect("the startup drain sends the library")
         .value
-        .expect("the catalog builds a library frame");
-    assert!(content.tabs.iter().any(|tab| tab.label == "Music"));
+        .expect("the catalog builds a library list");
+    assert!(list.tabs.iter().any(|tab| tab.label == "Music"));
 }
 
 /// Past the navigation-idle delay (`NAV_IDLE_DELAY` is 150 ms): one second is
@@ -368,9 +374,8 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
 
     assert_eq!(carried_gated(&test.next_batch()), [Section::Library]);
     let held = test.held();
-    let music = held
-        .library()
-        .and_then(|content| content.music.as_ref())
-        .expect("the Music frame is presented");
-    assert_eq!(music.detail.playing_track_id.as_deref(), Some("trk-2"));
+    let Some(GuiLibraryDetail::Music(music)) = held.library_detail() else {
+        panic!("the Music detail is presented");
+    };
+    assert_eq!(music.playing_track_id.as_deref(), Some("trk-2"));
 }

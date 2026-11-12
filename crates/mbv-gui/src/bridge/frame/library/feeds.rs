@@ -50,21 +50,6 @@ pub struct GuiFeedsDetail {
     pub hero: Option<GuiFeedsHeroFrame>,
 }
 
-/// The Feeds destination's content as the current `library` section carries it
-/// (design D8): the list part and the detail part, flattened so the wire keys
-/// stay the ones the window reads today. A Client holds one feed tab, so no
-/// library index names it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiFeedsFrame {
-    /// The list part (design D8).
-    #[serde(flatten)]
-    pub list: GuiFeedsList,
-    /// The detail part (design D8).
-    #[serde(flatten)]
-    pub detail: GuiFeedsDetail,
-}
-
 /// The selected entry's Hero facts (row 11.1): the shared
 /// `hero_content_feed` producer's title and duration behind the subscription
 /// name, and the placeholder artwork's shape. A feed entry has no artwork
@@ -108,16 +93,6 @@ impl GuiFeedsDetail {
         Self {
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiFeedsHeroFrame::from),
-        }
-    }
-}
-
-impl GuiFeedsFrame {
-    /// The Feeds destination's content for `projection` (row 11.1).
-    pub(crate) fn from_projection(projection: &GuiFeedsProjection) -> Self {
-        Self {
-            list: GuiFeedsList::from_projection(projection),
-            detail: GuiFeedsDetail::from_projection(projection),
         }
     }
 }

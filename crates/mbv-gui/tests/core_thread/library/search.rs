@@ -12,12 +12,12 @@ use crate::Held;
 use mbv::{ClientTickHost, GuiDestinationKind};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::library::GuiSearchFrame;
+use mbv_gui::bridge::frame::library::{GuiDestinationList, GuiSearchFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{LIB_EVENT_BOUND, library_of, send_library};
+use super::{LIB_EVENT_BOUND, list_of, send_library};
 use crate::{TestCore, test_core_with, test_emby_client};
 
 /// The query the tests type into the field.
@@ -197,11 +197,8 @@ fn activating_a_result_opens_its_destination() {
         "the TUI's navigation landed the library level on the activated item"
     );
     let frame = reloaded_frame(&mut test);
-    let library = library_of(&frame.clone());
     assert!(
-        library
-            .as_ref()
-            .is_some_and(|content| content.emby.is_some()),
+        list_of(&frame).is_some_and(|list| matches!(list.destination, GuiDestinationList::Emby(_))),
         "the frame paints the activated row's destination"
     );
     assert!(
