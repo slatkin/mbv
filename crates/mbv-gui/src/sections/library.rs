@@ -5,10 +5,10 @@
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
+use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryArt,
-    GuiLibraryContent, GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame,
-    GuiShowsFrame,
+    GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryContent,
+    GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame, GuiShowsFrame,
 };
 
 /// The Library content of the active destination (design D2): the destination
@@ -145,7 +145,7 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
         .map(|hero| hero.album.album_id.clone());
     let art = picked
         .as_deref()
-        .map(|album_id| GuiLibraryArt::from(&app.gui_library_artwork(album_id)));
+        .map(|album_id| GuiArtRef::from(&app.gui_library_artwork(album_id)));
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();

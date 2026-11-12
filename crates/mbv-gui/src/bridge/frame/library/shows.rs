@@ -12,7 +12,8 @@ use mbv::{
 use serde::Serialize;
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryArt};
+use super::{GuiArtShapeFrame, GuiHomeRowStateFrame};
+use crate::art::GuiArtRef;
 
 /// The Shows destination's content (add-gui-library-panel design D12, the
 /// USER-APPROVED GUI Shows design): the view-mode pills, the active mode's
@@ -167,7 +168,7 @@ pub struct GuiShowsHeroFrame {
     pub art_shape: GuiArtShapeFrame,
     /// The Hero's artwork, present exactly while the item obtains art from
     /// the image cache; the window paints its own placeholder while `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The series Hero's Workspace; `None` on the Latest mode's episode Hero
     /// and while the selected series' detail has not landed.
     pub workspace: Option<GuiShowsWorkspaceFrame>,
@@ -306,7 +307,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero.workspace.as_ref().map(GuiShowsWorkspaceFrame::from),
         }
     }

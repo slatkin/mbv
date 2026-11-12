@@ -10,9 +10,10 @@
 use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
 use serde::Serialize;
 
+use super::GuiArtShapeFrame;
 use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiLibraryArt};
+use crate::art::GuiArtRef;
 use crate::bridge::library::GuiPodcastPill;
 
 /// The Podcasts destination's content (add-gui-library-panel design D12, row
@@ -70,7 +71,7 @@ pub struct GuiPodcastsHeroFrame {
     /// The parent show's cover, present exactly while the episode obtains art
     /// from the image cache; the window paints its own placeholder while
     /// `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
 }
 
 impl GuiPodcastsFrame {
@@ -99,7 +100,7 @@ impl From<&GuiPodcastsHero> for GuiPodcastsHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
         }
     }
 }

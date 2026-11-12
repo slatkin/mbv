@@ -1,6 +1,7 @@
 //! The Library section (add-gui-library-panel design D2): the
 //! active destination's content, carried whole only when its revision changes,
-//! with the Hero's artwork as the `data:` URLs the window paints.
+//! with the Hero's artwork as the `GuiArtRef` image references the window
+//! paints (design D7).
 //!
 //! A Library list can hold thousands of rows, so the section carries a
 //! revision and a rebuild re-carries the content only when that revision
@@ -13,12 +14,11 @@ use mbv::{
     GuiHomeRowKind, GuiHomeRowState, GuiLibraryArtwork, GuiLibraryMenuItem, GuiMusicAlbum,
     GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
-use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::music_grouping::ArtistKey;
 use serde::Serialize;
 
-use crate::artwork::data_url;
+use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 use mbv::GuiLibraryTab;
 
 mod audiobooks;
@@ -144,7 +144,7 @@ pub struct GuiMusicFrame {
     /// of the union.
     pub hero: Option<GuiMusicHeroFrame>,
     /// The Hero's square artwork (design D5): present exactly when `hero` is.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The id of the Emby track playing at the playhead (add-gui-library-panel,
     /// the Library's playing row): the Queue panel's own authority — the Owner
     /// status and the playback queue's item at the active index — carried so
@@ -282,20 +282,6 @@ pub struct GuiMusicMenuEntryFrame {
     pub index: usize,
 }
 
-/// The Library Hero's square artwork (design D5), as the window paints it.
-/// The image and placeholder payloads are `data:` URLs: the bytes are the
-/// mbv image cache's, so the window fetches no image itself.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
-pub enum GuiLibraryArt {
-    /// The cached artwork's display encode, as a `data:image/webp` URL.
-    Image(String),
-    /// The bundled placeholder, as a `data:image/webp` URL.
-    Placeholder(String),
-    /// The art fetch is in flight or awaits its retry.
-    Loading,
-}
-
 impl GuiMusicFrame {
     /// The Music destination's content for `projection`, with the library
     /// index the set-collections command names, the Hero's artwork `art` —
@@ -304,7 +290,7 @@ impl GuiMusicFrame {
     pub(crate) fn from_projection(
         lib_idx: usize,
         projection: &GuiMusicProjection,
-        art: Option<GuiLibraryArt>,
+        art: Option<GuiArtRef>,
         menu: &[GuiLibraryMenuItem],
         playing_track_id: Option<String>,
     ) -> Self {
@@ -435,15 +421,15 @@ impl From<&ArtistKey> for GuiArtistKey {
     }
 }
 
-impl From<&GuiLibraryArtwork> for GuiLibraryArt {
+impl From<&GuiLibraryArtwork> for GuiArtRef {
     fn from(artwork: &GuiLibraryArtwork) -> Self {
         match artwork {
-            GuiLibraryArtwork::Image { source, .. } => {
-                Self::Image(data_url(source.mime, &source.bytes))
-            }
-            GuiLibraryArtwork::Placeholder => {
-                Self::Placeholder(data_url("image/webp", QUEUE_CARD_PLACEHOLDER_BYTES))
-            }
+            GuiLibraryArtwork::Image { key, .. } => Self::Image {
+                src: art_url(&card_path(key)),
+            },
+            GuiLibraryArtwork::Placeholder => Self::Placeholder {
+                src: art_url(PLACEHOLDER_PATH),
+            },
             GuiLibraryArtwork::Loading => Self::Loading,
         }
     }
@@ -511,7 +497,7 @@ pub struct GuiHomeItemRowFrame {
     pub state: GuiHomeRowStateFrame,
     /// The row's artwork, present exactly while the row's item obtains art
     /// from the image cache.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
 }
 
 /// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
@@ -572,7 +558,7 @@ pub struct GuiHomeHeroFrame {
     /// The Hero's artwork, present exactly while the row's item obtains
     /// art from the image cache; the window paints its own placeholder
     /// while `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
 }
 
 /// The Hero artwork's box shape, mirroring `mbv::GuiArtShape` (the artwork
@@ -617,7 +603,7 @@ impl From<&GuiHomeItemRow> for GuiHomeItemRowFrame {
             date: item.date.clone(),
             kind: GuiHomeRowKindFrame::from(item.kind),
             state: GuiHomeRowStateFrame::from(&item.state),
-            art: item.art.as_ref().map(GuiLibraryArt::from),
+            art: item.art.as_ref().map(GuiArtRef::from),
         }
     }
 }
@@ -661,7 +647,7 @@ impl From<&GuiHomeHero> for GuiHomeHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
         }
     }
 }

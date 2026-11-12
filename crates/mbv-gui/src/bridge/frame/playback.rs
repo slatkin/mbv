@@ -4,8 +4,8 @@
 //! the window predicts from between anchors.
 
 use mbv::{
-    PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
-    TrackChips, TrackChoice, TrickplayGrid,
+    PlaybackChapter, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection, SegmentMark,
+    TrackChip, TrackChips, TrackChoice, TrickplayGrid,
 };
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
@@ -15,6 +15,7 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::{Deserialize, Serialize};
 
 use super::theme::GuiRole;
+use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 /// The Queue playback band's facts for one build.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,10 +65,12 @@ pub struct GuiQueuePlayback {
     /// source is the local player's stream, so a band whose playback rides a
     /// remote output paints none, as the TUI's does.
     pub status_indicators: Option<Vec<GuiStatusIndicator>>,
-    /// The visual slot's artwork (design D10): `None` unless the slot's art
-    /// changed for this window — the theme's arming rule (design D7). The
-    /// front end keeps the last carried value and paints it until the next.
-    pub artwork: Option<GuiCardArtwork>,
+    /// The visual slot's artwork (design D7): the image reference the slot
+    /// paints, carried on every build — a URL names the cache entry, so the
+    /// reference is small and needs no arming latch. `None` paints nothing:
+    /// idle, the user's hide toggle, images off, or the visualizer owning
+    /// the slot.
+    pub artwork: Option<GuiArtRef>,
     /// The track chips the canvas paints under the transport (design D4):
     /// the video stream's resolved label, and the audio and subtitle tracks
     /// each with its choices and the chosen one. `None` while the local
@@ -103,16 +106,14 @@ pub struct GuiScrubberHover {
 }
 
 /// The hovered trickplay tile the preview paints (task 6.7): the thumbnail's
-/// place in its sheet, the thumbnail's pixel size, and the sheet's bytes as
-/// the `data:image/jpeg` URL the window paints. The webview fetches nothing:
-/// the bytes are the core's cache, so the CSP keeps its `data:` image source
-/// and admits no remote origin (design D11).
+/// place in its sheet, the thumbnail's pixel size, and the sheet's image
+/// reference (design D7). The webview loads the sheet from the core's cache
+/// through the `mbv-art` scheme; it makes no other request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiScrubberTile {
     /// The sheet's opaque identity (the item, the thumbnail width, and the
-    /// sheet's ordinal). The window repaints the sheet it latched for this
-    /// key while `sheet` is `None`.
+    /// sheet's ordinal).
     pub sheet_key: String,
     /// The thumbnail's pixel width within the sheet.
     pub width: u32,
@@ -124,10 +125,8 @@ pub struct GuiScrubberTile {
     pub column: u32,
     /// The thumbnail's row in the sheet.
     pub row: u32,
-    /// The sheet image as a `data:image/jpeg` URL. `None` when the section does
-    /// not re-carry it — the hovered sheet is the one the window already
-    /// holds — as the artwork's arming rule works (design D10).
-    pub sheet: Option<String>,
+    /// The sheet image's reference: the URL the cached sheet loads through.
+    pub sheet: GuiArtRef,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -140,24 +139,21 @@ pub struct GuiStatusIndicator {
     pub role: GuiRole,
 }
 
-/// The Queue playback visual slot's artwork one build carries (design D10).
-/// The image and placeholder payloads are `data:` URLs: the artwork the
-/// window paints is the core's encoded cache bytes, never a fetch the
-/// webview makes (the CSP allows a `data:` image source for exactly this).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
-pub enum GuiCardArtwork {
-    /// The slot paints this image: the cached artwork's own bytes, as a
-    /// `data:` URL carrying the MIME type those bytes declare.
-    Image(String),
-    /// The slot paints the bundled placeholder, as a `data:image/webp` URL.
-    Placeholder(String),
-    /// The slot paints the loading fill: a fetch is in flight or awaits its
-    /// retry.
-    Loading,
-    /// The slot paints nothing: idle, the user's hide toggle, images off, or
-    /// the visualizer owning the slot.
-    Hidden,
+/// The visual slot's artwork reference for one `QueueCardArtwork` state
+/// (design D7): the cached image and the bundled placeholder as the URLs the
+/// `mbv-art` scheme answers, a fetch in flight as `Loading`, and the hidden
+/// state as `None` — the slot paints nothing.
+pub(crate) fn card_artwork_ref(artwork: &QueueCardArtwork) -> Option<GuiArtRef> {
+    match artwork {
+        QueueCardArtwork::Image { key, .. } => Some(GuiArtRef::Image {
+            src: art_url(&card_path(key)),
+        }),
+        QueueCardArtwork::Placeholder => Some(GuiArtRef::Placeholder {
+            src: art_url(PLACEHOLDER_PATH),
+        }),
+        QueueCardArtwork::Loading => Some(GuiArtRef::Loading),
+        QueueCardArtwork::Hidden => None,
+    }
 }
 
 impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
@@ -193,6 +189,8 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                     })
                     .collect()
             }),
+            // The section build overrides this with the slot's art reference
+            // (design D7); the projection alone cannot name it.
             artwork: None,
             track_chips: projection.track_chips.as_ref().map(GuiTrackChips::from),
             target_choices: projection

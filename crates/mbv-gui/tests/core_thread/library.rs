@@ -17,7 +17,8 @@ use std::sync::mpsc::Receiver;
 use crate::Held;
 use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryContent};
+use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
+use mbv_gui::bridge::frame::library::GuiLibraryContent;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -161,25 +162,25 @@ fn library_of(frame: &Held) -> Option<GuiLibraryContent> {
 }
 
 /// The Hero's artwork value of a frame that carries the Library content.
-fn hero_art(frame: &Held) -> GuiLibraryArt {
+fn hero_art(frame: &Held) -> GuiArtRef {
     library_of(frame)
         .and_then(|content| content.music)
         .and_then(|music| music.art)
         .expect("the frame carries the Hero's art")
 }
 
-/// The Hero paints the bundled placeholder as a `data:image/webp` URL.
-fn assert_placeholder(art: GuiLibraryArt) {
-    let GuiLibraryArt::Placeholder(url) = art else {
+/// The Hero paints the bundled placeholder's `mbv-art` reference (design D7).
+fn assert_placeholder(art: GuiArtRef) {
+    let GuiArtRef::Placeholder { src } = art else {
         panic!("the Hero paints the placeholder, not {art:?}");
     };
-    assert!(url.starts_with("data:image/webp;base64,"));
+    assert_eq!(src, art_url(PLACEHOLDER_PATH));
 }
 
-/// The Hero paints the cached art as a `data:` URL of the image's own bytes.
-fn assert_image(art: GuiLibraryArt) {
-    let GuiLibraryArt::Image(url) = art else {
+/// The Hero paints the cached art's `mbv-art` card reference (design D7).
+fn assert_image(art: GuiArtRef) {
+    let GuiArtRef::Image { src } = art else {
         panic!("the Hero paints the cached art, not {art:?}");
     };
-    assert!(url.starts_with("data:image/png;base64,"));
+    assert!(src.starts_with("mbv-art://localhost/card/"), "{src}");
 }

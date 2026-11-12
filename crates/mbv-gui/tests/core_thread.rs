@@ -507,9 +507,8 @@ fn an_announced_owner_shutdown_ends_the_run_and_saves_the_launch_location() {
 }
 
 /// The visual slot's artwork rides the playback section when the image is
-/// cached (design D10): the first batch carries the cached image's own bytes
-/// as a `data:` URL, and a tick that changes nothing sends no playback
-/// section.
+/// cached (design D7): the first batch carries the cached image's `mbv-art`
+/// reference, and a tick that changes nothing sends no playback section.
 #[test]
 fn a_cached_artwork_rides_the_playback_section() {
     let mut app = stub_app_with_playing_queue(1);
@@ -521,8 +520,13 @@ fn a_cached_artwork_rides_the_playback_section() {
     let mut test = test_core_with(app);
     assert!(test.core.step());
     match test.held().playback().artwork.clone() {
-        Some(mbv_gui::bridge::frame::playback::GuiCardArtwork::Image(detail)) => {
-            assert!(detail.starts_with("data:image/png;base64,"));
+        Some(mbv_gui::art::GuiArtRef::Image { src }) => {
+            assert_eq!(
+                src,
+                mbv_gui::art::art_url(&mbv_gui::art::card_path(
+                    &mbv_images::emby_queue_landscape_cache_key("id")
+                ))
+            );
         }
         artwork => panic!("the window holds the cached artwork: {artwork:?}"),
     }

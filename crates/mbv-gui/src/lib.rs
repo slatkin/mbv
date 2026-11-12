@@ -3,11 +3,9 @@
 //! and the Rust Client core (design D4).
 
 pub mod art;
-pub mod artwork;
 pub mod attach;
 pub mod bridge;
 pub mod core_thread;
 mod leaves;
 mod painted_choices;
 pub mod sections;
-pub mod trickplay;

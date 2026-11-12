@@ -10,8 +10,9 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiLibraryArt};
+use crate::art::GuiArtRef;
 
 /// The plain Emby-library destination's content (row 8.1), present while a
 /// plain Emby library is the active destination.
@@ -138,7 +139,7 @@ pub struct GuiEmbyHeroFrame {
     pub art_shape: GuiArtShapeFrame,
     /// The Hero's artwork, present exactly while the item obtains art from
     /// the image cache; the window paints its own placeholder while `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The movie's credits table (design D17, Q7): the director first, then
     /// the cast, as the TUI's credits table paints them.
     pub credits: Vec<GuiEmbyHeroCreditFrame>,
@@ -225,7 +226,7 @@ impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
             credits: hero
                 .credits
                 .iter()

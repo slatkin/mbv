@@ -10,8 +10,9 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiLibraryArt};
+use crate::art::GuiArtRef;
 
 /// The Audiobooks destination's content (add-gui-library-panel design D12,
 /// row 9.1): the book list, the core's selected book, and its Hero. No pill
@@ -84,7 +85,7 @@ pub struct GuiAudiobooksHeroFrame {
     /// The Hero's cover artwork, present exactly while the book obtains art
     /// from the image cache; the window paints its own placeholder while
     /// `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The book's chapter rows; `None` while the book's detail has not
     /// landed, which the frame's `workspaceLoading` names.
     pub workspace: Option<GuiAudiobooksWorkspaceFrame>,
@@ -163,7 +164,7 @@ impl From<&GuiAudiobooksHero> for GuiAudiobooksHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero
                 .workspace
                 .as_ref()

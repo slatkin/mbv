@@ -28,21 +28,20 @@ use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
-use crate::artwork::ArtworkFrames;
+use crate::art::{GuiArtRef, art_url, trickplay_path};
 use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::focus::GuiFocus;
 use crate::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile,
+    GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, card_artwork_ref,
 };
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::GuiTheme;
 use crate::bridge::frame::{GuiPanelToggles, scrubber_hover, scrubber_ticks};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
-use crate::trickplay::TrickplayFrames;
 
 use self::deadlines::DeadlineMarks;
 
@@ -221,8 +220,6 @@ pub struct SectionLedger {
     /// Whether the audit runs (design D3). Production never turns it on; the
     /// core-thread tests do, through `CoreThread::set_section_audit_for_test`.
     audit: bool,
-    artwork: ArtworkFrames,
-    trickplay: TrickplayFrames,
 }
 
 impl Default for SectionLedger {
@@ -252,8 +249,6 @@ impl Default for SectionLedger {
             deadlines: DeadlineMarks::new(Instant::now()),
             playhead_anchor: playhead::PlayheadAnchor::new(Instant::now()),
             audit: false,
-            artwork: ArtworkFrames::default(),
-            trickplay: TrickplayFrames::default(),
         };
         ledger.mark_all_gated();
         ledger
@@ -367,15 +362,15 @@ impl SectionLedger {
                 .as_ref()
                 .map(GuiOverlayFrame::from),
         );
-        let tile = self.hover_tile(app, &playback, playback_surface);
+        let tile = Self::hover_tile(app, &playback, playback_surface);
         self.hover.adopt(scrubber_hover(
             playback_surface.scrubber_hover(),
             &playback,
             tile,
         ));
-        let artwork = self.artwork.current_value(&app.queue_card_artwork());
+        let artwork = card_artwork_ref(&app.queue_card_artwork());
         self.playback.adopt(GuiQueuePlayback {
-            artwork: Some(artwork),
+            artwork,
             ..GuiQueuePlayback::from(&playback)
         });
         self.footer
@@ -453,11 +448,10 @@ impl SectionLedger {
         }
     }
 
-    /// The scrubber's hover tile this tick (task 6.7's rule, with the sheet
-    /// image always carried). Leaving the bar ends the hover episode, as the
-    /// tick's `hover_tile` does.
+    /// The scrubber's hover tile this tick (task 6.7): the preview's tile
+    /// facts with the cached sheet's image reference (design D7). Leaving the
+    /// bar ends the hover episode, as `hover_tile` does.
     fn hover_tile(
-        &mut self,
         app: &mut App,
         playback: &QueuePlaybackProjection,
         surface: &QueuePlaybackSurface,
@@ -468,7 +462,17 @@ impl SectionLedger {
         };
         let ticks = scrubber_ticks(playback, fraction);
         let preview = app.trickplay_preview_tile(ticks)?;
-        Some(self.trickplay.current_tile(&preview))
+        let sheet_key = preview.key.wire_key();
+        let sheet = art_url(&trickplay_path(&sheet_key));
+        Some(GuiScrubberTile {
+            sheet_key,
+            width: preview.width,
+            height: preview.height,
+            columns: preview.columns,
+            column: preview.column,
+            row: preview.row,
+            sheet: GuiArtRef::Image { src: sheet },
+        })
     }
 
     /// The batch of every slot the window does not hold, or `None` when the
