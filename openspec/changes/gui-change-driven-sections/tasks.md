@@ -68,8 +68,8 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 
 ## 9. Integration
 
-- [ ] 9.1 Re-run every bench and write a "Final" table beside the baseline in `measurements.md`. Verify: each of the eight benches has a baseline and a final median.
-- [ ] 9.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, `make ui-check`, `make ui-lint`, `make ui-test`, and, just before the push, `make check-code-file-lines`. Verify: every gate passes.
+- [x] 9.1 Re-run every bench and write a "Final" table beside the baseline in `measurements.md`. Verify: each of the eight benches has a baseline and a final median.
+- [x] 9.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, `make ui-check`, `make ui-lint`, `make ui-test`, and, just before the push, `make check-code-file-lines`. Verify: every gate passes.
 
 ## Workflow follow-up
 

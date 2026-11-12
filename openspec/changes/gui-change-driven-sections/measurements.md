@@ -209,3 +209,5 @@ baseline above, which was taken on an earlier run. Before this task, each step
 rebuilt the 5,000 canvas rows (≈ 0.34 ms per step). After it, a step moves only
 the scroll store, and the rows come back from the memo, so the clamp is the
 only work left.
+
+**Music drift check (after task 9.1).** In one session, `music_grouped` ran 259.8 µs at HEAD `bae0a17e4` and 276.2 µs with the task 7.1 and 7.2 code put back to `dbcc74804`. The pre-7.x code is not faster, so the rise against the task 6.6 run (242.3 µs) is machine drift, not a regression from tasks 7.1 or 7.2.
