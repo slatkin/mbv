@@ -39,3 +39,28 @@ statistic.
 | 100 scroll steps over 5,000 rows | 39.8 ms | ≈ 0.40 ms |
 
 64 samples, relative margin of error ±3.10%.
+
+## Task 5.5: artwork through the `mbv-art` scheme
+
+Run at HEAD `bb3323426` (rows 5.1 to 5.4 landed, task 5.5 uncommitted), on the
+same machine, with `timeout 900 cargo bench -p mbv-gui --bench sections`. The
+table holds the two fixtures that rows 5.x touch: the playing queue (fixture 2)
+and the Music step (fixture 3). The medians are `median.point_estimate` in
+`target/criterion/sections/<fixture>/new/estimates.json`.
+
+| Fixture | Baseline median step | Median step | Baseline bytes per step | Bytes per step |
+| --- | --- | --- | --- | --- |
+| `playing_queue` (50 slots, active playing) | 9.0 µs | 9.63 µs | 10,458 | 2 |
+| `music_grouped` (2,000 artists, 6,000 albums, one picked) | 344.1 µs | 249.8 µs | 1,253 | 2 |
+
+The bytes column no longer compares with the baseline. The baseline measured
+a full frame. The sections contract sends a section only when it changes, so
+the steady-state timed step carries an empty batch, which serializes to 2
+bytes. A bench step that changes artwork is not timed here, so this run does
+not measure the size of an artwork reference or the data URLs that rows 5.3 and
+5.4 removed from the payload.
+
+The Music step fell by 27% against the baseline. The playing-queue step rose
+by about 7%, which is within the spread that the earlier rows left. The step
+times include the ledger's compared sections from rows 2.x to 4.x, so the change
+is not the effect of task 5.5 alone.

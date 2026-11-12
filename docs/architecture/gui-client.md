@@ -37,8 +37,8 @@ Surface state; the drains for surfaces the first slice does not present are
 documented no-ops. The card-image completion drain
 (`App::drain_card_image_completions`, the shell drain without the
 TV-workspace re-push) runs because the Queue playback visual slot paints: it
-lands the slot's artwork fetches in the image cache the `playback` section
-encodes from.
+lands the slot's artwork fetches in the image cache the `mbv-art` scheme
+answers from.
 
 The Tauri command handlers never touch the `App`. They only translate the
 input and push it into the channel. tokio stays inside Tauri's runtime; no
@@ -134,13 +134,20 @@ the shared projection builds from the same indicator data the TUI's spans
 build from: the `playback` section carries each uppercased label with its
 foreground role, and the field is `None` while the local player is inactive.
 The canvas player panel paints no cluster, so the field travels unused in
-the slice. The visual slot's artwork (`artwork`): `src/artwork.rs` memoizes
-the slot's `data:` URL per state — the cached art's own bytes, the bundled
-placeholder, a loading fill, or hidden — and the `playback` section's
-compare carries the value again only when the slot's art changed (design
-D10); a window-content reload's `sync` re-sends the section. The payload is
-a `data:` URL of bytes the core's image cache already holds, never a fetch
-the webview makes, so the CSP grows only `img-src 'self' data:`. The panel
+the slice. The visual slot's artwork (`artwork`) is a `GuiArtRef`: an `image` reference
+to `mbv-art://localhost/card/<key>` for a cached card, a `placeholder`
+reference to the bundled placeholder, a `loading` reference with no URL while
+the fetch is in flight or awaits its retry, or no reference when the slot has
+none. `src/art.rs` builds every URL, and the core answers each load from its
+image cache through `App::gui_art_source`. The `playback` section's compare
+carries the reference again only when the slot's art changed (design D10); a
+window-content reload's `sync` re-sends the section. The window paints the
+reference through `ArtImage.svelte`. The payload is a URL, never the cached
+bytes, so the section does not grow with the artwork. The `mbv-art` scheme
+answers a cached key with 200, the source's own MIME type, and
+`Cache-Control: max-age=31536000, immutable`; a key with no entry answers 404
+with `Cache-Control: no-store`, so the webview asks the core again on its next
+load. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
 element's resizes report the regions a swapped bitmap moved.
 
@@ -148,13 +155,14 @@ The scrubber's hover preview (`hover`) carries the pointer's fraction along
 the painted bar, the time it names, the covering chapter, and the trickplay
 tile at that position. The tile (`GuiScrubberTile`) names the thumbnail's
 place in its sheet — the sheet key, the thumbnail's pixel width and height,
-the sheet's columns, and the thumbnail's column and row — plus the sheet as
-a `data:image/jpeg` URL. `src/trickplay.rs` holds the sheet's encoded URL
-per key, and the `hover` section's compare carries the image again only when
-the hovered sheet changes; the front end latches the last image per key, so
-the preview paints
-the tile by cropping the sheet as a CSS sprite and the window fetches no
-image. A move away from the bar carries no hover. An item with no
+the sheet's columns, and the thumbnail's column and row — plus the sheet as an
+`image` reference whose URL is `mbv-art://localhost/trickplay/<key>`. The
+core carries the tile only once the sheet is cached (`App::trickplay_preview_tile`),
+so the reference names bytes the scheme answers at once. The `hover` section's
+compare carries the reference again only when the hovered sheet changes. The
+preview paints the tile by cropping the sheet as a CSS sprite, which loads the
+sheet by its URL; the window keeps no image of its own. A move away from the
+bar carries no hover. An item with no
 trickplay, a sheet not yet cached, or a tile the server does not hold paints
 the time and the chapter without a tile.
 
@@ -338,7 +346,8 @@ imports the latin woff2 subsets from `@fontsource/ibm-plex-sans` and
 `'IBM Plex Sans', system-ui, sans-serif` and `--font-mono` to
 `'JetBrains Mono', monospace`. The woff2 files build into `ui/dist`, so the
 window fetches no font at runtime and the CSP's `default-src 'self'` covers
-`font-src`.
+`font-src`. The CSP's `img-src` is `'self' mbv-art:`: the window loads an image
+only through the `mbv-art` scheme.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
 `@lucide/svelte` only: the transport controls and the playback-target
@@ -904,12 +913,13 @@ entry's index in the shared builder's order, so a front end that paints only
 some entries still executes the one it painted). `GuiMusicFrame` also
 carries `row_menu` (`Option`): the item of the `rowMenu` command with the
 TUI menu builder's full entries for it, which the right-click item menu
-paints. `GuiLibraryArt`
-is the cached artwork's own bytes or the bundled placeholder as a
-`data:` URL, or `Loading`. The core never re-encodes artwork: the image fetch's
-1280-pixel cap bounds the payload, and the window's `object-fit: cover` crops
-the Hero's art. The window fetches no Library image: every byte is
-the core's image cache.
+paints. The Hero's art (`art`) is a `GuiArtRef`: the cached artwork as an `image`
+URL, the bundled placeholder as a `placeholder` URL, or `Loading` with no URL.
+The core never re-encodes artwork: the image fetch's 1280-pixel cap bounds the
+cached bytes (`src/app/infra/image_fetch/protocol.rs`), the `mbv-art` scheme
+answers them unchanged, and the window's `object-fit: cover` crops the Hero's
+art. The window fetches no Library image: every load goes through the
+`mbv-art` scheme to the core's image cache.
 
 The core warms that cache around the pick. Each destination's projection ends
 with `App::warm_gui_hero_neighbours`
