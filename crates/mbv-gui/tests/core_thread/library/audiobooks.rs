@@ -167,26 +167,36 @@ fn the_frame_carries_the_book_list_after_the_open() {
     );
 
     let audiobooks = audiobooks_of(library_of(&test.held()));
-    assert_eq!(audiobooks.lib_idx, 0);
-    assert!(!audiobooks.loading && !audiobooks.failed);
-    let ids: Vec<&str> = audiobooks.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(audiobooks.list.lib_idx, 0);
+    assert!(!audiobooks.list.loading && !audiobooks.list.failed);
+    let ids: Vec<&str> = audiobooks
+        .list
+        .rows
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect();
     assert_eq!(
         ids,
         ["book-a", "book-b"],
         "the rows are the catalog in its order"
     );
-    let letters: Vec<char> = audiobooks.rows.iter().map(|row| row.sort_letter).collect();
+    let letters: Vec<char> = audiobooks
+        .list
+        .rows
+        .iter()
+        .map(|row| row.sort_letter)
+        .collect();
     assert_eq!(
         letters,
         ['A', 'F'],
         "the rail letters read the author sort keys"
     );
     assert_eq!(
-        audiobooks.selected.as_deref(),
+        audiobooks.detail.selected.as_deref(),
         Some("book-a"),
         "the first book is the Hero default"
     );
-    let hero = audiobooks.hero.expect("the Hero paints");
+    let hero = audiobooks.detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
     let texts: Vec<String> = hero
         .meta_rows
@@ -216,8 +226,8 @@ fn the_select_command_moves_the_hero_and_workspace() {
     );
 
     let audiobooks = audiobooks_of(library_of(&test.held()));
-    assert_eq!(audiobooks.selected.as_deref(), Some("book-b"));
-    let hero = audiobooks.hero.expect("the Hero paints");
+    assert_eq!(audiobooks.detail.selected.as_deref(), Some("book-b"));
+    let hero = audiobooks.detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Bovary");
     let workspace = hero
         .workspace
@@ -237,7 +247,7 @@ fn the_select_command_moves_the_hero_and_workspace() {
     assert_eq!(workspace.rows[1].start_ticks, 30 * minutes);
     assert_eq!(workspace.rows[1].end_ticks, 60 * minutes);
     assert_eq!(
-        audiobooks.playing_book_id, None,
+        audiobooks.detail.playing_book_id, None,
         "no book plays, so the frame names no playing book"
     );
 }

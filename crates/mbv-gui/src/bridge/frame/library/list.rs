@@ -5,7 +5,10 @@
 
 use serde::Serialize;
 
-use super::{GuiHomeList, GuiLibraryTabFrame, GuiMusicList};
+use super::{
+    GuiAudiobooksList, GuiEmbyList, GuiFeedsList, GuiHomeList, GuiLibraryTabFrame, GuiMusicList,
+    GuiPodcastsList, GuiShowsList,
+};
 
 /// The Library list section (design D8): the destination tabs, the tab the top
 /// bar marks current, and the active destination's list part.
@@ -29,4 +32,9 @@ pub struct GuiLibraryList {
 pub enum GuiDestinationList {
     Music(GuiMusicList),
     Home(GuiHomeList),
+    Shows(GuiShowsList),
+    Emby(GuiEmbyList),
+    Audiobooks(GuiAudiobooksList),
+    Podcasts(GuiPodcastsList),
+    Feeds(GuiFeedsList),
 }

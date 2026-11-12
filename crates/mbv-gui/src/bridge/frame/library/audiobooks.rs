@@ -14,12 +14,12 @@ use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
 
-/// The Audiobooks destination's content (add-gui-library-panel design D12,
-/// row 9.1): the book list, the core's selected book, and its Hero. No pill
-/// rides here — the letter rail replaces the TUI's surname buckets.
+/// The Audiobooks destination's list part (add-gui-library-panel design D12,
+/// row 9.1; `gui-change-driven-sections` design D8): the book list and the
+/// catalog's load facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiAudiobooksFrame {
+pub struct GuiAudiobooksList {
     /// The Audiobooks library index the Audiobooks commands name (design
     /// D2, D12): the library whose content this is.
     pub lib_idx: usize,
@@ -27,11 +27,19 @@ pub struct GuiAudiobooksFrame {
     pub loading: bool,
     /// Whether the catalog fetch failed.
     pub failed: bool,
+    /// The catalog's books in the TUI's sort order.
+    pub rows: Vec<GuiAudiobooksRowFrame>,
+}
+
+/// The Audiobooks destination's detail part (`gui-change-driven-sections`
+/// design D8): the core's selected book, the playing book, and its Hero with
+/// the chapters Workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiAudiobooksDetail {
     /// Whether the selected book's detail fetch has not landed yet: the
     /// Workspace's loading state.
     pub workspace_loading: bool,
-    /// The catalog's books in the TUI's sort order.
-    pub rows: Vec<GuiAudiobooksRowFrame>,
     /// The core's selected book (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first book is the Hero default.
     pub selected: Option<String>,
@@ -42,6 +50,20 @@ pub struct GuiAudiobooksFrame {
     pub playing_book_id: Option<String>,
     /// The selected book's Hero facts; `None` while no book is selected.
     pub hero: Option<GuiAudiobooksHeroFrame>,
+}
+
+/// The Audiobooks destination's content as the current `library` section
+/// carries it (design D8): the list part and the detail part, flattened so the
+/// wire keys stay the ones the window reads today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiAudiobooksFrame {
+    /// The list part (design D8).
+    #[serde(flatten)]
+    pub list: GuiAudiobooksList,
+    /// The detail part (design D8).
+    #[serde(flatten)]
+    pub detail: GuiAudiobooksDetail,
 }
 
 /// One row of the book list (row 9.1).
@@ -122,23 +144,43 @@ pub struct GuiAudiobooksChapterRowFrame {
     pub end_ticks: i64,
 }
 
-impl GuiAudiobooksFrame {
-    /// The Audiobooks destination's content for `projection` (row 9.1), with
-    /// the library index the Audiobooks commands name.
+impl GuiAudiobooksList {
+    /// The Audiobooks list part for `projection` (row 9.1), with the library
+    /// index the Audiobooks commands name.
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiAudiobooksProjection) -> Self {
         Self {
             lib_idx,
             loading: projection.loading,
             failed: projection.failed,
-            workspace_loading: projection.workspace_loading,
             rows: projection
                 .rows
                 .iter()
                 .map(GuiAudiobooksRowFrame::from)
                 .collect(),
+        }
+    }
+}
+
+impl GuiAudiobooksDetail {
+    /// The Audiobooks detail part for `projection` (row 9.1): the selection,
+    /// the playing book, and the Hero with its chapters Workspace.
+    pub(crate) fn from_projection(projection: &GuiAudiobooksProjection) -> Self {
+        Self {
+            workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
             playing_book_id: projection.playing_book_id.clone(),
             hero: projection.hero.as_ref().map(GuiAudiobooksHeroFrame::from),
+        }
+    }
+}
+
+impl GuiAudiobooksFrame {
+    /// The Audiobooks destination's content for `projection` (row 9.1), with
+    /// the library index the Audiobooks commands name.
+    pub(crate) fn from_projection(lib_idx: usize, projection: &GuiAudiobooksProjection) -> Self {
+        Self {
+            list: GuiAudiobooksList::from_projection(lib_idx, projection),
+            detail: GuiAudiobooksDetail::from_projection(projection),
         }
     }
 }

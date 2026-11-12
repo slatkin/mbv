@@ -33,16 +33,16 @@ mod search;
 mod shows;
 
 pub use self::audiobooks::{
-    GuiAudiobooksChapterRowFrame, GuiAudiobooksFrame, GuiAudiobooksHeroFrame,
-    GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
+    GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksFrame, GuiAudiobooksHeroFrame,
+    GuiAudiobooksList, GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
 };
 pub use self::detail::{GuiDestinationDetail, GuiLibraryDetail};
 pub use self::emby::{
-    GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
-    GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiEmbyDetail, GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
+    GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
 };
 pub use self::entry_list::{GuiEntryRowFrame, GuiPillFrame};
-pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame};
+pub use self::feeds::{GuiFeedsDetail, GuiFeedsFrame, GuiFeedsHeroFrame, GuiFeedsList};
 pub use self::home::{
     GuiHomeDetail, GuiHomeFrame, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList,
     GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame,
@@ -54,11 +54,14 @@ pub use self::music::{
     GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame, GuiMusicTrackFrame,
     GuiMusicTrackTotalFrame,
 };
-pub use self::podcasts::{GuiPodcastsFrame, GuiPodcastsHeroFrame};
+pub use self::podcasts::{
+    GuiPodcastsDetail, GuiPodcastsFrame, GuiPodcastsHeroFrame, GuiPodcastsList,
+};
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
-    GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,
-    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsList,
+    GuiShowsModeFrame, GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame,
+    GuiShowsWorkspaceFrame,
 };
 
 /// The content of the Library panel (design D2): the destination tabs the

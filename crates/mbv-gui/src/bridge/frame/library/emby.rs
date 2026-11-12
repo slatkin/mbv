@@ -14,11 +14,11 @@ use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
 
-/// The plain Emby-library destination's content (row 8.1), present while a
-/// plain Emby library is the active destination.
+/// The plain Emby-library destination's list part (row 8.1; design D8): the
+/// feed-group pills, the active list's rows, and the load facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiEmbyFrame {
+pub struct GuiEmbyList {
     /// The plain Emby-library index the Emby commands name (design D2, row
     /// 8.1): the library whose content this is.
     pub lib_idx: usize,
@@ -40,12 +40,33 @@ pub struct GuiEmbyFrame {
     pub failed: bool,
     /// The active list's rows in the list's order.
     pub rows: Vec<GuiEmbyRowFrame>,
+}
+
+/// The plain Emby-library destination's detail part (`gui-change-driven-sections`
+/// design D8): the core's selected row and its Hero.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiEmbyDetail {
     /// The core's selected row (design D2, row 8.1), as the frame painted
     /// it: a select command sends it back. The first row is the Hero
     /// default.
     pub selected: Option<String>,
     /// The selected row's Hero facts; `None` while no row is selected.
     pub hero: Option<GuiEmbyHeroFrame>,
+}
+
+/// The plain Emby-library destination's content as the current `library`
+/// section carries it (design D8): the list part and the detail part,
+/// flattened so the wire keys stay the ones the window reads today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiEmbyFrame {
+    /// The list part (design D8).
+    #[serde(flatten)]
+    pub list: GuiEmbyList,
+    /// The detail part (design D8).
+    #[serde(flatten)]
+    pub detail: GuiEmbyDetail,
 }
 
 /// The feed-group pill a press selects (row 8.1): `New` (the destination
@@ -160,9 +181,9 @@ pub struct GuiEmbyHeroCreditFrame {
     pub role: String,
 }
 
-impl GuiEmbyFrame {
-    /// The plain Emby-library destination's content for `projection` (row
-    /// 8.1), with the library index the Emby commands name.
+impl GuiEmbyList {
+    /// The plain Emby-library list part for `projection` (row 8.1), with the
+    /// library index the Emby commands name.
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiEmbyProjection) -> Self {
         Self {
             lib_idx,
@@ -177,8 +198,27 @@ impl GuiEmbyFrame {
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEmbyRowFrame::from).collect(),
+        }
+    }
+}
+
+impl GuiEmbyDetail {
+    /// The plain Emby-library detail part for `projection` (row 8.1).
+    pub(crate) fn from_projection(projection: &GuiEmbyProjection) -> Self {
+        Self {
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiEmbyHeroFrame::from),
+        }
+    }
+}
+
+impl GuiEmbyFrame {
+    /// The plain Emby-library destination's content for `projection` (row
+    /// 8.1), with the library index the Emby commands name.
+    pub(crate) fn from_projection(lib_idx: usize, projection: &GuiEmbyProjection) -> Self {
+        Self {
+            list: GuiEmbyList::from_projection(lib_idx, projection),
+            detail: GuiEmbyDetail::from_projection(projection),
         }
     }
 }

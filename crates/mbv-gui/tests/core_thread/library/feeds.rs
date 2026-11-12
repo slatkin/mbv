@@ -163,7 +163,12 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         "the Feeds destination is active"
     );
     let feeds = feeds_of(&reloaded_frame(&mut test));
-    let titles: Vec<&str> = feeds.rows.iter().map(|row| row.title.as_str()).collect();
+    let titles: Vec<&str> = feeds
+        .list
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
     assert_eq!(
         titles,
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
@@ -171,6 +176,7 @@ fn the_frame_carries_the_feed_list_after_the_open() {
     );
     assert_eq!(
         feeds
+            .list
             .pills
             .iter()
             .map(|pill| (pill.name.as_str(), pill.selected))
@@ -179,11 +185,11 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         "the pill row is Latest first, then each subscription by name"
     );
     assert_eq!(
-        feeds.selected.as_deref(),
-        feeds.rows.first().map(|row| row.id.as_str()),
+        feeds.detail.selected.as_deref(),
+        feeds.list.rows.first().map(|row| row.id.as_str()),
         "the first row is the Hero default"
     );
-    let hero = feeds.hero.expect("the Hero paints");
+    let hero = feeds.detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "a-new");
     assert_eq!(hero.parent.as_deref(), Some("Feed A"));
     assert_eq!(
@@ -209,9 +215,15 @@ fn the_pill_command_changes_the_rows() {
     );
 
     let feeds = feeds_of(&newest_frame(&mut test));
-    let titles: Vec<&str> = feeds.rows.iter().map(|row| row.title.as_str()).collect();
+    let titles: Vec<&str> = feeds
+        .list
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
     assert_eq!(titles, ["b-mid", "b-undated"]);
     let selected: Vec<&str> = feeds
+        .list
         .pills
         .iter()
         .filter(|pill| pill.selected)
@@ -228,6 +240,7 @@ fn the_select_command_moves_the_hero() {
     open_feeds(&mut test);
     land_fetches(&mut test);
     let row = feeds_of(&reloaded_frame(&mut test))
+        .list
         .rows
         .get(1)
         .map(|row| row.id.clone())
@@ -239,8 +252,8 @@ fn the_select_command_moves_the_hero() {
     );
 
     let feeds = feeds_of(&newest_frame(&mut test));
-    assert_eq!(feeds.selected.as_deref(), Some(row.as_str()));
-    let hero = feeds.hero.expect("the Hero paints");
+    assert_eq!(feeds.detail.selected.as_deref(), Some(row.as_str()));
+    let hero = feeds.detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "b-mid");
     assert_eq!(hero.parent.as_deref(), Some("Feed B"));
 }
@@ -254,6 +267,7 @@ fn the_play_and_queue_commands_reach_the_owner() {
     open_feeds(&mut test);
     land_fetches(&mut test);
     let row = feeds_of(&reloaded_frame(&mut test))
+        .list
         .rows
         .first()
         .map(|row| row.id.clone())
@@ -306,6 +320,7 @@ fn a_source_less_entry_flashes_and_submits_nothing() {
     );
     assert!(test.core.step(), "the core thread never quits mid-drain");
     let row = feeds_of(&reloaded_frame(&mut test))
+        .list
         .rows
         .first()
         .map(|row| row.id.clone())

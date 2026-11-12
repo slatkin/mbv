@@ -228,17 +228,23 @@ pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
     });
     let artists = music.map_or(0, |music| music.list.artists.len());
     let home_rows = content.home.as_ref().map_or(0, |home| home.list.rows.len());
-    let shows_rows = content.shows.as_ref().map_or(0, |shows| shows.rows.len());
-    let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.rows.len());
+    let shows_rows = content
+        .shows
+        .as_ref()
+        .map_or(0, |shows| shows.list.rows.len());
+    let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.list.rows.len());
     let abs_rows = content
         .audiobooks
         .as_ref()
-        .map_or(0, |audiobooks| audiobooks.rows.len());
+        .map_or(0, |audiobooks| audiobooks.list.rows.len());
     let podcasts_rows = content
         .podcasts
         .as_ref()
-        .map_or(0, |podcasts| podcasts.rows.len());
-    let feeds_rows = content.feeds.as_ref().map_or(0, |feeds| feeds.rows.len());
+        .map_or(0, |podcasts| podcasts.list.rows.len());
+    let feeds_rows = content
+        .feeds
+        .as_ref()
+        .map_or(0, |feeds| feeds.list.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -251,7 +257,7 @@ pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
                 .home
                 .as_ref()
                 .is_some_and(|home| home.detail.hero.is_some())
-            || content.shows.as_ref().is_some_and(|shows| shows.hero.is_some()),
+            || content.shows.as_ref().is_some_and(|shows| shows.detail.hero.is_some()),
         home_rows,
         shows_rows,
         emby_rows,

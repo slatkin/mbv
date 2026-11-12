@@ -73,18 +73,21 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     let frame = test.held();
     let emby = emby_section(&frame).expect("the open Movies destination presents its content");
     assert_eq!(
-        emby.lib_idx, 0,
+        emby.list.lib_idx, 0,
         "the frame names the library the commands carry"
     );
-    assert!(!emby.feed_group, "the Movies library is the plain mode");
     assert!(
-        emby.pills.is_empty() && emby.rows.is_empty() && emby.hero.is_none(),
+        !emby.list.feed_group,
+        "the Movies library is the plain mode"
+    );
+    assert!(
+        emby.list.pills.is_empty() && emby.list.rows.is_empty() && emby.detail.hero.is_none(),
         "the root list has not landed rows yet"
     );
     // The no-URL stub client's root-list fetch fails; the frame names the
     // failure once it lands, and a later frame build re-issues nothing
     // behind the seed below.
-    pump_until_emby(&mut test, |emby| emby.failed, "the failed root fetch");
+    pump_until_emby(&mut test, |emby| emby.list.failed, "the failed root fetch");
 
     test.core
         .app_mut()
@@ -99,12 +102,12 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     let frame = test.held();
     let emby = emby_section(&frame).expect("the frame carries the Emby content");
     assert_eq!(
-        emby.selected.as_deref(),
+        emby.detail.selected.as_deref(),
         Some("m-2"),
         "the frame paints the core's selection"
     );
     assert_eq!(
-        emby.hero.as_ref().expect("the Hero moved").title,
+        emby.detail.hero.as_ref().expect("the Hero moved").title,
         "B Movie",
         "the Hero's facts follow the selected row"
     );
@@ -131,7 +134,7 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        |emby| emby.pills.len() == 3 && !emby.loading,
+        |emby| emby.list.pills.len() == 3 && !emby.list.loading,
         "the counted folder pill",
     );
 
@@ -145,8 +148,9 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     pump_until_emby(
         &mut test,
         |emby| {
-            emby.rows.iter().any(|row| row.id == "vid-1")
+            emby.list.rows.iter().any(|row| row.id == "vid-1")
                 && emby
+                    .list
                     .pills
                     .iter()
                     .find(|pill| pill.selected)
@@ -183,7 +187,7 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
 
     pump_until_emby(
         &mut test,
-        |emby| emby.pills.len() == 3 && !emby.loading,
+        |emby| emby.list.pills.len() == 3 && !emby.list.loading,
         "the counted folder pill",
     );
 
@@ -199,11 +203,12 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
         &mut test,
         |emby| {
             let ready = emby
+                .list
                 .pills
                 .iter()
                 .find(|pill| pill.selected)
                 .is_some_and(|pill| pill.name == "New")
-                && emby.rows.iter().any(|row| row.id == "vid-new");
+                && emby.list.rows.iter().any(|row| row.id == "vid-new");
             if ready {
                 *new_view.borrow_mut() = Some(emby.clone());
             }
@@ -215,12 +220,12 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
         .into_inner()
         .expect("the New view's frame carried its content");
     assert_eq!(
-        emby.collection_names,
+        emby.list.collection_names,
         vec!["New".to_string()],
         "the location names the New pill"
     );
     assert_eq!(
-        emby.rows[0].subtitle,
+        emby.list.rows[0].subtitle,
         Some("Channel 1".to_string()),
         "the row names the programme (root folder) the video sits in"
     );
@@ -236,7 +241,7 @@ fn movies_hero_frame(items: Vec<EmbyItem>) -> Held {
     );
     let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
     assert!(test.core.step());
-    pump_until_emby(&mut test, |emby| emby.failed, "the failed root fetch");
+    pump_until_emby(&mut test, |emby| emby.list.failed, "the failed root fetch");
     test.core.app_mut().seed_gui_emby_roots_for_test(0, items);
     send_library(
         &mut test,
@@ -256,7 +261,7 @@ fn an_emby_heros_duration_row_arrives_as_a_time_segment() {
     item.runtime_ticks = 5_400 * TICKS_PER_SECOND;
     let frame = movies_hero_frame(vec![item]);
     let hero = emby_section(&frame)
-        .and_then(|emby| emby.hero.as_ref())
+        .and_then(|emby| emby.detail.hero.as_ref())
         .expect("the Hero paints");
     let duration = hero.duration_row.expect("the Hero names its duration row");
     assert_eq!(

@@ -16,13 +16,12 @@ use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
 use crate::bridge::library::GuiPodcastPill;
 
-/// The Podcasts destination's content (add-gui-library-panel design D12, row
-/// 10.1): the pill row, the active pill's episode rows, the core's selected
-/// episode, and its Hero. No letter rail rides here — the list is sorted by
-/// date — and no Workspace.
+/// The Podcasts destination's list part (add-gui-library-panel design D12, row
+/// 10.1; `gui-change-driven-sections` design D8): the pill row and the active
+/// pill's episode rows, with the load facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiPodcastsFrame {
+pub struct GuiPodcastsList {
     /// The Podcasts library index the Podcasts commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
@@ -37,12 +36,33 @@ pub struct GuiPodcastsFrame {
     /// episodes, a show pill holds that one show's, both newest first with
     /// undated episodes last.
     pub rows: Vec<GuiEntryRowFrame>,
+}
+
+/// The Podcasts destination's detail part (`gui-change-driven-sections` design
+/// D8): the core's selected episode and its Hero.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiPodcastsDetail {
     /// The core's selected episode (design D2, D12), as the frame painted it:
     /// a select, play, or enqueue command sends it back. The first row is the
     /// Hero default.
     pub selected: Option<String>,
     /// The selected episode's Hero facts; `None` while no episode is selected.
     pub hero: Option<GuiPodcastsHeroFrame>,
+}
+
+/// The Podcasts destination's content as the current `library` section carries
+/// it (design D8): the list part and the detail part, flattened so the wire keys
+/// stay the ones the window reads today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiPodcastsFrame {
+    /// The list part (design D8).
+    #[serde(flatten)]
+    pub list: GuiPodcastsList,
+    /// The detail part (design D8).
+    #[serde(flatten)]
+    pub detail: GuiPodcastsDetail,
 }
 
 /// The selected episode's Hero facts (row 10.1): the shared
@@ -74,9 +94,9 @@ pub struct GuiPodcastsHeroFrame {
     pub art: Option<GuiArtRef>,
 }
 
-impl GuiPodcastsFrame {
-    /// The Podcasts destination's content for `projection` (row 10.1), with
-    /// the library index the Podcasts commands name.
+impl GuiPodcastsList {
+    /// The Podcasts list part for `projection` (row 10.1), with the library
+    /// index the Podcasts commands name.
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
         Self {
             lib_idx,
@@ -84,8 +104,27 @@ impl GuiPodcastsFrame {
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),
+        }
+    }
+}
+
+impl GuiPodcastsDetail {
+    /// The Podcasts detail part for `projection` (row 10.1).
+    pub(crate) fn from_projection(projection: &GuiPodcastsProjection) -> Self {
+        Self {
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiPodcastsHeroFrame::from),
+        }
+    }
+}
+
+impl GuiPodcastsFrame {
+    /// The Podcasts destination's content for `projection` (row 10.1), with
+    /// the library index the Podcasts commands name.
+    pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
+        Self {
+            list: GuiPodcastsList::from_projection(lib_idx, projection),
+            detail: GuiPodcastsDetail::from_projection(projection),
         }
     }
 }

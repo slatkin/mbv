@@ -163,12 +163,18 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
     let shows = shows_section(&frame).expect("the open Shows destination presents its content");
 
     assert_eq!(
-        shows.lib_idx, 0,
+        shows.list.lib_idx, 0,
         "the frame names the library the commands carry"
     );
-    let names: Vec<&str> = shows.pills.iter().map(|pill| pill.name.as_str()).collect();
+    let names: Vec<&str> = shows
+        .list
+        .pills
+        .iter()
+        .map(|pill| pill.name.as_str())
+        .collect();
     assert_eq!(names, ["New", "Upcoming", "All"]);
     let selected: Vec<&str> = shows
+        .list
         .pills
         .iter()
         .filter(|pill| pill.selected)
@@ -180,11 +186,11 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "one mode pill is selected, the resolved default"
     );
     assert!(
-        !shows.pills.iter().any(|pill| pill.collection),
+        !shows.list.pills.iter().any(|pill| pill.collection),
         "the mode pills are single-select"
     );
     assert!(
-        shows.rows.is_empty() && shows.hero.is_none(),
+        shows.list.rows.is_empty() && shows.detail.hero.is_none(),
         "the default mode's root load has not landed rows yet"
     );
 }
@@ -200,7 +206,7 @@ fn open_shows_destination(test: &mut TestCore, position: usize, lib_idx: usize) 
     let frame = test.held();
     let shows = shows_section(&frame).expect("the open's frame carries the Shows content");
     assert_eq!(
-        shows.lib_idx, lib_idx,
+        shows.list.lib_idx, lib_idx,
         "the frame names the library the commands carry"
     );
 }
@@ -211,9 +217,13 @@ fn pump_until_series_hero(test: &mut TestCore, series: &str, title: &str) {
     pump_until_shows(
         test,
         |shows| {
-            shows.series.len() == 2
-                && shows.selected.as_deref() == Some(series)
-                && shows.hero.as_ref().is_some_and(|hero| hero.title == title)
+            shows.list.series.len() == 2
+                && shows.detail.selected.as_deref() == Some(series)
+                && shows
+                    .detail
+                    .hero
+                    .as_ref()
+                    .is_some_and(|hero| hero.title == title)
         },
         "the All series mode's rows and Hero",
     );
@@ -225,6 +235,7 @@ fn pump_until_workspace(test: &mut TestCore, season_id: &str, episode_id: &str, 
         test,
         |shows| {
             shows
+                .detail
                 .hero
                 .as_ref()
                 .and_then(|hero| hero.workspace.as_ref())
@@ -288,12 +299,12 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
     let frame = test.held();
     let shows = shows_section(&frame).expect("the frame carries the Shows content");
     assert_eq!(
-        shows.selected.as_deref(),
+        shows.detail.selected.as_deref(),
         Some("series-b"),
         "the frame paints the core's selection"
     );
     assert_eq!(
-        shows.hero.as_ref().expect("the Hero moved").title,
+        shows.detail.hero.as_ref().expect("the Hero moved").title,
         "Bridgerton",
         "the Hero's facts follow the selected series"
     );

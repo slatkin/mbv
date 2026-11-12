@@ -4,7 +4,10 @@
 
 use serde::Serialize;
 
-use super::{GuiHomeDetail, GuiMusicDetail};
+use super::{
+    GuiAudiobooksDetail, GuiEmbyDetail, GuiFeedsDetail, GuiHomeDetail, GuiMusicDetail,
+    GuiPodcastsDetail, GuiShowsDetail,
+};
 
 /// The Library detail section (design D8): the active destination's detail
 /// part.
@@ -22,4 +25,9 @@ pub struct GuiLibraryDetail {
 pub enum GuiDestinationDetail {
     Music(GuiMusicDetail),
     Home(GuiHomeDetail),
+    Shows(GuiShowsDetail),
+    Emby(GuiEmbyDetail),
+    Audiobooks(GuiAudiobooksDetail),
+    Podcasts(GuiPodcastsDetail),
+    Feeds(GuiFeedsDetail),
 }
