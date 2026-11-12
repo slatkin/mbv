@@ -102,6 +102,25 @@ pub(super) fn save_gui_launch_state_at(
     write_state_at(path, state)
 }
 
+/// Delete the saved location, so the next start falls back to the Client's
+/// own first-choice rules (the GUI's Reset UI State,
+/// `add-gui-settings-screen` D10). A file that is already absent is a
+/// cleared state, not a failure.
+pub fn clear_gui_launch_state() -> Result<(), LaunchStateError> {
+    clear_gui_launch_state_at(&gui_launch_state_path())
+}
+
+pub(super) fn clear_gui_launch_state_at(path: &Path) -> Result<(), LaunchStateError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(LaunchStateError::remove(format!(
+            "remove {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
 /// Load the saved location. Missing, unreadable, malformed, or
 /// version-mismatched files all yield `None` — a start is never prevented by
 /// launch-state data.

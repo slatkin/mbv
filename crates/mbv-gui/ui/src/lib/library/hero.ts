@@ -1,14 +1,21 @@
 // The Library Hero's facts and geometry (add-gui-library-panel design D5, D8):
 // the picked album's lines as the canvas prints them, the artist's albums in
 // the union that Shuffle artist plays, and the tracklist's cursor. The data is
-// the core's, so this module only reads the carried Hero; keeping the strings
+// the core's, so this module only reads the carried Hero; keeping the lines
 // and the cursor movement here lets the painters stay markup and the movement
 // test without a layout.
+//
+// A line that joins values of several data types is built as typed segments
+// (add-gui-settings-screen design D14): colour carries the type, so a count
+// and a time on one line each carry their own kind, and the painter paints the
+// kinds through `TypedText`.
 
 import type {
 	GuiMusicFrame,
 	GuiMusicHero,
 	GuiMusicTrack,
+	GuiMetaRow,
+	GuiMetaSegment,
 	GuiMusicTrackTotal,
 } from '$lib/bridge/types';
 import type { ListMove } from './list';
@@ -19,34 +26,65 @@ export function heroTracks(hero: GuiMusicHero | null): GuiMusicTrack[] {
 	return hero?.album.tracks ?? [];
 }
 
+/** One line's typed runs, in display order (design D14). */
+export type Segments = GuiMetaSegment[];
+
+/** A line with no typed part: it inherits the colour the painter gives it. */
+export function plainSegments(text: string): Segments {
+	return text === '' ? [] : [{ text, kind: 'plain' }];
+}
+
+/** A section label's line, which paints the label token (design D14). */
+export function labelSegments(text: string): Segments {
+	return [{ text, kind: 'label' }];
+}
+
+/** The segments of several meta rows on one line, joined by ` · ` as the
+ * frames order them. */
+export function joinMetaRows(rows: readonly GuiMetaRow[]): Segments {
+	return rows.filter((row) => row.length > 0).flatMap((row, index) =>
+		index === 0 ? row : [{ text: ' · ', kind: 'plain' as const }, ...row],
+	);
+}
+
 /** The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
  * the artist label with the selected collection names (design D5). */
-export function heroKicker(hero: GuiMusicHero): string {
-	return hero.collections.length > 0
-		? `artist · ${hero.collections.join(' + ').toUpperCase()}`
-		: 'artist';
+export function heroKicker(hero: GuiMusicHero): Segments {
+	return labelSegments(
+		hero.collections.length > 0
+			? `artist · ${hero.collections.join(' + ').toUpperCase()}`
+			: 'artist',
+	);
 }
 
 /** `13 tracks · 44:25`: a track count with its total time, each in the
- * singular when the count is one. */
-export function trackTotalFacts(total: GuiMusicTrackTotal): string {
-	return `${total.count} ${total.count === 1 ? 'track' : 'tracks'} · ${total.duration}`;
+ * singular when the count is one. The count and the time carry their own type
+ * (design D14). */
+export function trackTotalFacts(total: GuiMusicTrackTotal): Segments {
+	return [
+		{ text: String(total.count), kind: 'count' },
+		{ text: total.count === 1 ? ' track · ' : ' tracks · ', kind: 'plain' },
+		{ text: total.duration, kind: 'time' },
+	];
 }
 
 /** The artist header's third line (design D5): the artist's album count in the
  * union, and the track count and total time once every one of those albums
  * holds a cached tracklist. */
-export function artistFacts(hero: GuiMusicHero): string {
-	const albums = `${hero.albumCount} ${hero.albumCount === 1 ? 'album' : 'albums'}`;
+export function artistFacts(hero: GuiMusicHero): Segments {
+	const albums: Segments = [
+		{ text: String(hero.albumCount), kind: 'count' },
+		{ text: hero.albumCount === 1 ? ' album' : ' albums', kind: 'plain' },
+	];
 	return hero.artistTracks === null
 		? albums
-		: `${albums} · ${trackTotalFacts(hero.artistTracks)}`;
+		: [...albums, { text: ' · ', kind: 'plain' }, ...trackTotalFacts(hero.artistTracks)];
 }
 
-/** The album block's facts line, or `''` while the album's tracklist has not
+/** The album block's facts line, empty while the album's tracklist has not
  * landed (design D5). */
-export function albumFacts(hero: GuiMusicHero): string {
-	return hero.album.total === null ? '' : trackTotalFacts(hero.album.total);
+export function albumFacts(hero: GuiMusicHero): Segments {
+	return hero.album.total === null ? [] : trackTotalFacts(hero.album.total);
 }
 
 /** The artist's albums in the union, which Shuffle artist plays (design D8).
@@ -108,20 +146,26 @@ export function moveTrackCursor(
 
 /** One meta row of a single-row Hero, with the role the frame paints it in. */
 export interface HeroMetaRow {
-	text: string;
+	segments: Segments;
 	role: 'meta' | 'duration' | 'progress';
 }
 
+/** The joined text of one Hero meta row: the line's text without its types, for
+ * the places that compare or join a row as one string. */
+export function metaRowText(row: GuiMetaRow): string {
+	return row.map((segment) => segment.text).join('');
+}
+
 /** The meta rows of a Hero that shows one selected row (add-gui-library-panel
- * design D15): each row's text with its duration or progress role, as the
- * core's `durationRow` and `progressRow` indices mark them. */
+ * design D15): each row's typed segments with its duration or progress role, as
+ * the core's `durationRow` and `progressRow` indices mark them. */
 export function heroMetaRows(facts: {
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 }): HeroMetaRow[] {
-	return facts.metaRows.map((text, index) => ({
-		text,
+	return facts.metaRows.map((row, index) => ({
+		segments: row,
 		role:
 			index === facts.durationRow
 				? 'duration'
@@ -145,7 +189,7 @@ export interface HeroLayoutFacts {
 	title: string;
 	/** The largest unit's name (show, feed, series), when the item has one. */
 	parent?: string | null;
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 	overview?: string | null;
@@ -160,7 +204,7 @@ export function heroLayout(
 	facts: HeroLayoutFacts,
 	kicker: string,
 ): {
-	header: { kicker: string; title: string; facts: string };
+	header: { kicker: Segments; title: string; facts: Segments };
 	block: {
 		label: string;
 		name?: string;
@@ -172,12 +216,9 @@ export function heroLayout(
 	const parent = (facts.parent ?? '') === '' ? null : (facts.parent ?? null);
 	return {
 		header: {
-			kicker,
+			kicker: labelSegments(kicker),
 			title: parent ?? facts.title,
-			facts: rows
-				.filter((row) => row.role === 'meta' && row.text !== '')
-				.map((row) => row.text)
-				.join(' · '),
+			facts: joinMetaRows(rows.filter((row) => row.role === 'meta').map((row) => row.segments)),
 		},
 		block: {
 			label: facts.title,

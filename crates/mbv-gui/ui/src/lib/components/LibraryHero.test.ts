@@ -244,3 +244,40 @@ test('the tracklist marks the frame playing track with a play glyph, not a fill'
 function mountHeroWithPlaying(trackId: string): HTMLElement {
 	return render(LibraryHero, { music: { ...music(hero()), playingTrackId: trackId } }).container;
 }
+
+// The album's facts line joins a count and a time (add-gui-settings-screen
+// design D14): each paints its own type's token.
+test('the album facts line types its count and its time', () => {
+	const container = mountHero();
+
+	const facts = part(container, 'block-facts');
+	expect(facts.querySelector('[data-meta-kind="count"]')?.textContent).toBe('2');
+	expect(facts.querySelector('[data-meta-kind="count"]')?.getAttribute('style')).toContain(
+		'var(--canvas-type-count)',
+	);
+	expect(facts.querySelector('[data-meta-kind="time"]')?.getAttribute('style')).toContain(
+		'var(--canvas-type-time)',
+	);
+});
+
+// A duration repeats down the tracklist, so it paints the time token at the
+// repeat opacity; the cursor row keeps its own ink (design D14).
+test('a tracklist duration carries the repeated-time token', () => {
+	const container = mountHero();
+
+	const duration = container.querySelector(
+		'[data-library-track="t2"] [data-library-track-duration]',
+	) as HTMLElement;
+	const segment = duration.querySelector('[data-meta-kind="time"]') as HTMLElement;
+	expect(segment.style.color).toBe('var(--canvas-type-time)');
+	expect(segment.style.opacity).toBe('var(--canvas-type-repeat-opacity)');
+
+	// The first track carries the cursor, so its duration keeps its ink.
+	const current = container.querySelector(
+		'[data-library-track="t1"] [data-library-track-duration]',
+	) as HTMLElement;
+	expect(current.style.color).toBe('var(--canvas-muted)');
+	expect(current.querySelector('[data-meta-kind="time"]')?.getAttribute('style')).not.toContain(
+		'opacity',
+	);
+});

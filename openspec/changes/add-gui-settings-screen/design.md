@@ -82,15 +82,20 @@ Every other action is `AllClients`. The Keys section lists only `AllClients` act
 
 ### D5. A fifth bridge command, `settings(GuiSettingsCommand)`
 
+**Grant rule (live finding).** Tauri's ACL sits between `invoke` and the command. A command that `generate_handler!` registers but `build.rs`'s app manifest does not declare, or that `capabilities/default.json` does not grant, is refused before the core sees it. The front end's fire-and-forget invoke then logs only to the webview console. The first build of this change shipped `settings` in neither file, so every Settings action died silently, by pointer and by key. `crates/mbv-gui/tests/capabilities.rs` now reads the command list from `generate_handler!` in `src/main.rs` and asserts that each command is declared and granted once. A new command cannot repeat the miss, because no list in the test names one.
+
 `src/main.rs` registers `settings`. It only pushes `CoreInput::Settings`, as `library` does. `src/bridge/settings.rs` translates the wire form into `mbv::GuiSettingsCommand`, and `App::apply_gui_settings_command` (`src/app/gui_settings.rs`) applies each variant through the shared `App` method. Identities are stable, never row positions. A command built from a stale frame logs at debug level and changes nothing, as the `library` arms do.
 
 | Variant | Carries | Applies through |
 |---|---|---|
-| `close` | none | close the screen (D2) |
+| `open` | none | open the screen at Services, as `ToggleSettings` opens it when closed (D2); a no-op while open. The top bar's Settings control sends it |
+| `close` | none | close the screen (D2); Esc from the sidebar and the sidebar's Back control send it |
 | `selectSection` | `section` | set `section`, then start the section's load (D9) |
 | `activate` | `setting` (the `SettingKey` name) | `App::handle_settings_activate`, refused for a key whose scope is not `AllClients` |
+| `setValue` | `setting` (`SubtitleMode`, `SubtitleLanguage`, or `AudioLanguage`), `value` | `App::set_settings_value` (D13): sets the value directly, with the cycle handler's player update and deferred save; a value outside the row's projected list logs and changes nothing |
 | `applyChoices` | `kind`, `selected` (choice ids) | `App::commit_settings_choices` (D7) |
 | `assignRoute` | `library` (lowercased name), `endpoint` or none | `App::assign_library_route` (D7) |
+| `routeDevices` | `library` (lowercased name) | `App::route_devices(library)` (D7); the candidates are cached in `GuiSettingsState` and projected until the section closes |
 | `embySetup` | `serverUrl`, `username`, `password` | fill `EmbySetupForm`, then `App::submit_emby_setup` |
 | `audiobookshelfSetup` | `serverUrl`, `apiKey` | fill the form, then `App::submit_audiobookshelf_setup` |
 | `serviceAction` | `ServiceActionIntent` name | `App::route_service_action`, except `ManageFeeds`, which selects the Feeds section: routing it would raise `OpenFeedsManage`, which the D2 drain drops |
@@ -144,17 +149,18 @@ Each move keeps the TUI's behaviour. The TUI shell keeps only its component work
 
 `GuiFrame.settings: Option<GuiSettingsFrame>` is `None` while the screen is closed. While it is open, it carries `section`, `sections` (the shown list from D3 and D4), and `content`, a tagged union with one variant for each section:
 
-- **F2 rows**: each row's `SettingKey` name, its kind (toggle, cycle, choice list, or action), its value text or flag, and, for a choice list, its choices once loaded.
-- **Services**: each Service's state label, its action labels and intents, and the setup form's `busy`, `error`, and server URL. The form never carries a password or an API key.
+- **F2 rows**: each row's `SettingKey` name, its kind (toggle, pick, choice list, or action), its value text or flag, for a pick its value list (D13), and, for a choice list, its choices once loaded. Every F2 section except Library uses this variant.
+- **Library**: the section's choice rows (`HiddenLibraries`, `FeedViewLibraries`) with their choices once loaded, plus `routes`: the routable libraries with each one's assigned device, the selected library, and its device candidates once `routeDevices` runs for it. The `LibraryRoutes` F2 row is not projected in the GUI: its TUI popup's work lives inline in this section, and its `activate` would raise `OpenLibraryRoutes`, which the D2 drain drops.
+- **Services**: each Service's state label, its action labels and intents, and the setup form's `busy`, `error`, and server URL. The form never carries a password or an API key. The same rule covers logs: a file-backed debug log, the GUI Client log included, never carries a setup secret — a password, an API key, or a Service credential — such as through a `Debug` formatting of a command that carries one.
 - **Feeds**: the subscriptions (name, URL, kind) and the pending-add flag.
 - **Keys**: the prefix chord, then one row for each `AllClients` action. Each row has the id, the label, the section, the effective router chords, the prefix-namespace chord, the changed-from-default flag, and the prefix-addressable flag. The frame also carries the last refusal (action and text) until the next edit.
 - **Sessions**: the `GuiTargetChoice` list that the chooser uses.
-- **Playlists**: the list (id, name, item count, loaded flag), the open playlist and its items, and the loading flags.
+- **Playlists**: the list (id, name, item count), the open playlist and its items, and the loading flags. A per-playlist loaded flag is not carried: no requirement reads it, because only the open playlist shows items and the loading flags cover that fetch.
 
 The section's load starts on `selectSection` and when the screen opens:
 
 - Playlists runs `App::spawn_load_playlists`.
-- Library runs `App::route_libraries` and `App::settings_choices` for its two library kinds.
+- Library runs `App::route_libraries` and `App::settings_choices` for its two library kinds. Selecting a library in the routes list sends `routeDevices`, which runs `App::route_devices(library)`; the candidates are cached until the section closes.
 - Playback runs `App::settings_choices(MyLanguages)`.
 
 The results are cached in `GuiSettingsState` until the screen closes. The status line paints from the frame's existing `status` field (the shared Status bar projection). So the screen shows toasts and the prefix-armed state with no new projection.
@@ -176,7 +182,11 @@ When the front end sees a new epoch value, it resets its Library interaction sto
 
 `ui/src/lib/settings/` holds the store and the key router. `ui/src/lib/components/Settings*.svelte` holds the screen, the sidebar, one component for each section, and the status line. `App.svelte` mounts `SettingsScreen` in place of the two columns while `frame.settings` is present.
 
-- **Widths.** The sidebar takes the Queue column's expanded width: the dragged or default width, whatever the collapse toggle, because the 72 px rail cannot hold the list. No divider shows. Mini is the existing `libraryArrangement` threshold, measured as the window width minus that width.
+- **Mouse-centric.** The pointer is the primary path, and keys give parity. The Library top bar shows a Lucide `Settings` button to the right of the Search field, which sends `open`. The sidebar shows a Lucide `ArrowLeft` Back button above its title, which sends `close`. A user can therefore enter, use, and leave the screen without a key. Each control has a visible press target and hover feedback. No action is reachable only by key, the mirror of the `gui-client` rule that no action is reachable only by pointer.
+- **Fill.** `SettingsScreen`'s root is a flex item of `App.svelte`'s row container, so it carries `flex-1 min-w-0`. Without them it took its content's width (631 px of a 1400 px window in the live finding), and the content pane shrank to a strip. jsdom has no layout, so no test can measure this. The user's live run is the layout gate. No front-end test runs in a real browser.
+- **Pointer contract.** Every control is a native `button` or `input` whose press runs the same store function as the keyboard path, so the two paths share one effect. A press moves the store's cursor and pane to the pressed item. Hover feedback paints for each control that can act, and an unavailable control is a disabled `button`, so a press on it never runs its handler. The window forwards each press to the core as well (`pointer`). The Queue and Library panels retract their reported regions on unmount, so while the screen is open a press resolves to no core surface. A core test pins this.
+- **Choice kind.** Each projected choice-list row carries its apply kind in the frame. The front end reads that kind and does not derive it again from the setting name (the open review finding on `choicesKindOf`).
+- **Widths.** The sidebar is a fixed 260 px (the design canvas, D13), independent of the Queue column's dragged width and its collapse toggle. No divider shows. Mini is the existing `libraryArrangement` threshold, measured as the window width minus 260 px. This replaces the first plan's Queue-column width, at the user's choice when the canvas arrived.
 - **Paint.** The screen paints with the existing `app.css` tokens and the shared Library parts (rows, list headers, scrollers, buttons). Icons are Lucide only.
 - **Key routing order.** This is added to `routeLibraryKey`'s chain while `frame.settings` is present, and the Library steps do not run:
   1. A core overlay or prefix mode takes the key, as today.
@@ -184,6 +194,60 @@ When the front end sees a new epoch value, it resets its Library interaction sto
   3. A focused text field takes the key. Esc cancels the form, and Enter submits it.
   4. The screen keys run. Up, Down, Page Up, Page Down, Home, and End move in the focused pane. Tab and Shift+Tab switch between the sidebar and the content. Enter opens the sidebar entry or activates the content row. Space activates a focused toggle or choice mark. Esc follows the spec's ladder.
   5. Every other key goes to the core, so Space on the sidebar plays or pauses.
+
+### D13. The design canvas is the visual reference
+
+`canvas/Settings.dc.html` (with its `README.md`) is a Claude Code Design artboard, committed verbatim in this change, as `align-gui-with-design-canvas` committed its canvas. Its inline styles are normative for paint, the same as the queue canvas. The runtime files of the export (`support.js`, `vendor/`) are not part of the design and are not committed.
+
+The artboard draws the sidebar, the status line, and three sections: Services, Playback, and mpv. It marks the other nine as not mocked. Those nine use the same parts, so the design defines a small set of shared Settings parts in `ui/src/lib/components/settings/`, and every section paints only through them:
+
+- **Sidebar.** 260 px on the queue-column fill, with a right border, a 20 px semibold title, and 38 px rows. Each row has an icon and its name. The open section's row is the accent fill with ink text. The artboard draws custom SVG paths, so each section maps to the closest Lucide icon: Services `Server`, Playback `Play`, Display `Monitor`, Session `Clock`, Library `Library`, Queue `ListOrdered`, mpv `SquarePlay`, Feeds `Rss`, Actions `Zap`, Keys `Keyboard`, Sessions `Cast`, and Playlists `ListPlus`. The GUI's rule stays Lucide only.
+- **Sources label.** The Services section shows as "Sources" in the sidebar, the section title, and the status line, at the user's choice. Only the label changes. The section id (`services`), the commands, the frame, the spec, the TUI, and the domain term stay Service (`CONTEXT.md`, *Service*). The Feeds card's text and the state labels do not change.
+- **Content.** 32 px by 48 px padding, a 1120 px maximum width, a 24 px semibold section title, and 24 px between blocks.
+- **Card.** The raised fill, a border, a 10 px radius, and 20 px padding. Cards sit in a two-column grid with a 20 px gap, top-aligned. A single-card section (mpv) is at most 560 px wide.
+- **Setting row.** 60 px high, with the label on the left, the control on the right, and a divider between rows.
+- **Switch.** A 44 by 24 px track and an 18 px knob (`role="switch"`). It is accent when on and the control fill when off. Every Toggle row is a switch.
+- **Pick button.** 34 px high, at least 140 px wide, with the value and a `ChevronDown`. It opens a menu of the row's values with the row menu's chrome (`--canvas-menu*`). Up, Down, Enter, Esc, and a press work in the menu, as they do in the queue's row menu.
+- **Checkbox grid.** Three columns of 36 px `role="checkbox"` buttons. A checked one is the success fill and border, with an accent box and a check. The header shows a count, and the section ends in an Apply primary button. My languages, Hidden libraries, and Feed view libraries use it.
+- **Buttons.** Four kinds, all 36 px with a 6 px radius: secondary (raise fill and control border), primary (accent fill, ink text, semibold), destructive (outline in the destructive tone), and ghost (muted text, no fill). Remove is destructive. Setup submit and Apply are primary. Cancel is ghost.
+- **Service card.** The name, and on the right a state pill: a dot and the label, success fill for Ready. Not configured, Connecting, Needs authentication, and Unavailable map to the muted, source, partial, and destructive tones. The card then shows the actions as buttons, and the open setup form as a recessed well with labelled mono inputs, Cancel, and the primary submit. The Feeds card shows its subscription count in its header.
+- **Status line.** 36 px, the raised fill with a top border, mono 12 px, the key hints in the source tone on the left, and the section name on the right.
+
+The artboard's hexes with no token today get `--canvas-*` tokens in `app.css`: `#3a4a3a` (success fill), `#5f7360` (success border), and `#5c3f45` (destructive border). Every other value maps to an existing token. No paint row hard-codes a hex. The artboard loads Google Fonts, and the GUI keeps its bundled faces. Keys, Sessions, Playlists, Feeds, Library routes, and Actions are not drawn. They are composed from these parts: cards that hold setting rows, buttons, and lists of 36 px rows, with no new visual vocabulary.
+
+`App::set_settings_value(key, value)` replaces the cycle for the three pick rows in the GUI. It sets the config value, runs the player update that the cycle handler runs (`update_subtitle_prefs`, then `push_subtitle_prefs`), and arms the deferred save. Each cycle handler then calls it with its computed next value, so the TUI's cycle and the GUI's pick share one effect. The value lists come from `mbv-ui-model`: a `SUBTITLE_MODES` constant in the order `next_subtitle_mode` steps through, which that function then reads, and the language list `""` plus `my_languages`, which `cycle_lang` already builds. The empty value paints as Any.
+
+### D14. Colour carries data type across the GUI
+
+The user authorized this scope beyond Settings. The reference is `canvas/colour-by-type.diff`, a diff of the Main (Queue), Library, and Settings artboards. Its Settings part is already applied to `canvas/Settings.dc.html`. The Main and Library artboards live in archived changes, which are never edited, so the diff itself is their reference.
+
+**The rule.** Weight and size carry hierarchy, and colour carries data type. Titles and body text stay heading, text, or muted. Each type has one semantic token in `app.css`, which aliases an existing hue where one exists:
+
+| Type | Token | Value |
+|---|---|---|
+| time and duration | `--canvas-type-time` | `#a7c080` |
+| year and date | `--canvas-type-date` | `#7fbbb3` |
+| count and meta | `--canvas-type-count` | `#e69875` |
+| section label | `--canvas-type-label` | `#83c092` |
+| secondary title (series, show, parent) | `--canvas-type-secondary` | `#d699b6` (new) |
+| role and character | `--canvas-type-role` | `#dbbc7f` |
+
+Links keep the date hue, and danger keeps `--canvas-destructive`. A time or a year repeated down a list (a duration column, a tree row's year, the queue's right column) paints at `--canvas-type-repeat-opacity: 0.65`. The selected or current row keeps full opacity in its own ink. The scrubber's remaining time paints the time hue at 0.75, as the diff draws it.
+
+**Typed segments, not parsed strings.** A line that joins values of several types is built as typed segments where it is built, and never split in the window:
+
+- `mbv-ui-model` gets `MetaKind { Plain, Time, Date, Count, Label, Secondary, Role }` and `MetaSegment { text, kind }`.
+- The shared Hero meta-row builder (`emby_hero_meta_rows_plain` in `mbv-render`, and its siblings that feed `meta_rows`) returns rows of segments. The TUI joins each row's text, so its output is byte-identical, and the existing TUI tests prove it. The GUI frame's `metaRows` carry the segments. `durationRow` and `progressRow` stay, because they mark whole rows.
+- Lines the window already builds from typed fields (`hero.ts`: the Music facts line `13 tracks · 44:25`, the kicker) return segments in TypeScript.
+- Single-type fields need no segments. Their painter picks the token: a year, a duration, `finishClock`, `remainingClock`, `episodeBadge` (count), and `parentLine` (secondary).
+
+One `TypedText.svelte` paints a segment list. Each kind maps to its token, and `repeat` applies the repeat opacity.
+
+**The sites, from the diff:**
+
+- **Library.** Letter headings and the tracklist column header are labels. The artist kicker is a label. Hero facts and meta segments are typed. The album year is a date. Tracklist durations are repeated times. Tree-row years are repeated dates. The same applies to the Shows, Emby, Audiobooks, Podcasts, Feeds, and Home Heroes and lists, wherever they paint a year, a duration, or a count.
+- **Queue.** The still's episode badge is a count. The parent line is a secondary title. The scrubber's remaining time is a time at 0.75. In the header, the remaining count is a count and the finish clock is a time. The footer's source line is a secondary title. The right column (Length or Ends at) is repeated time, and the current row keeps its ink.
+- **Settings.** The Feeds card's subscription count and the language count are counts (already painted). Key chords stay mono text, because a chord is not one of the six types.
 
 ### D12. No new dependency
 
@@ -195,7 +259,7 @@ The change adds no crate and no npm package. It uses what the workspace and `ui/
 - **[Risk] A user binds a chord that the GUI window takes first.** Examples are `1` to `7` or `/`, or a TUI leaf key. `load` accepts it, but the window content consumes it before the core. → This is listed as a non-goal. The Keys row still shows the chord, so the user sees what they set.
 - **[Risk] A retired action id stays in the file longer.** A full save used to drop it. → `load` already ignores it with one warning, and the next Keys edit rewrites the table.
 - **[Risk] The `Model` to `App` moves change TUI code paths.** → Each move is a separate task with no behaviour change, and the existing TUI tests for multiselect, routes, feeds, and playlists stay green before the GUI calls the moved method.
-- **[Trade-off] The sidebar ignores a collapsed Queue panel.** Its width is the expanded Queue column's width. → The rail width cannot hold section names, and closing the screen restores the collapsed state.
+- **[Trade-off] The sidebar has one fixed width.** It is 260 px whatever the Queue column's width (D13). → Closing the screen restores the Queue column at the width it had.
 
 ## Migration Plan
 

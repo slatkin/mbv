@@ -23,6 +23,7 @@ use super::entry_list::{
 };
 use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
 use crate::app::App;
+use mbv_ui_model::meta::MetaSegment;
 
 /// One entry's stable identity across every list view and every
 /// subscription (row 11.1): the subscription's URL — the feed identity the
@@ -115,7 +116,7 @@ pub struct GuiFeedsHero {
     pub parent: Option<String>,
     /// The meta rows in display order: the duration when the entry
     /// declares one (the subscription name is the parent).
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role. The shared producer fills

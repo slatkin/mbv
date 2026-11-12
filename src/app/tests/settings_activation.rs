@@ -87,3 +87,26 @@ fn navigation_settings_raise_their_expected_overlay_requests() {
         ))
     ));
 }
+
+/// `set_settings_value` sets the chosen value in the configuration, writes it
+/// through to the player's prefs as the cycle handler does, and arms the
+/// deferred save (row 9.1, design D13): the GUI's pick and the TUI's cycle end
+/// in one effect.
+#[test]
+fn set_settings_value_sets_the_config_value_and_the_player_prefs() {
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().my_languages = vec!["English".into(), "Chinese".into()];
+
+    app.set_settings_value(SettingKey::SubtitleLanguage, "Chinese");
+
+    assert_eq!(app.config.lock().unwrap().subtitle_lang, "Chinese");
+    assert_eq!(
+        app.player.subtitle_prefs_snapshot().subtitle_lang,
+        "Chinese",
+        "the player's prefs take the picked value"
+    );
+    assert!(
+        app.settings_save_at.is_some(),
+        "the picked value arms the deferred save"
+    );
+}

@@ -25,9 +25,9 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
-	import { heroAttr, heroLayout } from '$lib/library/hero';
+	import { heroAttr, heroLayout, metaRowText } from '$lib/library/hero';
 	import type { HeroLayoutFacts } from '$lib/library/hero';
-	import type { GuiEmbyFrame, GuiEmbyHero } from '$lib/bridge/types';
+	import type { GuiEmbyFrame, GuiEmbyHero, GuiMetaRow } from '$lib/bridge/types';
 
 	interface Props {
 		/** The carried plain Emby-library content (design D12, row 8.1): the
@@ -43,11 +43,11 @@
 	 * (the header action paints it as a link), with the duration and progress
 	 * indices remapped to the rows that remain. */
 	function layoutFacts(facts: GuiEmbyHero): HeroLayoutFacts {
-		const metaRows: string[] = [];
+		const metaRows: GuiMetaRow[] = [];
 		let durationRow: number | null = null;
 		let progressRow: number | null = null;
 		facts.metaRows.forEach((row, index) => {
-			if (facts.imdbUrl !== null && row === 'IMDb') {
+			if (facts.imdbUrl !== null && metaRowText(row) === 'IMDb') {
 				return;
 			}
 			if (index === facts.durationRow) {

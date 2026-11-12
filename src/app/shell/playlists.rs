@@ -1,10 +1,6 @@
 use super::Model;
-use crate::app::state::playback::{PendingQueueAction, ReplacementExecutor};
 use mbv_components::{PlaylistsComponent, PlaylistsContent};
-use mbv_emby_model::EmbyItem;
-use mbv_queue::{QueueItem, QueueSource};
-use mbv_ui_msg::{ComponentId, ModalId, MusicTreeAction, OverlayId, PlaylistsTarget, ShellRequest};
-use rand::seq::SliceRandom;
+use mbv_ui_msg::{ComponentId, ModalId, OverlayId, PlaylistsTarget, ShellRequest};
 
 impl Model {
     pub(in crate::app) fn update_playlists_content(&mut self) {
@@ -58,8 +54,21 @@ impl Model {
                 }
             }
             ShellRequest::PlaylistsAction { target, action } => match *target {
-                PlaylistsTarget::Playlist(index) => self.playlist_action(index, *action),
-                PlaylistsTarget::Row(index) => self.playlist_row_action(index, *action),
+                PlaylistsTarget::Playlist(index) => {
+                    if let Some(id) = self.app.playlists.get(index).map(|p| p.id.clone()) {
+                        self.app.playlist_action(&id, *action);
+                    }
+                }
+                PlaylistsTarget::Row(index) => {
+                    if let Some(item_id) = self
+                        .app
+                        .playlists_open_items
+                        .get(index)
+                        .map(|i| i.id.clone())
+                    {
+                        self.app.playlist_row_action(&item_id, *action);
+                    }
+                }
             },
             ShellRequest::PlaylistsRename(index) => {
                 if let Some(playlist) = self.app.playlists.get(*index).cloned() {
@@ -106,94 +115,6 @@ impl Model {
             _ => {}
         }
     }
-
-    /// Enter/`s`/`a` on a saved playlist in the list view (design D2): Play and
-    /// Shuffle replace the queue with its playable items; Enqueue appends them.
-    fn playlist_action(&mut self, index: usize, action: MusicTreeAction) {
-        let Some(playlist) = self.app.playlists.get(index) else {
-            return;
-        };
-        let (id, name) = (playlist.id.clone(), playlist.name.clone());
-        let Some(items) = self.app.playlist_playable_items(&id) else {
-            return;
-        };
-        match action {
-            MusicTreeAction::Play => {
-                let source = QueueSource::Playlist { id: Some(id), name };
-                self.replace_queue_from_playlist(items, 0, source);
-            }
-            MusicTreeAction::Shuffle => self.shuffle_queue_from_playlist(items),
-            MusicTreeAction::Enqueue => self.enqueue_playlist_items(items),
-        }
-    }
-
-    /// Enter/`s`/`a` on an item row of the open playlist (design D2): Play
-    /// starts the playlist at that row, Shuffle replaces the queue with the
-    /// whole playlist shuffled, and Enqueue appends just that row.
-    fn playlist_row_action(&mut self, index: usize, action: MusicTreeAction) {
-        let Some(row) = self.app.playlists_open_items.get(index).cloned() else {
-            return;
-        };
-        let Some(playlist) = self.app.playlists_open.clone() else {
-            return;
-        };
-        let items: Vec<_> = self
-            .app
-            .playlists_open_items
-            .iter()
-            .filter(|item| !item.is_folder)
-            .cloned()
-            .collect();
-        match action {
-            MusicTreeAction::Play => {
-                let start_idx = items.iter().position(|item| item.id == row.id).unwrap_or(0);
-                let source = QueueSource::Playlist {
-                    id: Some(playlist.id),
-                    name: playlist.name,
-                };
-                self.replace_queue_from_playlist(items, start_idx, source);
-            }
-            MusicTreeAction::Shuffle => self.shuffle_queue_from_playlist(items),
-            MusicTreeAction::Enqueue if !row.is_folder => self.enqueue_playlist_items(vec![row]),
-            MusicTreeAction::Enqueue => {}
-        }
-    }
-
-    fn shuffle_queue_from_playlist(&mut self, mut items: Vec<EmbyItem>) {
-        items.shuffle(&mut rand::rng());
-        self.replace_queue_from_playlist(items, 0, QueueSource::Shuffle);
-    }
-
-    /// Replaces the queue (gated by the populated-queue confirmation), then
-    /// closes the Playlists sidebar so the new queue is visible.
-    fn replace_queue_from_playlist(
-        &mut self,
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-        source: QueueSource,
-    ) {
-        if items.is_empty() {
-            return;
-        }
-        self.app.request_queue_replacement(
-            PendingQueueAction::PlayItems {
-                items,
-                start_idx,
-                source,
-            },
-            ReplacementExecutor::PlaylistsSidebar,
-        );
-    }
-
-    /// Appends to the viewed queue once and leaves the sidebar open.
-    fn enqueue_playlist_items(&mut self, items: Vec<EmbyItem>) {
-        let items = items
-            .into_iter()
-            .map(|item| QueueItem::Emby(Box::new(item)))
-            .collect();
-        let link = self.app.playing_queue_link();
-        self.app.append_on_owner(link, items, None);
-    }
 }
 
 #[cfg(test)]
@@ -201,6 +122,8 @@ mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_local_daemon_app_stub_with_cmd_rx};
     use mbv_emby_model::test_support::make_item;
+    use mbv_queue::QueueSource;
+    use mbv_ui_msg::MusicTreeAction;
     use mbv_ui_msg::{Msg, TerminalObserverEvent};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 

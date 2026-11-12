@@ -19,6 +19,7 @@
 	import { Search } from '@lucide/svelte';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
 	import { canvasVar } from '$lib/bridge/theme';
+	import TypedText from './TypedText.svelte';
 
 	interface Props {
 		summary: GuiQueueSummary;
@@ -40,23 +41,38 @@
 	data-queue-header
 >
 	<!-- The canvas's two heading lines, 2 px apart: the count over the
-		queue's finish clock. -->
+		queue's finish clock. Both lines carry their data type (design D14): the
+		remaining count is a count and the finish clock is a time. -->
 	<div class="flex flex-col" style:gap="2px">
 		<span
 			style:font-size="13px"
 			style:line-height="18px"
 			style:font-weight="600"
 			style:color={canvasVar('heading')}
-			data-queue-heading>Up next · {summary.remaining}</span
+			data-queue-heading
 		>
+			<TypedText
+				segments={[
+					{ text: 'Up next · ', kind: 'plain' },
+					{ text: String(summary.remaining), kind: 'count' },
+				]}
+			/>
+		</span>
 		{#if summary.finishClock}
 			<span
 				class="font-mono"
 				style:font-size="11px"
 				style:line-height="16px"
 				style:color={canvasVar('muted')}
-				data-finish-clock>queue ends {summary.finishClock}</span
+				data-finish-clock
 			>
+				<TypedText
+					segments={[
+						{ text: 'queue ends ', kind: 'plain' },
+						{ text: summary.finishClock, kind: 'time' },
+					]}
+				/>
+			</span>
 		{/if}
 	</div>
 	<div class="flex items-center" style:gap="4px">

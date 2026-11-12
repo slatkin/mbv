@@ -2,39 +2,26 @@
 //!
 //! The `FeedsManageComponent` owns the interaction state (stage/cursor/form
 //! edits): the two-way per-tick mirror (`sync_feeds_manage` /
-//! `sync_feeds_manage_to_app`) is deleted. This module owns only the effects
-//! the component's key forwarding cannot perform — network fetch, confirm
-//! dialog, config persistence — and the background add-feed channel that
-//! cannot live in the component (`Model::feeds_manage`).
+//! `sync_feeds_manage_to_app`) is deleted. The fetch, confirm, config
+//! persistence, and background add-feed channel effects live on `App`
+//! (add-gui-settings-screen design D7, `App.feeds_manage` and its
+//! `begin_feed_add`/`edit_feed`/`request_feed_removal`/
+//! `drain_feed_add_results`); this module owns only the component mounting
+//! and the projection of the App-owned outcomes onto the component.
 
 use mbv_components::FeedsManageComponent;
-use mbv_config::FeedSubscription;
-use mbv_ui_model::feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
+use mbv_ui_model::feeds_manage::{FeedAddDrain, FeedForm, FeedsManageStage};
 use mbv_ui_msg::FeedsManageIntent;
 use mbv_ui_msg::{ComponentId, PopupId};
 
-fn require_feed_entries<T>(
-    result: Result<Vec<T>, mbv_ui_model::UiModelError>,
-) -> Result<(), mbv_ui_model::UiModelError> {
-    result.and_then(|entries| {
-        if entries.is_empty() {
-            Err(mbv_ui_model::UiModelError::operation(
-                "response did not contain any valid RSS or Atom entries",
-            ))
-        } else {
-            Ok(())
-        }
-    })
-}
-
 impl super::Model {
     /// Mount the feeds-management component and seed it (task 5.3c/5.3d).
-    /// The component owns the stage/cursor; `Model::feeds_manage` carries
+    /// The component owns the stage/cursor; `App.feeds_manage` carries
     /// only the background add-feed channel, the pending-add marker and the
     /// add-attempt id counter.
     pub(in crate::app) fn open_feeds_manage(&mut self) {
-        if self.feeds_manage.is_none() {
-            self.feeds_manage = Some(FeedsManagePopup::new());
+        if self.app.feeds_manage.is_none() {
+            self.app.feeds_manage = Some(mbv_ui_model::feeds_manage::FeedsManagePopup::new());
         }
         let id = ComponentId::Popup(PopupId::FeedManage);
         if !self.application.mounted(&id) {
@@ -60,7 +47,7 @@ impl super::Model {
     /// the pending-add marker). Stage/cursor/form edits stay component-local.
     fn push_feeds_manage_content(&mut self) {
         let feeds = self.app.config.lock().unwrap().feeds.clone();
-        let pending = self.feeds_manage.as_ref().and_then(|p| p.pending_add);
+        let pending = self.app.feeds_manage.as_ref().and_then(|p| p.pending_add);
         if let Some(component) = self.feeds_manage_component_mut() {
             component.set_feeds(feeds);
             component.set_pending_add(pending);
@@ -117,7 +104,7 @@ impl super::Model {
     pub(in crate::app) fn dismiss_feeds_manage(&mut self) {
         let id = ComponentId::Popup(PopupId::FeedManage);
         self.dismiss_focus_overlay(&id);
-        self.feeds_manage = None;
+        self.app.feeds_manage = None;
     }
 
     fn start_add_feed(&mut self) {
@@ -139,33 +126,25 @@ impl super::Model {
 
     fn confirm_remove_feed(&mut self) {
         let index = self.feeds_manage_cursor();
-        let name = self
+        let url = self
             .app
             .config
             .lock()
             .unwrap()
             .feeds
             .get(index)
-            .map(|s| s.name.clone());
-        let Some(name) = name else {
+            .map(|s| s.url.clone());
+        let Some(url) = url else {
             return;
         };
-        self.app.ask_confirm(super::ConfirmModal::two_button(
-            format!(
-                "Remove subscription '{}'?",
-                mbv_ui_model::ui_util::trunc_str(&name, 40)
-            ),
-            "Confirm",
-            "Cancel",
-            super::ConfirmAction::RemoveFeedSubscription(index),
-        ));
+        self.app.request_feed_removal(&url);
     }
 
     /// Esc from the add/edit form (§6.2): discards unsaved input and, for
     /// an in-flight add, invalidates its pending id so the eventual fetch
     /// result is dropped as stale by `drain_feed_add_results`.
     pub(in crate::app) fn cancel_feed_form(&mut self) {
-        if let Some(popup) = &mut self.feeds_manage {
+        if let Some(popup) = &mut self.app.feeds_manage {
             popup.pending_add = None;
         }
         if let Some(component) = self.feeds_manage_component_mut() {
@@ -175,13 +154,6 @@ impl super::Model {
     }
 
     pub(in crate::app) fn submit_feed_form(&mut self) {
-        if self
-            .feeds_manage
-            .as_ref()
-            .is_some_and(|p| p.pending_add.is_some())
-        {
-            return;
-        }
         let Some(form) = self.feeds_manage_stage().and_then(|stage| match stage {
             FeedsManageStage::Form(form) => Some(form),
             FeedsManageStage::List => None,
@@ -189,155 +161,46 @@ impl super::Model {
             return;
         };
         match form.editing_index {
-            Some(index) => self.submit_feed_edit(index, &form),
-            None => self.submit_feed_add(&form),
-        }
-    }
-
-    /// Edit changes only name and kind (§6.3) -- applied synchronously,
-    /// unlike add, since the URL (and therefore feed validity) never
-    /// changes here.
-    fn submit_feed_edit(&mut self, index: usize, form: &FeedForm) {
-        let name = form.name.trim().to_string();
-        if name.is_empty() {
-            self.app.flash(
-                "Feed name can't be empty".into(),
-                crate::app::dispatch::notify::ToastSeverity::Error,
-            );
-            return;
-        }
-        let feeds: Vec<FeedSubscription> = {
-            let c = self.app.config.lock().unwrap();
-            c.feeds
-                .iter()
-                .enumerate()
-                .map(|(i, s)| {
-                    if i == index {
-                        FeedSubscription {
-                            name: name.clone(),
-                            url: s.url.clone(),
-                            kind: form.kind,
-                        }
-                    } else {
-                        s.clone()
+            Some(_) => {
+                if self.app.edit_feed(&form.url, &form.name, form.kind) {
+                    let feeds = self.app.config.lock().unwrap().feeds.clone();
+                    if let Some(component) = self.feeds_manage_component_mut() {
+                        component.set_stage(FeedsManageStage::List);
+                        component.set_feeds(feeds);
                     }
-                })
-                .collect()
-        };
-        self.app.persist_feeds(feeds.clone());
-        if let Some(component) = self.feeds_manage_component_mut() {
-            component.set_stage(FeedsManageStage::List);
-            component.set_feeds(feeds);
-        }
-        self.app.flash(
-            format!("Updated '{name}'"),
-            crate::app::dispatch::notify::ToastSeverity::Success,
-        );
-    }
-
-    /// Add fetches+parses the feed first (§6.2), off the UI thread; only a
-    /// successful result -- matched against `pending_add` by id -- appends
-    /// to `config.feeds` and persists. Failure surfaces via `flash` and
-    /// does not save.
-    fn submit_feed_add(&mut self, form: &FeedForm) {
-        let name = form.name.trim().to_string();
-        let url = form.url.trim().to_string();
-        if name.is_empty() || url.is_empty() {
-            self.app.flash(
-                "Feed name and URL are required".into(),
-                crate::app::dispatch::notify::ToastSeverity::Error,
-            );
-            return;
-        }
-        let kind = form.kind;
-        let Some(popup) = &mut self.feeds_manage else {
-            return;
-        };
-        let id = popup.next_add_id;
-        popup.next_add_id += 1;
-        popup.pending_add = Some(id);
-        let tx = popup.add_tx.clone();
-        std::thread::spawn(move || {
-            let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url)
-                .map_err(mbv_ui_model::UiModelError::operation_source)
-            {
-                Ok(resolved_url) => {
-                    let result = require_feed_entries(
-                        mbv_feed::fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
-                            .map_err(mbv_ui_model::UiModelError::operation_source),
-                    );
-                    (resolved_url, result)
                 }
-                Err(error) => (url, Err(error)),
-            };
-            let _ = tx.send(FeedAddResult {
-                id,
-                name,
-                url: resolved_url,
-                kind,
-                result,
-            });
-        });
-        if let Some(component) = self.feeds_manage_component_mut() {
-            component.set_pending_add(Some(id));
+            }
+            None => {
+                if let Some(id) = self.app.begin_feed_add(&form.name, &form.url, form.kind)
+                    && let Some(component) = self.feeds_manage_component_mut()
+                {
+                    component.set_pending_add(Some(id));
+                }
+            }
         }
-        self.app.flash(
-            "Fetching feed…".into(),
-            crate::app::dispatch::notify::ToastSeverity::Neutral,
-        );
     }
 
-    /// Drain the in-flight add-feed fetch result, if any (§6.2). A result
-    /// whose id no longer matches the popup's current `pending_add` -- the
-    /// add was cancelled (Esc) or superseded by a later submission -- is
-    /// discarded without touching config.
+    /// Drain the in-flight add-feed fetch result, if any (§6.2): the
+    /// `App` drain owns the channel and the config write; this half only
+    /// projects the outcome onto the component's stage/pending/feeds.
     pub(in crate::app) fn drain_feed_add_results(&mut self) -> bool {
-        let Some(popup) = &self.feeds_manage else {
-            return false;
-        };
-        let Ok(result) = popup.add_rx.try_recv() else {
-            return false;
-        };
-        let current_pending = self.feeds_manage.as_ref().and_then(|p| p.pending_add);
-        if current_pending != Some(result.id) {
-            return true;
-        }
-        if let Some(popup) = &mut self.feeds_manage {
-            popup.pending_add = None;
-        }
-        match result.result {
-            Ok(()) => {
-                let feeds = {
-                    let c = self.app.config.lock().unwrap();
-                    let mut feeds = c.feeds.clone();
-                    feeds.push(FeedSubscription {
-                        name: result.name.clone(),
-                        url: result.url,
-                        kind: result.kind,
-                    });
-                    feeds
-                };
-                self.app.persist_feeds(feeds.clone());
-                self.app.flash(
-                    format!("Added '{}'", result.name),
-                    crate::app::dispatch::notify::ToastSeverity::Success,
-                );
+        match self.app.drain_feed_add_results() {
+            FeedAddDrain::Idle => false,
+            FeedAddDrain::Discarded => true,
+            FeedAddDrain::Applied(feeds) => {
                 if let Some(component) = self.feeds_manage_component_mut() {
                     component.set_stage(FeedsManageStage::List);
                     component.set_feeds(feeds);
                     component.set_pending_add(None);
                 }
+                true
             }
-            Err(e) => {
-                self.app.flash(
-                    format!("Couldn't add feed: {e}"),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
+            FeedAddDrain::Failed => {
                 if let Some(component) = self.feeds_manage_component_mut() {
                     component.set_pending_add(None);
                 }
+                true
             }
         }
-        true
     }
 }

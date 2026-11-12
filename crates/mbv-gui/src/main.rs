@@ -14,6 +14,7 @@ use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::pointer::{DomPointer, neutral_pointer};
+use mbv_gui::bridge::settings::GuiSettingsCommand;
 use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
 use mimalloc::MiMalloc;
 use tauri::{Emitter, Manager, State};
@@ -68,6 +69,24 @@ fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
 #[tauri::command]
 fn library(channel: State<'_, CoreChannel>, command: GuiLibraryCommand) {
     push(channel, CoreInput::Library(command.into()));
+}
+
+/// The `settings` command (`add-gui-settings-screen` design D5): the Settings
+/// screen's window content sends one semantic request, the bridge translates it
+/// to the neutral command, and it pushes into the core channel as a
+/// [`CoreInput::Settings`]. A request this build cannot address — a setting
+/// name no key declares — logs and drops, so a stale frame's edit reaches
+/// nothing.
+#[tauri::command]
+fn settings(channel: State<'_, CoreChannel>, command: GuiSettingsCommand) {
+    if let Some(command) = mbv_gui::bridge::settings::neutral(command) {
+        push(channel, CoreInput::Settings(command));
+    } else {
+        tracing::debug!(
+            target: "gui_commands",
+            "the settings command names no setting this build declares; the request drops"
+        );
+    }
 }
 
 /// Push one input into the core channel (design D3): the command hands the
@@ -156,7 +175,8 @@ fn main() -> tauri::Result<()> {
             key,
             pointer,
             report_layout,
-            library
+            library,
+            settings
         ])
         .build(tauri::generate_context!())?;
     // The event loop ends on the window's destroy or the quit edge's close.

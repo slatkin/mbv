@@ -45,6 +45,7 @@
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
+	import TypedText from './TypedText.svelte';
 	import { canvasVar } from '$lib/bridge/theme';
 
 	interface Props {
@@ -225,7 +226,7 @@
 							style:height="{LETTER_ROW_HEIGHT}px"
 							style:padding="0 8px 2px"
 							style:font-size="12px"
-							style:color="var(--canvas-source)"
+							style:color="var(--canvas-type-label)"
 							data-library-letter={row.letter}
 						>
 							{row.letter}
@@ -305,11 +306,20 @@
 								style:font-weight={rowWeight(row)}>{row.name}</span
 							>
 							{#if row.kind === 'album' && row.year !== ''}
+								<!-- A year repeats down the tree, so it paints the date
+									token at the repeat opacity; the picked album keeps its
+									own ink (design D14). -->
 								<span
 									class="flex-none font-mono tabular-nums"
 									style:font-size="12px"
-									style:color="var(--canvas-muted)">{row.year}</span
+									style:color={isPicked(row) ? 'var(--canvas-muted)' : undefined}
+									data-library-row-year
 								>
+									<TypedText
+										segments={[{ text: row.year, kind: 'date' }]}
+										repeat={!isPicked(row)}
+									/>
+								</span>
 							{/if}
 						</button>
 					{/if}

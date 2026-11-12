@@ -9,7 +9,7 @@
 // wire types, so every call site keeps importing from the one bridge module.
 
 import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
-import type { GuiLibraryArt } from './library-types';
+import type { GuiLibraryArt, GuiMetaRow } from './library-types';
 import type { GuiPodcastPill } from './library-types';
 
 /** The Podcasts destination's content (design D12, row 10.1), present while
@@ -63,7 +63,7 @@ export interface GuiPodcastsHero {
 	parent?: string | null;
 	/** The meta rows in display order: the duration, then the publish date
 	 * (the show title is the parent). */
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	/** Which meta row paints the duration role, when one does. */
 	durationRow: number | null;
 	/** Which meta row paints the progress role; `null` on every episode. */

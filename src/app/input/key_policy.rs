@@ -10,103 +10,10 @@ use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_msg::{Key, KeyModifiers};
 
-/// Which remote-control target currently owns transport shortcuts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum RemoteControlTarget {
-    #[default]
-    None,
-    DirectRemote,
-}
-
-/// Playback facts read by the central keyboard policy.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RouterPlaybackState {
-    pub player_active: bool,
-    pub remote_target: RemoteControlTarget,
-    pub queue_only_idle: bool,
-    pub idle_feed_link_available: bool,
-}
-
-/// The overlay-focus situation read by the central keyboard policy.
-///
-/// The policy only ever distinguishes four reachable situations. `blocking`
-/// implies `holds_focus` (the blocking set is a subset of the focus-holding
-/// set) and the context menu is itself a blocking overlay, so the three facts
-/// are not independent and are carried as one ordered enum instead of three
-/// settable bools. `help`/`sessions_sidebar`/`text_entry_focused` stay
-/// independent and live on `RouterOverlayState`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum OverlayFocus {
-    /// No overlay holds `TuiRealm` focus; the panels own the keyboard.
-    #[default]
-    Free,
-    /// A non-blocking overlay (Help, a sidebar) holds focus.
-    NonBlocking,
-    /// A blocking overlay other than the context menu holds focus.
-    Blocking,
-    /// The context menu is open (it is a blocking overlay the policy names
-    /// explicitly, so the `ClearQueuePrompt` gate can read it directly).
-    ContextMenu,
-}
-
-impl OverlayFocus {
-    /// Whether a blocking overlay is mounted.
-    pub(in crate::app) fn blocking(self) -> bool {
-        matches!(self, Self::Blocking | Self::ContextMenu)
-    }
-
-    /// Whether any overlay/sidebar/modal holds `TuiRealm` focus.
-    pub(in crate::app) fn holds_focus(self) -> bool {
-        !matches!(self, Self::Free)
-    }
-
-    /// Whether the context menu is open.
-    pub(in crate::app) fn context_menu(self) -> bool {
-        matches!(self, Self::ContextMenu)
-    }
-}
-
-/// Overlay facts read by the central keyboard policy.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RouterOverlayState {
-    /// Which overlay-focus situation the keyboard sees.
-    pub focus: OverlayFocus,
-    /// Whether the (non-blocking) Help overlay is mounted.
-    pub help: bool,
-    /// Whether the (non-blocking) Sessions sidebar is mounted. When open, Esc
-    /// closes it and takes precedence over the Escape playback stop.
-    pub sessions_sidebar: bool,
-    /// Whether the focused leaf is a text-entry component (the search sidebar,
-    /// inline library search, or the settings form's text inputs). Global
-    /// bindings do not fire while a text entry owns focus.
-    pub text_entry_focused: bool,
-}
-
-/// Plain-data state read by the central keyboard policy.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RouterSnapshot {
-    pub playback: RouterPlaybackState,
-    pub overlays: RouterOverlayState,
-    pub panel_mode: PanelMode,
-    pub panel_focus: PanelFocus,
-    /// Whether the focused list holds an active Visual selection. Its row-local
-    /// Space (`media-list-multi-select` spec) takes Space ahead of the global
-    /// play/pause toggle.
-    pub visual_selection_active: bool,
-    /// Whether prefix mode is armed: the mirror of the App-owned bit. While
-    /// true, the
-    /// next chord resolves against the prefix namespace only; arming is
-    /// suppressed while a text entry owns focus or a blocking overlay is
-    /// open (the `prefix_arm` layer's gate).
-    pub prefix_armed: bool,
-    /// Whether the resolving Client is the GUI Client (add-tauri-gui-client
-    /// row 6.2): the GUI-only key context's gate reads it, so the canvas's
-    /// `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) chords
-    /// route in the GUI Client and never in the TUI Client — a configured
-    /// TUI binding on those chords does not follow into the GUI, and the
-    /// TUI's default bindings stay unchanged.
-    pub gui_client: bool,
-}
+mod snapshot;
+pub use snapshot::{
+    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+};
 
 /// One ordered layer of the keyboard policy.
 #[derive(Debug, Clone)]
@@ -294,7 +201,13 @@ impl KeyPolicyGate {
             Self::PanelFocusLibraryBoth => panel_focus_library_both_allowed(snapshot),
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::ClearQueuePrompt => {
-                !snapshot.overlays.focus.blocking() && !snapshot.overlays.focus.context_menu()
+                // The GUI Settings screen's queue keys stay behind it
+                // (`add-gui-settings-screen` design D2): the screen holds the
+                // keyboard over the queue, so the prompt never opens while it
+                // shows. The TUI's own sidebar situations keep today's rules.
+                !snapshot.overlays.focus.blocking()
+                    && !snapshot.overlays.focus.context_menu()
+                    && !snapshot.overlays.focus.settings_screen()
             }
             Self::SessionsSidebarOpen => snapshot.overlays.sessions_sidebar,
             Self::Playback => playback_allowed(snapshot),

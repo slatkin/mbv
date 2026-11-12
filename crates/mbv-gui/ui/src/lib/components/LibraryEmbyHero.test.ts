@@ -36,7 +36,7 @@ function hero(
 	return {
 		kind: 'movie',
 		title: 'Heat',
-		metaRows: ['2 h 50 m', '1995 · Crime'],
+		metaRows: [[{ text: '2 h 50 m', kind: 'time' }], [{ text: '1995 · Crime', kind: 'plain' }]],
 		durationRow: 0,
 		progressRow: 1,
 		overview: 'A crew plans a bank job.',

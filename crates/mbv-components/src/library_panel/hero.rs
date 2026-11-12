@@ -14,6 +14,7 @@ use mbv_queue::{
 use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
 use mbv_render::components::home_video::format_release_date;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
+use mbv_ui_model::meta::{MetaKind, MetaSegment};
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
 use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink};
@@ -273,13 +274,13 @@ pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
             })
             .collect::<Vec<_>>();
         if !links.is_empty() {
-            meta_rows.push(
+            meta_rows.push(vec![MetaSegment::plain(
                 links
                     .iter()
                     .map(|link| link.name.as_str())
                     .collect::<Vec<_>>()
                     .join("|"),
-            );
+            )]);
         }
         let genres = item
             .genres
@@ -289,7 +290,7 @@ pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
             .collect::<Vec<_>>()
             .join("/");
         if !genres.is_empty() {
-            meta_rows.push(genres);
+            meta_rows.push(vec![MetaSegment::plain(genres)]);
         }
         let mut credits = Vec::new();
         credits.extend(
@@ -373,11 +374,12 @@ pub fn hero_content_series_with_episode(
         (item.runtime_ticks > 0).then(|| fmt_duration_hms(item.runtime_ticks / TICKS_PER_SECOND))
     };
     let focused_episode = episode.filter(|_| workspace_focused);
-    let mut meta_rows: Vec<String> = series
+    let mut meta_rows: Vec<Vec<MetaSegment>> = series
         .genres
         .first()
         .map(|genre| genre.to_uppercase())
         .filter(|genre| !genre.is_empty())
+        .map(|genre| vec![MetaSegment::plain(genre)])
         .into_iter()
         .collect();
     let date = if workspace_focused {
@@ -387,7 +389,7 @@ pub fn hero_content_series_with_episode(
     } else {
         series_years_range(series).or_else(|| release_date(series))
     };
-    meta_rows.extend(date);
+    meta_rows.extend(date.map(|text| vec![MetaSegment::new(text, MetaKind::Date)]));
     let duration = workspace_focused
         .then(|| {
             focused_episode
@@ -396,7 +398,7 @@ pub fn hero_content_series_with_episode(
         })
         .flatten();
     let duration_row = duration.is_some().then_some(meta_rows.len());
-    meta_rows.extend(duration);
+    meta_rows.extend(duration.map(|text| vec![MetaSegment::new(text, MetaKind::Time)]));
     let mut overview_item = series;
     let mut artwork = emby_artwork_policy(series);
     if let Some(episode) = focused_episode {
@@ -417,10 +419,13 @@ pub fn hero_content_series_with_episode(
     if let Some(seasons) = seasons
         && seasons > 0
     {
-        meta_rows.push(seasons_label(seasons));
+        meta_rows.push(vec![MetaSegment::new(
+            seasons_label(seasons),
+            MetaKind::Count,
+        )]);
     }
     if let Some(network) = series_network(series) {
-        meta_rows.push(network);
+        meta_rows.push(vec![MetaSegment::plain(network)]);
     }
     let facts = HeroFacts {
         title: series.name.clone(),
@@ -546,21 +551,22 @@ pub fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) -> HeroContentD
 
 fn abs_book_meta_rows(
     book: &AudiobookshelfBookQueueItem,
-) -> (Vec<String>, Option<usize>, Option<usize>) {
+) -> (Vec<Vec<MetaSegment>>, Option<usize>, Option<usize>) {
     let mut rows = Vec::new();
     let mut duration_row = None;
     let mut progress_row = None;
     if let Some(author) = book.author.as_deref().filter(|a| !a.is_empty()) {
-        rows.push(author.to_string());
+        rows.push(vec![MetaSegment::plain(author)]);
     }
     if let Some(ticks) = book.duration_ticks.filter(|t| *t > 0) {
         duration_row = Some(rows.len());
-        rows.push(fmt_duration_hms(
-            i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
-        ));
+        rows.push(vec![MetaSegment::new(
+            fmt_duration_hms(i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX)),
+            MetaKind::Time,
+        )]);
     }
     if book.is_finished {
-        rows.push("Finished".into());
+        rows.push(vec![MetaSegment::plain("Finished")]);
     } else if book.position_ticks > 0
         && let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0)
     {
@@ -577,7 +583,7 @@ fn abs_book_meta_rows(
         )]
         let pct = percent as u8;
         progress_row = Some(rows.len());
-        rows.push(format!("{pct}%"));
+        rows.push(vec![MetaSegment::plain(format!("{pct}%"))]);
     }
     (rows, duration_row, progress_row)
 }
@@ -593,16 +599,20 @@ pub fn hero_content_abs_episode(episode: &AudiobookshelfQueueItem) -> HeroConten
     let mut meta_rows = Vec::new();
     let mut duration_row = None;
     if let Some(show) = episode.show_title.as_deref().filter(|s| !s.is_empty()) {
-        meta_rows.push(show.to_string());
+        meta_rows.push(vec![MetaSegment::new(show, MetaKind::Secondary)]);
     }
     if let Some(ticks) = episode.duration_ticks.filter(|t| *t > 0) {
         duration_row = Some(meta_rows.len());
-        meta_rows.push(fmt_duration_hms(
-            i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
-        ));
+        meta_rows.push(vec![MetaSegment::new(
+            fmt_duration_hms(i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX)),
+            MetaKind::Time,
+        )]);
     }
     if let Some(secs) = episode.pub_date_secs {
-        meta_rows.push(fmt_publish_date(secs));
+        meta_rows.push(vec![MetaSegment::new(
+            fmt_publish_date(secs),
+            MetaKind::Date,
+        )]);
     }
     let facts = HeroFacts {
         title: episode.title.clone(),
@@ -636,9 +646,12 @@ pub fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
             .duration_ticks
             .filter(|t| *t > 0)
             .map(|ticks| {
-                vec![fmt_duration_hms(
-                    i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
-                )]
+                vec![vec![MetaSegment::new(
+                    fmt_duration_hms(
+                        i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
+                    ),
+                    MetaKind::Time,
+                )]]
             })
             .unwrap_or_default(),
         duration_row: has_duration.then_some(0),
@@ -657,6 +670,7 @@ pub fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
 mod tests {
     use super::*;
     use mbv_emby_model::test_support::make_item;
+    use mbv_ui_model::meta::meta_rows_text;
     use rstest::rstest;
 
     const MINUTE: i64 = 60 * TICKS_PER_SECOND;
@@ -753,11 +767,22 @@ mod tests {
         let episode = selection.map(|(date, minutes)| episode(date, minutes));
         let data =
             hero_content_series_with_episode(&show, episode.as_ref(), workspace_focused, Some(11));
-        assert_eq!(data.facts.meta_rows, expected);
+        assert_eq!(meta_rows_text(&data.facts.meta_rows), expected);
         assert_eq!(
             data.facts.duration_row.is_some(),
             workspace_focused,
             "duration row presence follows workspace focus"
+        );
+    }
+
+    /// The Series line types its year range as a Date segment; the genre
+    /// after it stays Plain (design D14).
+    #[test]
+    fn series_line_types_year_range_as_date() {
+        let data = hero_content_emby(&series());
+        assert_eq!(
+            data.facts.meta_rows[0].first(),
+            Some(&MetaSegment::new("2026", MetaKind::Date)),
         );
     }
 }

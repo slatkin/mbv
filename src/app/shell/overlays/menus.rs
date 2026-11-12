@@ -285,141 +285,14 @@ impl Model {
     }
 
     fn commit_multiselect(&mut self, kind: MultiSelectKind, items: &[(String, String, bool)]) {
-        if matches!(kind, MultiSelectKind::MyLanguages) {
-            self.commit_my_languages(items);
-            return;
-        }
-
-        self.commit_library_list_selection(kind, items);
-    }
-
-    fn commit_my_languages(&mut self, items: &[(String, String, bool)]) {
-        let selected: Vec<String> = items
-            .iter()
-            .filter(|(_, _, is_sel)| *is_sel)
-            .map(|(_, name, _)| name.clone())
-            .collect();
-        {
-            let mut c = self.app.config.lock().unwrap();
-            if !selected.is_empty() {
-                if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
-                    c.subtitle_lang = String::new();
-                }
-                if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
-                    c.audio_lang = String::new();
-                }
-            }
-            c.my_languages = selected;
-        };
-        let cfg = self.app.config.lock().unwrap().clone();
-        self.app.player.update_subtitle_prefs(|p| {
-            p.subtitle_lang.clone_from(&cfg.subtitle_lang);
-            p.audio_lang.clone_from(&cfg.audio_lang);
-        });
-        if let Err(e) =
-            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
-        {
-            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
-        }
-    }
-
-    fn commit_library_list_selection(
-        &mut self,
-        kind: MultiSelectKind,
-        items: &[(String, String, bool)],
-    ) {
-        let hidden: Vec<String> = items
-            .iter()
-            .filter(|(_, _, is_hidden)| *is_hidden)
-            .map(|(lower, _, _)| lower.clone())
-            .collect();
-        {
-            let mut c = self.app.config.lock().unwrap();
-            match kind {
-                MultiSelectKind::HiddenLibraries => c.hidden_libraries.clone_from(&hidden),
-                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries.clone_from(&hidden),
-                MultiSelectKind::MyLanguages => unreachable!(),
-            }
-        }
-        match kind {
-            MultiSelectKind::HiddenLibraries => self.app.hidden_libraries = hidden,
-            MultiSelectKind::FeedViewLibraries => {
-                for lib in &mut self.app.libs {
-                    lib.nav_stack.clear();
-                }
-            }
-            MultiSelectKind::MyLanguages => unreachable!(),
-        }
-        let cfg = self.app.config.lock().unwrap().clone();
-        if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
-        {
-            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
-        }
-        if let Ok(content) = self.app.fetch_home() {
-            // The commit runs the fetch synchronously (order-sensitive
-            // side effects); the computed content is assigned to
-            // the stored `home_content` directly — a shell-side caller
-            // (task 5.3d).
+        if let Some(content) = self.app.commit_settings_choices(kind, items) {
             self.assign_home_content(content);
         }
     }
 
     pub(in crate::app) fn open_multiselect(&mut self, kind: MultiSelectKind) {
-        let items: Vec<(String, String, bool)> = if matches!(kind, MultiSelectKind::MyLanguages) {
-            const ALL_LANGS: &[&str] = &[
-                "English",
-                "French",
-                "German",
-                "Spanish",
-                "Italian",
-                "Portuguese",
-                "Japanese",
-                "Korean",
-                "Chinese",
-                "Russian",
-                "Arabic",
-                "Dutch",
-                "Swedish",
-                "Norwegian",
-                "Danish",
-                "Finnish",
-                "Polish",
-                "Czech",
-                "Turkish",
-            ];
-            let my_langs = self.app.config.lock().unwrap().my_languages.clone();
-            ALL_LANGS
-                .iter()
-                .map(|&name| {
-                    let selected = my_langs.iter().any(|l| l == name);
-                    (name.to_lowercase(), name.to_string(), selected)
-                })
-                .collect()
-        } else {
-            let Some(client) = self.app.emby_client() else {
-                return;
-            };
-            let client = client.lock().unwrap();
-            let all = match kind {
-                MultiSelectKind::HiddenLibraries | MultiSelectKind::FeedViewLibraries => {
-                    client.get_views().unwrap_or_default()
-                }
-                MultiSelectKind::MyLanguages => unreachable!(),
-            };
-            let config = self.app.config.lock().unwrap();
-            let selected_list = match kind {
-                MultiSelectKind::HiddenLibraries => &config.hidden_libraries,
-                MultiSelectKind::FeedViewLibraries => &config.feed_view_libraries,
-                MultiSelectKind::MyLanguages => unreachable!(),
-            };
-            all.iter()
-                .filter(|v| v.collection_type != "playlists")
-                .map(|v| {
-                    let lower = v.name.to_lowercase();
-                    let is_hidden = selected_list.contains(&lower);
-                    (lower, v.name.clone(), is_hidden)
-                })
-                .collect()
+        let Some(items) = self.app.settings_choices(kind) else {
+            return;
         };
         let id = Self::multiselect_id();
         if !self.application.mounted(&id) {
@@ -481,37 +354,9 @@ impl Model {
     }
 
     pub(in crate::app) fn open_library_routes(&mut self) {
-        tracing::info!(name: "library_route.picker.opened", target: "library_route", "F2 route picker opened");
-        let Some(client) = self.app.emby_client() else {
+        let Some(items) = self.app.route_libraries() else {
             return;
         };
-        let client = client.lock().unwrap();
-        let all = match client.get_views() {
-            Ok(all) => {
-                tracing::info!(name: "library_route.library_fetch.succeeded", target: "library_route", count = all.len(), "F2 library fetch succeeded");
-                all
-            }
-            Err(e) => {
-                tracing::warn!(name: "library_route.library_fetch.failed", target: "library_route", { error = %e }, "F2 library fetch failed");
-                drop(client);
-                self.app.flash(
-                    format!("⚠ Library routes couldn't load libraries ({e})"),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
-                return;
-            }
-        };
-        let routes = self.app.config.lock().unwrap().library_routes.clone();
-        let items: Vec<(String, String, Option<String>)> = all
-            .iter()
-            .filter(|v| v.collection_type != "playlists")
-            .map(|v| {
-                let lower = v.name.to_lowercase();
-                let assigned = routes.get(&lower).cloned();
-                (lower, v.name.clone(), assigned)
-            })
-            .collect();
-        drop(client);
         let id = Self::library_routes_id();
         if !self.application.mounted(&id) {
             self.application
@@ -559,65 +404,13 @@ impl Model {
     }
 
     pub(in crate::app) fn enter_device_stage(&mut self, library_lower: String) {
-        let sessions = match self.app.fetch_sessions_blocking() {
-            Ok(sessions) => {
-                tracing::info!(name: "library_route.session_fetch.succeeded", target: "library_route", count = sessions.len(), "F2 session fetch succeeded");
-                sessions
-            }
-            Err(e) => {
-                tracing::warn!(name: "library_route.session_fetch.failed", target: "library_route", { library = %library_lower, error = %e }, "F2 session fetch failed");
-                self.app.flash(
-                    format!("⚠ Library routes couldn't load devices ({e})"),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
-                return;
-            }
-        };
-        let Some(client) = self.app.emby_client() else {
+        let Some((devices, cursor)) = self.app.route_devices(&library_lower) else {
             return;
         };
-        let local_device_name = client.lock().unwrap().device_name.clone();
-        let mut devices: Vec<(String, Option<mbv_remote_player::DaemonEndpoint>)> = sessions
-            .iter()
-            .filter(|s| s.client.eq_ignore_ascii_case("mbv"))
-            .filter(|s| !s.device_name.eq_ignore_ascii_case(&local_device_name))
-            .map(|s| {
-                let endpoint = self.app.session_direct_endpoint(s);
-                if let Some(endpoint) = &endpoint {
-                    tracing::info!(name: "library_route.endpoint.eligible", target: "library_route", device = %s.device_name, endpoint = %endpoint, "F2 endpoint eligible");
-                } else {
-                    tracing::info!(name: "library_route.endpoint.rejected", target: "library_route", device = %s.device_name, reason = "no resolvable direct-connect endpoint", "F2 endpoint rejected");
-                }
-                (s.device_name.clone(), endpoint)
-            })
-            .collect();
-        devices.sort_by(|a, b| a.0.cmp(&b.0));
-        devices.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
-        tracing::info!(name: "library_route.candidates.counted", target: "library_route", count = devices.len(), library = %library_lower, "F2 candidate count");
-
-        let current_endpoint = self
-            .app
-            .config
-            .lock()
-            .unwrap()
-            .library_routes
-            .get(&library_lower)
-            .and_then(|raw| mbv_remote_player::DaemonEndpoint::parse(raw).ok());
-        let cursor = current_endpoint
-            .and_then(|current| {
-                devices
-                    .iter()
-                    .position(|(_, ep)| ep.as_ref() == Some(&current))
-            })
-            .map_or(0, |idx| idx + 1);
-
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {
                 library_lower,
-                devices: devices
-                    .into_iter()
-                    .map(|(name, endpoint)| (name, endpoint.map(|endpoint| endpoint.to_string())))
-                    .collect(),
+                devices,
             },
             cursor,
         });
@@ -633,98 +426,22 @@ impl Model {
             return;
         };
         let cursor = self.library_routes_cursor();
-
-        if cursor > 0
-            && let Some((name, None)) = devices.get(cursor - 1)
-        {
-            self.app.flash(
-                format!("{name} is not currently routable (no resolvable direct-connect endpoint)"),
-                crate::app::dispatch::notify::ToastSeverity::Neutral,
-            );
-            return;
-        }
-
-        self.apply_device_selection_to_config(&library_lower, &devices, cursor);
-        let cfg = self.app.config.lock().unwrap().clone();
-        self.app.library_routes = cfg.library_routes.clone();
-        tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.app.library_routes.len(), "runtime route table synchronized");
-        let save_result =
-            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes);
-        if !self.finish_route_config_save(save_result) {
-            return;
-        }
-        let Some(client) = self.app.emby_client() else {
+        // Cursor 0 is the automatic entry; a picked row carries its device
+        // name and endpoint (a `None` endpoint is refused in
+        // `assign_library_route`).
+        let device = if cursor > 0 {
+            devices.get(cursor - 1)
+        } else {
+            None
+        };
+        let Some((items, restored_cursor)) = self.app.assign_library_route(&library_lower, device)
+        else {
             return;
         };
-        let refresh_result = { client.lock().unwrap().get_views() };
-        let all = match refresh_result {
-            Ok(all) => all,
-            Err(e) => {
-                tracing::warn!(name: "library_route.library_refresh.failed", target: "library_route", { error = %e }, "F2 post-save library refresh failed");
-                self.app.flash(
-                    format!("⚠ Library route saved but couldn't refresh libraries ({e})"),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
-                return;
-            }
-        };
-        let routes = cfg.library_routes.clone();
-        let items: Vec<(String, String, Option<String>)> = all
-            .iter()
-            .filter(|v| v.collection_type != "playlists")
-            .map(|v| {
-                let lower = v.name.to_lowercase();
-                let assigned = routes.get(&lower).cloned();
-                (lower, v.name.clone(), assigned)
-            })
-            .collect();
-        let restored_cursor = items
-            .iter()
-            .position(|(lower, _, _)| *lower == library_lower)
-            .unwrap_or(0);
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickLibrary { items },
             cursor: restored_cursor,
         });
-    }
-
-    /// Writes the selected device route into config, or removes the override
-    /// when the automatic (index 0) entry is chosen.
-    fn apply_device_selection_to_config(
-        &mut self,
-        library_lower: &str,
-        devices: &[(String, Option<String>)],
-        cursor: usize,
-    ) {
-        let mut c = self.app.config.lock().unwrap();
-        if cursor == 0 {
-            c.library_routes.remove(library_lower);
-            tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
-        } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
-            c.library_routes
-                .insert(library_lower.to_string(), endpoint.clone());
-            tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
-        }
-    }
-
-    pub(in crate::app) fn finish_route_config_save(
-        &mut self,
-        result: Result<(), mbv_config::ConfigError>,
-    ) -> bool {
-        match result {
-            Ok(()) => {
-                tracing::info!(name: "library_route.config_save.succeeded", target: "library_route", "config save succeeded");
-                true
-            }
-            Err(e) => {
-                tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error = %e }, "config save failed");
-                self.app.flash(
-                    format!("⚠ Library route changed but config save failed ({e})"),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
-                false
-            }
-        }
     }
 
     pub(in crate::app) fn render_library_routes_popup(&mut self, f: &mut ratatui::Frame) {

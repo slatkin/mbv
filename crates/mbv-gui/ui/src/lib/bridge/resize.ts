@@ -179,3 +179,37 @@ export function resetQueueWidth(): void {
 export function resetListWidth(): void {
 	draggedWidths.update((widths) => ({ ...widths, list: null }));
 }
+
+/** The `uiResetEpoch` the window last saw (add-gui-settings-screen design
+ * D10): the first frame seeds it, and a change resets the widths. */
+let lastUiResetEpoch: number | null = null;
+
+/** Drop the dragged widths and remove the saved `mbv.gui.panelWidths`
+ * (design D10's Reset UI State): the panels paint their defaults, and the
+ * next launch starts from them too. */
+export function resetPanelWidths(storage: Storage = localStorage): void {
+	draggedWidths.set({ ...DEFAULT_DRAGGED_WIDTHS });
+	// The store's own save writes the defaults back through its subscribe,
+	// so the key leaves storage after that write, not before it.
+	try {
+		storage.removeItem(PANEL_WIDTHS_STORAGE_KEY);
+	} catch {
+		// Storage is disabled: the session still reset.
+	}
+}
+
+/**
+ * Fold one frame's `uiResetEpoch` into the width store (design D10): a new
+ * value — the core's Reset UI State — drops the dragged widths and removes
+ * the saved `mbv.gui.panelWidths`. Returns whether the value changed, so
+ * the caller resets the other interaction stores on the same fact. The
+ * first value only seeds it.
+ */
+export function noteUiResetEpoch(epoch: number): boolean {
+	const changed = lastUiResetEpoch !== null && lastUiResetEpoch !== epoch;
+	lastUiResetEpoch = epoch;
+	if (changed) {
+		resetPanelWidths();
+	}
+	return changed;
+}

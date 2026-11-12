@@ -299,6 +299,22 @@ export function buildFlatRows<Item extends { id: string; title: string }>(
  * and End. */
 export type ListMove = 'up' | 'down' | 'pageUp' | 'pageDown' | 'home' | 'end';
 
+/** The index a movement leaves over `count` rows from `at` (design D7, D12):
+ * the one clamp every list and the Settings panes share. `page` is the rows a
+ * page spans. */
+export function moveIndex(count: number, at: number, move: ListMove, page = 1): number {
+	const step = Math.max(page, 1);
+	const to = {
+		up: at - 1,
+		down: at + 1,
+		pageUp: at - step,
+		pageDown: at + step,
+		home: 0,
+		end: count - 1,
+	}[move];
+	return Math.min(Math.max(to, 0), count - 1);
+}
+
 /**
  * The cursor row a movement leaves (design D7), over the rows the destination
  * lets the cursor rest on: the next, the previous, or a page away row, clamped
@@ -319,21 +335,11 @@ export function moveCursor<Row extends { readonly id: string }>(
 	if (rows.length === 0) {
 		return null;
 	}
-	const last = rows.length - 1;
 	const at = rows.findIndex((row) => row.id === cursor);
 	if (at < 0) {
-		return (move === 'up' || move === 'end' ? rows[last] : rows[0]).id;
+		return (move === 'up' || move === 'end' ? rows[rows.length - 1] : rows[0]).id;
 	}
-	const step = Math.max(page, 1);
-	const to = {
-		up: at - 1,
-		down: at + 1,
-		pageUp: at - step,
-		pageDown: at + step,
-		home: 0,
-		end: last,
-	}[move];
-	return rows[Math.min(Math.max(to, 0), last)].id;
+	return rows[moveIndex(rows.length, at, move, page)].id;
 }
 
 /** The canvas tree's cursor movement (design D7): the shared movement over the

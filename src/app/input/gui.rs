@@ -133,8 +133,13 @@ impl App {
             // while an overlay is up and the overlay's own key rules consume
             // the chord.
             overlays: RouterOverlayState {
+                // The Settings screen is the non-blocking situation the
+                // queue-scoped gates read closed (`add-gui-settings-screen`
+                // design D2), while the global and transport actions fire.
                 focus: if self.gui_overlay.is_some() {
                     OverlayFocus::ContextMenu
+                } else if self.gui_settings.is_some() {
+                    OverlayFocus::SettingsScreen
                 } else {
                     OverlayFocus::Free
                 },

@@ -33,6 +33,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
+		settings: null,
 		library: { revision: 1, search: null, content: null },
 	};
 }
@@ -97,7 +98,7 @@ function pills(selected: 'latest' | 'subscription'): GuiFeedsFrame['pills'] {
 /** The entry Hero a selected entry paints (design D12, row 11.1). */
 const HERO: NonNullable<GuiFeedsFrame['hero']> = {
 	title: 'Entry A',
-	metaRows: ['Sub One', '12:30'],
+	metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
 	durationRow: 1,
 	progressRow: null,
 	artShape: 'square',

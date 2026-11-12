@@ -8,7 +8,7 @@ use mbv::{
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::theme::GuiRole;
 /// The Queue playback band's facts for one frame.
@@ -308,12 +308,26 @@ impl From<&PlaybackTargetChoice> for GuiTargetChoice {
 /// A playback target's stable identity, mirroring `ChooserTargetKey`: the local
 /// output, the Emby session id, or the cast receiver id. The local output is a
 /// unit kind (`{ "kind": "local" }`) with no id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
 pub enum GuiTargetKey {
     Local,
     Emby(String),
     Cast(String),
+}
+
+/// The reverse of the frame's `GuiTargetKey` projection (the `selectTarget`
+/// command, and a painted chooser row's press): the stable identity a painted
+/// row names, back in the shared vocabulary the selection request carries. A
+/// function, not a `From` impl: the conversion is this bridge's, and an impl on
+/// the shared key type would spread it crate-wide.
+#[must_use]
+pub(crate) fn chooser_target_key(key: &GuiTargetKey) -> ChooserTargetKey {
+    match key {
+        GuiTargetKey::Local => ChooserTargetKey::Local,
+        GuiTargetKey::Emby(id) => ChooserTargetKey::Target(SessionTargetKey::Emby(id.clone())),
+        GuiTargetKey::Cast(id) => ChooserTargetKey::Target(SessionTargetKey::Cast(id.clone())),
+    }
 }
 
 impl From<&ChooserTargetKey> for GuiTargetKey {

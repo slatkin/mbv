@@ -53,11 +53,13 @@ core reaches both Clients with no change to either Client's code. A row below
 names its Surface state where one exists; a surface whose state is still
 component-private keeps it until its migration moves it.
 
-The GUI Library panel is the GUI Client's only surface that holds no Surface
-state: it keeps its interaction state in its own window content. It shares no
-interaction rule with the TUI, so there is nothing for `mbv-surfaces` to own
-(ADR 0036). Its pointer input never reaches a `HitMap` or a
-`GuiSurfaceLeaf`, and it has no `[keys]` action.
+The GUI Library panel and the GUI Settings screen are the GUI Client's
+surfaces that hold no Surface state: each keeps its interaction state in its
+own window content. They share no interaction rule with the TUI, so there is
+nothing for `mbv-surfaces` to own (ADR 0036, ADR 0037). Their pointer input
+never reaches a `HitMap` or a `GuiSurfaceLeaf`. The Library panel has no
+`[keys]` action; the Settings screen's open actions are shared `[keys]`
+actions, which the GUI Client core decides.
 
 ## Panel ledger
 
@@ -72,6 +74,7 @@ interaction rule with the TUI, so there is nothing for `mbv-surfaces` to own
 | Pane boundaries | Live split gesture state | boundary Interactive Components | Root-placed only where the corresponding split is painted | resize tick tests |
 | Overlay stack | Overlay presence, focus and z-order | `UiRootComponent` plus mounted overlay Components | Root-composed above Panels; each overlay owns its surface | overlay tick tests |
 | GUI Library panel | GUI-owned interaction state in the GUI Client's window content (`crates/mbv-gui/ui/src/lib/library/state.ts`): cursor, hover, scroll, open tree nodes, pane focus, filter text, the open Hero overlay and item menu. The GUI Client core holds the data selection (the active destination, each destination's selected collections, the Hero's item). No `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, no `[keys]` action (ADR 0036) | `LibraryPanel.svelte` and its children (`LibraryTopBar`, `LibraryPills`, `LibraryList`, `LibraryLetterRail`, `LibraryHero`, `LibraryTracklist`, `LibraryStatusBar`) | GUI window only, in the Library column beside the Queue panel; the window content takes its own keys before the forwarder and handles its own pointer input | key routing: `$lib/library/keys.test.ts`; commands and frames: `crates/mbv-gui/tests/core_thread/library.rs`, `crates/mbv-gui/tests/core_thread/launch.rs`; paint: `LibraryPanel.test.ts`, `LibraryList.test.ts`, `LibraryPills.test.ts`, `LibraryHero.test.ts`, `LibraryStatusBar.test.ts` |
+| GUI Settings screen | GUI-owned interaction state in the GUI Client's window content (design D11, `crates/mbv-gui/ui/src/lib/settings/`): the sidebar cursor, the keyboard position (sidebar or content), each list's cursor and scroll, form drafts, choice marks before apply, the capture state, and the Mini pane. The GUI Client core holds whether the screen is open, the shown section, the section's data and caches, the setup form's progress and error, the last refused Keys edit, and every action. No `mbv-surfaces` Surface state and no `GuiSurfaceLeaf`; the open actions are shared `[keys]` actions that the core router resolves while `ComponentId::Overlay(OverlayId::Settings)` holds the core focus, and the screen's global keys keep working behind it (ADR 0037) | `SettingsScreen.svelte`, `SettingsSidebar.svelte`, and the section components; the core's `GuiSettingsFrame` supplies the open section's content | GUI window only, in place of the two columns while `frame.settings` is present; the window content takes the screen's keys before the forwarder, and a key it does not take reaches the core router | key routing and capture: `$lib/settings/keys.test.ts`; commands, section loads, and frames: `crates/mbv-gui/tests/core_thread/settings.rs`; paint: `SettingsScreen.test.ts`, `SettingsSidebar.test.ts` |
 
 ## Embedded content owners
 

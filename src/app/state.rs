@@ -8,6 +8,7 @@ pub(in crate::app) mod library_position;
 pub(in crate::app) mod library_route;
 pub(in crate::app) mod music_artist_detail;
 pub(in crate::app) mod music_grouping;
+pub(in crate::app) mod overlay_requests;
 pub(in crate::app) mod panel_focus;
 pub(in crate::app) mod panel_targets;
 pub(in crate::app) mod pinned_request;

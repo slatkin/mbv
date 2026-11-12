@@ -103,6 +103,21 @@ impl KeySection {
     }
 }
 
+/// Which Clients a key action has an effect in (`add-gui-settings-screen`
+/// D4). Each action declares its scope once, in the `KEYBIND_ACTIONS` table;
+/// the GUI Keys editor lists only `AllClients` actions, and the TUI ignores
+/// the scope. A collision with a `TuiOnly` action is still refused at load,
+/// because the file is shared between Clients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionScope {
+    /// The action's routed command has an effect in every Client.
+    AllClients,
+    /// The action's routed command has no effect in the GUI Client: a
+    /// `Command::Shell` the GUI leaves undelivered, or `App` state the GUI
+    /// does not paint.
+    TuiOnly,
+}
+
 /// One declared configurable keyboard action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeybindAction {
@@ -129,6 +144,8 @@ pub struct KeybindAction {
     /// chord and the armed disarm chord would collide, because Escape while
     /// armed always disarms, never dispatches.
     pub prefix_addressable: bool,
+    /// Which Clients the action has an effect in (D4).
+    pub scope: ActionScope,
 }
 
 impl KeybindAction {
@@ -164,6 +181,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "help_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "settings_open",
@@ -173,6 +191,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "settings_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "twitch_url_open",
@@ -184,6 +203,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "twitch_url_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     // ── Session ─────────────────────────────────────────────────────────
     KeybindAction {
@@ -194,6 +214,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "quit",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "sessions_open",
@@ -203,6 +224,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "sessions_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // ── Library ─────────────────────────────────────────────────────────
     KeybindAction {
@@ -213,6 +235,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "search_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "next_library_tab",
@@ -222,6 +245,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "next_library_tab",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "previous_library_tab",
@@ -231,6 +255,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "previous_library_tab",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "library_tab_jump",
@@ -245,6 +270,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         // configured router chord, not the digit typed. Not
         // prefix-addressable (rejected at load).
         prefix_addressable: false,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "f5_refresh",
@@ -254,6 +280,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "f5_refresh",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "alt_next_library_tab",
@@ -263,6 +290,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "alt_next_library_tab",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "alt_previous_library_tab",
@@ -272,6 +300,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "alt_previous_library_tab",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // ── Queue ───────────────────────────────────────────────────────────
     KeybindAction {
@@ -282,6 +311,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playlists_open",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "clear_queue_prompt_c",
@@ -291,6 +321,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "clear_queue_prompt_c",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // The canvas queue's row move (add-tauri-gui-client row 6.5, the
     // "a row is moved by key" spec): `Alt+J`/`Alt+K` move the selected row
@@ -307,6 +338,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "queue_move_down",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "queue_move_up",
@@ -316,6 +348,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "queue_move_up",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // ── Playback ────────────────────────────────────────────────────────
     KeybindAction {
@@ -326,6 +359,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "visualizer",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "hide_visual_slot",
@@ -335,6 +369,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "hide_visual_slot",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "toggle_play_pause",
@@ -344,6 +379,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "stop",
@@ -356,6 +392,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         // while armed must disarm, never dispatch (spec: prefix namespace
         // capture), so `stop` cannot take a prefix assignment.
         prefix_addressable: false,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "seek_back",
@@ -365,6 +402,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "seek_forward",
@@ -374,6 +412,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // The canvas transport's deeper steps (add-tauri-gui-client row 6.4,
     // the "back 10 s, forward 30 s" spec): the GUI Client's `seekBack`/
@@ -389,6 +428,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "seek_back_10",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "seek_forward_30",
@@ -398,6 +438,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "seek_forward_30",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // The track chips' popover openers (add-tauri-gui-client row 6.4, the
     // "every action is reachable from the keyboard" spec): the GUI
@@ -413,6 +454,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "open_audio_popover",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "open_subtitle_popover",
@@ -422,6 +464,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "open_subtitle_popover",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "next_track",
@@ -434,6 +477,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "previous_track",
@@ -444,6 +488,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "volume_down",
@@ -453,6 +498,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "volume_up",
@@ -463,6 +509,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "toggle_mute",
@@ -472,6 +519,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "cycle_audio",
@@ -481,6 +529,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "cycle_subtitle",
@@ -490,6 +539,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "open_idle_feed_link",
@@ -499,6 +549,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "playback",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     // ── Display ─────────────────────────────────────────────────────────
     KeybindAction {
@@ -509,6 +560,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "panel_mode_cycle_x",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "panel_right",
@@ -518,6 +570,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "panel_right",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "panel_left",
@@ -527,6 +580,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "panel_left",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::AllClients,
     },
     KeybindAction {
         id: "ctrl_l_force_clear",
@@ -538,6 +592,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "ctrl_l_force_clear",
         rebindable: true,
         prefix_addressable: true,
+        scope: ActionScope::TuiOnly,
     },
 ];
 

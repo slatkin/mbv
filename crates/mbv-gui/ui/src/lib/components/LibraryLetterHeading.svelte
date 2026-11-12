@@ -15,7 +15,7 @@
 	style:height="{height}px"
 	style:padding="0 8px 2px"
 	style:font-size="12px"
-	style:color="var(--canvas-source)"
+	style:color="var(--canvas-type-label)"
 	{...{ [`data-library-${attr}-letter`]: letter }}
 >
 	{letter}

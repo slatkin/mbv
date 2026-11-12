@@ -22,6 +22,7 @@ use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
 use crate::app::shell::now_playing::derive_workspace_now_playing;
+use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 /// One row of the book list (row 9.1). The identity is the book's stable
 /// `library_item_id` a select or play command sends, never a row position.
@@ -52,7 +53,7 @@ pub struct GuiAudiobooksHero {
     pub title: String,
     /// The meta rows in display order: the author, the duration, and the
     /// `Finished` or `N%` progress row.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
@@ -210,10 +211,16 @@ impl App {
         // the description overview.
         let mut content = hero_content_abs_book(&book);
         if let Some(narrator) = narrator {
-            content.facts.meta_rows.push(format!("Read by {narrator}"));
+            content
+                .facts
+                .meta_rows
+                .push(vec![MetaSegment::plain(format!("Read by {narrator}"))]);
         }
         if let Some(year) = year {
-            content.facts.meta_rows.push(year);
+            content
+                .facts
+                .meta_rows
+                .push(vec![MetaSegment::new(year, MetaKind::Date)]);
         }
         content.overview = description
             .as_deref()

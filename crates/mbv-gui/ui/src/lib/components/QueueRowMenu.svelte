@@ -63,6 +63,9 @@
 		 * front end that paints only some entries still sends the index of the
 		 * entry it painted. */
 		onSelect?: (index: number) => void;
+		/** The menu's accessible name; a front-end menu names its own list (the
+		 * Settings pick's values). */
+		label?: string;
 	}
 	const {
 		cursor,
@@ -71,6 +74,7 @@
 		left,
 		right = 'var(--mbv-cell-col)',
 		onSelect,
+		label = 'Row actions',
 	}: Props = $props();
 
 	/** The painted hint: the canvas draws `⏎` where the core's hint chord is
@@ -85,7 +89,7 @@
 <div
 	class="absolute z-20 flex flex-col"
 	role="menu"
-	aria-label="Row actions"
+	aria-label={label}
 	style:top
 	style:left
 	style:right

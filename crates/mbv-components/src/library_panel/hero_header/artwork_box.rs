@@ -149,7 +149,7 @@ fn landscape_text_rows(width: u16, facts: &HeroFacts) -> u16 {
         let wrap_width = (width as usize).saturating_sub(1).max(1);
         facts
             .live_entries()
-            .map(|line| u16::try_from(textwrap::wrap(line, wrap_width).len()).unwrap_or(u16::MAX))
+            .map(|line| u16::try_from(textwrap::wrap(&line, wrap_width).len()).unwrap_or(u16::MAX))
             .fold(0u16, u16::saturating_add)
     }
 }

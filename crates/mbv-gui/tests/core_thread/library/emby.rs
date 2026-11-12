@@ -7,8 +7,9 @@
 //! or webview runs (design D13).
 
 use mbv::ClientTickHost;
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_gui::bridge::frame::GuiFrame;
+use mbv_gui::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
@@ -222,5 +223,47 @@ fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
         emby.rows[0].subtitle,
         Some("Channel 1".to_string()),
         "the row names the programme (root folder) the video sits in"
+    );
+}
+
+/// Opens the mocked Movies destination with `items` as its root list and
+/// selects the first one, so the next frame carries that item's Hero.
+fn movies_hero_frame(items: Vec<EmbyItem>) -> GuiFrame {
+    let view = EmbyItem::folder(
+        "lib-movies".to_string(),
+        "Movies".to_string(),
+        "movies".to_string(),
+    );
+    let mut test = test_core_with(mbv::stub_app_with_completed_emby_startup(vec![view]));
+    assert!(test.core.step());
+    pump_until_emby(&mut test, |emby| emby.failed, "the failed root fetch");
+    test.core.app_mut().seed_gui_emby_roots_for_test(0, items);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::EmbySelect {
+            lib_idx: 0,
+            row: "m-1".into(),
+        },
+    );
+    test.latest_frame().expect("the select's frame emitted")
+}
+
+/// An Emby Hero's duration row reaches the frame as a `time` segment, so the
+/// window can paint it in the time colour (design D14).
+#[test]
+fn an_emby_heros_duration_row_arrives_as_a_time_segment() {
+    let mut item = movie("m-1", "A Movie");
+    item.runtime_ticks = 5_400 * TICKS_PER_SECOND;
+    let frame = movies_hero_frame(vec![item]);
+    let hero = emby_section(&frame)
+        .and_then(|emby| emby.hero.as_ref())
+        .expect("the Hero paints");
+    let duration = hero.duration_row.expect("the Hero names its duration row");
+    assert_eq!(
+        hero.meta_rows[duration],
+        vec![GuiMetaSegmentFrame {
+            text: "01:30:00".into(),
+            kind: GuiMetaKindFrame::Time,
+        }],
     );
 }

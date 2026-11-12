@@ -13,6 +13,7 @@
 	// double-click on a row, like the play control, plays it.
 	import type { Component } from 'svelte';
 	import { Play } from '@lucide/svelte';
+	import TypedText from './TypedText.svelte';
 
 	/** One row of the table, as the destination maps its rows. */
 	export interface WorkspaceRow {
@@ -111,7 +112,7 @@
 			style:border-bottom="1px solid var(--canvas-border)"
 			style:font-size="12px"
 			style:letter-spacing="0.08em"
-			style:color="var(--canvas-muted)"
+			style:color="var(--canvas-type-label)"
 		>
 			<span>#</span>
 			<span>TITLE</span>
@@ -209,13 +210,21 @@
 							{/each}
 						</span>
 					</span>
+					<!-- A duration repeats down the list, so it paints the time token at
+						the repeat opacity; the cursor row keeps its own ink (design
+						D14). -->
 					<span
 						class="font-mono tabular-nums"
 						style:font-size="12px"
-						style:color="var(--canvas-muted)"
+						style:color={row.id === cursor ? 'var(--canvas-muted)' : undefined}
 						style:text-align="right"
-						{...own('duration')}>{row.duration}</span
+						{...own('duration')}
 					>
+						<TypedText
+							segments={[{ text: row.duration, kind: 'time' }]}
+							repeat={row.id !== cursor}
+						/>
+					</span>
 					{#if row.progress !== null && row.progress !== undefined}
 						<!-- The resume position: a thin accent run under the row's bottom
 						edge, at the frame's bounded percent. -->

@@ -251,7 +251,8 @@ test('a playing frame renders the header, artwork badge, title, and clocks', () 
 	expect(title.style.fontWeight).toBe('600');
 	const parent = getByText('The Show');
 	expect(parent.style.fontSize).toBe('13px');
-	expect(parent.style.color).toBe('var(--mbv-playbackContextFg)');
+	// The parent line is a secondary title (add-gui-settings-screen D14).
+	expect(parent.style.color).toBe('var(--canvas-type-secondary)');
 
 	// The scrubber's one right-hand line joins the remaining time and the
 	// finish clock behind the canvas minus (`main` audit 9).

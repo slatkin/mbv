@@ -30,10 +30,13 @@ pub use launch_state::{
     save_tui_launch_state, tui_launch_state_path,
 };
 mod gui_launch_state;
+#[cfg(test)]
+pub(crate) use gui_launch_state::clear_gui_launch_state_at;
 #[doc(inline)]
 pub use gui_launch_state::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
-    first_launch, gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
+    clear_gui_launch_state, first_launch, gui_launch_state_path, load_gui_launch_state,
+    save_gui_launch_state,
 };
 mod test_support;
 #[cfg(test)]

@@ -529,7 +529,10 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     // The shared Emby hero producer's facts: the premiere date, the
     // duration row, and the IMDb row the producer appends from the item's
     // external URLs — the same meta rows the TUI's hero paints.
-    assert_eq!(hero.meta_rows, vec!["1 Jun 1999", "01:30:00", "IMDb"]);
+    assert_eq!(
+        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
+        vec!["1 Jun 1999", "01:30:00", "IMDb"]
+    );
     assert_eq!(hero.duration_row, Some(1));
     assert_eq!(hero.progress_row, None);
     // The credits and the IMDb target ride the shared producer's output,

@@ -155,6 +155,8 @@ impl App {
             resize_drag_activity: None,
 
             pending_overlay: None,
+            gui_settings: None,
+            gui_ui_reset_epoch: 0,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_delete_selection: None,
@@ -231,6 +233,7 @@ impl App {
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,
+            feeds_manage: None,
             mouse_capture_pending: None,
             confirm_logout: false,
             notif_failed: false,

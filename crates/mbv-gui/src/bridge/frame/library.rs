@@ -25,6 +25,7 @@ mod audiobooks;
 mod emby;
 mod entry_list;
 mod feeds;
+mod meta;
 mod podcasts;
 mod search;
 mod shows;
@@ -39,6 +40,7 @@ pub use self::emby::{
 };
 pub use self::entry_list::{GuiEntryRowFrame, GuiPillFrame};
 pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame};
+pub use self::meta::{GuiMetaKindFrame, GuiMetaSegmentFrame, gui_meta_rows};
 pub use self::podcasts::{GuiPodcastsFrame, GuiPodcastsHeroFrame};
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
@@ -581,7 +583,7 @@ pub struct GuiHomeHeroFrame {
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does.
@@ -677,7 +679,7 @@ impl From<&GuiHomeHero> for GuiHomeHeroFrame {
     fn from(hero: &GuiHomeHero) -> Self {
         Self {
             title: hero.title.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),

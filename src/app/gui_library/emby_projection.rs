@@ -20,6 +20,7 @@ use super::GuiLibraryArtwork;
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
+use mbv_ui_model::meta::MetaSegment;
 
 /// The feed-group pill a press selects (row 8.1): `New` (the destination
 /// Latest view), `All`, or one root folder by its stable Service id. The
@@ -108,7 +109,7 @@ pub struct GuiEmbyHero {
     /// The hero's title.
     pub title: String,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does. The shared

@@ -85,6 +85,49 @@ impl KeyChord {
         };
         Self::new(code, mods)
     }
+
+    /// The inverse of [`Self::from_keybinds_chord`]: a captured pressed chord
+    /// becomes the configured chord the Keys editor stores
+    /// (`add-gui-settings-screen` D6). `None` for a code the chord grammar
+    /// cannot name (`Key::Null`), so the caller refuses the capture. The
+    /// result spells the chord the way a declared default or a hand-written
+    /// `[keys]` entry spells it — an ASCII letter under SHIFT keeps its
+    /// uppercase form (`Shift+N`), and `BackTab` carries no SHIFT — because
+    /// the load rules compare chords by spelling: a lowercase spelling would
+    /// slip past the collision check against a declared `Shift+N` default
+    /// while routing the same press. `from_keybinds_chord` of the result is
+    /// the pressed chord again, its `KeyChord::new` folding undoing this.
+    pub(in crate::app) fn to_keybinds_chord(self) -> Option<mbv_keybinds::Chord> {
+        use mbv_keybinds::Key as RegistryKey;
+        let key = match self.code {
+            Key::Backspace => RegistryKey::Backspace,
+            Key::Enter => RegistryKey::Enter,
+            Key::Esc => RegistryKey::Esc,
+            Key::Left => RegistryKey::Left,
+            Key::Right => RegistryKey::Right,
+            Key::Up => RegistryKey::Up,
+            Key::Down => RegistryKey::Down,
+            Key::Home => RegistryKey::Home,
+            Key::End => RegistryKey::End,
+            Key::PageUp => RegistryKey::PageUp,
+            Key::PageDown => RegistryKey::PageDown,
+            Key::Tab => RegistryKey::Tab,
+            Key::BackTab => RegistryKey::BackTab,
+            Key::Delete => RegistryKey::Delete,
+            Key::Insert => RegistryKey::Insert,
+            Key::Function(n) => RegistryKey::F(n),
+            Key::Char(c) if self.mods.contains(KeyModifiers::SHIFT) && c.is_ascii_alphabetic() => {
+                RegistryKey::Char(c.to_ascii_uppercase())
+            }
+            Key::Char(c) => RegistryKey::Char(c),
+            // No configured spelling exists; the caller refuses the capture.
+            Key::Null => return None,
+        };
+        Some(mbv_keybinds::Chord {
+            mods: modifiers_to_registry_mods(self.mods),
+            key,
+        })
+    }
 }
 
 /// Map the registry's Ctrl/Shift/Alt modifier set onto the neutral modifiers.
@@ -104,3 +147,24 @@ fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     }
     out
 }
+
+/// The neutral modifiers as the registry's Ctrl/Shift/Alt set, the inverse of
+/// [`registry_mods_to_modifiers`]: the Keys editor's captured chord carries
+/// them (`add-gui-settings-screen` D6).
+fn modifiers_to_registry_mods(mods: KeyModifiers) -> mbv_keybinds::KeyMods {
+    use mbv_keybinds::KeyMods;
+    let mut out = KeyMods::NONE;
+    if mods.contains(KeyModifiers::CONTROL) {
+        out = out.union(KeyMods::CTRL);
+    }
+    if mods.contains(KeyModifiers::SHIFT) {
+        out = out.union(KeyMods::SHIFT);
+    }
+    if mods.contains(KeyModifiers::ALT) {
+        out = out.union(KeyMods::ALT);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests;

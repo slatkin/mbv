@@ -220,7 +220,7 @@ test('the location reads Home and the Home Hero title', () => {
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {
 				title: 'Better Call Saul',
-				metaRows: ['1 h 47 m left'],
+				metaRows: [[{ text: '1 h 47 m left', kind: 'time' }]],
 				durationRow: 0,
 				progressRow: null,
 				overview: null,

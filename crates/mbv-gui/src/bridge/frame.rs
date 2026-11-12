@@ -14,6 +14,7 @@ pub mod library;
 pub mod overlay;
 pub mod playback;
 pub mod queue;
+pub mod settings;
 pub mod theme;
 
 use mbv::{App, PlaybackChapter, QueuePlaybackProjection};
@@ -28,6 +29,7 @@ use self::library::GuiLibraryFrame;
 use self::overlay::GuiOverlayFrame;
 use self::playback::{GuiCardArtwork, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile};
 use self::queue::{GuiQueue, GuiQueueSummary};
+use self::settings::GuiSettingsFrame;
 use self::theme::GuiTheme;
 
 /// One frame (design D4), sent to the window as the `mbv://frame` event. The
@@ -113,6 +115,13 @@ pub struct GuiFrame {
     /// presented Library destination is active — the front end mounts the
     /// Library panel only for a frame that carries the section.
     pub library: Option<GuiLibraryFrame>,
+    /// The Settings screen's section (`add-gui-settings-screen` design D9).
+    /// `None` while the screen is closed: the front end replaces the two
+    /// columns with the screen only for a frame that carries it.
+    pub settings: Option<GuiSettingsFrame>,
+    /// The UI-reset counter (design D10): the front end resets its interaction
+    /// stores when the value changes.
+    pub ui_reset_epoch: u64,
     /// The role-to-colour map (design D7). `None` unless the theme changed for
     /// this window.
     pub theme: Option<GuiTheme>,
@@ -187,6 +196,8 @@ impl GuiFrame {
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
             library: sources.library.clone(),
+            settings: GuiSettingsFrame::build(sources.app, playback),
+            ui_reset_epoch: sources.app.gui_ui_reset_epoch(),
             theme: sources.theme_changed.then(GuiTheme::current),
         }
     }

@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::bridge::library::GuiFeedPill;
 
 /// The Feeds destination's content (add-gui-library-panel design D12, row
@@ -57,7 +58,7 @@ pub struct GuiFeedsHeroFrame {
     pub parent: Option<String>,
     /// The meta rows in display order: the duration when the entry
     /// declares one (the subscription name is the parent).
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role; `None` on every entry, as the
@@ -88,7 +89,7 @@ impl From<&GuiFeedsHero> for GuiFeedsHeroFrame {
         Self {
             title: hero.title.clone(),
             parent: hero.parent.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             art_shape: GuiArtShapeFrame::from(hero.art_shape),

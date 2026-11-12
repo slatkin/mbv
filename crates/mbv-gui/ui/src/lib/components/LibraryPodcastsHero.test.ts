@@ -33,7 +33,7 @@ function hero(artShape: GuiPodcastsHero['artShape'] = 'square'): GuiPodcastsHero
 	return {
 		title: 'Episode 12: The Long Road',
 		parent: 'Bits and Bites',
-		metaRows: ['0 h 54 m', '08 Oct'],
+		metaRows: [[{ text: '0 h 54 m', kind: 'time' }], [{ text: '08 Oct', kind: 'date' }]],
 		durationRow: 0,
 		progressRow: null,
 		overview: 'A conversation about long walks.',

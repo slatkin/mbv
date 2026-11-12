@@ -58,7 +58,7 @@ function shows(
 ): GuiShowsFrame {
 	const hero: GuiShowsHero = {
 		title: 'Better Call Saul',
-		metaRows: ['TV Series'],
+		metaRows: [[{ text: 'TV Series', kind: 'plain' }]],
 		durationRow: null,
 		progressRow: null,
 		overview: null,

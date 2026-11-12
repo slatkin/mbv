@@ -1,4 +1,5 @@
 use super::*;
+use crate::UiConfig;
 use mbv_config::PanelConfig;
 use rstest::rstest;
 

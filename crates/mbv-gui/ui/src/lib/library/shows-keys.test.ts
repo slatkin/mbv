@@ -42,6 +42,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
+		settings: null,
 		library: { revision: 1, search: null, content: null },
 	};
 }
@@ -140,7 +141,7 @@ function showsContent(
 /** The All series mode's Hero: a series whose Workspace the Hero pane walks. */
 const SHOWS_HERO: GuiShowsHero = {
 	title: 'Atlanta',
-	metaRows: ['4 seasons'],
+	metaRows: [[{ text: '4 seasons', kind: 'count' }]],
 	durationRow: null,
 	progressRow: null,
 	overview: null,

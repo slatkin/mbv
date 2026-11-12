@@ -430,6 +430,19 @@ export type GuiLibraryArt =
 	| { kind: 'placeholder'; detail: string }
 	| { kind: 'loading' };
 
+/** The data type a meta segment carries; colour carries the type in the
+ * window (design D14). */
+export type GuiMetaKind = 'plain' | 'time' | 'date' | 'count' | 'label' | 'secondary' | 'role';
+
+/** One typed run of a Hero meta row: `{ text, kind }` on the wire. */
+export interface GuiMetaSegment {
+	text: string;
+	kind: GuiMetaKind;
+}
+
+/** One Hero meta row: its typed segments in display order. */
+export type GuiMetaRow = GuiMetaSegment[];
+
 /** One view mode of the Shows destination's pill row (design D12, row
  * 7.1). The TUI's letter-range buckets are not pills here — the All series
  * list's letter rail replaces them. */
@@ -536,7 +549,7 @@ export interface GuiShowsHero {
 	title: string;
 	/** The series' name on an episode Hero: the largest unit, the header's title. */
 	parent?: string | null;
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	durationRow: number | null;
 	progressRow: number | null;
 	overview: string | null;

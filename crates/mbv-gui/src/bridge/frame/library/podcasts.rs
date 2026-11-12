@@ -11,6 +11,7 @@ use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
 use serde::Serialize;
 
 use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use super::{GuiArtShapeFrame, GuiLibraryArt};
 use crate::bridge::library::GuiPodcastPill;
 
@@ -55,7 +56,7 @@ pub struct GuiPodcastsHeroFrame {
     pub parent: Option<String>,
     /// The meta rows in display order: the show title, the duration, and the
     /// publish date.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<GuiMetaSegmentFrame>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role; `None` on every episode, as
@@ -93,7 +94,7 @@ impl From<&GuiPodcastsHero> for GuiPodcastsHeroFrame {
         Self {
             title: hero.title.clone(),
             parent: hero.parent.clone(),
-            meta_rows: hero.meta_rows.clone(),
+            meta_rows: gui_meta_rows(&hero.meta_rows),
             duration_row: hero.duration_row,
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),

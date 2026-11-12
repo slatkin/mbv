@@ -10,10 +10,10 @@
 //! re-resolves that identity against its live state, so a vanished choice
 //! applies nothing.
 
-use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
+use mbv_ui_model::panel_targets::ChooserTargetKey;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::playback::GuiTargetKey;
+use crate::bridge::frame::playback::chooser_target_key;
 /// The open overlay's choice lists as the last emitted frame painted them.
 /// A frame with no overlay (or the row menu, whose entries carry their own
 /// resolved targets) clears both.
@@ -37,7 +37,7 @@ impl PaintedChoices {
             Some(GuiOverlayFrame::TargetChooser { choices, .. }) => {
                 self.target_keys = choices
                     .iter()
-                    .map(|choice| painted_target_key(&choice.key))
+                    .map(|choice| chooser_target_key(&choice.key))
                     .collect();
             }
             Some(GuiOverlayFrame::TrackPopover { choices, .. }) => {
@@ -69,17 +69,5 @@ impl PaintedChoices {
             .as_ref()
             .and_then(|ids| ids.get(index))
             .copied()
-    }
-}
-
-/// The reverse of the frame's `GuiTargetKey` projection: the stable identity
-/// a painted chooser row names, back in the shared vocabulary the selection
-/// request carries. A function, not a `From` impl: the conversion is this
-/// bridge's, and an impl on the shared key type would spread it crate-wide.
-fn painted_target_key(key: &GuiTargetKey) -> ChooserTargetKey {
-    match key {
-        GuiTargetKey::Local => ChooserTargetKey::Local,
-        GuiTargetKey::Emby(id) => ChooserTargetKey::Target(SessionTargetKey::Emby(id.clone())),
-        GuiTargetKey::Cast(id) => ChooserTargetKey::Target(SessionTargetKey::Cast(id.clone())),
     }
 }

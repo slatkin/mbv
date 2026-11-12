@@ -268,6 +268,25 @@ test('a press on a result row sends searchActivate, and never searchClose', () =
 	});
 });
 
+test('a press on the Settings control opens the screen', async () => {
+	// add-gui-settings-screen row 9.11: the top bar's Settings control is the
+	// pointer's way into the screen (design D11 *Mouse-centric*), so a press
+	// sends `open` — never the keyboard's `selectSection`.
+	const { container } = render(LibraryTopBar, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+	});
+
+	const button = container.querySelector('[data-library-settings]') as HTMLElement;
+	expect(button.getAttribute('aria-label')).toBe('Settings');
+
+	await fireEvent.click(button);
+
+	expect(invokeMock).toHaveBeenCalledWith('settings', {
+		command: { command: 'open' },
+	});
+});
+
 test('unmounting the top bar retracts the mount and focus facts', async () => {
 	// Review of row 12.1, finding P1: the bar's teardown retracts the focus
 	// fact with the mount fact, so an arrangement change never leaves the

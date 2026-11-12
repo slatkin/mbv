@@ -136,9 +136,12 @@ impl LibraryContentOwner for FixtureOwner {
                     facts: crate::library_panel::HeroFacts {
                         title: "Dune".into(),
                         meta_rows: if self.link {
-                            vec!["2021".into(), "IMDb".into()]
+                            vec![
+                                vec![mbv_ui_model::meta::MetaSegment::plain("2021")],
+                                vec![mbv_ui_model::meta::MetaSegment::plain("IMDb")],
+                            ]
                         } else {
-                            vec!["2021".into()]
+                            vec![vec![mbv_ui_model::meta::MetaSegment::plain("2021")]]
                         },
                         links: if self.link {
                             vec![crate::library_panel::HeroLink {

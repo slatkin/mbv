@@ -15,8 +15,8 @@ pub use chord::{Chord, ChordParseError, Key, KeyMods};
 pub use config::{Keybinds, KeybindsError, RawKeybinds, RawSection, SectionBindings, load};
 #[doc(inline)]
 pub use registry::{
-    KEY_SECTIONS, KEYBIND_ACTIONS, KeyGate, KeySection, KeybindAction, RESERVED_CHORDS,
-    action_by_id,
+    ActionScope, KEY_SECTIONS, KEYBIND_ACTIONS, KeyGate, KeySection, KeybindAction,
+    RESERVED_CHORDS, action_by_id,
 };
 
 #[cfg(test)]

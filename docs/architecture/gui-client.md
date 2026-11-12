@@ -20,7 +20,7 @@ binary, and the handshake refuses an Owner with a different build id.
 ## Process shape: one core thread
 
 Tauri owns the main thread and the window's event loop. `src/main.rs` builds
-the Tauri application, registers the four bridge commands, starts the core
+the Tauri application, registers the five bridge commands, starts the core
 thread in `setup`, turns the webview's context menu off, and joins the core
 thread after the event loop ends so a quit's exit teardown completes before
 the process exits.
@@ -92,7 +92,9 @@ its message and button row, and the daemon-lost recovery dialog with its
 diagnostics and recovery choices), the Queue playback projection
 (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
 projection (`GuiStatusBar`), the Library panel's section (`GuiLibraryFrame`;
-*The Library panel* names it), and the theme when it is armed (`GuiTheme`).
+*The Library panel* names it), the Settings screen's section
+(`GuiSettingsFrame`; *The Settings screen* names it), the UI-reset counter
+(`uiResetEpoch`), and the theme when it is armed (`GuiTheme`).
 The window picks the panel state from the frame's toggles and its own
 measurement of the panel container; the frame carries no breakpoint class
 (design D10).
@@ -127,7 +129,7 @@ image. A move away from the bar carries no hover. An item with no
 trickplay, a sheet not yet cached, or a tile the server does not hold paints
 the time and the chapter without a tile.
 
-Front end to Rust there are three commands, registered in
+Front end to Rust there are five commands, registered in
 `src/main.rs`. Each only pushes into the core channel:
 
 - `key(DomKey)`: the DOM `KeyboardEvent` fields. `src/bridge/keys.rs`
@@ -149,6 +151,9 @@ Front end to Rust there are three commands, registered in
   size in logical pixels (`src/bridge/layout.rs`).
 - `library(GuiLibraryCommand)`: the Library panel's one semantic request,
   pushed into the core channel as `CoreInput::Library` (*The Library panel*
+  names the variants).
+- `settings(GuiSettingsCommand)`: the Settings screen's one semantic request,
+  pushed into the core channel as `CoreInput::Settings` (*The Settings screen*
   names the variants).
 
 The front end interprets no input apart from the Library panel's own keys and
@@ -251,6 +256,36 @@ re-arms it through the mount-time report. `ui/src/lib/bridge/theme.ts`
 writes each role and chrome fill into a `--mbv-<name>` custom property on
 `:root`, and `ui/src/app.css` points every shadcn-svelte variable at the mbv
 properties. There is one palette and no light or dark variant.
+
+### Colour by data type
+
+Weight and size carry hierarchy; colour carries the data type (design D14).
+A title or a body line stays `--canvas-heading`, `--canvas-text`, or
+`--canvas-muted`, and each data type names one `--canvas-type-*` token in
+`app.css`. Each token aliases the hue the palette already carried, except
+the secondary title's purple, which the GUI adds.
+
+| Type | Token |
+|---|---|
+| time and duration | `--canvas-type-time` (`--canvas-accent`) |
+| year and date | `--canvas-type-date` (`--canvas-source`, the link hue) |
+| count and meta | `--canvas-type-count` (`--canvas-partial`) |
+| section label | `--canvas-type-label` (`--canvas-insertion`) |
+| secondary title (series, show, parent) | `--canvas-type-secondary` |
+| role and character | `--canvas-type-role` (`--canvas-owner`) |
+
+A line that joins values of several types is built as typed segments where it
+is built, never split in the window. The core's Hero meta rows and the
+window's own facts lines (`ui/src/lib/library/hero.ts`) return segments, and
+`ui/src/lib/components/TypedText.svelte` paints them: each segment maps its
+kind to its token, and a plain segment inherits the line's own colour. A
+time or a date repeated down a list — a duration column, a tree row's year,
+the queue's right column — paints at `--canvas-type-repeat-opacity`; a
+selected or current row keeps its own ink at full strength by painting
+without `repeat`. The scrubber's remaining clock is a time at 0.75, as the
+canvas draws it. A single-type field needs no segments: its painter names its
+token (`--canvas-type-count` for an episode badge, `--canvas-type-secondary`
+for a parent line).
 
 ## Text and icons
 
@@ -949,7 +984,31 @@ action prevented, `handled` means the window content took the key so the core
 receives none, and `text` means an open text field takes it, so the browser's
 own default types it. `App.svelte` installs `routeLibraryKey`
 (`ui/src/lib/library/keys.ts`) as that router, so the Library's handler runs
-before the forwarder (design D3). The order is:
+before the forwarder (design D3).
+
+While the frame carries `settings`, `routeLibraryKey` hands the key to
+`routeSettingsKey` (`ui/src/lib/settings/keys.ts`) after the overlay, prefix,
+and Queue-filter steps, and the Library steps do not run
+(add-gui-settings-screen design D11). The Settings order is:
+
+1. An active capture takes every key: Esc cancels it, and any other key
+   sends `keysCapture` with the capture's target and the raw `DomKey`. A
+   sent capture keeps swallowing keys until the next frame answers it.
+2. A focused text field takes the key: Esc cancels the form, Enter submits
+   it, and every other key is the field's typing — the `text` answer lets
+   the browser's own default run, so Tab walks the form's fields.
+3. The screen keys run: Up, Down, Page Up, Page Down, Home, and End move
+   the cursor in the focused pane; Tab and Shift+Tab switch between the
+   sidebar and the content; Enter opens the sidebar entry or activates
+   the content row; Space activates a focused toggle or choice mark; Esc
+   walks the spec's ladder — an open edit, capture, or form cancels first,
+   then the content hands the keyboard back to the sidebar, then the
+   sidebar's Esc sends `close`.
+4. Every other key goes to the core's keyboard router, so playback and
+   global chords keep working behind the screen: Space on the sidebar
+   plays or pauses.
+
+With no Settings frame, the Library chain runs. The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
    playback-target chooser, the confirmation modal, the daemon-lost recovery
@@ -1018,6 +1077,18 @@ dividers are the window content's: they report no region to the core, which
 needs none, because the Queue panel's own resize observer re-reports the
 regions a drag moved.
 
+While the Settings screen is open it replaces the two columns
+(add-gui-settings-screen design D11): the sidebar sits in the Queue column's
+place at the column's expanded width — the dragged or the default width,
+whatever the collapse toggle, because the 72 px rail cannot hold the section
+list — and paints no divider; the shown section's content takes the rest of
+the window, and the status line closes the screen with the frame's `status`
+facts (the prefix-armed state and the live toast). Below the Mini threshold
+— `libraryArrangement` measured on the window width minus the sidebar's
+column — only the pane that holds the keyboard shows: the sidebar until a
+section opens, then its content. A resize across the threshold keeps the
+open section, which the core owns.
+
 Panel focus stays in the core's `FocusStack`, and the frame's `GuiFocus`
 carries it. `CoreThread::new` mounts `ComponentId::Library`; a press inside the
 Library panel sends `takeFocus`, and the core sets the stack and
@@ -1058,6 +1129,122 @@ them under another destination. The restore is idempotent, so the catalog and
 library drains call it whenever their content can complete a phase. The saved
 picks restore with the group list, and a group with no pick heroes its first
 album (design D13).
+
+## The Settings screen
+
+`settings(GuiSettingsCommand)` is the fifth bridge command (`src/main.rs`). It
+only pushes `CoreInput::Settings` into the core channel, as the other commands
+do. `src/bridge/settings.rs` translates the wire variants and
+`App::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
+each one through the existing `App` method, so the TUI's own paths do not
+change. The variants are `open`, `close`, `selectSection` (`section`), `activate`
+(`setting`, the `SettingKey` name), `setValue` (`setting`, `value`), `applyChoices` (`kind`, `selected`),
+`assignRoute` (`library`, `endpoint` or none), `embySetup` (`serverUrl`,
+`username`, `password`), `audiobookshelfSetup` (`serverUrl`, `apiKey`),
+`serviceAction` (`action`), `cancelSetup` (`service`), `feedAdd` (`name`,
+`url`, `kind`), `feedEdit` (`url`, `name`, `kind`), `feedRemove` (`url`),
+`keysCapture` (`target`, `key` as a `DomKey`), `keysReset` (`action`),
+`keysClear` (`target`), `selectTarget` (`target`), `playlistOpen`,
+`playlistBack`, and `playlistRefresh` (`id` or none), `playlistAction` and
+`playlistItemAction` (`id`, the item `id`, and `play`, `shuffle`, or
+`enqueue`), `playlistRename` (`id`, `name`), `playlistDelete` (`id`), and
+`resetUiState`. Identities are stable — a `SettingKey` name, a playlist id, a
+feed URL, a chord — never row positions, so a command built from a stale frame
+addresses what that frame painted or nothing, and a `setting` name this build
+declares no key for logs and changes nothing. `src/bridge/keys.rs` translates a
+`keysCapture` press to the neutral `KeyEvent` the router normalizes, so the
+window never forms a chord string and the two Clients cannot disagree on one
+chord's spelling.
+
+The Client core owns whether the screen is open and which section it shows
+(`App::gui_settings`, `src/app/gui_settings.rs`); the window content owns its
+interaction state — the sidebar cursor, the keyboard pane, each list's cursor
+and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
+frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the
+sidebar lists, and `content`, a tagged union with `rows` (an F2 page's rows),
+`services`, `feeds`, `keys`, `sessions`, and `playlists`. Each F2 row carries
+its stable setting name, its label, its kind (toggle, cycle, pick with its value list, choice list, or
+action), its value text, its toggle flag, and its choices once the section's
+load lands. The Services content carries each Service's state and the actions
+the TUI offers for it, with the open setup form's progress and error; the Keys
+content the prefix chord, one row per `AllClients` action, and the last
+refusal; the Sessions content the same playback-target choices the header's
+chooser lists; and the Playlists content the saved list, the open playlist, and
+the loading flags. No variant carries a password, an API key, or any other
+Service credential. `GuiFrame.settings` is `None` while the screen is closed,
+so the window mounts the screen only for a frame that carries it.
+
+The sidebar requests reach the GUI through one per-tick drain
+(`CoreThread::drain_pending_overlay`, `src/core_thread/settings.rs`).
+`ClientTickHost` gets no new hook: after input routing the core takes
+`App::pending_overlay` once and matches it exhaustively — one documented arm
+per variant, no wildcard. `ToggleSidebar(Settings)` toggles the F2 group,
+`ToggleSidebar(Sessions)` and `ToggleSidebar(Playlists)` toggle their own
+sections, and the toggle rule is the spec's: closed opens at the action's
+section, the action's own group closes, and any other section switches.
+`OpenSidebar(Settings)` opens the screen at the section `settings_destination`
+names, so the first-start open reaches the GUI with no new code in `construct`,
+and `DismissSidebar(Playlists)` closes the screen while it shows Playlists,
+which is what the playlist play's `ReplacementExecutor` request does. Every
+other variant is a TUI overlay the GUI does not present: it logs
+`gui.overlay_request.undelivered` at debug level and drops. The drain also
+clears a stale request, which `run_replacement` reads through
+`pending_overlay.is_none()`.
+
+Opening the screen pushes `ComponentId::Overlay(OverlayId::Settings)` onto the
+core `FocusStack`, and closing pops it. The GUI keeps no `GuiSurfaceLeaf` for
+that id, so a key routes with no leaf: global and transport actions fire, while
+a queue-scoped gate such as `ClearQueuePrompt` reads a focus that is not the
+Queue and stays closed. Settings is not added to `is_blocking_overlay`, so the
+two Clients' overlay rules stay the TUI's.
+
+The frame carries the UI-reset counter `uiResetEpoch` (design D10): the window
+resets its Library interaction stores and its panel widths when the value
+changes, and the TUI's own reset does not move it.
+
+The window-content half lives in `ui/src/lib/settings/` (design D11):
+`state.ts` holds the screen store — the keyboard pane, the sidebar and
+content cursors, the Mini pane (which is the keyboard pane), the form
+drafts, the choice marks, and the capture — and `entries.ts` builds each
+section's flat list of activatable controls, which `keys.ts` routes the
+screen keys over. `ui/src/lib/components/Settings*.svelte` holds the screen,
+the sidebar, one component per section kind, and the status line, and
+`App.svelte` mounts `SettingsScreen` in place of the two columns while
+`frame.settings` is present. Commands go through `sendSettingsCommand`
+(`ui/src/lib/bridge/settings.ts`) to the `settings` bridge command.
+
+The screen paints the design canvas `canvas/Settings.dc.html` of the
+`add-gui-settings-screen` change (design D13). The pointer is the primary
+path and keys give parity (design D11, *Mouse-centric*). The Library top bar's
+Lucide `Settings` button, right of the Search field, sends `open`, which opens
+the screen at Services and does nothing while it is open. The sidebar's
+`ArrowLeft` Back button sends `close`. The sidebar is a fixed 260 px
+(`SETTINGS_SIDEBAR_WIDTH_PX`), independent of the Queue column, and Mini
+measures the window width minus it. The sidebar's rows carry one Lucide icon
+each, and the Services section is labelled Sources (a UI label only; the
+code and the domain keep Service). Every section paints only through the
+shared parts in `ui/src/lib/components/settings/`: `SettingsCard`,
+`SettingsRow`, `SettingsSwitch` (every toggle), `SettingsButton` (secondary,
+primary, destructive, ghost), `SettingsCheckboxGrid` (the choice lists, with
+their Apply), `SettingsStatePill` (a Service's state), and
+`SettingsPickButton`. The pick button serves Subtitle mode, Subtitle
+language, and Audio language: it opens a value menu in the row menu's chrome,
+which the Settings key router owns while it is open, and an entry sends
+`setValue`. `App::set_settings_value` sets the value with the cycle handler's
+player update and deferred save, and the TUI's cycle calls it with its next
+value, so the two Clients share one effect. The value lists come from
+`mbv-ui-model` (`SUBTITLE_MODES`, `lang_cycle`), and the empty language
+paints as Any.
+
+The ACL grant rule (design D5). Tauri's ACL sits between `invoke` and the
+command: a command that `generate_handler!` registers but that
+`crates/mbv-gui/build.rs`'s app manifest does not declare, or that
+`capabilities/default.json` does not grant, is refused before the core sees it,
+and the front end's fire-and-forget invoke logs only to the webview console.
+Every command is therefore declared and granted once, and
+`crates/mbv-gui/tests/capabilities.rs` derives the command list from
+`generate_handler!` in `src/main.rs` and asserts both. No list in the test
+names a command, so a new one cannot ship without its grant.
 
 ## The attach states
 

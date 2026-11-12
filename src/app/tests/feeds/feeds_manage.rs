@@ -74,14 +74,14 @@ fn stale_add_result_is_dropped() {
         })
         .unwrap();
     popup.pending_add = Some(5); // a newer submission is the current one
-    model.feeds_manage = Some(popup);
+    model.app.feeds_manage = Some(popup);
 
     let had_events = model.drain_feed_add_results();
 
     assert!(had_events, "the stale message should still be drained");
     assert!(model.app.config.lock().unwrap().feeds.is_empty());
     assert_eq!(
-        model.feeds_manage.as_ref().unwrap().pending_add,
+        model.app.feeds_manage.as_ref().unwrap().pending_add,
         Some(5),
         "the still-current pending id must be untouched"
     );
@@ -108,10 +108,39 @@ fn add_fetch_failure_does_not_save() {
             result: Err(mbv_ui_model::UiModelError::operation("connection refused")),
         })
         .unwrap();
-    model.feeds_manage = Some(popup);
+    model.app.feeds_manage = Some(popup);
 
     model.drain_feed_add_results();
 
     assert!(model.app.config.lock().unwrap().feeds.is_empty());
     assert!(model.app.status.contains("Couldn't add feed"));
+}
+
+/// D5 of `add-gui-settings-screen`: the URL is the subscription list's
+/// only stable identity (edit and remove resolve by first URL match), so
+/// an add whose URL is already subscribed is refused and the list is
+/// unchanged. §6.2: the refusal surfaces through the same failed-add
+/// drain as a fetch failure ("Couldn't add feed: ...").
+#[test]
+fn duplicate_url_add_is_refused_and_list_unchanged() {
+    let mut model = Model::new(make_app_stub());
+    model.app.feeds_manage = Some(FeedsManagePopup::new());
+    model.app.config.lock().unwrap().feeds = vec![sub("A", "https://a", FeedKind::Video)];
+
+    let id = model.app.begin_feed_add("B", "https://a", FeedKind::Video);
+
+    assert!(
+        id.is_some(),
+        "a duplicate add must report through the add-result drain"
+    );
+    assert!(
+        model.drain_feed_add_results(),
+        "the refusal must drain as a handled result"
+    );
+    let feeds = model.app.config.lock().unwrap().feeds.clone();
+    assert_eq!(feeds.len(), 1);
+    assert_eq!(feeds[0].name, "A");
+    assert_eq!(feeds[0].url, "https://a");
+    assert!(model.app.status.contains("Couldn't add feed"));
+    assert_eq!(model.app.feeds_manage.as_ref().unwrap().pending_add, None);
 }

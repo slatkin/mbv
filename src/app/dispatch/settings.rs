@@ -1,5 +1,6 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
+use crate::app::state::playback::HomeContent;
 use crate::pin::{PanelReserveMode, PinnedSettingRequest};
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
@@ -106,6 +107,37 @@ impl App {
             let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
+    }
+
+    /// Set one value setting directly (`add-gui-settings-screen` design D13):
+    /// the chosen value lands in the configuration, the player's prefs take
+    /// it as the cycle handler's update does, and the deferred save is armed
+    /// as an activation arms it. The three cycle handlers call this with the
+    /// next value they compute, so the TUI's cycle and the GUI's pick share
+    /// one effect. A key that is no value setting changes nothing.
+    pub(crate) fn set_settings_value(&mut self, key: SettingKey, value: &str) {
+        match key {
+            SettingKey::SubtitleMode => {
+                self.config.lock().unwrap().subtitle_mode = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.mode = value.to_string());
+            }
+            SettingKey::SubtitleLanguage => {
+                self.config.lock().unwrap().subtitle_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.subtitle_lang = value.to_string());
+            }
+            SettingKey::AudioLanguage => {
+                self.config.lock().unwrap().audio_lang = value.to_string();
+                self.player
+                    .update_subtitle_prefs(|prefs| prefs.audio_lang = value.to_string());
+            }
+            // The pick and cycle paths never call here for another row, and a
+            // stale GUI command for one changes nothing.
+            _ => return,
+        }
+        self.push_subtitle_prefs();
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }
 
     /// Apply and persist one Panel value change: an activate steps the row up
@@ -254,20 +286,8 @@ impl App {
         if key == SettingKey::Panel {
             self.open_panel_settings();
         }
-        if key == SettingKey::HiddenLibraries {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::HiddenLibraries,
-            ));
-        }
-        if key == SettingKey::MyLanguages {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::MyLanguages,
-            ));
-        }
-        if key == SettingKey::FeedViewLibraries {
-            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                MultiSelectKind::FeedViewLibraries,
-            ));
+        if let Some(kind) = key.multiselect_kind() {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(kind));
         }
         if key == SettingKey::LibraryRoutes {
             self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
@@ -372,38 +392,24 @@ impl App {
     }
 
     fn apply_subtitle_mode(&mut self) {
-        let new_mode = {
-            let mut c = self.config.lock().unwrap();
-            c.subtitle_mode = next_subtitle_mode(&c.subtitle_mode).to_string();
-            c.subtitle_mode.clone()
-        };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.mode = new_mode);
-        self.push_subtitle_prefs();
+        let next = next_subtitle_mode(&self.config.lock().unwrap().subtitle_mode).to_string();
+        self.set_settings_value(SettingKey::SubtitleMode, &next);
     }
 
     fn cycle_subtitle_language(&mut self) {
-        let new_lang = {
-            let mut c = self.config.lock().unwrap();
-            let new = cycle_lang(&c.my_languages, &c.subtitle_lang);
-            c.subtitle_lang.clone_from(&new);
-            new
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.subtitle_lang)
         };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.subtitle_lang = new_lang);
-        self.push_subtitle_prefs();
+        self.set_settings_value(SettingKey::SubtitleLanguage, &next);
     }
 
     fn cycle_audio_language(&mut self) {
-        let new_lang = {
-            let mut c = self.config.lock().unwrap();
-            let new = cycle_lang(&c.my_languages, &c.audio_lang);
-            c.audio_lang.clone_from(&new);
-            new
+        let next = {
+            let c = self.config.lock().unwrap();
+            cycle_lang(&c.my_languages, &c.audio_lang)
         };
-        self.player
-            .update_subtitle_prefs(|prefs| prefs.audio_lang = new_lang);
-        self.push_subtitle_prefs();
+        self.set_settings_value(SettingKey::AudioLanguage, &next);
     }
 
     /// Flip the stored config flag of a `ConfigToggle` row. Rows of any
@@ -527,6 +533,170 @@ fn pinned_setting_request(
         | SettingKey::ManageFeeds
         | SettingKey::ResetUiState
         | SettingKey::LogOut => None,
+    }
+}
+
+impl App {
+    /// Build the Settings multiselect's item list for `kind`
+    /// (add-gui-settings-screen design D7): the entries the TUI shell's
+    /// `open_multiselect` built before the move. Returns `None` when the
+    /// library-view kinds have no Emby client to enumerate.
+    pub(in crate::app) fn settings_choices(
+        &self,
+        kind: MultiSelectKind,
+    ) -> Option<Vec<(String, String, bool)>> {
+        if matches!(kind, MultiSelectKind::MyLanguages) {
+            const ALL_LANGS: &[&str] = &[
+                "English",
+                "French",
+                "German",
+                "Spanish",
+                "Italian",
+                "Portuguese",
+                "Japanese",
+                "Korean",
+                "Chinese",
+                "Russian",
+                "Arabic",
+                "Dutch",
+                "Swedish",
+                "Norwegian",
+                "Danish",
+                "Finnish",
+                "Polish",
+                "Czech",
+                "Turkish",
+            ];
+            let my_langs = self.config.lock().unwrap().my_languages.clone();
+            return Some(
+                ALL_LANGS
+                    .iter()
+                    .map(|&name| {
+                        let selected = my_langs.iter().any(|l| l == name);
+                        (name.to_lowercase(), name.to_string(), selected)
+                    })
+                    .collect(),
+            );
+        }
+        let client = self.emby_client()?;
+        let client = client.lock().unwrap();
+        let all = match kind {
+            MultiSelectKind::HiddenLibraries | MultiSelectKind::FeedViewLibraries => {
+                client.get_views().unwrap_or_default()
+            }
+            MultiSelectKind::MyLanguages => unreachable!(),
+        };
+        let config = self.config.lock().unwrap();
+        let selected_list = match kind {
+            MultiSelectKind::HiddenLibraries => &config.hidden_libraries,
+            MultiSelectKind::FeedViewLibraries => &config.feed_view_libraries,
+            MultiSelectKind::MyLanguages => unreachable!(),
+        };
+        Some(
+            all.iter()
+                .filter(|v| v.collection_type != "playlists")
+                .map(|v| {
+                    let lower = v.name.to_lowercase();
+                    let is_hidden = selected_list.contains(&lower);
+                    (lower, v.name.clone(), is_hidden)
+                })
+                .collect(),
+        )
+    }
+
+    /// Run the Settings multiselect's two commits for `kind`
+    /// (add-gui-settings-screen design D7): the language commit the TUI
+    /// shell's `commit_my_languages` ran, or the library-list commit its
+    /// `commit_library_list_selection` ran. For a library kind, returns the
+    /// refetched Home content the caller assigns to its Home store; the
+    /// language kind returns `None` and refetches nothing.
+    pub(in crate::app) fn commit_settings_choices(
+        &mut self,
+        kind: MultiSelectKind,
+        selected: &[(String, String, bool)],
+    ) -> Option<HomeContent> {
+        if matches!(kind, MultiSelectKind::MyLanguages) {
+            self.commit_my_languages(selected);
+            return None;
+        }
+
+        self.commit_library_list_selection(kind, selected)
+    }
+
+    /// The `My Languages` commit (§ multiselect): the selected display names
+    /// replace `my_languages`, and the single-value subtitle/audio language
+    /// prefs clear when the user deselected them, then persist and push to
+    /// the player.
+    fn commit_my_languages(&mut self, items: &[(String, String, bool)]) {
+        let selected: Vec<String> = items
+            .iter()
+            .filter(|(_, _, is_sel)| *is_sel)
+            .map(|(_, name, _)| name.clone())
+            .collect();
+        {
+            let mut c = self.config.lock().unwrap();
+            if !selected.is_empty() {
+                if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
+                    c.subtitle_lang = String::new();
+                }
+                if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
+                    c.audio_lang = String::new();
+                }
+            }
+            c.my_languages = selected;
+        };
+        let cfg = self.config.lock().unwrap().clone();
+        self.player.update_subtitle_prefs(|p| {
+            p.subtitle_lang.clone_from(&cfg.subtitle_lang);
+            p.audio_lang.clone_from(&cfg.audio_lang);
+        });
+        if let Err(e) =
+            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+        {
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
+        }
+    }
+
+    /// The hidden-libraries / feed-view-libraries commit: the marked
+    /// (hidden) lowercased names replace the kind's config list, then
+    /// persist, and for the feed-view kind the destination nav stacks clear
+    /// so the new filter applies. Returns the refetched Home content.
+    fn commit_library_list_selection(
+        &mut self,
+        kind: MultiSelectKind,
+        items: &[(String, String, bool)],
+    ) -> Option<HomeContent> {
+        let hidden: Vec<String> = items
+            .iter()
+            .filter(|(_, _, is_hidden)| *is_hidden)
+            .map(|(lower, _, _)| lower.clone())
+            .collect();
+        {
+            let mut c = self.config.lock().unwrap();
+            match kind {
+                MultiSelectKind::HiddenLibraries => c.hidden_libraries.clone_from(&hidden),
+                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries.clone_from(&hidden),
+                MultiSelectKind::MyLanguages => unreachable!(),
+            }
+        }
+        match kind {
+            MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
+            MultiSelectKind::FeedViewLibraries => {
+                for lib in &mut self.libs {
+                    lib.nav_stack.clear();
+                }
+            }
+            MultiSelectKind::MyLanguages => unreachable!(),
+        }
+        let cfg = self.config.lock().unwrap().clone();
+        if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
+        {
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
+        }
+        // The commit runs the fetch synchronously (order-sensitive
+        // side effects); the caller assigns the computed content to
+        // its Home store.
+        self.fetch_home().ok()
     }
 }
 

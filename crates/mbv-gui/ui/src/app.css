@@ -76,8 +76,14 @@
 	--canvas-ghost-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); /* the drag ghost's lift */
 	--canvas-insertion: #83c092; /* the drag's insertion line */
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
-	--canvas-source: #7fbbb3; /* the footer's queue source text */
+	--canvas-source: #7fbbb3; /* the sources' teal: a selected pill, a key hint, and the date hue */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */
+	/* The Settings screen's values (`Settings.dc.html`, add-gui-settings-screen
+	   design D13): the success fill and border a Ready Service pill and a
+	   checked box paint, and the outline the destructive button paints. */
+	--canvas-success-fill: #3a4a3a; /* the Ready pill's and the checked box's fill */
+	--canvas-success-border: #5f7360; /* the checked box's border */
+	--canvas-destructive-border: #5c3f45; /* the destructive button's outline */
 	/* The Library column's values (add-gui-library-panel design D4): the body
 	   fill the Hero pane and the column paint, and the raised fill of the top
 	   bar and the list column. */
@@ -98,6 +104,19 @@
 	/* The canvas header's two lines over the 44 px filter control, between
 	   12 px and 8 px of padding. */
 	--canvas-queue-header-height: 64px;
+	/* The GUI's data types (add-gui-settings-screen design D14): weight and size
+	   carry hierarchy and colour carries the type. Each type names one token
+	   that aliases the hue the palette already carried, except the secondary
+	   title's purple, which the GUI adds. `TypedText.svelte` paints a meta
+	   segment by its kind; a time or a date repeated down a list paints at the
+	   repeat opacity. */
+	--canvas-type-time: var(--canvas-accent); /* #a7c080: a time and a duration */
+	--canvas-type-date: var(--canvas-source); /* #7fbbb3: a year and a date, the link hue */
+	--canvas-type-count: var(--canvas-partial); /* #e69875: a count and a meta value */
+	--canvas-type-label: var(--canvas-insertion); /* #83c092: a section label */
+	--canvas-type-secondary: #d699b6; /* a secondary title: a series, a show, a parent */
+	--canvas-type-role: var(--canvas-owner); /* #dbbc7f: a role and a character */
+	--canvas-type-repeat-opacity: 0.65; /* a time or date repeated down a list */
 }
 
 @theme inline {
@@ -166,13 +185,32 @@
 	border-radius: 0;
 }
 
+/* The Settings forms' one field look (add-gui-settings-screen design D13,
+   the canvas field inside a Service's well): the raised fill over the well,
+   the control border, the mono face, and a 38 px box. Each form wraps it in a
+   labelled field; this rule owns the box, so no form repeats it inline. */
+[data-settings-field] {
+	height: 38px;
+	box-sizing: border-box;
+	padding: 0 12px;
+	background: var(--canvas-library-panel);
+	border: 1px solid var(--canvas-menu-border);
+	border-radius: 6px;
+	color: var(--canvas-heading);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	outline: none;
+}
+
 /* Every interactive control answers the pointer (design D16): one rule, so a
    new button cannot be born without the hover, and the glow is a veil rather
    than a fill because the controls paint their own fills inline. An inset
    shadow composites over that fill and under the label, which is why a pill, a
    selected row, and an accent button keep their own colours and still light
    up. The filter field's frame is a `label` around its `input`, so it takes
-   the same veil while the pointer is on the field. The seekbar is the one
+   the same veil while the pointer is on the field; the Settings forms' fields
+   join through their `data-settings-field` marker (design
+   add-gui-settings-screen D11 *Pointer contract*). The seekbar is the one
    control left out: it already answers the pointer with the trickplay tile
    preview, and a veil over its 60 px box would tint the elapsed and remaining
    labels with it. */
@@ -180,6 +218,7 @@ button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,
 [role='tab']:not([aria-disabled='true']):hover,
 [role='option']:hover,
+[data-settings-field]:not(:disabled):hover,
 label:has(> input:hover) {
 	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
 }

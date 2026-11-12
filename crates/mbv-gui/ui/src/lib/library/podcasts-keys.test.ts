@@ -44,6 +44,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
+		settings: null,
 		library: { revision: 1, search: null, content: null },
 	};
 }
@@ -96,7 +97,7 @@ function pills(selected: 'latest' | 'show'): GuiPodcastsPill[] {
 /** The episode Hero a selected episode paints (design D12, row 10.1). */
 const HERO: NonNullable<GuiPodcastsFrame['hero']> = {
 	title: 'Episode A',
-	metaRows: ['Show One', '34:00'],
+	metaRows: [[{ text: 'Show One', kind: 'plain' }], [{ text: '34:00', kind: 'time' }]],
 	durationRow: 1,
 	progressRow: null,
 	overview: null,

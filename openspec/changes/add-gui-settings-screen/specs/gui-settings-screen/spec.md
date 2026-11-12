@@ -23,6 +23,56 @@ While the Settings screen is open, the GUI Client SHALL show the Settings sideba
 - **WHEN** the user closes the Settings screen
 - **THEN** the Library shows the same destination and picked item, and the Queue panel has Panel focus
 
+### Requirement: The Settings screen fills the window
+
+While the Settings screen is open, the sidebar SHALL take one fixed width that does not follow the Queue column's width, and the section content SHALL take the rest of the window's width and height. Outside Mini, no part of the window SHALL stay empty beside the content.
+
+#### Scenario: A dragged Queue width does not move the sidebar
+
+- **GIVEN** the user dragged the Queue column wider
+- **WHEN** the Settings screen opens
+- **THEN** the sidebar has the same width it has with the default Queue column
+
+#### Scenario: The content takes the remaining width
+
+- **GIVEN** a window wider than the Mini threshold
+- **WHEN** the Settings screen opens
+- **THEN** the content spans from the sidebar's edge to the window's right edge
+
+### Requirement: Every Settings request reaches the Client core
+
+Every request that the Settings screen sends SHALL reach the Client core. The window's permissions SHALL grant every command that the GUI Client registers, so no Settings action is refused before the core sees it.
+
+#### Scenario: A sidebar press reaches the core
+
+- **WHEN** the user presses a sidebar entry
+- **THEN** the core receives the section request, and the next frame shows that section
+
+### Requirement: Every Settings control works by pointer
+
+A pointer press on any Settings control (sidebar entries, rows, marks, routes, Service and form controls, feed, playlist, Keys, and target controls) SHALL have the same effect as the keyboard path to it, and SHALL move the keyboard position to it. A control that can act SHALL show hover feedback. A control that cannot act SHALL show as unavailable, and a press on it SHALL do nothing.
+
+#### Scenario: A press on a toggle
+
+- **WHEN** the user presses the Consume audio row in the Queue section
+- **THEN** the setting changes as Enter on that row changes it, and the content cursor rests on the row
+
+#### Scenario: A press starts a capture
+
+- **WHEN** the user presses an action's chord in Keys
+- **THEN** a capture starts for that action, as the keyboard path starts it
+
+#### Scenario: A press on an unavailable control
+
+- **WHEN** the user presses a control that shows as unavailable
+- **THEN** nothing is sent and nothing changes
+
+#### Scenario: A press does not act behind the screen
+
+- **GIVEN** the Settings screen is open
+- **WHEN** the user presses where a queue row painted before the screen opened
+- **THEN** no queue action runs
+
 ### Requirement: The Settings screen shows the toasts
 
 While the Settings screen is open, it SHALL show the prefix-armed state and the toasts of the shared Status bar projection, because neither the footer line nor the Library Status bar shows.
@@ -70,6 +120,35 @@ The `settings_open` action SHALL open the Settings screen at Services, the `sess
 - **GIVEN** `settings_open` is bound to another chord in `[keys]`
 - **WHEN** the user presses that chord
 - **THEN** the Settings screen opens at Services
+
+### Requirement: A Settings control in the top bar opens the screen
+
+The Library top bar SHALL show a Settings control to the right of the Search field. A press on it SHALL open the Settings screen at Services, as the `settings_open` action does.
+
+#### Scenario: The cog opens Settings
+
+- **GIVEN** the Library panel shows and the Settings screen is closed
+- **WHEN** the user presses the Settings control in the top bar
+- **THEN** the Settings screen opens at Services
+
+### Requirement: A Back control in the sidebar closes the screen
+
+The Settings sidebar SHALL show a Back control above its section list. A press on it SHALL close the Settings screen and restore the panels as they were, as Esc from the sidebar does.
+
+#### Scenario: Back returns to the panels
+
+- **GIVEN** the Settings screen is open
+- **WHEN** the user presses Back
+- **THEN** the screen closes and the Queue and Library panels show as they were before it opened
+
+### Requirement: The pointer is the primary path
+
+The Settings screen SHALL be fully usable by pointer alone: opening, moving between sections, every setting and action, and leaving. Every pointer path SHALL also have a key path.
+
+#### Scenario: A round trip by pointer
+
+- **WHEN** the user presses the top bar's Settings control, presses a section, changes a setting, and presses Back
+- **THEN** each step takes effect, and no key press was needed
 
 ### Requirement: Esc closes the screen from the sidebar
 
@@ -142,6 +221,32 @@ Changing a shown setting SHALL have the same effect, the same refusal rules, and
 - **WHEN** the user turns off the systray icon setting
 - **THEN** the setting stays as it was and the GUI shows the same refusal notice as the TUI
 
+### Requirement: Value settings are picked from their list
+
+Subtitle mode, Subtitle language, and Audio language SHALL each show their current value and SHALL open the list of their values when pressed or activated. Picking a value SHALL set that value directly, with the TUI's effect and save. The mode list SHALL be the subtitle modes the TUI cycles through. A language list SHALL be Any followed by My languages.
+
+#### Scenario: Picking a subtitle language
+
+- **GIVEN** My languages holds English and Chinese and the subtitle language is English
+- **WHEN** the user opens Subtitle language and picks Chinese
+- **THEN** the subtitle language is Chinese, the player uses it, and the setting is saved
+
+#### Scenario: Closing the list picks nothing
+
+- **GIVEN** the Subtitle mode list is open
+- **WHEN** the user presses Esc or presses outside the list
+- **THEN** the list closes and the mode is unchanged
+
+### Requirement: The section content has a title and grouped settings
+
+The section content SHALL show the section's name as its title and SHALL group the section's settings into one or more cards. A setting that is on or off SHALL show as a switch. Each Service SHALL have its own card, which shows the Service's state, its actions, and its setup form when that form is open.
+
+#### Scenario: A Service's setup form opens in its card
+
+- **GIVEN** Audiobookshelf is Not configured
+- **WHEN** the user presses its setup action
+- **THEN** the setup form opens inside the Audiobookshelf card
+
 ### Requirement: Choice-list settings are edited in place
 
 The Hidden libraries, Feed view libraries, and My languages settings SHALL each show their choices as a list the user marks in the section content. Applying the marks SHALL save them with the same effects as the TUI's multiselect commit.
@@ -153,17 +258,24 @@ The Hidden libraries, Feed view libraries, and My languages settings SHALL each 
 
 ### Requirement: Library routes are edited in the Library section
 
-The Library section SHALL list the routable libraries with each one's assigned device and SHALL let the user assign one device or clear the route. A device with no direct-connect endpoint SHALL be refused with the TUI's notice. The route SHALL be saved and take effect as the TUI's route editor saves it.
+The Library section SHALL list the routable libraries with each one's assigned device and SHALL let the user assign one device or clear the route. A device with no direct-connect endpoint SHALL show as not routable and SHALL NOT be assignable by pointer or key. The route SHALL be saved and take effect as the TUI's route editor saves it.
 
 #### Scenario: Assigning a route
 
 - **WHEN** the user assigns a routable device to a library
 - **THEN** the route is saved and playback of that library goes to the device
 
+#### Scenario: Selecting a library lists its devices
+
+- **GIVEN** the Library section shows the routable libraries
+- **WHEN** the user selects a library in the routes list
+- **THEN** the section lists that library's candidate devices
+
 #### Scenario: A device with no endpoint
 
-- **WHEN** the user assigns a device that has no direct-connect endpoint
-- **THEN** no route is saved and the GUI shows the TUI's notice
+- **GIVEN** a library's candidate devices include one with no direct-connect endpoint
+- **WHEN** the user presses that device or presses Enter on it
+- **THEN** the device shows as not routable, no command is sent, and no route is saved
 
 ### Requirement: Services shows each Service and its setup
 

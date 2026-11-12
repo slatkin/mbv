@@ -25,6 +25,7 @@ use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
 use crate::app::App;
+use mbv_ui_model::meta::MetaSegment;
 
 /// One view mode of the Shows destination's pill row (design D12): the three
 /// single-select pills the design names. The TUI's letter-range buckets are
@@ -210,7 +211,7 @@ pub struct GuiShowsHero {
     /// its own largest unit. The meta rows never repeat it.
     pub parent: Option<String>,
     /// The meta rows in display order.
-    pub meta_rows: Vec<String>,
+    pub meta_rows: Vec<Vec<MetaSegment>>,
     /// Which meta row paints the duration role, when one does.
     pub duration_row: Option<usize>,
     /// Which meta row paints the progress role, when one does. The shared

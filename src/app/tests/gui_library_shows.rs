@@ -179,7 +179,7 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     let hero = projection.hero.expect("the series Hero paints");
     assert_eq!(hero.title, "Alfred");
     assert_eq!(
-        hero.meta_rows,
+        mbv_ui_model::meta::meta_rows_text(&hero.meta_rows),
         vec!["DRAMA", "2013 - 2022", "2 Seasons", "FX"],
         "the Hero carries the TUI series producer's rows"
     );

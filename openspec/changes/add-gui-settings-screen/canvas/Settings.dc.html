@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mbv settings</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#232a2e}
+a{color:#83c092}a:hover{color:#a7c080}
+button,input{font:inherit}
+</style>
+</helmet>
+<div style="width: 1720px; height: 1000px; box-sizing: border-box; background: #272e33; color: #d3c6aa; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <div style="flex: 1 1 auto; min-height: 0; display: flex">
+
+    <!-- Sidebar -->
+    <nav aria-label="Settings sections" style="width: 260px; flex: 0 0 auto; box-sizing: border-box; background: #232a2e; border-right: 1px solid #3d484d; padding: 20px 12px; display: flex; flex-direction: column; gap: 2px">
+      <div style="padding: 0 12px 14px; font-size: 20px; font-weight: 600; color: #e9e1cc">Settings</div>
+      <sc-for list="{{sections}}" as="s" hint-placeholder-count="12">
+        <button onClick="{{s.pick}}" aria-current="{{s.current}}" style="{{s.style}}"><span style="{{s.iconStyle}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.icon}}"></path></svg></span>{{s.name}}</button>
+      </sc-for>
+    </nav>
+
+    <!-- Content -->
+    <main style="flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 32px 48px; box-sizing: border-box">
+      <div style="max-width: 1120px; display: flex; flex-direction: column; gap: 24px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #e9e1cc">{{title}}</h1>
+
+        <!-- SERVICES -->
+        <sc-if value="{{isServices}}" hint-placeholder-val="{{ true }}">
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start">
+
+            <!-- Emby -->
+            <section aria-label="Emby" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; align-items: center; justify-content: space-between">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">Emby</h2>
+                <span style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: #3a4a3a; color: #a7c080; font-size: 12px; font-weight: 500"><span style="width: 7px; height: 7px; border-radius: 4px; background: #a7c080"></span>Ready</span>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button style="height: 36px; padding: 0 14px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">Repair</button>
+                <button style="height: 36px; padding: 0 14px; background: none; border: 1px solid #5c3f45; border-radius: 6px; color: #e67e80; font-size: 13px; cursor: pointer">Remove</button>
+              </div>
+            </section>
+
+            <!-- Feeds -->
+            <section aria-label="Feeds" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; align-items: center; justify-content: space-between">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">Feeds</h2>
+                <span style="font-size: 12px; color: #9da9a0">Always present · <span style="font-family: 'JetBrains Mono', monospace; color: #e69875">4</span> subscriptions</span>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button style="height: 36px; padding: 0 14px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">Manage feeds</button>
+              </div>
+            </section>
+
+            <!-- Audiobookshelf -->
+            <section aria-label="Audiobookshelf" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; align-items: center; justify-content: space-between">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">Audiobookshelf</h2>
+                <span style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: #3a4a3a; color: #a7c080; font-size: 12px; font-weight: 500"><span style="width: 7px; height: 7px; border-radius: 4px; background: #a7c080"></span>Ready</span>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                <button style="height: 36px; padding: 0 14px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">Test connection</button>
+                <button style="height: 36px; padding: 0 14px; background: #475258; border: 1px solid #7fbbb3; border-radius: 6px; color: #e9e1cc; font-size: 13px; cursor: pointer">Set up Audiobookshelf</button>
+                <button style="height: 36px; padding: 0 14px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">Replace</button>
+                <button style="height: 36px; padding: 0 14px; background: none; border: 1px solid #5c3f45; border-radius: 6px; color: #e67e80; font-size: 13px; cursor: pointer">Remove</button>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #232a2e; border-radius: 8px">
+                <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #9da9a0">Server URL
+                  <input type="text" value="http://192.168.0.6:13378" style="height: 38px; box-sizing: border-box; padding: 0 12px; background: #2d353b; border: 1px solid #475258; border-radius: 6px; color: #e9e1cc; font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #9da9a0">API key
+                  <input type="password" placeholder="API key" style="height: 38px; box-sizing: border-box; padding: 0 12px; background: #2d353b; border: 1px solid #475258; border-radius: 6px; color: #e9e1cc; font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none">
+                </label>
+                <div style="display: flex; gap: 8px; justify-content: flex-end">
+                  <button style="height: 36px; padding: 0 14px; background: none; border: 0; border-radius: 6px; color: #9da9a0; font-size: 13px; cursor: pointer">Cancel</button>
+                  <button style="height: 36px; padding: 0 16px; background: #a7c080; border: 0; border-radius: 6px; color: #232a2e; font-size: 13px; font-weight: 600; cursor: pointer">Set up</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <!-- PLAYBACK -->
+        <sc-if value="{{isPlayback}}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start">
+            <section aria-label="Subtitles and audio" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 8px 20px">
+              <sc-for list="{{playbackRows}}" as="r" hint-placeholder-count="3">
+                <div style="{{r.rowStyle}}">
+                  <span style="font-size: 14px; color: #e9e1cc">{{r.label}}</span>
+                  <button style="height: 34px; min-width: 140px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px 0 12px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer">{{r.value}}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+                </div>
+              </sc-for>
+            </section>
+
+            <section aria-label="My languages" style="background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #e9e1cc">My languages</h2>
+                <span style="font-size: 12px; color: #e69875">{{langCount}}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+                <sc-for list="{{langs}}" as="l" hint-placeholder-count="20">
+                  <button role="checkbox" aria-checked="{{l.checked}}" onClick="{{l.toggle}}" style="{{l.style}}"><span style="{{l.boxStyle}}"><sc-if value="{{l.on}}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#232a2e" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></sc-if></span>{{l.name}}</button>
+                </sc-for>
+              </div>
+              <div style="display: flex; justify-content: flex-end">
+                <button style="height: 36px; padding: 0 18px; background: #a7c080; border: 0; border-radius: 6px; color: #232a2e; font-size: 13px; font-weight: 600; cursor: pointer">Apply</button>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <!-- MPV -->
+        <sc-if value="{{isMpv}}" hint-placeholder-val="{{ false }}">
+          <section aria-label="mpv" style="max-width: 560px; background: #2d353b; border: 1px solid #3d484d; border-radius: 10px; padding: 8px 20px">
+            <sc-for list="{{mpvRows}}" as="m" hint-placeholder-count="4">
+              <div style="{{m.rowStyle}}">
+                <span style="font-size: 14px; color: #e9e1cc">{{m.label}}</span>
+                <button role="switch" aria-checked="{{m.checked}}" aria-label="{{m.label}}" onClick="{{m.toggle}}" style="{{m.trackStyle}}"><span style="{{m.knobStyle}}"></span></button>
+              </div>
+            </sc-for>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{isOther}}" hint-placeholder-val="{{ false }}">
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">[ {{title}} — not in the screenshots, not mocked ]</div>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+
+  <!-- Status bar -->
+  <div style="height: 36px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid #3d484d; background: #2d353b; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">
+    <span><span style="color: #7fbbb3">↑↓</span> move   <span style="color: #7fbbb3">⏎</span> open   <span style="color: #7fbbb3">space</span> toggle   <span style="color: #7fbbb3">tab</span> pane   <span style="color: #7fbbb3">esc</span> back</span>
+    <span>{{title}}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1720,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { sec: 'Services', langs: { English: true, Chinese: true }, mpv: { 'Show audio window': false, 'Use mpv config': false, 'No scripts': false, 'autoload': true } };
+  }
+  renderVals() {
+    const icons = {
+      Services: 'M5 5h14v5H5zM5 14h14v5H5zM8 7.5h.01M8 16.5h.01',
+      Playback: 'M7 4.5v15l12-7.5z',
+      Display: 'M3 5h18v11H3zM8 20h8M12 16v4',
+      Session: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+      Library: 'M5 4v16M10 4v16M15 5l4 15',
+      Queue: 'M4 6h16M4 12h16M4 18h10',
+      mpv: 'M4 4h16v16H4zM10 9v6l5-3z',
+      Feeds: 'M5 19h.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14',
+      Actions: 'M13 3 5 14h6l-1 7 8-11h-6z',
+      Keys: 'M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8',
+      Sessions: 'M4 5h16v10H4zM2 19h20',
+      Playlists: 'M4 6h12M4 11h12M4 16h7M17 14v6M14 17h6'
+    };
+    const sec = this.state.sec;
+    const sections = Object.keys(icons).map((name) => {
+      const on = name === sec;
+      return {
+        name, icon: icons[name], current: on ? 'page' : 'false',
+        pick: () => this.setState({ sec: name }),
+        style: `height: 38px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border: 0; border-radius: 8px; text-align: left; cursor: pointer; font-size: 14px; background: ${on ? '#a7c080' : 'transparent'}; color: ${on ? '#232a2e' : '#d3c6aa'}; font-weight: ${on ? 600 : 400};`,
+        iconStyle: `display: flex; color: ${on ? '#232a2e' : '#9da9a0'};`
+      };
+    });
+    const playbackRows = [['Subtitle mode', 'Default'], ['Subtitle language', 'English'], ['Audio language', 'English']].map(([label, value], i, a) => ({
+      label, value,
+      rowStyle: `height: 60px; display: flex; align-items: center; justify-content: space-between; ${i < a.length - 1 ? 'border-bottom: 1px solid #3d484d;' : ''}`
+    }));
+    const L = this.state.langs;
+    const names = ['English','French','German','Spanish','Italian','Portuguese','Japanese','Korean','Chinese','Russian','Arabic','Dutch','Swedish','Norwegian','Danish','Finnish','Polish','Czech','Turkish'];
+    const langs = names.map((name) => {
+      const on = !!L[name];
+      return {
+        name, on, checked: on ? 'true' : 'false',
+        toggle: () => this.setState({ langs: Object.assign({}, L, { [name]: !on }) }),
+        style: `height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 13px; border: 1px solid ${on ? '#5f7360' : 'transparent'}; background: ${on ? '#3a4a3a' : 'transparent'}; color: ${on ? '#e9e1cc' : '#d3c6aa'};`,
+        boxStyle: `width: 16px; height: 16px; flex: 0 0 auto; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: 1.5px solid ${on ? '#a7c080' : '#7f897d'}; background: ${on ? '#a7c080' : 'transparent'};`
+      };
+    });
+    const n = names.filter((x) => L[x]).length;
+    const M = this.state.mpv;
+    const mpvRows = Object.keys(M).map((label, i, a) => {
+      const on = M[label];
+      return {
+        label, checked: on ? 'true' : 'false',
+        toggle: () => this.setState({ mpv: Object.assign({}, M, { [label]: !on }) }),
+        rowStyle: `height: 60px; display: flex; align-items: center; justify-content: space-between; ${i < a.length - 1 ? 'border-bottom: 1px solid #3d484d;' : ''}`,
+        trackStyle: `width: 44px; height: 24px; flex: 0 0 auto; position: relative; padding: 0; border: 0; border-radius: 12px; cursor: pointer; background: ${on ? '#a7c080' : '#475258'}; transition: background 120ms;`,
+        knobStyle: `position: absolute; top: 3px; left: ${on ? 23 : 3}px; width: 18px; height: 18px; border-radius: 9px; background: ${on ? '#232a2e' : '#d3c6aa'}; transition: left 120ms;`
+      };
+    });
+    return {
+      sections, title: sec,
+      isServices: sec === 'Services', isPlayback: sec === 'Playback', isMpv: sec === 'mpv',
+      isOther: !['Services', 'Playback', 'mpv'].includes(sec),
+      playbackRows, langs, langCount: n + (n === 1 ? ' language' : ' languages'), mpvRows
+    };
+  }
+}
+</script>
+</body>
+</html>

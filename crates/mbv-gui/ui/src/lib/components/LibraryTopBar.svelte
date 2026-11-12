@@ -15,8 +15,14 @@
 	// component never interprets a key: it only follows the focus fact, and a
 	// highlight id that a new results frame no longer carries falls to the
 	// first row.
+	//
+	// The Settings control sits to the right of the field (add-gui-settings-screen
+	// design D11 *Mouse-centric*): a press opens the Settings screen at Services,
+	// so the pointer has its own way into the screen.
+	import { Settings } from '@lucide/svelte';
 	import { roleVar } from '$lib/bridge/theme';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import { sendSettingsCommand } from '$lib/bridge/settings';
 	import type { GuiLibraryTab, GuiSearchFrame, GuiSearchRow } from '$lib/bridge/types';
 	import {
 		activateSearchRow,
@@ -52,6 +58,13 @@
 	 * is 0, and the Home icon opens it. */
 	function open(position: number): void {
 		void sendLibraryCommand({ command: 'openDestination', position });
+	}
+
+	/** Open the Settings screen at Services (design D11 *Mouse-centric*), as the
+	 * `settings_open` action does: the pointer's way in, so a user can enter the
+	 * screen without a key. */
+	function openSettings(): void {
+		void sendSettingsCommand({ command: 'open' });
 	}
 
 	let searchEl: HTMLInputElement | undefined = $state();
@@ -308,4 +321,24 @@
 			</div>
 		{/if}
 	</div>
+	<!-- The Settings control to the right of the Search field (design D11
+		*Mouse-centric*, the spec's *A Settings control in the top bar opens the
+		screen*): a Lucide cog whose press opens the screen at Services. The
+		global hover veil gives it its pointer feedback. -->
+	<button
+		type="button"
+		class="flex flex-none items-center justify-center"
+		style:width="34px"
+		style:height="34px"
+		style:border="0"
+		style:border-radius="6px"
+		style:background="none"
+		style:color="var(--canvas-muted)"
+		style:cursor="pointer"
+		aria-label="Settings"
+		data-library-settings=""
+		onclick={openSettings}
+	>
+		<Settings size={18} />
+	</button>
 </nav>

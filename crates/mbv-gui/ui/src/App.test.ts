@@ -21,6 +21,8 @@ import type {
 	LayoutSize,
 } from '$lib/bridge/types';
 import { libraryContent } from '$lib/library/state';
+import { initialSettingsUi, settingsUi } from '$lib/settings/state';
+import { selectSettingsSection } from '$lib/settings/state';
 import App from './App.svelte';
 
 const listenMock = vi.mocked(listen);
@@ -50,6 +52,7 @@ beforeEach(() => {
 	listenMock.mockReset();
 	listenMock.mockResolvedValue(() => {});
 	libraryContent.set(null);
+	settingsUi.set(initialSettingsUi());
 	// The divider widths are session state (design D4): a drag one test holds
 	// would outlive it.
 	draggedWidths.set(DEFAULT_DRAGGED_WIDTHS);
@@ -164,6 +167,8 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 							rowMenu: null,
 						},
 					},
+		settings: null,
+		uiResetEpoch: 0,
 		theme: null,
 	};
 }
@@ -407,6 +412,83 @@ test('dragging the Queue divider resizes the column and a double-click resets it
 	expect(column.style.width).toBe('400px');
 });
 
+// add-gui-settings-screen row 6.2: while the frame carries the Settings
+// screen, the window mounts the screen in place of the Queue and Library
+// panels, the sidebar lists the frame's sections in order, and Mini shows
+// only the pane that holds the keyboard — the content once a section opens.
+
+/** A Settings frame section over the Queue section (design D9). */
+function settingsFrame(): GuiFrame['settings'] {
+	return {
+		section: 'queue',
+		sections: ['services', 'playback', 'queue', 'actions', 'keys', 'sessions', 'playlists'],
+		content: {
+			kind: 'rows',
+			rows: [
+				{
+					key: 'consumeAudio',
+					label: 'Consume audio',
+					kind: 'toggle',
+					value: 'on',
+					flag: true,
+					choices: null,
+					choicesKind: null,
+					values: null,
+				},
+			],
+		},
+	};
+}
+
+test('the open Settings screen mounts no Queue or Library panel', async () => {
+	const slice = frame('library', music());
+	slice.settings = settingsFrame();
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	expect(container.querySelector('[data-settings-screen]')).toBeTruthy();
+	expect(container.querySelector('[data-panel-state]')).toBeNull();
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
+	expect(container.querySelector('[data-settings-status]')?.textContent).toContain('Queue');
+});
+
+test('the Settings sidebar lists the frame sections in order', async () => {
+	const slice = frame('queue', null);
+	slice.settings = settingsFrame();
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	const sections = [...container.querySelectorAll('[data-settings-section]')].map(
+		(el) => el.getAttribute('data-settings-section'),
+	);
+
+	expect(sections).toEqual([
+		'services',
+		'playback',
+		'queue',
+		'actions',
+		'keys',
+		'sessions',
+		'playlists',
+	]);
+});
+
+// The spec's *Narrow window* requirement: below the Mini threshold only the
+// pane that holds the keyboard paints — the sidebar first, and the content
+// once the user opens a section.
+test('in Mini, opening a section shows only its content', async () => {
+	const slice = frame('queue', null);
+	slice.settings = settingsFrame();
+	const { container } = await mount({ width: 700, height: 900 }, slice);
+
+	expect(container.querySelector('[data-settings-sidebar-pane]')).toBeTruthy();
+	expect(container.querySelector('[data-settings-content]')).toBeNull();
+
+	selectSettingsSection('playback');
+	await tick();
+
+	expect(container.querySelector('[data-settings-sidebar-pane]')).toBeNull();
+	expect(container.querySelector('[data-settings-content]')).toBeTruthy();
+});
+
 // add-gui-library-panel row 8.1: while a plain Emby library is the active
 // destination (design D12), the window mounts the Library panel with the Emby
 // painters — its list, its rail, and its Hero — as it does for the other
@@ -509,7 +591,7 @@ function feedsContent(): GuiLibraryContent {
 			selected: 's1::e1',
 			hero: {
 				title: 'Entry A',
-				metaRows: ['Sub One', '12:30'],
+				metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
 				durationRow: 1,
 				progressRow: null,
 				artShape: 'square',
@@ -550,7 +632,7 @@ function podcastsContent(): GuiLibraryContent {
 			selected: 'e1:ep1',
 			hero: {
 				title: 'Episode A',
-				metaRows: ['Show One', '34:00'],
+				metaRows: [[{ text: 'Show One', kind: 'plain' }], [{ text: '34:00', kind: 'time' }]],
 				durationRow: 1,
 				progressRow: null,
 				overview: null,
@@ -594,7 +676,7 @@ function embyContent(): GuiLibraryContent {
 			hero: {
 				kind: 'movie',
 				title: 'Alien',
-				metaRows: ['1979'],
+				metaRows: [[{ text: '1979', kind: 'date' }]],
 				durationRow: 0,
 				progressRow: null,
 				overview: null,

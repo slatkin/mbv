@@ -17,9 +17,7 @@ use mbv_queue::QueueSlotId;
 use mbv_render as render;
 use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
-use mbv_ui_model::confirm::ConfirmModal;
 use mbv_ui_model::feed::IdleFeed;
-use mbv_ui_model::feed::SavePlaylistDialog;
 use mbv_ui_model::feed_tab::FeedTabState;
 use mbv_ui_model::library_tab::LibraryTab;
 use mbv_ui_model::playback::QueueLink;
@@ -354,6 +352,13 @@ pub struct App {
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
+    /// The Settings feeds-management popup's background add-feed channel,
+    /// its in-flight add marker, and its attempt-id counter
+    /// (add-gui-settings-screen design D7): the piece of the Feeds-manage
+    /// overlay that cannot live in the interaction component, so both
+    /// Clients share it. `Some` only while a feed-manage surface is open;
+    /// the mpsc receiver drops on close, discarding any in-flight result.
+    pub(in crate::app) feeds_manage: Option<mbv_ui_model::feeds_manage::FeedsManagePopup>,
     /// Live mouse-capture flip requested by the Settings toggle arm (ADR
     /// 0024): the run loop consumes it and applies `set_mouse_capture` on
     /// the session stdout once per tick.
@@ -475,6 +480,15 @@ pub struct App {
     /// The GUI Client's open overlay: the queue row's menu or a track chip's
     /// popover (design D4a). `None` while none is open.
     pub(in crate::app) gui_overlay: Option<GuiOverlay>,
+    /// The GUI Settings screen's open state (`add-gui-settings-screen`
+    /// design D2): `None` while closed. The GUI core thread's drain drives it
+    /// and its focus sync mirrors it onto the core `FocusStack`; the TUI
+    /// Client never sets it (its Settings sidebar keeps its own shell state).
+    pub(in crate::app) gui_settings: Option<crate::app::gui_settings::GuiSettingsState>,
+    /// The UI-reset counter the GUI frame carries (`add-gui-settings-screen`
+    /// design D10): the front end resets its interaction stores when the value
+    /// changes. Row 5.6 raises it. The TUI Client never reads it.
+    pub(in crate::app) gui_ui_reset_epoch: u64,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
     pub(in crate::app) ui_volume: u8,
@@ -698,68 +712,6 @@ impl App {
         }
         self.queue_column_width = normalized;
         true
-    }
-
-    pub(in crate::app) fn request_sidebar_open(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
-    }
-
-    pub(in crate::app) fn request_sidebar_dismiss(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
-            sidebar,
-        ));
-    }
-
-    pub(in crate::app) fn request_sidebar_toggle(
-        &mut self,
-        sidebar: mbv_ui_model::overlay::SidebarId,
-    ) {
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ToggleSidebar(
-            sidebar,
-        ));
-    }
-
-    pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
-        // The GUI Client presents the shared confirmation as its own blocking
-        // overlay (the canvas's modal); the shell request stays undrained —
-        // the GUI mounts no TUI modal component.
-        if self.gui_client {
-            self.gui_overlay = Some(GuiOverlay::Confirm(modal.clone()));
-        }
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal));
-    }
-
-    pub(in crate::app) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::SavePlaylist(dialog));
-    }
-
-    pub(in crate::app) fn dismiss_confirm(&mut self) {
-        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
-            self.gui_overlay = None;
-        }
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
-    }
-
-    pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
-        // The GUI Client presents the dialog as its own blocking overlay and
-        // mounts no TUI modal component, so the dismissal clears that held
-        // overlay; the shell request stays undrained, as the confirmation's
-        // does. A successful restart reaches here from
-        // `restart_local_daemon`.
-        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
-            self.gui_overlay = None;
-        }
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
-    }
-
-    pub(in crate::app) fn dismiss_save_playlist(&mut self) {
-        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
     }
 }
 

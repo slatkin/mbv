@@ -25,25 +25,29 @@
 	import type { Snippet } from 'svelte';
 	import type { GuiLibraryArt } from '$lib/bridge/library-types';
 	import { heroAttr } from '$lib/library/hero';
+	import type { Segments } from '$lib/library/hero';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
+	import TypedText from './TypedText.svelte';
 
 	interface Props {
 		/** The destination's attribute prefix: empty for Music, `shows` for Shows. */
 		attr: string;
 		/** The root's own attribute, the hook the panel's tests take. */
 		root: string;
-		/** The header band: always painted, so every Hero shares the one look. */
-		header: { kicker: string; title: string; facts: string };
+		/** The header band: always painted, so every Hero shares the one look. The
+		 * kicker is a label, and the facts line carries each value's data type
+		 * (design D14). */
+		header: { kicker: Segments; title: string; facts: Segments };
 		/** The header band's trailing control, when the destination has one. */
 		headerAction?: Snippet;
 		/** The detail block's text: each line paints only when it is non-empty. */
 		block: {
 			label: string;
-			eyebrow?: string;
+			eyebrow?: Segments;
 			name?: string;
-			facts?: string;
+			facts?: Segments;
 			/** Meta rows that carry a role, for a Hero whose facts are rows. */
-			meta?: { text: string; role: 'meta' | 'duration' | 'progress' }[];
+			meta?: { segments: Segments; role: 'meta' | 'duration' | 'progress' }[];
 			overview?: string | null;
 		};
 		/** The artwork box's shape and its fetched art. */
@@ -79,6 +83,11 @@
 	function own(name: string, value = ''): Record<string, string> {
 		return { [heroAttr(attr, name)]: value };
 	}
+
+	/** Whether a line has anything to paint. */
+	function painted(segments: Segments | undefined): segments is Segments {
+		return (segments ?? []).length > 0;
+	}
 </script>
 
 <div
@@ -99,8 +108,7 @@
 				class="font-mono"
 				style:font-size="12px"
 				style:letter-spacing="0.08em"
-				style:color="var(--canvas-muted)"
-				{...own('kicker')}>{header.kicker}</span
+				{...own('kicker')}><TypedText segments={header.kicker} /></span
 			>
 			<h1
 				style:margin="0"
@@ -110,12 +118,12 @@
 				style:color="var(--canvas-heading)"
 				{...own('title')}>{header.title}</h1
 			>
-			{#if header.facts !== ''}
+			{#if painted(header.facts)}
 				<span
 					class="font-mono"
 					style:font-size="13px"
 					style:color="var(--canvas-muted)"
-					{...own('facts')}>{header.facts}</span
+					{...own('facts')}><TypedText segments={header.facts} /></span
 				>
 			{/if}
 		</div>
@@ -142,14 +150,15 @@
 			style:flex-basis={band ? '320px' : undefined}
 			style:padding-top={band ? '0' : '8px'}
 		>
-			{#if (block.eyebrow ?? '') !== '' || (block.name ?? '') !== '' || (block.facts ?? '') !== '' || (block.meta ?? []).length > 0}
+			{#if painted(block.eyebrow) || (block.name ?? '') !== '' || painted(block.facts) || (block.meta ?? []).length > 0}
 				<div class="flex flex-col" style:gap="6px">
-					{#if (block.eyebrow ?? '') !== ''}
+					{#if painted(block.eyebrow)}
 						<span
 							class="font-mono"
 							style:font-size="12px"
 							style:letter-spacing="0.08em"
-							style:color="var(--canvas-muted)">{block.eyebrow}</span
+							style:color="var(--canvas-muted)"
+							><TypedText segments={block.eyebrow} /></span
 						>
 					{/if}
 					{#if (block.name ?? '') !== ''}
@@ -161,12 +170,12 @@
 							{...own('block-name')}>{block.name}</h2
 						>
 					{/if}
-					{#if (block.facts ?? '') !== ''}
+					{#if painted(block.facts)}
 						<span
 							class="font-mono"
 							style:font-size="13px"
 							style:color="var(--canvas-muted)"
-							{...own('block-facts')}>{block.facts}</span
+							{...own('block-facts')}><TypedText segments={block.facts} /></span
 						>
 					{/if}
 					{#each block.meta ?? [] as row, index (index)}
@@ -174,7 +183,7 @@
 							class={row.role === 'meta' ? 'font-mono' : 'font-mono tabular-nums'}
 							style:font-size="13px"
 							style:color={row.role === 'progress' ? 'var(--canvas-accent)' : 'var(--canvas-muted)'}
-							{...own('role', row.role)}>{row.text}</span
+							{...own('role', row.role)}><TypedText segments={row.segments} /></span
 						>
 					{/each}
 				</div>

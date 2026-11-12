@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::mouse::hit::HitRegions;
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use mbv_theme as palette;
+use mbv_ui_model::meta::meta_row_text;
 use mbv_ui_model::ui_util::trunc_str;
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
@@ -454,14 +455,18 @@ pub fn overlay_links(
     if joined.is_empty() {
         return;
     }
-    let Some(index) = facts.meta_rows.iter().position(|row| row == &joined) else {
+    let Some(index) = facts
+        .meta_rows
+        .iter()
+        .position(|row| meta_row_text(row) == joined)
+    else {
         return;
     };
     let wrap = (area.width as usize).saturating_sub(1).max(1);
     let mut y = area.y;
     for line in facts.entries().take(index + 2) {
-        let lines = textwrap::wrap(line, wrap);
-        if line == &joined {
+        let lines = textwrap::wrap(&line, wrap);
+        if line == joined {
             if lines.len() != 1 {
                 return;
             }
@@ -499,7 +504,11 @@ pub fn overlay_links_grid(
     if joined.is_empty() {
         return;
     }
-    let Some(index) = facts.meta_rows.iter().position(|row| row == &joined) else {
+    let Some(index) = facts
+        .meta_rows
+        .iter()
+        .position(|row| meta_row_text(row) == joined)
+    else {
         return;
     };
     let pos = facts

@@ -41,6 +41,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		overlay: null,
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
+		settings: null,
 		library: { revision: 1, search: null, content: null },
 	};
 }
@@ -98,7 +99,7 @@ const FEED: GuiEmbyRow[] = [
 const EMBY_HERO: GuiEmbyHero = {
 	kind: 'movie',
 	title: 'Alien',
-	metaRows: ['1979 · 1 h 57 m'],
+	metaRows: [[{ text: '1979 · 1 h 57 m', kind: 'time' }]],
 	durationRow: 0,
 	progressRow: null,
 	overview: null,

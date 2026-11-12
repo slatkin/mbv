@@ -9,6 +9,7 @@
 // wire types, so every call site keeps importing from the one bridge module.
 
 import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
+import type { GuiMetaRow } from './library-types';
 
 /** The Feeds destination's content (design D12, row 11.1), present while
  * Feeds is the active destination: the single-select pill row of Latest and
@@ -64,7 +65,7 @@ export interface GuiFeedsHero {
 	parent?: string | null;
 	/** The meta rows in display order: the duration when the entry declares
 	 * one (the subscription name is the parent). */
-	metaRows: string[];
+	metaRows: GuiMetaRow[];
 	/** Which meta row paints the duration role, when one does. */
 	durationRow: number | null;
 	/** Which meta row paints the progress role; `null` on every entry. */

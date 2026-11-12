@@ -1,6 +1,6 @@
 use crate::ui_util::{
-    continue_tab_title, fmt_duration_gutter, fmt_duration_hms, fmt_duration_short,
-    fmt_publish_date_short, fmt_wall_clock, is_home_icon_title,
+    SUBTITLE_MODES, continue_tab_title, fmt_duration_gutter, fmt_duration_hms, fmt_duration_short,
+    fmt_publish_date_short, fmt_wall_clock, is_home_icon_title, next_subtitle_mode,
 };
 use time::UtcOffset;
 
@@ -35,6 +35,33 @@ fn fmt_wall_clock_renders_a_zero_padded_twenty_four_hour_clock_in_the_offset() {
 #[test]
 fn fmt_wall_clock_saturates_out_of_range_seconds_to_empty() {
     assert_eq!(fmt_wall_clock(i64::MAX, UtcOffset::UTC), "");
+}
+
+/// The mode list is the cycle's order (row 9.1, design D13): the GUI's pick
+/// paints the modes `next_subtitle_mode` steps through, and the last mode
+/// wraps back to the first. An empty mode still reads as `Always`, the step
+/// after the default, and an undeclared mode steps to `Default`.
+#[test]
+fn next_subtitle_mode_walks_the_mode_list_in_order_and_wraps() {
+    assert_eq!(
+        SUBTITLE_MODES,
+        [
+            "Default",
+            "Always",
+            "Smart",
+            "OnlyForced",
+            "None",
+            "HearingImpaired"
+        ]
+    );
+    assert_eq!(next_subtitle_mode("Default"), "Always");
+    assert_eq!(next_subtitle_mode("Always"), "Smart");
+    assert_eq!(next_subtitle_mode("Smart"), "OnlyForced");
+    assert_eq!(next_subtitle_mode("OnlyForced"), "None");
+    assert_eq!(next_subtitle_mode("None"), "HearingImpaired");
+    assert_eq!(next_subtitle_mode("HearingImpaired"), "Default");
+    assert_eq!(next_subtitle_mode(""), "Always");
+    assert_eq!(next_subtitle_mode("Nowhere"), "Default");
 }
 
 // ── fmt_duration_short ───────────────────────────────────────────────────

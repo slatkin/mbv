@@ -63,6 +63,41 @@ impl App {
         self.setup.emby_setup_form = Some(EmbySetupForm::new(&config, previous));
     }
 
+    /// Fill the Emby setup form with a submitted command's fields
+    /// (`add-gui-settings-screen` design D5's `embySetup`): the window content
+    /// sends a form's values as one command, and the shared submit validates
+    /// them. An open form keeps its generation, so a resubmit while one runs
+    /// is refused by [`Self::submit_emby_setup`] instead of orphaning it.
+    pub(in crate::app) fn fill_emby_setup_form(
+        &mut self,
+        server_url: String,
+        username: String,
+        password: String,
+    ) {
+        if self.setup.emby_setup_form.is_none() {
+            self.open_emby_setup();
+        }
+        if let Some(form) = self.setup.emby_setup_form.as_mut() {
+            form.fields = [server_url, username, password];
+        }
+    }
+
+    /// Fill the Audiobookshelf setup form with a submitted command's fields
+    /// (design D5's `audiobookshelfSetup`), as [`Self::fill_emby_setup_form`]
+    /// does for Emby.
+    pub(in crate::app) fn fill_audiobookshelf_setup_form(
+        &mut self,
+        server_url: String,
+        api_key: String,
+    ) {
+        if self.setup.audiobookshelf_setup_form.is_none() {
+            self.open_audiobookshelf_setup();
+        }
+        if let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() {
+            form.fields = [server_url, api_key];
+        }
+    }
+
     fn open_audiobookshelf_setup(&mut self) {
         let config = self.config.lock().unwrap().clone();
         self.setup.audiobookshelf_setup_form = Some(AudiobookshelfSetupForm {
@@ -222,6 +257,7 @@ impl App {
             ServiceActionIntent::SetupEmby | ServiceActionIntent::RepairEmby => {
                 self.open_emby_setup();
             }
+            ServiceActionIntent::RemoveEmby => self.request_emby_removal(),
             ServiceActionIntent::RetryEmby => self.retry_emby(),
         }
     }
@@ -263,6 +299,45 @@ impl App {
             ServiceEntry::Emby => service_state_label(self.emby_runtime.state),
             ServiceEntry::Audiobookshelf => service_state_label(self.audiobookshelf_runtime.state),
             ServiceEntry::Feeds => "Always present",
+        }
+    }
+
+    /// The Service actions the GUI's Services section offers for `entry`
+    /// (`add-gui-settings-screen` design D9): the intents
+    /// [`Self::activate_service_entry`] resolves and the TUI's action hints
+    /// name for the Service's current state. Each intent paints its own label
+    /// ([`ServiceActionIntent::label`]), so the GUI offers one button per
+    /// action where the TUI paints one key-hint sentence.
+    pub(in crate::app) fn service_action_intents(
+        &self,
+        entry: ServiceEntry,
+    ) -> Vec<ServiceActionIntent> {
+        use ServiceActionIntent as Intent;
+        match entry {
+            ServiceEntry::Emby => match self.emby_runtime.state {
+                ServiceState::Connecting => Vec::new(),
+                ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {
+                    vec![Intent::SetupEmby]
+                }
+                ServiceState::Ready => vec![Intent::RepairEmby, Intent::RemoveEmby],
+                ServiceState::Unavailable => vec![Intent::RetryEmby],
+            },
+            ServiceEntry::Audiobookshelf => match self.audiobookshelf_runtime.state {
+                ServiceState::Connecting => Vec::new(),
+                ServiceState::NotConfigured => vec![Intent::SetupAudiobookshelf],
+                ServiceState::NeedsAuthentication => vec![
+                    Intent::SetupAudiobookshelf,
+                    Intent::ReplaceAudiobookshelf,
+                    Intent::RemoveAudiobookshelf,
+                ],
+                ServiceState::Ready | ServiceState::Unavailable => vec![
+                    Intent::TestAudiobookshelf,
+                    Intent::SetupAudiobookshelf,
+                    Intent::ReplaceAudiobookshelf,
+                    Intent::RemoveAudiobookshelf,
+                ],
+            },
+            ServiceEntry::Feeds => vec![Intent::ManageFeeds],
         }
     }
 
