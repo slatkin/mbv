@@ -53,7 +53,7 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 - [x] 6.3 Replace the `library` section with `libraryList`, `libraryDetail`, and `rowMenu`, built in one gated pass and compared on their own. Delete `GuiLibraryContent` and `GuiLibraryFrame`. Verify: `cargo nextest run -p mbv-gui`. Test contract, in `tests/core_thread/library/frame.rs`: a pick sends `libraryDetail` and no `libraryList`. Destination tests that read the content read the section that now owns each fact.
 - [x] 6.4 Mirror the new types in `library-types*.ts` and make `LibraryPanel.svelte` and the Music and Home components read `libraryList`, `libraryDetail`, and `rowMenu`. Verify: `make ui-test`; `make ui-check`. Test contract: none new.
 - [x] 6.5 Make the Shows, Emby, Audiobooks, Podcasts, and Feeds components read the new sections. Verify: `make ui-test`; `make ui-check`; `make ui-lint`. Test contract: none new.
-- [ ] 6.6 Re-run the bench fixtures 3, 4, and 5 and add the medians to `measurements.md`. Update `docs/architecture/gui-client.md` (*The frame section and its revision* becomes the Library sections). Verify: `rg -n "GuiLibraryContent|carryLibraryContent|LibraryFrames" docs/architecture/gui-client.md` finds nothing.
+- [x] 6.6 Re-run the bench fixtures 3, 4, and 5 and add the medians to `measurements.md`. Update `docs/architecture/gui-client.md` (*The frame section and its revision* becomes the Library sections). Verify: `rg -n "GuiLibraryContent|carryLibraryContent|LibraryFrames" docs/architecture/gui-client.md` finds nothing.
 
 ## 7. Projection fixes
 
