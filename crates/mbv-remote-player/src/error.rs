@@ -1,5 +1,7 @@
 use std::{backtrace::Backtrace, error::Error, fmt};
 
+use mbv_ctrl::BuildInfo;
+
 #[derive(Debug)]
 pub struct RemotePlayerError {
     kind: RemotePlayerErrorKind,
@@ -20,16 +22,10 @@ enum RemotePlayerErrorKind {
         pid: u32,
     },
     OwnerShuttingDown,
-    /// Boxed payload: two owned `String`s would push `RemotePlayerError`
-    /// past the `result_large_err` threshold.
-    OwnerBuildMismatch(Box<OwnerBuildMismatchData>),
-}
-
-/// The Owner's reported identity for a `OwnerBuildMismatch` refusal.
-#[derive(Debug)]
-struct OwnerBuildMismatchData {
-    app_version: String,
-    build_id: String,
+    /// Boxed payload: three owned `String`s would push `RemotePlayerError`
+    /// past the `result_large_err` threshold. Holds the Owner's reported
+    /// identity for the refusal.
+    OwnerMismatch(Box<BuildInfo>),
 }
 
 impl RemotePlayerError {
@@ -77,15 +73,9 @@ impl RemotePlayerError {
         }
     }
 
-    pub(crate) fn owner_build_mismatch(
-        app_version: impl Into<String>,
-        build_id: impl Into<String>,
-    ) -> Self {
+    pub(crate) fn owner_mismatch(owner: BuildInfo) -> Self {
         Self {
-            kind: RemotePlayerErrorKind::OwnerBuildMismatch(Box::new(OwnerBuildMismatchData {
-                app_version: app_version.into(),
-                build_id: build_id.into(),
-            })),
+            kind: RemotePlayerErrorKind::OwnerMismatch(Box::new(owner)),
             message: String::new(),
             source: None,
             backtrace: Backtrace::capture(),
@@ -111,14 +101,13 @@ impl RemotePlayerError {
     }
 
     /// Test support: builds the mismatch error for callers outside this crate
-    /// (the `mbv` binary's startup-prompt tests), gated behind the `test`
-    /// feature like the crate's other test seams.
+    /// (the `mbv` binary's startup-prompt tests and the GUI Client's attach
+    /// tests), gated behind the `test` feature like the crate's other test
+    /// seams.
     #[cfg(any(test, feature = "test"))]
-    pub fn owner_build_mismatch_for_test(
-        app_version: impl Into<String>,
-        build_id: impl Into<String>,
-    ) -> Self {
-        Self::owner_build_mismatch(app_version, build_id)
+    #[must_use]
+    pub fn owner_mismatch_for_test(owner: BuildInfo) -> Self {
+        Self::owner_mismatch(owner)
     }
 
     fn new(kind: RemotePlayerErrorKind, message: impl Into<String>) -> Self {
@@ -147,12 +136,12 @@ impl RemotePlayerError {
         matches!(&self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
     }
 
-    /// The error is a local Owner build mismatch: the Owner's version or
-    /// build identity differs from this binary's, so nothing identifying was
-    /// sent (invariant 15).
+    /// The error is a local Owner mismatch: the Owner's version or wire
+    /// identity differs from this binary's, so nothing identifying was sent
+    /// (invariant 15).
     #[must_use]
-    pub fn is_owner_build_mismatch(&self) -> bool {
-        matches!(&self.kind, RemotePlayerErrorKind::OwnerBuildMismatch(_))
+    pub fn is_owner_mismatch(&self) -> bool {
+        matches!(&self.kind, RemotePlayerErrorKind::OwnerMismatch(_))
     }
 
     #[must_use]
@@ -171,30 +160,39 @@ impl RemotePlayerError {
             RemotePlayerErrorKind::Control => "remote-player.control",
             RemotePlayerErrorKind::ExclusiveOwner { .. } => "remote-player.exclusive_owner",
             RemotePlayerErrorKind::OwnerShuttingDown => "remote-player.owner_shutting_down",
-            RemotePlayerErrorKind::OwnerBuildMismatch { .. } => {
-                "remote-player.owner_build_mismatch"
-            }
+            RemotePlayerErrorKind::OwnerMismatch(_) => "remote-player.owner_mismatch",
         }
     }
 }
 
-/// Canonical user-facing text for a local Owner build mismatch: both
-/// application versions, then how to proceed. The startup prompt and every
-/// path that only prints the error render this one text, so the guidance
-/// cannot drift between them.
-fn owner_build_mismatch_message(owner_app_version: &str, owner_build_id: &str) -> String {
-    // An Owner that predates the build-id field sends no identity; the
-    // prompt names it as an unknown build (spec: "The Owner's hello reports
-    // no build identity").
-    let owner_build = if owner_build_id.is_empty() {
-        "unknown build".to_string()
-    } else {
-        format!("build {owner_build_id}")
+/// One side's identity as the mismatch text shows it: application version,
+/// build identity, and wire identity. An empty value (an Owner that predates
+/// a field) shows as `unknown`.
+fn describe_identity(build: &BuildInfo) -> String {
+    let or_unknown = |value: &str| {
+        if value.is_empty() {
+            "unknown".to_string()
+        } else {
+            value.to_string()
+        }
     };
     format!(
-        "Owner process is running version {owner_app_version} ({owner_build}), but this terminal is version {} (build {}); stop it with `mbv -q`, then relaunch mbv",
-        env!("CARGO_PKG_VERSION"),
-        mbv_ctrl::BUILD_ID
+        "version {} (build {}, wire {})",
+        or_unknown(&build.app_version),
+        or_unknown(&build.build_id),
+        or_unknown(&build.wire_id),
+    )
+}
+
+/// Canonical user-facing text for a local Owner mismatch: the Owner's and
+/// this Client's identities, then how to proceed. The startup prompt and
+/// every path that only prints the error render this one text, so the
+/// guidance cannot drift between them.
+fn owner_mismatch_message(owner: &BuildInfo) -> String {
+    format!(
+        "Owner process is running {}, but this terminal is {}; stop it with `mbv -q`, then relaunch mbv",
+        describe_identity(owner),
+        describe_identity(&BuildInfo::current()),
     )
 }
 
@@ -204,9 +202,9 @@ impl fmt::Display for RemotePlayerError {
             RemotePlayerErrorKind::ExclusiveOwner { pid } => {
                 write!(f, "local owner process {pid} already has a client")
             }
-            RemotePlayerErrorKind::OwnerBuildMismatch(data) => f.write_str(
-                &owner_build_mismatch_message(&data.app_version, &data.build_id),
-            ),
+            RemotePlayerErrorKind::OwnerMismatch(owner) => {
+                f.write_str(&owner_mismatch_message(owner))
+            }
             _ => f.write_str(&self.message),
         }
     }

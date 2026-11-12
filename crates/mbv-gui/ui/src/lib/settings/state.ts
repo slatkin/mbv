@@ -496,9 +496,11 @@ export function activateSettingsEntry(entry: SettingsEntry): void {
 				// picked from their list*): the same menu a press on its button
 				// opens. The menu's own choice sends `setValue`.
 				togglePickMenu(row.key, row.value, row.values ?? []);
-			} else if (row.kind !== 'choiceList') {
+			} else if (row.kind !== 'choiceList' && row.kind !== 'info') {
 				// A choice list's activate would raise the TUI's multiselect,
-				// which the overlay drain drops; its marks edit in place.
+				// which the overlay drain drops; its marks edit in place. An
+				// info row is read-only (owner-gate-on-wire-identity design D5):
+				// its activation sends nothing.
 				void sendSettingsCommand({ command: 'activate', setting: row.key });
 			}
 			return;

@@ -71,6 +71,8 @@ pub enum SettingKey {
     NoScripts,
     Autoload,
     ShowSysTrayIcon,
+    ClientVersion,
+    OwnerVersion,
     SystemNotifications,
     MouseSupport,
     MyLanguages,
@@ -123,6 +125,8 @@ impl SettingKey {
             K::NoScripts => "noScripts",
             K::Autoload => "autoload",
             K::ShowSysTrayIcon => "showSysTrayIcon",
+            K::ClientVersion => "clientVersion",
+            K::OwnerVersion => "ownerVersion",
             K::SystemNotifications => "systemNotifications",
             K::MouseSupport => "mouseSupport",
             K::MyLanguages => "myLanguages",
@@ -173,6 +177,8 @@ impl SettingKey {
             "noScripts" => K::NoScripts,
             "autoload" => K::Autoload,
             "showSysTrayIcon" => K::ShowSysTrayIcon,
+            "clientVersion" => K::ClientVersion,
+            "ownerVersion" => K::OwnerVersion,
             "systemNotifications" => K::SystemNotifications,
             "mouseSupport" => K::MouseSupport,
             "myLanguages" => K::MyLanguages,
@@ -243,6 +249,8 @@ impl SettingKey {
             | K::NoScripts
             | K::Autoload
             | K::ShowSysTrayIcon
+            | K::ClientVersion
+            | K::OwnerVersion
             | K::SystemNotifications
             | K::MyLanguages
             | K::SubtitleMode
@@ -345,6 +353,8 @@ pub static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::AlwaysSkipIntro,
             SettingKey::SavePlaylistOnQuit,
             SettingKey::ShowSysTrayIcon,
+            SettingKey::ClientVersion,
+            SettingKey::OwnerVersion,
         ],
     ),
     (

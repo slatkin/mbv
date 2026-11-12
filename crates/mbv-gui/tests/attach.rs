@@ -82,7 +82,11 @@ fn shutting_down_error() -> RemotePlayerError {
 
 /// The build-mismatch refusal, as an Owner from another build reports.
 fn mismatch_error() -> RemotePlayerError {
-    RemotePlayerError::owner_build_mismatch_for_test("1.2.3", "build-a")
+    RemotePlayerError::owner_mismatch_for_test(mbv_ctrl::BuildInfo {
+        app_version: "1.2.3".to_string(),
+        build_id: "build-a".to_string(),
+        wire_id: String::new(),
+    })
 }
 
 /// An unrelated attach error, as a failed connection reports.

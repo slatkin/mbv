@@ -17,6 +17,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingValueKind::Text => setting_text_label(key),
         SettingValueKind::Stepper => setting_stepper_label(key),
         SettingValueKind::Collection => setting_collection_label(key),
+        SettingValueKind::Info => setting_info_label(key),
     }
 }
 
@@ -107,6 +108,16 @@ fn setting_collection_label(key: SettingKey) -> &'static str {
     )
 }
 
+fn setting_info_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::ClientVersion, "This client"),
+            (SettingKey::OwnerVersion, "Owner"),
+        ],
+    )
+}
+
 fn label_for(key: SettingKey, labels: &[(SettingKey, &'static str)]) -> &'static str {
     labels
         .iter()
@@ -124,6 +135,9 @@ pub enum SettingValueKind {
     Text,
     Stepper,
     Collection,
+    /// A read-only row whose value the caller supplies (the version rows).
+    /// It takes no toggle, stepper, or activation effect.
+    Info,
 }
 
 #[must_use]
@@ -171,6 +185,7 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::ManageFeeds
         | K::ResetUiState
         | K::LogOut => V::Collection,
+        K::ClientVersion | K::OwnerVersion => V::Info,
     }
 }
 
@@ -182,6 +197,9 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         SettingValueKind::Text => setting_text_value(key, cfg, ui),
         SettingValueKind::Stepper => setting_stepper_value(key, cfg),
         SettingValueKind::Collection => setting_collection_value(key, cfg),
+        // The version rows' values come from `App`, not from configuration;
+        // the caller fills them.
+        SettingValueKind::Info => None,
     }
     .unwrap_or_default()
 }

@@ -6,7 +6,11 @@ use super::{Choice, FollowUp, ask, follow_up};
 use mbv_remote_player::RemotePlayerError;
 
 fn mismatch_error(owner_app_version: &str) -> RemotePlayerError {
-    RemotePlayerError::owner_build_mismatch_for_test(owner_app_version, "owner-build-1")
+    RemotePlayerError::owner_mismatch_for_test(mbv_ctrl::BuildInfo {
+        app_version: owner_app_version.to_string(),
+        build_id: "owner-build-1".to_string(),
+        wire_id: String::new(),
+    })
 }
 
 // Issue #559 (tasks row 3.1 contract: only an explicit r restarts). The

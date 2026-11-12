@@ -1,74 +1,73 @@
-# Invariant 15 — Local Client credential is sent only after the Owner build gate
+# Invariant 15 — Local Client credential is sent only after the Owner version-and-wire gate
 
 ## The invariant
 
-When a local Client attaches to the local Owner process, the ctrl handshake
-must reject a mismatched Owner build *before* the Client transmits its hello
-or control credential. The build comparison happens on the Owner's hello,
-inside the Client's read of the handshake; nothing identifying or
-authorizing leaves the Client until the build check has passed. The gate
-compares two values: the application version and the build identity.
+When a local Client attaches to the Owner process, the ctrl handshake must
+reject a mismatched Owner *before* the Client transmits its hello or control
+credential. The comparison happens on the Owner's hello, inside the Client's
+read of the handshake. Nothing identifying or authorizing leaves the Client
+until the comparison has passed. The gate compares two values: the
+application version and the wire identity. The build identity never takes
+part; it is for display only.
 
 ## Why it matters
 
-The gate exists (issue #559, design D1; the build identity added by issue
-#949 item 3) so a terminal discovering an outdated Owner never pays
-credentials into a process it is about to ask the user to kill. A differing
-version is the ordinary stale process; a same version with a different
-build identity is a rebuild at another commit, which the version alone
-cannot see. An Owner that predates the build-id field sends an empty
-identity and is refused the same way. Nothing in the type system orders the
-two handshake steps: moving the check after `send_client_hello` compiles
-and passes every functional test. The property is upheld only by statement
-order in the handshake path.
+The gate exists (issue #559; the Owner mismatch error and the wire identity
+from the `owner-gate-on-wire-identity` change) so a terminal discovering an
+outdated Owner never pays credentials into a process it is about to ask the
+user to kill. The gate moved from the build identity to the wire identity
+because the build identity changes with every commit and every dirty build: a
+Client-only rebuild that left the ctrl wire unchanged was refused without
+cause. A differing application version is the ordinary stale process. A
+differing wire identity is an Owner whose ctrl messages this Client cannot
+read. An Owner that predates the wire-identity field sends an empty value and
+is refused the same way. Nothing in the type system orders the two handshake
+steps: moving the check after `send_client_hello` compiles and passes every
+functional test. The property is upheld only by statement order in the
+handshake path.
 
 ## How the code maintains it today
 
 - `read_server_hello` in
-  `crates/mbv-remote-player/src/connect/handshake.rs` compares
-  `CtrlHello.app_version` and `CtrlHello.build_id` against this binary
-  before `send_client_hello` runs. `PeerBuild::MustMatch` scopes the gate to
-  local Owner attachment: the Client connect when the endpoint is `Local`,
-  and both restricted-role handshakes — service-setup admin and owner
-  action — because they connect only to `control_socket_path()` and pay
-  the same Control credential. Explicit `unix://`/`tcp://` endpoints and
-  packaged mbvd are `PeerBuild::Any` (design D2/D3) and compare nothing.
-  Stopping a mismatched Owner never needs the handshake: `mbv -q` signals
+  `crates/mbv-remote-player/src/connect/handshake.rs` refuses under
+  `PeerBuild::MustMatch` when `BuildInfo::current().differs_for_gate()`
+  returns true for the Owner's `BuildInfo`, before `validate_peer` and
+  `send_client_hello` run. `differs_for_gate` (`crates/mbv-ctrl/src/
+  build_info.rs`) compares the application version and the wire identity and
+  nothing else. The error is `RemotePlayerErrorKind::OwnerMismatch` (code
+  `remote-player.owner_mismatch`). Its `Display` names the application
+  version, build identity, and wire identity of the Owner and of this Client,
+  with an empty value shown as unknown.
+- `PeerBuild::MustMatch` scopes the gate to every handshake to
+  `control_socket_path()`: the Client attach, and the two restricted roles —
+  service-setup admin and owner action — because they pay the same Control
+  credential. Explicit `unix://`/`tcp://` endpoints and packaged mbvd are
+  `PeerBuild::Any` and compare nothing.
+- An empty Owner `wire_id` never equals this binary's non-empty value, so a
+  pre-change Owner is refused as a mismatch rather than accepted on the
+  version alone.
+- After a pass, the handshake carries the Owner's `BuildInfo` into
+  `RemotePlayer::owner_build`. The F2 Settings Session version rows show it.
+- Regression tests live in
+  `crates/mbv-remote-player/src/connect/tests/owner_gate.rs`. Each refusal
+  case — a different version, a different wire identity, an Owner without a
+  wire identity — asserts that the peer receives an empty client hello
+  (nothing transmitted). The accept case asserts that a different build
+  identity with the same version and wire identity attaches, and that
+  `owner_build()` reports the Owner's values.
+- Stopping a mismatched Owner never needs the handshake: `mbv -q` signals
   the lock-file PID, so the gate cannot deadlock recovery.
-- `build_id` is `BUILD_ID` from `crates/mbv-ctrl/build.rs`: the git short
-  SHA, plus `-dirty` when `git status --porcelain` was non-empty at build
-  time, or `unknown` when git is unavailable (tarball builds). A local
-  Owner built from a tarball reports `unknown` on both sides and still
-  attaches; two different tarball builds are indistinguishable.
-- That value is re-embedded when the build script reruns, and the script
-  watches git paths only, each emitted only when it exists: `HEAD`, the
-  branch ref (the per-worktree path and the common-dir
-  `refs/heads/<branch>`), `packed-refs`, and the per-worktree HEAD reflog
-  (`logs/HEAD`). A literal `.git/HEAD` is never named, because in a
-  worktree `.git` is a file and Cargo reruns the script on every build
-  when a named path is missing. The reflog is what keeps the identity
-  fresh when the branch ref is packed: `git pack-refs` folds the loose ref
-  into `packed-refs`, which a commit never rewrites, while every commit
-  appends to the reflog.
-- An empty Owner `build_id` never equals this binary's non-empty identity,
-  so a pre-change Owner is refused as a build mismatch rather than accepted
-  on the version alone.
-- Regression tests in `crates/mbv-remote-player/src/connect/tests.rs` assert
-  the peer receives an empty client hello (nothing transmitted) on a version
-  mismatch and on a same-version build-id mismatch, including the empty
-  Owner identity a pre-change Owner sends.
-- `CTRL_PROTOCOL_VERSION` and `validate_peer` are independent of the build
-  gate; a protocol-only difference is not a build mismatch.
+- `CTRL_PROTOCOL_VERSION` and `validate_peer` are independent of the gate; a
+  protocol-only difference is not an `OwnerMismatch`.
 
 ## Where it currently fails
 
-The identity is commit-level, not binary-level: two builds of the same
-commit carry the same `build_id`, so a rebuild at the same commit is not
-detected. `-dirty` narrows the gap only when the build script reruns — the
-marker is computed at build-script time, so a tree edited after that run
-keeps the earlier marker until a HEAD, ref, or reflog change reruns the
-script.
-
 No known violation of the ordering. It is conventional, not enforced: any
-future handshake restructuring must keep the build check ahead of the first
+future handshake restructuring must keep the comparison ahead of the first
 credential write.
+
+A behavior-only Owner change stays outside the gate's reach. Such an Owner
+passes the comparison and attaches without a prompt, so a test can run
+against old Owner logic. The design accepts this trade-off. The F2 Settings
+Session version rows show the build identity of both sides; that display is
+the only signal of a behavior-only difference.

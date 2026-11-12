@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
-use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
+use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueLineage, QueueSource};
@@ -89,6 +89,9 @@ pub struct RemotePlayer {
     /// deliberate shutdown, as opposed to closing with no warning.
     pub(crate) shutdown_announced: Arc<AtomicBool>,
     pub(crate) ctrl_compatibility: CtrlCompatibility,
+    /// The Owner's identity from its hello, kept for the Settings version rows
+    /// (`owner_build()`). Per-connection, like `ctrl_compatibility`.
+    pub(crate) owner_build: BuildInfo,
     /// A kept clone of the control socket, used only by `disconnect()`
     /// (#233) to shut the connection down on demand rather than relying
     /// on `Drop` -- which only closes this clone's own fd duplicate, not
@@ -475,6 +478,18 @@ impl RemotePlayer {
     #[cfg(any(test, feature = "test"))]
     pub fn set_ctrl_compatibility_for_test(&mut self, compatibility: CtrlCompatibility) {
         self.ctrl_compatibility = compatibility;
+    }
+
+    /// The Owner's application version, build identity, and wire identity as
+    /// its hello reported them on this connection.
+    #[must_use]
+    pub fn owner_build(&self) -> &BuildInfo {
+        &self.owner_build
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_owner_build_for_test(&mut self, owner: BuildInfo) {
+        self.owner_build = owner;
     }
 
     #[must_use]

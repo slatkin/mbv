@@ -173,6 +173,11 @@
             "string",
             "null"
           ]
+        },
+        "wire_id": {
+          "default": "",
+          "description": "Wire identity of the sending binary (`ctrl-protocol` delta, design D1):\na digest of the command, event, and hello wire shapes. `#[serde(default)]`\nkeeps the field additive: a peer that predates it decodes an empty value,\nwhich the local Owner gate refuses.",
+          "type": "string"
         }
       },
       "required": [

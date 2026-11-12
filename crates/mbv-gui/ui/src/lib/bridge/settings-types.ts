@@ -96,7 +96,8 @@ export type GuiSettingRowKind =
 	| 'cycle'
 	| 'pick'
 	| 'choiceList'
-	| 'action';
+	| 'action'
+	| 'info';
 
 /** One choice of a choice-list row (design D9): `id` is the value the apply
  * command sends back. */

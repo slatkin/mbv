@@ -28,6 +28,7 @@ mod queue_summary_projection;
 mod queue_surface;
 pub mod state;
 mod status_bar_projection;
+mod version_rows;
 mod waking_relay;
 
 pub use self::client_core::{

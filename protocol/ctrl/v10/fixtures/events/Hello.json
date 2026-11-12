@@ -9,6 +9,7 @@
     ],
     "control_token": null,
     "protocol_version": 10,
-    "swap_token": null
+    "swap_token": null,
+    "wire_id": "5a3c9e1f0b7d2468"
   }
 }

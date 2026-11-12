@@ -9,7 +9,7 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::BUILD_ID;
+use crate::{BUILD_ID, BuildInfo, wire_id};
 
 use super::CtrlError;
 
@@ -23,6 +23,12 @@ pub struct CtrlHello {
     /// value and is ignored by `PeerBuild::Any` handshakes.
     #[serde(default)]
     pub build_id: String,
+    /// Wire identity of the sending binary (`ctrl-protocol` delta, design D1):
+    /// a digest of the command, event, and hello wire shapes. `#[serde(default)]`
+    /// keeps the field additive: a peer that predates it decodes an empty value,
+    /// which the local Owner gate refuses.
+    #[serde(default)]
+    pub wire_id: String,
     pub capabilities: Vec<String>,
     /// Control credential used only when the peer advertises `control-auth`.
     #[serde(default)]
@@ -40,6 +46,7 @@ impl CtrlHello {
             protocol_version: CTRL_PROTOCOL_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             build_id: BUILD_ID.to_string(),
+            wire_id: wire_id().to_string(),
             capabilities: vec![
                 CTRL_CAP_QUEUE_STATE.to_string(),
                 CTRL_CAP_START_INDEX.to_string(),
@@ -59,6 +66,16 @@ impl CtrlHello {
             ],
             control_token: None,
             swap_token: None,
+        }
+    }
+
+    /// The application version, build identity, and wire identity this hello reports.
+    #[must_use]
+    pub fn build_info(&self) -> BuildInfo {
+        BuildInfo {
+            app_version: self.app_version.clone(),
+            build_id: self.build_id.clone(),
+            wire_id: self.wire_id.clone(),
         }
     }
 

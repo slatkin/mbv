@@ -27,6 +27,9 @@ enum SettingRowKind {
     /// through `apply_panel_setting`, and `ResetUiState` runs through its
     /// own confirm path in the shell.
     Passive,
+    /// A value shown for reading only (the version rows). Activation changes
+    /// nothing and arms no save, unlike `Passive`.
+    ReadOnly,
 }
 
 /// Classify one Settings row. The match is exhaustive over `SettingKey`,
@@ -50,6 +53,7 @@ fn setting_row_kind(key: SettingKey) -> SettingRowKind {
         | K::SubtitleMode
         | K::SubtitleLanguage
         | K::AudioLanguage => SettingRowKind::OwnActivation,
+        K::ClientVersion | K::OwnerVersion => SettingRowKind::ReadOnly,
         K::StayAlive
         | K::AutoReconnect
         | K::SavePlaylistOnQuit
@@ -86,6 +90,10 @@ impl App {
     }
 
     pub(crate) fn handle_settings_activate(&mut self, key: SettingKey) {
+        // A read-only row arms no save: it returns before the save below.
+        if setting_row_kind(key) == SettingRowKind::ReadOnly {
+            return;
+        }
         if self.open_settings_destination(key) {
             return;
         }
@@ -304,7 +312,7 @@ impl App {
             // panel geometry rows step through `apply_panel_setting`
             // (`ResetUiState` runs through its own confirm path in the
             // shell), so neither reaches a config toggle.
-            SettingRowKind::Destination | SettingRowKind::Passive => {}
+            SettingRowKind::Destination | SettingRowKind::Passive | SettingRowKind::ReadOnly => {}
             SettingRowKind::OwnActivation => self.apply_own_activation(key),
             SettingRowKind::ConfigToggle => self.toggle_config_setting(key),
         }
@@ -532,7 +540,9 @@ fn pinned_setting_request(
         | SettingKey::AudioLanguage
         | SettingKey::ManageFeeds
         | SettingKey::ResetUiState
-        | SettingKey::LogOut => None,
+        | SettingKey::LogOut
+        | SettingKey::ClientVersion
+        | SettingKey::OwnerVersion => None,
     }
 }
 

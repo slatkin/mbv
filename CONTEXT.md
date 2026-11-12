@@ -181,6 +181,14 @@ Attach:
 The act by which a Client establishes a ctrl connection to an existing Player owner. It is a control relation. It is not login or Service setup. Its handshake can present a Control or legacy Service credential for admission. It establishes no Client identity. Several Clients can attach at one time without displacement of each other. Connection never evicts existing clients (multi-connection model, ADR 0014).
 _Avoid_: reattach, connect, resume, take over
 
+Build identity:
+The per-build marker of one mbv binary. `crates/mbv-ctrl/build.rs` computes it as `BUILD_ID`: the git short SHA, plus `-dirty` when the build tree was edited at build-script time, or `unknown` when git is unavailable. Every ctrl hello carries it. It is display-only: the F2 Settings Session version rows and the mismatch prompt show it. The Owner mismatch gate never compares it (invariant 15).
+_Avoid_: commit identity, git hash, build hash, revision
+
+Wire identity:
+A short deterministic digest of one binary's ctrl wire shape (`crates/mbv-ctrl/src/wire_identity.rs`). It covers the wire shapes of the ctrl commands, events, and hello. Documentation text and the ctrl protocol version never change it. Two binaries with the same wire shape report the same value. Every ctrl hello carries the wire identity. The Owner mismatch gate compares it with the application version before the Client sends its hello or Control credential; the ctrl protocol version keeps its own check (invariant 15).
+_Avoid_: schema hash, protocol hash
+
 ## Queue
 
 Queue slot:
