@@ -282,7 +282,11 @@ impl App {
                 key,
                 label: setting_label(key).to_string(),
                 kind: gui_settings_row_kind(key),
-                value: setting_value(key, &cfg, &ui),
+                value: if setting_kind(key) == SettingValueKind::Info {
+                    self.version_row_value(key)
+                } else {
+                    setting_value(key, &cfg, &ui)
+                },
                 flag: setting_flag(key, &cfg),
                 choices: gui_settings_row_choices(&state, key),
                 choices_kind: key.multiselect_kind(),

@@ -13,7 +13,7 @@ impl App {
     /// its hello. Any other key has no version value and yields an empty
     /// string.
     #[must_use]
-    pub(crate) fn version_row_value(&self, key: SettingKey) -> String {
+    pub fn version_row_value(&self, key: SettingKey) -> String {
         match key {
             SettingKey::ClientVersion => format_build_info(&BuildInfo::current()),
             SettingKey::OwnerVersion => format_build_info(self.player.remote().owner_build()),
