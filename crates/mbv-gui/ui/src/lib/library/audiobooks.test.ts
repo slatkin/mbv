@@ -43,6 +43,7 @@ function frame(selected: string | null = 'b1'): GuiAudiobooksFrame {
 		workspaceLoading: false,
 		rows: CATALOG,
 		selected,
+		playingBookId: null,
 		hero: null,
 	};
 }

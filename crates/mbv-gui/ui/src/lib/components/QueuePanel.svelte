@@ -54,6 +54,7 @@
 	import { onMount } from 'svelte';
 	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { playhead, rowEndText } from '$lib/bridge/playhead';
 	import {
 		focus,
 		queue as queueSection,
@@ -82,6 +83,28 @@
 	/** The queue header's facts (design D4): the remaining count, the finish
 	 * clock, the right-column mode, and the filter. */
 	const summary = $derived($summarySection);
+
+	/** The playhead's stores (design D5): the rows' "Ends at" clocks are the
+	 * wall clock at each row's offset past the active item's end, and the
+	 * active row's progress is the predicted played fraction. */
+	const {
+		anchor: playheadAnchor,
+		finish: playheadFinish,
+		fraction
+	} = playhead;
+
+	/** The slot that carries the now-playing marker: the playhead's active
+	 * slot, whose row paints the predicted progress. */
+	const playheadSlot = $derived($playheadAnchor?.activeSlot ?? null);
+
+	/** The playhead's finish facts the rows' "Ends at" clocks read (design
+	 * D5): `null` while no anchor holds or the runtime is unknown. */
+	const finishFacts = $derived($playheadFinish);
+
+	/** The playhead's played fraction as the row track paints it: the whole
+	 * percent, so the store's per-frame prediction re-renders the one row
+	 * only when its painted percent moves. */
+	const playheadPercent = $derived(Math.round($fraction * 100));
 	/** The open menu or popover (design D4): the row menu paints while
 	 * `rowMenu` is the open overlay. `null` while none is open. */
 	const overlay = $derived($overlaySection);
@@ -168,19 +191,23 @@
 		return queue.marks.includes(slot) || (focused && queue.cursor === slot);
 	}
 
-	/** The row's progress percentage, where its state carries one. */
+	/** The row's progress percentage, where its state carries one: an active
+	 * row keeps the frame's percent, and the playing row paints the
+	 * playhead's predicted percent (design D5) while its slot is the active
+	 * slot. */
 	function rowProgress(row: ItemRow): number | null {
-		return row.state.state === 'active' || row.state.state === 'nowPlaying'
-			? row.state.progress
-			: null;
+		if (row.state.state === 'nowPlaying') {
+			return row.slot === playheadSlot ? playheadPercent : null;
+		}
+		return row.state.state === 'active' ? row.state.progress : null;
 	}
 
 	/** The row's right-column text under the summary's mode: "Length"
-	 * paints the media row's duration; "Ends at" paints the finish clock
-	 * the frame carries for the slot. */
+	 * paints the media row's duration; "Ends at" paints the wall clock at
+	 * the row's offset past the active item's end (design D5). */
 	function rightValue(row: ItemRow): string | null {
 		if (summary.rightColumn === 'endsAt') {
-			return row.endsAt;
+			return rowEndText(finishFacts, row.endsAfterSecs);
 		}
 		return row.kind === 'media' ? row.duration : null;
 	}

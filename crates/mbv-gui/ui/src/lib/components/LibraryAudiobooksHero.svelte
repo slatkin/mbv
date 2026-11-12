@@ -18,6 +18,7 @@
 	// the book the frame painted and never a position.
 	
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import { playhead } from '$lib/bridge/playhead';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
@@ -25,6 +26,7 @@
 	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
+		currentChapterRow,
 		pressAbsChapter,
 		resolveAbsChapterCursor,
 	} from '$lib/library/audiobooks-workspace';
@@ -46,11 +48,29 @@
 	 * landed. */
 	const workspace = $derived(hero?.workspace ?? null);
 
+	/** The playhead's predicted position (design D5): the mark reads it. */
+	const { position: playheadPosition } = playhead;
+
+	/** The chapter the Hero marks: the row whose span holds the predicted
+	 * position while the Hero's book is the playing book (design D5); `null`
+	 * while another book plays or none does. The marked row's identity is
+	 * stable within its span, so the per-frame prediction re-renders the
+	 * Workspace only when the mark moves. */
+	const markedChapter = $derived.by(() => {
+		if (
+			audiobooks.playingBookId === null ||
+			audiobooks.playingBookId !== audiobooks.selected
+		) {
+			return null;
+		}
+		return currentChapterRow(workspace?.rows ?? [], $playheadPosition);
+	});
+
 	/** The chapter the cursor rests on: the state's chapter while the carried
-	 * Workspace paints it, the playing chapter, or the first chapter otherwise
+	 * Workspace paints it, the marked chapter, or the first chapter otherwise
 	 * (design D12). */
 	const cursorChapter = $derived(
-		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor)?.chapter ?? null,
+		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor, markedChapter)?.chapter ?? null,
 	);
 
 
@@ -79,14 +99,14 @@
 	}
 
 	/** The Workspace table's rows: each chapter with its number, its title, its
-	 * duration, and the playing mark. */
+	 * duration, and the playing mark from the predicted position (design D5). */
 	const chapterRows = $derived(
 		(workspace?.rows ?? []).map((row) => ({
 			id: String(row.chapter),
 			number: String(row.chapter),
 			name: row.title,
 			duration: row.duration,
-			playing: row.current,
+			playing: row.chapter === markedChapter?.chapter,
 		})),
 	);
 

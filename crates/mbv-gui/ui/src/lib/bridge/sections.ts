@@ -16,6 +16,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { writable } from 'svelte/store';
 import type { Writable } from 'svelte/store';
+import { playhead } from './playhead';
 import { applyTheme } from './theme';
 import type {
 	GuiAttachState,
@@ -52,7 +53,7 @@ const FRESH: Omit<SectionValues, 'theme'> & { theme: GuiTheme | null } = {
 	summary: {
 		remaining: 0,
 		nextTitle: null,
-		finishClock: null,
+		tailSecs: null,
 		rightColumn: 'length',
 		filter: '',
 		filterActive: false,
@@ -64,21 +65,11 @@ const FRESH: Omit<SectionValues, 'theme'> & { theme: GuiTheme | null } = {
 		host: '',
 		hostIsRemote: false,
 		shown: false,
-		playback: {
-			active: false,
-			activeIdx: null,
-			positionTicks: 0,
-			runtimeTicks: 0,
-			paused: false,
-		},
-		elapsedClock: '0:00',
-		remainingClock: '0:00',
 		showControls: false,
 		nowPlayingTitle: null,
 		parentLine: null,
 		episodeBadge: null,
 		stillCaption: null,
-		finishClock: null,
 		chapters: [],
 		introMark: null,
 		creditsMark: null,
@@ -174,12 +165,26 @@ const SECTION_NAMES = Object.keys(stores) as SectionName[];
  * revision the window holds writes nothing (design D1). */
 const held: Partial<Record<SectionName, number>> = {};
 
+/** The revision of the `playhead` section the window last stamped (design
+ * D5): the anchor rides the batch but not the section stores, so its
+ * revision is tracked beside `held`. A re-sent section whose revision the
+ * window holds — a `sync` snapshot's copy — re-stamps nothing, and the
+ * prediction continues from the stamp it already holds. */
+let heldPlayhead: number | undefined;
+
 /** Write a batch into the section stores (design D6): each present section
  * whose revision the window does not hold replaces its store's value, and a
  * `theme` section also writes the role colours into the CSS custom
- * properties. Sections the batch leaves out leave their stores as they are. */
+ * properties. A carried `playhead` section stamps the prediction stores
+ * (design D5) at its own revision. Sections the batch leaves out leave
+ * their stores as they are. */
 export function applyBatch(batch: GuiSectionBatch): void {
 	connected.set(true);
+	const carried = batch.playhead;
+	if (carried !== undefined && carried.revision !== heldPlayhead) {
+		heldPlayhead = carried.revision;
+		playhead.stamp(carried.value);
+	}
 	for (const name of SECTION_NAMES) {
 		const section = batch[name];
 		if (section === undefined || section.revision === held[name]) {
@@ -206,8 +211,12 @@ export async function connectSections(): Promise<UnlistenFn> {
 }
 
 /** Drop every section store and revision back to the fresh-window state, so
- * a test starts from the values the first batch would carry. */
+ * a test starts from the values the first batch would carry. The playhead
+ * drops with them: its anchor and clocks stop, and the next `applyBatch`
+ * stamps it again. */
 export function resetSectionsForTest(): void {
+	playhead.reset();
+	heldPlayhead = undefined;
 	for (const name of SECTION_NAMES) {
 		held[name] = undefined;
 	}

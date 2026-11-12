@@ -21,14 +21,23 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
+	import { playhead } from '$lib/bridge/playhead';
 	import { playback as playbackSection } from '$lib/bridge/sections';
-	import { clampRatio } from '$lib/bridge/time';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
+
+	/** The playhead's stores (design D5): the ring paints the predicted
+	 * played fraction, and the remaining time is the prediction's. */
+	const {
+		anchor: playheadAnchor,
+		runtime: runtimeTicks,
+		fraction,
+		remaining
+	} = playhead;
 
 	interface Props {
 		/** The artwork the window carries for the active item (design D10):
@@ -59,8 +68,13 @@
 	let nextEl: HTMLElement | undefined = $state();
 	let expandEl: HTMLElement | undefined = $state();
 
-	/** The played fraction the ring paints, clamped to `[0, 1]`. */
-	const progress = $derived(clampRatio(playback.playback.positionTicks, playback.playback.runtimeTicks));
+	/** The played fraction the ring paints, clamped to `[0, 1]`: the
+	 * playhead's prediction (design D5). */
+	const progress = $derived($fraction);
+
+	/** Whether the transport is paused: the anchor's fact (design D5). `true`
+	 * while no anchor holds — the idle transport paints a play control. */
+	const paused = $derived($playheadAnchor?.paused ?? true);
 
 	/** The artwork's bitmap, `null` while the item has none (a placeholder,
 	 * loading, or hidden slot paints the empty ring). */
@@ -175,11 +189,11 @@
 		class="flex items-center justify-center rounded-full p-1"
 		bind:this={playPauseEl}
 		data-target="playPause"
-		aria-label={playback.playback.paused ? 'Play' : 'Pause'}
-		title={playback.playback.paused ? 'Play' : 'Pause'}
+		aria-label={paused ? 'Play' : 'Pause'}
+		title={paused ? 'Play' : 'Pause'}
 		style:background="var(--mbv-secondary)"
 	>
-		{#if playback.playback.paused}
+		{#if paused}
 			<Play size={16} fill={roleVar('accent')} color={roleVar('accent')} />
 		{:else}
 			<Pause size={16} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />
@@ -199,13 +213,15 @@
 			color={glyphColor(playback.availability.next, 'textStrong')}
 		/>
 	</button>
-	{#if playback.playback.runtimeTicks > 0}
+	{#if $runtimeTicks > 0}
 		<!-- The remaining time: the same `-M:SS` the expanded scrubber's right
-			end paints. -->
+			end paints, from the playhead's prediction (design D5). The rail
+			paints a literal `-` until the collapsed-states work picks the
+			canvas's U+2212 convention up. -->
 		<span
 			class="font-mono text-xs tabular-nums"
 			style:color={roleVar('playbackMetaFg')}
-			data-remaining>-{playback.remainingClock}</span
+			data-remaining>-{$remaining}</span
 		>
 	{/if}
 	<span class="flex-1"></span>

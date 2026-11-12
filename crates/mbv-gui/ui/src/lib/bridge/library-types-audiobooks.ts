@@ -25,6 +25,11 @@ export interface GuiAudiobooksFrame {
 	/** The core's selected book (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first book is the Hero default. */
 	selected: string | null;
+	/** The Audiobooks book playing at the playhead (`gui-change-driven-sections`
+	 * design D5): its stable `library_item_id`, the fact the window compares
+	 * with the Hero's book before it marks a chapter row from the position.
+	 * `null` while no book plays or the active slot is pending. */
+	playingBookId: string | null;
 	/** The selected book's Hero facts; `null` while no book is selected. */
 	hero: GuiAudiobooksHero | null;
 }
@@ -87,8 +92,12 @@ export interface GuiAudiobooksChapterRow {
 	title: string;
 	/** The row's duration, the TUI's duration gutter; empty when unknown. */
 	duration: string;
-	/** Whether this chapter is playing. A frame re-carries the content when
-	 * the mark moves, so the Workspace paints what the Queue's active slot
-		 * paints. */
-		current: boolean;
+	/** The chapter's start on the book's merged timeline, in ticks (design
+	 * D5). The window marks the row whose span holds the predicted position;
+	 * an audio-part row carries no span — its `startTicks` and `endTicks`
+	 * are both `0`, and an empty span never holds one. */
+	startTicks: number;
+	/** The chapter's end on the book's merged timeline, in ticks (design
+	 * D5). The span's end is exclusive. */
+	endTicks: number;
 }

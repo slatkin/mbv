@@ -62,6 +62,7 @@ function frame(rows: GuiAudiobooksRow[], selected: string | null): GuiAudiobooks
 		workspaceLoading: false,
 		rows,
 		selected,
+		playingBookId: null,
 		hero: null,
 	};
 }

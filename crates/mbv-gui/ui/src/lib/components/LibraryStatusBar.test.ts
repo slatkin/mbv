@@ -143,6 +143,7 @@ test('the bar paints the Audiobooks location for the carried content', () => {
 			{ id: 'b1', title: 'Dune', subtitle: 'Frank Herbert', duration: '15:12:00', sortLetter: 'D' },
 		],
 		selected: 'b1',
+		playingBookId: null,
 		hero: null,
 	};
 	const { container } = render(LibraryStatusBar, {

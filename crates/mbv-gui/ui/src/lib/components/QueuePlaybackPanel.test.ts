@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import {
 	focus as focusStore,
 	footer as footerStore,
@@ -25,6 +26,7 @@ import {
 } from '$lib/bridge/sections';
 import type {
 	GuiOverlayFrame,
+	GuiPlayhead,
 	GuiQueue,
 	GuiQueueFooter,
 	GuiQueuePlayback,
@@ -60,32 +62,20 @@ beforeEach(() => {
 	resetSectionsForTest();
 });
 
-/** One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`). */
-const SECOND = 10_000_000;
-
+/** The playing transport band's facts, without the playhead facts (design
+ * D5): the clocks and the paused fact ride the playhead, which the render
+ * helper stamps. */
 function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 	return {
 		status: 'playing',
 		host: 'poo',
 		hostIsRemote: true,
 		shown: true,
-		playback: {
-			active: true,
-			activeIdx: 0,
-			positionTicks: 60 * SECOND,
-			runtimeTicks: 200 * SECOND,
-			paused: false,
-		},
-		// The frame carries the two clocks formatted (the TUI's shared
-		// duration formatter): 1:00 elapsed, 2:20 left of 3:20.
-		elapsedClock: '1:00',
-		remainingClock: '2:20',
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		parentLine: 'The Show',
 		episodeBadge: 'S2 · E5',
 		stillCaption: 'Episode still · Emby Primary / Thumb',
-		finishClock: '21:00',
 		availability: { stop: true, next: true, previous: false },
 		statusIndicators: null,
 		artwork: null,
@@ -131,11 +121,23 @@ function renderPanel(
 	overlayValue: GuiOverlayFrame | null = null,
 	carriedSheet: GuiTrickplaySheet | null = null,
 	hoverValue: GuiScrubberHover | null = null,
+	playhead: Partial<GuiPlayhead> = {},
 ) {
 	mounted?.unmount();
 	playbackStore.set(playbackValue);
 	overlayStore.set(overlayValue);
 	hoverStore.set(hoverValue);
+	// The clocks ride the playhead (design D5), not the playback section: the
+	// fixed test clocks hold the position at its anchor and the finish clock
+	// at 21:00.
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 60 * SECOND,
+		runtimeTicks: 200 * SECOND,
+		paused: false,
+		...playhead,
+	});
 	const rendered = render(QueuePlaybackPanel, { props: { carriedSheet } });
 	mounted = rendered;
 	return rendered;
@@ -198,7 +200,7 @@ function queue(): GuiQueue {
 				secondary: null,
 				trailing: null,
 				duration: '3:12',
-				endsAt: null,
+				endsAfterSecs: null,
 				kind: 'media',
 				state: { state: 'ordinary' },
 				striped: false,
@@ -465,7 +467,7 @@ test('an open chooser reports its rows after the queue and footer regions', asyn
 	summaryStore.set({
 		remaining: 0,
 		nextTitle: null,
-		finishClock: null,
+		tailSecs: null,
 		rightColumn: 'length',
 		filter: '',
 		filterActive: false,

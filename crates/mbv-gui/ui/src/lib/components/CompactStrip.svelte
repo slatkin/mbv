@@ -17,8 +17,8 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
+	import { playhead } from '$lib/bridge/playhead';
 	import { playback as playbackSection } from '$lib/bridge/sections';
-	import { clampRatio } from '$lib/bridge/time';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
@@ -38,6 +38,14 @@
 	/** The transport band's facts the strip paints. */
 	const playback = $derived($playbackSection);
 
+	/** The playhead's played-fraction store (design D5): the thin progress
+	 * line paints the prediction. */
+	const { anchor: playheadAnchor, fraction } = playhead;
+
+	/** Whether the transport is paused: the anchor's fact (design D5). `true`
+	 * while no anchor holds — the idle transport paints a play control. */
+	const paused = $derived($playheadAnchor?.paused ?? true);
+
 	/** The still's canvas size (the spec's 96×54). */
 	const STILL_WIDTH_PX = 96;
 	const STILL_HEIGHT_PX = 54;
@@ -48,10 +56,9 @@
 	let playPauseEl: HTMLElement | undefined = $state();
 	let nextEl: HTMLElement | undefined = $state();
 
-	/** The played fraction of the thin progress line, clamped to `[0, 1]`. */
-	const progress = $derived(
-		clampRatio(playback.playback.positionTicks, playback.playback.runtimeTicks),
-	);
+	/** The played fraction of the thin progress line, clamped to `[0, 1]`:
+	 * the playhead's prediction (design D5). */
+	const progress = $derived($fraction);
 
 	/** The artwork's bitmap, `null` while the item has none. */
 	const image = $derived(art?.kind === 'image' ? art.detail : null);
@@ -148,11 +155,11 @@
 		class="flex shrink-0 items-center justify-center rounded-full p-1"
 		bind:this={playPauseEl}
 		data-target="playPause"
-		aria-label={playback.playback.paused ? 'Play' : 'Pause'}
-		title={playback.playback.paused ? 'Play' : 'Pause'}
+		aria-label={paused ? 'Play' : 'Pause'}
+		title={paused ? 'Play' : 'Pause'}
 		style:background="var(--mbv-secondary)"
 	>
-		{#if playback.playback.paused}
+		{#if paused}
 			<Play size={16} fill={roleVar('accent')} color={roleVar('accent')} />
 		{:else}
 			<Pause size={16} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />

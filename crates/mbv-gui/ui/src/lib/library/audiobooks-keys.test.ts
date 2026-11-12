@@ -106,6 +106,7 @@ const AUIB_FRAME: GuiAudiobooksFrame = {
 	workspaceLoading: false,
 	rows: CATALOG,
 	selected: 'b1',
+	playingBookId: null,
 	hero: null,
 };
 
@@ -138,7 +139,7 @@ const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 	overview: null,
 	artShape: 'portrait',
 	art: null,
-	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
+	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
 };
 
 /** Carry the content, focus the pane, and paint the list's cursor. */

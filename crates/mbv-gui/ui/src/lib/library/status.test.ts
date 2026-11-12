@@ -141,6 +141,7 @@ test('the location reads the Audiobooks destination and the selected book', () =
 			{ id: 'b2', title: 'Hyperion', subtitle: 'Dan Simmons', duration: '9:18:00', sortLetter: 'H' },
 		],
 		selected: 'b2',
+		playingBookId: null,
 		hero: null,
 	};
 
@@ -159,6 +160,7 @@ test('an Audiobooks selection with no carried book leaves the location at the de
 		workspaceLoading: false,
 		rows: [],
 		selected: null,
+		playingBookId: null,
 		hero: null,
 	};
 

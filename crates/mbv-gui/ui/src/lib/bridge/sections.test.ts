@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { playhead } from './playhead';
 import {
 	SECTIONS_EVENT,
 	applyBatch,
@@ -77,7 +78,7 @@ test('applyBatch skips a section whose revision the store holds', () => {
 			value: {
 				remaining: 3,
 				nextTitle: null,
-				finishClock: null,
+				tailSecs: null,
 				rightColumn: 'length' as const,
 				filter: '',
 				filterActive: false,
@@ -149,6 +150,36 @@ test('connectSections calls sync only after listen resolves', async () => {
 	await connecting;
 
 	expect(invokeMock).toHaveBeenCalledWith('sync');
+});
+
+// The `playhead` anchor is not a section store (design D5): a carried
+// `playhead` section stamps the prediction stores instead, and a reset
+// drops it.
+test('applyBatch stamps the carried playhead anchor and a reset drops it', () => {
+	applyBatch({
+		playhead: {
+			revision: 3,
+			value: {
+				active: true,
+				activeSlot: 4,
+				positionTicks: 1_000,
+				runtimeTicks: 2_000,
+				paused: false,
+			},
+		},
+	});
+
+	expect(get(playhead.anchor)).toEqual({
+		active: true,
+		activeSlot: 4,
+		positionTicks: 1_000,
+		runtimeTicks: 2_000,
+		paused: false,
+	});
+
+	resetSectionsForTest();
+
+	expect(get(playhead.anchor)).toBeNull();
 });
 
 // The theme section's contract, moved from the frame store: a theme section

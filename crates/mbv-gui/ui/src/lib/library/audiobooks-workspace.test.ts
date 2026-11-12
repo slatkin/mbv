@@ -1,14 +1,17 @@
 // add-gui-library-panel row 9.1: the Audiobooks Workspace's interaction state
 // (design D12) — the chapter cursor's movement and clamping, its re-resolution
-// to the current chapter (or the first chapter) when its chapter leaves the
+// to the marked chapter (or the first chapter) when its chapter leaves the
 // frame, the reset when the selected book changes, the chapter command the
 // cursor names, and the book commands the selected book names. The Tauri IPC
 // is mocked; the asserted payloads are the serde wire shapes of
-// bridge/library.rs.
+// bridge/library.rs. The current chapter is the window's derivation from the
+// playhead (gui-change-driven-sections design D5).
 
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { playhead } from '$lib/bridge/playhead';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiAudiobooksChapterRow,
 	GuiAudiobooksFrame,
@@ -16,7 +19,9 @@ import type {
 } from '$lib/bridge/types';
 import {
 	absCursorChapter,
+	currentChapterRow,
 	initialAudiobooksWorkspace,
+	markedChapterOf,
 	moveAbsChapterCursor,
 	playAbsBook,
 	playAbsChapter,
@@ -35,12 +40,20 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	audiobooksWorkspace.set(initialAudiobooksWorkspace());
+	playhead.reset();
 });
 
-/** A book's chapters: one untouched, one playing at the playhead. */
+/** A book's chapters on the merged timeline: the first spans 0–21:00, the
+ * second 21:00–45:00 (design D5's `startTicks`/`endTicks`). */
 const CHAPTERS: GuiAudiobooksChapterRow[] = [
-	{ chapter: 1, title: 'First Contact', duration: '21:00', current: false },
-	{ chapter: 2, title: 'Fallen Angel', duration: '24:00', current: true },
+	{ chapter: 1, title: 'First Contact', duration: '21:00', startTicks: 0, endTicks: 21 * 60 * SECOND },
+	{
+		chapter: 2,
+		title: 'Fallen Angel',
+		duration: '24:00',
+		startTicks: 21 * 60 * SECOND,
+		endTicks: 45 * 60 * SECOND,
+	},
 ];
 
 /** The selected book's Hero facts with a chapter Workspace. */
@@ -57,10 +70,12 @@ function hero(rows: GuiAudiobooksChapterRow[] = CHAPTERS): GuiAudiobooksHero {
 	};
 }
 
-/** A frame whose selected book's Hero carries `workspace`. */
+/** A frame whose selected book's Hero carries `workspace`, with the book
+ * the playhead plays when one does. */
 function audiobooks(
 	rows: GuiAudiobooksChapterRow[] = CHAPTERS,
 	selected: string | null = 'book1',
+	playingBook: string | null = null,
 ): GuiAudiobooksFrame {
 	return {
 		libIdx: 4,
@@ -69,6 +84,7 @@ function audiobooks(
 		workspaceLoading: false,
 		rows: [{ id: 'book1', title: 'The Caves of Steel', subtitle: 'Isaac Asimov', duration: '9:51:00', sortLetter: 'A' }],
 		selected,
+		playingBookId: playingBook,
 		hero: selected === null ? null : hero(rows),
 	};
 }
@@ -94,24 +110,98 @@ test('a cursor move past the last chapter stays there', () => {
 	expect(get(audiobooksWorkspace).cursor).toBe(2);
 });
 
-// A cursor whose chapter left the frame re-resolves to the playing chapter,
-// without it to the first chapter, and it keeps its chapter while the frame
-// paints it.
-test('a cursor whose chapter left the frame resolves to the playing chapter', () => {
-	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), cursor: 7 });
+// The current chapter is the window's derivation now (design D5): the row
+// whose span holds the predicted position, while the Hero's book is the
+// playing book. The fixed test clocks hold the position at its anchor.
+test('the marked chapter follows the predicted position while the Hero\'s book plays', () => {
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
 
-	expect(absCursorChapter(audiobooks())?.chapter).toBe(2);
+	expect(markedChapterOf(audiobooks(CHAPTERS, 'book1', 'book1'))?.chapter).toBe(2);
+
+	// An earlier position marks the first chapter.
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 5 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
+
+	expect(markedChapterOf(audiobooks(CHAPTERS, 'book1', 'book1'))?.chapter).toBe(1);
 });
 
-test('a cursor with no playing chapter resolves to the first chapter', () => {
-	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), cursor: 7 });
-	const idle = CHAPTERS.map((row) => ({ ...row, current: false }));
+test('a different playing book marks no chapter', () => {
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
 
-	expect(absCursorChapter(audiobooks(idle))?.chapter).toBe(1);
+	expect(markedChapterOf(audiobooks(CHAPTERS, 'book1', 'book2'))).toBeNull();
+	expect(markedChapterOf(audiobooks(CHAPTERS, 'book1', null))).toBeNull();
+});
+
+// The span's end is exclusive: a position at a chapter's end marks the next
+// chapter, and an empty span (`startTicks === endTicks`, an audio-part row's
+// `0`/`0`) never holds one.
+test('a position at a chapter\'s end marks the next chapter', () => {
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 21 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
+
+	expect(markedChapterOf(audiobooks(CHAPTERS, 'book1', 'book1'))?.chapter).toBe(2);
+});
+
+test('an empty span never holds a position', () => {
+	const parts: GuiAudiobooksChapterRow[] = [
+		{ chapter: 1, title: 'Part 1', duration: '21:00', startTicks: 0, endTicks: 0 },
+		{ chapter: 2, title: 'Part 2', duration: '24:00', startTicks: 0, endTicks: 0 },
+	];
+
+	expect(currentChapterRow(parts, 0)).toBeNull();
+	expect(currentChapterRow(parts, 10 * SECOND)).toBeNull();
 });
 
 test('a cursor keeps its chapter while the frame paints it', () => {
 	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), cursor: 1 });
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
+
+	expect(absCursorChapter(audiobooks(CHAPTERS, 'book1', 'book1'))?.chapter).toBe(1);
+});
+
+test('a cursor whose chapter left the frame resolves to the marked chapter', () => {
+	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), cursor: 7 });
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
+
+	expect(absCursorChapter(audiobooks(CHAPTERS, 'book1', 'book1'))?.chapter).toBe(2);
+});
+
+test('a cursor with no marked chapter resolves to the first chapter', () => {
+	audiobooksWorkspace.set({ ...initialAudiobooksWorkspace(), cursor: 7 });
 
 	expect(absCursorChapter(audiobooks())?.chapter).toBe(1);
 });
@@ -122,10 +212,17 @@ test('a cursor over a book with no chapters resolves to none', () => {
 	expect(absCursorChapter(audiobooks([]))).toBeNull();
 });
 
-test('a cursor whose chapter left the frame moves on from the playing chapter', () => {
+test('a cursor whose chapter left the frame moves on from the marked chapter', () => {
 	cursorAt(7);
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
 
-	moveAbsChapterCursor('down', audiobooks());
+	moveAbsChapterCursor('down', audiobooks(CHAPTERS, 'book1', 'book1'));
 
 	expect(get(audiobooksWorkspace).cursor).toBe(2);
 });

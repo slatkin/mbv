@@ -1,8 +1,10 @@
 // The Audiobooks Hero's Workspace interaction state (add-gui-library-panel
 // design D1, D12, row 9.1): the cursor over the selected book's chapters. It
 // is the window content's own — the core never reads it, and the hover is the
-// Workspace table's own paint — and the chapters themselves and the current-chapter mark
-// are the core's, carried by the frame.
+// Workspace table's own paint — and the chapters themselves are the core's,
+// carried by the frame. The chapter whose span holds the predicted position
+// (design D5) is the window's derivation, read from the playhead stores while
+// the Hero's book is the playing book.
 //
 // The cursor is a chapter number, never a row position: the frame carries the
 // stable Service discriminator the TUI's chapter activation addresses, so a
@@ -13,6 +15,7 @@
 // keys and controls name.
 
 import { get, writable } from 'svelte/store';
+import { playhead } from '$lib/bridge/playhead';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiAudiobooksChapterRow,
@@ -45,29 +48,68 @@ function workspaceOf(audiobooks: GuiAudiobooksFrame): GuiAudiobooksWorkspace | n
 }
 
 /**
+ * The chapter whose span holds the predicted position (design D5):
+ * `startTicks <= position < endTicks` — the span's end is exclusive, so a
+ * position at a chapter's end marks the next chapter, and an empty span
+ * (`startTicks === endTicks`, an audio-part row's `0`/`0`) never holds one.
+ * `null` while no row's span holds the position.
+ */
+export function currentChapterRow(
+	rows: readonly GuiAudiobooksChapterRow[],
+	positionTicks: number | null,
+): GuiAudiobooksChapterRow | null {
+	if (positionTicks === null) {
+		return null;
+	}
+	return (
+		rows.find(
+			(row) => row.startTicks <= positionTicks && positionTicks < row.endTicks,
+		) ?? null
+	);
+}
+
+/**
+ * The selected book's Hero's marked chapter: the row whose span holds the
+ * predicted position while the Hero's book is the playing book (design D5).
+ * The Hero's book is the frame's selection; the playing book is the frame's
+ * `playingBookId`, `null` while the active slot is pending. Reads the
+ * playhead's predicted position, so a reactive caller reads it through a
+ * store subscription, not through this function.
+ */
+export function markedChapterOf(audiobooks: GuiAudiobooksFrame): GuiAudiobooksChapterRow | null {
+	if (
+		audiobooks.playingBookId === null ||
+		audiobooks.playingBookId !== audiobooks.selected
+	) {
+		return null;
+	}
+	return currentChapterRow(workspaceOf(audiobooks)?.rows ?? [], get(playhead.position));
+}
+
+/**
  * The chapter the cursor rests on (design D12): the chapter the state's number
- * names while the Workspace still paints it, the book's current chapter while
- * one plays, and the Workspace's first chapter otherwise — the cursor
+ * names while the Workspace still paints it, the marked chapter while the
+ * Hero's book plays, and the Workspace's first chapter otherwise — the cursor
  * re-resolves when its chapter leaves the frame, so a book change never leaves
  * it resting on nothing.
  */
 export function resolveAbsChapterCursor(
 	workspace: GuiAudiobooksWorkspace | null,
 	cursor: number | null,
+	marked: GuiAudiobooksChapterRow | null,
 ): GuiAudiobooksChapterRow | null {
 	const rows = workspace?.rows ?? [];
-	return (
-		rows.find((row) => row.chapter === cursor) ??
-		rows.find((row) => row.current) ??
-		rows[0] ??
-		null
-	);
+	return rows.find((row) => row.chapter === cursor) ?? marked ?? rows[0] ?? null;
 }
 
 /** The chapter the cursor rests on in the carried frame, or `null` while the
  * Workspace holds no chapter. Enter on the Workspace acts on this chapter. */
 export function absCursorChapter(audiobooks: GuiAudiobooksFrame): GuiAudiobooksChapterRow | null {
-	return resolveAbsChapterCursor(workspaceOf(audiobooks), get(audiobooksWorkspace).cursor);
+	return resolveAbsChapterCursor(
+		workspaceOf(audiobooks),
+		get(audiobooksWorkspace).cursor,
+		markedChapterOf(audiobooks),
+	);
 }
 
 /**
@@ -106,7 +148,11 @@ export function moveChapterCursor(
  * keys while the Hero pane has the pane focus. */
 export function moveAbsChapterCursor(move: ListMove, audiobooks: GuiAudiobooksFrame): void {
 	const workspace = workspaceOf(audiobooks);
-	const current = resolveAbsChapterCursor(workspace, get(audiobooksWorkspace).cursor);
+	const current = resolveAbsChapterCursor(
+		workspace,
+		get(audiobooksWorkspace).cursor,
+		markedChapterOf(audiobooks),
+	);
 	const cursor = moveChapterCursor(workspace?.rows ?? [], current?.chapter ?? null, move);
 	audiobooksWorkspace.update((state) => (state.cursor === cursor ? state : { ...state, cursor }));
 }

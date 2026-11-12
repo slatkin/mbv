@@ -45,10 +45,11 @@
 		SkipForward
 	} from '@lucide/svelte';
 	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { playhead } from '$lib/bridge/playhead';
 	import { hover, overlay, playback } from '$lib/bridge/sections';
 	import TrackChips from './TrackChips.svelte';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
-	import { clampRatio, minus } from '$lib/bridge/time';
+	import { clampRatio, formatWallClock, minus } from '$lib/bridge/time';
 	import type {
 		GuiCardArtwork,
 		GuiChapter,
@@ -58,6 +59,22 @@
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
+
+	/** The playhead's stores (design D5): the predicted position drives the
+	 * scrubber's fill and clocks between anchors, and the anchor's paused
+	 * fact paints the play/pause control. */
+	const {
+		anchor: playheadAnchor,
+		runtime: runtimeTicks,
+		fraction,
+		elapsed,
+		remaining,
+		finish: playheadFinish
+	} = playhead;
+
+	/** Whether the transport is paused: the anchor's fact (design D5). `true`
+	 * while no anchor holds — the idle transport paints a play control. */
+	const paused = $derived($playheadAnchor?.paused ?? true);
 
 	interface Props {
 		/** The artwork the window carried for the active item (design D10),
@@ -100,13 +117,9 @@
 	 * open state lives here. */
 	const chooser = $derived($overlay?.kind === 'targetChooser' ? $overlay : null);
 
-	/** The played fraction of the scrubber, clamped to `[0, 1]`. */
-	const progress = $derived(
-		clampRatio(
-			$playback.playback.positionTicks,
-			$playback.playback.runtimeTicks,
-		),
-	);
+	/** The played fraction of the scrubber, clamped to `[0, 1]`: the
+	 * playhead's prediction (design D5). */
+	const progress = $derived($fraction);
 
 	/** The chapter boundaries the bar paints as 2×14 ticks, skipping the first
 	 * boundary (the bar's own left edge) and any outside the runtime, in bar
@@ -114,17 +127,17 @@
 	const chapterTicks = $derived(
 		visibleChapters(
 			$playback.chapters,
-			$playback.playback.runtimeTicks,
+			$runtimeTicks,
 		),
 	);
 
 	/** The intro and credits marks' starts in bar fractions (`main` audit 10);
 	 * `null` while a mark is unknown. */
 	const introLeft = $derived(
-		markLeft($playback.introMark, $playback.playback.runtimeTicks),
+		markLeft($playback.introMark, $runtimeTicks),
 	);
 	const creditsLeft = $derived(
-		markLeft($playback.creditsMark, $playback.playback.runtimeTicks),
+		markLeft($playback.creditsMark, $runtimeTicks),
 	);
 
 	/** The scrubber's hover preview, painted from the hover section: the pointer's
@@ -626,11 +639,12 @@
 					>
 						<!-- A clock is time (design D14): the elapsed label paints the time
 							token, and the remaining label paints it at 0.75, as the canvas
-							draws the scrubber's two ends. -->
-						<span style:color="var(--canvas-type-time)">{$playback.elapsedClock}</span>
+							draws the scrubber's two ends. The clocks are the playhead's
+							prediction (design D5). -->
+						<span style:color="var(--canvas-type-time)">{$elapsed}</span>
 						<span style:color="var(--canvas-type-time)" style:opacity="0.75"
-							>{minus($playback.remainingClock)}{$playback.finishClock
-								? ` · ends ${$playback.finishClock}`
+							>{minus($remaining)}{$playheadFinish
+								? ` · ends ${formatWallClock($playheadFinish.finishSecs)}`
 								: ''}</span
 						>
 					</div>
@@ -682,9 +696,9 @@
 					style:background="var(--mbv-accent)"
 					bind:this={playPauseEl}
 					data-target="playPause"
-					aria-label={$playback.playback.paused ? 'Play' : 'Pause'}
+					aria-label={paused ? 'Play' : 'Pause'}
 				>
-					{#if $playback.playback.paused}
+					{#if paused}
 						<Play
 							size={22}
 							fill={roleVar('textOnAccent')}

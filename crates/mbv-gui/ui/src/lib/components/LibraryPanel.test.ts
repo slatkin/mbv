@@ -538,7 +538,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 			overview: null,
 			artShape: 'portrait',
 			art: null,
-			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
+			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
 		}),
 		podcasts: null,
 		feeds: null,
@@ -579,6 +579,7 @@ function audiobooks(hero: GuiAudiobooksFrame['hero']): GuiAudiobooksFrame {
 			},
 		],
 		selected: 'b1',
+		playingBookId: null,
 		hero,
 	};
 }

@@ -21,6 +21,7 @@ import {
 	summary as summaryStore,
 	overlay as overlayStore,
 } from '$lib/bridge/sections';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiOverlayFrame,
 	GuiQueue,
@@ -73,7 +74,9 @@ function summary(overrides: Partial<GuiQueueSummary> = {}): GuiQueueSummary {
 	return {
 		remaining: 2,
 		nextTitle: null,
-		finishClock: '21:43',
+		// The queue's finish is the transport's finish (21:00 over the fixed
+		// wall clock) plus the tail's 43 minutes.
+		tailSecs: 43 * 60,
 		rightColumn: 'length',
 		filter: '',
 		filterActive: false,
@@ -90,7 +93,9 @@ function item(slot: number, rest: Partial<Extract<GuiQueueRow, { row: 'item' }>>
 		secondary: null,
 		trailing: null,
 		duration: '3:12',
-		endsAt: '21:40',
+		// The row ends 40 minutes after the transport's finish (21:00 over
+		// the fixed wall clock), so "Ends at" paints 21:40.
+		endsAfterSecs: 40 * 60,
 		kind: 'media',
 		state: { state: 'ordinary' },
 		striped: false,
@@ -128,6 +133,16 @@ function renderPanel(
 	summaryStore.set(summaryProp);
 	overlayStore.set(overlayProp);
 	focusStore.set({ surface: 'queue', panel: 'queue' });
+	// The clocks ride the playhead (design D5): a 200 s item at its 60th
+	// second, finishing at 21:00 over the fixed wall clock. No slot carries
+	// the anchor by default, so no row paints the predicted progress.
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: null,
+		positionTicks: 60 * SECOND,
+		runtimeTicks: 200 * SECOND,
+		paused: false,
+	});
 	const rendered = render(QueuePanel);
 	mounted = rendered;
 	return rendered;
@@ -160,9 +175,9 @@ test('a frame with slots renders its rows', () => {
 	const { getByText, container } = renderPanel(
 		queue(
 			[
-				item(1, { primary: 'First track', endsAt: null }),
+				item(1, { primary: 'First track', endsAfterSecs: null }),
 				{ row: 'heading', text: 'album' },
-				item(2, { primary: 'Second track', endsAt: null }),
+				item(2, { primary: 'Second track', endsAfterSecs: null }),
 			],
 			2,
 		),
@@ -225,7 +240,7 @@ test('the right column paints the mode\'s value as a repeated time', () => {
 // right column at full strength (design D14).
 test('the current row keeps its ink in the right column', () => {
 	const { container } = renderPanel(
-		queue([item(1, { state: { state: 'nowPlaying', progress: 12 } })]),
+		queue([item(1, { state: { state: 'nowPlaying' } })]),
 	);
 
 	const value = container.querySelector('[data-slot="1"] [data-right-value]') as HTMLElement;
@@ -240,7 +255,7 @@ test('the rows paint the watched, active, and partial-progress states', () => {
 				item(1, { primary: 'Watched', state: { state: 'played' } }),
 				item(2, {
 					primary: 'Playing',
-					state: { state: 'nowPlaying', progress: 12 },
+					state: { state: 'nowPlaying' },
 				}),
 				item(3, { primary: 'Partial', state: { state: 'active', progress: 42 } }),
 				item(4, { primary: 'Started', state: { state: 'active', progress: 1 } }),
@@ -288,7 +303,7 @@ test('the row paints the canvas one-liner: its ordinal, one title line, and the 
 test('the cursor and marked rows paint the canvas picked fill, playing or not', () => {
 	const { container } = renderPanel(
 		queue(
-			[item(1), item(2, { state: { state: 'nowPlaying', progress: null } })],
+			[item(1), item(2, { state: { state: 'nowPlaying' } })],
 			2,
 			{ cursor: 1, marks: [2] },
 		),
@@ -648,7 +663,7 @@ test('a press on a menu entry forwards a pointer press', async () => {
 });
 
 test('a layout change sends one merged report', async () => {
-	const { container } = renderPanel(queue([item(7, { duration: null, endsAt: null })]));
+	const { container } = renderPanel(queue([item(7, { duration: null, endsAfterSecs: null })]));
 	// The mount paint reports once; wait for that flush before the change.
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 	invokeMock.mockClear();

@@ -19,6 +19,7 @@ import {
 	status as statusStore,
 	summary as summaryStore,
 } from '$lib/bridge/sections';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiPanelToggles,
 	GuiQueue,
@@ -51,9 +52,6 @@ beforeEach(() => {
 	resetSectionsForTest();
 });
 
-/** One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`). */
-const SECOND = 10_000_000;
-
 /** A container tall enough for the expanded artboard. */
 const TALL: LayoutSize = { width: 640, height: 900 };
 
@@ -70,7 +68,7 @@ function item(slot: number, primary: string): GuiQueueRow {
 		secondary: null,
 		trailing: null,
 		duration: '3:12',
-		endsAt: '21:05',
+		endsAfterSecs: null,
 		kind: 'media',
 		state: { state: 'ordinary' },
 		striped: false,
@@ -114,7 +112,9 @@ function seed(
 	summaryStore.set({
 		remaining: 1,
 		nextTitle: overrides.nextTitle === undefined ? 'Second track' : overrides.nextTitle,
-		finishClock: '21:43',
+		// The queue's finish is the transport's finish (21:00 over the fixed
+		// wall clock) plus the tail's 43 minutes.
+		tailSecs: 43 * 60,
 		rightColumn: 'length',
 		filter: '',
 		filterActive: false,
@@ -122,6 +122,16 @@ function seed(
 	});
 	overlayStore.set(null);
 	playbackStore.set(playing(overrides.playback));
+	// The clocks ride the playhead (design D5), not the playback section: a
+	// 200 s item at its 60th second, finishing at 21:00 over the fixed wall
+	// clock.
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 60 * SECOND,
+		runtimeTicks: 200 * SECOND,
+		paused: false,
+	});
 	footerStore.set({
 		owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 		ownerLive: true,
@@ -133,28 +143,19 @@ function seed(
 	hoverStore.set(null);
 }
 
-/** A playing transport band with the carried artwork the panel adopts. */
+/** A playing transport band with the carried artwork the panel adopts: the
+ * clocks and the paused fact ride the playhead the seed stamps (design D5). */
 function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 	return {
 		status: 'playing',
 		host: 'poo',
 		hostIsRemote: false,
 		shown: true,
-		playback: {
-			active: true,
-			activeIdx: 0,
-			positionTicks: 60 * SECOND,
-			runtimeTicks: 200 * SECOND,
-			paused: false,
-		},
-		elapsedClock: '1:00',
-		remainingClock: '2:20',
 		showControls: true,
 		nowPlayingTitle: 'Track One',
 		parentLine: 'The Show',
 		episodeBadge: null,
 		stillCaption: null,
-		finishClock: '21:00',
 		chapters: [],
 		introMark: null,
 		creditsMark: null,

@@ -12,12 +12,22 @@
 	import { onMount } from 'svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { playhead, queueFinishText } from '$lib/bridge/playhead';
 	import { summary as summarySection } from '$lib/bridge/sections';
 	import { roleVar } from '$lib/bridge/theme';
 	import type { LayoutRegion } from '$lib/bridge/types';
 
 	/** The queue summary the line paints. */
 	const summary = $derived($summarySection);
+
+	/** The playhead's finish-facts store (design D5): the queue's finish
+	 * clock is the wall clock at the summary's tail past the active item's
+	 * end, with its ` +1d` suffix. */
+	const { finish: playheadFinish } = playhead;
+
+	/** The queue's finish clock, `null` while no finish facts hold or the
+	 * summary carries no tail. */
+	const queueFinish = $derived(queueFinishText($playheadFinish, summary.tailSecs));
 
 	const reportKey = Symbol('folded-queue');
 	let lineEl: HTMLElement | undefined = $state();
@@ -69,11 +79,11 @@
 		data-remaining>{summary.remaining}</span
 	>
 	<span class="flex-1"></span>
-	{#if summary.finishClock}
+	{#if queueFinish}
 		<span
 			class="font-mono text-xs tabular-nums"
 			style:color={roleVar('textMuted')}
-			data-finish-clock>{summary.finishClock}</span
+			data-finish-clock>{queueFinish}</span
 		>
 	{/if}
 	<button

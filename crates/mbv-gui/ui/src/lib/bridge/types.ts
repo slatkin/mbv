@@ -157,10 +157,13 @@ export type SectionName = keyof SectionValues;
 /** One `mbv://sections` payload (design D1): a present field replaces the
  * window's section at the carried revision, and an absent field leaves the
  * window's section as it is. The fields mirror `GuiSectionBatch`'s optional
- * serde fields field for field. */
+ * serde fields field for field. The `playhead` anchor (design D5) rides the
+ * batch too, but it is not a section store: `sections.ts` stamps it into
+ * `playhead.ts`'s prediction stores, so it is an explicit field here, not a
+ * mapped one over `SectionValues`. */
 export type GuiSectionBatch = {
 	[K in SectionName]?: GuiSection<SectionValues[K]>;
-};
+} & { playhead?: GuiSection<GuiPlayhead> };
 
 /** One variant per Owner attach outcome, with the text the TUI Client gets. */
 export type GuiAttachState =
@@ -195,7 +198,7 @@ export type GuiPopup = 'multiselect' | 'libraryRoutes' | 'feedManage';
 export type GuiPanel = 'queue' | 'library';
 
 /** The queue summary the header paints: the remaining count, the queue
- * finish clock, the right column's mode, and the filter text. */
+ * finish's tail offset, the right column's mode, and the filter text. */
 export interface GuiQueueSummary {
 	/** The slots after the active index; the whole queue while no slot
 	 * carries the playhead. */
@@ -205,9 +208,11 @@ export interface GuiQueueSummary {
 	 * queue, not from the painted rows, because the strip paints no Queue
 	 * list. `null` while no slot follows the playhead. */
 	nextTitle: string | null;
-	/** The wall-clock time the shown queue finishes; `null` while no slot
+	/** The shown queue's tail (design D5): the queue's finish as seconds
+	 * after the end of the active item, which the window adds to the wall
+	 * clock now plus the active item's remaining time. `null` while no slot
 	 * carries the playhead or a pending runtime in the chain is unknown. */
-	finishClock: string | null;
+	tailSecs: number | null;
 	/** Which value the rows' right column paints. */
 	rightColumn: GuiRightColumn;
 	/** The queue filter's text, which narrows the projected rows locally;
@@ -363,10 +368,12 @@ export type GuiQueueRow =
 			trailing: GuiTrailing | null;
 			/** The right column's "Length" value. */
 			duration: string | null;
-			/** The right column's "Ends at" value; `null` for a slot before the
-			 * playhead and for a slot whose finish chain an unknown runtime
-			 * broke. */
-			endsAt: string | null;
+			/** The row's end as seconds after the active item's end (design
+			 * D5): the right column's "Ends at" fact, which the window turns
+			 * into a wall clock from the playhead anchor. `null` for a slot
+			 * before the playhead and for a slot whose end chain an unknown
+			 * runtime broke. */
+			endsAfterSecs: number | null;
 			kind: GuiMediaKind;
 			state: GuiSemanticState;
 			/** Whether the row takes the alternating `QueueColumn` fill — the
@@ -384,21 +391,19 @@ export type GuiSemanticState =
 	| { state: 'ordinary' }
 	| { state: 'played' }
 	| { state: 'active'; progress: number | null }
-	| { state: 'nowPlaying'; progress: number | null };
+	/** The now-playing state carries no progress (design D5): the window
+	 * reads the playhead's played fraction for the row whose slot is the
+	 * active slot. */
+	| { state: 'nowPlaying' };
 
-/** The Queue playback transport band's facts. */
+/** The Queue playback transport band's facts, without the playhead facts
+ * (design D5): they ride the `playhead` anchor, which the window predicts
+ * from between anchors. */
 export interface GuiQueuePlayback {
 	status: GuiNowPlayingStatus;
 	host: string;
 	hostIsRemote: boolean;
 	shown: boolean;
-	playback: GuiPlaybackState;
-	/** The seek row's left clock (the playhead's elapsed time), formatted by
-	 * the TUI's shared duration formatter. */
-	elapsedClock: string;
-	/** The seek row's right clock (the time left in the active item), in the
-	 * same format. The window paints the minus sign before it. */
-	remainingClock: string;
 	showControls: boolean;
 	nowPlayingTitle: string | null;
 	/** The now-playing parent line: the series of an episode, the artist of
@@ -412,9 +417,6 @@ export interface GuiQueuePlayback {
 	 * active item's kind. `null` while nothing to caption — idle, a
 	 * slotless output, or an item kind with no image source. */
 	stillCaption: string | null;
-	/** The active item's wall-clock end time; the scrubber's finish clock.
-	 * `null` while no item plays or the runtime is unknown. */
-	finishClock: string | null;
 	/** The active item's chapter boundaries with their names (design D4a):
 	 * the scrubber's boundary ticks and the hover preview's chapter name.
 	 * Empty while the item's fetch has not landed or carries none. */
@@ -594,11 +596,22 @@ export type GuiCardArtwork =
 
 export type GuiNowPlayingStatus = 'playing' | 'paused' | 'idle';
 
-export interface GuiPlaybackState {
+/** The playhead anchor (design D5): the position, runtime, paused state,
+ * and active slot at the core's send, from which the window predicts the
+ * position until the next anchor. The window stamps it with its own clock
+ * at receipt (`playhead.ts`); no timestamp crosses the wire. */
+export interface GuiPlayhead {
+	/** Whether a transport is active, on any target. */
 	active: boolean;
-	activeIdx: number | null;
+	/** The slot that carries the now-playing marker (`QueueSlotId::raw`),
+	 * the same whole-list marker the `queue` section's `active` carries. */
+	activeSlot: number | null;
+	/** The reported position at the send, in ticks. */
 	positionTicks: number;
+	/** The active item's runtime, in ticks. */
 	runtimeTicks: number;
+	/** Whether the transport is paused: the prediction holds the position
+	 * while it is. */
 	paused: boolean;
 }
 
