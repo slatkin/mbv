@@ -689,18 +689,15 @@ part, tagged by the same seven `kind` values: the core's selection, the Hero,
 and the Workspace facts. `rowMenu` (`GuiLibraryRowMenuFrame`) carries `itemId`
 and the shared builder's `entries` while a row menu is open. Each destination
 keeps its list and detail parts in one file under `src/bridge/frame/library/`;
-`music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`. The
-destination paragraphs below still use the former `Gui<Destination>Frame` names:
-read their list fields as the `libraryList` part, and their selection, Hero, and
-Workspace fields as the `libraryDetail` part.
+`music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`.
 
-`GuiHomeFrame` carries `rows`, `selected`, and `hero`: Home's flat list in
-the Music list slot, with no pill, no letter rail, and no Workspace. `rows`
+`GuiHomeList` carries `loading` and `rows`: Home's flat list in the Music list
+slot, with no pill, no letter rail, and no Workspace. `rows`
 are the two sections' heading rows and item rows in paint order —
 `Continue watching` first, then `Recently added` — with a heading only above
 its rows, an empty section omitted, and the spacer only between two
 non-empty sections, the TUI's flat list's rules. An item row carries:
-`id` (`GuiHomeRowId`), the stable identity `App::home_stable_target`
+`id` (`GuiHomeRowIdFrame`), the stable identity `App::home_stable_target`
 resolves — a `Continue` tag with the row's Emby item id, or a `Recent` tag
 with the queue item's content id (`provider`/`value`, never a position);
 `title` and `subtitle`, the split title parts the TUI's flat list paints;
@@ -710,31 +707,32 @@ row and on an undated item); `kind` (`collection` when the row targets a
 container the play path refuses, `media` on a playable leaf, mirroring the
 shared flat-list vocabulary); `state` (`ordinary`, `played`, or
 `{ active: { progress } }` with the Continue Watching resume percent);
-and `art` (`GuiLibraryArt | null`, the row's card art for Emby items only —
+and `art` (`GuiArtRef | null`, the row's card art for Emby items only —
 the Audiobookshelf and Feed rows paint without art in Phase 2, and the
-front end paints its own placeholder while `null`). `selected` carries the
-core's selected row the select command last named — the first item row is
+front end paints its own placeholder while `null`). `GuiHomeDetail`'s `selected`
+carries the core's selected row the select command last named — the first item row is
 the Hero default, so the Hero paints as soon as a section lands; a stale
 frame's selection resolves on its own rows or falls back without a hero.
-`hero` carries `title`, `meta_rows` with `duration_row` and `progress_row`,
+`GuiHomeDetail`'s `hero` carries `title`, `meta_rows` with `duration_row` and
+`progress_row`,
 `overview`, `art_shape` (`landscape`, `square`, or `portrait`, the artwork
 policy's declared arm), and `art` (the artwork policy chain's display
 encode for Emby items only, again `null` on the rows without art) — the
 shared hero producers' facts, the same facts the TUI paints for the same
 item.
 
-`GuiShowsFrame` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
+`GuiShowsList` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
 Shows library index the Shows commands name), `pills`, `collection_names`
 (the active mode's name, which the Library Status bar's location reads),
-`loading`, `workspace_loading`, `series`, `upcoming_failed`, `rows`,
-`selected`, and `hero` (design D14). The pill row is single-select and holds
+`loading`, `series`, `upcoming_failed`, and `rows`. `GuiShowsDetail` carries
+`workspace_loading`, `selected`, and `hero` (design D14). The pill row is single-select and holds
 the TUI's three modes in order — `latest`, `upcoming`, and `all`, labelled
 New, Upcoming, and All — each with `mode`, `name`, `selected`, and
 `collection` (`false`: the TUI's letter-range buckets are not pills here,
 because the All mode's letter rail replaces them).
 
-The All mode's list is the Music tree over the TUI's TV node kinds, and the
-frame carries it as `series`: each node holds `id`, `title`, `sort_letter`,
+The All mode's list is the Music tree over the TUI's TV node kinds, and
+`GuiShowsList` carries it as `series`: each node holds `id`, `title`, `sort_letter`,
 `expandable`, and its `seasons`; each season holds `id`, `name`, and
 `episodes`, which are `null` until that season's load lands, so an open
 season asks the core for them. The window content owns the open and closed
@@ -751,7 +749,8 @@ premieres, with the series' name as `title`, the season/episode label and the
 episode's name as `subtitle`, and the premiere date in `date`. Both flat
 lists are date-sorted and carry no `sort_letter`; `upcoming_failed` carries
 the eager fetch's final failure, which the list names with the pill as the
-retry. `selected` carries the core's selected row as the frame painted it —
+retry. `GuiShowsDetail`'s `selected` carries the core's selected row as the frame
+painted it —
 the series id in All, the episode id or the premiere's stable key in the flat
 modes — with the first node as the default, so the Hero paints as soon as a
 list lands, and a stored id the list no longer carries falls back to that
@@ -760,7 +759,8 @@ selected; `ensure_gui_shows_workspace` loads the selected series' detail and
 its selected season's episodes on the frame path, so the Workspace paints
 without a season press.
 
-`hero` is the selected row's Hero and is absent in Upcoming, which paints
+`GuiShowsDetail`'s `hero` is the selected row's Hero and is absent in
+Upcoming, which paints
 none. In All series it carries the TUI series producer's facts —
 `hero_content_series_with_episode`'s genre, year range (else the release
 date), season count, and network rows, no duration row while the Workspace
@@ -780,11 +780,12 @@ click or a double-click on a Workspace episode sends that episode's
 `episode_id` with `showsPlay`, and a right-press on a tree row opens the item
 menu at that row's stable Service id.
 
-`GuiEmbyFrame` (`src/bridge/frame/library/emby.rs`) carries `lib_idx` (the
+`GuiEmbyList` (`src/bridge/frame/library/emby.rs`) carries `lib_idx` (the
 plain Emby-library index the Emby commands name), `pills`,
 `collection_names` (the selected collection's name the Library Status bar's
 location reads; empty in plain mode, whose list is the whole library),
-`feed_group`, `loading`, `failed`, `rows`, `selected`, and `hero`. A plain
+`feed_group`, `loading`, `failed`, and `rows`. `GuiEmbyDetail` carries
+`selected` and `hero`. A plain
 Emby library (row 8.1: every Emby library that is neither a Grouped Music
 library nor a TV library) paints the plain mode: `feed_group` is `false`,
 the rows are the root-list store's full list in the server's `SortName`
@@ -797,31 +798,32 @@ is positive, in listing order, each pill with `group` (`{ kind: 'all' }` or
 `{ kind: 'folder', id }`), `name`, `selected`, and `collection` (`false`,
 design D6). Its rows are the selected group's items in the server's date
 order — All newest first, a folder oldest first — with the production year
-in `date` and no `sort_letter`. In both modes `selected` carries the core's
-selected row as the frame painted it, with the first row as the default, so
+in `date` and no `sort_letter`. In both modes the detail's `selected` carries the
+core's selected row as the frame painted it, with the first row as the default, so
 the Hero paints as soon as a list lands, and a stored id the list no longer
 carries falls back to that first row; a plain mode's fetch that failed
-carries `failed` and shows no row until the library opens again. `hero` is
+carries `failed` and shows no row until the library opens again. The detail's `hero` is
 the selected row's shared Emby hero producer's facts — `title`, `meta_rows`
 with `duration_row` and `progress_row`, `overview`, `art_shape` at the
 artwork policy's declared arm, and `art` — and carries no Workspace.
 
-`GuiAudiobooksFrame` (`src/bridge/frame/library/audiobooks.rs`) carries
+`GuiAudiobooksList` (`src/bridge/frame/library/audiobooks.rs`) carries
 `lib_idx` (the Audiobooks library index the Audiobooks commands name),
-`loading`, `failed` (the browse state's catalog states),
-`workspace_loading` (the selected book's detail fetch), `rows`, `selected`,
-and `hero`. No pill rides here: the A-Z letter rail replaces the TUI's eight
+`loading`, `failed` (the browse state's catalog states), and `rows`.
+`GuiAudiobooksDetail` carries `workspace_loading` (the selected book's detail
+fetch), `selected`, and `hero`. No pill rides here: the A-Z letter rail replaces the TUI's eight
 surname buckets, as it does for Shows and the plain Emby libraries. The rows
 are the catalog's books in the TUI's order — author sort key, then title —
 each with `id` (the book's stable `library_item_id`), `title`, `subtitle`
 (the author display credit), `duration` (the book's total duration, the TUI
 row's duration gutter), and `sort_letter` (the first letter of the author
-sort key, `#` for a digit- or symbol-led surname). `selected` carries the
-core's selected book as the frame painted it, with the catalog's first book
+sort key, `#` for a digit- or symbol-led surname). The detail's `selected`
+carries the core's selected book as the frame painted it, with the catalog's first book
 as the default, so the Hero paints as soon as the catalog lands, and a stale
 pick falls back to that first book.
 
-`hero` is the selected book's Hero: the shared `hero_content_abs_book`
+The detail's `hero` is the selected book's Hero: the shared
+`hero_content_abs_book`
 producer's facts — `title`, `meta_rows` (the author, the duration, and the
 `Finished` or `N%` progress row) with `duration_row` and `progress_row`, and
 no narrator, series, or description — `art_shape` at the book artwork
@@ -830,17 +832,16 @@ chain, `null` while the book declares no cover or no server is configured),
 and `workspace`: the book's chapter rows in the TUI's `visible_rows` order.
 A chapter row carries `chapter` (the stable Service discriminator the TUI's
 chapter activation addresses — the chapter number, or the audio-part index
-on a `Part N` row, never a display position), `title`, `duration`, and
-`current` — the current-chapter mark while that book plays, derived exactly
-as the TUI's `WorkspaceNowPlaying::Chapter` projection derives it; a frame
-re-carries the content when the mark moves, so the Workspace paints what the
-Queue's active slot paints. An audio-part row never carries the mark, as the
-TUI's rows never light.
+on a `Part N` row, never a display position), `title`, `duration`, and the
+`start_ticks` and `end_ticks` span on the book's merged timeline. The window
+marks the row whose span holds the playhead while this book plays. An
+audio-part row carries no span, so it never lights.
 
-`GuiPodcastsFrame` (`src/bridge/frame/library/podcasts.rs`) carries `lib_idx`
+`GuiPodcastsList` (`src/bridge/frame/library/podcasts.rs`) carries `lib_idx`
 (the Podcasts library index the Podcasts commands name), `pills`, `loading`
-(the show catalog's pages or the active view's own episode fetches),
-`failed` (the catalog's error), `rows`, `selected`, and `hero`. No letter rail
+(the show catalog's pages or the active view's own episode fetches), `failed`
+(the catalog's error), and `rows`. `GuiPodcastsDetail` carries `selected` and
+`hero`. No letter rail
 rides here: the list is sorted by date. `pills` holds the single-select pill
 row in paint order — `Latest` first, then one pill per show in the show
 list's title order — each with `pill` (`{ kind: 'latest' }` or
@@ -855,13 +856,14 @@ episode_id)` pair encoded as one opaque string
 show id and the episode id; `decode` is its only reader) — `title` (the
 episode), `subtitle` (the parent show's title), `date` (the `day month`
 gutter, `null` on an undated episode), and `state` (`ordinary`, `played`, or
-`{ active: { progress } }`, the TUI podcast row's own arms). `selected`
+`{ active: { progress } }`, the TUI podcast row's own arms). The detail's `selected`
 carries the core's picked episode as the frame painted it while the active
 list still holds it, else that list's first row, so the Hero paints as soon
 as a list lands; a stored pill whose show the published show list no longer
 carries falls back to `Latest`.
 
-`hero` is the selected episode's Hero: the shared `hero_content_abs_episode`
+The detail's `hero` is the selected episode's Hero: the shared
+`hero_content_abs_episode`
 producer's facts — `title` (the episode), `meta_rows` (the show title, the
 duration, and the publish date) with `duration_row` and `progress_row` (the
 producer fills no progress row for an episode) — the cleaned description as
@@ -870,8 +872,8 @@ the parent show's cover through the Service-scoped cover chain (`null` while
 the show declares no cover or no server is configured). There is no
 Workspace: a podcast Hero is episode information only.
 
-`GuiFeedsFrame` (`src/bridge/frame/library/feeds.rs`) carries `pills`,
-`loading`, `failed`, `rows`, `selected`, and `hero`. It carries no `libIdx`: a
+`GuiFeedsList` (`src/bridge/frame/library/feeds.rs`) carries `pills`,
+`loading`, `failed`, and `rows`. `GuiFeedsDetail` carries `selected` and `hero`. It carries no `libIdx`: a
 Client holds one feed tab, so the Feeds commands name no library. No letter
 rail rides here — the list is sorted by date — and no state filter.
 `failed` is always `false`, because the feed tab keeps no failure state: a
@@ -892,12 +894,13 @@ subscriptions can publish the same `guid` — `title` (the entry), `subtitle`
 (the subscription's name, `null` when the tab no longer holds it), `date`
 (the `day month` gutter, `null` on an undated entry), and `state`
 (`ordinary`, `played`, or `{ active: { progress } }`, the TUI feed row's own
-arms). `selected` carries the core's picked entry as the frame painted it
-while the active list still holds it, else that list's first row, so the Hero
+arms). The detail's `selected` carries the core's picked entry as the frame painted
+it while the active list still holds it, else that list's first row, so the Hero
 paints as soon as a list lands; a stored pill whose subscription the tab no
 longer holds falls back to `Latest`.
 
-`hero` is the selected entry's Hero: the shared `hero_content_feed`
+The detail's `hero` is the selected entry's Hero: the shared
+`hero_content_feed`
 producer's facts — `title` (the entry) and `meta_rows` (the subscription
 name, then the duration when the entry declares one) with `duration_row` and
 `progress_row` (the producer fills no progress row for an entry) — and
@@ -906,21 +909,22 @@ name, then the duration when the entry declares one) with `duration_row` and
 Workspace ride here: a feed entry has no artwork source and no description,
 so the Hero paints its placeholder in the reserved shape.
 
-`GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
+`GuiMusicList` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
-`collection`), `loading`, `failure` (the failure line naming the selected
-groups whose album list failed), `artists` (`artist_key`, `name`,
-`sort_letter`, and `albums`), `hero`, `art`, and `playing_track_id` (the
-playhead's Emby track id, from the Queue panel's own authority, which the
-tracklist's playing row paints with a play glyph beside the title, as the
-Queue's now-playing row does; the library tree shows no playing marker). An album carries `album_id`,
+`collection`), `collection_names`, `loading`, `failure` (the failure line
+naming the selected groups whose album list failed), and `artists`
+(`artist_key`, `name`, `sort_letter`, and `albums`). `GuiMusicDetail` carries
+`hero`, `art`, and `playing_track_id` (the playhead's Emby track id, from the
+Queue panel's own authority, which the tracklist's playing row paints with a
+play glyph beside the title, as the Queue's now-playing row does; the library
+tree shows no playing marker). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
 `album`, and its `menu` entries with `label`, `key_hint`, and `index` (the
 entry's index in the shared builder's order, so a front end that paints only
-some entries still executes the one it painted). `GuiMusicFrame` also
-carries `row_menu` (`Option`): the item of the `rowMenu` command with the
+some entries still executes the one it painted). The `rowMenu` section
+(`GuiLibraryRowMenuFrame`) carries the item of the `rowMenu` command with the
 TUI menu builder's full entries for it, which the right-click item menu
 paints. The Hero's art (`art`) is a `GuiArtRef`: the cached artwork as an `image`
 URL, the bundled placeholder as a `placeholder` URL, or `Loading` with no URL.
@@ -1361,7 +1365,7 @@ names a command, so a new one cannot ship without its grant.
 ## The attach states
 
 Before the attach there is no `App`, so `src/attach.rs` (`AttachCampaign`)
-owns the pre-attach phase on the core thread. It emits `GuiAttachFrame`
+owns the pre-attach phase on the core thread. It emits `GuiAttachState`
 states — the two refusal texts, the waiting state while an Owner shuts
 down, the version-or-wire mismatch, and the attach-failed text — the same
 texts `startup::run_local_instance` gives the TUI Client. The attach gate
