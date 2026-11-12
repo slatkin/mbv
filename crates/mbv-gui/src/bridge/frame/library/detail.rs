@@ -10,19 +10,11 @@ use super::{
 };
 
 /// The Library detail section (design D8): the active destination's detail
-/// part.
+/// part, tagged with the destination (`kind`) the same way `GuiDestinationList`
+/// is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GuiLibraryDetail {
-    /// The active destination's detail part (design D8).
-    pub destination: GuiDestinationDetail,
-}
-
-/// The active destination's detail part (design D8), tagged with the
-/// destination the same way `GuiDestinationList` is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "destination", rename_all = "camelCase")]
-pub enum GuiDestinationDetail {
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum GuiLibraryDetail {
     Music(GuiMusicDetail),
     Home(GuiHomeDetail),
     Shows(GuiShowsDetail),

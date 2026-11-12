@@ -28,7 +28,7 @@ pub struct GuiLibraryList {
 /// The active destination's list part (design D8), tagged with the destination
 /// so the window reads one shape per destination.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "destination", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum GuiDestinationList {
     Music(GuiMusicList),
     Home(GuiHomeList),

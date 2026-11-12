@@ -36,7 +36,7 @@ pub use self::audiobooks::{
     GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksFrame, GuiAudiobooksHeroFrame,
     GuiAudiobooksList, GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
 };
-pub use self::detail::{GuiDestinationDetail, GuiLibraryDetail};
+pub use self::detail::GuiLibraryDetail;
 pub use self::emby::{
     GuiEmbyDetail, GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame,
     GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
