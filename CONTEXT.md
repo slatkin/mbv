@@ -602,6 +602,20 @@ Watched filter:
 The All, Played, and Unplayed selector in the Feeds tab (`w` key). It filters feed entries by their played flag. Audiobookshelf podcast browsing has a matching All, Played, and Unplayed episode filter.
 _Avoid_: played filter, hide watched, unwatched filter
 
+## GUI window data
+
+Window section:
+One named part of what the GUI window paints. The *Client core* sends it with its own revision, and the window keeps it in its own store. A batch that carries a section replaces the window's value at the carried revision; a batch that omits it leaves the window's value alone. The section names the one fact or projection the window paints from it, so the Client core and the window never mirror a section's value in a second shape.
+_Avoid_: frame section, slice
+
+Section batch:
+The one update that carries the window sections that changed in one tick. The *Client core* sends at most one batch per tick, on the one `mbv://sections` event. The full batch that answers `sync` carries every present section at its current revision; it is the one form that may be called a snapshot.
+_Avoid_: frame, snapshot (except for the full batch that answers `sync`)
+
+Playhead anchor:
+The position, runtime, paused state, and active slot that the *Client core* sends on a discontinuity. The window stamps the anchor when it receives it and predicts the position from it between anchors. A new reported sample that leaves the prediction past the tolerance re-anchors; a report without a new sample never moves the prediction.
+_Avoid_: progress tick, position update
+
 ## Audiobookshelf
 
 Podcast:
