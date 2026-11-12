@@ -67,9 +67,10 @@ listed the per-frame costs.
 
 ## Consequences
 
-- An idle window gets no events, except when a toast expires or a Library
-  deadline passes. A playing window gets an event only when a section changes,
-  not on every render interval.
+- A window with stopped playback gets no events, except when a toast expires
+  or a Library deadline passes. A paused window also gets the finish clocks
+  when their minute changes. A playing window gets an event only when a section
+  changes, not on every render interval.
 - A missed dirty mark shows as a stale section until the next input.
   Invariant 32 owns the rule, and the audit runs in every core-thread test.
 - The window formats the elapsed and remaining clocks itself, with a port of

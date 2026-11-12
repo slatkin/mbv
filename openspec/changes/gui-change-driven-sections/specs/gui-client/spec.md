@@ -8,10 +8,17 @@ The Client core SHALL send the window an update only when the content of at leas
 
 #### Scenario: Nothing changes while the window is idle
 
-- **GIVEN** playback is paused or stopped and no toast is shown
+- **GIVEN** playback is stopped and no toast is shown
 - **AND** no Library deadline is pending
 - **WHEN** the user gives no input and no Service or Owner event arrives
 - **THEN** the window receives no update
+
+#### Scenario: Playback is paused
+
+- **GIVEN** playback is paused and no toast is shown
+- **WHEN** the user gives no input for one minute and no Service or Owner event arrives
+- **THEN** the window receives only the sections whose finish clocks changed
+- **AND** the window receives no playhead update
 
 #### Scenario: A Library deadline passes
 
