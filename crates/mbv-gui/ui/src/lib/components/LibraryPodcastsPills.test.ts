@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, podcastsScroll } from '$lib/library/scroll';
 import type { GuiPodcastsList } from '$lib/bridge/types';
 import { initialPodcastsUi, podcastsUi } from '$lib/library/podcasts';
 import LibraryPodcastsPills from './LibraryPodcastsPills.svelte';
@@ -21,6 +22,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	podcastsUi.set(initialPodcastsUi());
+	podcastsScroll.set(initialListScroll());
 });
 
 /** The carried Podcasts content with the show view selected (design D12). */

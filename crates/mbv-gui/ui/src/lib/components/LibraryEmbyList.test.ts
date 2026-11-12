@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, embyScroll } from '$lib/library/scroll';
 import type { GuiEmbyDetail, GuiEmbyList, GuiEmbyRow } from '$lib/bridge/types';
 import { embyUi, initialEmbyUi } from '$lib/library/emby';
 import { carryLibrary } from '$lib/bridge/test-library';
@@ -92,6 +93,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
+	embyScroll.set(initialListScroll());
 	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);

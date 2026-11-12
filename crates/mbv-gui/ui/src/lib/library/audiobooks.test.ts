@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, audiobooksScroll } from './scroll';
 import type { GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRow } from '$lib/bridge/types';
 import { audiobooksUi, initialAudiobooksUi, jumpAudiobooksToLetter, playAudiobooksRow, pressAudiobooksRow, queueAudiobooksRow } from './audiobooks';
 import { buildAudiobooksRows } from './audiobooks-list';
@@ -24,6 +25,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	audiobooksUi.set(initialAudiobooksUi());
+	audiobooksScroll.set(initialListScroll());
 	libraryUi.update((ui) => ({ ...ui, heroDismissed: true, itemMenuOpen: true }));
 	carryLibrary(null);
 });

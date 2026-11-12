@@ -21,3 +21,21 @@ export function initialListScroll(): ListScroll {
 
 /** The Music list's scroll store (the `LibraryList` canvas tree). */
 export const musicScroll = writable<ListScroll>(initialListScroll());
+
+/** The Shows list's scroll store. */
+export const showsScroll = writable<ListScroll>(initialListScroll());
+
+/** The Audiobooks list's scroll store. */
+export const audiobooksScroll = writable<ListScroll>(initialListScroll());
+
+/** The Home list's scroll store. */
+export const homeScroll = writable<ListScroll>(initialListScroll());
+
+/** The Emby library list's scroll store. */
+export const embyScroll = writable<ListScroll>(initialListScroll());
+
+/** The Feeds list's scroll store. */
+export const feedsScroll = writable<ListScroll>(initialListScroll());
+
+/** The Podcasts list's scroll store. */
+export const podcastsScroll = writable<ListScroll>(initialListScroll());

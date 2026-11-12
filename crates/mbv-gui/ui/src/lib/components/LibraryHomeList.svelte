@@ -30,6 +30,7 @@
 		scrollHomeList,
 		setHomeFilter,
 	} from '$lib/library/home';
+	import { homeScroll } from '$lib/library/scroll';
 	import { openRowMenuAt } from '$lib/library/state';
 	import ArtImage from './ArtImage.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
@@ -119,8 +120,8 @@
 	{/if}
 	<LibraryVirtualList
 		{rows}
-		scrollTop={$homeUi.scrollTop}
-		viewportHeight={$homeUi.viewportHeight}
+		scrollTop={$homeScroll.scrollTop}
+		viewportHeight={$homeScroll.viewportHeight}
 		attr="home"
 		onmeasure={measureHomeList}
 		onscroll={scrollHomeList}

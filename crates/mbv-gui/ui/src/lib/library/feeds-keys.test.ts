@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, feedsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type { GuiFeedsDetail, GuiFeedsList, GuiPanel } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
@@ -26,6 +27,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	feedsUi.set(initialFeedsUi());
+	feedsScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 

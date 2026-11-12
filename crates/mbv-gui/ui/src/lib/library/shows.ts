@@ -15,6 +15,7 @@ import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor, stepPi
 import type { ListMove } from './list';
 import { libraryShowsList } from './parts';
 import { libraryUi } from './state';
+import { showsScroll } from './scroll';
 import {
 	activeShowsMode,
 	buildShowsRows,
@@ -29,11 +30,6 @@ export interface ShowsUiState {
 	/** The cursor's row id, or `null` while no row carries the cursor
 	 * (design D12). The cursor moves over the item rows only. */
 	cursor: string | null;
-	/** The list's native scroll offset in pixels (design D12). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The mode pill the pill row's Left and Right move the focus to, or
 	 * `null` while no pill has it (design D6, D12). */
 	focusedPill: GuiShowsMode | null;
@@ -57,8 +53,6 @@ export interface ShowsUiState {
 export function initialShowsUi(): ShowsUiState {
 	return {
 		cursor: null,
-		scrollTop: 0,
-		viewportHeight: 0,
 		focusedPill: null,
 		pillSelect: null,
 		filter: '',
@@ -96,33 +90,44 @@ export function showsCursorRow(): ShowsItemRow | null {
 	return cursorRow(showsRows(), get(showsUi).cursor);
 }
 
-/** The state once the painted rows may have narrowed (design D12): the
+/** Scroll the list so the cursor's row paints fully, in the scroll store
+ * (design D12, D9). */
+function followShowsCursor(list: readonly ShowsListRow[], cursor: string | null): void {
+	showsScroll.update((scroll) => {
+		const scrollTop = scrollTopToShowCursor(list, cursor, scroll.scrollTop, scroll.viewportHeight);
+		return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+	});
+}
+
+/** Settle the cursor once the painted rows may have narrowed (design D12): the
  * cursor keeps its row while that row still paints, and falls to the first
- * painted row otherwise, with the scroll offset showing it — the Music
+ * painted row otherwise. The scroll store then shows the cursor — the Music
  * filter's own resolve (design D7). */
-function resolveShowsCursor(ui: ShowsUiState): ShowsUiState {
+function settleShowsCursor(): void {
+	const ui = get(showsUi);
 	const list = showsRows(ui.filter);
 	const cursor = list.some((row) => row.id === ui.cursor)
 		? ui.cursor
 		: moveShowsCursor(list, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	if (cursor !== ui.cursor) {
+		showsUi.update((current) => ({ ...current, cursor }));
+	}
+	followShowsCursor(list, cursor);
 }
 
 /** Narrow the list to the titles that contain `filter`, without case (design
  * D7's filter rule): the cursor follows the rows. */
 export function setShowsFilter(filter: string): void {
-	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter }));
+	showsUi.update((ui) => ({ ...ui, filter }));
+	settleShowsCursor();
 }
 
 /** Close the filter with Esc: the text goes with it, so a closed filter
  * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
 export function closeShowsFilter(): void {
 	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
-	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter: '' }));
+	showsUi.update((ui) => ({ ...ui, filter: '' }));
+	settleShowsCursor();
 }
 
 /** Accept the filter with Enter: the field closes and the list keeps the
@@ -253,16 +258,14 @@ export function queueShowsRow(rowId: string): void {
 export function moveShowsListCursor(move: ListMove): void {
 	const list = showsRows();
 	const current = get(showsUi);
-	const view = listWindow(list, current.scrollTop, current.viewportHeight);
+	const scroll = get(showsScroll);
+	const view = listWindow(list, scroll.scrollTop, scroll.viewportHeight);
 	const cursor = moveShowsCursor(list, current.cursor, move, view.end - view.start);
 	if (cursor === current.cursor) {
 		return;
 	}
-	showsUi.update((ui) => ({
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	}));
+	showsUi.update((ui) => ({ ...ui, cursor }));
+	followShowsCursor(list, cursor);
 }
 
 /** Jump to a letter of the rail (design D12): the cursor moves to the first
@@ -270,28 +273,30 @@ export function moveShowsListCursor(move: ListMove): void {
  * without rows changes nothing. */
 export function jumpShowsToLetter(letter: string): void {
 	const list = showsRows();
-	showsUi.update((ui) => {
-		const jump = jumpToLetter(showsLetterRail(list), list, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const jump = jumpToLetter(showsLetterRail(list), list, letter, get(showsScroll));
+	if (jump === null) {
+		return;
+	}
+	showsUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	showsScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (design D12): the rows in view
  * follow it, and the scroll offset stays inside the narrower range. */
 export function measureShowsList(viewportHeight: number): void {
-	showsUi.update((ui) => ({
-		...ui,
+	showsScroll.update((scroll) => ({
+		...scroll,
 		viewportHeight,
-		scrollTop: clampScrollTop(showsRows(), ui.scrollTop, viewportHeight),
+		scrollTop: clampScrollTop(showsRows(), scroll.scrollTop, viewportHeight),
 	}));
 }
 
 /** Report the list's native scroll offset (design D12): a user scroll moves
  * the rows in view, and the offset stays inside the list's range. */
 export function scrollShowsList(scrollTop: number): void {
-	showsUi.update((ui) => {
-		const top = clampScrollTop(showsRows(), Math.max(scrollTop, 0), ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	showsScroll.update((scroll) => {
+		const top = clampScrollTop(showsRows(), Math.max(scrollTop, 0), scroll.viewportHeight);
+		return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 	});
 }
 

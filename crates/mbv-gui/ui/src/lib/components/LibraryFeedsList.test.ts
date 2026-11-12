@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, feedsScroll } from '$lib/library/scroll';
 import type { GuiFeedsDetail, GuiFeedsList, GuiFeedsRow } from '$lib/bridge/types';
 import { initialFeedsUi, feedsUi } from '$lib/library/feeds';
 import { carryLibrary } from '$lib/bridge/test-library';
@@ -76,6 +77,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	feedsUi.set(initialFeedsUi());
+	feedsScroll.set(initialListScroll());
 	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);

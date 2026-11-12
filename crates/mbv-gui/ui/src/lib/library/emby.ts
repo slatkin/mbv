@@ -13,6 +13,7 @@
 // frame, the Emby rows and their letter headings, the letter rail, the play-next
 // command, the Emby command shapes, and the Emby names.
 
+import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { jumpToLetter } from './list';
@@ -26,6 +27,7 @@ import {
 import type { EmbyItemRow, EmbyListRow } from './emby-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
+import { embyScroll } from './scroll';
 import { libraryEmbyList } from './parts';
 
 /** The Emby list's interaction state: the shared pill-list state over the
@@ -51,6 +53,7 @@ const pillList = createPillList<
 	GuiEmbyList['pills'][number]
 >({
 	frame: libraryEmbyList,
+	scroll: embyScroll,
 	buildRows: (emby, filter) => buildEmbyRows(emby.rows, emby.feedGroup, filter),
 	itemOf: (row) => (row.kind === 'item' ? row : null),
 	move: moveEmbyCursor,
@@ -154,10 +157,12 @@ export function moveEmbyListCursor(move: ListMove): void {
  * rows changes nothing. */
 export function jumpEmbyToLetter(letter: string): void {
 	const list = embyRows();
-	embyUi.update((ui) => {
-		const jump = jumpToLetter(embyLetterRail(list), list, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const jump = jumpToLetter(embyLetterRail(list), list, letter, get(embyScroll));
+	if (jump === null) {
+		return;
+	}
+	embyUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	embyScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (row 8.1): the rows in view

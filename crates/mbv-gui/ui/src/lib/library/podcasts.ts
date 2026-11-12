@@ -21,6 +21,7 @@ import { buildPodcastsRows } from './podcasts-list';
 import type { PodcastsItemRow } from './podcasts-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
+import { podcastsScroll } from './scroll';
 import { libraryPodcastsList } from './parts';
 
 /** The Podcasts list's interaction state: the shared pill-list state over
@@ -57,6 +58,7 @@ const pillList = createPillList<
 	GuiPodcastsList['pills'][number]
 >({
 	frame: libraryPodcastsList,
+	scroll: podcastsScroll,
 	buildRows: (podcasts, filter) => buildPodcastsRows(podcasts.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,

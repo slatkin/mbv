@@ -28,6 +28,7 @@
 		scrollFeedsList,
 		setFeedsFilter,
 	} from '$lib/library/feeds';
+	import { feedsScroll } from '$lib/library/scroll';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryItemRow from './LibraryItemRow.svelte';
@@ -104,8 +105,8 @@
 	{/if}
 	<LibraryVirtualList
 		{rows}
-		scrollTop={$feedsUi.scrollTop}
-		viewportHeight={$feedsUi.viewportHeight}
+		scrollTop={$feedsScroll.scrollTop}
+		viewportHeight={$feedsScroll.viewportHeight}
 		attr="feeds"
 		onmeasure={measureFeedsList}
 		onscroll={scrollFeedsList}

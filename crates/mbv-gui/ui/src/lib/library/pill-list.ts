@@ -21,6 +21,7 @@ import type { GuiLibraryCommand } from '$lib/bridge/types';
 import { clampScrollTop, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
 import type { GeometryRow, ListMove } from './list';
 import { libraryUi } from './state';
+import type { ListScroll } from './scroll';
 
 /** A pill-list destination's interaction state (design D12): what the window
  * content owns and the core never reads. */
@@ -28,11 +29,6 @@ export interface PillListUiState<Pill, Focus = Pill> {
 	/** The cursor's row id, or `null` while no row carries the cursor
 	 * (design D12). The cursor moves over the item rows only. */
 	cursor: string | null;
-	/** The list's native scroll offset in pixels (design D12). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The pill the pill row's Left and Right move the focus to, or `null`
 	 * while no pill has it (design D6, D12): the pill itself, or its stable
 	 * key — the destination picks. */
@@ -49,8 +45,6 @@ export interface PillListUiState<Pill, Focus = Pill> {
 export function initialPillListUi<Pill, Focus = Pill>(): PillListUiState<Pill, Focus> {
 	return {
 		cursor: null,
-		scrollTop: 0,
-		viewportHeight: 0,
 		focusedPill: null,
 		pillSelect: null,
 		filter: '',
@@ -85,6 +79,9 @@ export interface PillListConfig<
 	/** The carried content slice, or `null` while any other destination is
 	 * active. */
 	frame(): Frame | null;
+	/** The list's scroll store (design D9): the native offset and the measured
+	 * viewport the controller's scroll actions write. */
+	scroll: Writable<ListScroll>;
 	/** The painted rows a frame builds under a filter text (design D12). */
 	buildRows(frame: Frame, filter: string): Row[];
 	/** The item a painted row names, or `null` for a row the cursor skips — a
@@ -190,20 +187,29 @@ export function createPillList<
 		return frame === null ? [] : config.buildRows(frame, filter);
 	}
 
-	/** The state once the painted rows may have narrowed (design D12): the
-	 * cursor keeps its row while that row still paints, and falls to the
-	 * first painted row otherwise, with the scroll offset showing it — the
-	 * Music filter's own resolve (design D7). */
-	function resolveCursor(state: PillListUiState<Pill, Focus>): PillListUiState<Pill, Focus> {
+	/** Scroll the list so the cursor's row paints fully, in the scroll store
+	 * (design D12, D9). */
+	function followCursor(list: readonly Row[], cursor: string | null): void {
+		config.scroll.update((scroll) => {
+			const scrollTop = scrollTopToShowCursor(list, cursor, scroll.scrollTop, scroll.viewportHeight);
+			return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+		});
+	}
+
+	/** Settle the cursor once the painted rows may have narrowed (design D12): the
+	 * cursor keeps its row while that row still paints, and falls to the first
+	 * painted row otherwise. The scroll store then shows the cursor — the Music
+	 * filter's own resolve (design D7). */
+	function settleCursor(): void {
+		const state = get(ui);
 		const list = rows(state.filter);
 		const cursor = list.some((row) => row.id === state.cursor)
 			? state.cursor
 			: config.move(list, null, 'home');
-		return {
-			...state,
-			cursor,
-			scrollTop: scrollTopToShowCursor(list, cursor, state.scrollTop, state.viewportHeight),
-		};
+		if (cursor !== state.cursor) {
+			ui.update((current) => ({ ...current, cursor }));
+		}
+		followCursor(list, cursor);
 	}
 
 	return {
@@ -231,12 +237,14 @@ export function createPillList<
 		},
 
 		setFilter(filter) {
-			ui.update((state) => resolveCursor({ ...state, filter }));
+			ui.update((state) => ({ ...state, filter }));
+			settleCursor();
 		},
 
 		closeFilter() {
 			libraryUi.update((state) => ({ ...state, filterOpen: false }));
-			ui.update((state) => resolveCursor({ ...state, filter: '' }));
+			ui.update((state) => ({ ...state, filter: '' }));
+			settleCursor();
 		},
 
 		acceptFilter() {
@@ -246,39 +254,28 @@ export function createPillList<
 		moveCursor(move) {
 			const list = rows();
 			const current = get(ui);
-			const view = listWindow(list, current.scrollTop, current.viewportHeight);
+			const scroll = get(config.scroll);
+			const view = listWindow(list, scroll.scrollTop, scroll.viewportHeight);
 			const cursor = config.move(list, current.cursor, move, view.end - view.start);
 			if (cursor === current.cursor) {
 				return;
 			}
-			ui.update((state) => ({
-				...state,
-				cursor,
-				scrollTop: scrollTopToShowCursor(
-					list,
-					cursor,
-					state.scrollTop,
-					state.viewportHeight,
-				),
-			}));
+			ui.update((state) => ({ ...state, cursor }));
+			followCursor(list, cursor);
 		},
 
 		measure(viewportHeight) {
-			ui.update((state) => ({
-				...state,
+			config.scroll.update((scroll) => ({
+				...scroll,
 				viewportHeight,
-				scrollTop: clampScrollTop(rows(), state.scrollTop, viewportHeight),
+				scrollTop: clampScrollTop(rows(), scroll.scrollTop, viewportHeight),
 			}));
 		},
 
 		scroll(scrollTop) {
-			ui.update((state) => {
-				const top = clampScrollTop(
-					rows(),
-					Math.max(scrollTop, 0),
-					state.viewportHeight,
-				);
-				return top === state.scrollTop ? state : { ...state, scrollTop: top };
+			config.scroll.update((scroll) => {
+				const top = clampScrollTop(rows(), Math.max(scrollTop, 0), scroll.viewportHeight);
+				return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 			});
 		},
 

@@ -35,6 +35,7 @@
 		setShowsFilter,
 		showsUi,
 	} from '$lib/library/shows';
+	import { showsScroll } from '$lib/library/scroll';
 	import { openRowMenuAt } from '$lib/library/state';
 	import { isPlayedEpisode, resetShowsEpisodeCursor } from '$lib/library/shows-workspace';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
@@ -211,8 +212,8 @@
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
 		{rows}
-		scrollTop={$showsUi.scrollTop}
-		viewportHeight={$showsUi.viewportHeight}
+		scrollTop={$showsScroll.scrollTop}
+		viewportHeight={$showsScroll.viewportHeight}
 		attr="shows"
 		padding="8px 0 8px 8px"
 		onmeasure={measureShowsList}

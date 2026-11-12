@@ -21,6 +21,7 @@ import { buildFeedsRows } from './feeds-list';
 import type { FeedsItemRow } from './feeds-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
+import { feedsScroll } from './scroll';
 import { libraryFeedsList } from './parts';
 
 /** The Feeds list's interaction state: the shared pill-list state over the
@@ -50,6 +51,7 @@ const pillList = createPillList<
 	GuiFeedsList['pills'][number]
 >({
 	frame: libraryFeedsList,
+	scroll: feedsScroll,
 	buildRows: (feeds, filter) => buildFeedsRows(feeds.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,

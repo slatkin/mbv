@@ -10,6 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, showsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type {
 
@@ -35,6 +36,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	showsUi.set(initialShowsUi());
+	showsScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 

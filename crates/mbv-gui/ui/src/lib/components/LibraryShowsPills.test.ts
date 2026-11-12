@@ -6,6 +6,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, showsScroll } from '$lib/library/scroll';
 import type { GuiShowsList } from '$lib/bridge/types';
 import { initialShowsUi, showsUi } from '$lib/library/shows';
 import LibraryShowsPills from './LibraryShowsPills.svelte';
@@ -20,6 +21,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
+	showsScroll.set(initialListScroll());
 });
 
 /** The carried Shows content with `all` selected (design D12). */

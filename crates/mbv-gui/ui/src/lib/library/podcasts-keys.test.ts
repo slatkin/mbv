@@ -10,6 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, podcastsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type {
 	GuiPanel,
@@ -36,6 +37,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	podcastsUi.set(initialPodcastsUi());
+	podcastsScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 

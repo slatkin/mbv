@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, feedsScroll } from '$lib/library/scroll';
 import type { GuiFeedsList } from '$lib/bridge/types';
 import { initialFeedsUi, feedsUi } from '$lib/library/feeds';
 import LibraryFeedsPills from './LibraryFeedsPills.svelte';
@@ -21,6 +22,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	feedsUi.set(initialFeedsUi());
+	feedsScroll.set(initialListScroll());
 });
 
 /** The carried Feeds content with the subscription view selected (design

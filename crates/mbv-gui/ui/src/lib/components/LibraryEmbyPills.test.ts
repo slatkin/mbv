@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, embyScroll } from '$lib/library/scroll';
 import type { GuiEmbyList } from '$lib/bridge/types';
 import { embyUi, initialEmbyUi } from '$lib/library/emby';
 import LibraryEmbyPills from './LibraryEmbyPills.svelte';
@@ -21,6 +22,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
+	embyScroll.set(initialListScroll());
 });
 
 /** The carried Emby content in the feed-group mode with `All` selected (row

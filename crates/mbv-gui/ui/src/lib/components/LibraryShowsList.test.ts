@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, showsScroll } from '$lib/library/scroll';
 import type {
 	GuiShowsDetail,
 	GuiShowsList,
@@ -113,6 +114,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
+	showsScroll.set(initialListScroll());
 	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);

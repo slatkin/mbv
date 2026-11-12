@@ -28,6 +28,7 @@
 		scrollPodcastsList,
 		setPodcastsFilter,
 	} from '$lib/library/podcasts';
+	import { podcastsScroll } from '$lib/library/scroll';
 	import { openRowMenuAt } from '$lib/library/state';
 	import LibraryItemRow from './LibraryItemRow.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
@@ -121,8 +122,8 @@
 	{/if}
 	<LibraryVirtualList
 		{rows}
-		scrollTop={$podcastsUi.scrollTop}
-		viewportHeight={$podcastsUi.viewportHeight}
+		scrollTop={$podcastsScroll.scrollTop}
+		viewportHeight={$podcastsScroll.viewportHeight}
 		attr="podcasts"
 		onmeasure={measurePodcastsList}
 		onscroll={scrollPodcastsList}

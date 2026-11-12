@@ -35,6 +35,7 @@
 		scrollAudiobooksList,
 		setAudiobooksFilter,
 	} from '$lib/library/audiobooks';
+	import { audiobooksScroll } from '$lib/library/scroll';
 	import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
 	import { openRowMenuAt } from '$lib/library/state';
 	import LibraryListHeader from './LibraryListHeader.svelte';
@@ -134,8 +135,8 @@
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
 		{rows}
-		scrollTop={$audiobooksUi.scrollTop}
-		viewportHeight={$audiobooksUi.viewportHeight}
+		scrollTop={$audiobooksScroll.scrollTop}
+		viewportHeight={$audiobooksScroll.viewportHeight}
 		attr="abs"
 		padding="8px 0 8px 8px"
 		onmeasure={measureAudiobooksList}

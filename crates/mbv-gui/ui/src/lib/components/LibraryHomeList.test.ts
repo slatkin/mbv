@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, homeScroll } from '$lib/library/scroll';
 import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from '$lib/library/home-list';
 import { homeUi, initialHomeUi } from '$lib/library/home';
@@ -62,6 +63,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	homeUi.set(initialHomeUi());
+	homeScroll.set(initialListScroll());
 	carryLibrary(carriedContent());
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);

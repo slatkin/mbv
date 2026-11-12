@@ -36,6 +36,7 @@
 		scrollEmbyList,
 		setEmbyFilter,
 	} from '$lib/library/emby';
+	import { embyScroll } from '$lib/library/scroll';
 	import { openRowMenuAt } from '$lib/library/state';
 	import LibraryLetterRail from './LibraryLetterRail.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
@@ -138,8 +139,8 @@
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
 		{rows}
-		scrollTop={$embyUi.scrollTop}
-		viewportHeight={$embyUi.viewportHeight}
+		scrollTop={$embyScroll.scrollTop}
+		viewportHeight={$embyScroll.viewportHeight}
 		attr="emby"
 		padding="8px 0 8px 8px"
 		onmeasure={measureEmbyList}

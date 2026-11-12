@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, audiobooksScroll } from '$lib/library/scroll';
 import type {
 	GuiAudiobooksDetail,
 	GuiAudiobooksList,
@@ -93,6 +94,7 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	resetMock.mockClear();
 	audiobooksUi.set(initialAudiobooksUi());
+	audiobooksScroll.set(initialListScroll());
 	libraryUi.set(initialLibraryUi());
 	carryLibrary(null);
 	ResizeObserverStub.instances = [];

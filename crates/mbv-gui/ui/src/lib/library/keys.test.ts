@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { homeScroll, initialListScroll, musicScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import {
 	initialHomeUi,
@@ -34,7 +35,6 @@ import {
 	reportLibraryArrangement,
 	setLibraryFilter,
 } from './state';
-import { initialListScroll, musicScroll } from './scroll';
 
 const invokeMock = vi.mocked(invoke);
 
@@ -43,6 +43,7 @@ beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
 	musicScroll.set(initialListScroll());
 	homeUi.set(initialHomeUi());
+	homeScroll.set(initialListScroll());
 	carryLibrary(null);
 });
 

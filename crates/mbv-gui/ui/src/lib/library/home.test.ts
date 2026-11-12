@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, homeScroll } from './scroll';
 import type { GuiHomeDetail, GuiHomeList, GuiHomeRow } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from './home-list';
 import { carryLibrary } from '$lib/bridge/test-library';
@@ -28,6 +29,7 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	libraryUi.set(initialLibraryUi());
 	homeUi.set(initialHomeUi());
+	homeScroll.set(initialListScroll());
 });
 
 /** The item row's narrowed type: the union's arm a populated row carries. */
@@ -99,7 +101,7 @@ test('a cursor move that settles on a row selects it by its opaque id', () => {
 	moveHomeListCursor('down');
 
 	expect(get(homeUi).cursor).toBe(homeRowKey(ADDED.id));
-	expect(get(homeUi).scrollTop).toBe(0);
+	expect(get(homeScroll).scrollTop).toBe(0);
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'homeSelect', row: ADDED.id },
 	});
@@ -119,7 +121,7 @@ test('a cursor move past a section scrolls the row into view', () => {
 	moveHomeListCursor('end');
 
 	expect(get(homeUi).cursor).toBe(homeRowKey(ADDED.id));
-	expect(get(homeUi).scrollTop).toBe(adRow.top + adRow.height - HOME_ITEM_ROW_HEIGHT * 3);
+	expect(get(homeScroll).scrollTop).toBe(adRow.top + adRow.height - HOME_ITEM_ROW_HEIGHT * 3);
 });
 
 // The press is the selection's half only (design D12): it selects, and Enter
