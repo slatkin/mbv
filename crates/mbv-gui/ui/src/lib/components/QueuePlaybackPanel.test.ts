@@ -34,7 +34,7 @@ import type {
 	GuiScrubberTile,
 	GuiStatusBar,
 	GuiTrickplayGrid,
-	GuiTrickplaySheet,
+	GuiArtRef,
 } from '$lib/bridge/types';
 import QueueFooter from './QueueFooter.svelte';
 import QueuePanel from './QueuePanel.svelte';
@@ -119,7 +119,6 @@ let mounted: { unmount(): void } | null = null;
 function renderPanel(
 	playbackValue: GuiQueuePlayback = playing(),
 	overlayValue: GuiOverlayFrame | null = null,
-	carriedSheet: GuiTrickplaySheet | null = null,
 	hoverValue: GuiScrubberHover | null = null,
 	playhead: Partial<GuiPlayhead> = {},
 ) {
@@ -138,7 +137,7 @@ function renderPanel(
 		paused: false,
 		...playhead,
 	});
-	const rendered = render(QueuePlaybackPanel, { props: { carriedSheet } });
+	const rendered = render(QueuePlaybackPanel);
 	mounted = rendered;
 	return rendered;
 }
@@ -167,9 +166,9 @@ function trickplayGrid(): GuiTrickplayGrid {
 	};
 }
 
-/** One hovered trickplay tile: column two, row one of the sheet `sheet`
- * carries the image of (`null` when the frame does not re-carry it). */
-function tile(sheet: string | null): GuiScrubberTile {
+/** One hovered trickplay tile: column two, row one of a sheet
+ * whose image reference is `sheet`. */
+function tile(sheet: GuiArtRef): GuiScrubberTile {
 	return {
 		sheetKey: 'item:320:0',
 		width: 320,
@@ -181,7 +180,8 @@ function tile(sheet: string | null): GuiScrubberTile {
 	};
 }
 
-const SHEET = 'data:image/jpeg;base64,anBlZw==';
+const SHEET_URL = 'mbv-art://localhost/trickplay/item%3A320%3A0';
+const SHEET: GuiArtRef = { kind: 'image', src: SHEET_URL };
 
 /** The preview's painted thumbnail: the only element that crops a sprite. */
 function tileElement(container: HTMLElement): HTMLElement | null {
@@ -258,7 +258,7 @@ function isChoice(id: unknown): boolean {
 
 test('a playing frame renders the header, artwork badge, title, and clocks', () => {
 	const { getByText, container } = renderPanel(
-		playing({ artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' } }),
+		playing({ artwork: { kind: 'image', src: 'mbv-art://localhost/card/k' } }),
 	);
 
 	// The canvas header (`main` audits 1–5): the cast target carries the
@@ -321,7 +321,7 @@ test('the still slot paints the canvas caption while no image lands', () => {
 });
 
 test('a paint reports the transport, seek, header, seekbar, and target regions', async () => {
-	renderPanel(playing({ artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' } }));
+	renderPanel(playing({ artwork: { kind: 'image', src: 'mbv-art://localhost/card/k' } }));
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
 	expect(reportedRegionIds()).toEqual([
@@ -371,7 +371,6 @@ test('the scrubber paints the hover preview from the frame', () => {
 	const { container, getByText } = renderPanel(
 		playing(),
 		null,
-		null,
 		{ fraction: 0.75, timeLabel: '2:30', chapter: 'Chapter Two', chapterNumber: 2, tile: null },
 	);
 
@@ -403,37 +402,23 @@ test('the hover preview paints the trickplay tile the frame carries', () => {
 	const { container } = renderPanel(
 		playing({ trickplay: [trickplayGrid()] }),
 		null,
-		null,
 		hovered(0.5, tile(SHEET)),
 	);
 
 	const thumb = tileElement(container);
-	expect(thumb?.style.backgroundImage).toContain(SHEET);
+	expect(thumb?.style.backgroundImage).toContain(SHEET_URL);
 	expect(thumb?.style.backgroundPosition).toBe('-256px -72px');
 });
 
-// The frame re-carries the sheet's image only when the hovered sheet changes,
-// so the preview repaints the sheet the panel latched; with none latched, it
-// keeps the placeholder.
-test('the hover preview repaints the latched sheet, else the in-flight box', () => {
-	const latched = renderPanel(
-		playing({ trickplay: [trickplayGrid()] }),
-		null,
-		{ key: 'item:320:0', image: SHEET },
-		hovered(0.5, tile(null)),
-	);
-	expect(tileElement(latched.container)?.style.backgroundImage).toContain(
-		SHEET,
-	);
-
-	// A hovered tile whose sheet is not yet latched is the canvas's
+// A sheet still loading paints the canvas's in-flight box, not a sprite.
+test('the hover preview paints the in-flight box while its sheet loads', () => {
+	// A hovered tile whose sheet is still loading is the canvas's
 	// `[trickplay]` box while the fetch is in flight — the placeholder paints
 	// only while the frame carries the tile fact.
 	const bare = renderPanel(
 		playing({ trickplay: [trickplayGrid()] }),
 		null,
-		null,
-		hovered(0.5, tile(null)),
+		hovered(0.5, tile({ kind: 'loading' })),
 	);
 	expect(tileElement(bare.container)).toBeNull();
 	expect(bare.getByText('[trickplay]')).toBeTruthy();

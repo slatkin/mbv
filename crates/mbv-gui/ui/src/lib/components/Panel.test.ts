@@ -162,7 +162,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		trickplay: null,
 		availability: { stop: false, next: true, previous: true },
 		statusIndicators: null,
-		artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' },
+		artwork: { kind: 'image', src: 'mbv-art://localhost/card/k' },
 		trackChips: null,
 		targetChoices: [],
 		...overrides,

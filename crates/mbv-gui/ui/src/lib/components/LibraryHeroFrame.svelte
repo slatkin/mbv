@@ -23,7 +23,7 @@
 	// `data-library-hero-*` (`attr` empty) and the Shows Hero's are
 	// `data-library-shows-hero-*`, so a destination's tests keep their hooks.
 	import type { Snippet } from 'svelte';
-	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import type { GuiArtRef } from '$lib/bridge/library-types';
 	import { heroAttr } from '$lib/library/hero';
 	import type { Segments } from '$lib/library/hero';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
@@ -52,7 +52,7 @@
 		};
 		/** The artwork box's shape and its fetched art. */
 		artShape: 'landscape' | 'square' | 'portrait';
-		art: GuiLibraryArt | null;
+		art: GuiArtRef | null;
 		/** The alternative text of the artwork. */
 		artTitle: string;
 		/** The artwork box's placeholder while no art is carried. */

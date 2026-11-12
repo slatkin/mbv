@@ -5,7 +5,7 @@
 // `library-types.ts` re-exports this family with the rest of the Library's
 // wire types, so every call site keeps importing from the one bridge module.
 
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 
 /** One Home row's stable identity (add-gui-library-panel design D12): the
  * identity the Home paths resolve, addressed by Service ids and never by a
@@ -57,7 +57,7 @@ export type GuiHomeRow =
 			text: string;
 	  }
 	| { row: 'spacer' }
-	| { row: 'item'; id: GuiHomeRowId; title: string; subtitle: string | null; date: string | null; kind: GuiHomeRowKind; state: GuiHomeRowState; art: GuiLibraryArt | null };
+	| { row: 'item'; id: GuiHomeRowId; title: string; subtitle: string | null; date: string | null; kind: GuiHomeRowKind; state: GuiHomeRowState; art: GuiArtRef | null };
 
 /** The kind one item row paints (design D12): `collection` when the row
  * targets a container the play path refuses, `media` on a playable leaf. */
@@ -88,5 +88,5 @@ export interface GuiHomeHero {
 	/** The Hero's artwork, present exactly while the row's item obtains art
 	 * from the image cache; the window paints its own placeholder while
 	 * `null`. */
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 }

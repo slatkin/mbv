@@ -7,7 +7,7 @@
 // rests on them. The model is plain data over fixed heights, so the geometry
 // is asserted without a layout, which jsdom does not have.
 
-import type { GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiLibraryArt } from '$lib/bridge/types';
+import type { GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiArtRef } from '$lib/bridge/types';
 import { filterMatch, moveCursor } from './list';
 import type { ListMove } from './list';
 
@@ -40,7 +40,7 @@ export type HomeListRow =
 			date: string | null;
 			itemKind: GuiHomeRowKind;
 			state: GuiHomeRowState;
-			art: GuiLibraryArt | null;
+			art: GuiArtRef | null;
 	  };
 
 /** The row's stable key (design D12): the `GuiHomeRowId` as one string, so a

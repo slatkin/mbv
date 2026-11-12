@@ -6,6 +6,7 @@
 // re-exported below, so every call site keeps importing from the one bridge
 // module.
 
+import type { GuiArtRef } from './art';
 import type { GuiAudiobooksFrame } from './library-types-audiobooks';
 import type { GuiEmbyFeedGroup, GuiEmbyFrame } from './library-types-emby';
 import type { GuiFeedsFrame, GuiFeedsLibraryCommand } from './library-types-feeds';
@@ -307,7 +308,7 @@ export interface GuiMusicFrame {
 	/** The Hero's facts; `null` while no album of the union is picked. */
 	hero: GuiMusicHero | null;
 	/** The Hero's square artwork, present exactly when `hero` is. */
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The id of the Emby track playing at the playhead (the Library's
 	 * playing row): the Queue panel's own authority, carried so a tracklist
 	 * row and a list track row paint what the Queue's active slot paints.
@@ -408,12 +409,7 @@ export interface GuiMusicMenuEntryFrame {
 	index: number;
 }
 
-/** The Library Hero's square artwork (design D5). The image and placeholder
- * payloads are `data:` URLs the core encoded from the mbv image cache. */
-export type GuiLibraryArt =
-	| { kind: 'image'; detail: string }
-	| { kind: 'placeholder'; detail: string }
-	| { kind: 'loading' };
+export type { GuiArtRef };
 
 /** The data type a meta segment carries; colour carries the type in the
  * window (design D14). */
@@ -542,7 +538,7 @@ export interface GuiShowsHero {
 	 * arm: landscape for a series and a thumb-declared episode, portrait
 	 * for a poster-declared one). */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The series Hero's Workspace; `null` on the Latest mode's episode
 	 * Hero and while the selected series' detail has not landed. */
 	workspace: GuiShowsWorkspace | null;

@@ -9,8 +9,8 @@
 	// own control brings the panel back. Both controls report the
 	// `QueuePlayback` target ids, so a press resolves through the same core
 	// arms as the expanded header's controls.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
+	import ArtImage from './ArtImage.svelte';
 	import { Pause, Play, SkipForward } from '@lucide/svelte';
 	import {
 		elementRegion,
@@ -21,7 +21,7 @@
 	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
-		GuiCardArtwork,
+		GuiArtRef,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
@@ -31,7 +31,7 @@
 		 * row's finding P2), `null` while no slot follows the playhead. */
 		next: string | null;
 		/** The artwork the window carries for the active item (design D10). */
-		art: GuiCardArtwork | null;
+		art: GuiArtRef | null;
 	}
 	const { next, art }: Props = $props();
 
@@ -59,9 +59,6 @@
 	/** The played fraction of the thin progress line, clamped to `[0, 1]`:
 	 * the playhead's prediction (design D5). */
 	const progress = $derived($fraction);
-
-	/** The artwork's bitmap, `null` while the item has none. */
-	const image = $derived(art?.kind === 'image' ? art.detail : null);
 
 	/** The meta line: the parent line and the next item, whichever the frame
 	 * carries, joined as one truncating line. */
@@ -122,11 +119,11 @@
 		bind:this={stillEl}
 		data-target="visualSlot"
 	>
-		{#if image}
-			<img class="h-full w-full object-cover" alt="" src={image} use:capToNaturalSize />
-		{:else}
-			<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
-		{/if}
+		<ArtImage art={art} alt="" class="h-full w-full object-cover">
+			{#snippet fallback()}
+				<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
+			{/snippet}
+		</ArtImage>
 	</div>
 	<div class="flex min-w-0 flex-1 flex-col" style:gap="calc(var(--mbv-cell-row) / 4)">
 		<span

@@ -1,7 +1,7 @@
 // The Emby-library destination's wire types (add-gui-library-panel design D12,
 // row 8.1), split out of library-types.ts; re-exported there.
 
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 
 /** The feed-group pill a press selects (design D12, row 8.1): `New` (the
  * destination Latest view), `All`, or one root folder by its stable Service
@@ -94,7 +94,7 @@ export interface GuiEmbyHero {
 	/** The artwork box the Hero reserves (the artwork policy's declared
 	 * arm). */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The movie's credits table (design D17, Q7): the director first,
 	 * then the cast, as the TUI's credits table paints them. */
 	credits: GuiEmbyHeroCredit[];

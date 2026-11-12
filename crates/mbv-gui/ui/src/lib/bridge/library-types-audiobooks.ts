@@ -1,7 +1,7 @@
 // The Audiobooks destination's wire types (add-gui-library-panel design D12,
 // row 9.1), split out of library-types.ts; re-exported there.
 
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 
 /** The Audiobooks destination's content (design D12, row 9.1), present
  * while an Audiobookshelf book library is the active destination: the flat
@@ -68,7 +68,7 @@ export interface GuiAudiobooksHero {
 	/** The artwork box the Hero reserves: the book artwork policy's
 	 * portrait. */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The book's chapter rows; `null` while the book's detail has not
 	 * landed, which the frame's `workspaceLoading` names. */
 	workspace: GuiAudiobooksWorkspace | null;

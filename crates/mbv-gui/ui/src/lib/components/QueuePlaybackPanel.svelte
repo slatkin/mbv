@@ -31,7 +31,6 @@
 	// holds no open, cursor, or hover state; Esc and a press elsewhere close
 	// the popover through the core's key and pointer paths. The track chips
 	// row and its popover live in `TrackChips` below the transport.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
 	import {
 		Cast,
@@ -47,15 +46,14 @@
 	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { playhead } from '$lib/bridge/playhead';
 	import { hover, overlay, playback } from '$lib/bridge/sections';
+	import ArtImage from './ArtImage.svelte';
 	import TrackChips from './TrackChips.svelte';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import { clampRatio, formatWallClock, minus } from '$lib/bridge/time';
 	import type {
-		GuiCardArtwork,
 		GuiChapter,
 		GuiNowPlayingStatus,
 		GuiSegmentMark,
-		GuiTrickplaySheet,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
@@ -76,23 +74,6 @@
 	 * while no anchor holds — the idle transport paints a play control. */
 	const paused = $derived($playheadAnchor?.paused ?? true);
 
-	interface Props {
-		/** The artwork the window carried for the active item (design D10),
-		 * held by the panel above this one so a state that mounts later paints
-		 * it too. `null` in a bare render, where the section's own `artwork` is
-		 * the only source. */
-		carried?: GuiCardArtwork | null;
-		/** The trickplay sheet the window carried (task 6.7), held by the panel
-		 * above this one: a section re-carries the sheet's image only when the
-		 * hovered sheet changes, so the preview repaints the latched image while
-		 * the tile names its key. `null` in a bare render. */
-		carriedSheet?: GuiTrickplaySheet | null;
-	}
-	const {
-		carried = null,
-		carriedSheet = null,
-	}: Props = $props();
-
 	const reportKey = Symbol('queue-playback-panel');
 	const chooserKey = Symbol('target-chooser');
 	let panelEl: HTMLElement | undefined = $state();
@@ -107,9 +88,9 @@
 	let collapseEl: HTMLElement | undefined = $state();
 	let chooserEl: HTMLElement | undefined = $state();
 
-	/** The art the panel paints: this batch's carried value when it has one,
-	 * else the value the panel above carried for the window (design D10). */
-	const art = $derived($playback.artwork ?? carried);
+	/** The art the panel paints: the section's reference, `null` while the
+	 * slot hides (design D7). */
+	const art = $derived($playback.artwork);
 
 	/** The open playback-target chooser, or `null` while another overlay (or
 	 * none) is up. The rows paint the core's live choice list; a row's press
@@ -153,22 +134,19 @@
 
 	/** The hover preview's tile crop (task 6.7): the thumbnail's place in its
 	 * sheet, scaled to the preview box, as the CSS sprite the browser paints.
-	 * `null` while no sheet is latched for the hovered tile, so the preview
-	 * falls back to the placeholder. */
+	 * The sprite loads the sheet by its URL. `null` while the sheet is still
+	 * loading, so the preview paints the in-flight box. */
 	const tileCrop = $derived.by(() => {
 		const tile = hoverPreview?.tile;
-		const image = tile
-			? (tile.sheet ??
-				(carriedSheet?.key === tile.sheetKey ? carriedSheet.image : null))
-			: null;
-		if (!tile || !image || tile.width <= 0) {
+		const sheet = tile?.sheet;
+		if (!tile || !sheet || sheet.kind === 'loading' || tile.width <= 0) {
 			return null;
 		}
 		const scale = TILE_WIDTH_PX / tile.width;
 		return {
 			width: `${TILE_WIDTH_PX}px`,
 			height: `${tile.height * scale}px`,
-			backgroundImage: `url('${image}')`,
+			backgroundImage: `url('${sheet.src}')`,
 			backgroundSize: `${tile.columns * TILE_WIDTH_PX}px auto`,
 			backgroundPosition: `-${tile.column * TILE_WIDTH_PX}px -${tile.row * tile.height * scale}px`,
 		};
@@ -423,7 +401,7 @@
 			image lands. The wrapper is the visual slot's painted region. The
 			season-and-episode badge is the canvas chip at the box's bottom
 			left (`main` audit 7); a non-episode item paints none. -->
-		{#if art && art.kind !== 'hidden'}
+		{#if art}
 			<div
 				class="relative flex w-fit max-w-full items-center justify-center overflow-hidden"
 				style:height={art.kind === 'image' ? undefined : '225px'}
@@ -431,27 +409,22 @@
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
-				{#if art.kind === 'image' || art.kind === 'placeholder'}
-					<img
-						class="block"
-						alt=""
-						src={art.detail}
-						use:capToNaturalSize={{ height: 225 }}
-					/>
-				{:else}
-					<!-- The canvas's source caption while no image lands
-						(design D4a's still slot): the frame's still-caption
-						fact, one `[...]` line per item kind; an item with no
-						image source paints no caption. -->
-					{#if $playback.stillCaption}
-						<span
-							class="font-mono"
-							style:font-size="12px"
-							style:color={roleVar('textMuted')}
-							>{`[${$playback.stillCaption}]`}</span
-						>
-					{/if}
-				{/if}
+				<ArtImage art={art} alt="" class="block" bounds={{ height: 225 }}>
+					{#snippet fallback()}
+						<!-- The canvas's source caption while no image lands
+							(design D4a's still slot): the frame's still-caption
+							fact, one `[...]` line per item kind; an item with no
+							image source paints no caption. -->
+						{#if $playback.stillCaption}
+							<span
+								class="font-mono"
+								style:font-size="12px"
+								style:color={roleVar('textMuted')}
+								>{`[${$playback.stillCaption}]`}</span
+							>
+						{/if}
+					{/snippet}
+				</ArtImage>
 				{#if $playback.episodeBadge}
 					<span
 						class="absolute font-mono"
@@ -510,8 +483,8 @@
 						<!-- The hover preview (`main` audit 12): the 128×72
 							trickplay tile stacked over the label chip, which reads
 							the time and the covering chapter's number, not its
-							name. A hovered tile paints the cached sheet when one
-							is latched and the canvas `[trickplay]` box while the
+							name. A hovered tile paints the sheet by its URL, and
+							the canvas `[trickplay]` box while the
 							sheet's fetch is still in flight; a position the item
 							offers no tile for paints the label chip alone (the
 							spec's no-trickplay scenario). -->

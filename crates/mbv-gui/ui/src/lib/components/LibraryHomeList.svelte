@@ -14,7 +14,6 @@
 	// paints that state and reports the two facts only the DOM holds. A press
 	// selects the row, and a double-click plays it (design D12): the keys'
 	// Enter plays the cursor row, and the press is the selection's half.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import type { GuiHomeFrame } from '$lib/bridge/types';
 	import {
 		buildHomeRows,
@@ -32,6 +31,7 @@
 		setHomeFilter,
 	} from '$lib/library/home';
 	import { openRowMenuAt } from '$lib/library/state';
+	import ArtImage from './ArtImage.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
@@ -159,9 +159,9 @@
 					oncontextmenu={(event) => rowMenu(event, row)}
 				>
 					{#if row.art !== null}
-						<!-- The row's card art (design D12): the frame's data URL, or
-							the art box while the cache still encodes it. The rows without
-							art paint no box at all. -->
+						<!-- The row's card art (design D12): the frame's image reference,
+							or the empty box while it is loading. The rows without art paint
+							no box at all. -->
 						<span
 							class="flex flex-none items-center justify-center"
 							style:width="40px"
@@ -171,14 +171,7 @@
 							style:overflow="hidden"
 							data-library-home-art={row.art.kind}
 						>
-							{#if row.art.kind !== 'loading'}
-								<img
-									class="h-full w-full object-cover"
-									src={row.art.detail}
-									alt=""
-									use:capToNaturalSize
-								/>
-							{/if}
+							<ArtImage art={row.art} alt="" class="h-full w-full object-cover" />
 						</span>
 					{/if}
 					<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">

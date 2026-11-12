@@ -8,10 +8,10 @@
 	//
 	// `attr` names the destination's own attributes (`data-library-shows-hero-art`),
 	// so a destination's tests keep their hook.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
-	import type { GuiLibraryArt } from '$lib/bridge/library-types';
+	import type { GuiArtRef } from '$lib/bridge/art';
 	import { heroAttr } from '$lib/library/hero';
 	import { canvasVar } from '$lib/bridge/theme';
+	import ArtImage from './ArtImage.svelte';
 
 	/** The artwork box policy's shape, as every Hero's frames carry it. */
 	type HeroArtShape = 'landscape' | 'square' | 'portrait';
@@ -20,7 +20,7 @@
 		/** The artwork box the Hero reserves, from the artwork policy. */
 		shape: HeroArtShape;
 		/** The fetched artwork, or `null` while the item declares none. */
-		art: GuiLibraryArt | null;
+		art: GuiArtRef | null;
 		/** The item's title: the image's alternative text. */
 		title: string;
 		/** The destination's own attribute prefix, as in `shows` or `emby`;
@@ -73,18 +73,16 @@
 	{...{ [own('art')]: art?.kind ?? 'none' }}
 	{...{ [own('art-shape')]: shape }}
 >
-	{#if art !== null && art.kind !== 'loading'}
-		<img
-			class="block"
-			src={art.detail}
-			alt={title}
-			use:capToNaturalSize={band
-				? { height: BAND_MAX_HEIGHT }
-				: { width: ART_WIDTH, height: ART_HEIGHT[shape] }}
-		/>
-	{:else}
-		<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
-			>{placeholder}</span
-		>
-	{/if}
+	<ArtImage
+		{art}
+		alt={title}
+		class="block"
+		bounds={band ? { height: BAND_MAX_HEIGHT } : { width: ART_WIDTH, height: ART_HEIGHT[shape] }}
+	>
+		{#snippet fallback()}
+			<span class="font-mono" style:font-size="13px" style:color={canvasVar('muted')}
+				>{placeholder}</span
+			>
+		{/snippet}
+	</ArtImage>
 </div>

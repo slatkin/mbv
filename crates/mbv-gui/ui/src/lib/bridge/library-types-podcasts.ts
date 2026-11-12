@@ -9,7 +9,7 @@
 // wire types, so every call site keeps importing from the one bridge module.
 
 import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 import type { GuiPodcastPill } from './library-types';
 
 /** The Podcasts destination's content (design D12, row 10.1), present while
@@ -73,5 +73,5 @@ export interface GuiPodcastsHero {
 	/** The artwork box the Hero reserves: the episode artwork policy's
 	 * Square. */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 }

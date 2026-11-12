@@ -7,6 +7,7 @@ import type { GuiChrome, GuiRgb, GuiRole, GuiTheme } from './theme-types';
 // lives in `library-types.ts`; this module re-exports it so every consumer
 // keeps importing from the one bridge module.
 
+import type { GuiArtRef } from './art';
 import type { GuiLibraryContent } from './library-types';
 import type { GuiSearchFrame } from './library-types-search';
 import type { GuiSettingsFrame } from './settings-types';
@@ -52,7 +53,7 @@ export type {
 	GuiHomeRowId,
 	GuiHomeRowKind,
 	GuiHomeRowState,
-	GuiLibraryArt,
+	GuiArtRef,
 	GuiMetaKind,
 	GuiMetaRow,
 	GuiMetaSegment,
@@ -437,9 +438,9 @@ export interface GuiQueuePlayback {
 	 * source is the local player's stream, so a band whose playback rides a
 	 * remote output paints none, as the TUI's does. */
 	statusIndicators: GuiStatusIndicator[] | null;
-	/** The visual slot's artwork; `null` unless the art changed for this
-	 * window (design D10) — the component keeps the last carried value. */
-	artwork: GuiCardArtwork | null;
+	/** The visual slot's artwork reference (design D7), carried on every
+	 * build; `null` hides the slot. */
+	artwork: GuiArtRef | null;
 	/** The track chips under the transport: the video stream's resolved
 	 * label, and the audio and subtitle tracks each with its choices and the
 	 * chosen one. `null` while the local player is inactive, as the
@@ -474,12 +475,11 @@ export interface GuiScrubberHover {
 }
 
 /** The hovered trickplay tile (task 6.7): the thumbnail's place in its sheet,
- * the thumbnail's pixel size, and the sheet's bytes as a `data:image/jpeg`
- * URL. The window fetches nothing — the core's cache supplies the bytes, so
- * the CSP keeps its `data:` image source (design D11). */
+ * the thumbnail's pixel size, and the sheet's image reference. The window
+ * loads the sheet by its URL through the `mbv-art` scheme (design D7). */
 export interface GuiScrubberTile {
-	/** The sheet's opaque identity: the window repaints the sheet it latched
-	 * for this key while `sheet` is `null`. */
+	/** The sheet's opaque identity (the item, the thumbnail width, and the
+	 * sheet's ordinal). */
 	sheetKey: string;
 	/** The thumbnail's pixel width within the sheet. */
 	width: number;
@@ -491,20 +491,8 @@ export interface GuiScrubberTile {
 	column: number;
 	/** The thumbnail's row in the sheet. */
 	row: number;
-	/** The sheet image as a `data:image/jpeg` URL; `null` when the frame does
-	 * not re-carry it — the hovered sheet is the one already latched. */
-	sheet: string | null;
-}
-
-/** The trickplay sheet the window latches for the hover preview (task 6.7):
- * the image last carried and the sheet key it belongs to. A frame re-carries
- * the image only when the hovered sheet changes, so the preview repaints the
- * latched one while the tile names the same key. */
-export interface GuiTrickplaySheet {
-	/** The sheet's opaque identity, as the tile's `sheetKey` names it. */
-	key: string;
-	/** The sheet image as a `data:image/jpeg` URL. */
-	image: string;
+	/** The sheet image's reference: the URL the cached sheet loads through. */
+	sheet: GuiArtRef;
 }
 
 /** One chapter boundary of the active item: the scrubber's boundary tick
@@ -585,14 +573,6 @@ export interface GuiStatusIndicator {
 	label: string;
 	role: GuiRole;
 }
-
-/** The visual slot's artwork one frame carries (design D10). The image and
- * placeholder payloads are `data:` URLs the core encoded from its cache. */
-export type GuiCardArtwork =
-	| { kind: 'image'; detail: string }
-	| { kind: 'placeholder'; detail: string }
-	| { kind: 'loading' }
-	| { kind: 'hidden' };
 
 export type GuiNowPlayingStatus = 'playing' | 'paused' | 'idle';
 

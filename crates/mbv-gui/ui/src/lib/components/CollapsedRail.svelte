@@ -12,8 +12,8 @@
 	// and the footer belong to the expanded artboard, and the core keeps
 	// their state while the rail is up (the `gui-client` spec: the window
 	// holds no interaction state).
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
+	import ArtImage from './ArtImage.svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
 	import { QUEUE_RAIL_WIDTH_PX } from '$lib/bridge/arrangement';
 	import {
@@ -25,7 +25,7 @@
 	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
-		GuiCardArtwork,
+		GuiArtRef,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
@@ -44,7 +44,7 @@
 		 * the playback section arms it on a change and `Panel` keeps it, so
 		 * the rail paints the same art the expanded artboard showed. `null`
 		 * while the window has carried none. */
-		art: GuiCardArtwork | null;
+		art: GuiArtRef | null;
 	}
 	const { art }: Props = $props();
 
@@ -75,10 +75,6 @@
 	/** Whether the transport is paused: the anchor's fact (design D5). `true`
 	 * while no anchor holds — the idle transport paints a play control. */
 	const paused = $derived($playheadAnchor?.paused ?? true);
-
-	/** The artwork's bitmap, `null` while the item has none (a placeholder,
-	 * loading, or hidden slot paints the empty ring). */
-	const image = $derived(art?.kind === 'image' ? art.detail : null);
 
 	/** The played arc's length in ring pixels. */
 	const playedArc = $derived(progress * RING_CIRCUMFERENCE_PX);
@@ -164,23 +160,21 @@
 				stroke-dasharray="{playedArc} {RING_CIRCUMFERENCE_PX}"
 			/>
 		</svg>
-		{#if image}
-			<img
-				class="rounded-full object-cover"
-				alt=""
-				src={image}
-				use:capToNaturalSize
-				style:width="{ART_SIZE_PX}px"
-				style:height="{ART_SIZE_PX}px"
-			/>
-		{:else}
-			<div
-				class="rounded-full"
-				style:width="{ART_SIZE_PX}px"
-				style:height="{ART_SIZE_PX}px"
-				style:background="var(--mbv-textMuted)"
-			></div>
-		{/if}
+		<ArtImage
+			{art}
+			alt=""
+			class="rounded-full object-cover"
+			style="width: {ART_SIZE_PX}px; height: {ART_SIZE_PX}px"
+		>
+			{#snippet fallback()}
+				<div
+					class="rounded-full"
+					style:width="{ART_SIZE_PX}px"
+					style:height="{ART_SIZE_PX}px"
+					style:background="var(--mbv-textMuted)"
+				></div>
+			{/snippet}
+		</ArtImage>
 	</div>
 	<!-- The transport's play/pause and next, the rail's two controls (the
 		spec's rail list). -->

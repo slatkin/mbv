@@ -79,7 +79,7 @@ function homeFrame(): GuiHomeFrame {
 				date: null,
 				kind: 'media',
 				state: { active: { progress: 42 } },
-				art: { kind: 'image', detail: 'data:image/png;base64,x' },
+				art: { kind: 'image', src: 'mbv-art://localhost/card/x' },
 			},
 			{
 				row: 'item',
