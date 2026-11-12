@@ -277,7 +277,6 @@ impl App {
             last_library_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))
                 .unwrap_or_else(Instant::now),
-            gui_art_retry_checked: Instant::now(),
             refocus_at: None,
             window_focused: true,
             album_artist_cache: std::collections::HashMap::new(),

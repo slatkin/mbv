@@ -505,10 +505,6 @@ pub struct App {
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(in crate::app) last_nav_at: Instant,
     pub(in crate::app) last_library_nav_at: Instant,
-    /// The instant the GUI core last asked whether an interrupted art fetch
-    /// came due (`App::gui_art_retry_due`). The next ask reports the retries
-    /// that passed after it.
-    pub(in crate::app) gui_art_retry_checked: Instant,
     /// The instant of the most recent terminal focus report, kept alongside
     /// `window_focused` (`note_focus_gained`/`note_focus_lost`): `Some` from
     /// the last `FocusGained`, `None` after `FocusLost`. No production code

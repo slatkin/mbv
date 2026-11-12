@@ -31,19 +31,13 @@ impl App {
         self.navigation_idle()
     }
 
-    /// Whether an interrupted art fetch's retry time passed since the previous
-    /// call (design D3 rule 3, invariant 27). The first call reports the
-    /// retries that passed since construction, and each later call reports
-    /// those that passed since the one before. The cursor moves to `now`, so
-    /// a retry is reported once. A `now` at or before the cursor reports
-    /// nothing and moves no cursor.
-    pub fn gui_art_retry_due(&mut self, now: Instant) -> bool {
-        let since = self.gui_art_retry_checked;
-        if now <= since {
-            return false;
-        }
-        self.gui_art_retry_checked = now;
-        self.images.retry_passed_between(since, now)
+    /// Whether an interrupted art fetch's retry time falls in `(after, until]`
+    /// (design D3 rule 3, invariant 27). The core keeps the window's start: each
+    /// tick asks for the span since its previous tick, so a retry is reported
+    /// once.
+    #[must_use]
+    pub fn gui_art_retry_due(&self, after: Instant, until: Instant) -> bool {
+        self.images.retry_passed_between(after, until)
     }
 
     /// The playing Music track and the playing Audiobooks book (design D3 rule

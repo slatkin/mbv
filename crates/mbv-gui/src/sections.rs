@@ -230,7 +230,7 @@ impl Default for SectionLedger {
             search: Slot::default(),
             settings: Slot::default(),
             marked: HashSet::new(),
-            deadlines: DeadlineMarks::default(),
+            deadlines: DeadlineMarks::new(Instant::now()),
             audit: false,
             artwork: ArtworkFrames::default(),
             trickplay: TrickplayFrames::default(),
