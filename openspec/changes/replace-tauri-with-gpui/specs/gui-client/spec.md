@@ -85,7 +85,7 @@ The window SHALL derive every value that follows the playback position or the wa
 
 ### Requirement: The Client core holds the shared surfaces' interaction state
 
-The interaction state of the player panel and the Status bar (focus, cursor, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the drag, and the open menu or popover) and Panel focus SHALL live in the Client core. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it.
+The interaction state of the player panel and the Status bar (focus, cursor, selection, marks, viewport, prefix mode, the collapse and fold toggles, the drag, the open menu or popover) and Panel focus SHALL live in the Client core. The window SHALL paint what the core projects and forward key and pointer input to it. The size-picked layout is not interaction state. "The window content holds the Library panel's interaction state" defines the exception.
 
 #### Scenario: The window is resized
 
@@ -101,13 +101,14 @@ The interaction state of the player panel and the Status bar (focus, cursor, sel
 
 ### Requirement: The window content holds the Library panel's interaction state
 
-The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collection, and the Hero's item. The window content SHALL change the data selection only through the Client core.
+The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collection, and the Hero's item. The window content SHALL change the data selection only through the Client core. An update of the Library list SHALL NOT reset the window content's state for that list.
 
 #### Scenario: A list update keeps the window's state
 
 - **GIVEN** Music is active with Hip-Hop selected, the list scrolled, and a tree node open
-- **WHEN** an update carries the same Library list
+- **WHEN** an update carries the Hip-Hop list with one new album
 - **THEN** the list's cursor, scroll, and open nodes stay as they were
+- **AND** the new album shows in the list
 
 #### Scenario: The TUI Client browses a library
 
@@ -172,7 +173,7 @@ mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal prog
 
 ### Requirement: The GUI program ships beside the terminal program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the runtime libraries that the GUI program loads: the Vulkan loader, the Wayland client library, and xkbcommon. No artifact SHALL declare a web engine. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the runtime libraries that the GUI program loads: the Vulkan loader, the EGL library, the Wayland client library, and xkbcommon. No artifact SHALL declare a web engine. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
 
 #### Scenario: A package installs both programs
 
@@ -182,12 +183,12 @@ Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL in
 #### Scenario: A package declares the GUI runtime
 
 - **WHEN** the `.deb` or an Arch package is inspected
-- **THEN** it declares the Vulkan loader, the Wayland client library, and xkbcommon
+- **THEN** it declares the Vulkan loader, the EGL library, the Wayland client library, and xkbcommon
 - **AND** it declares no WebKitGTK package
 
 ### Requirement: The GUI Client uses the typography and colours of the canvas
 
-Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship inside the GUI program, and the window SHALL load no font from the network or from the system font set. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. The queue, row menu, popover, and drag visuals SHALL paint the canvas colours that name no `mbv-theme` slot through GUI-local canvas tokens in the GUI program, and the TUI's palette SHALL NOT change.
+Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship inside the GUI program, and the window SHALL load no font from the network. The window MAY use a system font only for a glyph that the two bundled faces do not hold. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. The queue, row menu, popover, and drag visuals SHALL paint the canvas colours that name no `mbv-theme` slot through GUI-local canvas tokens in the GUI program, and the TUI's palette SHALL NOT change.
 
 #### Scenario: Fonts load with no network
 
