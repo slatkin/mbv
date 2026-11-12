@@ -212,7 +212,7 @@ impl GuiFrame {
 /// chapter it names against the playback projection the frame reads, plus
 /// the tile the core thread resolved for the same position. `None` while the
 /// pointer is away from the bar.
-fn scrubber_hover(
+pub(crate) fn scrubber_hover(
     fraction: Option<f64>,
     playback: &QueuePlaybackProjection,
     tile: Option<GuiScrubberTile>,

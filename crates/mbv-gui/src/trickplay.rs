@@ -41,15 +41,16 @@ impl TrickplayFrames {
         if carry_sheet {
             self.sent_sheet = Some(sheet_key.clone());
         }
-        Some(GuiScrubberTile {
-            sheet_key,
-            width: preview.width,
-            height: preview.height,
-            columns: preview.columns,
-            column: preview.column,
-            row: preview.row,
-            sheet,
-        })
+        Some(tile(preview, sheet_key, sheet))
+    }
+
+    /// The tile for `preview` with its sheet image always carried. Unlike
+    /// [`Self::frame_value`] it never arms: the section ledger carries the
+    /// tile and compares it, so the sheet travels in the value.
+    pub(crate) fn current_tile(&mut self, preview: &TrickplayPreviewTile) -> GuiScrubberTile {
+        let sheet_key = preview.key.wire_key();
+        let sheet = self.encoded_sheet(&sheet_key, preview);
+        tile(preview, sheet_key, Some(sheet))
     }
 
     /// Arm the next frame: a window reload's `report_layout` re-carries the
@@ -68,6 +69,24 @@ impl TrickplayFrames {
         let image = format!("data:image/jpeg;base64,{}", BASE64.encode(&preview.jpeg));
         self.encoded = Some((sheet_key.to_string(), image.clone()));
         image
+    }
+}
+
+/// The window's tile for `preview`: the thumbnail's place in the sheet named by
+/// `sheet_key`, with the sheet image when this value carries it.
+fn tile(
+    preview: &TrickplayPreviewTile,
+    sheet_key: String,
+    sheet: Option<String>,
+) -> GuiScrubberTile {
+    GuiScrubberTile {
+        sheet_key,
+        width: preview.width,
+        height: preview.height,
+        columns: preview.columns,
+        column: preview.column,
+        row: preview.row,
+        sheet,
     }
 }
 

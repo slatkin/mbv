@@ -1,6 +1,7 @@
 //! The frame's Library section (add-gui-library-panel design D2): the content
-//! revision that saves the bridge the content when nothing changed, and the
-//! Hero's artwork as the `data:` URLs the window paints.
+//! revision that saves the bridge the content when nothing changed. The
+//! content build lives in `sections::library`, the one builder the section
+//! ledger shares with this frame path.
 //!
 //! The memo holds the content the last frame built and the revision it
 //! carried, so a frame re-carries the whole section only when the content
@@ -8,13 +9,10 @@
 //! copy; the reload's `report_layout` re-arms the section, and the next frame
 //! re-carries the next build under the revision the window already holds.
 
-use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
+use mbv::App;
 
-use crate::bridge::frame::library::{
-    GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryArt,
-    GuiLibraryContent, GuiLibraryFrame, GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicFrame,
-    GuiPodcastsFrame, GuiSearchFrame, GuiShowsFrame,
-};
+use crate::bridge::frame::library::{GuiLibraryContent, GuiLibraryFrame, GuiSearchFrame};
+use crate::sections::library::build_content;
 
 /// The frames' Library section memo (design D2).
 #[derive(Debug, Default)]
@@ -33,77 +31,17 @@ impl LibraryFrames {
     /// section when no presented destination is active or the window already
     /// holds this revision.
     pub(crate) fn frame(&mut self, app: &mut App) -> Option<GuiLibraryFrame> {
-        // No presented destination is active (design D2): the section is
-        // absent, and the next one re-carries its content whatever the window
-        // kept while the section was away.
-        let destination = app.gui_active_destination();
-        // The Podcasts destination's frame-path ensure (add-gui-library-panel
-        // design D12, row 10.1): the selected pill's own loads — the Latest
-        // shelf and every show's episodes, or one show's episodes — start
-        // before any command does, as the Audiobooks ensure starts its
-        // default pick's detail. The section itself is built with the content
-        // below.
-        if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
-            app.ensure_gui_podcast_selection(lib_idx);
-        }
-        // The Feeds destination's frame-path ensure (add-gui-library-panel
-        // design D12, row 11.1): the stored pill converges on the subscription
-        // set the tab holds. The entries arrive from the shared startup fetch,
-        // so the ensure starts no load.
-        if matches!(destination, Some(GuiDestinationKind::Feeds)) {
-            app.ensure_gui_feeds_selection();
-        }
-        // The Audiobooks destination's frame-path ensure (add-gui-library-panel
-        // design D12, row 9.1): the default pick's detail load starts before
-        // any select does, as the Shows frame path ensures its default series'
-        // detail. The section itself is built with the content below.
-        let music = match destination {
-            Some(GuiDestinationKind::Music { lib_idx }) => Some(music_frame(app, lib_idx)),
-            _ => None,
-        };
-        let shows = match destination {
-            Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_frame(app, lib_idx)),
-            _ => None,
-        };
-        let emby = match destination {
-            Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_frame(app, lib_idx)),
-            _ => None,
-        };
-        let audiobooks = match destination {
-            Some(GuiDestinationKind::Audiobooks { lib_idx }) => {
-                app.ensure_gui_abs_selection(lib_idx);
-                Some(audiobooks_frame(app, lib_idx))
-            }
-            _ => None,
-        };
-        let podcasts = match destination {
-            Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_frame(app, lib_idx)),
-            _ => None,
-        };
-        let feeds =
-            matches!(destination, Some(GuiDestinationKind::Feeds)).then(|| feeds_frame(app));
-        // Home presents while no library destination presents content
-        // (design D12): the destinations are exclusive, so no two fields of
-        // the content set themselves at once.
-        let home = matches!(destination, Some(GuiDestinationKind::Home)).then(|| home_frame(app));
-        let sections = DestinationSections {
-            music,
-            home,
-            shows,
-            emby,
-            audiobooks,
-            podcasts,
-            feeds,
-        };
-        if !sections.any() {
+        let Some(content) = build_content(app) else {
+            // No presented destination is active (design D2): the section is
+            // absent, and the next one re-carries its content whatever the
+            // window kept while the section was away.
             self.sent = None;
             return None;
-        }
+        };
         // The Search section rides the frame, not the content (row 12.1): a
         // landed result reaches the window whichever content revision the
         // frame carries, and a closed field rides as `None`.
         let search = GuiSearchFrame::carried(&app.gui_search_projection());
-        let content = content(app, sections);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -170,142 +108,4 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         feeds_rows,
         "the Library content changed"
     );
-}
-
-/// The active destination's section, computed by the gate above (design D2):
-/// exactly one field is present, because the destinations are exclusive. The
-/// struct keeps the content build's argument count in hand as the presented
-/// destinations grow.
-#[derive(Debug, Default)]
-struct DestinationSections {
-    music: Option<GuiMusicFrame>,
-    home: Option<GuiHomeFrame>,
-    shows: Option<GuiShowsFrame>,
-    emby: Option<GuiEmbyFrame>,
-    audiobooks: Option<GuiAudiobooksFrame>,
-    podcasts: Option<GuiPodcastsFrame>,
-    feeds: Option<GuiFeedsFrame>,
-}
-
-impl DestinationSections {
-    /// Whether any destination presents content: the gate's condition, and the
-    /// one the section's absence names.
-    fn any(&self) -> bool {
-        self.music.is_some()
-            || self.home.is_some()
-            || self.shows.is_some()
-            || self.emby.is_some()
-            || self.audiobooks.is_some()
-            || self.podcasts.is_some()
-            || self.feeds.is_some()
-    }
-}
-
-/// The Library panel's content for the active destination (design D2): the
-/// destination tabs the top bar paints, and the one active destination's
-/// section — the Music destination's pills, list, and Hero while a Grouped
-/// Music library is active, Home's flat list and Hero while Home is active
-/// (design D12), the Shows destination's mode pills, list, and Hero while a
-/// Shows library is active (design D12, row 7.1), and the Feeds destination's
-/// pill row, entry rows, and Hero while Feeds is active (row 11.1). The gate
-/// above computes the section, so the gate and the content cannot disagree.
-fn content(app: &mut App, sections: DestinationSections) -> GuiLibraryContent {
-    let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
-    // The right-click item menu is the Library's, not one destination's (design
-    // D8, D15): a row of any destination opens it, so it rides the content.
-    let row_menu = app.gui_library_row_menu();
-    GuiLibraryContent {
-        tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
-        current_tab: current,
-        music: sections.music,
-        home: sections.home,
-        shows: sections.shows,
-        emby: sections.emby,
-        audiobooks: sections.audiobooks,
-        podcasts: sections.podcasts,
-        feeds: sections.feeds,
-        row_menu: row_menu.as_ref().map(GuiLibraryRowMenuFrame::from),
-    }
-}
-
-/// The Music destination's content (design D5): the projection's facts with
-/// the Hero's artwork projected beside them, the picked item's menu, and the
-/// playing track's id.
-fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
-    app.ensure_gui_music_selection(lib_idx);
-    let projection = app.gui_music_projection(lib_idx);
-    let picked = projection
-        .hero
-        .as_ref()
-        .map(|hero| hero.album.album_id.clone());
-    let art = picked
-        .as_deref()
-        .map(|album_id| GuiLibraryArt::from(&app.gui_library_artwork(album_id)));
-    let menu = picked
-        .map(|album_id| app.gui_library_menu(&album_id))
-        .unwrap_or_default();
-    let playing_track_id = app.gui_playing_track_id();
-    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu, playing_track_id)
-}
-
-/// The Home destination's content (design D12, the USER-APPROVED GUI Home
-/// design): the flat list's projection rows, the core's selected row, and
-/// its Hero, fetched and built here per frame so an unchanged frame's
-/// revision carries nothing (the memo's content compare).
-fn home_frame(app: &mut App) -> GuiHomeFrame {
-    let projection = app.gui_home_projection();
-    GuiHomeFrame::from_projection(&projection)
-}
-
-/// The Shows destination's content (design D14): the mode pills, the active
-/// mode's rows — the All series tree or the flat lists — the selected row,
-/// and its Hero, fetched and built here per frame so an unchanged frame's
-/// revision carries nothing (the memo's content compare). The ensure loads
-/// the selected series' detail **and its selected season's episodes**, so the
-/// Hero's Workspace paints on arrival.
-fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
-    app.ensure_gui_shows_workspace(lib_idx);
-    let projection = app.gui_shows_projection(lib_idx);
-    GuiShowsFrame::from_projection(lib_idx, &projection)
-}
-
-/// The plain Emby-library destination's content (design D12, row 8.1): the
-/// feed pills, the active list's rows, the selected row, and its Hero,
-/// fetched and built here per frame so an unchanged frame's revision carries
-/// nothing (the memo's content compare). The frame path's ensure is the
-/// shown-pass trigger the TUI projection pass's lazy-fetch arm mirrors.
-fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
-    app.ensure_gui_emby_selection(lib_idx);
-    let projection = app.gui_emby_projection(lib_idx);
-    GuiEmbyFrame::from_projection(lib_idx, &projection)
-}
-
-/// The Audiobooks destination's content (design D12, row 9.1): the book
-/// list, the selected book, and its Hero with its chapters Workspace, built
-/// here per frame so an unchanged frame's revision carries nothing (the
-/// memo's content compare). The ensure above the content build is the
-/// default pick's detail-load trigger.
-fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
-    let projection = app.gui_audiobooks_projection(lib_idx);
-    GuiAudiobooksFrame::from_projection(lib_idx, &projection)
-}
-
-/// The Podcasts destination's content (design D12, row 10.1): the pill row,
-/// the active pill's episode rows, the selected episode, and its Hero, built
-/// here per frame so an unchanged frame's revision carries nothing (the memo's
-/// content compare). The ensure above the content build is the selected pill's
-/// load trigger.
-fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
-    let projection = app.gui_podcasts_projection(lib_idx);
-    GuiPodcastsFrame::from_projection(lib_idx, &projection)
-}
-
-/// The Feeds destination's content (design D12, row 11.1): the pill row, the
-/// active pill's entry rows, the selected entry, and its Hero, built here per
-/// frame so an unchanged frame's revision carries nothing (the memo's content
-/// compare). The entries arrive from the shared startup fetch, so the build
-/// starts no load; the frame path's ensure has already settled the pill.
-fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
-    let projection = app.gui_feeds_projection();
-    GuiFeedsFrame::from_projection(&projection)
 }

@@ -50,20 +50,27 @@ impl ArtworkFrames {
     /// The frame's artwork value for `artwork`: `None` when the last frame
     /// already carried it.
     pub(crate) fn frame_value(&mut self, artwork: &QueueCardArtwork) -> Option<GuiCardArtwork> {
+        let value = self.current_value(artwork);
+        if self.sent.as_ref() == Some(&value) {
+            return None;
+        }
+        self.sent = Some(value.clone());
+        Some(value)
+    }
+
+    /// The artwork value for `artwork`, encoded once per state class. Unlike
+    /// [`Self::frame_value`] it never arms: the section ledger carries the
+    /// value and compares it, so it always reports the current state.
+    pub(crate) fn current_value(&mut self, artwork: &QueueCardArtwork) -> GuiCardArtwork {
         let class = ArtworkClass::of(artwork);
-        let value = match self.encoded.as_ref() {
+        match self.encoded.as_ref() {
             Some((encoded_class, value)) if *encoded_class == class => value.clone(),
             _ => {
                 let value = encode(artwork);
                 self.encoded = Some((class, value.clone()));
                 value
             }
-        };
-        if self.sent.as_ref() == Some(&value) {
-            return None;
         }
-        self.sent = Some(value.clone());
-        Some(value)
     }
 
     /// Arm the next frame: a window reload's `report_layout` re-carries the
