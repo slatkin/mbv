@@ -222,10 +222,12 @@ fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
 /// are visible in the GUI log.
 pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
     let music = content.music.as_ref();
-    let pills = music.map_or(0, |music| music.pills.len());
-    let selected = music.map_or(0, |music| music.pills.iter().filter(|p| p.selected).count());
-    let artists = music.map_or(0, |music| music.artists.len());
-    let home_rows = content.home.as_ref().map_or(0, |home| home.rows.len());
+    let pills = music.map_or(0, |music| music.list.pills.len());
+    let selected = music.map_or(0, |music| {
+        music.list.pills.iter().filter(|p| p.selected).count()
+    });
+    let artists = music.map_or(0, |music| music.list.artists.len());
+    let home_rows = content.home.as_ref().map_or(0, |home| home.list.rows.len());
     let shows_rows = content.shows.as_ref().map_or(0, |shows| shows.rows.len());
     let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.rows.len());
     let abs_rows = content
@@ -244,8 +246,11 @@ pub(crate) fn log_built(revision: u64, content: &GuiLibraryContent) {
         pills,
         selected,
         artists,
-        hero = music.is_some_and(|music| music.hero.is_some())
-            || content.home.as_ref().is_some_and(|home| home.hero.is_some())
+        hero = music.is_some_and(|music| music.detail.hero.is_some())
+            || content
+                .home
+                .as_ref()
+                .is_some_and(|home| home.detail.hero.is_some())
             || content.shows.as_ref().is_some_and(|shows| shows.hero.is_some()),
         home_rows,
         shows_rows,

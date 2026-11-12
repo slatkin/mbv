@@ -372,5 +372,5 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
         .library()
         .and_then(|content| content.music.as_ref())
         .expect("the Music frame is presented");
-    assert_eq!(music.playing_track_id.as_deref(), Some("trk-2"));
+    assert_eq!(music.detail.playing_track_id.as_deref(), Some("trk-2"));
 }

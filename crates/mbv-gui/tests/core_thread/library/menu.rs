@@ -34,7 +34,7 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
 
     let menu = library_of(&picked)
         .and_then(|content| content.music)
-        .and_then(|music| music.hero)
+        .and_then(|music| music.detail.hero)
         .expect("the picked album has a Hero")
         .menu;
     let labels: Vec<&str> = menu.iter().map(|entry| entry.label.as_str()).collect();

@@ -165,7 +165,7 @@ fn library_of(frame: &Held) -> Option<GuiLibraryContent> {
 fn hero_art(frame: &Held) -> GuiArtRef {
     library_of(frame)
         .and_then(|content| content.music)
-        .and_then(|music| music.art)
+        .and_then(|music| music.detail.art)
         .expect("the frame carries the Hero's art")
 }
 

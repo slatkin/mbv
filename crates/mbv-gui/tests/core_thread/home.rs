@@ -163,6 +163,7 @@ fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
     let home = home_section(&test.held());
 
     let titles: Vec<&str> = home
+        .list
         .rows
         .iter()
         .filter_map(|row| match row {
@@ -178,7 +179,7 @@ fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
         "the frame paints the refreshed snapshot, not the startup one"
     );
     assert_eq!(
-        home.hero.expect("the Hero paints").title,
+        home.detail.hero.expect("the Hero paints").title,
         "Continue Third",
         "the Hero reads the refreshed snapshot's first row"
     );
@@ -192,7 +193,7 @@ fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
 fn a_home_content_cleared_event_empties_the_next_home_frame() {
     let mut test = home_core_with_open();
     assert!(
-        !home_section(&test.held()).rows.is_empty(),
+        !home_section(&test.held()).list.rows.is_empty(),
         "the seeded snapshot painted rows before the clear"
     );
 
@@ -201,10 +202,10 @@ fn a_home_content_cleared_event_empties_the_next_home_frame() {
     let home = home_section(&test.held());
 
     assert!(
-        home.rows.is_empty(),
+        home.list.rows.is_empty(),
         "the clear emptied the Continue watching section"
     );
-    assert!(home.hero.is_none(), "no row survives to select");
+    assert!(home.detail.hero.is_none(), "no row survives to select");
 }
 
 /// An open-destination command for Home (position 0) presents the Home
@@ -223,24 +224,24 @@ fn an_open_home_destination_finds_the_home_frame() {
     let home = home_section(&test.held());
 
     assert_eq!(
-        home.rows.len(),
+        home.list.rows.len(),
         3,
         "the heading row, then the two item rows"
     );
     assert!(
         matches!(
-            &home.rows[0],
+            &home.list.rows[0],
             mbv_gui::bridge::frame::library::GuiHomeRowFrame::Heading { .. }
         ),
         "the section opens with its heading row"
     );
     assert_eq!(
-        home.selected,
+        home.detail.selected,
         Some(mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-first".into())),
         "the first item row is the Hero default"
     );
     assert_eq!(
-        home.hero.expect("the Hero paints").title,
+        home.detail.hero.expect("the Hero paints").title,
         "Continue First",
         "the Hero's facts read the selected row's item"
     );
@@ -253,7 +254,7 @@ fn an_open_home_destination_finds_the_home_frame() {
 fn a_home_select_command_moves_the_hero() {
     let mut test = home_core_with_open();
     let home = home_section(&test.held());
-    let second = match &home.rows[2] {
+    let second = match &home.list.rows[2] {
         mbv_gui::bridge::frame::library::GuiHomeRowFrame::Item(item) => item.id.clone(),
         _ => panic!("the second item row carries an identity"),
     };
@@ -270,12 +271,12 @@ fn a_home_select_command_moves_the_hero() {
     let home = home_section(&test.held());
 
     assert_eq!(
-        home.selected,
+        home.detail.selected,
         Some(mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-second".into())),
         "the frame paints the core's selection"
     );
     assert_eq!(
-        home.hero.expect("the Hero paints").title,
+        home.detail.hero.expect("the Hero paints").title,
         "Continue Second",
         "the Hero's facts follow the selected row"
     );

@@ -37,7 +37,7 @@ fn the_music_frame_carries_the_playing_track_id() {
     let music = content
         .and_then(|content| content.music)
         .expect("the Music destination is active");
-    assert_eq!(music.playing_track_id.as_deref(), Some("trk-1"));
+    assert_eq!(music.detail.playing_track_id.as_deref(), Some("trk-1"));
 }
 
 /// The section's destination facts (row 4.3, design D2): the Library section
@@ -60,7 +60,7 @@ fn the_library_section_carries_the_destination_tabs_and_the_lib_idx() {
     );
     assert_eq!(content.current_tab, Some(1));
     let music = content.music.expect("the Music destination is active");
-    assert_eq!(music.lib_idx, 0);
+    assert_eq!(music.list.lib_idx, 0);
 }
 
 /// The section carries the selected collection names in pill order once for
@@ -84,7 +84,7 @@ fn the_music_frame_carries_the_selected_collection_names() {
     let music = library_of(&test.held())
         .and_then(|content| content.music)
         .expect("the Music destination is active");
-    assert_eq!(music.collection_names, ["Hip-Hop"]);
+    assert_eq!(music.list.collection_names, ["Hip-Hop"]);
 }
 
 /// The Library section rides a batch only when its content changes (design D2):
