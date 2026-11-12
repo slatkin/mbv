@@ -96,8 +96,9 @@ Panel (`focus`, `GuiFocus`, mirroring `ComponentId` and `PanelFocus`), the
 Queue viewport rows with their stable `QueueSlotId` raw numbers, cursor,
 marks, active slot, row hover, row drag, and each item row's zebra parity
 (`queue`, `GuiQueue`), the queue header's remaining count, next item title,
-finish clock, right-column mode, and filter text with its caret fact
-(`summary`, `GuiQueueSummary`), the collapse and queue-fold toggles the
+queue finish's tail offset, right-column mode, and filter text with its
+caret fact (`summary`, `GuiQueueSummary`), the collapse and queue-fold
+toggles the
 Client core holds, with the UI-reset counter `uiResetEpoch` beside them
 (`panel`, `GuiPanelToggles`), the open menu or popover (`overlay`,
 `Option<GuiOverlayFrame>`: the row menu with its entries, key hints, and
@@ -422,7 +423,50 @@ units of the cell grid.
 
 The scrubber paints the played fraction, the chapter boundaries, the intro
 and credits mark segments, the thumb, and the elapsed, remaining, and finish
-clock texts. A press on the bar seeks through the core. The transport row
+clock texts, all derived from the playhead anchor (below). A press on the
+bar seeks through the core.
+
+The window predicts the playhead between the `playhead` section's anchors
+(design D5 of `gui-change-driven-sections`). The core sends the anchor —
+`GuiPlayhead`: the active fact, the active slot, the position and runtime in
+ticks, and the paused fact — only on a changed fact or a new sample that
+drifted past the one-second tolerance, and it carries no timestamp, because
+the core and the webview share no clock. The window stamps each anchor with
+its own `performance.now()` at receipt (`ui/src/lib/bridge/playhead.ts`, the
+one module the sections' `applyBatch` stamps it through) and derives from it,
+until the next anchor: the predicted position (the anchor's position advanced
+by the elapsed monotonic time while playing, held while paused, clamped into
+the runtime), the played fraction, the elapsed and remaining clocks
+(`formatDurationShort`, the port of the TUI's shared duration formatter), and
+the active item's finish epoch. A `requestAnimationFrame` loop drives the
+prediction only while the anchor is active and not paused, and a `minute`
+store — one `setTimeout` re-armed at each wall-clock minute — moves the
+finish times while playback is paused, with no update from the core. The
+panels read the derived stores: the scrubber's fill and clocks, the
+transport's finish clock (`formatWallClock`, the zero-padded `HH:MM` in the
+window's local zone), the rail's ring and remaining time, the compact
+strip's progress line, the queue header's and the folded line's finish
+clock — the wall clock at the summary's `tailSecs` past the active item's
+end, with the ` +1d` suffix when the finish lands past the local day, the
+rule `queue_finish_clock` runs in Rust for the TUI — each row's "Ends at"
+clock (the same wall clock at the row's `endsAfterSecs` offset), the active
+queue row's progress, and the Audiobooks Workspace's current chapter: the
+chapter row whose `startTicks <= position < endTicks` span holds the
+predicted position while the Hero's book is the frame's `playingBookId`;
+the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
+— never holds one.
+
+What stays in Rust are the facts that change only on a discontinuity: the
+end offsets themselves (`App::gui_queue_end_offsets` over
+`queue_end_offsets` in `src/app/queue_summary_projection.rs`), the Music
+playing track id and the playing book id (a mark source, design D3), and
+the scrubber hover's `time_label` (the pointer drives it, not the clock).
+`GuiQueuePlayback` carries no playhead facts: its `playback`,
+`elapsed_clock`, `remaining_clock`, and `finish_clock` fields are gone, and
+the queue row DTO carries no NowPlaying progress — the window reads the
+playhead's played fraction for the row whose slot is the anchor's active
+slot. mbv has no playback-rate fact, so the anchor has no rate and a rate
+change re-anchors only through the drift rule. The transport row
 below it paints previous, back 10 s, play/pause, forward 30 s, and next as
 solid Lucide shapes, with the availability that the colour carries. The
 track chips row sits under the transport: the video stream's resolved label,
@@ -432,7 +476,8 @@ local player is inactive.
 
 The Queue panel's recessed box sits below the player block on the
 `queuePanel` pair, with its header row, its rows, and its bottom spacer. The
-header paints the remaining count, the queue finish clock, the Length /
+header paints the remaining count, the queue's derived finish clock (the
+` +1d` rule above), the Length /
 Ends-at switch, and the filter control; the switch, the filter, and each row
 report their own region. The item rows zebra-stripe as the TUI's
 `media_list/wide.rs` walk paints them: the frame carries each row's parity —
