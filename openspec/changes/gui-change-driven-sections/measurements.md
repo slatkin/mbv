@@ -40,6 +40,51 @@ statistic.
 
 64 samples, relative margin of error ±3.10%.
 
+## Final: task 9.1, all eight benches
+
+Run at HEAD `5e39ffb42` (tasks 1.1 to 8.3 landed), on the same machine, with
+`timeout 1200 cargo bench -p mbv-gui --bench sections` and
+`timeout 600 pnpm vitest bench --run --reporter=verbose` in
+`crates/mbv-gui/ui`. The Rust medians are `median.point_estimate` in
+`target/criterion/sections/<fixture>/new/estimates.json`. Vitest reports a mean,
+not a median, so the front-end row has a mean.
+
+| Fixture | Baseline median step | Final median step | Baseline bytes per step | Final bytes per step | Same-session before run |
+| --- | --- | --- | --- | --- | --- |
+| `idle_queue` (50 slots, nothing playing) | 8.7 µs | 8.98 µs | 10,318 | 2 | None (not measured before) |
+| `playing_queue` (50 slots, active playing) | 9.0 µs | 9.30 µs | 10,458 | 2 | Task 5.5: 9.63 µs (after) |
+| `music_grouped` (2,000 artists, 6,000 albums, one picked) | 344.1 µs | 264.4 µs | 1,253 | 2 | Task 5.5: 249.8 µs; task 6.6: 242.3 µs (note 3) |
+| `shows_all` (300 series, All mode) | 6.4 µs | 6.65 µs | 1,253 | 2 | Task 6.6: 6.68 µs |
+| `home_rows` (50 Continue rows, 100 recent rows) | 44.6 µs | 41.9 µs | 1,445 | 2 | Task 6.6: 40.7 µs |
+| `search_open` (query `bench`, 200 results) | 71.9 µs | 29.3 µs | 17,109 | 2 | Task 7.1: 49.3 µs (before), 29.4 µs (after) |
+| `settings_f2` (Settings on its F2 section) | 6.9 µs | 6.96 µs | 1,904 | 2 | Task 7.2: 7.18 and 7.11 µs (before), 6.97 and 6.96 µs (after) |
+
+| Bench | Baseline mean per pass | Final mean per pass | Per scroll step (final) | Same-session before run |
+| --- | --- | --- | --- | --- |
+| 100 scroll steps over 5,000 rows | 39.8 ms | 0.0478 ms | ≈ 0.48 µs | Task 8.1: 34.48 ms (before), 0.046 ms (after) |
+
+The final front-end run took 20,925 samples at ±0.16%.
+
+Notes:
+
+1. Some baseline numbers do not reproduce on this machine today. `search_open`
+   measured 49.3 µs before task 7.1 in the same session, against the 71.9 µs
+   baseline. The front end measured 34.48 ms before task 8.1 in the same session,
+   against the 39.8 ms baseline. The baseline columns above are unchanged. Compare
+   a final value with its same-session before run, not with the baseline alone.
+2. The bytes per step changed meaning. The baseline bytes measured a full frame at
+   steady state. A section now rides a frame only when it changes, so the
+   steady-state timed step sends an empty batch, which serializes to 2 bytes. The
+   final bytes column does not show a size reduction against the baseline. It
+   shows that the timed unit carries no section payload.
+3. The final Music median is 264.4 µs. A rerun of that fixture alone gave 264.2 µs.
+   That is 9% above the task 6.6 run and 6% above the task 5.5 run. Criterion's
+   change line against the last saved run reports +9.4%, "Performance has
+   regressed". Between task 6.6 and HEAD, only tasks 7.1 and 7.2 change Rust under
+   `src/` and `crates/mbv-gui/src/`. Both edit the Search and Settings projections
+   and the config read. The Library scroll tasks of section 8 are front end only.
+   The cause is not found. Open question for the parent.
+
 ## Task 5.5: artwork through the `mbv-art` scheme
 
 Run at HEAD `bb3323426` (rows 5.1 to 5.4 landed, task 5.5 uncommitted), on the
