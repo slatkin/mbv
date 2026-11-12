@@ -6,4 +6,5 @@ pub mod keys;
 pub mod layout;
 pub mod library;
 pub mod pointer;
+pub mod sections;
 pub mod settings;

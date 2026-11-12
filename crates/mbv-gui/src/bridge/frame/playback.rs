@@ -85,10 +85,6 @@ pub struct GuiQueuePlayback {
     /// receivers the Owner offers, each marked with whether it is the Owner's
     /// attached output.
     pub target_choices: Vec<GuiTargetChoice>,
-    /// The scrubber's hover preview (add-tauri-gui-client row 6.4): the
-    /// pointer's fraction along the bar and the time and chapter it names.
-    /// `None` while the pointer is away from the bar.
-    pub hover: Option<GuiScrubberHover>,
 }
 
 /// The scrubber's hover preview (design D4): the position a move over the
@@ -216,7 +212,6 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 .iter()
                 .map(GuiTargetChoice::from)
                 .collect(),
-            hover: None,
         }
     }
 }

@@ -364,7 +364,7 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
     test.tx.send(move_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
     let frame = test.next_frame();
-    let hover = frame.playback.hover.expect("the move set the hover");
+    let hover = frame.hover.expect("the move set the hover");
     assert_eq!(hover.fraction, 0.5);
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
@@ -375,7 +375,7 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
     test.tx.send(move_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
     let frame = test.next_frame();
-    assert_eq!(frame.playback.hover, None);
+    assert_eq!(frame.hover, None);
 }
 
 /// A chip press opens its track popover (the `gui-client` spec's "the

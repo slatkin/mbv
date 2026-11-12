@@ -106,6 +106,10 @@ pub struct GuiFrame {
     pub overlay: Option<GuiOverlayFrame>,
     /// The Queue playback projection: the transport band.
     pub playback: GuiQueuePlayback,
+    /// The scrubber's hover preview: the pointer's fraction along the bar and
+    /// the time and chapter it names. `None` while the pointer is away from the
+    /// bar.
+    pub hover: Option<GuiScrubberHover>,
     /// The Queue footer's status pills.
     pub footer: GuiQueueFooter,
     /// The Status bar projection.
@@ -186,13 +190,13 @@ impl GuiFrame {
                 .map(GuiOverlayFrame::from),
             playback: GuiQueuePlayback {
                 artwork: sources.artwork.clone(),
-                hover: scrubber_hover(
-                    sources.playback.scrubber_hover(),
-                    playback,
-                    sources.hover_tile.clone(),
-                ),
                 ..GuiQueuePlayback::from(playback)
             },
+            hover: scrubber_hover(
+                sources.playback.scrubber_hover(),
+                playback,
+                sources.hover_tile.clone(),
+            ),
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
             library: sources.library.clone(),

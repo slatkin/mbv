@@ -555,7 +555,7 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
 
     let frame = frame_with_playback_surface(&mut app, &playback);
 
-    let hover = frame.playback.hover.expect("the frame carries the hover");
+    let hover = frame.hover.expect("the frame carries the hover");
     assert_eq!(hover.fraction, 0.75);
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
@@ -657,7 +657,7 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         library: None,
     });
 
-    let hover = frame.playback.hover.expect("the frame carries the hover");
+    let hover = frame.hover.expect("the frame carries the hover");
     assert_eq!(hover.tile, Some(tile));
 
     // The pointer leaves the bar: the hover, and its tile, go together.
@@ -675,5 +675,5 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         artwork: None,
         library: None,
     });
-    assert!(frame.playback.hover.is_none());
+    assert!(frame.hover.is_none());
 }
