@@ -246,6 +246,12 @@ impl ClientTickHost for CoreThread {
                     // nothing (design D4).
                     self.apply_layout(&report);
                 }
+                CoreInput::Sync => {
+                    // A `sync` releases every section the window holds, so the
+                    // collect after this tick re-sends each present section at
+                    // its current revision (design D4). It marks nothing.
+                    self.ledger.release_all();
+                }
                 CoreInput::Close => {
                     // The window closed (design D9): the run ends as a quit
                     // does, so the same edge runs — a no-op on the window

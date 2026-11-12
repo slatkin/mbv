@@ -39,7 +39,7 @@ use crate::leaves::{
     seekbar_region,
 };
 use crate::painted_choices::PaintedChoices;
-use crate::sections::{SectionLedger, SectionSources};
+use crate::sections::{SectionLedger, SectionSources, SentRevisions};
 
 mod launch_restore;
 mod overlays;
@@ -79,6 +79,10 @@ pub enum CoreInput {
     /// window content's `settings` command. The core applies it through
     /// [`App::apply_gui_settings_command`].
     Settings(mbv::GuiSettingsCommand),
+    /// The window asks for a full snapshot (design D4): the core releases
+    /// every section the window holds, so the next batch carries every present
+    /// section at its current revision. It marks no section.
+    Sync,
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,
@@ -149,15 +153,17 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
         let steps = LibraryOwnerSteps::new(&config);
         let outcome = {
             let mut campaign = AttachCampaign::new(&rx, &sink, &quit, &steps);
-            campaign.run()
+            let outcome = campaign.run();
+            (outcome, campaign.sent_revisions())
         };
         match outcome {
-            Ok(app) => {
+            (Ok(app), sent) => {
                 let mut core = CoreThread::new(app, rx, sink, quit);
+                core.resume_after_attach(sent);
                 core.install_waker(waker_tx);
                 core.run();
             }
-            Err(end) => tracing::info!(
+            (Err(end), _) => tracing::info!(
                 name: "gui_core.attach_ended",
                 target: "gui_core",
                 end = ?end,
@@ -322,6 +328,13 @@ impl CoreThread {
         ClientCore::from_app(&self.app).install_waker(move || {
             let _ = tx.send(CoreInput::Wake);
         });
+    }
+
+    /// Continue the revisions the attach campaign sent (design D4). The
+    /// attached core's first batch carries `attach: null` at a revision past
+    /// the campaign's, so the window applies it.
+    pub fn resume_after_attach(&mut self, sent: SentRevisions) {
+        self.ledger.resume(sent);
     }
 
     /// Adopt the wait cadence a test pins; production keeps

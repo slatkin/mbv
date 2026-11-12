@@ -32,6 +32,7 @@ use crate::bridge::layout::{AttachTargetId, RegionTarget, hit_map};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::{CoreInput, QuitSink, SectionSink};
 use crate::leaves::gesture_point;
+use crate::sections::SentRevisions;
 
 /// The wait between the shutting-down Owner's polls, as the TUI's run waits
 /// (`startup::run_local_instance`).
@@ -130,14 +131,12 @@ pub struct AttachCampaign<'a> {
     /// The painted regions of the last report the mismatch state received
     /// (design D4): the Restart and Quit buttons a press resolves against.
     regions: HitMap<RegionTarget>,
-    /// The frame the next attach emission carries the theme in (design D7):
-    /// the first emission, and the first after a report re-arms it.
-    theme_pending: bool,
-    /// The revision the next attach section carries: it steps on each
-    /// emission, so the window replaces its attach state each time.
-    attach_revision: u64,
-    /// The revision the next theme section carries.
-    theme_revision: u64,
+    /// The revisions the campaign has sent (design D4): the attach revision
+    /// steps on each state change, and the theme revision steps when the
+    /// palette differs from the last one sent.
+    sent: SentRevisions,
+    /// The palette the last theme section carried.
+    theme_value: Option<GuiTheme>,
 }
 
 impl<'a> AttachCampaign<'a> {
@@ -158,9 +157,8 @@ impl<'a> AttachCampaign<'a> {
             poll_interval: OWNER_WAIT_POLL,
             gestures: PointerGestureState::new(),
             regions: HitMap::new(),
-            theme_pending: true,
-            attach_revision: 0,
-            theme_revision: 0,
+            sent: SentRevisions::default(),
+            theme_value: None,
         }
     }
 
@@ -168,6 +166,13 @@ impl<'a> AttachCampaign<'a> {
     /// A zeroed wait makes a poll's channel read non-blocking.
     pub fn set_poll_interval_for_test(&mut self, interval: Duration) {
         self.poll_interval = interval;
+    }
+
+    /// The revisions the campaign sent, for the attached core to continue from
+    /// (design D4).
+    #[must_use]
+    pub fn sent_revisions(&self) -> SentRevisions {
+        self.sent
     }
 
     /// Runs the campaign to an attached `App` (design D9). The loop is
@@ -251,9 +256,8 @@ impl<'a> AttachCampaign<'a> {
 
     /// Shows the waiting state and runs one paced poll of the shutting-down
     /// Owner (design D9). The paced channel read comes first, as the TUI's
-    /// wait sleeps before it probes: a report from the window re-shows the
-    /// state, a close ends the wait, and the poll's outcome resolves one
-    /// campaign step. The campaign loop re-enters the wait on the wind-down's
+    /// wait sleeps before it probes: a sync re-sends the state, a close ends
+    /// the wait, and the poll's outcome resolves one campaign step. The campaign loop re-enters the wait on the wind-down's
     /// next shutting-down failure, so the wind-down's repeated attach
     /// attempts pace one probe per entry, exactly as the TUI's loop re-runs
     /// its state.
@@ -261,15 +265,16 @@ impl<'a> AttachCampaign<'a> {
         let waiting = GuiAttachState::Waiting;
         self.show(&waiting);
         match self.rx.recv_timeout(self.poll_interval) {
-            Ok(CoreInput::Layout(..)) => self.reshow(&waiting),
+            Ok(CoreInput::Sync) => self.send(&waiting),
             Ok(CoreInput::Close) | Err(RecvTimeoutError::Disconnected) => {
                 return Err(CampaignEnd::Closed);
             }
             // The pre-attach window has no App, so a Library or Settings
             // command has nothing to apply: it is served and dropped as a key
-            // is.
+            // is. A layout report marks nothing and re-sends nothing.
             Ok(
-                CoreInput::Key(_)
+                CoreInput::Layout(_)
+                | CoreInput::Key(_)
                 | CoreInput::Pointer(_)
                 | CoreInput::Wake
                 | CoreInput::Library(_)
@@ -307,8 +312,8 @@ impl<'a> AttachCampaign<'a> {
             match self.rx.recv() {
                 Ok(CoreInput::Layout(report)) => {
                     self.regions = hit_map(&report.regions);
-                    self.reshow(&mismatch);
                 }
+                Ok(CoreInput::Sync) => self.send(&mismatch),
                 Ok(CoreInput::Key(key)) => {
                     if let Some(outcome) = mismatch_key(key) {
                         return self.prompt_outcome(outcome, restart_requested);
@@ -384,9 +389,8 @@ impl<'a> AttachCampaign<'a> {
     /// Parks the window in a state that answers nothing (design D9): the run
     /// ends only when the window closes — the close arrives as a
     /// [`CoreInput::Close`], and a channel that ends without one means the
-    /// same. Between reports the loop serves the channel, so a reload
-    /// re-shows the state with its theme; keys and pointer events resolve to
-    /// nothing. The `Ok` type is the caller's, and no call site can reach it:
+    /// same. A sync re-sends the state with its theme; keys, pointer events,
+    /// and layout reports resolve to nothing. The `Ok` type is the caller's, and no call site can reach it:
     /// the loop only ends through the close.
     fn park<T>(&mut self, state: &GuiAttachState) -> Result<T, CampaignEnd> {
         tracing::warn!(
@@ -397,16 +401,14 @@ impl<'a> AttachCampaign<'a> {
         self.show(state);
         loop {
             match self.rx.recv() {
-                Ok(CoreInput::Layout(..)) => {
-                    // The dead end paints no buttons, so the report carries no
-                    // region the campaign resolves.
-                    self.reshow(state);
-                }
+                Ok(CoreInput::Sync) => self.send(state),
                 // The pre-attach window has no App, so a Library or Settings
                 // command has nothing to apply: it is served and dropped as a
-                // key is.
+                // key is. The dead end paints no buttons, so a layout report
+                // carries no region the campaign resolves.
                 Ok(
-                    CoreInput::Key(_)
+                    CoreInput::Layout(_)
+                    | CoreInput::Key(_)
                     | CoreInput::Pointer(_)
                     | CoreInput::Wake
                     | CoreInput::Library(_)
@@ -419,35 +421,40 @@ impl<'a> AttachCampaign<'a> {
         }
     }
 
-    /// Re-emits the state the window shows, as a `report_layout` asks
-    /// (design D3's emission rule carried to the pre-attach phase), with the
-    /// re-armed theme (design D7).
-    fn reshow(&mut self, state: &GuiAttachState) {
-        self.theme_pending = true;
-        self.show(state);
+    /// Shows a new state (design D9): the attach revision steps, so the window
+    /// replaces its attach state, and the batch goes out through `send`.
+    fn show(&mut self, state: &GuiAttachState) {
+        self.sent.attach = self.sent.attach.wrapping_add(1);
+        self.send(state);
     }
 
-    /// Emits the attach frame for `state` (design D9). The frame carries the
-    /// theme when armed (design D7): the first emission, and the first after
-    /// a report re-arms it.
-    fn show(&mut self, state: &GuiAttachState) {
-        let theme_changed = std::mem::take(&mut self.theme_pending);
-        self.attach_revision = self.attach_revision.wrapping_add(1);
-        let theme = theme_changed.then(|| {
-            self.theme_revision = self.theme_revision.wrapping_add(1);
-            GuiSection {
-                revision: self.theme_revision,
-                value: GuiTheme::current(),
-            }
-        });
+    /// Sends `state` with the theme (design D4) at its current revisions. A
+    /// state change sends it after `show` steps the attach revision; a `sync`
+    /// answers with the same revisions.
+    fn send(&mut self, state: &GuiAttachState) {
+        let theme = self.theme_section();
         (self.sink)(GuiSectionBatch {
             attach: Some(GuiSection {
-                revision: self.attach_revision,
+                revision: self.sent.attach,
                 value: Some(state.clone()),
             }),
-            theme,
+            theme: Some(theme),
             ..GuiSectionBatch::default()
         });
+    }
+
+    /// The theme section at its current revision (design D2's compare rule):
+    /// the revision steps only when the palette differs from the last one sent.
+    fn theme_section(&mut self) -> GuiSection<GuiTheme> {
+        let value = GuiTheme::current();
+        if self.theme_value.as_ref() != Some(&value) {
+            self.sent.theme = self.sent.theme.wrapping_add(1);
+            self.theme_value = Some(value.clone());
+        }
+        GuiSection {
+            revision: self.sent.theme,
+            value,
+        }
     }
 }
 
@@ -456,7 +463,7 @@ impl std::fmt::Debug for AttachCampaign<'_> {
         f.debug_struct("AttachCampaign")
             .field("poll_interval", &self.poll_interval)
             .field("regions", &self.regions.len())
-            .field("theme_pending", &self.theme_pending)
+            .field("sent", &self.sent)
             .finish_non_exhaustive()
     }
 }

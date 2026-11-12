@@ -55,11 +55,19 @@ fn pointer(channel: State<'_, CoreChannel>, event: DomPointer) {
 }
 
 /// The `report_layout` command (design D4): the report pushes into the core
-/// channel, where the core applies it to the capacity and the hit map and
-/// emits the current frame, changed or not (design D3).
+/// channel, where the core applies it to the capacity and the hit map. It
+/// marks no section and forces no batch.
 #[tauri::command]
 fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
     push(channel, CoreInput::Layout(report));
+}
+
+/// The `sync` command (design D4): the window asks for a full snapshot once its
+/// section listener is subscribed. The core releases the sections the window
+/// holds, so the next batch carries every present section at its revision.
+#[tauri::command]
+fn sync(channel: State<'_, CoreChannel>) {
+    push(channel, CoreInput::Sync);
 }
 
 /// The `library` command (add-gui-library-panel design D2): the Library
@@ -176,7 +184,8 @@ fn main() -> tauri::Result<()> {
             pointer,
             report_layout,
             library,
-            settings
+            settings,
+            sync
         ])
         .build(tauri::generate_context!())?;
     // The event loop ends on the window's destroy or the quit edge's close.

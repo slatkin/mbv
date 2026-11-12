@@ -19,6 +19,7 @@ fn main() {
             "report_layout",
             "library",
             "settings",
+            "sync",
         ]));
     if let Err(error) = tauri_build::try_build(attributes) {
         println!("failed to run tauri-build: {error:#}");

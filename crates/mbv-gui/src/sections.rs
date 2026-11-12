@@ -23,6 +23,7 @@ use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
 use crate::artwork::ArtworkFrames;
+use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::focus::GuiFocus;
 use crate::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
@@ -53,6 +54,17 @@ pub enum Section {
     Library,
     Search,
     Settings,
+}
+
+/// The revisions the pre-attach campaign sent (design D4). The attached core
+/// continues from them, so its first attach and theme sections mint past the
+/// revisions the window already holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SentRevisions {
+    /// The last attach revision the campaign sent.
+    pub attach: u64,
+    /// The last theme revision the campaign sent.
+    pub theme: u64,
 }
 
 /// What one [`SectionLedger::collect`] reads: the `App` whose read-only
@@ -141,6 +153,7 @@ impl<T> Slot<T> {
 /// name the gated sections whose sources changed since the last collect.
 #[derive(Debug)]
 pub struct SectionLedger {
+    attach: Slot<Option<GuiAttachState>>,
     theme: Slot<GuiTheme>,
     focus: Slot<GuiFocus>,
     queue: Slot<GuiQueue>,
@@ -164,6 +177,7 @@ impl Default for SectionLedger {
     /// start, so its first collect builds it (design D4).
     fn default() -> Self {
         let mut ledger = Self {
+            attach: Slot::default(),
             theme: Slot::default(),
             focus: Slot::default(),
             queue: Slot::default(),
@@ -206,9 +220,17 @@ impl SectionLedger {
         }
     }
 
+    /// Continue the revisions the attach campaign sent (design D4), so the
+    /// attached core's first attach and theme sections mint past them.
+    pub fn resume(&mut self, sent: SentRevisions) {
+        self.attach.revision = sent.attach;
+        self.theme.revision = sent.theme;
+    }
+
     /// Forget every section the window holds (design D4, the `sync` path). The
     /// next collect sends every present section at its current revision.
     pub fn release_all(&mut self) {
+        self.attach.release();
         self.theme.release();
         self.focus.release();
         self.queue.release();
@@ -240,6 +262,9 @@ impl SectionLedger {
         // the hover's tick, and the settings build, so they cannot disagree.
         let playback = app.queue_playback_projection();
         let summary = app.queue_summary_projection();
+        // The attached core clears the pre-attach state (design D4): `null`
+        // rides the first batch, and no later build changes it.
+        self.attach.adopt(None);
         self.focus.adopt(GuiFocus::from(focus));
         self.queue
             .adopt(GuiQueue::from_surface(queue, viewport_rows, &summary));
@@ -323,6 +348,7 @@ impl SectionLedger {
     /// batch is empty. Each sent slot is held after this.
     fn take_batch(&mut self) -> Option<GuiSectionBatch> {
         let batch = GuiSectionBatch {
+            attach: self.attach.take(),
             theme: self.theme.take(),
             focus: self.focus.take(),
             queue: self.queue.take(),
@@ -336,7 +362,6 @@ impl SectionLedger {
             library: self.library.take(),
             search: self.search.take(),
             settings: self.settings.take(),
-            ..GuiSectionBatch::default()
         };
         (!batch.is_empty()).then_some(batch)
     }
