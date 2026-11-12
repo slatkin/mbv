@@ -10,7 +10,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
-import type { RenderResult } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
 import {
@@ -125,7 +124,7 @@ function chooserOverlay(): GuiOverlayFrame {
 
 /** The previous render, unmounted before the next: the section stores are
  * module state, so two mounted panels would both repaint on a store write. */
-let mounted: RenderResult<typeof QueuePlaybackPanel> | null = null;
+let mounted: { unmount(): void } | null = null;
 
 function renderPanel(
 	playbackValue: GuiQueuePlayback = playing(),
@@ -137,8 +136,9 @@ function renderPanel(
 	playbackStore.set(playbackValue);
 	overlayStore.set(overlayValue);
 	hoverStore.set(hoverValue);
-	mounted = render(QueuePlaybackPanel, { props: { carriedSheet } });
-	return mounted;
+	const rendered = render(QueuePlaybackPanel, { props: { carriedSheet } });
+	mounted = rendered;
+	return rendered;
 }
 
 /** The hovered scrubber preview the `hover` section carries. */

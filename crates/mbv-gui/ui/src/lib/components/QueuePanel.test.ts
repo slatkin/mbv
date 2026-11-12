@@ -12,7 +12,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
-import type { RenderResult } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
 import {
@@ -117,7 +116,7 @@ function rowMenu(): GuiOverlayFrame {
 
 /** The previous render, unmounted before the next: the section stores are
  * module state, so two mounted panels would both repaint on a store write. */
-let mounted: RenderResult<typeof QueuePanel> | null = null;
+let mounted: { unmount(): void } | null = null;
 
 function renderPanel(
 	queueProp: GuiQueue,
@@ -129,8 +128,9 @@ function renderPanel(
 	summaryStore.set(summaryProp);
 	overlayStore.set(overlayProp);
 	focusStore.set({ surface: 'queue', panel: 'queue' });
-	mounted = render(QueuePanel);
-	return mounted;
+	const rendered = render(QueuePanel);
+	mounted = rendered;
+	return rendered;
 }
 
 interface ReportedReport {
