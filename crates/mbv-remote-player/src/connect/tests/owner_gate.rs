@@ -63,6 +63,14 @@ fn local_handshake_rejects_a_mismatched_owner_before_client_hello(
         error.to_string().contains(message_fragment),
         "the mismatch message names the Owner's identity: {error}"
     );
+    let client = BuildInfo::current();
+    assert!(
+        error.to_string().contains(&format!(
+            "but this terminal is version {} (build {}, wire {})",
+            client.app_version, client.build_id, client.wire_id
+        )),
+        "the mismatch message names this Client's identity: {error}"
+    );
     peer.join().unwrap();
     assert_eq!(received_rx.recv().unwrap(), "");
 }
