@@ -37,11 +37,13 @@ pub(super) static PROBE_LINK: Mutex<Option<(RemotePlayer, mpsc::Receiver<PlayerE
 pub(super) fn staged_probe_connect(
     _endpoint: &DaemonEndpoint,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-    PROBE_LINK
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or_else(|| RemotePlayerError::owner_build_mismatch_for_test("test", "test-build"))
+    PROBE_LINK.lock().unwrap().take().ok_or_else(|| {
+        RemotePlayerError::owner_mismatch_for_test(mbv_ctrl::BuildInfo {
+            app_version: "test".to_string(),
+            build_id: "test-build".to_string(),
+            wire_id: String::new(),
+        })
+    })
 }
 
 /// An F3 peer row that advertises a direct Player-owner endpoint (design D6).

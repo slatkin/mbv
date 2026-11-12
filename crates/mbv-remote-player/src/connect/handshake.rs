@@ -139,10 +139,7 @@ pub(super) fn read_server_hello(
     if matches!(peer_build, PeerBuild::MustMatch)
         && (info.app_version != env!("CARGO_PKG_VERSION") || info.build_id != mbv_ctrl::BUILD_ID)
     {
-        return Err(crate::RemotePlayerError::owner_build_mismatch(
-            info.app_version,
-            info.build_id,
-        ));
+        return Err(crate::RemotePlayerError::owner_mismatch(info.build_info()));
     }
     info.validate_peer()?;
     let mut compatibility = info.compatibility()?;

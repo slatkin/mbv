@@ -225,7 +225,7 @@ impl<'a> AttachCampaign<'a> {
         if error.is_owner_shutting_down() {
             return self.wait_for_owner_exit();
         }
-        if error.is_owner_build_mismatch() {
+        if error.is_owner_mismatch() {
             if *restart_requested {
                 return self.wait_for_owner_exit();
             }

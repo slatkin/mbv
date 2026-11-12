@@ -353,7 +353,7 @@ fn connect_endpoint_maps_owner_admission_refusals() {
 #[case::a_stale_owner_without_a_build_id(
     env!("CARGO_PKG_VERSION"),
     "",
-    "unknown build"
+    "build unknown"
 )]
 fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
     #[case] owner_version: &str,
@@ -372,6 +372,7 @@ fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
         let mut hello = CtrlHello::current();
         hello.app_version = owner_version;
         hello.build_id = owner_build_id;
+        hello.wire_id = "owner-wire-1".to_string();
         writeln!(
             writer,
             "{}",
@@ -392,10 +393,17 @@ fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
     )
     .unwrap_err();
 
-    assert!(error.is_owner_build_mismatch());
+    assert!(error.is_owner_mismatch());
     assert!(
         error.to_string().contains(message_fragment),
         "the mismatch message names the Owner's identity: {error}"
+    );
+    assert!(
+        error.to_string().contains("wire owner-wire-1")
+            && error
+                .to_string()
+                .contains(&format!("wire {}", mbv_ctrl::wire_id())),
+        "the mismatch message names both wire identities: {error}"
     );
     peer.join().unwrap();
     assert_eq!(received_rx.recv().unwrap(), "");

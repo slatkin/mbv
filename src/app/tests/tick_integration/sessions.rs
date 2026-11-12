@@ -102,7 +102,13 @@ fn failed_direct_connect(
     ),
     mbv_remote_player::RemotePlayerError,
 > {
-    Err(mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test("test", "test-build"))
+    Err(
+        mbv_remote_player::RemotePlayerError::owner_mismatch_for_test(mbv_ctrl::BuildInfo {
+            app_version: "test".to_string(),
+            build_id: "test-build".to_string(),
+            wire_id: String::new(),
+        }),
+    )
 }
 
 fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {
@@ -701,9 +707,12 @@ fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
         let peer = mbv_remote_player::DaemonEndpoint::Tcp("192.168.1.20:47788".parse().unwrap());
         if *endpoint != peer {
             return Err(
-                mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test(
-                    "test",
-                    "test-build",
+                mbv_remote_player::RemotePlayerError::owner_mismatch_for_test(
+                    mbv_ctrl::BuildInfo {
+                        app_version: "test".to_string(),
+                        build_id: "test-build".to_string(),
+                        wire_id: String::new(),
+                    },
                 ),
             );
         }
