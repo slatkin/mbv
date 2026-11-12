@@ -55,3 +55,10 @@ mbv-net = { path = "../mbv-net", features = ["test"] }
 image = { workspace = true, features = ["png"] }
 rstest.workspace = true
 serde_json.workspace = true
+# The `sections` bench times one core step per fixture (design D12 of
+# `gui-change-driven-sections`); it runs only on a manual `cargo bench`.
+criterion = { workspace = true }
+
+[[bench]]
+name = "sections"
+harness = false

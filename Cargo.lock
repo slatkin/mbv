@@ -3277,6 +3277,7 @@ name = "mbv-gui"
 version = "0.26.9"
 dependencies = [
  "base64 0.23.1",
+ "criterion",
  "image",
  "mbv",
  "mbv-config",

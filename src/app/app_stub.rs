@@ -12,6 +12,11 @@ use std::sync::{Arc, Mutex};
 
 use super::{App, AppInit, QueueView};
 
+/// The GUI `sections` bench's bench-scale seeds (design D12 of
+/// `gui-change-driven-sections`), in their own child module.
+#[cfg(feature = "test")]
+mod gui_scale;
+
 /// Minimal `App` stub for logic-only tests: the ordinary `App::build`
 /// construction ([`make_built_app`]) plus the stub-friendly defaults below.
 #[must_use]
