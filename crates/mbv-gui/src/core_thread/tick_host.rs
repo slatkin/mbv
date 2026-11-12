@@ -2,14 +2,19 @@
 //! the input phase `ClientCore::tick` drives each step. The first slice
 //! mounts only the Queue, the Queue playback band, and the Status bar, so
 //! most surfaces' drains stay no-ops while the App-owned halves apply.
+//!
+//! Each hook that reports work marks the gated sections its row of the mark
+//! table names (`crate::sections::marks_for_hook`, design D3 rule 2). The
+//! input phase marks them for the inputs of rule 1.
 
 use std::time::Instant;
 
 use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{Msg, ServiceRequest};
+use mbv_ui_msg::{Msg, PointerKind, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
+use crate::sections::{DrainHook, marks_for_hook};
 
 /// The Panel a Library command moves focus to (design D4): the two take-focus
 /// commands move it on the core's `FocusStack` too, so the frame's focus and
@@ -20,6 +25,32 @@ fn focus_target(command: &mbv::GuiLibraryCommand) -> Option<PanelFocus> {
         mbv::GuiLibraryCommand::TakeFocus => Some(PanelFocus::Library),
         mbv::GuiLibraryCommand::TakeQueueFocus => Some(PanelFocus::Queue),
         _ => None,
+    }
+}
+
+/// Whether a pointer event marks the gated sections (design D3 rule 1): a
+/// press or a right press. A gesture resolves on its press, and an outside
+/// press dismisses an open overlay whether or not it lands on a region, so
+/// every press marks. A release, a move, a drag, a wheel step, and a cancel
+/// mark none.
+fn pointer_marks_gated(kind: PointerKind) -> bool {
+    match kind {
+        PointerKind::Press | PointerKind::RightPress => true,
+        PointerKind::Release
+        | PointerKind::Move
+        | PointerKind::Drag
+        | PointerKind::ScrollDown
+        | PointerKind::ScrollUp
+        | PointerKind::Cancel => false,
+    }
+}
+
+impl CoreThread {
+    /// Set the gated marks one hook's row names (design D3 rule 2).
+    pub(super) fn mark_hook(&mut self, hook: DrainHook) {
+        for section in marks_for_hook(hook) {
+            self.ledger.mark(*section);
+        }
     }
 }
 
@@ -42,19 +73,24 @@ impl ClientTickHost for CoreThread {
         // A landed catalog can complete the saved launch location's first
         // phase (add-gui-library-panel design D9).
         self.restore_launch_location();
+        if drain.events {
+            self.mark_hook(DrainHook::DrainStartupWorkers);
+        }
         drain.events
     }
 
     fn reproject_audiobookshelf_content(&mut self) {
         // The first slice presents no Audiobookshelf surface; the App-side
-        // drain already applied the event's semantics.
+        // drain already applied the event's semantics. The shared tick calls
+        // this only after such a drain, so the call is the signal to mark.
+        self.mark_hook(DrainHook::ReprojectAudiobookshelfContent);
     }
 
     fn drain_suspended_home_events(&mut self) -> bool {
         let mut had_events = false;
         loop {
             match self.app.drain_home_event() {
-                HomeEventDrain::Empty => return had_events,
+                HomeEventDrain::Empty => break,
                 // The GUI Client never joins the Pin swap —
                 // `declare_gui_client` sends a plain Hello — so the
                 // lifecycle arms consume their event with no action.
@@ -64,6 +100,10 @@ impl ClientTickHost for CoreThread {
                 ) => had_events = true,
             }
         }
+        if had_events {
+            self.mark_hook(DrainHook::DrainSuspendedHomeEvents);
+        }
+        had_events
     }
 
     fn drain_player_events(&mut self, input_received: &mut bool) -> bool {
@@ -76,8 +116,10 @@ impl ClientTickHost for CoreThread {
             }
             PlayerEventDrain::Handled { restart } => {
                 // The snapshot adoption ran App-side; the next frame's Queue
-                // sync re-projects the adopted state (design D5).
+                // sync re-projects the adopted state (design D5). The adopted
+                // snapshot can change the gated sources, so it marks them.
                 *input_received = true;
+                self.mark_hook(DrainHook::DrainPlayerEvents);
                 restart
             }
         }
@@ -93,6 +135,9 @@ impl ClientTickHost for CoreThread {
         while self.app.drain_lib_event() {
             had_events = true;
         }
+        if had_events {
+            self.mark_hook(DrainHook::DrainLibEvents);
+        }
         // A landed group list can complete the saved launch location's second
         // phase (add-gui-library-panel design D9).
         self.restore_launch_location();
@@ -105,26 +150,35 @@ impl ClientTickHost for CoreThread {
         // The top bar's own field reads the App store this App-side drain
         // fills, and the frame carries it; a landed result reports changed so
         // the next frame paints it.
-        self.app.drain_gui_search_results()
+        let landed = self.app.drain_gui_search_results();
+        if landed {
+            self.mark_hook(DrainHook::DrainSearchResults);
+        }
+        landed
     }
 
     fn tick_search_clock(&mut self, _now: Instant) -> Option<Msg> {
         // No search control holds a debounce deadline in the first slice.
+        self.mark_hook(DrainHook::TickSearchClock);
         None
     }
 
     fn handle_service_request(&mut self, _request: ServiceRequest) {
         // Unreachable while `tick_search_clock` emits nothing: the search
         // debounce is the only Service request the core routes.
+        self.mark_hook(DrainHook::HandleServiceRequest);
     }
 
     fn tick_inline_search_clock(&mut self, _now: Instant) -> bool {
         // The first slice presents no Inline Search control.
+        self.mark_hook(DrainHook::TickInlineSearchClock);
         false
     }
 
     fn reproject_feed_content(&mut self) {
-        // The first slice presents no feed surface.
+        // The first slice presents no feed surface. The shared tick calls this
+        // only after a feed-tab refresh, so the call is the signal to mark.
+        self.mark_hook(DrainHook::ReprojectFeedContent);
     }
 
     fn drain_feed_add_results(&mut self) -> bool {
@@ -133,10 +187,14 @@ impl ClientTickHost for CoreThread {
         // channel and the config write, and the frame reads the subscription
         // list from the App. The GUI mounts no feed-manage component, so no
         // stage follows the outcome.
-        !matches!(
+        let landed = !matches!(
             self.app.drain_feed_add_results(),
             mbv_ui_model::feeds_manage::FeedAddDrain::Idle
-        )
+        );
+        if landed {
+            self.mark_hook(DrainHook::DrainFeedAddResults);
+        }
+        landed
     }
 
     fn drain_card_image_completions(&mut self) -> bool {
@@ -144,16 +202,24 @@ impl ClientTickHost for CoreThread {
         // fetches resolve through this drain, so a completion's decoded
         // image lands in the cache and the next frame carries it. The GUI
         // paints no TV workspace, so a Series key's re-push is the TUI's.
-        self.app.drain_card_image_completions().drained
+        let drained = self.app.drain_card_image_completions().drained;
+        if drained {
+            self.mark_hook(DrainHook::DrainCardImageCompletions);
+        }
+        drained
     }
 
     fn drain_resize_responses(&mut self) -> bool {
         // The GUI issues no image resize request (the TUI's resize drag owns
         // them), so the response channel stays empty.
+        self.mark_hook(DrainHook::DrainResizeResponses);
         false
     }
 
     fn drain_transport_events(&mut self) -> bool {
+        // The ctrl transport commands change no gated source (design D3 rule
+        // 2): the App-side drain feeds the compared sections only.
+        self.mark_hook(DrainHook::DrainTransportEvents);
         self.app.drain_transport_events()
     }
 
@@ -161,6 +227,9 @@ impl ClientTickHost for CoreThread {
         let mut had_events = false;
         while self.app.drain_ws_event() {
             had_events = true;
+        }
+        if had_events {
+            self.mark_hook(DrainHook::DrainWsEvents);
         }
         had_events
     }
@@ -170,16 +239,27 @@ impl ClientTickHost for CoreThread {
         while self.app.drain_audiobookshelf_socket_event() {
             had_events = true;
         }
+        if had_events {
+            self.mark_hook(DrainHook::DrainAudiobookshelfSocketEvents);
+        }
         had_events
     }
 
     fn drain_idle_feed(&mut self) -> bool {
         // The GUI never initializes the idle feed; the App-side drain is a
         // no-op without one.
-        self.app.drain_idle_feed()
+        let drained = self.app.drain_idle_feed();
+        if drained {
+            self.mark_hook(DrainHook::DrainIdleFeed);
+        }
+        drained
     }
 
     fn run_periodic_maintenance(&mut self) {
+        // The maintenance writes the held configuration, sends the websocket
+        // keepalive, and starts the capability refresh. No gated section reads
+        // these (design D3 rule 2).
+        self.mark_hook(DrainHook::RunPeriodicMaintenance);
         self.app.run_periodic_maintenance();
     }
 
@@ -194,6 +274,7 @@ impl ClientTickHost for CoreThread {
                     // the focused surface as the leaf (design D4); a routed
                     // quit ends the run.
                     outcome.input_received = true;
+                    self.ledger.mark_all_gated();
                     if self.route_key(key) {
                         outcome.quit_requested = true;
                     }
@@ -205,6 +286,9 @@ impl ClientTickHost for CoreThread {
                     // the daemon-lost dialog's quit choice ends the run
                     // through the same quit edge a routed quit key uses.
                     outcome.input_received = true;
+                    if pointer_marks_gated(event.kind) {
+                        self.ledger.mark_all_gated();
+                    }
                     if self.route_pointer(event) {
                         outcome.quit_requested = true;
                     }
@@ -216,6 +300,7 @@ impl ClientTickHost for CoreThread {
                     // with the App's stored focus (design D4), so the frame
                     // and the App's key gates agree.
                     outcome.input_received = true;
+                    self.ledger.mark_all_gated();
                     let focus_target = focus_target(&command);
                     self.app.apply_gui_library_command(command);
                     if let Some(panel) = focus_target {
@@ -233,6 +318,7 @@ impl ClientTickHost for CoreThread {
                     // core `FocusStack`. The UI reset spans the App and this
                     // thread (design D10), so it runs here in one place.
                     outcome.input_received = true;
+                    self.ledger.mark_all_gated();
                     if matches!(command, mbv::GuiSettingsCommand::ResetUiState) {
                         self.reset_gui_ui_state();
                     } else {

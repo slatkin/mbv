@@ -14,6 +14,9 @@
 //! builder of the sections.
 
 pub(crate) mod library;
+mod marks;
+
+pub(crate) use marks::{DrainHook, marks_for_hook};
 
 use std::collections::HashSet;
 
@@ -55,6 +58,15 @@ pub enum Section {
     Search,
     Settings,
 }
+
+/// The gated sections (design D2). A mark on each one rebuilds them all; the
+/// ledger compares each build, so an unchanged section sends nothing.
+const GATED_SECTIONS: &[Section] = &[
+    Section::Theme,
+    Section::Library,
+    Section::Search,
+    Section::Settings,
+];
 
 /// The revisions the pre-attach campaign sent (design D4). The attached core
 /// continues from them, so its first attach and theme sections mint past the
@@ -173,8 +185,11 @@ pub struct SectionLedger {
 }
 
 impl Default for SectionLedger {
-    /// A fresh ledger holds no section. The theme carries one mark from the
-    /// start, so its first collect builds it (design D4).
+    /// A fresh ledger holds no section. Every gated section carries a mark
+    /// from the start, so its first collect builds it (design D4): a gated
+    /// section no drain or input has marked yet would otherwise never reach the
+    /// window, because no mark would name it. The theme and the Library, Search,
+    /// and Settings builds all start this way.
     fn default() -> Self {
         let mut ledger = Self {
             attach: Slot::default(),
@@ -195,7 +210,7 @@ impl Default for SectionLedger {
             artwork: ArtworkFrames::default(),
             trickplay: TrickplayFrames::default(),
         };
-        ledger.mark(Section::Theme);
+        ledger.mark_all_gated();
         ledger
     }
 }
@@ -210,13 +225,8 @@ impl SectionLedger {
     /// Mark every gated section (design D3): the startup drains and the
     /// reprojections change their sources, which no single section names.
     pub fn mark_all_gated(&mut self) {
-        for section in [
-            Section::Theme,
-            Section::Library,
-            Section::Search,
-            Section::Settings,
-        ] {
-            self.mark(section);
+        for section in GATED_SECTIONS {
+            self.mark(*section);
         }
     }
 

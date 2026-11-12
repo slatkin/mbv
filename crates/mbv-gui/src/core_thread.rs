@@ -344,6 +344,14 @@ impl CoreThread {
         self.idle_cadence = cadence;
     }
 
+    /// Mark what a library completion marks (design D3 rule 2), for a test
+    /// that applied the completion through the App's test seam. That seam
+    /// runs the App arm outside the tick, so the tick's `drain_lib_events`
+    /// hook never reports the completion. Production never calls this.
+    pub fn mark_library_completion_for_test(&mut self) {
+        self.mark_hook(crate::sections::DrainHook::DrainLibEvents);
+    }
+
     /// The Settings screen's open section, for a Client's test that asserts a
     /// key opened, closed, or switched it (`add-gui-settings-screen` rows
     /// 3.2, 3.3). The frame carries the section from the change's section 4
@@ -691,10 +699,6 @@ impl CoreThread {
     fn send_sections(&mut self) {
         self.sync_queue_surface();
         self.app.fetch_playback_metadata();
-        // Interim until row 2.6 (design D3): every gated section carries a mark
-        // each tick. A gated build compares with its last built value, so only
-        // a changed section is sent; the drain-hook marks replace this line.
-        self.ledger.mark_all_gated();
         let batch = self.ledger.collect(SectionSources {
             app: &mut self.app,
             focus: &self.focus,

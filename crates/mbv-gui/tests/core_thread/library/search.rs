@@ -114,6 +114,7 @@ fn pump_until_movies_destination(test: &mut TestCore) {
                 .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
             "no library completion landed while waiting for the activated row's destination"
         );
+        test.core.mark_library_completion_for_test();
         test.waker.wake();
     }
 }

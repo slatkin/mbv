@@ -2,12 +2,21 @@
 //! a tick sends the sections it changed, each under its revision, and nothing
 //! else.
 
+use mbv::{
+    App, ClientTickHost, stub_app_with_completed_emby_startup,
+    stub_app_with_completed_emby_startup_and_contents, stub_app_with_queue,
+};
+use mbv_emby_model::EmbyItem;
+use mbv_emby_model::test_support::make_item;
+use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::core_thread::CoreInput;
-use mbv_gui::sections::SentRevisions;
+use mbv_gui::sections::{Section, SentRevisions};
+use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+use rstest::rstest;
 
-use crate::test_core;
+use crate::{TestCore, test_core, test_core_with, test_emby_client};
 
 /// The attached core's first batch carries `attach: null` (design D4): the
 /// window's pre-attach state clears.
@@ -84,4 +93,168 @@ fn a_queue_cursor_move_sends_only_the_queue_section() {
             ..GuiSectionBatch::default()
         }
     );
+}
+
+/// The gated sections a batch carries (design D2), in ledger order.
+fn carried_gated(batch: &GuiSectionBatch) -> Vec<Section> {
+    [
+        (Section::Theme, batch.theme.is_some()),
+        (Section::Library, batch.library.is_some()),
+        (Section::Search, batch.search.is_some()),
+        (Section::Settings, batch.settings.is_some()),
+    ]
+    .into_iter()
+    .filter_map(|(section, carried)| carried.then_some(section))
+    .collect()
+}
+
+/// A Continue Watching item whose id is its name.
+fn continue_item(id: &str) -> EmbyItem {
+    let mut item = make_item(id, "Movie");
+    item.id = id.to_string();
+    item
+}
+
+/// An App whose Home bootstrap completes on the first step, with two
+/// Continue Watching items for the Home rows.
+fn library_app() -> App {
+    stub_app_with_completed_emby_startup_and_contents(
+        Vec::new(),
+        vec![continue_item("cw-first"), continue_item("cw-second")],
+    )
+}
+
+fn empty_app() -> App {
+    stub_app_with_queue(0)
+}
+
+/// Seed one Music library whose group holds two albums, so a selected album's
+/// Hero carries card art (as the Library frame tests seed it), then pick the
+/// group and open one album's detail. The Hero paints its placeholder until the
+/// album's card image lands.
+fn show_album(test: &mut TestCore) {
+    let http = MockHttp::new();
+    let app = test.core.app_mut();
+    app.seed_gui_music_library_for_test(test_emby_client(&http));
+    app.seed_gui_library_groups_for_test(0, "grp-hiphop");
+    app.seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[
+            ("alb-ill", "Licensed to Ill"),
+            ("alb-paul", "Paul's Boutique"),
+        ],
+    );
+    // The Emby agent must outlive this function, as the Library frame tests keep
+    // their mock for the whole test.
+    std::mem::forget(http);
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::SelectCollection {
+                lib_idx: 0,
+                group_id: "grp-hiphop".into(),
+            }
+            .into(),
+        ))
+        .unwrap();
+    // One step applies one queued input, so the group pick gets its own step
+    // before the album open the row's settle step applies.
+    assert!(test.core.step());
+    test.held();
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::ShowDetail {
+                item_id: "alb-paul".into(),
+            }
+            .into(),
+        ))
+        .unwrap();
+}
+
+/// Open Home, the first destination (position 0).
+fn open_home(test: &mut TestCore) {
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::OpenDestination { position: 0 }.into(),
+        ))
+        .unwrap();
+}
+
+/// Open the Search field with a query (row 12.1).
+fn open_search(test: &mut TestCore) {
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::SearchQuery {
+                query: "blue".into(),
+            }
+            .into(),
+        ))
+        .unwrap();
+}
+
+/// A Home refresh the Library drain applies on the next step.
+fn land_home_refresh(test: &mut TestCore) {
+    test.core
+        .app_mut()
+        .queue_home_content_refreshed_for_test(vec![continue_item("cw-third")]);
+}
+
+/// The shown album's fetched card image, which the card drain lands on the
+/// next step.
+fn land_card_image(test: &mut TestCore) {
+    test.core.app_mut().enable_card_images_for_test();
+    test.core.app_mut().complete_card_image_for_test(
+        &mbv_images::emby_card_cache_key("alb-paul", ""),
+        image::DynamicImage::new_rgb8(4, 4),
+    );
+}
+
+/// The search worker's result the search drain stores on the next step.
+fn land_search_result(test: &mut TestCore) {
+    test.core
+        .app_mut()
+        .send_gui_search_result_for_test("blue", vec![continue_item("blue-1")]);
+}
+
+/// One drain hook's row (design D3 rule 2): a settled first batch, then an
+/// event the hook drains. The next batch carries only the gated sections the
+/// event changed. `prepare` sends the input that opens the destination first.
+#[rstest]
+#[case::library_data(library_app, open_home, land_home_refresh, &[Section::Library])]
+#[case::card_images(empty_app, show_album, land_card_image, &[Section::Library])]
+#[case::search_results(empty_app, open_search, land_search_result, &[Section::Search])]
+fn a_drain_hook_sends_the_gated_sections_it_changed(
+    #[case] app: fn() -> App,
+    #[case] prepare: fn(&mut TestCore),
+    #[case] land: fn(&mut TestCore),
+    #[case] expected: &[Section],
+) {
+    let mut test = test_core_with(app());
+    prepare(&mut test);
+    assert!(test.core.step());
+    test.next_batch();
+
+    land(&mut test);
+    assert!(test.core.step());
+    assert_eq!(carried_gated(&test.next_batch()), expected.to_vec());
+}
+
+/// The startup drain's catalog reaches the Library section (design D3 rule 2).
+/// The stub queues the Emby startup at construction, so no batch precedes its
+/// drain: this test reads the first batch, which also carries every gated
+/// section's first build (design D2). It checks the catalog content, not the
+/// section set, so it is not a `#[case]` row of the table above.
+#[test]
+fn the_startup_drain_sends_the_music_tab_in_the_library_section() {
+    let music = EmbyItem::folder("lib-music".into(), "Music".into(), "music".into());
+    let mut test = test_core_with(stub_app_with_completed_emby_startup(vec![music]));
+    assert!(test.core.step());
+
+    let content = test
+        .next_batch()
+        .library
+        .expect("the startup drain sends the library")
+        .value
+        .expect("the catalog builds a library frame");
+    assert!(content.tabs.iter().any(|tab| tab.label == "Music"));
 }
