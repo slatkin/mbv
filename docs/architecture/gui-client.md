@@ -108,9 +108,9 @@ daemon-lost recovery dialog with its diagnostics and recovery choices), the
 Queue playback projection (`playback`, `GuiQueuePlayback`), the scrubber's
 hover preview (`hover`, `Option<GuiScrubberHover>`), the footer pills
 (`footer`, `GuiQueueFooter`), the Status bar projection (`status`,
-`GuiStatusBar`), the Library panel's content (`library`,
-`Option<GuiLibraryContent>`; *The Library panel* names it; a later group
-splits it into the list, detail, and row-menu sections), the Search field's
+`GuiStatusBar`), the Library panel's three sections (`libraryList`, the destination tabs and
+the list part; `libraryDetail`, the detail part; and `rowMenu`, the open item
+menu; *The Library sections and their revisions* names them), the Search field's
 section (`search`, `Option<GuiSearchFrame>`), and the Settings screen's
 content (`settings`, `Option<GuiSettingsFrame>`; *The Settings screen* names
 it). The window picks the panel state from the `panel` section's toggles and
@@ -120,7 +120,7 @@ class (design D10).
 A section's revision starts at 1 and grows by one for each built value that
 differs from the last built value. The compared sections build on every tick
 and compare with the last built value, so a build that matches sends
-nothing. The gated sections (`theme`, `library`, `search`, `settings`) build
+nothing. The gated sections (`theme`, `library` for the three Library sections, `search`, `settings`) build
 only while a mark names them (design D3): an input that resolved, a drain
 hook that reported work, a passed deadline, or a moved playhead. The
 pre-attach campaign (`src/attach.rs`) sends its own batches of the `attach`
@@ -635,26 +635,37 @@ Queue`), under each entry's carried builder index, and paints no control at
 all when the remainder is empty — the live finding that a Music album's
 menu repeated the buttons and offered nothing new.
 
-### The frame section and its revision
+### The Library sections and their revisions
 
-`GuiFrame.library` carries a `GuiLibraryFrame`
-(`src/bridge/frame/library.rs`). A Library list can hold thousands of rows, so
-the section carries a revision and the content rides a frame only when that
-revision changes, as the visual slot's artwork does. `revision` changes when
-any part of the built content changes, the art included. `content` is
-`Option<Box<GuiLibraryContent>>`: `None` while the window already holds the
-revision, so an unchanged frame carries only the number. The window content
-keeps the last carried content (`carryLibraryContent`,
-`ui/src/lib/library/state.ts`), and a window-content reload's `report_layout`
-re-arms the section (`LibraryFrames::rearm`,
-`crates/mbv-gui/src/library_frames.rs`), so the next frame re-carries the
-whole content.
+The Library panel reads three window sections, and each one has its own
+revision: `libraryList` (`GuiLibraryList`, `src/bridge/frame/library/list.rs`),
+`libraryDetail` (`GuiLibraryDetail`, `src/bridge/frame/library/detail.rs`), and
+`rowMenu` (`GuiLibraryRowMenuFrame`, `src/bridge/frame/library.rs`). A Library
+list can hold thousands of rows, so each section carries its revision, and its
+value rides a batch only when that revision changes, as the visual slot's
+artwork does. The ledger compares each slot on its own. A pick therefore sends
+only `libraryDetail`, and a row-menu open sends only `rowMenu`. Each value is an
+`Option`, so a `null` clears its section. A window-content reload calls `sync`,
+which releases every section the window holds, so the next batch re-sends each
+present Library section at its current revision.
+
+One gated Library pass (`src/sections/library.rs`) builds all three sections.
+The `library` mark (design D3) names the pass. The pass makes one projection
+call per destination, so the three slots share one build, and each slot keeps
+its own compare. A build that matches the slot's last built value sends nothing.
+
+The window keeps one store per section: `libraryList`, `libraryDetail`, and
+`rowMenu` in `ui/src/lib/bridge/sections.ts`. `applyBatch` writes a store only
+when the batch carries a revision the window does not hold. `LibraryPanel.svelte`
+narrows the list and the detail through `libraryPair`
+(`ui/src/lib/library/parts.ts`). The pair narrows only when both `kind` tags
+match, so a mismatched pair paints nothing.
 
 `search` is the Search section (design D12, row 12.1):
 `Option<GuiSearchFrame>`, present while the top bar's Search field — the
 field the `Ctrl+K` chord arms — holds a query or its rows, and `None`
-while it is closed. It rides the section beside the
-revision-gated `content`, never inside it, because Search is
+while it is closed. It rides its own section beside the
+Library sections, never inside them, because Search is
 cross-destination: a result that lands between two content changes still
 reaches the window. `GuiSearchFrame`
 (`src/bridge/frame/library/search.rs`) carries `query` (the query the core is
@@ -662,28 +673,26 @@ answering), `loading`, `failed`, and `results`, whose rows carry `id` and
 `item_type` (the stable Service identity the `searchActivate` command sends
 back), `title`, and `subtitle` (empty when the item has none).
 
-`GuiLibraryContent` carries `tabs` (one tab per Service library
-destination, plus the feed tab while subscriptions are configured, in
-catalog order, each a `GuiLibraryTabFrame` with a `position` and a
-`label`; Home is not a tab — the top bar's Home icon opens position 0),
-`current_tab` (the active tab's position; `None` for Home, whose icon
-marks itself current while `home` is present, and for an active
-destination no tab names), `music`
-(`Option<GuiMusicFrame>`, present while a Grouped Music library is active),
-`home` (`Option<GuiHomeFrame>`, present while Home is the active
-destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
-design), and `shows` (`Option<GuiShowsFrame>`, present while an Emby TV
-library's Shows destination is active — design D12, row 7.1), and `emby`
-(`Option<GuiEmbyFrame>`, present while a plain Emby library's destination is
-active — design D12, row 8.1), and `audiobooks` (`Option<GuiAudiobooksFrame>`,
-present while an Audiobookshelf book library's Audiobooks destination is
-active — design D12, row 9.1), `podcasts` (`Option<GuiPodcastsFrame>`,
-present while an Audiobookshelf podcast library's Podcasts destination is
-active — design D12, row 10.1), and `feeds` (`Option<GuiFeedsFrame>`, present
-while the Feeds destination is active — design D12, row 11.1). No two
-destination fields present at once: the destinations are exclusive, so the
-present field names the active destination, and the top bar marks the Home
-icon current exactly while `home` is present.
+`libraryList` (`GuiLibraryList`) carries `tabs` (one tab per Service library
+destination, plus the feed tab while subscriptions are configured, in catalog
+order, each a `GuiLibraryTabFrame` with a `position` and a `label`; Home is not
+a tab, and the top bar's Home icon opens position 0), `currentTab` (the active
+tab's position; `null` for Home and for an active destination that no tab
+names), and `destination` (`GuiDestinationList`), the active destination's list
+part. `destination` is tagged by `kind`: `music`, `home`, `shows`, `emby`,
+`audiobooks`, `podcasts`, or `feeds`. Only one destination is active at a time,
+and the top bar's Home icon marks itself current exactly while `destination` is
+`home`.
+
+`libraryDetail` (`GuiLibraryDetail`) carries the active destination's detail
+part, tagged by the same seven `kind` values: the core's selection, the Hero,
+and the Workspace facts. `rowMenu` (`GuiLibraryRowMenuFrame`) carries `itemId`
+and the shared builder's `entries` while a row menu is open. Each destination
+keeps its list and detail parts in one file under `src/bridge/frame/library/`;
+`music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`. The
+destination paragraphs below still use the former `Gui<Destination>Frame` names:
+read their list fields as the `libraryList` part, and their selection, Hero, and
+Workspace fields as the `libraryDetail` part.
 
 `GuiHomeFrame` carries `rows`, `selected`, and `hero`: Home's flat list in
 the Music list slot, with no pill, no letter rail, and no Workspace. `rows`

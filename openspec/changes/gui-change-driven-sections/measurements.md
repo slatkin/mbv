@@ -64,3 +64,30 @@ The Music step fell by 27% against the baseline. The playing-queue step rose
 by about 7%, which is within the spread that the earlier rows left. The step
 times include the ledger's compared sections from rows 2.x to 4.x, so the change
 is not the effect of task 5.5 alone.
+
+## Task 6.6: Library sections
+
+Run at HEAD `a9e3b85f1` (rows 6.1 to 6.5 landed, task 6.6 uncommitted), on the
+same machine, with `timeout 900 cargo bench -p mbv-gui --bench sections`. The
+run covered all seven fixtures. The table holds fixtures 3, 4, and 5, the three
+that read the Library sections. The medians are `median.point_estimate` in
+`target/criterion/sections/<fixture>/new/estimates.json`.
+
+| Fixture | Baseline median step | Median step | Baseline bytes per step | Bytes per step |
+| --- | --- | --- | --- | --- |
+| `music_grouped` (2,000 artists, 6,000 albums, one picked) | 344.1 µs | 242.3 µs | 1,253 | 2 |
+| `shows_all` (300 series, All mode) | 6.4 µs | 6.68 µs | 1,253 | 2 |
+| `home_rows` (50 Continue rows, 100 recent rows) | 44.6 µs | 40.7 µs | 1,445 | 2 |
+
+The bytes column has the same meaning as in Task 5.5. The timed key marks every
+gated section, so each timed step runs the one Library pass and compares its
+three slots. Nothing changed, so the batch is empty and serializes to 2 bytes.
+This run does not time a pick or a row-menu open, which each send one section.
+
+Against the baseline, the Music step fell 30% and the Home step fell 9%. Against
+the Task 5.5 run, the Music step fell 3% (249.8 µs). The Shows step rose 4%
+over the baseline. Criterion's change line compares with the last saved run in
+`target/criterion`, and it reports Music −3.3%, Home −2.7%, and Shows −0.7%, so
+the Shows rise is not a regression between the last two runs. The step times
+include the compared sections from rows 2.x to 6.x, so the change is not the
+effect of task 6.6 alone.
