@@ -110,3 +110,17 @@ fn set_settings_value_sets_the_config_value_and_the_player_prefs() {
         "the picked value arms the deferred save"
     );
 }
+
+/// A version row is read-only: activating it arms no save and changes no
+/// setting (`owner-gate-on-wire-identity` design D4, spec "A version row is
+/// activated").
+#[test]
+fn owner_version_row_activation_arms_no_save_and_changes_no_setting() {
+    let mut app = make_app_stub();
+    let before = format!("{:?}", app.config.lock().unwrap());
+
+    app.handle_settings_activate(SettingKey::OwnerVersion);
+
+    assert!(app.settings_save_at.is_none());
+    assert_eq!(format!("{:?}", app.config.lock().unwrap()), before);
+}

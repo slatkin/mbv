@@ -60,6 +60,7 @@ pub enum GuiSettingRowKind {
     Pick,
     ChoiceList,
     Action,
+    Info,
 }
 
 impl From<mbv::GuiSettingsRowKind> for GuiSettingRowKind {
@@ -70,6 +71,7 @@ impl From<mbv::GuiSettingsRowKind> for GuiSettingRowKind {
             mbv::GuiSettingsRowKind::Pick => Self::Pick,
             mbv::GuiSettingsRowKind::ChoiceList => Self::ChoiceList,
             mbv::GuiSettingsRowKind::Action => Self::Action,
+            mbv::GuiSettingsRowKind::Info => Self::Info,
         }
     }
 }

@@ -82,8 +82,9 @@ pub struct GuiSettingsRowProjection {
     pub values: Option<Vec<String>>,
 }
 
-/// The four ways an F2 row is edited (design D9, D13): a toggle, a cycle, a
-/// pick from a value list, a choice list, or an action.
+/// The ways an F2 row is edited (design D9, D13): a toggle, a cycle, a pick
+/// from a value list, a choice list, or an action. `Info` is a read-only row
+/// that takes no edit (the version rows).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuiSettingsRowKind {
     Toggle,
@@ -91,6 +92,7 @@ pub enum GuiSettingsRowKind {
     Pick,
     ChoiceList,
     Action,
+    Info,
 }
 
 /// One choice of a choice-list row (design D9); `id` is the value the config
@@ -493,5 +495,6 @@ fn gui_settings_row_kind(key: SettingKey) -> GuiSettingsRowKind {
         }
         SettingValueKind::Collection => GuiSettingsRowKind::ChoiceList,
         SettingValueKind::Key => GuiSettingsRowKind::Action,
+        SettingValueKind::Info => GuiSettingsRowKind::Info,
     }
 }

@@ -43,7 +43,7 @@ impl Model {
         let rows = if self.app.settings_destination == SettingsDestination::Panel {
             Self::panel_settings_rows(&cfg, &ui)
         } else {
-            Self::main_settings_rows(&cfg, &ui)
+            Self::main_settings_rows(&self.app, &cfg, &ui)
         };
 
         let keys = self.keys_snapshot();
@@ -132,7 +132,7 @@ impl Model {
     /// below the grid, but its rows use the same `settings_cursor_to_key`
     /// ordinal as every other section, so an action needs no separately
     /// hard-coded row (#745).
-    fn main_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
+    fn main_settings_rows(app: &super::App, cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         let mut rows = Vec::new();
         let mut cursor = 0;
         let (grid_sections, action_sections) =
@@ -146,24 +146,37 @@ impl Model {
                 kind: SettingValueKind::Key,
             });
             for &key in *keys {
-                rows.push(Self::key_row(key, cfg, ui, cursor));
+                rows.push(Self::key_row(app, key, cfg, ui, cursor));
                 cursor += 1;
             }
         }
         for (_, keys) in action_sections {
             for &key in *keys {
-                rows.push(Self::key_row(key, cfg, ui, cursor));
+                rows.push(Self::key_row(app, key, cfg, ui, cursor));
                 cursor += 1;
             }
         }
         rows
     }
 
-    /// One plain (non-header) settings row at cursor ordinal `cursor`.
-    fn key_row(key: SettingKey, cfg: &Config, ui: &UiConfig, cursor: usize) -> SettingsRow {
+    /// One plain (non-header) settings row at cursor ordinal `cursor`. The
+    /// version rows take their value from `App`, which holds both identities;
+    /// every other row's value comes from the configuration.
+    fn key_row(
+        app: &super::App,
+        key: SettingKey,
+        cfg: &Config,
+        ui: &UiConfig,
+        cursor: usize,
+    ) -> SettingsRow {
+        let value = if settings::setting_kind(key) == SettingValueKind::Info {
+            app.version_row_value(key)
+        } else {
+            settings::setting_value(key, cfg, ui)
+        };
         SettingsRow {
             label: settings::setting_label(key).into(),
-            value: settings::setting_value(key, cfg, ui),
+            value,
             section: false,
             cursor: Some(cursor),
             kind: settings::setting_kind(key),
@@ -420,6 +433,27 @@ mod tests {
         assert_eq!(
             settings::setting_value(SettingKey::Keys, &configured, &ui),
             "Ctrl+k \u{b7} 2 overridden"
+        );
+
+        // The Session section's two version rows carry the values `App`
+        // formats for them, not configuration values (owner-gate-on-wire-identity
+        // design D4).
+        let model = Model::new(crate::app::tests::make_app_stub());
+        let snapshot = model.settings_snapshot();
+        let row_value = |label: &str| {
+            snapshot
+                .rows
+                .iter()
+                .find(|row| row.label == label)
+                .map(|row| row.value.clone())
+        };
+        assert_eq!(
+            row_value("This client"),
+            Some(model.app.version_row_value(SettingKey::ClientVersion))
+        );
+        assert_eq!(
+            row_value("Owner"),
+            Some(model.app.version_row_value(SettingKey::OwnerVersion))
         );
     }
 
