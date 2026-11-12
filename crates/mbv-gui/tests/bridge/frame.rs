@@ -160,7 +160,12 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
     ));
     queue.set_cursor(&QueueCursorUpdate::Set(2));
 
-    let frame = GuiQueue::from_surface(&queue, 2, &app.queue_summary_projection());
+    let frame = GuiQueue::from_surface(
+        &queue,
+        2,
+        &app.queue_summary_projection(),
+        &app.gui_queue_end_offsets(),
+    );
 
     let painted: Vec<(&str, usize)> = frame
         .rows
@@ -176,7 +181,7 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
 }
 
 /// An empty queue's frame carries no rows and no active slot, and its
-/// summary counts no remaining slot and names no finish clock — no slot
+/// summary counts no remaining slot and names no tail — no slot
 /// carries the playhead, so no end time is anchored — and the Client-core
 /// state the row 6.2 dispatches introduced rests at its defaults: the panel
 /// expanded and unfolded, the length column, no filter, and no overlay.
@@ -188,7 +193,7 @@ fn empty_queue_frame_carries_no_rows() {
     assert_eq!(frame.queue().active, None);
     assert_eq!(frame.summary().remaining, 0);
     assert_eq!(frame.summary().next_title, None);
-    assert_eq!(frame.summary().finish_clock, None);
+    assert_eq!(frame.summary().tail_secs, None);
     assert_eq!(frame.summary().right_column, GuiRightColumn::Length);
     assert_eq!(frame.summary().filter, "");
     assert!(!frame.summary().filter_active);
@@ -231,8 +236,8 @@ fn slot_item(name: &str, runtime_ticks: i64, position_ticks: i64, played: bool) 
 /// A queue's rows carry their state and both right-column values (design
 /// D4): the active row marks now-playing, a slot with a stored resume
 /// position marks its bounded progress, a played slot marks watched — and
-/// every pending row carries its "Ends at" clock, the queue's finish clock
-/// is the last pending row's, and the scrubber's finish clock is the active
+/// every pending row carries its end offset, the queue's tail is the last
+/// pending row's, and the scrubber's finish clock is the active
 /// row's. The stub numbers its slots from 1 and the first one plays.
 ///
 /// The same stub queue drives the open row menu (the task row's "open
@@ -262,30 +267,32 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
     assert_eq!(
         states,
         [
-            &GuiSemanticState::NowPlaying { progress: None },
+            &GuiSemanticState::NowPlaying,
             &GuiSemanticState::Active { progress: Some(30) },
             &GuiSemanticState::Played,
         ]
     );
 
-    let ends_at: Vec<Option<&str>> = frame
+    let ends_after: Vec<Option<i64>> = frame
         .queue()
         .rows
         .iter()
         .map(|row| match row {
-            GuiQueueRow::Item { ends_at, .. } => ends_at.as_deref(),
+            GuiQueueRow::Item {
+                ends_after_secs, ..
+            } => *ends_after_secs,
             GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => None,
         })
         .collect();
-    let (active_clock, partial_clock, watched_clock) = match ends_at.as_slice() {
+    let (active_end, partial_end, watched_end) = match ends_after.as_slice() {
         [Some(active), Some(partial), Some(watched)] => (*active, *partial, *watched),
-        _ => panic!("every pending row carries its finish clock"),
+        _ => panic!("every pending row carries its end offset"),
     };
-    // The queue's finish clock is the last pending row's; the clocks chain:
-    // each pending row ends one runtime after the row before it, so the
-    // partial row's clock differs from the active row's.
-    assert_eq!(frame.summary().finish_clock.as_deref(), Some(watched_clock));
-    assert_ne!(partial_clock, active_clock);
+    // The queue's tail is the last pending row's; the offsets chain: each
+    // pending row ends one runtime after the row before it, so the partial
+    // row's end differs from the active row's.
+    assert_eq!(frame.summary().tail_secs, Some(watched_end));
+    assert_ne!(partial_end, active_end);
 
     assert_eq!(frame.summary().remaining, 2);
     assert_eq!(frame.summary().right_column, GuiRightColumn::Length);
@@ -611,11 +618,11 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
     assert_eq!(hover.chapter_number, Some(2));
 }
 
-/// The drag ghost carries the dragged row's Ends-at value (review of
+/// The drag ghost carries the dragged row's end offset (review of
 /// add-tauri-gui-client row 6.5, finding P2-3): in Ends-at mode the ghost
 /// paints the same right column as the row it lifts.
 #[test]
-fn a_drag_ghost_carries_its_rows_ends_at_clock_review_u65_p2_3() {
+fn a_drag_ghost_carries_its_rows_end_offset_review_u65_p2_3() {
     let minute = 60 * TICKS_PER_SECOND;
     let mut app = stub_app_with_playing_items(vec![
         slot_item("Playing", 20 * minute, 0, false),
@@ -641,22 +648,27 @@ fn a_drag_ghost_carries_its_rows_ends_at_clock_review_u65_p2_3() {
     assert!(queue.begin_row_drag(QueueSlotId::from_raw(2)));
 
     let summary = app.queue_summary_projection();
+    let offsets = app.gui_queue_end_offsets();
     assert_eq!(
         GuiRightColumn::from(summary.right_column),
         GuiRightColumn::EndsAt,
         "the frame paints the Ends-at column"
     );
-    let frame = GuiQueue::from_surface(&queue, VIEWPORT_ROWS, &summary);
+    let frame = GuiQueue::from_surface(&queue, VIEWPORT_ROWS, &summary, &offsets);
     let row_ends = frame.rows.iter().find_map(|row| match row {
         GuiQueueRow::Item {
-            slot: 2, ends_at, ..
-        } => ends_at.clone(),
+            slot: 2,
+            ends_after_secs,
+            ..
+        } => *ends_after_secs,
         _ => None,
     });
-    assert!(row_ends.is_some(), "the pending row carries its end clock");
+    assert!(row_ends.is_some(), "the pending row carries its end offset");
     let drag = frame.drag.expect("the frame carries the drag");
     let ghost_ends = match drag.ghost {
-        GuiQueueRow::Item { ends_at, .. } => ends_at,
+        GuiQueueRow::Item {
+            ends_after_secs, ..
+        } => ends_after_secs,
         GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => panic!("a drag holds an item row"),
     };
     assert_eq!(ghost_ends, row_ends);

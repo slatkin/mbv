@@ -45,13 +45,13 @@ pub use self::app::{
     GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace, GuiSurfaceLeaf,
     HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
     PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
-    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
-    QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
-    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
-    WorkspaceRelayout, resolve_router_outcome_with_focused,
+    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueEndOffsets,
+    QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection,
+    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
+    RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SegmentMark, SetupSecret,
+    ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
+    TrackChoice, TrackPopoverChoice, TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey,
+    TrickplayTile, VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{

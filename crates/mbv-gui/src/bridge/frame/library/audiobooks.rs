@@ -34,6 +34,11 @@ pub struct GuiAudiobooksFrame {
     /// The core's selected book (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first book is the Hero default.
     pub selected: Option<String>,
+    /// The Audiobooks book playing at the playhead (`gui-change-driven-sections`
+    /// design D5): its stable `library_item_id`, the fact the window compares
+    /// with the Hero's book before it marks a chapter row from the position.
+    /// `None` while no book plays or the active slot is pending.
+    pub playing_book_id: Option<String>,
     /// The selected book's Hero facts; `None` while no book is selected.
     pub hero: Option<GuiAudiobooksHeroFrame>,
 }
@@ -107,10 +112,13 @@ pub struct GuiAudiobooksChapterRowFrame {
     pub title: String,
     /// The row's duration, the TUI's duration gutter; empty when unknown.
     pub duration: String,
-    /// Whether this chapter is playing. A frame re-carries the content when
-    /// the mark moves, so the Workspace paints what the Queue's active slot
-    /// paints.
-    pub current: bool,
+    /// The chapter's start on the book's merged timeline, in ticks (design
+    /// D5). An audio-part row carries no span — the window marks the row
+    /// whose span holds the playhead position, and an empty span never
+    /// holds one.
+    pub start_ticks: i64,
+    /// The chapter's end on the book's merged timeline, in ticks (design D5).
+    pub end_ticks: i64,
 }
 
 impl GuiAudiobooksFrame {
@@ -128,6 +136,7 @@ impl GuiAudiobooksFrame {
                 .map(GuiAudiobooksRowFrame::from)
                 .collect(),
             selected: projection.selected.clone(),
+            playing_book_id: projection.playing_book_id.clone(),
             hero: projection.hero.as_ref().map(GuiAudiobooksHeroFrame::from),
         }
     }
@@ -181,7 +190,8 @@ impl From<&GuiAudiobooksChapterRow> for GuiAudiobooksChapterRowFrame {
             chapter: row.chapter,
             title: row.title.clone(),
             duration: row.duration.clone(),
-            current: row.current,
+            start_ticks: row.start_ticks,
+            end_ticks: row.end_ticks,
         }
     }
 }

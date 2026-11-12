@@ -202,7 +202,7 @@ fn the_frame_carries_the_book_list_after_the_open() {
 
 /// A select moves the Hero and its Workspace (row 9.1): the select command
 /// stores the pick, the next frame's Hero shows that book, and the seeded
-/// detail's chapters ride the Workspace with no current mark.
+/// detail's chapters ride the Workspace with their spans (design D5).
 #[test]
 fn the_select_command_moves_the_hero_and_workspace() {
     let (mut test, _cmd_rx) = seeded_audiobooks_core();
@@ -228,7 +228,18 @@ fn the_select_command_moves_the_hero_and_workspace() {
         .map(|row| row.title.as_str())
         .collect();
     assert_eq!(titles, ["Chapter One", "Chapter Two"]);
-    assert!(workspace.rows.iter().all(|row| !row.current));
+    // The spans ride in ticks (design D5): the window marks the row whose
+    // span holds the playhead position, from the playing book id the frame
+    // carries.
+    let minutes = 60 * mbv_emby_model::TICKS_PER_SECOND;
+    assert_eq!(workspace.rows[0].start_ticks, 0);
+    assert_eq!(workspace.rows[0].end_ticks, 30 * minutes);
+    assert_eq!(workspace.rows[1].start_ticks, 30 * minutes);
+    assert_eq!(workspace.rows[1].end_ticks, 60 * minutes);
+    assert_eq!(
+        audiobooks.playing_book_id, None,
+        "no book plays, so the frame names no playing book"
+    );
 }
 
 /// The play and queue commands reach the Owner through the admission (row

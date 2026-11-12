@@ -52,8 +52,10 @@ impl App {
     }
 
     /// The library item id of the Audiobooks book at the playhead, or `None`
-    /// while no book plays or the active slot is pending.
-    fn gui_playing_book_id(&self) -> Option<String> {
+    /// while no book plays or the active slot is pending. The playhead marks
+    /// sample it (design D3 rule 4), and the Audiobooks projection carries it
+    /// into the window's detail as the `playing_book_id` fact (design D5).
+    pub(in crate::app) fn gui_playing_book_id(&self) -> Option<String> {
         let state = self.displayed_playback_state();
         if !state.active {
             return None;

@@ -99,7 +99,9 @@ pub use self::queue_playback_projection::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid, TrickplayTile,
 };
-pub use self::queue_summary_projection::{QueueRightColumn, QueueSummaryProjection};
+pub use self::queue_summary_projection::{
+    QueueEndOffsets, QueueRightColumn, QueueSummaryProjection,
+};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;

@@ -83,11 +83,7 @@ impl App {
         let right_column = self.queue_right_column;
         let filter = self.queue_filter.clone();
         let filter_active = self.queue_filter_active;
-        let active_index = state
-            .active
-            .then_some(state.active_idx)
-            .flatten()
-            .filter(|index| *index < slots.len());
+        let active_index = self.displayed_active_index(slots);
         let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
         let Some(index) = active_index else {
             return QueueSummaryProjection {
@@ -137,6 +133,49 @@ impl App {
             .get(active_index + 1)
             .map(|slot| self.playback_title_parts(&slot.item).title.text)
     }
+
+    /// The index of the shown queue's slot that carries the playhead, or
+    /// `None` while the displayed playback state names no slot of that queue
+    /// (idle playback, or a playhead the shown queue does not know yet).
+    fn displayed_active_index(&self, slots: &[QueueSlot]) -> Option<usize> {
+        let state = self.displayed_playback_state();
+        state
+            .active
+            .then_some(state.active_idx)
+            .flatten()
+            .filter(|index| *index < slots.len())
+    }
+
+    /// The shown queue's end offsets the GUI window derives its finish times
+    /// from (`gui-change-driven-sections` design D5): each slot's end as
+    /// seconds after the end of the active item, and the queue's tail. The
+    /// window adds the anchor — the wall clock now plus the active item's
+    /// remaining time — and the local zone itself, so no clock string crosses
+    /// the Owner edge and a paused window's times still move.
+    #[must_use]
+    pub fn gui_queue_end_offsets(&self) -> QueueEndOffsets {
+        let slots = self.playback_queue().slots();
+        let Some(index) = self.displayed_active_index(slots) else {
+            return QueueEndOffsets::default();
+        };
+        let (rows, tail) = queue_end_offsets(slots, index);
+        QueueEndOffsets { rows, tail }
+    }
+}
+
+/// The shown queue's end offsets for one read (design D5): the GUI sections'
+/// duration facts for the queue finish and each row's "Ends at" value.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct QueueEndOffsets {
+    /// Each slot from the playhead onward, in queue order, with its end as
+    /// seconds after the end of the active item — `0` for the active row. A
+    /// slot before the playhead carries no entry, and the rows stop at the
+    /// first pending slot whose runtime is unknown.
+    pub rows: Vec<(QueueSlotId, i64)>,
+    /// The shown queue's tail: the last pending slot's end as seconds after
+    /// the end of the active item. `None` when a pending runtime breaks the
+    /// chain, or no slot carries the playhead.
+    pub tail: Option<i64>,
 }
 
 /// The wall-clock epoch at which the playhead's item ends, from `now_secs`:
@@ -178,30 +217,49 @@ fn queue_finish_clock(finish_secs: i64, now_secs: i64, offset: UtcOffset) -> Str
     }
 }
 
-/// The pending slots' wall-clock end epochs from one anchor: the anchor ends
-/// the active slot, and each later slot's known runtime extends the chain.
-/// Returns the per-slot ends in queue order and the shown queue's finish —
-/// the last slot's end when the whole chain resolved, `None` when a pending
-/// runtime broke it.
+/// The pending slots' end offsets from the active item's end (design D5):
+/// the active slot's end is `0`, and each later slot's known runtime extends
+/// the chain. Returns the per-slot offsets in queue order and the shown
+/// queue's tail — the last slot's offset when the whole chain resolved,
+/// `None` when a pending runtime broke it.
+#[must_use]
+fn queue_end_offsets(
+    slots: &[QueueSlot],
+    active_index: usize,
+) -> (Vec<(QueueSlotId, i64)>, Option<i64>) {
+    let mut offsets = Vec::with_capacity(slots.len() - active_index);
+    let mut offset = 0;
+    for (position, slot) in slots[active_index..].iter().enumerate() {
+        if position > 0 {
+            let runtime_secs = slot.item.runtime_ticks() / TICKS_PER_SECOND;
+            if runtime_secs <= 0 {
+                return (offsets, None);
+            }
+            offset += runtime_secs;
+        }
+        offsets.push((slot.slot_id, offset));
+    }
+    (offsets, Some(offset))
+}
+
+/// The pending slots' wall-clock end epochs from one anchor:
+/// [`queue_end_offsets`] gives each slot's end as seconds after the active
+/// item's end, and the anchor turns the offsets into epochs. Returns the
+/// per-slot ends in queue order and the shown queue's finish — the last
+/// slot's end when the whole chain resolved, `None` when a pending runtime
+/// broke it.
 #[must_use]
 fn finish_chain(
     slots: &[QueueSlot],
     active_index: usize,
     anchor_epoch: i64,
 ) -> (Vec<(QueueSlotId, i64)>, Option<i64>) {
-    let mut ends = Vec::with_capacity(slots.len() - active_index);
-    let mut end = anchor_epoch;
-    for (offset, slot) in slots[active_index..].iter().enumerate() {
-        if offset > 0 {
-            let runtime_secs = slot.item.runtime_ticks() / TICKS_PER_SECOND;
-            if runtime_secs <= 0 {
-                return (ends, None);
-            }
-            end += runtime_secs;
-        }
-        ends.push((slot.slot_id, end));
-    }
-    (ends, Some(end))
+    let (offsets, tail) = queue_end_offsets(slots, active_index);
+    let ends = offsets
+        .into_iter()
+        .map(|(slot, offset)| (slot, anchor_epoch + offset))
+        .collect();
+    (ends, tail.map(|tail| anchor_epoch + tail))
 }
 
 /// The wall clock's unix seconds, saturated to `i64`.

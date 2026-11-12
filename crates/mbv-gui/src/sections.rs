@@ -327,13 +327,22 @@ impl SectionLedger {
         let playback = app.queue_playback_projection();
         self.deadlines.sample(app, &playback, now, &mut marked);
         let summary = app.queue_summary_projection();
+        // The queue's end offsets (design D5): the duration facts the summary
+        // and queue sections carry in place of the clock strings the window
+        // now derives from the playhead anchor.
+        let offsets = app.gui_queue_end_offsets();
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
         self.attach.adopt(None);
         self.focus.adopt(GuiFocus::from(focus));
-        self.queue
-            .adopt(GuiQueue::from_surface(queue, viewport_rows, &summary));
-        self.summary.adopt(GuiQueueSummary::from(&summary));
+        self.queue.adopt(GuiQueue::from_surface(
+            queue,
+            viewport_rows,
+            &summary,
+            &offsets,
+        ));
+        self.summary
+            .adopt(GuiQueueSummary::build(&summary, &offsets));
         self.panel.adopt(GuiPanelToggles::new(
             &app.panel_toggles_projection(),
             app.gui_ui_reset_epoch(),
