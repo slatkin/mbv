@@ -3,12 +3,10 @@
 
 import type { GuiArtRef, GuiMetaRow } from './library-types';
 
-/** The Audiobooks destination's content (design D12, row 9.1), present
- * while an Audiobookshelf book library is the active destination: the flat
- * book list with its rail letters, the core's selected book, and its Hero
- * with the chapters Workspace. No pill rides here — the letter rail
- * replaces the TUI's surname buckets. */
-export interface GuiAudiobooksFrame {
+/** The Audiobooks destination's list part (design D12, row 9.1, D8): the flat
+ * book list with its rail letters and the catalog's load facts. No pill rides
+ * here — the letter rail replaces the TUI's surname buckets. */
+export interface GuiAudiobooksList {
 	/** The Audiobooks library index the Audiobooks commands name (design
 	 * D2, D12). */
 	libIdx: number;
@@ -16,12 +14,17 @@ export interface GuiAudiobooksFrame {
 	loading: boolean;
 	/** Whether the catalog fetch failed. */
 	failed: boolean;
-	/** Whether the selected book's detail fetch has not landed yet: the
-	 * Workspace's loading state. */
-	workspaceLoading: boolean;
 	/** The catalog's books in the TUI's sort order: author sort key, then
 	 * title. */
 	rows: GuiAudiobooksRow[];
+}
+
+/** The Audiobooks destination's detail part (design D8): the core's selected
+ * book, the playing book, and its Hero with the chapters Workspace. */
+export interface GuiAudiobooksDetail {
+	/** Whether the selected book's detail fetch has not landed yet: the
+	 * Workspace's loading state. */
+	workspaceLoading: boolean;
 	/** The core's selected book (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first book is the Hero default. */
 	selected: string | null;

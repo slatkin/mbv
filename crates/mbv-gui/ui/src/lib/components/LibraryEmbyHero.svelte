@@ -27,17 +27,18 @@
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import { heroAttr, heroLayout, metaRowText } from '$lib/library/hero';
 	import type { HeroLayoutFacts } from '$lib/library/hero';
-	import type { GuiEmbyFrame, GuiEmbyHero, GuiMetaRow } from '$lib/bridge/types';
+	import type { GuiEmbyDetail, GuiEmbyHero, GuiEmbyList, GuiMetaRow } from '$lib/bridge/types';
 
 	interface Props {
 		/** The carried plain Emby-library content (design D12, row 8.1): the
 		 * selected row and its Hero facts. */
-		emby: GuiEmbyFrame;
+		list: GuiEmbyList;
+		detail: GuiEmbyDetail;
 	}
-	const { emby }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(emby.hero);
+	const hero = $derived(detail.hero);
 
 	/** The facts `heroLayout` maps: the `IMDb` meta row out of the plain rows
 	 * (the header action paints it as a link), with the duration and progress
@@ -74,9 +75,9 @@
 	/** Send an Emby-library command for the frame's selected row (design D12,
 	 * row 8.1): the row the frame painted, never a position. */
 	function act(command: 'embyPlay' | 'embyPlayNext' | 'embyQueue'): void {
-		const itemId = emby.selected;
+		const itemId = detail.selected;
 		if (itemId !== null && hero !== null) {
-			void sendLibraryCommand({ command, libIdx: emby.libIdx, itemId });
+			void sendLibraryCommand({ command, libIdx: list.libIdx, itemId });
 		}
 	}
 

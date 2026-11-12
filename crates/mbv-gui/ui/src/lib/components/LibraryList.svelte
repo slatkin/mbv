@@ -21,7 +21,7 @@
 	// focus. It takes the keyboard while the filter is open and closes the
 	// filter when it loses focus, keeping its text as Enter does.
 	import { ChevronRight } from '@lucide/svelte';
-	import type { GuiMusicFrame } from '$lib/bridge/types';
+	import type { GuiMusicDetail, GuiMusicList } from '$lib/bridge/types';
 	import {
 		LETTER_ROW_HEIGHT,
 		NODE_ROW_HEIGHT,
@@ -51,20 +51,21 @@
 	interface Props {
 		/** The carried Music content: the union the list paints and the pills
 		 * whose names the header line reads (design D2, D6). */
-		music: GuiMusicFrame;
+		list: GuiMusicList;
+		detail: GuiMusicDetail;
 	}
-	const { music }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The album the list last revealed. A pick reveals once, so a later frame
 	 * carrying the same pick does not move the cursor again. */
 	let revealedAlbum: string | null = null;
 	$effect(() => {
-		const albumId = music.hero?.album.albumId ?? null;
+		const albumId = detail.hero?.album.albumId ?? null;
 		if (albumId === null || albumId === revealedAlbum) {
 			return;
 		}
 		revealedAlbum = albumId;
-		revealPickedAlbum(music);
+		revealPickedAlbum(list, detail);
 	});
 
 	/** The painted rows of the canvas tree (design D7): the same model
@@ -72,7 +73,7 @@
 	 * and the filter this component paints. */
 	const rows = $derived(
 		buildLibraryRows({
-			artists: music.artists,
+			artists: list.artists,
 			open: $libraryUi.openNodes,
 			closed: $libraryUi.filterClosed,
 			filter: $libraryUi.filter,
@@ -84,7 +85,7 @@
 	 * bar location cannot disagree. An empty selection is the whole library:
 	 * the header names it `All` instead of an empty label. */
 	const selectedNames = $derived(
-		music.collectionNames.length > 0 ? music.collectionNames : ['All'],
+		list.collectionNames.length > 0 ? list.collectionNames : ['All'],
 	);
 
 	/** The header's right line: the canvas's selection label — the names joined
@@ -93,7 +94,7 @@
 	const selectionLabel = $derived(
 		selectedNames.length > 1
 			? selectedNames.join(' + ')
-			: selectedNames.length === 1 && music.collectionNames.length > 0
+			: selectedNames.length === 1 && list.collectionNames.length > 0
 				? `${selectedNames[0]} · sort name`
 				: 'All',
 	);
@@ -114,7 +115,7 @@
 
 	/** The album the Hero shows: the list paints its row in the canvas's picked
 	 * fill (design D7). */
-	const picked = $derived(music.hero?.album.albumId ?? null);
+	const picked = $derived(detail.hero?.album.albumId ?? null);
 
 	/** The stable Service id a row's menu names: an artist's Service item, an
 	 * album's own id, and a track's id — the same id the row's actions send. */
@@ -194,17 +195,17 @@
 			onaccept={acceptLibraryFilter}
 		/>
 	</div>
-	{#if music.loading}
+	{#if list.loading}
 		<!-- A selected group's album list has not landed yet (design D5): one
 			placeholder line holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-loading" />
 	{/if}
-	{#if music.failure !== null}
+	{#if list.failure !== null}
 		<!-- The selected groups whose album list failed (design D5): the
 			frame's failure line names them. -->
-		<LibraryListNotice text={music.failure} attr="data-library-failure" />
+		<LibraryListNotice text={list.failure} attr="data-library-failure" />
 	{/if}
-	{#if !music.loading && music.artists.length === 0}
+	{#if !list.loading && list.artists.length === 0}
 		<!-- The selected collections hold no artist (the spec's empty text):
 			the row area is empty, so one line says so. -->
 		<LibraryListNotice text="No artists" attr="data-library-empty" />

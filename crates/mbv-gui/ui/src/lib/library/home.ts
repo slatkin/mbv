@@ -13,7 +13,8 @@ import { buildHomeRows, moveHomeCursor } from './home-list';
 import type { HomeListRow } from './home-list';
 import type { ListMove } from './list';
 import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
-import { libraryHome, libraryUi } from './state';
+import { libraryHomeList } from './parts';
+import { libraryUi } from './state';
 
 /** The Home list's interaction state. */
 export interface HomeUiState {
@@ -41,7 +42,7 @@ export const homeUi = writable<HomeUiState>(initialHomeUi());
 /** The painted rows of the carried Home content (design D12), narrowed by the
  * state's filter text. */
 function homeRows(filter = get(homeUi).filter): HomeListRow[] {
-	return buildHomeRows(libraryHome()?.rows ?? [], filter);
+	return buildHomeRows(libraryHomeList()?.rows ?? [], filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */

@@ -11,10 +11,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiHomeFrame, GuiLibraryContent } from '$lib/bridge/types';
+import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from '$lib/library/home-list';
 import { homeUi, initialHomeUi } from '$lib/library/home';
-import { library } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import LibraryHomeList from './LibraryHomeList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -41,33 +42,34 @@ class ResizeObserverStub {
 
 /** The carried content while Home is active (design D12): the frame the
  * panel paints and the row model reads for a cursor move. */
-function carriedContent(): GuiLibraryContent {
+function carriedContent(): LibrarySections {
 	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: null,
-		music: null,
-		home: homeFrame(),
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: null,
+			destination: { kind: 'home', ...homeFrame() },
+		},
+		detail: { kind: 'home', ...homeDetail() },
 	};
+}
+
+/** The Home detail part: the first item row selected, and no Hero painted here. */
+function homeDetail(): GuiHomeDetail {
+	return { selected: { kind: 'continue', id: 'e1' }, hero: null };
 }
 
 beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	homeUi.set(initialHomeUi());
-	library.set(carriedContent());
+	carryLibrary(carriedContent());
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
 /** The two sections' item rows: the Emby row with art and a resume percent,
  * the Feed row without art, and the played row between them. */
-function homeFrame(): GuiHomeFrame {
+function homeFrame(): GuiHomeList {
 	return { loading: false,
 		rows: [
 			{ row: 'heading', text: 'Continue watching' },
@@ -104,8 +106,6 @@ function homeFrame(): GuiHomeFrame {
 				art: null,
 			},
 		],
-		selected: { kind: 'continue', id: 'e1' },
-		hero: null,
 	};
 }
 
@@ -113,7 +113,7 @@ function homeFrame(): GuiHomeFrame {
  * view are the rows a measured list of that height paints: an unmeasured
  * viewport paints nothing, as the Music list does. */
 async function mountList(viewportHeight = 40): Promise<HTMLElement> {
-	const { container } = render(LibraryHomeList, { home: homeFrame() });
+	const { container } = render(LibraryHomeList, { list: homeFrame(), detail: homeDetail() });
 	const list = container.querySelector<HTMLElement>('[data-library-home-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();
@@ -234,15 +234,15 @@ test('the list paints the Home header', async () => {
 // landed, and nothing at all when both sections are empty — each says so in one
 // line rather than painting a blank column.
 test('a loading Home paints the loading line', async () => {
-	const home = { ...homeFrame(), loading: true, rows: [] };
-	const { container } = render(LibraryHomeList, { home });
+	const list = { ...homeFrame(), loading: true, rows: [] };
+	const { container } = render(LibraryHomeList, { list, detail: homeDetail() });
 
 	expect(container.querySelector('[data-library-home-loading]')).toBeTruthy();
 });
 
 test('an empty Home paints the empty line', async () => {
-	const home = { ...homeFrame(), rows: [] };
-	const { container } = render(LibraryHomeList, { home });
+	const list = { ...homeFrame(), rows: [] };
+	const { container } = render(LibraryHomeList, { list, detail: homeDetail() });
 
 	expect(container.querySelector('[data-library-home-empty]')?.textContent).toContain(
 		'Nothing to play',

@@ -13,23 +13,23 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
 	
-	import type { GuiHomeFrame } from '$lib/bridge/types';
+	import type { GuiHomeDetail } from '$lib/bridge/types';
 
 	interface Props {
 		/** The carried Home content (design D12): the selected row and its
 		 * Hero facts. */
-		home: GuiHomeFrame;
+		detail: GuiHomeDetail;
 	}
-	const { home }: Props = $props();
+	const { detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(home.hero);
+	const hero = $derived(detail.hero);
 
 	/** Send a Home command for `row` when an action has one (design D12): the
 	 * frame's selected row, never a position. */
 	function act(
 		command: 'homePlay' | 'homePlayNext' | 'homeQueue',
-		row: Props['home']['selected'],
+		row: Props['detail']['selected'],
 	): void {
 		if (row !== null && hero !== null) {
 			void sendLibraryCommand({ command, row });
@@ -43,9 +43,9 @@
 						attr="home"
 			section="data-library-home-hero"
 			{hero}
-			onplay={() => act('homePlay', home.selected)}
-			onplaynext={() => act('homePlayNext', home.selected)}
-			onqueue={() => act('homeQueue', home.selected)}
+			onplay={() => act('homePlay', detail.selected)}
+			onplaynext={() => act('homePlayNext', detail.selected)}
+			onqueue={() => act('homeQueue', detail.selected)}
 		/>
 	</div>
 {/if}

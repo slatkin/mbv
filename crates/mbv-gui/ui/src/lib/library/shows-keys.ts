@@ -12,10 +12,11 @@
 // stays the core's play and pause.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiShowsFrame } from '$lib/bridge/types';
+import type { GuiShowsDetail, GuiShowsList } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryShows, openLibraryFilter } from './state';
+import { libraryShowsDetail, libraryShowsList } from './parts';
+import { openLibraryFilter } from './state';
 import {
 	closeShowsNode,
 	focusedShowsPill,
@@ -55,8 +56,9 @@ function bare(event: KeyboardEvent): boolean {
  * its `n` and `a` change nothing.
  */
 export function routeShowsPanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
-	const shows = libraryShows();
-	if (shows === null) {
+	const shows = libraryShowsList();
+	const detail = libraryShowsDetail();
+	if (shows === null || detail === null) {
 		return 'core';
 	}
 	// `/` opens the list's filter (design D3, D7): the rail's keyboard path.
@@ -83,8 +85,8 @@ export function routeShowsPanelKey(event: KeyboardEvent, ui: LibraryUiState): Ke
 	if (ui.pane === 'list') {
 		return routeListKey(event);
 	}
-	if (ui.pane === 'hero' && shows.hero !== null) {
-		return orRemaining(routeWorkspaceKey(event, shows), event);
+	if (ui.pane === 'hero' && detail.hero !== null) {
+		return orRemaining(routeWorkspaceKey(event, shows.libIdx, detail), event);
 	}
 	// The Hero pane the Upcoming mode does not paint, and any pane that left a
 	// key unclaimed, still keep the Library's keys from the core: the movements
@@ -115,7 +117,7 @@ function routeRemainingKey(event: KeyboardEvent): KeyOutcome {
 /** Route a key to the mode pills (design D12): Right and Left walk the pills,
  * the first of them with no pill focused taking the end it walks from, and
  * Enter selects the focused pill as Space does. */
-function routePillKey(event: KeyboardEvent, shows: GuiShowsFrame): KeyOutcome {
+function routePillKey(event: KeyboardEvent, shows: GuiShowsList): KeyOutcome {
 	if (event.key === 'ArrowRight') {
 		moveShowsPillFocus(1);
 		return 'handled';
@@ -222,22 +224,26 @@ function routeListItemKey(event: KeyboardEvent, row: ShowsListRow | null): void 
 /** Route a key to the Hero's Workspace (design D12): the movement keys move the
  * episode cursor, Left and Right step the season, Enter plays the episode, and
  * `n` and `a` play it next or queue it. */
-function routeWorkspaceKey(event: KeyboardEvent, shows: GuiShowsFrame): KeyOutcome {
+function routeWorkspaceKey(
+	event: KeyboardEvent,
+	libIdx: number,
+	detail: GuiShowsDetail,
+): KeyOutcome {
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
-		moveShowsEpisodeCursor(move, shows);
+		moveShowsEpisodeCursor(move, detail);
 		return 'handled';
 	}
 	if (event.key === 'ArrowLeft') {
-		stepShowsSeason(-1, shows);
+		stepShowsSeason(-1, libIdx, detail);
 		return 'handled';
 	}
 	if (event.key === 'ArrowRight') {
-		stepShowsSeason(1, shows);
+		stepShowsSeason(1, libIdx, detail);
 		return 'handled';
 	}
 	if (event.key === 'Enter' || event.key === 'n' || event.key === 'a') {
-		routeWorkspaceItemKey(event, shows);
+		routeWorkspaceItemKey(event, libIdx, detail);
 		return 'handled';
 	}
 	return LIST_AND_HERO_KEYS.has(event.key) ? 'handled' : 'core';
@@ -245,14 +251,18 @@ function routeWorkspaceKey(event: KeyboardEvent, shows: GuiShowsFrame): KeyOutco
 
 /** Run Enter, `n`, or `a` against the Workspace's selected episode (design
  * D12): the Hero owns the episode cursor, so the key names no episode id. */
-function routeWorkspaceItemKey(event: KeyboardEvent, shows: GuiShowsFrame): void {
+function routeWorkspaceItemKey(
+	event: KeyboardEvent,
+	libIdx: number,
+	detail: GuiShowsDetail,
+): void {
 	if (event.key === 'n') {
-		playNextShowsEpisode(shows);
+		playNextShowsEpisode(libIdx, detail);
 		return;
 	}
 	if (event.key === 'a') {
-		queueShowsEpisode(shows);
+		queueShowsEpisode(libIdx, detail);
 		return;
 	}
-	playShowsEpisode(shows);
+	playShowsEpisode(libIdx, detail);
 }

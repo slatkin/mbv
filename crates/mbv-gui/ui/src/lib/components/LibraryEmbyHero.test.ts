@@ -10,7 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiEmbyFrame, GuiEmbyHero } from '$lib/bridge/types';
+import type { GuiEmbyDetail, GuiEmbyHero, GuiEmbyList } from '$lib/bridge/types';
 import LibraryEmbyHero from './LibraryEmbyHero.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -48,8 +48,8 @@ function hero(
 	};
 }
 
-/** The carried plain Emby-library content with the hero picked. */
-function emby(facts: GuiEmbyHero | null): GuiEmbyFrame {
+/** The carried plain Emby-library list part: the one row the Hero shows. */
+function emby(): GuiEmbyList {
 	return {
 		libIdx: LIB_IDX,
 		libraryName: 'Movies',
@@ -59,14 +59,17 @@ function emby(facts: GuiEmbyHero | null): GuiEmbyFrame {
 		loading: false,
 		failed: false,
 		rows: [{ id: 'movie1', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' }],
-		selected: 'movie1',
-		hero: facts,
 	};
+}
+
+/** The Emby detail part: the row selected, with the Hero `facts`. */
+function embyDetail(facts: GuiEmbyHero | null): GuiEmbyDetail {
+	return { selected: 'movie1', hero: facts };
 }
 
 /** Render the Hero for the carried content. */
 function mount(facts: GuiEmbyHero | null = hero()): HTMLElement {
-	return render(LibraryEmbyHero, { emby: emby(facts) }).container;
+	return render(LibraryEmbyHero, { list: emby(), detail: embyDetail(facts) }).container;
 }
 
 // The artwork box reserves the arm the frame declares (design D15): a portrait

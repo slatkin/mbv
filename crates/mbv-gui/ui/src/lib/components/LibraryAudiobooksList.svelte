@@ -18,7 +18,7 @@
 	// The Hero's chapter cursor belongs to the selected book (the
 	// `audiobooks-workspace` contract): a selection change starts it over,
 	// because the chapters it rested on belong to the previous book.
-	import type { GuiAudiobooksFrame } from '$lib/bridge/types';
+	import type { GuiAudiobooksDetail, GuiAudiobooksList } from '$lib/bridge/types';
 	import {
 		buildAudiobooksRows,
 		audiobooksLetterRail,
@@ -47,13 +47,14 @@
 
 	interface Props {
 		/** The carried Audiobooks content (row 9.1): the catalog's book rows. */
-		audiobooks: GuiAudiobooksFrame;
+		list: GuiAudiobooksList;
+		detail: GuiAudiobooksDetail;
 	}
-	const { audiobooks }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The painted rows (row 9.1): the book rows with their letter headings,
 	 * narrowed by the filter's text. */
-	const rows = $derived(buildAudiobooksRows(audiobooks.rows, $audiobooksUi.filter));
+	const rows = $derived(buildAudiobooksRows(list.rows, $audiobooksUi.filter));
 
 	/** The rail's A–Z letters over the painted rows (row 9.1). */
 	const rail = $derived(audiobooksLetterRail(rows));
@@ -75,7 +76,7 @@
 		if (row.id === $audiobooksUi.cursor) {
 			return canvasVar('selected');
 		}
-		return row.id === audiobooks.selected ? canvasVar('library-raise') : undefined;
+		return row.id === detail.selected ? canvasVar('library-raise') : undefined;
 	}
 
 	/** Open the book's right-click menu (the row-menu command): the row's
@@ -89,7 +90,7 @@
 	// to the previous book.
 	let lastSelected: string | null = null;
 	$effect(() => {
-		const selected = audiobooks.selected;
+		const selected = detail.selected;
 		if (selected === lastSelected) {
 			return;
 		}
@@ -112,12 +113,12 @@
 			onaccept={acceptAudiobooksFilter}
 		/>
 	</div>
-	{#if audiobooks.loading}
+	{#if list.loading}
 		<!-- The book catalog has not landed yet (row 9.1): one placeholder line
 			holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-abs-loading" />
 	{/if}
-	{#if audiobooks.failed}
+	{#if list.failed}
 		<!-- The catalog fetch failed (row 9.1): the failure line naming what
 			failed, and no row until the destination opens again. -->
 		<LibraryListNotice
@@ -125,7 +126,7 @@
 			attr="data-library-abs-failed"
 		/>
 	{/if}
-	{#if !audiobooks.loading && !audiobooks.failed && audiobooks.rows.length === 0}
+	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The catalog landed and holds no book (row 9.1): the TUI's empty
 			slot. -->
 		<LibraryListNotice text="No audiobooks" attr="data-library-abs-empty" />
@@ -156,7 +157,7 @@
 					titleColor={canvasVar('text')}
 					background={rowBackground(row)}
 					cursor={row.id === $audiobooksUi.cursor}
-					selected={row.id === audiobooks.selected}
+					selected={row.id === detail.selected}
 					progress={null}
 					onpress={() => pressAudiobooksRow(row)}
 					onplay={() => playAudiobooksRow(row.row.id)}

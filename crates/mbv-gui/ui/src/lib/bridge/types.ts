@@ -8,7 +8,7 @@ import type { GuiChrome, GuiRgb, GuiRole, GuiTheme } from './theme-types';
 // keeps importing from the one bridge module.
 
 import type { GuiArtRef } from './art';
-import type { GuiLibraryContent } from './library-types';
+import type { GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenu } from './library-types';
 import type { GuiSearchFrame } from './library-types-search';
 import type { GuiSettingsFrame } from './settings-types';
 
@@ -42,12 +42,14 @@ export type {
 export type {
 	GuiArtistKey,
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
 	GuiAudiobooksHero,
 	GuiAudiobooksRow,
 	GuiAudiobooksWorkspace,
 	GuiHomeContentId,
-	GuiHomeFrame,
+	GuiHomeDetail,
+	GuiHomeList,
 	GuiHomeHero,
 	GuiHomeRow,
 	GuiHomeRowId,
@@ -58,11 +60,14 @@ export type {
 	GuiMetaRow,
 	GuiMetaSegment,
 	GuiLibraryCommand,
-	GuiLibraryContent,
+	GuiDestinationList,
+	GuiLibraryDetail,
+	GuiLibraryList,
 	GuiLibraryTab,
 	GuiMusicAlbum,
 	GuiMusicArtist,
-	GuiMusicFrame,
+	GuiMusicDetail,
+	GuiMusicList,
 	GuiMusicHero,
 	GuiMusicMenuEntryFrame,
 	GuiMusicPill,
@@ -70,18 +75,21 @@ export type {
 	GuiMusicTrack,
 	GuiMusicTrackTotal,
 	GuiPodcastPill,
-	GuiPodcastsFrame,
+	GuiPodcastsDetail,
+	GuiPodcastsList,
 	GuiPodcastsHero,
 	GuiPodcastsPill,
 	GuiPodcastsRow,
 	GuiEmbyFeedGroup,
-	GuiEmbyFrame,
+	GuiEmbyDetail,
+	GuiEmbyList,
 	GuiEmbyHero,
 	GuiEmbyHeroCredit,
 	GuiEmbyPill,
 	GuiEmbyRow,
 	GuiFeedPill,
-	GuiFeedsFrame,
+	GuiFeedsDetail,
+	GuiFeedsList,
 	GuiFeedsHero,
 	GuiFeedsLibraryCommand,
 	GuiFeedsPill,
@@ -91,7 +99,8 @@ export type {
 	GuiSearchRow,
 	GuiEmbyRowKind,
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsDetail,
+	GuiShowsList,
 	GuiShowsHero,
 	GuiShowsMode,
 	GuiShowsPill,
@@ -142,9 +151,15 @@ export interface SectionValues {
 	footer: GuiQueueFooter;
 	/** The Status bar projection. */
 	status: GuiStatusBar;
-	/** The Library content of the active destination, `null` while no
-	 * presented destination is active. */
-	library: GuiLibraryContent | null;
+	/** The Library list: the destination tabs and the active destination's list
+	 * part, `null` while no presented destination is active. */
+	libraryList: GuiLibraryList | null;
+	/** The Library detail: the active destination's selection, Hero, Workspace,
+	 * and playing marks, `null` while no presented destination is active. */
+	libraryDetail: GuiLibraryDetail | null;
+	/** The right-click item menu the window last opened, `null` while none is
+	 * open. */
+	rowMenu: GuiLibraryRowMenu | null;
 	/** The Search section: the query the top bar answers and its rows, `null`
 	 * while the field is closed. */
 	search: GuiSearchFrame | null;

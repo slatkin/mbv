@@ -9,7 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiPodcastsFrame, GuiPodcastsHero } from '$lib/bridge/types';
+import type { GuiPodcastsDetail, GuiPodcastsHero, GuiPodcastsList } from '$lib/bridge/types';
 import LibraryPodcastsHero from './LibraryPodcastsHero.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -42,8 +42,8 @@ function hero(artShape: GuiPodcastsHero['artShape'] = 'square'): GuiPodcastsHero
 	};
 }
 
-/** The carried Podcasts content with the hero picked. */
-function podcasts(facts: GuiPodcastsHero | null): GuiPodcastsFrame {
+/** The carried Podcasts list part: the Latest pill and one merged episode. */
+function podcastsList(): GuiPodcastsList {
 	return {
 		libIdx: LIB_IDX,
 		loading: false,
@@ -60,14 +60,17 @@ function podcasts(facts: GuiPodcastsHero | null): GuiPodcastsFrame {
 				state: 'ordinary',
 			},
 		],
-		selected: 'show1:ep12',
-		hero: facts,
 	};
+}
+
+/** The Podcasts detail part: the episode selected, with the Hero `facts`. */
+function podcastsDetail(facts: GuiPodcastsHero | null): GuiPodcastsDetail {
+	return { selected: 'show1:ep12', hero: facts };
 }
 
 /** Render the Hero for the carried content. */
 function mount(facts: GuiPodcastsHero | null = hero()): HTMLElement {
-	return render(LibraryPodcastsHero, { podcasts: podcasts(facts) }).container;
+	return render(LibraryPodcastsHero, { list: podcastsList(), detail: podcastsDetail(facts) }).container;
 }
 
 // The artwork box takes the arm every Hero shares (design D15): the square

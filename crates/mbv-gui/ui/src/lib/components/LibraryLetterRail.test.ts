@@ -8,9 +8,9 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test } from 'vitest';
-import type { GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
+import type { GuiMusicArtist, GuiMusicList } from '$lib/bridge/types';
 import { buildLibraryRows, letterRail } from '$lib/library/list';
-import { library } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
 import {
 	initialLibraryUi,
 	libraryUi,
@@ -20,7 +20,7 @@ import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
-	library.set(null);
+	carryLibrary(null);
 });
 
 /** The Beastie Boys artist: one album whose tracks the content does not
@@ -41,7 +41,7 @@ const BRAND: GuiMusicArtist = {
 };
 
 /** The carried Music content: both artists, none of them open. */
-function music(): GuiMusicFrame {
+function music(): GuiMusicList {
 	return {
 		libIdx: 0,
 		pills: [],
@@ -49,9 +49,6 @@ function music(): GuiMusicFrame {
 		loading: false,
 		failure: null,
 		artists: [BEASTIE, BRAND],
-		hero: null,
-		art: null,
-		playingTrackId: null,
 	};
 }
 
@@ -72,7 +69,10 @@ test('a letter with no painted rows is disabled and a press changes nothing', as
 });
 
 test('a press on a letter moves the cursor to its first row and shows that row', async () => {
-	library.set({ tabs: [], currentTab: null, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
+	carryLibrary({
+		list: { tabs: [], currentTab: null, destination: { kind: 'music', ...music() } },
+		detail: { kind: 'music', hero: null, art: null, playingTrackId: null },
+	});
 	measureLibraryList(40);
 	const { container } = render(LibraryLetterRail, { letters: letters(), marked: null });
 

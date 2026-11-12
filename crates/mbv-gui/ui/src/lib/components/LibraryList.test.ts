@@ -9,7 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
+import type { GuiMusicArtist, GuiMusicDetail, GuiMusicList } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryList from './LibraryList.svelte';
 
@@ -70,7 +70,7 @@ const BRAND: GuiMusicArtist = {
 
 /** The carried Music content: the two artists, and the collection names the
  * header reads (design D6). */
-function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
+function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicList {
 	return {
 		libIdx: 0,
 		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
@@ -78,16 +78,16 @@ function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
 		loading: false,
 		failure: null,
 		artists: [BEASTIE, BRAND],
-		hero: null,
-		art: null,
-		playingTrackId: null,
 	};
 }
+
+/** The Music detail part with no album picked: the list paints no Hero. */
+const NO_HERO: GuiMusicDetail = { hero: null, art: null, playingTrackId: null };
 
 /** Render the list and report a `viewportHeight` px viewport, so the rows in
  * view are the rows a measured list of that height paints. */
 async function mountList(viewportHeight = 40): Promise<HTMLElement> {
-	const { container } = render(LibraryList, { music: music() });
+	const { container } = render(LibraryList, { list: music(), detail: NO_HERO });
 	const list = container.querySelector<HTMLElement>('[data-library-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();
@@ -124,7 +124,7 @@ test('a press on an album without its tracklist opens it and asks for the tracks
 });
 
 test('the header names the carried selection, not a derivation from the pills', () => {
-	const { container } = render(LibraryList, { music: music(['Hip-Hop', 'Soul']) });
+	const { container } = render(LibraryList, { list: music(['Hip-Hop', 'Soul']), detail: NO_HERO });
 
 	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe(
 		'Hip-Hop + Soul',
@@ -135,7 +135,7 @@ test('the header names the carried selection, not a derivation from the pills', 
 // instead of printing no collection name (the Library's empty-selection
 // label).
 test('an empty selection names the header All', () => {
-	const { container } = render(LibraryList, { music: music([]) });
+	const { container } = render(LibraryList, { list: music([]), detail: NO_HERO });
 
 	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe('All');
 });

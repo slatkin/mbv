@@ -11,11 +11,9 @@ export type GuiEmbyFeedGroup =
 	| { kind: 'all' }
 	| { kind: 'folder'; id: string };
 
-/** The plain Emby-library destination's content (design D12, row 8.1),
- * present while a plain Emby library is the active destination: the
- * feed-group pills, the active list's rows, the core's selected row, and its
- * Hero. */
-export interface GuiEmbyFrame {
+/** The plain Emby-library destination's list part (design D12, row 8.1, D8):
+ * the feed-group pills, and the active list's rows and load facts. */
+export interface GuiEmbyList {
 	/** The plain Emby-library index the Emby commands name (design D2). */
 	libIdx: number;
 	/** The library's display name: the list header's title, so the column
@@ -36,6 +34,11 @@ export interface GuiEmbyFrame {
 	failed: boolean;
 	/** The active list's rows in the list's order. */
 	rows: GuiEmbyRow[];
+}
+
+/** The plain Emby-library destination's detail part (design D8): the core's
+ * selected row and its Hero. */
+export interface GuiEmbyDetail {
 	/** The core's selected row (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first row is the Hero default. */
 	selected: string | null;

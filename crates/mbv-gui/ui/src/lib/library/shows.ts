@@ -10,10 +10,11 @@
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiShowsFrame, GuiShowsMode } from '$lib/bridge/types';
+import type { GuiShowsList, GuiShowsMode } from '$lib/bridge/types';
 import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
 import type { ListMove } from './list';
-import { libraryShows, libraryUi } from './state';
+import { libraryShowsList } from './parts';
+import { libraryUi } from './state';
 import {
 	activeShowsMode,
 	buildShowsRows,
@@ -72,7 +73,7 @@ export const showsUi = writable<ShowsUiState>(initialShowsUi());
 /** The painted rows of the carried Shows content (design D14), narrowed by
  * the state's filter text. */
 function showsRows(filter = get(showsUi).filter): ShowsListRow[] {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return [];
 	}
@@ -138,7 +139,7 @@ export function acceptShowsFilter(): void {
  * arrangement's Hero overlay and closes an open menu, because the facts they
  * paint belong to the previous row, as a Music pick's do. */
 export function selectShowsRow(row: ShowsListRow): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null || row.kind === 'heading') {
 		return;
 	}
@@ -220,7 +221,7 @@ export function pressShowsRow(row: ShowsListRow): void {
 /** Play a Shows episode (design D12): Enter on a flat row, and a
  * double-click's play. The row id is the episode's stable Service id. */
 export function playShowsRow(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -229,7 +230,7 @@ export function playShowsRow(rowId: string): void {
 
 /** Play a Shows episode next (design D12): `n` on a flat row. */
 export function playShowsRowNext(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -238,7 +239,7 @@ export function playShowsRowNext(rowId: string): void {
 
 /** Add a Shows episode to the queue's tail (design D12): `a` on a flat row. */
 export function queueShowsRow(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -297,7 +298,7 @@ export function scrollShowsList(scrollTop: number): void {
 /** The pill the pill row's focus holds, resolved against the carried pills so
  * a stale mode focuses nothing: the mode the keys' Space and Enter select, and
  * the pill the row paints the accent outline on (design D6, D12). */
-export function focusedShowsPill(shows: GuiShowsFrame): GuiShowsMode | null {
+export function focusedShowsPill(shows: GuiShowsList): GuiShowsMode | null {
 	const { focusedPill } = get(showsUi);
 	if (focusedPill === null) {
 		return null;
@@ -316,7 +317,7 @@ function focusShowsPill(mode: GuiShowsMode | null): void {
  * walks from. */
 export function moveShowsPillFocus(step: number): void {
 	const pill = stepPillFocus(
-		libraryShows()?.pills ?? [],
+		libraryShowsList()?.pills ?? [],
 		get(showsUi).focusedPill,
 		(entry) => entry.mode,
 		step,

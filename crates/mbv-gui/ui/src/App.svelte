@@ -6,7 +6,7 @@
 		connected,
 		connectSections,
 		focus,
-		library,
+		libraryList,
 		overlay,
 		panel,
 		search,
@@ -78,7 +78,7 @@
 			status: get(status),
 			summary: { filterActive: get(summary).filterActive },
 			settings: get(settings),
-			library: get(library),
+			libraryList: get(libraryList),
 			search: get(search),
 		};
 	}
@@ -131,20 +131,12 @@
       resolution, so a drag paints the width the thresholds classify. -->
     {@const widths = panelWidths(container, $panel, $draggedWidths)}
     {@const arrangement = libraryArrangement(container, widths.queue)}
-    {@const content = $library}
-    {@const music = content?.music ?? null}
-    {@const home = content?.home ?? null}
-    {@const shows = content?.shows ?? null}
-    {@const emby = content?.emby ?? null}
-    {@const audiobooks = content?.audiobooks ?? null}
-    {@const podcasts = content?.podcasts ?? null}
-    {@const feeds = content?.feeds ?? null}
     {@const queueFocused = $focus.panel === 'queue'}
     <!-- The Library panel's one presence fact (design D2, D10, D12): the
       window holds the active destination's content, whose painters the panel
       mounts. The key router gates on the same fact, so a destination that
       leaves unmounts the panel and stops its keys together. -->
-    {@const panelShows = libraryShown(content)}
+    {@const panelShows = libraryShown($libraryList)}
     {@const queueVisible = !panelShows || arrangement !== 'mini' || queueFocused}
     {@const libraryVisible = panelShows && (arrangement !== 'mini' || !queueFocused)}
     {@const twoColumns = queueVisible && libraryVisible}
@@ -186,7 +178,7 @@
           onReset={resetQueueWidth}
         />
       {/if}
-      {#if libraryVisible && (music || home || shows || emby || audiobooks || podcasts || feeds)}
+      {#if libraryVisible && $libraryList !== null}
         <LibraryPanel
           {arrangement}
           listWidth={widths.list}

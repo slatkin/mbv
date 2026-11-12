@@ -9,20 +9,20 @@
 	//
 	// The row itself is the shared `LibraryPillRow` (design D15), so the
 	// canvas's pill form has one owner.
-	import type { GuiShowsFrame } from '$lib/bridge/types';
+	import type { GuiShowsList } from '$lib/bridge/types';
 	import { applyShowsPillSelect, selectShowsPill, showsUi } from '$lib/library/shows';
 	import LibraryPillRow from './LibraryPillRow.svelte';
 
 	interface Props {
 		/** The carried Shows content: the pills and the library index the
 		 * set-mode command names (design D12). */
-		shows: GuiShowsFrame;
+		list: GuiShowsList;
 	}
-	const { shows }: Props = $props();
+	const { list }: Props = $props();
 
 	/** The pills the row paints, keyed by the mode the command names. */
 	const pills = $derived(
-		shows.pills.map((pill) => ({
+		list.pills.map((pill) => ({
 			key: pill.mode,
 			name: pill.name,
 			selected: pill.selected,
@@ -35,9 +35,9 @@
 
 	/** Press a pill: select its mode (design D12). */
 	function press(key: string): void {
-		const pill = shows.pills.find((candidate) => candidate.mode === key);
+		const pill = list.pills.find((candidate) => candidate.mode === key);
 		if (pill !== undefined) {
-			selectShowsPill(shows.libIdx, pill.mode);
+			selectShowsPill(list.libIdx, pill.mode);
 		}
 	}
 
@@ -46,7 +46,7 @@
 	// consumes it so a repaint sends nothing.
 	$effect(() => {
 		void $showsUi.pillSelect;
-		applyShowsPillSelect(shows.libIdx);
+		applyShowsPillSelect(list.libIdx);
 	});
 </script>
 

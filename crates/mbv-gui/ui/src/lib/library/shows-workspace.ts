@@ -14,8 +14,8 @@ import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiHomeRowState,
+	GuiShowsDetail,
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
 	GuiShowsWorkspace,
 } from '$lib/bridge/types';
 import type { ListMove } from './list';
@@ -37,8 +37,8 @@ export const showsWorkspace = writable<ShowsWorkspaceState>(initialShowsWorkspac
 
 /** The selected series' Workspace, or `null` on the Latest mode's episode Hero
  * and while the selected series' detail has not landed. */
-function workspaceOf(shows: GuiShowsFrame): GuiShowsWorkspace | null {
-	return shows.hero?.workspace ?? null;
+function workspaceOf(detail: GuiShowsDetail): GuiShowsWorkspace | null {
+	return detail.hero?.workspace ?? null;
 }
 
 /**
@@ -57,8 +57,8 @@ export function resolveShowsEpisodeCursor(
 
 /** The cursor's episode in the carried frame, or `null` while the Workspace
  * holds no episode. The Hero's Enter, `n`, and `a` act on this episode. */
-export function showsCursorEpisode(shows: GuiShowsFrame): GuiShowsEpisodeRow | null {
-	return resolveShowsEpisodeCursor(workspaceOf(shows), get(showsWorkspace).cursor);
+export function showsCursorEpisode(detail: GuiShowsDetail): GuiShowsEpisodeRow | null {
+	return resolveShowsEpisodeCursor(workspaceOf(detail), get(showsWorkspace).cursor);
 }
 
 /**
@@ -94,8 +94,8 @@ export function moveEpisodeCursor(
 
 /** Move the Workspace's cursor one movement along (design D12): the movement
  * keys while the Hero pane has the pane focus. */
-export function moveShowsEpisodeCursor(move: ListMove, shows: GuiShowsFrame): void {
-	const workspace = workspaceOf(shows);
+export function moveShowsEpisodeCursor(move: ListMove, detail: GuiShowsDetail): void {
+	const workspace = workspaceOf(detail);
 	const current = resolveShowsEpisodeCursor(workspace, get(showsWorkspace).cursor);
 	const cursor = moveEpisodeCursor(workspace?.episodes ?? [], current?.episodeId ?? null, move);
 	showsWorkspace.update((state) => (state.cursor === cursor ? state : { ...state, cursor }));
@@ -105,8 +105,8 @@ export function moveShowsEpisodeCursor(move: ListMove, shows: GuiShowsFrame): vo
  * Left walk the pills, and a move past either end changes nothing. The press
  * sends the select-season command, and the core's frame carries the season's
  * episodes back. */
-export function stepShowsSeason(delta: -1 | 1, shows: GuiShowsFrame): void {
-	const workspace = workspaceOf(shows);
+export function stepShowsSeason(delta: -1 | 1, libIdx: number, detail: GuiShowsDetail): void {
+	const workspace = workspaceOf(detail);
 	if (workspace === null || workspace.selectedSeason === null) {
 		return;
 	}
@@ -119,7 +119,7 @@ export function stepShowsSeason(delta: -1 | 1, shows: GuiShowsFrame): void {
 	}
 	void sendLibraryCommand({
 		command: 'showsSelectSeason',
-		libIdx: shows.libIdx,
+		libIdx,
 		seasonId: next.seasonId,
 	});
 }
@@ -127,31 +127,32 @@ export function stepShowsSeason(delta: -1 | 1, shows: GuiShowsFrame): void {
 /** Play the cursor's episode (design D12): Enter on the Workspace, and the
  * Hero's Play. The Owner owns the queue, so the command replaces it through
  * the shared play path. A Workspace with no episode sends nothing. */
-export function playShowsEpisode(shows: GuiShowsFrame): void {
-	actOnCursor(shows, 'showsPlay');
+export function playShowsEpisode(libIdx: number, detail: GuiShowsDetail): void {
+	actOnCursor(libIdx, detail, 'showsPlay');
 }
 
 /** Play the cursor's episode directly after the active slot (design D12). */
-export function playNextShowsEpisode(shows: GuiShowsFrame): void {
-	actOnCursor(shows, 'showsPlayNext');
+export function playNextShowsEpisode(libIdx: number, detail: GuiShowsDetail): void {
+	actOnCursor(libIdx, detail, 'showsPlayNext');
 }
 
 /** Add the cursor's episode to the queue (design D12). */
-export function queueShowsEpisode(shows: GuiShowsFrame): void {
-	actOnCursor(shows, 'showsQueue');
+export function queueShowsEpisode(libIdx: number, detail: GuiShowsDetail): void {
+	actOnCursor(libIdx, detail, 'showsQueue');
 }
 
 /** Send one episode command for the cursor's episode, and nothing while the
  * Workspace holds none. */
 function actOnCursor(
-	shows: GuiShowsFrame,
+	libIdx: number,
+	detail: GuiShowsDetail,
 	command: 'showsPlay' | 'showsPlayNext' | 'showsQueue',
 ): void {
-	const episode = showsCursorEpisode(shows);
+	const episode = showsCursorEpisode(detail);
 	if (episode === null) {
 		return;
 	}
-	void sendLibraryCommand({ command, libIdx: shows.libIdx, itemId: episode.episodeId });
+	void sendLibraryCommand({ command, libIdx, itemId: episode.episodeId });
 }
 
 /** Start the cursor over when the selected series changes (design D12): the

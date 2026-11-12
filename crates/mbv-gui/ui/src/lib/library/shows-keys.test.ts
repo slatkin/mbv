@@ -12,7 +12,7 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
 import type {
-	GuiLibraryContent,
+
 	GuiPanel,
 	GuiShowsHero,
 	GuiShowsMode,
@@ -23,7 +23,9 @@ import type {
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { initialShowsUi, showsCursorRow, showsUi } from './shows';
-import { library } from '$lib/bridge/sections';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
@@ -33,7 +35,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	showsUi.set(initialShowsUi());
-	library.set(null);
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -44,7 +46,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: get(library),
+		libraryList: get(libraryList),
 		search: null,
 	};
 }
@@ -111,29 +113,28 @@ function showsContent(
 	mode: GuiShowsMode,
 	rows: GuiShowsRow[],
 	hero: GuiShowsHero | null = null,
-): GuiLibraryContent {
+): LibrarySections {
 	return {
-		tabs: [
-			{ position: 1, label: 'Music' },
-			{ position: 2, label: 'Shows' },
-		],
-		currentTab: 2,
-		music: null,
-		home: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-		shows: {
-			libIdx: 0,
-			pills: showsPills(mode),
-			collectionNames: [mode],
-			loading: false,
+		list: {
+			tabs: [
+				{ position: 1, label: 'Music' },
+				{ position: 2, label: 'Shows' },
+			],
+			currentTab: 2,
+			destination: {
+				kind: 'shows',
+				libIdx: 0,
+				pills: showsPills(mode),
+				collectionNames: [mode],
+				loading: false,
+				series: mode === 'all' ? SHOWS_TREE : [],
+				upcomingFailed: false,
+				rows,
+			},
+		},
+		detail: {
+			kind: 'shows',
 			workspaceLoading: false,
-			series: mode === 'all' ? SHOWS_TREE : [],
-			upcomingFailed: false,
-			rows,
 			selected: rows[0]?.id ?? null,
 			hero,
 		},
@@ -167,11 +168,11 @@ const SHOWS_HERO: GuiShowsHero = {
 
 /** Carry the Shows content and focus the pane the key acts on. */
 function carryShows(
-	content: GuiLibraryContent,
+	content: LibrarySections,
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	library.set(content);
+	carryLibrary(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	showsUi.set({ ...initialShowsUi(), cursor });
 }

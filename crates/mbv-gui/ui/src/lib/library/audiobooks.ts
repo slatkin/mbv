@@ -12,7 +12,8 @@ import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor } from './list';
 import type { ListMove } from './list';
-import { libraryAudiobooks, libraryUi } from './state';
+import { libraryAudiobooksList } from './parts';
+import { libraryUi } from './state';
 import {
 	buildAudiobooksRows,
 	moveAudiobooksCursor,
@@ -46,7 +47,7 @@ export const audiobooksUi = writable<AudiobooksUiState>(initialAudiobooksUi());
 
 /** The painted rows of the carried book content (row 9.1). */
 function bookRows(filter = get(audiobooksUi).filter): AudiobooksListRow[] {
-	const audiobooks = libraryAudiobooks();
+	const audiobooks = libraryAudiobooksList();
 	return audiobooks === null ? [] : buildAudiobooksRows(audiobooks.rows, filter);
 }
 
@@ -105,7 +106,7 @@ export function acceptAudiobooksFilter(): void {
  * closes an open menu, because the facts they paint belong to the previous
  * book, as a Music pick's do. */
 export function selectAudiobooksRow(row: AudiobooksListRow): void {
-	const audiobooks = libraryAudiobooks();
+	const audiobooks = libraryAudiobooksList();
 	if (audiobooks === null || row.kind === 'heading') {
 		return;
 	}
@@ -133,7 +134,7 @@ export function pressAudiobooksRow(row: AudiobooksListRow): void {
  * the shared play path's admission. The book id is the row's stable
  * `library_item_id`. */
 export function playAudiobooksRow(bookId: string): void {
-	const audiobooks = libraryAudiobooks();
+	const audiobooks = libraryAudiobooksList();
 	if (audiobooks === null) {
 		return;
 	}
@@ -143,7 +144,7 @@ export function playAudiobooksRow(bookId: string): void {
 /** Add a book to the queue's tail (row 9.1): `a` on the cursor book. Books
  * have no play-next, so `n` is consumed and does nothing here. */
 export function queueAudiobooksRow(bookId: string): void {
-	const audiobooks = libraryAudiobooks();
+	const audiobooks = libraryAudiobooksList();
 	if (audiobooks === null) {
 		return;
 	}

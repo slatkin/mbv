@@ -21,7 +21,9 @@ import { applyTheme } from './theme';
 import type {
 	GuiAttachState,
 	GuiFocus,
-	GuiLibraryContent,
+	GuiLibraryDetail,
+	GuiLibraryList,
+	GuiLibraryRowMenu,
 	GuiOverlayFrame,
 	GuiPanelToggles,
 	GuiQueue,
@@ -89,7 +91,9 @@ const FRESH: Omit<SectionValues, 'theme'> & { theme: GuiTheme | null } = {
 		dirty: null,
 	},
 	status: { prefixArmed: false, toast: null },
-	library: null,
+	libraryList: null,
+	libraryDetail: null,
+	rowMenu: null,
 	search: null,
 	settings: null,
 };
@@ -123,9 +127,17 @@ export const footer = writable<GuiQueueFooter>(FRESH.footer);
 
 export const status = writable<GuiStatusBar>(FRESH.status);
 
-/** The Library content of the active destination, `null` while no presented
- * destination is active. */
-export const library = writable<GuiLibraryContent | null>(FRESH.library);
+/** The Library list: the destination tabs and the active destination's list
+ * part, `null` while no presented destination is active. */
+export const libraryList = writable<GuiLibraryList | null>(FRESH.libraryList);
+
+/** The Library detail: the active destination's selection, Hero, Workspace, and
+ * playing marks, `null` while no presented destination is active. */
+export const libraryDetail = writable<GuiLibraryDetail | null>(FRESH.libraryDetail);
+
+/** The right-click item menu the window last opened, `null` while none is
+ * open. */
+export const rowMenu = writable<GuiLibraryRowMenu | null>(FRESH.rowMenu);
 
 /** The Search section's results, `null` while the field is closed. */
 export const search = writable<GuiSearchFrame | null>(FRESH.search);
@@ -153,7 +165,9 @@ const stores: Record<SectionName, Writable<unknown>> = {
 	hover,
 	footer,
 	status,
-	library,
+	libraryList,
+	libraryDetail,
+	rowMenu,
 	search,
 	settings,
 };

@@ -23,7 +23,7 @@
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout, joinMetaRows, labelSegments, plainSegments } from '$lib/library/hero';
-	import type { GuiShowsEpisodeRow, GuiShowsFrame } from '$lib/bridge/types';
+	import type { GuiShowsDetail, GuiShowsEpisodeRow, GuiShowsList } from '$lib/bridge/types';
 	import {
 		episodeProgress,
 		isPlayedEpisode,
@@ -36,12 +36,13 @@
 	interface Props {
 		/** The carried Shows content (design D12): the selected row's Hero, its
 		 * Workspace, and the library index the Shows commands name. */
-		shows: GuiShowsFrame;
+		list: GuiShowsList;
+		detail: GuiShowsDetail;
 	}
-	const { shows }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(shows.hero);
+	const hero = $derived(detail.hero);
 
 	/** The series Hero's Workspace, or `null` on a Hero that paints none. */
 	const workspace = $derived(hero?.workspace ?? null);
@@ -63,7 +64,7 @@
 
 	/** The selected season's episode count, once its episodes have landed. */
 	const seasonFacts = $derived(
-		workspace === null || shows.workspaceLoading || workspace.episodes.length === 0
+		workspace === null || detail.workspaceLoading || workspace.episodes.length === 0
 			? ''
 			: `${workspace.episodes.length} ${workspace.episodes.length === 1 ? 'episode' : 'episodes'}`,
 	);
@@ -77,21 +78,21 @@
 	/** Select a season (design D12): the select-season command the core
 	 * answers with that season's episodes. */
 	function selectSeason(seasonId: string): void {
-		void sendLibraryCommand({ command: 'showsSelectSeason', libIdx: shows.libIdx, seasonId });
+		void sendLibraryCommand({ command: 'showsSelectSeason', libIdx: list.libIdx, seasonId });
 	}
 
 	/** Play an episode (design D12): the double-click, as in Music's
 	 * tracklist. The Owner owns the queue, so the shared play path replaces
 	 * it. */
 	function play(episode: GuiShowsEpisodeRow): void {
-		void sendLibraryCommand({ command: 'showsPlay', libIdx: shows.libIdx, itemId: episode.episodeId });
+		void sendLibraryCommand({ command: 'showsPlay', libIdx: list.libIdx, itemId: episode.episodeId });
 	}
 
 	/** Admit an episode directly after the active slot (design D12). */
 	function playNext(episode: GuiShowsEpisodeRow): void {
 		void sendLibraryCommand({
 			command: 'showsPlayNext',
-			libIdx: shows.libIdx,
+			libIdx: list.libIdx,
 			itemId: episode.episodeId,
 		});
 	}
@@ -100,7 +101,7 @@
 	function queue(episode: GuiShowsEpisodeRow): void {
 		void sendLibraryCommand({
 			command: 'showsQueue',
-			libIdx: shows.libIdx,
+			libIdx: list.libIdx,
 			itemId: episode.episodeId,
 		});
 	}
@@ -108,12 +109,12 @@
 	/** The item the Hero's buttons act on (Q6 of the Hero look audit): the
 	 * selected season on a series Hero, and the episode on a Latest Hero. A
 	 * season is a folder, so the shared folder paths expand it. */
-	const actionTarget = $derived(workspace === null ? shows.selected : workspace.selectedSeason);
+	const actionTarget = $derived(workspace === null ? detail.selected : workspace.selectedSeason);
 
 	/** Send a Shows command for the Hero's target; nothing while it names none. */
 	function actOn(command: 'showsPlay' | 'showsPlayNext' | 'showsQueue'): void {
 		if (actionTarget !== null) {
-			void sendLibraryCommand({ command, libIdx: shows.libIdx, itemId: actionTarget });
+			void sendLibraryCommand({ command, libIdx: list.libIdx, itemId: actionTarget });
 		}
 	}
 
@@ -215,7 +216,7 @@
 				actions={rowActions}
 				onpress={pressShowsEpisode}
 				onplay={playById}
-				loading={shows.workspaceLoading
+				loading={detail.workspaceLoading
 					? { text: 'Loading episodes…', attr: 'data-library-shows-episodes-loading' }
 					: null}
 			/>

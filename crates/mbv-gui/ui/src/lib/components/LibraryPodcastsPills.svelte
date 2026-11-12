@@ -10,7 +10,7 @@
 	//
 	// The row itself is the shared `LibraryPillRow` (design D15), so the
 	// canvas's pill form has one owner.
-	import type { GuiPodcastsFrame } from '$lib/bridge/types';
+	import type { GuiPodcastsList } from '$lib/bridge/types';
 	import {
 		applyPodcastsPillSelect,
 		podcastPillKey,
@@ -22,13 +22,13 @@
 	interface Props {
 		/** The carried Podcasts content: the pills and the library index the
 		 * set-pill command names (design D12, row 10.1). */
-		podcasts: GuiPodcastsFrame;
+		list: GuiPodcastsList;
 	}
-	const { podcasts }: Props = $props();
+	const { list }: Props = $props();
 
 	/** The pills the row paints, keyed by the pill's paint key. */
 	const pills = $derived(
-		podcasts.pills.map((pill) => ({
+		list.pills.map((pill) => ({
 			key: podcastPillKey(pill.pill),
 			name: pill.name,
 			selected: pill.selected,
@@ -43,9 +43,9 @@
 
 	/** Press a pill: select its view (row 10.1). */
 	function press(key: string): void {
-		const pill = podcasts.pills.find((candidate) => podcastPillKey(candidate.pill) === key);
+		const pill = list.pills.find((candidate) => podcastPillKey(candidate.pill) === key);
 		if (pill !== undefined) {
-			selectPodcastsPill(podcasts.libIdx, pill.pill);
+			selectPodcastsPill(list.libIdx, pill.pill);
 		}
 	}
 
@@ -54,7 +54,7 @@
 	// consumes it so a repaint sends nothing.
 	$effect(() => {
 		void $podcastsUi.pillSelect;
-		applyPodcastsPillSelect(podcasts.libIdx);
+		applyPodcastsPillSelect(list.libIdx);
 	});
 </script>
 

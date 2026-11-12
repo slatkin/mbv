@@ -15,11 +15,11 @@
 // command.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiPodcastPill, GuiPodcastsFrame } from '$lib/bridge/types';
+import type { GuiPodcastPill, GuiPodcastsList } from '$lib/bridge/types';
 import { routePanelListKey } from './keys-shared';
 import type { PanelKeys } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryPodcasts } from './state';
+import { libraryPodcastsDetail, libraryPodcastsList } from './parts';
 import {
 	focusedPodcastsPill,
 	movePodcastsListCursor,
@@ -34,16 +34,16 @@ import type { PodcastsItemRow } from './podcasts-list';
 /** The Podcasts facts the shared panel key handler routes over (row 7C.2):
  * the episode pills are always painted, the item the play and queue commands
  * name is the episode the cursor row carries, and there is no play-next. */
-const PODCASTS_KEYS: PanelKeys<GuiPodcastsFrame, PodcastsItemRow, GuiPodcastPill> = {
-	frame: libraryPodcasts,
+const PODCASTS_KEYS: PanelKeys<GuiPodcastsList, PodcastsItemRow, GuiPodcastPill> = {
+	frame: libraryPodcastsList,
 	pills: {
 		available: () => true,
 		focused: focusedPodcastsPill,
 		request: requestPodcastsPillSelect,
 		moveFocus: movePodcastsPillFocus,
 	},
-	hasHero: (podcasts) => podcasts.hero !== null,
-	selectedItemId: (podcasts) => podcasts.selected,
+	hasHero: () => (libraryPodcastsDetail()?.hero ?? null) !== null,
+	selectedItemId: () => libraryPodcastsDetail()?.selected ?? null,
 	cursorRow: podcastsCursorRow,
 	itemId: (row) => row.row.id,
 	moveListCursor: movePodcastsListCursor,

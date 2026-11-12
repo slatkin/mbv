@@ -14,7 +14,7 @@
 	// paints that state and reports the two facts only the DOM holds. A press
 	// selects the row, and a double-click plays it (design D12): the keys'
 	// Enter plays the cursor row, and the press is the selection's half.
-	import type { GuiHomeFrame } from '$lib/bridge/types';
+	import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
 	import {
 		buildHomeRows,
 		HOME_ITEM_ROW_HEIGHT,
@@ -39,9 +39,10 @@
 
 	interface Props {
 		/** The carried Home content (design D12): the flat list's rows. */
-		home: GuiHomeFrame;
+		list: GuiHomeList;
+		detail: GuiHomeDetail;
 	}
-	const { home }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** Open the item's right-click menu (the row-menu command): the row's own
 	 * stable id, whose item the core resolves for the shared menu (design D8,
@@ -53,7 +54,7 @@
 	/** The painted rows of the flat list (design D12): the same model
 	 * `$lib/library/home` builds from the carried content, narrowed by the
 	 * filter's text. */
-	const rows = $derived(buildHomeRows(home.rows, $homeUi.filter));
+	const rows = $derived(buildHomeRows(list.rows, $homeUi.filter));
 
 
 	/** An item row's name colour: the canvas's text tone, dimmed on a played
@@ -69,7 +70,7 @@
 	 * shows. */
 	function isSelectedRow(row: HomeListRow): boolean {
 		return (
-			row.kind === 'item' && home.selected !== null && row.id === homeRowKey(home.selected)
+			row.kind === 'item' && detail.selected !== null && row.id === homeRowKey(detail.selected)
 		);
 	}
 
@@ -106,12 +107,12 @@
 			onaccept={acceptHomeFilter}
 		/>
 	</div>
-	{#if home.loading}
+	{#if list.loading}
 		<!-- The Home content has not landed yet (design D12): one placeholder
 		line holds the list's place, as the TUI's loading slot does. -->
 		<LibraryListNotice text="Loading…" attr="data-library-home-loading" />
 	{/if}
-	{#if !home.loading && home.rows.length === 0}
+	{#if !list.loading && list.rows.length === 0}
 		<!-- Home holds nothing to play: one line says so, as the Music list's
 		empty line does. -->
 		<LibraryListNotice text="Nothing to play" attr="data-library-home-empty" />

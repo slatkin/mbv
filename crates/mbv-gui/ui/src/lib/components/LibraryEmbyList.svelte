@@ -19,7 +19,7 @@
 	// folder glyph, so the Emby list adds none and the row's own decoration (the
 	// folder's item count) carries the distinction, with the kind on
 	// `data-library-emby-row`.
-	import type { GuiEmbyFrame } from '$lib/bridge/types';
+	import type { GuiEmbyDetail, GuiEmbyList } from '$lib/bridge/types';
 	import {
 		buildEmbyRows,
 		embyLetterRail,
@@ -48,25 +48,26 @@
 	interface Props {
 		/** The carried plain Emby-library content (row 8.1): the active mode's
 		 * rows. */
-		emby: GuiEmbyFrame;
+		list: GuiEmbyList;
+		detail: GuiEmbyDetail;
 	}
-	const { emby }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The painted rows (row 8.1): the plain mode's rows with their headings, or
 	 * the feed-group mode's flat rows with no heading, narrowed by the
 	 * filter's text. */
-	const rows = $derived(buildEmbyRows(emby.rows, emby.feedGroup, $embyUi.filter));
+	const rows = $derived(buildEmbyRows(list.rows, list.feedGroup, $embyUi.filter));
 
 	/** The header's selection label (design D15): the feed-group mode's
 	 * selected group, and `All` for a plain library, whose list is the whole
 	 * library — the Music header's own rule. */
 	const selectionLabel = $derived(
-		emby.collectionNames.length > 0 ? emby.collectionNames.join(' + ') : 'All',
+		list.collectionNames.length > 0 ? list.collectionNames.join(' + ') : 'All',
 	);
 
 	/** The filter field's placeholder, naming the selection it narrows. */
 	const filterPlaceholder = $derived(
-		emby.collectionNames.length > 0 ? `Filter ${emby.collectionNames.join(' + ')}` : 'Filter',
+		list.collectionNames.length > 0 ? `Filter ${list.collectionNames.join(' + ')}` : 'Filter',
 	);
 
 	/** Open the row's right-click item menu (the row-menu command): the next
@@ -97,7 +98,7 @@
 		if (row.id === $embyUi.cursor) {
 			return canvasVar('selected');
 		}
-		return row.id === emby.selected ? canvasVar('library-raise') : undefined;
+		return row.id === detail.selected ? canvasVar('library-raise') : undefined;
 	}
 </script>
 
@@ -106,7 +107,7 @@
 	selection's label, and the `/` filter field. -->
 	<div class="flex flex-none flex-col">
 		<LibraryListHeader
-			title={emby.libraryName}
+			title={list.libraryName}
 			label={selectionLabel}
 			labelAttr="data-library-emby-selection-label"
 			filter={$embyUi.filter}
@@ -116,12 +117,12 @@
 			onaccept={acceptEmbyFilter}
 		/>
 	</div>
-	{#if emby.loading}
+	{#if list.loading}
 		<!-- The active list has not landed yet (row 8.1): one placeholder line
 			holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-emby-loading" />
 	{/if}
-	{#if emby.failed}
+	{#if list.failed}
 		<!-- The plain mode's root-list fetch failed (row 8.1): the failure line
 			naming what failed, and no row until the library opens again. -->
 		<LibraryListNotice
@@ -129,7 +130,7 @@
 			attr="data-library-emby-failed"
 		/>
 	{/if}
-	{#if !emby.loading && !emby.failed && emby.rows.length === 0}
+	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The library landed and holds no item (row 8.1): one line says so,
 			as the Music list's empty line does. -->
 		<LibraryListNotice text="No items" attr="data-library-emby-empty" />
@@ -160,7 +161,7 @@
 					titleColor={canvasVar('text')}
 					background={rowBackground(row)}
 					cursor={row.id === $embyUi.cursor}
-					selected={row.id === emby.selected}
+					selected={row.id === detail.selected}
 					progress={null}
 					onpress={() => pressEmbyRow(row)}
 					onplay={() => playEmbyRow(row.row.id)}
@@ -169,7 +170,7 @@
 			{/if}
 		{/snippet}
 	</LibraryVirtualList>
-		{#if !emby.feedGroup}
+		{#if !list.feedGroup}
 			<LibraryLetterRail letters={rail} {marked} jump={jumpEmbyToLetter} />
 		{/if}
 	</div>

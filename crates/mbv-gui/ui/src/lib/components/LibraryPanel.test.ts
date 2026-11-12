@@ -9,17 +9,23 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { library, resetSectionsForTest, status } from '$lib/bridge/sections';
+import { resetSectionsForTest, status } from '$lib/bridge/sections';
 import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
 import type {
-	GuiAudiobooksFrame,
-	GuiEmbyFrame,
-	GuiFeedsFrame,
-	GuiMusicFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
+	GuiEmbyDetail,
+	GuiEmbyList,
+	GuiFeedsDetail,
+	GuiFeedsList,
 	GuiMusicHero,
-	GuiShowsFrame,
+	GuiMusicList,
+	GuiShowsDetail,
+	GuiShowsList,
 	GuiStatusBar,
 } from '$lib/bridge/types';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
 
@@ -42,8 +48,8 @@ beforeEach(() => {
 /** The frame's Status bar facts: nothing armed and no live toast. */
 const idle: GuiStatusBar = { prefixArmed: false, toast: null };
 
-/** The carried Music content with no album picked. */
-function music(): GuiMusicFrame {
+/** The carried Music list part with no album picked. */
+function music(): GuiMusicList {
 	return {
 		libIdx: 0,
 		pills: [],
@@ -51,9 +57,18 @@ function music(): GuiMusicFrame {
 		loading: false,
 		failure: null,
 		artists: [],
-		hero: null,
-		art: null,
-		playingTrackId: null,
+	};
+}
+
+/** The carried Music sections, with `picked` as the Hero's album. */
+function musicSections(picked: GuiMusicHero | null = null): LibrarySections {
+	return {
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: { kind: 'music', ...music() },
+		},
+		detail: { kind: 'music', hero: picked, art: null, playingTrackId: null },
 	};
 }
 
@@ -76,18 +91,7 @@ function hero(): GuiMusicHero {
 }
 
 test('a press inside the panel sends the take-focus command', () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: music(),
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(musicSections());
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -105,18 +109,7 @@ test('a press inside the panel sends the take-focus command', () => {
 });
 
 test('the panel paints the top bar and the pill row above the list region', () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: music(),
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(musicSections());
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -137,18 +130,7 @@ test('the panel paints the top bar and the pill row above the list region', () =
 // opaque fill that no key dismissed. Row 4.7 paints the Hero into it and gives
 // it the dismissal the review required: a press on the backdrop closes it.
 test('the Narrow overlay paints the Hero and closes on a press on its backdrop', async () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: { ...music(), hero: hero() },
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(musicSections(hero()));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
@@ -168,18 +150,7 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 });
 
 test('the Wide Hero pane paints the Hero beside the list', () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: { ...music(), hero: hero() },
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(musicSections(hero()));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -198,24 +169,30 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 // place of the Music ones, and the pill row and the letter rail do not paint:
 // Home paints no pills, no filter, and no rail.
 test('the Home content mounts the Home list and Hero and no pills or rail', () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: null,
-		music: null,
-		home: { loading: false,
-			rows: [
-				{ row: 'heading', text: 'Continue watching' },
-				{
-					row: 'item',
-					id: { kind: 'continue', id: 'e1' },
-					title: 'Better Call Saul',
-					subtitle: null,
-					date: null,
-					kind: 'media',
-					state: 'ordinary',
-					art: null,
-				},
-			],
+	carryLibrary({
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: null,
+			destination: {
+				kind: 'home',
+				loading: false,
+				rows: [
+					{ row: 'heading', text: 'Continue watching' },
+					{
+						row: 'item',
+						id: { kind: 'continue', id: 'e1' },
+						title: 'Better Call Saul',
+						subtitle: null,
+						date: null,
+						kind: 'media',
+						state: 'ordinary',
+						art: null,
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'home',
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {
 				title: 'Better Call Saul',
@@ -227,12 +204,6 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 				art: null,
 			},
 		},
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
 	});
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
@@ -253,12 +224,14 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 // The Narrow Hero overlay works for the Home Hero through the same painters
 // the Wide pane uses (design D4, D12), and closes on a press on its backdrop.
 test('the Narrow overlay paints the Home Hero and closes on a press on its backdrop', async () => {
-	library.set({
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: null,
-		music: null,
-		home: { loading: false,
-			rows: [],
+	carryLibrary({
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: null,
+			destination: { kind: 'home', loading: false, rows: [] },
+		},
+		detail: {
+			kind: 'home',
 			selected: { kind: 'continue', id: 'e1' },
 			hero: {
 				title: 'Better Call Saul',
@@ -270,12 +243,6 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 				art: null,
 			},
 		},
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
 	});
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
@@ -299,18 +266,7 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 // place of the Music and Home ones — its mode pills, its list, and the series
 // Hero with its Workspace.
 test('the Shows content mounts the mode pills, the Shows list, and the series Hero', () => {
-	library.set({
-		tabs: [{ position: 3, label: 'Shows' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: shows('all'),
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(showsSections('all'));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -330,18 +286,7 @@ test('the Shows content mounts the mode pills, the Shows list, and the series He
 // The Upcoming mode carries no Hero (design D12): the panel paints its flat
 // list and no Hero in the Wide pane or the Narrow overlay.
 test('the Upcoming Shows content paints no Hero', () => {
-	library.set({
-		tabs: [{ position: 3, label: 'Shows' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: shows('upcoming'),
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(showsSections('upcoming'));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
@@ -354,9 +299,8 @@ test('the Upcoming Shows content paints no Hero', () => {
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
 
-/** The carried Shows content of `mode`, with the series Hero the Upcoming mode
- * does not paint (design D12). */
-function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
+/** The carried Shows list part of `mode`: the three mode pills and one row. */
+function showsList(mode: 'latest' | 'upcoming' | 'all'): GuiShowsList {
 	return {
 		libIdx: 0,
 		pills: [
@@ -366,10 +310,17 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 		],
 		collectionNames: [mode],
 		loading: false,
-		workspaceLoading: false,
 		series: [],
 		upcomingFailed: false,
 		rows: [{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' }],
+	};
+}
+
+/** The carried Shows detail part of `mode`: the series Hero, which the
+ * Upcoming mode does not paint (design D12). */
+function showsDetail(mode: 'latest' | 'upcoming' | 'all'): GuiShowsDetail {
+	return {
+		workspaceLoading: false,
 		selected: 's1',
 		hero:
 			mode === 'upcoming'
@@ -387,23 +338,81 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 	};
 }
 
+/** The Shows sections of `mode`, under the Shows tab. */
+function showsSections(mode: 'latest' | 'upcoming' | 'all'): LibrarySections {
+	return {
+		list: {
+			tabs: [{ position: 3, label: 'Shows' }],
+			currentTab: 3,
+			destination: { kind: 'shows', ...showsList(mode) },
+		},
+		detail: { kind: 'shows', ...showsDetail(mode) },
+	};
+}
+
+/** The plain Emby-library list part: the plain mode's list, or the feed-group
+ * mode's pills and date-ordered rows. */
+function emby(feedGroup: boolean): GuiEmbyList {
+	return {
+		libIdx: 3,
+		libraryName: 'Movies',
+		pills: feedGroup
+			? [{ group: { kind: 'all' }, name: 'All', selected: true, collection: false }]
+			: [],
+		collectionNames: feedGroup ? ['All'] : [],
+		feedGroup,
+		loading: false,
+		failed: false,
+		rows: [
+			{
+				id: 'm1',
+				title: 'Alien',
+				subtitle: '1979',
+				date: feedGroup ? '1979' : null,
+				sortLetter: feedGroup ? null : 'A',
+				kind: 'media',
+			},
+		],
+	};
+}
+
+/** The plain Emby-library detail part: the row selected, with a Hero. */
+function embyDetail(): GuiEmbyDetail {
+	return {
+		selected: 'm1',
+		hero: {
+			kind: 'movie',
+			title: 'Alien',
+			metaRows: [[{ text: '1979', kind: 'date' }]],
+			durationRow: 0,
+			progressRow: null,
+			overview: null,
+			artShape: 'landscape',
+			art: null,
+			credits: [],
+			imdbUrl: null,
+		},
+	};
+}
+
+/** The Emby sections under the tab `label` at position 3. */
+function embySections(feedGroup: boolean, label: string): LibrarySections {
+	return {
+		list: {
+			tabs: [{ position: 3, label }],
+			currentTab: 3,
+			destination: { kind: 'emby', ...emby(feedGroup) },
+		},
+		detail: { kind: 'emby', ...embyDetail() },
+	};
+}
+
 // add-gui-library-panel row 8.1: while the plain Emby-library content is present
 // (design D12, the destinations are exclusive), the panel mounts the Emby
 // painters in place of the Music, Home, and Shows ones — its list with the plain
 // mode's rail, its Hero with no Workspace, and no pill row.
 test('the plain Emby content mounts the Emby list, rail, and Hero and none of the other destinations', () => {
-	library.set({
-		tabs: [{ position: 3, label: 'Movies' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: null,
-		emby: emby(false),
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(embySections(false, 'Movies'));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -423,18 +432,7 @@ test('the plain Emby content mounts the Emby list, rail, and Hero and none of th
 });
 
 test('the feed-group Emby content mounts its pill row and no rail', () => {
-	library.set({
-		tabs: [{ position: 3, label: 'Home videos' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: null,
-		emby: emby(true),
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(embySections(true, 'Home videos'));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -447,19 +445,54 @@ test('the feed-group Emby content mounts its pill row and no rail', () => {
 	expect(container.querySelector('[data-library-region="rail"]')).toBeNull();
 });
 
+/** The carried Audiobooks list part: the catalog's book list. */
+function audiobooksList(): GuiAudiobooksList {
+	return {
+		libIdx: 4,
+		loading: false,
+		failed: false,
+		rows: [
+			{
+				id: 'b1',
+				title: 'Aftermath',
+				subtitle: 'Bill Wyman',
+				duration: '4:32',
+				sortLetter: 'A',
+			},
+		],
+	};
+}
+
+/** The carried Audiobooks detail part: the selected book, with `hero` its Hero
+ * the frame paints (row 9.1). */
+function audiobooksDetail(hero: GuiAudiobooksDetail['hero']): GuiAudiobooksDetail {
+	return {
+		workspaceLoading: false,
+		selected: 'b1',
+		playingBookId: null,
+		hero,
+	};
+}
+
+/** The Audiobooks sections under the Audiobooks tab. */
+function audiobooksSections(hero: GuiAudiobooksDetail['hero']): LibrarySections {
+	return {
+		list: {
+			tabs: [{ position: 4, label: 'Audiobooks' }],
+			currentTab: 4,
+			destination: { kind: 'audiobooks', ...audiobooksList() },
+		},
+		detail: { kind: 'audiobooks', ...audiobooksDetail(hero) },
+	};
+}
+
 // add-gui-library-panel row 9.1: while the Audiobooks content is present
 // (design D12, the destinations are exclusive), the panel mounts the book list
 // with its rail and the book Hero in place of the Music, Home, Shows, and Emby
 // painters, and no pill row rides on the destination.
 test('the Audiobooks content mounts the book list, rail, and Hero and none of the other destinations', () => {
-	library.set({
-		tabs: [{ position: 4, label: 'Audiobooks' }],
-		currentTab: 4,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: audiobooks({
+	carryLibrary(
+		audiobooksSections({
 			title: 'Aftermath',
 			metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 			durationRow: 0,
@@ -469,10 +502,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 			art: null,
 			workspace: null,
 		}),
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	);
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
@@ -495,18 +525,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 // A frame without a Hero paints no Hero (row 9.1), and the Narrow overlay
 // stays closed while the selection carries none.
 test('the Hero-less Audiobooks content paints its list and no Hero', () => {
-	library.set({
-		tabs: [{ position: 4, label: 'Audiobooks' }],
-		currentTab: 4,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: audiobooks(null),
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	carryLibrary(audiobooksSections(null));
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
@@ -523,14 +542,8 @@ test('the Hero-less Audiobooks content paints its list and no Hero', () => {
 // the Wide pane uses (design D4), and — copied from the row-7.1 lesson — a
 // stale Hero paints through an overlay the frame's own selection carries.
 test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its backdrop', async () => {
-	library.set({
-		tabs: [{ position: 4, label: 'Audiobooks' }],
-		currentTab: 4,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: audiobooks({
+	carryLibrary(
+		audiobooksSections({
 			title: 'Aftermath',
 			metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 			durationRow: 0,
@@ -540,10 +553,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 			art: null,
 			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
 		}),
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-	});
+	);
 	status.set(idle);
 	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
@@ -561,101 +571,9 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
 
-/** The carried Audiobooks content: the catalog's book list, with `hero` the
- * selected book's Hero the frame paints (row 9.1). */
-function audiobooks(hero: GuiAudiobooksFrame['hero']): GuiAudiobooksFrame {
-	return {
-		libIdx: 4,
-		loading: false,
-		failed: false,
-		workspaceLoading: false,
-		rows: [
-			{
-				id: 'b1',
-				title: 'Aftermath',
-				subtitle: 'Bill Wyman',
-				duration: '4:32',
-				sortLetter: 'A',
-			},
-		],
-		selected: 'b1',
-		playingBookId: null,
-		hero,
-	};
-}
-
-// add-gui-library-panel row 11.1: while the Feeds content is present (design
-// D12, the destinations are exclusive), the panel mounts the view pills, the
-// date-gutter list, and the entry Hero, and none of the other destinations'
-// painters.
-test('the Feeds content mounts the Feeds pills, list, and Hero and none of the other destinations', () => {
-	library.set({
-		tabs: [{ position: 5, label: 'Feeds' }],
-		currentTab: 5,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: feeds({
-			title: 'Entry A',
-			metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
-			durationRow: 1,
-			progressRow: null,
-			artShape: 'square',
-		}),
-		rowMenu: null,
-	});
-	status.set(idle);
-	const { container } = render(LibraryPanel, {
-		arrangement: 'wide',
-		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
-		libraryColumn: 1200,
-	});
-
-	expect(container.querySelector('[data-library-region="pills"]')).toBeTruthy();
-	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
-	expect(
-		container.querySelector('[data-library-region="hero"] [data-library-feeds-hero]'),
-	).toBeTruthy();
-	expect(container.querySelector('[data-library-list]')).toBeNull();
-	expect(container.querySelector('[data-library-podcasts-list]')).toBeNull();
-	expect(container.querySelector('[data-library-home-list]')).toBeNull();
-	expect(container.querySelector('[data-library-emby-list]')).toBeNull();
-});
-
-// A frame without a Hero paints no Hero (row 11.1), and the Narrow overlay
-// stays closed while the selection carries none.
-test('the Hero-less Feeds content paints its list and no Hero', () => {
-	library.set({
-		tabs: [{ position: 5, label: 'Feeds' }],
-		currentTab: 5,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: feeds(null),
-		rowMenu: null,
-	});
-	status.set(idle);
-	const { container } = render(LibraryPanel, {
-		arrangement: 'narrow',
-		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
-		libraryColumn: 800,
-	});
-
-	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
-	expect(container.querySelector('[data-library-feeds-hero]')).toBeNull();
-	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
-});
-
-/** The carried Feeds content: the Latest and one subscription pill, one
- * merged entry row, with `hero` the selected entry's Hero the frame paints
- * (row 11.1). */
-function feeds(hero: GuiFeedsFrame['hero']): GuiFeedsFrame {
+/** The carried Feeds list part: the Latest and one subscription pill, and one
+ * merged entry row. */
+function feedsList(): GuiFeedsList {
 	return {
 		pills: [
 			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
@@ -677,70 +595,82 @@ function feeds(hero: GuiFeedsFrame['hero']): GuiFeedsFrame {
 				state: 'ordinary',
 			},
 		],
-		selected: 's1::e1',
-		hero,
 	};
 }
 
-/** The carried plain Emby-library content: the plain mode's list, or the
- * feed-group mode's pills and date-ordered rows, with a Hero. */
-function emby(feedGroup: boolean): GuiEmbyFrame {
+/** The Feeds sections under the Feeds tab, with `hero` the selected entry's
+ * Hero the frame paints (row 11.1). */
+function feedsSections(hero: GuiFeedsDetail['hero']): LibrarySections {
 	return {
-		libIdx: 3,
-		libraryName: 'Movies',
-		pills: feedGroup
-			? [{ group: { kind: 'all' }, name: 'All', selected: true, collection: false }]
-			: [],
-		collectionNames: feedGroup ? ['All'] : [],
-		feedGroup,
-		loading: false,
-		failed: false,
-		rows: [
-			{
-				id: 'm1',
-				title: 'Alien',
-				subtitle: '1979',
-				date: feedGroup ? '1979' : null,
-				sortLetter: feedGroup ? null : 'A',
-				kind: 'media',
-			},
-		],
-		selected: 'm1',
-		hero: {
-			kind: 'movie',
-			title: 'Alien',
-			metaRows: [[{ text: '1979', kind: 'date' }]],
-			durationRow: 0,
-			progressRow: null,
-			overview: null,
-			artShape: 'landscape',
-			art: null,
-			credits: [],
-			imdbUrl: null,
+		list: {
+			tabs: [{ position: 5, label: 'Feeds' }],
+			currentTab: 5,
+			destination: { kind: 'feeds', ...feedsList() },
 		},
+		detail: { kind: 'feeds', selected: 's1::e1', hero },
 	};
 }
+
+// add-gui-library-panel row 11.1: while the Feeds content is present (design
+// D12, the destinations are exclusive), the panel mounts the view pills, the
+// date-gutter list, and the entry Hero, and none of the other destinations'
+// painters.
+test('the Feeds content mounts the Feeds pills, list, and Hero and none of the other destinations', () => {
+	carryLibrary(
+		feedsSections({
+			title: 'Entry A',
+			metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
+			durationRow: 1,
+			progressRow: null,
+			artShape: 'square',
+		}),
+	);
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-region="pills"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-feeds-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+	expect(container.querySelector('[data-library-podcasts-list]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeNull();
+	expect(container.querySelector('[data-library-emby-list]')).toBeNull();
+});
+
+// A frame without a Hero paints no Hero (row 11.1), and the Narrow overlay
+// stays closed while the selection carries none.
+test('the Hero-less Feeds content paints its list and no Hero', () => {
+	carryLibrary(feedsSections(null));
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+
+	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-feeds-hero]')).toBeNull();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
 
 // add-gui-library-panel design D8, D15: the right-click item menu is the
-// Library's, not one destination's. The row menu rides the content, so a Shows
-// row's menu paints while Music carries no content — before D15 the panel read
-// the menu off the Music frame, so every other destination's right-click opened
-// nothing.
+// Library's, not one destination's. The row menu rides its own section, so a
+// Shows row's menu paints while Music carries no content — before D15 the panel
+// read the menu off the Music frame, so every other destination's right-click
+// opened nothing.
 test('the item menu paints on a destination that is not Music', () => {
 	libraryUi.update((ui) => ({
 		...ui,
 		rowMenu: { itemId: 's1', x: 40, y: 60 },
 	}));
-	library.set({
-		tabs: [{ position: 2, label: 'Shows' }],
-		currentTab: 2,
-		music: null,
-		home: null,
-		shows: shows('all'),
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
+	carryLibrary({
+		...showsSections('all'),
 		rowMenu: {
 			itemId: 's1',
 			entries: [{ label: 'Play', keyHint: null, index: 0 }],

@@ -23,7 +23,7 @@
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
-	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
+	import type { GuiAudiobooksChapterRow, GuiAudiobooksDetail, GuiAudiobooksList } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
 		currentChapterRow,
@@ -34,12 +34,13 @@
 	interface Props {
 		/** The carried Audiobooks content (design D12, row 9.1): the selected
 		 * book, its Hero facts, and its chapter Workspace. */
-		audiobooks: GuiAudiobooksFrame;
+		list: GuiAudiobooksList;
+		detail: GuiAudiobooksDetail;
 	}
-	const { audiobooks }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(audiobooks.hero);
+	const hero = $derived(detail.hero);
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'audiobook'));
@@ -58,8 +59,8 @@
 	 * Workspace only when the mark moves. */
 	const markedChapter = $derived.by(() => {
 		if (
-			audiobooks.playingBookId === null ||
-			audiobooks.playingBookId !== audiobooks.selected
+			detail.playingBookId === null ||
+			detail.playingBookId !== detail.selected
 		) {
 			return null;
 		}
@@ -77,9 +78,9 @@
 	/** Send the book command for the frame's selected book (design D12, row
 	 * 9.1): the book the frame painted, never a position. */
 	function actBook(command: 'absPlay' | 'absQueue'): void {
-		const itemId = audiobooks.selected;
+		const itemId = detail.selected;
 		if (itemId !== null && hero !== null) {
-			void sendLibraryCommand({ command, libIdx: audiobooks.libIdx, itemId });
+			void sendLibraryCommand({ command, libIdx: list.libIdx, itemId });
 		}
 	}
 
@@ -87,11 +88,11 @@
 	 * row's hover play control send the chapter the row names — the Service
 	 * discriminator the TUI's chapter activation addresses. */
 	function play(chapter: GuiAudiobooksChapterRow): void {
-		const bookId = audiobooks.selected;
+		const bookId = detail.selected;
 		if (bookId !== null) {
 			void sendLibraryCommand({
 				command: 'absPlayChapter',
-				libIdx: audiobooks.libIdx,
+				libIdx: list.libIdx,
 				bookId,
 				chapter: chapter.chapter,
 			});
@@ -141,7 +142,7 @@
 			/>
 		{/snippet}
 
-		{#if workspace !== null || audiobooks.workspaceLoading}
+		{#if workspace !== null || detail.workspaceLoading}
 			<!-- The book Hero's Workspace (design D12): the book's chapter rows, or
 			the loading line while the detail fetch has not landed. -->
 			<LibraryWorkspaceTable

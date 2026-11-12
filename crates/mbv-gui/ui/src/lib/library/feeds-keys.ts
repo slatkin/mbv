@@ -15,14 +15,14 @@
 // command.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiFeedPill, GuiFeedsFrame } from '$lib/bridge/types';
+import type { GuiFeedPill, GuiFeedsList } from '$lib/bridge/types';
 import { routePanelListKey } from './keys-shared';
 import type { PanelKeys } from './keys-shared';
 import type { LibraryUiState } from './state';
+import { libraryFeedsDetail, libraryFeedsList } from './parts';
 import {
 	feedsCursorRow,
 	focusedFeedsPill,
-	libraryFeeds,
 	moveFeedsListCursor,
 	moveFeedsPillFocus,
 	playFeedsRow,
@@ -34,16 +34,16 @@ import type { FeedsItemRow } from './feeds-list';
 /** The Feeds facts the shared panel key handler routes over (row 7C.2): the
  * view pills are always painted, the item the play and queue commands name
  * is the entry row itself, and there is no play-next. */
-const FEEDS_KEYS: PanelKeys<GuiFeedsFrame, FeedsItemRow, GuiFeedPill> = {
-	frame: libraryFeeds,
+const FEEDS_KEYS: PanelKeys<GuiFeedsList, FeedsItemRow, GuiFeedPill> = {
+	frame: libraryFeedsList,
 	pills: {
 		available: () => true,
 		focused: focusedFeedsPill,
 		request: requestFeedsPillSelect,
 		moveFocus: moveFeedsPillFocus,
 	},
-	hasHero: (feeds) => feeds.hero !== null,
-	selectedItemId: (feeds) => feeds.selected,
+	hasHero: () => (libraryFeedsDetail()?.hero ?? null) !== null,
+	selectedItemId: () => libraryFeedsDetail()?.selected ?? null,
 	cursorRow: feedsCursorRow,
 	itemId: (row) => row.id,
 	moveListCursor: moveFeedsListCursor,

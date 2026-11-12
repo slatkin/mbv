@@ -20,7 +20,7 @@
 <script lang="ts">
 	import { Ellipsis, Shuffle } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import type { GuiMusicFrame } from '$lib/bridge/types';
+	import type { GuiMusicDetail, GuiMusicList } from '$lib/bridge/types';
 	import { albumFacts, artistFacts, artistUnionAlbums, heroKicker } from '$lib/library/hero';
 	import {
 		closeLibraryItemMenu,
@@ -36,12 +36,13 @@
 		/** The carried Music content: the picked album's Hero facts, the union
 		 * that names the artist's albums, and the picked item's menu entries
 		 * (design D2, D5, D8). */
-		music: GuiMusicFrame;
+		list: GuiMusicList;
+		detail: GuiMusicDetail;
 	}
-	const { music }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, or `null` while no album is picked. */
-	const hero = $derived(music.hero);
+	const hero = $derived(detail.hero);
 
 	/** The Hero's More-actions entries (design D8): the frame carries the
 	 * shared builder's entries in the builder's order — the order the
@@ -51,7 +52,7 @@
 	 * album whose remainder is empty hides the control entirely. */
 	const heroButtonLabels: ReadonlySet<string> = new Set(['Play', 'Play All', 'Add to Queue']);
 	const menu = $derived(
-		(music.hero?.menu ?? []).filter((entry) => !heroButtonLabels.has(entry.label)),
+		(detail.hero?.menu ?? []).filter((entry) => !heroButtonLabels.has(entry.label)),
 	);
 
 	/** Play the album (design D8): the shared play-or-activate path, so the
@@ -78,7 +79,7 @@
 		}
 		void sendLibraryCommand({
 			command: 'shuffleArtist',
-			albumIds: artistUnionAlbums(music, hero),
+			albumIds: artistUnionAlbums(list, hero),
 		});
 	}
 
@@ -167,11 +168,11 @@
 			facts: albumFacts(hero),
 		}}
 		artShape="square"
-		art={music.art}
+		art={detail.art}
 		artTitle={hero.album.name}
 		artPlaceholder="[Album art · Emby Primary]"
 		{actions}
 	>
-		<LibraryTracklist {hero} playingTrackId={music.playingTrackId} />
+		<LibraryTracklist {hero} playingTrackId={detail.playingTrackId} />
 	</LibraryHeroFrame>
 {/if}

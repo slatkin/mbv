@@ -9,7 +9,7 @@
 	//
 	// The row itself is the shared `LibraryPillRow` (design D15), so the
 	// canvas's pill form has one owner.
-	import type { GuiEmbyFrame } from '$lib/bridge/types';
+	import type { GuiEmbyList } from '$lib/bridge/types';
 	import { applyEmbyPillSelect, selectEmbyPill, embyUi } from '$lib/library/emby';
 	import { embyGroupKey } from '$lib/library/emby-list';
 	import LibraryPillRow from './LibraryPillRow.svelte';
@@ -17,14 +17,14 @@
 	interface Props {
 		/** The carried plain Emby-library content: the pills and the library
 		 * index the set-feed-group command names (row 8.1). */
-		emby: GuiEmbyFrame;
+		list: GuiEmbyList;
 	}
-	const { emby }: Props = $props();
+	const { list }: Props = $props();
 
 	/** The pills the row paints, keyed by the group key the command's pill
 	 * resolves. */
 	const pills = $derived(
-		emby.pills.map((pill) => ({
+		list.pills.map((pill) => ({
 			key: embyGroupKey(pill.group),
 			name: pill.name,
 			selected: pill.selected,
@@ -37,9 +37,9 @@
 
 	/** Press a pill: select its group (row 8.1). */
 	function press(key: string): void {
-		const pill = emby.pills.find((candidate) => embyGroupKey(candidate.group) === key);
+		const pill = list.pills.find((candidate) => embyGroupKey(candidate.group) === key);
 		if (pill !== undefined) {
-			selectEmbyPill(emby.libIdx, pill.group);
+			selectEmbyPill(list.libIdx, pill.group);
 		}
 	}
 
@@ -48,7 +48,7 @@
 	// consumes it so a repaint sends nothing.
 	$effect(() => {
 		void $embyUi.pillSelect;
-		applyEmbyPillSelect(emby.libIdx);
+		applyEmbyPillSelect(list.libIdx);
 	});
 </script>
 

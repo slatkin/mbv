@@ -7,7 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiFeedsFrame } from '$lib/bridge/types';
+import type { GuiFeedsList } from '$lib/bridge/types';
 import { initialFeedsUi, feedsUi } from '$lib/library/feeds';
 import LibraryFeedsPills from './LibraryFeedsPills.svelte';
 
@@ -25,7 +25,7 @@ beforeEach(() => {
 
 /** The carried Feeds content with the subscription view selected (design
  * D12). */
-function frame(): GuiFeedsFrame {
+function frame(): GuiFeedsList {
 	return {
 		pills: [
 			{ pill: { kind: 'latest' }, name: 'Latest', selected: false, collection: false },
@@ -39,13 +39,11 @@ function frame(): GuiFeedsFrame {
 		loading: false,
 		failed: false,
 		rows: [],
-		selected: null,
-		hero: null,
 	};
 }
 
 test('the pills paint the core’s selection and never none', () => {
-	const { container } = render(LibraryFeedsPills, { feeds: frame() });
+	const { container } = render(LibraryFeedsPills, { list: frame() });
 	const pressed = [...container.querySelectorAll('[data-library-pill]')].map((el) => [
 		el.getAttribute('data-library-pill'),
 		el.getAttribute('aria-pressed'),
@@ -58,7 +56,7 @@ test('the pills paint the core’s selection and never none', () => {
 });
 
 test('a press sends the set-pill command with the frame’s pill object', async () => {
-	const { container } = render(LibraryFeedsPills, { feeds: frame() });
+	const { container } = render(LibraryFeedsPills, { list: frame() });
 
 	await fireEvent.click(container.querySelector('[data-library-pill="latest"]') as HTMLElement);
 

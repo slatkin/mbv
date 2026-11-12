@@ -14,7 +14,7 @@
 // command, the Emby command shapes, and the Emby names.
 
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiEmbyFeedGroup, GuiEmbyFrame } from '$lib/bridge/types';
+import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { jumpToLetter } from './list';
 import type { ListMove } from './list';
 import {
@@ -26,7 +26,7 @@ import {
 import type { EmbyItemRow, EmbyListRow } from './emby-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
-import { libraryEmby } from './state';
+import { libraryEmbyList } from './parts';
 
 /** The Emby list's interaction state: the shared pill-list state over the
  * feed-group pill, whose focus the pill row keeps as the group's stable key
@@ -43,14 +43,14 @@ export function initialEmbyUi(): EmbyUiState {
  * flat rows — the heading-skipping cursor movement, and the pill focus stored
  * as the group's key (row 7C.1). */
 const pillList = createPillList<
-	GuiEmbyFrame,
+	GuiEmbyList,
 	EmbyListRow,
 	EmbyItemRow,
 	GuiEmbyFeedGroup,
 	string,
-	GuiEmbyFrame['pills'][number]
+	GuiEmbyList['pills'][number]
 >({
-	frame: libraryEmby,
+	frame: libraryEmbyList,
 	buildRows: (emby, filter) => buildEmbyRows(emby.rows, emby.feedGroup, filter),
 	itemOf: (row) => (row.kind === 'item' ? row : null),
 	move: moveEmbyCursor,
@@ -116,7 +116,7 @@ export function pressEmbyRow(row: EmbyListRow): void {
  * folder-play rule expands a collection row. The row id is the item's stable
  * Service id. */
 export function playEmbyRow(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyPlay',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -125,7 +125,7 @@ export function playEmbyRow(rowId: string): void {
 
 /** Play a row next (row 8.1): `n` on the cursor row. */
 export function playEmbyRowNext(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyPlayNext',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -134,7 +134,7 @@ export function playEmbyRowNext(rowId: string): void {
 
 /** Add a row to the queue's tail (row 8.1): `a` on the cursor row. */
 export function queueEmbyRow(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyQueue',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -174,7 +174,7 @@ export function scrollEmbyList(scrollTop: number): void {
 
 /** The pill the pill row's focus holds, resolved against the carried pills so a
  * stale group focuses nothing (row 8.1). */
-export function focusedEmbyPill(emby: GuiEmbyFrame): GuiEmbyFeedGroup | null {
+export function focusedEmbyPill(emby: GuiEmbyList): GuiEmbyFeedGroup | null {
 	return pillList.focusedPill(emby);
 }
 

@@ -11,17 +11,16 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import {
 	connected,
 	focus,
-	library,
 	panel as panelStore,
 	resetSectionsForTest,
 	settings,
 	status as statusStore,
 } from '$lib/bridge/sections';
 import { DEFAULT_DRAGGED_WIDTHS, draggedWidths } from '$lib/bridge/resize';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import type {
-	GuiLibraryContent,
 	GuiSettingsFrame,
-	GuiMusicFrame,
 	GuiMusicHero,
 	GuiPanel,
 	LayoutSize,
@@ -62,17 +61,22 @@ beforeEach(() => {
 });
 
 /** The Music content with an optional picked album for the Hero. */
-function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
+function music(hero: GuiMusicHero | null = null): LibrarySections {
 	return {
-		libIdx: 0,
-		pills: [],
-		collectionNames: [],
-		loading: false,
-		failure: null,
-		artists: [],
-		hero,
-		art: null,
-		playingTrackId: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: {
+				kind: 'music',
+				libIdx: 0,
+				pills: [],
+				collectionNames: [],
+				loading: false,
+				failure: null,
+				artists: [],
+			},
+		},
+		detail: { kind: 'music', hero, art: null, playingTrackId: null },
 	};
 }
 
@@ -98,12 +102,12 @@ function hero(): GuiMusicHero {
  * focus, the given carried Music content, and any section overrides. */
 function seed(
 	panel: GuiPanel,
-	libraryMusic: GuiMusicFrame | null,
+	libraryMusic: LibrarySections | null,
 	overrides: {
 		panel?: Partial<{ collapsed: boolean; queueFolded: boolean; uiResetEpoch: number }>;
 		status?: { prefixArmed: boolean; toast: { text: string; severity: 'neutral' | 'success' | 'warning' | 'error' } | null };
 		settings?: GuiSettingsFrame | null;
-		library?: GuiLibraryContent | null;
+		library?: LibrarySections | null;
 	} = {},
 ): void {
 	connected.set(true);
@@ -116,23 +120,7 @@ function seed(
 	});
 	statusStore.set(overrides.status ?? { prefixArmed: false, toast: null });
 	settings.set(overrides.settings ?? null);
-	library.set(
-		overrides.library ??
-			(libraryMusic === null
-				? null
-				: {
-						tabs: [{ position: 1, label: 'Music' }],
-						currentTab: 1,
-						music: libraryMusic,
-						home: null,
-						shows: null,
-						emby: null,
-						audiobooks: null,
-						podcasts: null,
-						feeds: null,
-						rowMenu: null,
-					}),
-	);
+	carryLibrary(overrides.library ?? libraryMusic);
 }
 
 /** Renders the window over the seeded section stores at `size`, and returns
@@ -470,38 +458,37 @@ test('the Feeds content mounts the Library panel with the Feeds painters', async
 /** The carried content while the Feeds destination is active: the Latest
  * and one subscription pill, one merged entry row, and the selected entry's
  * Hero (design D12, row 11.1). */
-function feedsContent(): GuiLibraryContent {
+function feedsContent(): LibrarySections {
 	return {
-		rowMenu: null,
-		tabs: [{ position: 5, label: 'Feeds' }],
-		currentTab: 5,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: {
-			pills: [
-				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-				{
-					pill: { kind: 'subscription', id: 'https://sub.one' },
-					name: 'Sub One',
-					selected: false,
-					collection: false,
-				},
-			],
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 's1::e1',
-					title: 'Entry A',
-					subtitle: 'Sub One',
-					date: '12 May',
-					state: 'ordinary',
-				},
-			],
+		list: {
+			tabs: [{ position: 5, label: 'Feeds' }],
+			currentTab: 5,
+			destination: {
+				kind: 'feeds',
+				pills: [
+					{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+					{
+						pill: { kind: 'subscription', id: 'https://sub.one' },
+						name: 'Sub One',
+						selected: false,
+						collection: false,
+					},
+				],
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 's1::e1',
+						title: 'Entry A',
+						subtitle: 'Sub One',
+						date: '12 May',
+						state: 'ordinary',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'feeds',
 			selected: 's1::e1',
 			hero: {
 				title: 'Entry A',
@@ -517,32 +504,33 @@ function feedsContent(): GuiLibraryContent {
 /** The carried content while a Podcasts library is active: the Latest pill
  * and a show pill, one merged episode row, and the selected episode's Hero
  * (design D12, row 10.1). */
-function podcastsContent(): GuiLibraryContent {
+function podcastsContent(): LibrarySections {
 	return {
-		tabs: [{ position: 2, label: 'Podcasts' }],
-		currentTab: 2,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: {
-			libIdx: 2,
-			pills: [
-				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-				{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
-			],
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 'e1:ep1',
-					title: 'Episode A',
-					subtitle: 'Show One',
-					date: '12 May',
-					state: 'ordinary',
-				},
-			],
+		list: {
+			tabs: [{ position: 2, label: 'Podcasts' }],
+			currentTab: 2,
+			destination: {
+				kind: 'podcasts',
+				libIdx: 2,
+				pills: [
+					{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+					{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
+				],
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 'e1:ep1',
+						title: 'Episode A',
+						subtitle: 'Show One',
+						date: '12 May',
+						state: 'ordinary',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'podcasts',
 			selected: 'e1:ep1',
 			hero: {
 				title: 'Episode A',
@@ -554,38 +542,39 @@ function podcastsContent(): GuiLibraryContent {
 				art: null,
 			},
 		},
-		feeds: null,
-		rowMenu: null,
 	};
 }
 
 /** The carried content while a plain Emby library is active: one name-sorted
  * row with its rail letter and its Hero (design D12, row 8.1). */
-function embyContent(): GuiLibraryContent {
+function embyContent(): LibrarySections {
 	return {
-		tabs: [{ position: 3, label: 'Movies' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: null,
-		emby: {
-			libIdx: 3,
-			libraryName: 'Movies',
-			pills: [],
-			collectionNames: [],
-			feedGroup: false,
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 'm1',
-					title: 'Alien',
-					subtitle: '1979',
-					date: null,
-					sortLetter: 'A',
-					kind: 'media',
-				},
-			],
+		list: {
+			tabs: [{ position: 3, label: 'Movies' }],
+			currentTab: 3,
+			destination: {
+				kind: 'emby',
+				libIdx: 3,
+				libraryName: 'Movies',
+				pills: [],
+				collectionNames: [],
+				feedGroup: false,
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 'm1',
+						title: 'Alien',
+						subtitle: '1979',
+						date: null,
+						sortLetter: 'A',
+						kind: 'media',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'emby',
 			selected: 'm1',
 			hero: {
 				kind: 'movie',
@@ -600,9 +589,5 @@ function embyContent(): GuiLibraryContent {
 				imdbUrl: null,
 			},
 		},
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
 	};
 }

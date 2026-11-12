@@ -14,7 +14,8 @@ import { playhead } from '$lib/bridge/playhead';
 import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
 	GuiAudiobooksHero,
 } from '$lib/bridge/types';
 import { initialAudiobooksWorkspace, audiobooksWorkspace } from '$lib/library/audiobooks-workspace';
@@ -59,11 +60,10 @@ function mountFrame(
 	frameLoading = false,
 	playingBook: string | null = null,
 ): HTMLElement {
-	const frame: GuiAudiobooksFrame = {
+	const list: GuiAudiobooksList = {
 		libIdx: LIB_IDX,
 		loading: false,
 		failed: false,
-		workspaceLoading: frameLoading,
 		rows: [
 			{
 				id: 'book1',
@@ -73,11 +73,14 @@ function mountFrame(
 				sortLetter: 'A',
 			},
 		],
+	};
+	const detail: GuiAudiobooksDetail = {
+		workspaceLoading: frameLoading,
 		selected: 'book1',
 		playingBookId: playingBook,
 		hero: heroFacts,
 	};
-	return render(LibraryAudiobooksHero, { audiobooks: frame }).container;
+	return render(LibraryAudiobooksHero, { list, detail }).container;
 }
 
 /** Stamp the playhead mid-chapter-two, the book the frame selects, so the

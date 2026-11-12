@@ -17,17 +17,18 @@
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import { heroLayout } from '$lib/library/hero';
-	import type { GuiPodcastsFrame } from '$lib/bridge/types';
+	import type { GuiPodcastsDetail, GuiPodcastsList } from '$lib/bridge/types';
 
 	interface Props {
 		/** The carried Podcasts content (design D12, row 10.1): the selected
 		 * episode and its Hero facts. */
-		podcasts: GuiPodcastsFrame;
+		list: GuiPodcastsList;
+		detail: GuiPodcastsDetail;
 	}
-	const { podcasts }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(podcasts.hero);
+	const hero = $derived(detail.hero);
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'podcast'));
@@ -36,9 +37,9 @@
 	/** Send a Podcasts command for the frame's selected episode (design D12,
 	 * row 10.1): the row the frame painted, never a position. */
 	function act(command: 'podcastsPlay' | 'podcastsQueue'): void {
-		const itemId = podcasts.selected;
+		const itemId = detail.selected;
 		if (itemId !== null && hero !== null) {
-			void sendLibraryCommand({ command, libIdx: podcasts.libIdx, itemId });
+			void sendLibraryCommand({ command, libIdx: list.libIdx, itemId });
 		}
 	}
 </script>

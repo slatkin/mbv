@@ -14,7 +14,7 @@ import { playhead } from '$lib/bridge/playhead';
 import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
 	GuiAudiobooksHero,
 } from '$lib/bridge/types';
 import {
@@ -70,19 +70,18 @@ function hero(rows: GuiAudiobooksChapterRow[] = CHAPTERS): GuiAudiobooksHero {
 	};
 }
 
-/** A frame whose selected book's Hero carries `workspace`, with the book
+/** The Audiobooks library index the book commands name. */
+const LIB_IDX = 4;
+
+/** A detail part whose selected book's Hero carries `workspace`, with the book
  * the playhead plays when one does. */
 function audiobooks(
 	rows: GuiAudiobooksChapterRow[] = CHAPTERS,
 	selected: string | null = 'book1',
 	playingBook: string | null = null,
-): GuiAudiobooksFrame {
+): GuiAudiobooksDetail {
 	return {
-		libIdx: 4,
-		loading: false,
-		failed: false,
 		workspaceLoading: false,
-		rows: [{ id: 'book1', title: 'The Caves of Steel', subtitle: 'Isaac Asimov', duration: '9:51:00', sortLetter: 'A' }],
 		selected,
 		playingBookId: playingBook,
 		hero: selected === null ? null : hero(rows),
@@ -238,7 +237,7 @@ test('a cursor reset starts the Workspace over', () => {
 test('the chapter command names the cursor chapter and the selected book', () => {
 	cursorAt(2);
 
-	playAbsChapter(audiobooks());
+	playAbsChapter(LIB_IDX, audiobooks());
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'absPlayChapter', libIdx: 4, bookId: 'book1', chapter: 2 },
@@ -248,13 +247,13 @@ test('the chapter command names the cursor chapter and the selected book', () =>
 test('the chapter command sends nothing while no chapter carries the cursor', () => {
 	audiobooksWorkspace.set(initialAudiobooksWorkspace());
 
-	playAbsChapter(audiobooks([]));
+	playAbsChapter(LIB_IDX, audiobooks([]));
 
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
 test('Play sends the play command for the selected book', () => {
-	playAbsBook(audiobooks());
+	playAbsBook(LIB_IDX, audiobooks());
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'absPlay', libIdx: 4, itemId: 'book1' },
@@ -262,7 +261,7 @@ test('Play sends the play command for the selected book', () => {
 });
 
 test('Add to queue sends the enqueue command for the selected book', () => {
-	queueAbsBook(audiobooks());
+	queueAbsBook(LIB_IDX, audiobooks());
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'absQueue', libIdx: 4, itemId: 'book1' },
@@ -270,8 +269,8 @@ test('Add to queue sends the enqueue command for the selected book', () => {
 });
 
 test('a book command sends nothing while the frame selects no book', () => {
-	playAbsBook(audiobooks(CHAPTERS, null));
-	queueAbsBook(audiobooks(CHAPTERS, null));
+	playAbsBook(LIB_IDX, audiobooks(CHAPTERS, null));
+	queueAbsBook(LIB_IDX, audiobooks(CHAPTERS, null));
 
 	expect(invokeMock).not.toHaveBeenCalled();
 });

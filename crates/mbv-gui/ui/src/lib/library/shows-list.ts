@@ -11,7 +11,7 @@
 
 import type {
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsList,
 	GuiShowsMode,
 	GuiShowsRow,
 	GuiShowsSeries,
@@ -146,7 +146,7 @@ export function episodeRowId(episodeId: string): string {
 /** The active view mode: the pill the core marked selected. A frame that
  * marks none falls back to the rows' own shape — the tree-carrying frame is
  * the All series list — so the list always has one mode. */
-export function activeShowsMode(shows: GuiShowsFrame): GuiShowsMode {
+export function activeShowsMode(shows: GuiShowsList): GuiShowsMode {
 	const selected = shows.pills.find((pill) => pill.selected);
 	if (selected !== undefined) {
 		return selected.mode;
@@ -177,7 +177,7 @@ export function showsSeriesMode(mode: GuiShowsMode): boolean {
  * native scroll.
  */
 export function buildShowsRows(
-	shows: GuiShowsFrame,
+	shows: GuiShowsList,
 	mode: GuiShowsMode,
 	filter = '',
 	tree: ShowsTreeState = { open: [], closed: [] },

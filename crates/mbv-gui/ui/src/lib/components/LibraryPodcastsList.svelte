@@ -13,7 +13,7 @@
 	// keys' Enter plays the cursor row, and the press is the selection's half.
 	// The `/` filter field narrows the episodes to the titles that contain
 	// its text (design D7's filter rule).
-	import type { GuiPodcastsFrame } from '$lib/bridge/types';
+	import type { GuiPodcastsDetail, GuiPodcastsList } from '$lib/bridge/types';
 	import {
 		buildPodcastsRows,
 		PODCASTS_ROW_HEIGHT,
@@ -38,14 +38,15 @@
 	interface Props {
 		/** The carried Podcasts content (design D12, row 10.1): the active
 		 * pill's episode rows. */
-		podcasts: GuiPodcastsFrame;
+		list: GuiPodcastsList;
+		detail: GuiPodcastsDetail;
 	}
-	const { podcasts }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The header's selection label (design D15): the active pill's name, so the
 	 * column names the view it holds. */
 	const selectionLabel = $derived(
-		podcasts.pills.find((pill) => pill.selected)?.name ?? 'Latest',
+		list.pills.find((pill) => pill.selected)?.name ?? 'Latest',
 	);
 
 	/** The filter field's placeholder, naming the active view. */
@@ -60,7 +61,7 @@
 	/** The painted rows of the flat list (row 10.1): the same model
 	 * `$lib/library/podcasts` builds from the carried content, narrowed by
 	 * the filter's text. */
-	const rows = $derived(buildPodcastsRows(podcasts.rows, $podcastsUi.filter));
+	const rows = $derived(buildPodcastsRows(list.rows, $podcastsUi.filter));
 
 
 	/** An episode row's title colour: the canvas's text tone, dimmed on a
@@ -77,7 +78,7 @@
 		if (row.id === $podcastsUi.cursor) {
 			return canvasVar('selected');
 		}
-		return row.id === podcasts.selected ? canvasVar('library-raise') : undefined;
+		return row.id === detail.selected ? canvasVar('library-raise') : undefined;
 	}
 
 	/** The resume percent an active episode row paints, or `null`. */
@@ -101,12 +102,12 @@
 			onaccept={acceptPodcastsFilter}
 		/>
 	</div>
-	{#if podcasts.loading}
+	{#if list.loading}
 		<!-- The active view's episodes have not landed yet (row 10.1): one
 			placeholder line holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-podcasts-loading" />
 	{/if}
-	{#if podcasts.failed}
+	{#if list.failed}
 		<!-- The show catalog's fetch failed (row 10.1): the failure line, and no
 			row until the library opens again. -->
 		<LibraryListNotice
@@ -114,7 +115,7 @@
 			attr="data-library-podcasts-failed"
 		/>
 	{/if}
-	{#if !podcasts.loading && !podcasts.failed && podcasts.rows.length === 0}
+	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The active view holds no episode (row 10.1): the TUI's empty slot. -->
 		<LibraryListNotice text="No episodes" attr="data-library-podcasts-empty" />
 	{/if}
@@ -139,7 +140,7 @@
 				titleColor={nameColor(row)}
 				background={rowBackground(row)}
 				cursor={row.id === $podcastsUi.cursor}
-				selected={row.id === podcasts.selected}
+				selected={row.id === detail.selected}
 				progress={rowProgress(row)}
 				onpress={() => pressPodcastsRow(row)}
 				onplay={() => playPodcastsRow(row.row.id)}

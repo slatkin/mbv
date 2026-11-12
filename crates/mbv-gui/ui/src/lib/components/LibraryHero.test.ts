@@ -10,7 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiMusicFrame, GuiMusicHero } from '$lib/bridge/types';
+import type { GuiMusicDetail, GuiMusicList, GuiMusicHero } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryHero from './LibraryHero.svelte';
 
@@ -54,7 +54,7 @@ function hero(): GuiMusicHero {
 
 /** The carried Music content: the artist that owns the picked album, whose
  * union albums Shuffle artist names. */
-function music(facts: GuiMusicHero): GuiMusicFrame {
+function music(facts: GuiMusicHero): GuiMusicList {
 	return {
 		libIdx: 0,
 		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
@@ -69,15 +69,17 @@ function music(facts: GuiMusicHero): GuiMusicFrame {
 				albums: [facts.album, { albumId: 'al2', name: 'Paul’s Boutique', year: '1989', tracks: null, total: null }],
 			},
 		],
-		hero: facts,
-		art: null,
-		playingTrackId: null,
 	};
+}
+
+/** The Music detail part: the picked album's Hero, and the track playing. */
+function musicDetail(facts: GuiMusicHero, playingTrackId: string | null = null): GuiMusicDetail {
+	return { hero: facts, art: null, playingTrackId };
 }
 
 /** Render the Hero for the carried content. */
 function mountHero(facts: GuiMusicHero = hero()): HTMLElement {
-	return render(LibraryHero, { music: music(facts) }).container;
+	return render(LibraryHero, { list: music(facts), detail: musicDetail(facts) }).container;
 }
 
 /** The element a press targets, found by its data attribute. */
@@ -242,7 +244,10 @@ test('the tracklist marks the frame playing track with a play glyph, not a fill'
 
 /** The Hero mounted with `trackId` playing at the playhead. */
 function mountHeroWithPlaying(trackId: string): HTMLElement {
-	return render(LibraryHero, { music: { ...music(hero()), playingTrackId: trackId } }).container;
+	return render(LibraryHero, {
+		list: music(hero()),
+		detail: musicDetail(hero(), trackId),
+	}).container;
 }
 
 // The album's facts line joins a count and a time (add-gui-settings-screen

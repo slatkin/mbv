@@ -28,12 +28,9 @@ export type GuiHomeContentId =
 	| { provider: 'AudiobookshelfBook'; value: { library_item_id: string } }
 	| { provider: 'Twitch'; value: string };
 
-/** The Home destination's content (design D12, the USER-APPROVED GUI Home
- * design), present while Home is the active destination: the flat list's
- * rows, the core's selected row, and its Hero. No pill, no letter rail,
- * and no Workspace ride here; the top bar marks the Home icon current
- * exactly while this field is present. */
-export interface GuiHomeFrame {
+/** The Home destination's list part (design D12, D8): the flat list's rows
+ * and its load fact. No pill, no letter rail, and no Workspace ride here. */
+export interface GuiHomeList {
 	/** Whether the Home content's first fetch has not landed yet: the list
 	 * paints its loading line. */
 	loading: boolean;
@@ -41,6 +38,12 @@ export interface GuiHomeFrame {
 	 * heading rows and item rows, with the spacer between two non-empty
 	 * sections. */
 	rows: GuiHomeRow[];
+}
+
+/** The Home destination's detail part (design D8): the core's selected row and
+ * its Hero. The top bar marks the Home icon current while Home is the active
+ * destination. */
+export interface GuiHomeDetail {
 	/** The core's selected row (design D2, D12), as the frame painted it:
 	 * a select, play, or enqueue command sends it back. */
 	selected: GuiHomeRowId | null;

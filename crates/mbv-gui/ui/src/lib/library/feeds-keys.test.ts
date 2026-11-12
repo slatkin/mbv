@@ -10,11 +10,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
-import type { GuiFeedsFrame, GuiLibraryContent, GuiPanel } from '$lib/bridge/types';
+import type { GuiFeedsDetail, GuiFeedsList, GuiPanel } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { feedsPillKey, feedsCursorRow, feedsUi, initialFeedsUi } from './feeds';
-import { library } from '$lib/bridge/sections';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
@@ -24,7 +26,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	feedsUi.set(initialFeedsUi());
-	library.set(null);
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -35,7 +37,7 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: get(library),
+		libraryList: get(libraryList),
 		search: null,
 	};
 }
@@ -74,7 +76,7 @@ const ENTRIES = [
 
 /** The Latest pill and two subscription pills, with the frame carrying
  * `selected` (design D12). */
-function pills(selected: 'latest' | 'subscription'): GuiFeedsFrame['pills'] {
+function pills(selected: 'latest' | 'subscription'): GuiFeedsList['pills'] {
 	return [
 		{
 			pill: { kind: 'latest' },
@@ -98,7 +100,7 @@ function pills(selected: 'latest' | 'subscription'): GuiFeedsFrame['pills'] {
 }
 
 /** The entry Hero a selected entry paints (design D12, row 11.1). */
-const HERO: NonNullable<GuiFeedsFrame['hero']> = {
+const HERO: NonNullable<GuiFeedsDetail['hero']> = {
 	title: 'Entry A',
 	metaRows: [[{ text: 'Sub One', kind: 'plain' }], [{ text: '12:30', kind: 'time' }]],
 	durationRow: 1,
@@ -112,40 +114,35 @@ const HERO: NonNullable<GuiFeedsFrame['hero']> = {
 function feedsContent(
 	pillSelection: 'latest' | 'subscription',
 	rows: typeof ENTRIES,
-	hero: NonNullable<GuiFeedsFrame['hero']> | null = null,
+	hero: NonNullable<GuiFeedsDetail['hero']> | null = null,
 	selected: string | null = rows[0]?.id ?? null,
-): GuiLibraryContent {
+): LibrarySections {
 	return {
-		tabs: [
-			{ position: 1, label: 'Music' },
-			{ position: 2, label: 'Feeds' },
-		],
-		currentTab: 2,
-		music: null,
-		home: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: {
-			pills: pills(pillSelection),
-			loading: false,
-			failed: false,
-			rows,
-			selected,
-			hero,
+		list: {
+			tabs: [
+				{ position: 1, label: 'Music' },
+				{ position: 2, label: 'Feeds' },
+			],
+			currentTab: 2,
+			destination: {
+				kind: 'feeds',
+				pills: pills(pillSelection),
+				loading: false,
+				failed: false,
+				rows,
+			},
 		},
-		rowMenu: null,
-		shows: null,
+		detail: { kind: 'feeds', selected, hero },
 	};
 }
 
 /** Carry the Feeds content and focus the pane the key acts on. */
 function carryFeeds(
-	content: GuiLibraryContent,
+	content: LibrarySections,
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	library.set(content);
+	carryLibrary(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	feedsUi.set({ ...initialFeedsUi(), cursor });
 }
@@ -222,7 +219,7 @@ test('the pill walk keeps its place when the frame re-carries equal pills', () =
 	feedsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'subscription', id: 'https://sub.one' } }));
 
 	// A new frame: structurally equal pills, all fresh objects.
-	library.set(feedsContent('subscription', ENTRIES));
+	carryLibrary(feedsContent('subscription', ENTRIES));
 
 	press('ArrowRight');
 

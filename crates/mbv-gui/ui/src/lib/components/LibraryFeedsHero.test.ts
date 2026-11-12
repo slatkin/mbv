@@ -9,7 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiFeedsFrame, GuiFeedsHero } from '$lib/bridge/types';
+import type { GuiFeedsDetail, GuiFeedsHero, GuiFeedsList } from '$lib/bridge/types';
 import LibraryFeedsHero from './LibraryFeedsHero.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -36,8 +36,8 @@ function hero(artShape: GuiFeedsHero['artShape']): GuiFeedsHero {
 	};
 }
 
-/** The carried Feeds content with the hero picked. */
-function feeds(facts: GuiFeedsHero | null): GuiFeedsFrame {
+/** The carried Feeds list part: the Latest pill and one merged entry. */
+function feedsList(): GuiFeedsList {
 	return {
 		loading: false,
 		failed: false,
@@ -53,14 +53,17 @@ function feeds(facts: GuiFeedsHero | null): GuiFeedsFrame {
 				state: 'ordinary',
 			},
 		],
-		selected: 'sub1:guid12',
-		hero: facts,
 	};
+}
+
+/** The Feeds detail part with the hero picked. */
+function feedsDetail(facts: GuiFeedsHero | null): GuiFeedsDetail {
+	return { selected: 'sub1:guid12', hero: facts };
 }
 
 /** Render the Hero for the carried content. */
 function mount(facts: GuiFeedsHero | null = hero('square')): HTMLElement {
-	return render(LibraryFeedsHero, { feeds: feeds(facts) }).container;
+	return render(LibraryFeedsHero, { list: feedsList(), detail: feedsDetail(facts) }).container;
 }
 
 // A feed entry has no artwork source, so the box paints the placeholder in
@@ -164,13 +167,16 @@ test('the Hero paints the frame header above its artwork', () => {
 // feed's entries, with the selected one carrying the cursor, and no other
 // feed's entry.
 test('the list band holds the selected feed entries and marks the selected one', () => {
-	const frame = feeds(hero('square'));
-	frame.rows = [
-		{ ...frame.rows[0] },
-		{ ...frame.rows[0], id: 'sub1:guid11', title: 'Earlier Walk' },
-		{ ...frame.rows[0], id: 'sub2:guid20', title: 'Other Feed', subtitle: 'Elsewhere' },
+	const list = feedsList();
+	list.rows = [
+		{ ...list.rows[0] },
+		{ ...list.rows[0], id: 'sub1:guid11', title: 'Earlier Walk' },
+		{ ...list.rows[0], id: 'sub2:guid20', title: 'Other Feed', subtitle: 'Elsewhere' },
 	];
-	const { container } = render(LibraryFeedsHero, { feeds: frame });
+	const { container } = render(LibraryFeedsHero, {
+		list,
+		detail: feedsDetail(hero('square')),
+	});
 
 	const rows = [...container.querySelectorAll('[data-library-feeds-entry]')];
 	expect(rows.map((row) => row.getAttribute('data-library-feeds-entry'))).toEqual([

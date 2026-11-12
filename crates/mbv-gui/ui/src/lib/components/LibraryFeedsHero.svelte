@@ -22,17 +22,18 @@
 	import { selectFeedsRow } from '$lib/library/feeds';
 	import { episodeProgress, isPlayedEpisode } from '$lib/library/shows-workspace';
 	import { heroLayout } from '$lib/library/hero';
-	import type { GuiFeedsFrame } from '$lib/bridge/types';
+	import type { GuiFeedsDetail, GuiFeedsList } from '$lib/bridge/types';
 
 	interface Props {
 		/** The carried Feeds content (design D12, row 11.1): the selected
 		 * entry and its Hero facts. */
-		feeds: GuiFeedsFrame;
+		list: GuiFeedsList;
+		detail: GuiFeedsDetail;
 	}
-	const { feeds }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(feeds.hero);
+	const hero = $derived(detail.hero);
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'feed'));
@@ -43,7 +44,7 @@
 	const entryRows = $derived(
 		hero?.parent == null
 			? []
-			: feeds.rows
+			: list.rows
 					.filter((row) => row.subtitle === hero.parent)
 					.map((row, index) => ({
 						id: row.id,
@@ -73,7 +74,7 @@
 	/** Send a Feeds command for the frame's selected entry (design D12, row
 	 * 11.1): the row the frame painted, never a position. */
 	function act(command: 'feedsPlay' | 'feedsQueue'): void {
-		const itemId = feeds.selected;
+		const itemId = detail.selected;
 		if (itemId !== null && hero !== null) {
 			void sendLibraryCommand({ command, itemId });
 		}
@@ -103,7 +104,7 @@
 			hook="feeds-entry"
 			noun="Entry"
 			rows={entryRows}
-			cursor={feeds.selected}
+			cursor={detail.selected}
 			actions={rowActions}
 			onpress={selectFeedsRow}
 			onplay={(id) => void sendLibraryCommand({ command: 'feedsPlay', itemId: id })}

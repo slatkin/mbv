@@ -8,7 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiShowsEpisodeRow, GuiShowsFrame, GuiShowsHero } from '$lib/bridge/types';
+import type { GuiShowsDetail, GuiShowsEpisodeRow, GuiShowsHero } from '$lib/bridge/types';
 import {
 	initialShowsWorkspace,
 	moveShowsEpisodeCursor,
@@ -51,11 +51,14 @@ function workspace(
 	};
 }
 
-/** The carried Shows content with a series Hero. */
+/** The Shows library index the episode commands name. */
+const LIB_IDX = 2;
+
+/** The selected series' detail part, with a series Hero. */
 function shows(
 	episodes: GuiShowsEpisodeRow[] = EPISODES,
 	selectedSeason = 's1',
-): GuiShowsFrame {
+): GuiShowsDetail {
 	const hero: GuiShowsHero = {
 		title: 'Better Call Saul',
 		metaRows: [[{ text: 'TV Series', kind: 'plain' }]],
@@ -67,14 +70,7 @@ function shows(
 		workspace: workspace(episodes, selectedSeason),
 	};
 	return {
-		libIdx: 2,
-		pills: [],
-		collectionNames: ['All series'],
-		loading: false,
 		workspaceLoading: false,
-		series: [],
-		upcomingFailed: false,
-		rows: [],
 		selected: 'series1',
 		hero,
 	};
@@ -118,7 +114,7 @@ test('a cursor reset starts the Workspace over', () => {
 });
 
 test('a season step sends the neighbouring season', () => {
-	stepShowsSeason(1, shows());
+	stepShowsSeason(1, LIB_IDX, shows());
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'showsSelectSeason', libIdx: 2, seasonId: 's2' },
@@ -129,7 +125,7 @@ test.each([
 	['s1', -1],
 	['s2', 1],
 ] as const)('a season step past the end from %s sends nothing', (selectedSeason, delta) => {
-	stepShowsSeason(delta, shows(EPISODES, selectedSeason));
+	stepShowsSeason(delta, LIB_IDX, shows(EPISODES, selectedSeason));
 
 	expect(invokeMock).not.toHaveBeenCalled();
 });
@@ -137,7 +133,7 @@ test.each([
 test('the play command names the cursor episode', () => {
 	cursorAt('ep2');
 
-	playShowsEpisode(shows());
+	playShowsEpisode(LIB_IDX, shows());
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'showsPlay', libIdx: 2, itemId: 'ep2' },
@@ -147,7 +143,7 @@ test('the play command names the cursor episode', () => {
 test('an action sends nothing while the Workspace holds no episode', () => {
 	cursorAt('ep1');
 
-	playShowsEpisode(shows([]));
+	playShowsEpisode(LIB_IDX, shows([]));
 
 	expect(invokeMock).not.toHaveBeenCalled();
 });

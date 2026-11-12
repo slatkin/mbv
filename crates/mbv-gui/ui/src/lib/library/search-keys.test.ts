@@ -11,14 +11,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type {
-	GuiLibraryContent,
 	GuiPanel,
 	GuiSearchFrame,
 	GuiSearchRow,
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
-import { library } from '$lib/bridge/sections';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import {
 	initialLibraryUi,
 	libraryUi,
@@ -38,7 +39,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	librarySearch.set(initialLibrarySearch());
-	library.set(null);
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -52,7 +53,7 @@ function frame(
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: get(library),
+		libraryList: get(libraryList),
 		search: null,
 		...rest,
 	};
@@ -60,35 +61,29 @@ function frame(
 
 /** A carried Music content: the panel's presence fact needs one active
  * destination's section, and the pills go unused here. */
-function content(): GuiLibraryContent {
+function content(): LibrarySections {
 	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: {
-			libIdx: 0,
-			pills: [{ groupId: 'g1', name: 'Rock', selected: true, collection: true }],
-			collectionNames: ['Rock'],
-			loading: false,
-			failure: null,
-			artists: [],
-			hero: null,
-			art: null,
-			playingTrackId: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: {
+				kind: 'music',
+				libIdx: 0,
+				pills: [{ groupId: 'g1', name: 'Rock', selected: true, collection: true }],
+				collectionNames: ['Rock'],
+				loading: false,
+				failure: null,
+				artists: [],
+			},
 		},
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		detail: { kind: 'music', hero: null, art: null, playingTrackId: null },
 	};
 }
 
 /** Panel shown with the carried content, and `search` on the frame. */
 function shownSearch(search: GuiSearchFrame | null): LibraryKeyFrame {
-	library.set(content());
-	return frame('library', { library: content(), search });
+	carryLibrary(content());
+	return frame('library', { libraryList: content().list, search });
 }
 
 const ROWS: GuiSearchRow[] = [
@@ -150,7 +145,7 @@ test('Ctrl+K out of a Queue panel frame sends the key to the core instead', () =
 	// are unwired, so the core's own Ctrl+K (`[keys]`) keeps the key.
 	const outcome = routeLibraryKey(keyEvent('k', { ctrlKey: true }), {
 		...frame('queue'),
-		library: get(library),
+		libraryList: get(libraryList),
 	});
 
 	expect(outcome).toBe('core');
@@ -218,7 +213,7 @@ test('the highlight movement walks a new frame by id, not object identity', () =
 	// frame by id — r2 moves to r3 there.
 	focusField();
 	const next = frame('library', {
-		library: content(),
+		libraryList: content().list,
 		search: results(),
 	});
 	setSearchHighlight('r2');
@@ -276,7 +271,7 @@ test('Escape closes the carried results after the field lost the keyboard', () =
 test('a core overlay keeps the keyboard even from the focused Search field', () => {
 	focusField();
 	const overlay = frame('library', {
-		library: content(),
+		libraryList: content().list,
 		search: results(),
 		overlay: { kind: 'confirm' } as LibraryKeyFrame['overlay'],
 	});

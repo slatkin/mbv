@@ -8,9 +8,15 @@
 // test: it asserts nothing and runs outside `make ui-test`.
 
 import { test } from 'vitest';
-import type { GuiLibraryContent, GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
+import type {
+	GuiLibraryDetail,
+	GuiLibraryList,
+	GuiMusicArtist,
+	GuiMusicDetail,
+	GuiMusicList,
+} from '$lib/bridge/types';
 import { NODE_ROW_HEIGHT, RAIL_LETTERS } from './list';
-import { library } from '$lib/bridge/sections';
+import { libraryDetail, libraryList } from '$lib/bridge/sections';
 import { initialLibraryUi, libraryUi, measureLibraryList, scrollLibraryList } from './state';
 
 /** Artists in the fixture; each closed artist is one row under its letter. */
@@ -34,37 +40,29 @@ function artist(index: number): GuiMusicArtist {
 	};
 }
 
-/** The carried Library content of one grouped Music library over the
+/** The carried Library list and detail of one grouped Music library over the
  * fixture's artists, with no Hero and no album picked. */
-function musicContent(): GuiLibraryContent {
-	const music: GuiMusicFrame = {
+function musicSections(): { list: GuiLibraryList; detail: GuiLibraryDetail } {
+	const music: GuiMusicList = {
 		libIdx: 0,
 		pills: [],
 		collectionNames: ['Bench'],
 		loading: false,
 		failure: null,
 		artists: Array.from({ length: ARTISTS }, (_, index) => artist(index)),
-		hero: null,
-		art: null,
-		playingTrackId: null,
 	};
+	const detail: GuiMusicDetail = { hero: null, art: null, playingTrackId: null };
 	return {
-		tabs: [],
-		currentTab: 0,
-		music,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		list: { tabs: [], currentTab: 0, destination: { kind: 'music', ...music } },
+		detail: { kind: 'music', ...detail },
 	};
 }
 
 // The content and the viewport are the list's inputs, not the scroll: they
 // are set once, when the module loads, so the bench times only the steps.
-library.set(musicContent());
+const sections = musicSections();
+libraryList.set(sections.list);
+libraryDetail.set(sections.detail);
 libraryUi.set(initialLibraryUi());
 measureLibraryList(VIEWPORT_HEIGHT);
 

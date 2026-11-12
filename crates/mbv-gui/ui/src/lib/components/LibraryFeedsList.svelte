@@ -13,7 +13,7 @@
 	// keys' Enter plays the cursor row, and the press is the selection's half.
 	// The `/` filter field narrows the entries to the titles that contain
 	// its text (design D7's filter rule).
-	import type { GuiFeedsFrame } from '$lib/bridge/types';
+	import type { GuiFeedsDetail, GuiFeedsList } from '$lib/bridge/types';
 	import {
 		buildFeedsRows,
 		FEEDS_ROW_HEIGHT,
@@ -37,17 +37,18 @@
 	interface Props {
 		/** The carried Feeds content (design D12, row 11.1): the active pill's
 		 * entry rows. */
-		feeds: GuiFeedsFrame;
+		list: GuiFeedsList;
+		detail: GuiFeedsDetail;
 	}
-	const { feeds }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The painted rows of the flat list (row 11.1): the same model
 	 * `$lib/library/feeds` builds from the carried content, narrowed by the
 	 * filter's text. */
 	/** The header's selection label (design D15): the active pill's name. */
-	const selectionLabel = $derived(feeds.pills.find((pill) => pill.selected)?.name ?? 'Latest');
+	const selectionLabel = $derived(list.pills.find((pill) => pill.selected)?.name ?? 'Latest');
 
-	const rows = $derived(buildFeedsRows(feeds.rows, $feedsUi.filter));
+	const rows = $derived(buildFeedsRows(list.rows, $feedsUi.filter));
 
 
 	/** An entry row's title colour: the canvas's text tone, dimmed on a played
@@ -63,7 +64,7 @@
 		if (row.id === $feedsUi.cursor) {
 			return canvasVar('selected');
 		}
-		return row.id === feeds.selected ? canvasVar('library-raise') : undefined;
+		return row.id === detail.selected ? canvasVar('library-raise') : undefined;
 	}
 
 	/** The resume percent an active entry row paints, or `null`. */
@@ -87,17 +88,17 @@
 			onaccept={acceptFeedsFilter}
 		/>
 	</div>
-	{#if feeds.loading}
+	{#if list.loading}
 		<!-- The tab's fetch results have not landed yet (row 11.1): one
 			placeholder line holds the list's place, as every Library list's does. -->
 		<LibraryListNotice text="Loading…" attr="data-library-feeds-loading" />
 	{/if}
-	{#if feeds.failed}
+	{#if list.failed}
 		<!-- A fetch failed (row 11.1): the failure line, and no row until the
 			destination opens again. -->
 		<LibraryListNotice text="Couldn’t load this destination." attr="data-library-feeds-failed" />
 	{/if}
-	{#if !feeds.loading && !feeds.failed && feeds.rows.length === 0}
+	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The active view holds no entry (row 11.1): the TUI's empty slot. -->
 		<LibraryListNotice text="No entries" attr="data-library-feeds-empty" />
 	{/if}
@@ -122,7 +123,7 @@
 				titleColor={nameColor(row)}
 				background={rowBackground(row)}
 				cursor={row.id === $feedsUi.cursor}
-				selected={row.id === feeds.selected}
+				selected={row.id === detail.selected}
 				progress={rowProgress(row)}
 				onpress={() => pressFeedsRow(row)}
 				onplay={() => playFeedsRow(row.row.id)}

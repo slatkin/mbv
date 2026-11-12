@@ -8,7 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiMusicFrame } from '$lib/bridge/types';
+import type { GuiMusicList } from '$lib/bridge/types';
 import {
 	focusLibraryPill,
 	initialLibraryUi,
@@ -31,7 +31,7 @@ beforeEach(() => {
 
 /** The carried Music content: Hip-Hop selected, Jazz and Soul clear, in a
  * Grouped Music library. */
-function music(): GuiMusicFrame {
+function music(): GuiMusicList {
 	return {
 		libIdx: 2,
 		pills: [
@@ -43,9 +43,6 @@ function music(): GuiMusicFrame {
 		loading: false,
 		failure: null,
 		artists: [],
-		hero: null,
-		art: null,
-		playingTrackId: null,
 	};
 }
 
@@ -55,7 +52,7 @@ function pill(container: HTMLElement, groupId: string): HTMLElement {
 }
 
 test('marks the one selected pill with aria-pressed and no check glyph', () => {
-	const { container } = render(LibraryPills, { music: music() });
+	const { container } = render(LibraryPills, { list: music() });
 
 	expect(pill(container, 'g1').getAttribute('aria-pressed')).toBe('true');
 	expect(pill(container, 'g2').getAttribute('aria-pressed')).toBe('false');
@@ -63,13 +60,13 @@ test('marks the one selected pill with aria-pressed and no check glyph', () => {
 });
 
 test('paints no selected count or clear control', () => {
-	const { container } = render(LibraryPills, { music: music() });
+	const { container } = render(LibraryPills, { list: music() });
 
 	expect(container.querySelector('[data-library-pill-clear]')).toBeNull();
 });
 
 test('a press selects the pressed pill', () => {
-	const { container } = render(LibraryPills, { music: music() });
+	const { container } = render(LibraryPills, { list: music() });
 
 	fireEvent.click(pill(container, 'g3'));
 
@@ -79,7 +76,7 @@ test('a press selects the pressed pill', () => {
 });
 
 test('Space selects the focused pill', async () => {
-	render(LibraryPills, { music: music() });
+	render(LibraryPills, { list: music() });
 
 	requestLibraryPillSelect('g2');
 	await tick();
@@ -90,7 +87,7 @@ test('Space selects the focused pill', async () => {
 });
 
 test('marks the pill the keys focus holds and sends nothing for it', async () => {
-	const { container } = render(LibraryPills, { music: music() });
+	const { container } = render(LibraryPills, { list: music() });
 
 	focusLibraryPill('g2');
 	await tick();

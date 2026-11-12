@@ -9,9 +9,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiEmbyFrame, GuiEmbyRow } from '$lib/bridge/types';
+import type { GuiEmbyDetail, GuiEmbyList, GuiEmbyRow } from '$lib/bridge/types';
 import { embyUi, initialEmbyUi } from '$lib/library/emby';
-import { library } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
 import LibraryEmbyList from './LibraryEmbyList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -52,7 +52,7 @@ const FEED: GuiEmbyRow[] = [
 ];
 
 /** The carried Emby content in one mode over `rows` (row 8.1). */
-function embyFrame(feedGroup: boolean, rows: GuiEmbyRow[]): GuiEmbyFrame {
+function embyFrame(feedGroup: boolean, rows: GuiEmbyRow[]): GuiEmbyList {
 	return {
 		libIdx: 3,
 		libraryName: 'Movies',
@@ -72,16 +72,27 @@ function embyFrame(feedGroup: boolean, rows: GuiEmbyRow[]): GuiEmbyFrame {
 		loading: false,
 		failed: false,
 		rows,
-		selected: rows[0]?.id ?? null,
-		hero: null,
 	};
+}
+
+/** The Emby detail part: the first row selected, and no Hero painted here. */
+function embyDetail(emby: GuiEmbyList): GuiEmbyDetail {
+	return { selected: emby.rows[0]?.id ?? null, hero: null };
+}
+
+/** Carry one plain Emby library's list and detail parts. */
+function carryEmbySections(emby: GuiEmbyList): void {
+	carryLibrary({
+		list: { tabs: [], currentTab: 3, destination: { kind: 'emby', ...emby } },
+		detail: { kind: 'emby', ...embyDetail(emby) },
+	});
 }
 
 beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
-	library.set(null);
+	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -94,8 +105,8 @@ async function mountList(
 	viewportHeight = 300,
 ): Promise<HTMLElement> {
 	const emby = embyFrame(feedGroup, rows);
-	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
-	const { container } = render(LibraryEmbyList, { emby });
+	carryEmbySections(emby);
+	const { container } = render(LibraryEmbyList, { list: emby, detail: embyDetail(emby) });
 	const list = container.querySelector<HTMLElement>('[data-library-emby-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();
@@ -191,18 +202,18 @@ test('a double-click on a collection row plays it', async () => {
 
 test('a list that has not landed paints the loading line', async () => {
 	const emby = { ...embyFrame(false, []), loading: true };
-	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
+	carryEmbySections(emby);
 
-	const { container } = render(LibraryEmbyList, { emby });
+	const { container } = render(LibraryEmbyList, { list: emby, detail: embyDetail(emby) });
 
 	expect(container.querySelector('[data-library-emby-loading]')).toBeTruthy();
 });
 
 test('a failed plain-mode fetch paints the failure line', async () => {
 	const emby = { ...embyFrame(false, []), failed: true };
-	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
+	carryEmbySections(emby);
 
-	const { container } = render(LibraryEmbyList, { emby });
+	const { container } = render(LibraryEmbyList, { list: emby, detail: embyDetail(emby) });
 
 	expect(container.querySelector('[data-library-emby-failed]')).toBeTruthy();
 });
@@ -212,9 +223,9 @@ test('a failed plain-mode fetch paints the failure line', async () => {
 // field — so the plain Emby destination stopped opening with a bare filter.
 test('the list paints the library header with the selection label', async () => {
 	const emby = embyFrame(false, MOVIES);
-	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
+	carryEmbySections(emby);
 
-	const { container } = render(LibraryEmbyList, { emby });
+	const { container } = render(LibraryEmbyList, { list: emby, detail: embyDetail(emby) });
 
 	expect(container.querySelector('[data-library-list-title]')?.textContent).toBe('Movies');
 	expect(container.querySelector('[data-library-emby-selection-label]')?.textContent).toBe('All');
@@ -224,9 +235,9 @@ test('the list paints the library header with the selection label', async () => 
 // Music list's `No artists` line does, instead of painting a blank column.
 test('a landed library with no row paints the empty line', async () => {
 	const emby = embyFrame(false, []);
-	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
+	carryEmbySections(emby);
 
-	const { container } = render(LibraryEmbyList, { emby });
+	const { container } = render(LibraryEmbyList, { list: emby, detail: embyDetail(emby) });
 
 	expect(container.querySelector('[data-library-emby-empty]')?.textContent).toContain('No items');
 });

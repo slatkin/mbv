@@ -16,7 +16,7 @@
 	// for the Hero, a press on a leaf or a flat row selects it, a double-click
 	// on an episode plays it, and a right-click opens the item menu, as the
 	// Music list's rows do.
-	import type { GuiShowsFrame } from '$lib/bridge/types';
+	import type { GuiShowsDetail, GuiShowsList } from '$lib/bridge/types';
 	import {
 		activeShowsMode,
 		buildShowsRows,
@@ -47,17 +47,18 @@
 
 	interface Props {
 		/** The carried Shows content (design D14): the tree or the flat rows. */
-		shows: GuiShowsFrame;
+		list: GuiShowsList;
+		detail: GuiShowsDetail;
 	}
-	const { shows }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The active view mode: the pill the core marked. */
-	const mode = $derived(activeShowsMode(shows));
+	const mode = $derived(activeShowsMode(list));
 
 	/** The painted rows (design D14): the tree in the All mode, the flat rows
 	 * in the Latest and Upcoming modes, narrowed by the filter's text. */
 	const rows = $derived(
-		buildShowsRows(shows, mode, $showsUi.filter, {
+		buildShowsRows(list, mode, $showsUi.filter, {
 			open: $showsUi.open,
 			closed: $showsUi.closed,
 		}),
@@ -77,13 +78,13 @@
 	 * its sort rule. The All mode is sorted by name, the flat modes by date. */
 	const selectionLabel = $derived(
 		mode === 'all'
-			? `${shows.collectionNames[0] ?? 'All'} · sort name`
-			: (shows.collectionNames[0] ?? 'All'),
+			? `${list.collectionNames[0] ?? 'All'} · sort name`
+			: (list.collectionNames[0] ?? 'All'),
 	);
 
 	/** The filter field's placeholder, naming the selection as the Music list
 	 * does. */
-	const filterPlaceholder = $derived(`Filter ${shows.collectionNames[0] ?? 'shows'}`);
+	const filterPlaceholder = $derived(`Filter ${list.collectionNames[0] ?? 'shows'}`);
 
 
 	/** The stable Service id a row names, or `null` on a heading: the item the
@@ -98,7 +99,7 @@
 	/** Whether the row is the core's selected one: the series the Hero shows,
 	 * or the flat row it shows. */
 	function isSelectedRow(row: ShowsListRow): boolean {
-		return shows.selected !== null && rowSourceId(row) === shows.selected;
+		return detail.selected !== null && rowSourceId(row) === detail.selected;
 	}
 
 	/** The row's painted fill (design D14): the cursor row's focus fill, and
@@ -143,7 +144,7 @@
 	 * the shared media state. */
 	function episodePlayed(rowId: string): boolean {
 		const episodeId = rowId.slice('shows-episode:'.length);
-		for (const series of shows.series) {
+		for (const series of list.series) {
 			for (const season of series.seasons) {
 				const episode = season.episodes?.find((row) => row.episodeId === episodeId);
 				if (episode !== undefined) {
@@ -170,7 +171,7 @@
 	// series.
 	let lastSelected: string | null = null;
 	$effect(() => {
-		const selected = shows.selected;
+		const selected = detail.selected;
 		if (selected === lastSelected) {
 			return;
 		}
@@ -195,11 +196,11 @@
 			onaccept={acceptShowsFilter}
 		/>
 	</div>
-	{#if shows.loading}
+	{#if list.loading}
 		<!-- The active mode's list has not landed yet: one placeholder line
 		holds the list's place. -->
 		<LibraryListNotice text="Loading…" attr="data-library-shows-loading" />
-	{:else if shows.upcomingFailed}
+	{:else if list.upcomingFailed}
 		<!-- The Upcoming mode's eager fetch failed (design D14): the TUI's line,
 		and the pill is the retry. -->
 		<LibraryListNotice

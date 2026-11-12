@@ -8,7 +8,7 @@
 import { expect, test } from 'vitest';
 import type {
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsList,
 	GuiShowsMode,
 	GuiShowsPill,
 	GuiShowsRow,
@@ -78,18 +78,15 @@ function showsFrame(
 	mode: GuiShowsMode,
 	tree: GuiShowsSeries[] = TREE,
 	rows: GuiShowsRow[] = EPISODES,
-): GuiShowsFrame {
+): GuiShowsList {
 	return {
 		libIdx: 0,
 		pills: pills(mode),
 		collectionNames: [mode],
 		loading: false,
-		workspaceLoading: false,
 		series: tree,
 		upcomingFailed: false,
 		rows,
-		selected: null,
-		hero: null,
 	};
 }
 

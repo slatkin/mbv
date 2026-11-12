@@ -9,18 +9,20 @@
 
 import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
-import { library as librarySection } from '$lib/bridge/sections';
+import { libraryDetail } from '$lib/bridge/sections';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
-	GuiAudiobooksFrame,
-	GuiEmbyFrame,
-	GuiHomeFrame,
-	GuiLibraryContent,
-	GuiMusicFrame,
+	GuiLibraryList,
+	GuiMusicDetail,
+	GuiMusicList,
 	GuiMusicPill,
-	GuiPodcastsFrame,
-	GuiShowsFrame,
 } from '$lib/bridge/types';
+import {
+	activeLibraryDestination,
+	libraryEmbyList,
+	libraryMusicDetail,
+	libraryMusicList,
+} from './parts';
 import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
 import {
 	albumRowId,
@@ -144,39 +146,37 @@ export const FEEDS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
  * Upcoming mode does not paint, and on an Emby library it skips the pill row a
  * plain library does not paint and the Hero a frame without one does not. */
 export function activeLibraryPanes(): readonly LibraryPane[] {
-	if (libraryHome() !== null) {
-		return HOME_PANES;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			return HOME_PANES;
+		case 'shows':
+			return libraryDetailHasHero() ? SHOWS_PANES : SHOWS_PANES_NO_HERO;
+		case 'emby':
+			return embyPanes(libraryEmbyList()?.feedGroup ?? false, libraryDetailHasHero());
+		case 'audiobooks':
+			return libraryDetailHasHero() ? AUIB_PANES : AUIB_PANES_NO_HERO;
+		case 'podcasts':
+			return libraryDetailHasHero() ? PODCASTS_PANES : PODCASTS_PANES_NO_HERO;
+		case 'feeds':
+			return libraryDetailHasHero() ? FEEDS_PANES : FEEDS_PANES_NO_HERO;
+		default:
+			return PANES;
 	}
-	const shows = libraryShows();
-	if (shows !== null) {
-		return shows.hero === null ? SHOWS_PANES_NO_HERO : SHOWS_PANES;
-	}
-	const emby = libraryEmby();
-	if (emby !== null) {
-		return embyPanes(emby);
-	}
-	const audiobooks = libraryAudiobooks();
-	if (audiobooks !== null) {
-		return audiobooks.hero === null ? AUIB_PANES_NO_HERO : AUIB_PANES;
-	}
-	const podcasts = libraryPodcasts();
-	if (podcasts !== null) {
-		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
-	}
-	const feeds = get(librarySection)?.feeds ?? null;
-	if (feeds !== null) {
-		return feeds.hero === null ? FEEDS_PANES_NO_HERO : FEEDS_PANES;
-	}
-	return PANES;
 }
 
 /** The Emby walk's panes: the feed-group mode's pill row and the Hero ride
  * only where the frame paints them (row 8.1). */
-function embyPanes(emby: GuiEmbyFrame): readonly LibraryPane[] {
-	if (emby.feedGroup) {
-		return emby.hero === null ? EMBY_FEED_PANES_NO_HERO : EMBY_FEED_PANES;
+function embyPanes(feedGroup: boolean, hasHero: boolean): readonly LibraryPane[] {
+	if (feedGroup) {
+		return hasHero ? EMBY_FEED_PANES : EMBY_FEED_PANES_NO_HERO;
 	}
-	return emby.hero === null ? EMBY_PANES_NO_HERO : EMBY_PANES;
+	return hasHero ? EMBY_PANES : EMBY_PANES_NO_HERO;
+}
+
+/** Whether the active destination's detail part paints a Hero: every
+ * destination's detail carries a `hero`, `null` while none is picked. */
+function libraryDetailHasHero(): boolean {
+	return (get(libraryDetail)?.hero ?? null) !== null;
 }
 
 /** The state a freshly mounted window content starts with. */
@@ -203,22 +203,12 @@ export function initialLibraryUi(): LibraryUiState {
 /** The Library panel's interaction state. */
 export const libraryUi = writable<LibraryUiState>(initialLibraryUi());
 
-/** Whether the Library panel shows (design D2, D10, D12): the `library`
- * section's value names an active destination's content — Music's, Home's,
- * Shows', or an Emby library's — to paint. The window mounts the panel on
- * this one fact and the key router gates on it, so no Library key acts while
- * the panel paints nothing. */
-export function libraryShown(content: GuiLibraryContent | null): boolean {
-	return (
-		content !== null &&
-		(content.music !== null ||
-			content.home !== null ||
-			content.shows !== null ||
-			content.emby !== null ||
-			content.audiobooks !== null ||
-			content.podcasts !== null ||
-			content.feeds !== null)
-	);
+/** Whether the Library panel shows (design D2, D10, D12): the `libraryList`
+ * section's value names an active destination to paint. The window mounts the
+ * panel on this one fact and the key router gates on it, so no Library key acts
+ * while the panel paints nothing. */
+export function libraryShown(list: GuiLibraryList | null): boolean {
+	return list !== null;
 }
 
 /** Open the list's filter: `/` with Library Panel focus (design D3, step 4). */
@@ -301,43 +291,6 @@ export function applyLibraryPillSelect(libIdx: number): void {
 	selectLibraryPill(libIdx, pillSelect.groupId);
 }
 
-/** The carried Music content, or `null` while the active destination carries
- * none. */
-export function libraryMusic(): GuiMusicFrame | null {
-	return get(librarySection)?.music ?? null;
-}
-
-/** The carried Home content (design D12), or `null` while any other
- * destination is active. The top bar marks the Home icon current exactly
- * while this is present. */
-export function libraryHome(): GuiHomeFrame | null {
-	return get(librarySection)?.home ?? null;
-}
-
-/** The carried Shows content (design D12, row 7.1), or `null` while any other
- * destination is active. */
-export function libraryShows(): GuiShowsFrame | null {
-	return get(librarySection)?.shows ?? null;
-}
-
-/** The carried plain Emby-library content (design D12, row 8.1), or `null`
- * while any other destination is active. */
-export function libraryEmby(): GuiEmbyFrame | null {
-	return get(librarySection)?.emby ?? null;
-}
-
-/** The carried Audiobooks destination's content (design D12, row 9.1), or
- * `null` while any other destination is active. */
-export function libraryAudiobooks(): GuiAudiobooksFrame | null {
-	return get(librarySection)?.audiobooks ?? null;
-}
-
-/** The carried Podcasts destination's content (design D12, row 10.1), or
- * `null` while any other destination is active. */
-export function libraryPodcasts(): GuiPodcastsFrame | null {
-	return get(librarySection)?.podcasts ?? null;
-}
-
 /** The row model under one interaction state (design D7): the carried union,
  * the open nodes, and the filter text. */
 function rowsOf(ui: LibraryUiState): LibraryRow[] {
@@ -346,7 +299,7 @@ function rowsOf(ui: LibraryUiState): LibraryRow[] {
 
 function libraryTree(ui: LibraryUiState): LibraryTree {
 	return {
-		artists: libraryMusic()?.artists ?? [],
+		artists: libraryMusicList()?.artists ?? [],
 		open: ui.openNodes,
 		closed: ui.filterClosed,
 		filter: ui.filter,
@@ -464,12 +417,12 @@ let pendingRevealRow: string | null = null;
  * and its artist opens, so the row shows. An album whose tracks are not loaded
  * is opened through the same command a press sends, which is what loads them.
  * A restored pick and a pill's last pick reach the Hero this way. */
-export function revealPickedAlbum(music: GuiMusicFrame): void {
-	const album = music.hero?.album;
+export function revealPickedAlbum(list: GuiMusicList, detail: GuiMusicDetail): void {
+	const album = detail.hero?.album;
 	if (!album) {
 		return;
 	}
-	const artist = music.artists.find((candidate) =>
+	const artist = list.artists.find((candidate) =>
 		candidate.albums.some((row) => row.albumId === album.albumId),
 	);
 	if (!artist) {
@@ -648,7 +601,7 @@ function withHeroPane(ui: LibraryUiState): LibraryUiState {
  * tracklist shows, so the first key lands beside it. */
 export function moveLibraryTrackCursor(move: ListMove): void {
 	libraryUi.update((ui) => {
-		const tracks = heroTracks(libraryMusic()?.hero ?? null);
+		const tracks = heroTracks(libraryMusicDetail()?.hero ?? null);
 		const cursor = moveTrackCursor(
 			tracks,
 			resolveTrackCursor(tracks, ui.trackCursor),
@@ -668,7 +621,7 @@ export function focusedItemId(): string | null {
 	const ui = get(libraryUi);
 	if (ui.pane === 'hero') {
 		return resolveTrackCursor(
-			heroTracks(libraryMusic()?.hero ?? null),
+			heroTracks(libraryMusicDetail()?.hero ?? null),
 			ui.trackCursor,
 		);
 	}
@@ -697,13 +650,7 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 	return (
 		ui.arrangement === 'narrow' &&
 		!ui.heroDismissed &&
-		((libraryMusic()?.hero ?? null) !== null ||
-			(libraryHome()?.hero ?? null) !== null ||
-			(libraryShows()?.hero ?? null) !== null ||
-			(libraryEmby()?.hero ?? null) !== null ||
-			(libraryAudiobooks()?.hero ?? null) !== null ||
-			(libraryPodcasts()?.hero ?? null) !== null ||
-			(get(librarySection)?.feeds?.hero ?? null) !== null)
+		libraryDetailHasHero()
 	);
 }
 

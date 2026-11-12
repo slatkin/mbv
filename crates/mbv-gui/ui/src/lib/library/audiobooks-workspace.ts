@@ -19,7 +19,7 @@ import { playhead } from '$lib/bridge/playhead';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
 	GuiAudiobooksWorkspace,
 } from '$lib/bridge/types';
 import type { ListMove } from './list';
@@ -43,8 +43,8 @@ export const audiobooksWorkspace = writable<AudiobooksWorkspaceState>(
 
 /** The selected book's Workspace, or `null` while the book's detail has not
  * landed. */
-function workspaceOf(audiobooks: GuiAudiobooksFrame): GuiAudiobooksWorkspace | null {
-	return audiobooks.hero?.workspace ?? null;
+function workspaceOf(detail: GuiAudiobooksDetail): GuiAudiobooksWorkspace | null {
+	return detail.hero?.workspace ?? null;
 }
 
 /**
@@ -76,14 +76,11 @@ export function currentChapterRow(
  * playhead's predicted position, so a reactive caller reads it through a
  * store subscription, not through this function.
  */
-export function markedChapterOf(audiobooks: GuiAudiobooksFrame): GuiAudiobooksChapterRow | null {
-	if (
-		audiobooks.playingBookId === null ||
-		audiobooks.playingBookId !== audiobooks.selected
-	) {
+export function markedChapterOf(detail: GuiAudiobooksDetail): GuiAudiobooksChapterRow | null {
+	if (detail.playingBookId === null || detail.playingBookId !== detail.selected) {
 		return null;
 	}
-	return currentChapterRow(workspaceOf(audiobooks)?.rows ?? [], get(playhead.position));
+	return currentChapterRow(workspaceOf(detail)?.rows ?? [], get(playhead.position));
 }
 
 /**
@@ -104,11 +101,11 @@ export function resolveAbsChapterCursor(
 
 /** The chapter the cursor rests on in the carried frame, or `null` while the
  * Workspace holds no chapter. Enter on the Workspace acts on this chapter. */
-export function absCursorChapter(audiobooks: GuiAudiobooksFrame): GuiAudiobooksChapterRow | null {
+export function absCursorChapter(detail: GuiAudiobooksDetail): GuiAudiobooksChapterRow | null {
 	return resolveAbsChapterCursor(
-		workspaceOf(audiobooks),
+		workspaceOf(detail),
 		get(audiobooksWorkspace).cursor,
-		markedChapterOf(audiobooks),
+		markedChapterOf(detail),
 	);
 }
 
@@ -146,12 +143,12 @@ export function moveChapterCursor(
 
 /** Move the Workspace's cursor one movement along (design D12): the movement
  * keys while the Hero pane has the pane focus. */
-export function moveAbsChapterCursor(move: ListMove, audiobooks: GuiAudiobooksFrame): void {
-	const workspace = workspaceOf(audiobooks);
+export function moveAbsChapterCursor(move: ListMove, detail: GuiAudiobooksDetail): void {
+	const workspace = workspaceOf(detail);
 	const current = resolveAbsChapterCursor(
 		workspace,
 		get(audiobooksWorkspace).cursor,
-		markedChapterOf(audiobooks),
+		markedChapterOf(detail),
 	);
 	const cursor = moveChapterCursor(workspace?.rows ?? [], current?.chapter ?? null, move);
 	audiobooksWorkspace.update((state) => (state.cursor === cursor ? state : { ...state, cursor }));
@@ -160,40 +157,41 @@ export function moveAbsChapterCursor(move: ListMove, audiobooks: GuiAudiobooksFr
 /** Play the book the frame selected from its saved position (design D12): the
  * Hero's Play. The queue is replaced through the shared admission rule, so a
  * book that admits nothing changes nothing. */
-export function playAbsBook(audiobooks: GuiAudiobooksFrame): void {
-	actOnBook(audiobooks, 'absPlay');
+export function playAbsBook(libIdx: number, detail: GuiAudiobooksDetail): void {
+	actOnBook(libIdx, detail, 'absPlay');
 }
 
 /** Add the book the frame selected to the queue (design D12). */
-export function queueAbsBook(audiobooks: GuiAudiobooksFrame): void {
-	actOnBook(audiobooks, 'absQueue');
+export function queueAbsBook(libIdx: number, detail: GuiAudiobooksDetail): void {
+	actOnBook(libIdx, detail, 'absQueue');
 }
 
 /** Send one book command for the frame's selected book, and nothing while the
  * frame selects none: the selection names no book. */
 function actOnBook(
-	audiobooks: GuiAudiobooksFrame,
+	libIdx: number,
+	detail: GuiAudiobooksDetail,
 	command: 'absPlay' | 'absQueue',
 ): void {
-	const itemId = audiobooks.selected;
+	const itemId = detail.selected;
 	if (itemId === null) {
 		return;
 	}
-	void sendLibraryCommand({ command, libIdx: audiobooks.libIdx, itemId });
+	void sendLibraryCommand({ command, libIdx, itemId });
 }
 
 /** Play or seek from the cursor's chapter (design D12): Enter on the
  * Workspace, the row's double-click, and the row's hover play control. A
  * Workspace with no chapter, or a frame that selects no book, sends nothing. */
-export function playAbsChapter(audiobooks: GuiAudiobooksFrame): void {
-	const bookId = audiobooks.selected;
-	const chapter = absCursorChapter(audiobooks);
+export function playAbsChapter(libIdx: number, detail: GuiAudiobooksDetail): void {
+	const bookId = detail.selected;
+	const chapter = absCursorChapter(detail);
 	if (bookId === null || chapter === null) {
 		return;
 	}
 	void sendLibraryCommand({
 		command: 'absPlayChapter',
-		libIdx: audiobooks.libIdx,
+		libIdx,
 		bookId,
 		chapter: chapter.chapter,
 	});

@@ -9,20 +9,20 @@
 	//
 	// The row itself is the shared `LibraryPillRow` (design D15), so the
 	// canvas's pill form has one owner.
-	import type { GuiFeedsFrame } from '$lib/bridge/types';
+	import type { GuiFeedsList } from '$lib/bridge/types';
 	import { applyFeedsPillSelect, feedsPillKey, selectFeedsPill, feedsUi } from '$lib/library/feeds';
 	import LibraryPillRow from './LibraryPillRow.svelte';
 
 	interface Props {
 		/** The carried Feeds content: the pills of the one feed tab (row
 		 * 11.1). */
-		feeds: GuiFeedsFrame;
+		list: GuiFeedsList;
 	}
-	const { feeds }: Props = $props();
+	const { list }: Props = $props();
 
 	/** The pills the row paints, keyed by the pill's paint key. */
 	const pills = $derived(
-		feeds.pills.map((pill) => ({
+		list.pills.map((pill) => ({
 			key: feedsPillKey(pill.pill),
 			name: pill.name,
 			selected: pill.selected,
@@ -37,7 +37,7 @@
 
 	/** Press a pill: select its view (row 11.1). */
 	function press(key: string): void {
-		const pill = feeds.pills.find((candidate) => feedsPillKey(candidate.pill) === key);
+		const pill = list.pills.find((candidate) => feedsPillKey(candidate.pill) === key);
 		if (pill !== undefined) {
 			selectFeedsPill(pill.pill);
 		}

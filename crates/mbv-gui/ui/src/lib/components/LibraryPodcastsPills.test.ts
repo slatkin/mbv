@@ -7,7 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiPodcastsFrame } from '$lib/bridge/types';
+import type { GuiPodcastsList } from '$lib/bridge/types';
 import { initialPodcastsUi, podcastsUi } from '$lib/library/podcasts';
 import LibraryPodcastsPills from './LibraryPodcastsPills.svelte';
 
@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 /** The carried Podcasts content with the show view selected (design D12). */
-function frame(): GuiPodcastsFrame {
+function frame(): GuiPodcastsList {
 	return {
 		libIdx: 0,
 		pills: [
@@ -34,13 +34,11 @@ function frame(): GuiPodcastsFrame {
 		loading: false,
 		failed: false,
 		rows: [],
-		selected: null,
-		hero: null,
 	};
 }
 
 test('the pills paint the core’s selection and never none', () => {
-	const { container } = render(LibraryPodcastsPills, { podcasts: frame() });
+	const { container } = render(LibraryPodcastsPills, { list: frame() });
 	const pressed = [...container.querySelectorAll('[data-library-pill]')].map((el) => [
 		el.getAttribute('data-library-pill'),
 		el.getAttribute('aria-pressed'),
@@ -53,7 +51,7 @@ test('the pills paint the core’s selection and never none', () => {
 });
 
 test('a press sends the set-pill command with the frame’s pill object', async () => {
-	const { container } = render(LibraryPodcastsPills, { podcasts: frame() });
+	const { container } = render(LibraryPodcastsPills, { list: frame() });
 
 	await fireEvent.click(container.querySelector('[data-library-pill="latest"]') as HTMLElement);
 

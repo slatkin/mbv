@@ -12,7 +12,7 @@ import { routeSettingsKey } from '$lib/settings/keys';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type {
 	GuiFocus,
-	GuiLibraryContent,
+	GuiLibraryList,
 	GuiLibraryTab,
 	GuiOverlayFrame,
 	GuiPanel,
@@ -34,11 +34,6 @@ import {
 	focusedItemId,
 	focusedLibraryPill,
 	heroOverlayOpen,
-	libraryAudiobooks,
-	libraryPodcasts,
-	libraryEmby,
-	libraryHome,
-	libraryShows,
 	libraryShown,
 	libraryUi,
 	moveLibraryCursor,
@@ -49,7 +44,8 @@ import {
 	setLibraryCursorOpen,
 } from './state';
 import type { LibraryUiState } from './state';
-import { library as librarySection } from '$lib/bridge/sections';
+import { libraryList } from '$lib/bridge/sections';
+import { activeLibraryDestination, libraryMusicList } from './parts';
 import {
 	acceptHomeFilter,
 	closeHomeFilter,
@@ -68,7 +64,7 @@ import { acceptAudiobooksFilter, closeAudiobooksFilter } from './audiobooks';
 import { routePodcastsPanelKey } from './podcasts-keys';
 import { acceptPodcastsFilter, closePodcastsFilter } from './podcasts';
 import { routeFeedsPanelKey } from './feeds-keys';
-import { acceptFeedsFilter, closeFeedsFilter, libraryFeeds } from './feeds';
+import { acceptFeedsFilter, closeFeedsFilter } from './feeds';
 import {
 	activateSearchHighlight,
 	closeLibrarySearch,
@@ -88,9 +84,9 @@ export type LibraryKeyFrame = {
 	status: GuiStatusBar;
 	summary: { filterActive: boolean };
 	settings: GuiSettingsFrame | null;
-	/** The `library` section's value: the active destination's content, or
+	/** The `libraryList` section's value: the active destination's list part, or
 	 * `null` while no Library panel shows. */
-	library: GuiLibraryContent | null;
+	libraryList: GuiLibraryList | null;
 	/** The `search` section's value. */
 	search: GuiSearchFrame | null;
 };
@@ -103,7 +99,7 @@ function bare(event: KeyboardEvent): boolean {
 /** The carried destination tabs (design D2): the tabs the top bar paints, and
  * the ones the digits open. */
 function carriedTabs(): readonly GuiLibraryTab[] {
-	return get(librarySection)?.tabs ?? [];
+	return get(libraryList)?.tabs ?? [];
 }
 
 /** The place of the destination tab a digit opens (design D3, step 3): `1`
@@ -144,7 +140,7 @@ function takePaneFocus(panel: GuiPanel, step: number): void {
 
 /** The pills of the carried content. */
 function pills() {
-	return get(librarySection)?.music?.pills ?? [];
+	return libraryMusicList()?.pills ?? [];
 }
 
 /** Move the focused pill one pill along the row (design D3, step 4): Right and
@@ -167,61 +163,55 @@ function movePillFocus(step: number): void {
  * destination's own resolve, in the same order `routePanelKey` hands keys
  * over. */
 function closeActiveFilter(): void {
-	if (libraryHome() !== null) {
-		closeHomeFilter();
-		return;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			closeHomeFilter();
+			return;
+		case 'shows':
+			closeShowsFilter();
+			return;
+		case 'emby':
+			closeEmbyFilter();
+			return;
+		case 'audiobooks':
+			closeAudiobooksFilter();
+			return;
+		case 'podcasts':
+			closePodcastsFilter();
+			return;
+		case 'feeds':
+			closeFeedsFilter();
+			return;
+		default:
+			closeLibraryFilter();
 	}
-	if (libraryShows() !== null) {
-		closeShowsFilter();
-		return;
-	}
-	if (libraryEmby() !== null) {
-		closeEmbyFilter();
-		return;
-	}
-	if (libraryAudiobooks() !== null) {
-		closeAudiobooksFilter();
-		return;
-	}
-	if (libraryPodcasts() !== null) {
-		closePodcastsFilter();
-		return;
-	}
-	if (libraryFeeds() !== null) {
-		closeFeedsFilter();
-		return;
-	}
-	closeLibraryFilter();
 }
 
 /** Accept the active destination's filter with Enter (design D3, step 2):
  * the field closes and the list keeps its text. */
 function acceptActiveFilter(): void {
-	if (libraryHome() !== null) {
-		acceptHomeFilter();
-		return;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			acceptHomeFilter();
+			return;
+		case 'shows':
+			acceptShowsFilter();
+			return;
+		case 'emby':
+			acceptEmbyFilter();
+			return;
+		case 'audiobooks':
+			acceptAudiobooksFilter();
+			return;
+		case 'podcasts':
+			acceptPodcastsFilter();
+			return;
+		case 'feeds':
+			acceptFeedsFilter();
+			return;
+		default:
+			acceptLibraryFilter();
 	}
-	if (libraryShows() !== null) {
-		acceptShowsFilter();
-		return;
-	}
-	if (libraryEmby() !== null) {
-		acceptEmbyFilter();
-		return;
-	}
-	if (libraryAudiobooks() !== null) {
-		acceptAudiobooksFilter();
-		return;
-	}
-	if (libraryPodcasts() !== null) {
-		acceptPodcastsFilter();
-		return;
-	}
-	if (libraryFeeds() !== null) {
-		acceptFeedsFilter();
-		return;
-	}
-	acceptLibraryFilter();
 }
 
 /** Route a key while the filter field holds the keyboard (design D3, step 2). */
@@ -347,23 +337,21 @@ function routePanelKey(
 	if (event.key === 'Escape' && bare(event)) {
 		return routeEscapeKey(ui, search);
 	}
-	if (libraryHome() !== null) {
-		return routeHomePanelKey(event);
-	}
-	if (libraryShows() !== null) {
-		return routeShowsPanelKey(event, ui);
-	}
-	if (libraryEmby() !== null) {
-		return routeEmbyPanelKey(event, ui);
-	}
-	if (libraryAudiobooks() !== null) {
-		return routeAudiobooksPanelKey(event, ui);
-	}
-	if (libraryPodcasts() !== null) {
-		return routePodcastsPanelKey(event, ui);
-	}
-	if (libraryFeeds() !== null) {
-		return routeFeedsPanelKey(event, ui);
+	switch (activeLibraryDestination()) {
+		case 'home':
+			return routeHomePanelKey(event);
+		case 'shows':
+			return routeShowsPanelKey(event, ui);
+		case 'emby':
+			return routeEmbyPanelKey(event, ui);
+		case 'audiobooks':
+			return routeAudiobooksPanelKey(event, ui);
+		case 'podcasts':
+			return routePodcastsPanelKey(event, ui);
+		case 'feeds':
+			return routeFeedsPanelKey(event, ui);
+		default:
+			break;
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();
@@ -532,7 +520,7 @@ export function routeLibraryKey(
 	// D2, D10): a frame that carries no Library section takes no Library key,
 	// even while the window still holds the content of an earlier frame. The
 	// content names the active destination's section (design D12).
-	if (!libraryShown(frame.library)) {
+	if (!libraryShown(frame.libraryList)) {
 		return 'core';
 	}
 	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes

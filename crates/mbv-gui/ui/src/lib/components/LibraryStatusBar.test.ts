@@ -5,12 +5,10 @@
 import { render } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
 import type {
-	GuiAudiobooksFrame,
-	GuiEmbyFrame,
+	GuiDestinationList,
+	GuiLibraryDetail,
 	GuiLibraryTab,
-	GuiMusicFrame,
 	GuiMusicHero,
-	GuiPodcastsFrame,
 	GuiStatusBar,
 } from '$lib/bridge/types';
 import LibraryStatusBar from './LibraryStatusBar.svelte';
@@ -37,26 +35,31 @@ function hero(): GuiMusicHero {
 	};
 }
 
-/** The Music content with the picked album and one selected collection. */
-function music(): GuiMusicFrame {
-	return {
-		libIdx: 0,
-		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
-		collectionNames: ['Hip-Hop'],
-		loading: false,
-		failure: null,
-		artists: [],
-		hero: hero(),
-		art: null,
-		playingTrackId: null,
-	};
-}
+/** The Music list part: one selected collection. */
+const MUSIC_LIST: GuiDestinationList = {
+	kind: 'music',
+	libIdx: 0,
+	pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
+	collectionNames: ['Hip-Hop'],
+	loading: false,
+	failure: null,
+	artists: [],
+};
+
+/** The Music detail part with the picked album. */
+const MUSIC_DETAIL: GuiLibraryDetail = {
+	kind: 'music',
+	hero: hero(),
+	art: null,
+	playingTrackId: null,
+};
 
 function renderBar(status: GuiStatusBar = IDLE) {
 	return render(LibraryStatusBar, {
 		tabs: TABS,
 		currentTab: 1,
-		music: music(),
+		list: MUSIC_LIST,
+		detail: MUSIC_DETAIL,
 		status,
 	});
 }
@@ -103,7 +106,8 @@ test('an armed prefix replaces the hints and keeps the location', () => {
 // add-gui-library-panel row 8.1: the bar's carried plain Emby-library content
 // becomes the location while that destination is active (design D10, D12).
 test('the bar paints the plain Emby location for the carried content', () => {
-	const emby: GuiEmbyFrame = {
+	const list: GuiDestinationList = {
+		kind: 'emby',
 		libIdx: 2,
 		libraryName: 'Movies',
 		pills: [],
@@ -114,14 +118,12 @@ test('the bar paints the plain Emby location for the carried content', () => {
 		rows: [
 			{ id: 'm1', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' },
 		],
-		selected: 'm1',
-		hero: null,
 	};
 	const { container } = render(LibraryStatusBar, {
 		tabs: [{ position: 2, label: 'Movies' }],
 		currentTab: 2,
-		music: null,
-		emby,
+		list,
+		detail: { kind: 'emby', selected: 'm1', hero: null },
 		status: IDLE,
 	});
 
@@ -134,23 +136,20 @@ test('the bar paints the plain Emby location for the carried content', () => {
 // add-gui-library-panel row 9.1: the bar's carried Audiobooks content becomes
 // the location while that destination is active (design D10, D12).
 test('the bar paints the Audiobooks location for the carried content', () => {
-	const audiobooks: GuiAudiobooksFrame = {
+	const list: GuiDestinationList = {
+		kind: 'audiobooks',
 		libIdx: 1,
 		loading: false,
 		failed: false,
-		workspaceLoading: false,
 		rows: [
 			{ id: 'b1', title: 'Dune', subtitle: 'Frank Herbert', duration: '15:12:00', sortLetter: 'D' },
 		],
-		selected: 'b1',
-		playingBookId: null,
-		hero: null,
 	};
 	const { container } = render(LibraryStatusBar, {
 		tabs: [{ position: 2, label: 'Audiobooks' }],
 		currentTab: 2,
-		music: null,
-		audiobooks,
+		list,
+		detail: { kind: 'audiobooks', workspaceLoading: false, selected: 'b1', playingBookId: null, hero: null },
 		status: IDLE,
 	});
 
@@ -163,7 +162,8 @@ test('the bar paints the Audiobooks location for the carried content', () => {
 // add-gui-library-panel row 10.1: the bar's carried Podcasts content becomes
 // the location while that destination is active (design D10, D12).
 test('the bar paints the Podcasts location for the carried content', () => {
-	const podcasts: GuiPodcastsFrame = {
+	const list: GuiDestinationList = {
+		kind: 'podcasts',
 		libIdx: 1,
 		loading: false,
 		failed: false,
@@ -180,14 +180,12 @@ test('the bar paints the Podcasts location for the carried content', () => {
 				state: 'ordinary',
 			},
 		],
-		selected: 'show1:ep12',
-		hero: null,
 	};
 	const { container } = render(LibraryStatusBar, {
 		tabs: [{ position: 2, label: 'Podcasts' }],
 		currentTab: 2,
-		music: null,
-		podcasts,
+		list,
+		detail: { kind: 'podcasts', selected: 'show1:ep12', hero: null },
 		status: IDLE,
 	});
 
