@@ -28,7 +28,7 @@ use mbv_gui::bridge::frame::chrome::GuiStatusBar;
 use mbv_gui::bridge::frame::focus::GuiFocus;
 use mbv_gui::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
-use mbv_gui::bridge::frame::playback::{GuiQueuePlayback, GuiScrubberHover};
+use mbv_gui::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
 use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
 use mbv_gui::bridge::layout::{
@@ -44,6 +44,7 @@ mod core_thread {
     mod launch;
     mod library;
     mod overlay;
+    mod playhead;
     mod pointer;
     mod queue;
     mod sections;
@@ -175,6 +176,7 @@ impl Held {
         held.library = batch.library.or(held.library.take());
         held.search = batch.search.or(held.search.take());
         held.settings = batch.settings.or(held.settings.take());
+        held.playhead = batch.playhead.or(held.playhead.take());
     }
 
     /// The panel section's value: the toggles and the UI-reset counter.
@@ -230,6 +232,13 @@ impl Held {
     /// The Settings screen, `None` while the screen is closed.
     pub(crate) fn settings(&self) -> Option<&GuiSettingsFrame> {
         optional_value(self.batch.settings.as_ref())
+    }
+
+    /// The playhead section the window holds: the anchor and the revision it
+    /// carries, `None` while no anchor was sent. A tick that sends no new
+    /// anchor leaves both as they were.
+    pub(crate) fn playhead_section(&self) -> Option<&GuiSection<GuiPlayhead>> {
+        self.batch.playhead.as_ref()
     }
 }
 

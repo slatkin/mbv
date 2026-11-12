@@ -352,6 +352,13 @@ impl CoreThread {
         self.ledger.set_audit_for_test(on);
     }
 
+    /// Move the playhead anchor's send instant back by `by` (design D5's
+    /// drift rule), so a core-thread test's next collect predicts from an
+    /// older anchor with no real wait. Production never calls it.
+    pub fn backdate_playhead_anchor_for_test(&mut self, by: Duration) {
+        self.ledger.backdate_playhead_anchor_for_test(by);
+    }
+
     /// Mark the sections a catalog landing marks (design D3 rule 2), for a test
     /// whose seed lands the catalog between ticks. The startup drain marks every
     /// gated section when it lands a catalog (`DrainHook::DrainStartupWorkers`), and

@@ -195,7 +195,6 @@ fn empty_queue_frame_carries_no_rows() {
     assert!(!frame.panel().collapsed);
     assert!(!frame.panel().queue_folded);
     assert_eq!(frame.overlay(), None);
-    assert_eq!(frame.playback().finish_clock, None);
     assert_eq!(frame.playback().chapters, Vec::new());
     assert_eq!(frame.playback().intro_mark, None);
     assert_eq!(frame.playback().credits_mark, None);
@@ -282,12 +281,10 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         [Some(active), Some(partial), Some(watched)] => (*active, *partial, *watched),
         _ => panic!("every pending row carries its finish clock"),
     };
-    // The queue's finish clock is the last pending row's; the scrubber's is
-    // the active row's.
+    // The queue's finish clock is the last pending row's; the clocks chain:
+    // each pending row ends one runtime after the row before it, so the
+    // partial row's clock differs from the active row's.
     assert_eq!(frame.summary().finish_clock.as_deref(), Some(watched_clock));
-    assert_eq!(frame.playback().finish_clock.as_deref(), Some(active_clock));
-    // The clocks chain: each pending row ends one runtime after the row
-    // before it, so the partial row's clock differs from the active row's.
     assert_ne!(partial_clock, active_clock);
 
     assert_eq!(frame.summary().remaining, 2);

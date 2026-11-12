@@ -34,6 +34,26 @@ impl App {
             .update_status(|status| status.current_idx = index);
     }
 
+    /// Set the playing item's reported position and paused state, as the
+    /// Owner's status reports them (`gui-change-driven-sections` design D5):
+    /// the playhead's own advance, a seek, and a pause toggle. A core test
+    /// moves the reported position this way, with no real wait.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_playing_position_for_test(&self, position_ticks: i64, paused: bool) {
+        self.player.update_status(|status| {
+            status.position_ticks = position_ticks;
+            status.paused = paused;
+        });
+    }
+
+    /// Set the playing item's reported runtime, as the Owner's status reports
+    /// it when the active item's runtime lands (design D5's runtime trigger).
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_playing_runtime_for_test(&self, runtime_ticks: i64) {
+        self.player
+            .update_status(|status| status.runtime_ticks = runtime_ticks);
+    }
+
     /// Whether `key`'s image fetch is in flight (the reservation a fetch takes
     /// before it starts): a core test observes that a neighbour warm started.
     #[cfg(any(test, feature = "test"))]

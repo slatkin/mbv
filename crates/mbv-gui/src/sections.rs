@@ -16,11 +16,12 @@
 mod deadlines;
 pub(crate) mod library;
 mod marks;
+mod playhead;
 
 pub(crate) use marks::{DrainHook, marks_for_hook};
 
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use mbv::{App, QueuePlaybackProjection};
 use mbv_surfaces::FocusStack;
@@ -33,7 +34,9 @@ use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use crate::bridge::frame::focus::GuiFocus;
 use crate::bridge::frame::library::{GuiLibraryContent, GuiSearchFrame};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::playback::{GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile};
+use crate::bridge::frame::playback::{
+    GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile,
+};
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::GuiTheme;
@@ -196,10 +199,17 @@ pub struct SectionLedger {
     library: Slot<Option<GuiLibraryContent>>,
     search: Slot<Option<GuiSearchFrame>>,
     settings: Slot<Option<GuiSettingsFrame>>,
+    /// The playhead anchor (design D5): the last sent anchor, the revision it
+    /// carries, and whether the window holds it. A trigger adopts a new
+    /// anchor; the window predicts the position between anchors.
+    playhead: Slot<GuiPlayhead>,
     marked: HashSet<Section>,
     /// The deadline and playhead values the last tick sampled (design D3 rules
     /// 3 and 4).
     deadlines: DeadlineMarks,
+    /// The anchor compare's own state (design D5): the last observed position
+    /// and the `Instant` the last anchor went out.
+    playhead_anchor: playhead::PlayheadAnchor,
     /// Whether the audit runs (design D3). Production never turns it on; the
     /// core-thread tests do, through `CoreThread::set_section_audit_for_test`.
     audit: bool,
@@ -229,8 +239,10 @@ impl Default for SectionLedger {
             library: Slot::default(),
             search: Slot::default(),
             settings: Slot::default(),
+            playhead: Slot::default(),
             marked: HashSet::new(),
             deadlines: DeadlineMarks::new(Instant::now()),
+            playhead_anchor: playhead::PlayheadAnchor::new(Instant::now()),
             audit: false,
             artwork: ArtworkFrames::default(),
             trickplay: TrickplayFrames::default(),
@@ -262,6 +274,13 @@ impl SectionLedger {
         self.audit = on;
     }
 
+    /// Move the playhead anchor's send instant back by `by` (design D5's
+    /// drift rule), for a core-thread test that pins the drift with no real
+    /// wait. Production never calls it.
+    pub(crate) fn backdate_playhead_anchor_for_test(&mut self, by: Duration) {
+        self.playhead_anchor.backdate_for_test(by);
+    }
+
     /// Continue the revisions the attach campaign sent (design D4), so the
     /// attached core's first attach and theme sections mint past them.
     pub fn resume(&mut self, sent: SentRevisions) {
@@ -286,6 +305,7 @@ impl SectionLedger {
         self.library.release();
         self.search.release();
         self.settings.release();
+        self.playhead.release();
     }
 
     /// Build the sections this tick reads and return the batch of the sections
@@ -338,6 +358,11 @@ impl SectionLedger {
             .adopt(GuiQueueFooter::from(&app.queue_footer_projection()));
         self.status
             .adopt(GuiStatusBar::from(&app.status_bar_projection()));
+        // The anchor reads the same projection read and the same now-playing
+        // marker the queue section built from, so it cannot disagree with
+        // them (design D5).
+        self.playhead_anchor
+            .sample(&mut self.playhead, &playback, queue, now);
         self.adopt_marked_gated(app, &marked, &playback);
         if self.audit {
             self.audit_clean_gated(app, &marked, &playback);
@@ -440,6 +465,7 @@ impl SectionLedger {
             library: self.library.take(),
             search: self.search.take(),
             settings: self.settings.take(),
+            playhead: self.playhead.take(),
         };
         (!batch.is_empty()).then_some(batch)
     }

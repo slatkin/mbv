@@ -1,12 +1,16 @@
 //! The Queue playback section: the transport band's facts (design
-//! D4). Each field mirrors one fact of `QueuePlaybackProjection`.
+//! D4). Each field mirrors one fact of `QueuePlaybackProjection`, except the
+//! playhead facts: they ride the `playhead` anchor section (design D5), which
+//! the window predicts from between anchors.
 
 use mbv::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid,
 };
+use mbv_queue::QueueSlotId;
+use mbv_surfaces::queue::QueueSurface;
+use mbv_ui_model::media_list::{MediaListRow, MediaSemanticState};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
-use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::{Deserialize, Serialize};
 
@@ -23,14 +27,6 @@ pub struct GuiQueuePlayback {
     pub host_is_remote: bool,
     /// Whether the transport section paints. Idle collapses it.
     pub shown: bool,
-    /// The displayed playback state: the seek row's position, runtime, and paused flag.
-    pub playback: GuiPlaybackState,
-    /// The seek row's left clock, formatted by the TUI's shared duration
-    /// formatter. The front end paints the text verbatim.
-    pub elapsed_clock: String,
-    /// The seek row's right clock (the time left in the active item), in the
-    /// same format. The front end paints the minus sign before it.
-    pub remaining_clock: String,
     /// Whether the controls and seekbar carry playback.
     pub show_controls: bool,
     /// The plain now-playing title, if there is one.
@@ -47,10 +43,6 @@ pub struct GuiQueuePlayback {
     /// the active item's kind. `None` while nothing to caption — idle, a
     /// slotless output, or a kind with no image source.
     pub still_caption: Option<String>,
-    /// The active item's wall-clock end time, formatted in the local zone:
-    /// the scrubber's finish clock. `None` while no item plays or the runtime
-    /// is unknown.
-    pub finish_clock: Option<String>,
     /// The active item's chapter boundaries with their names (design D4a):
     /// the scrubber's boundary ticks and the hover preview's chapter name.
     /// Empty while the item's fetch has not landed or carries none.
@@ -175,15 +167,11 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             host: projection.host.clone(),
             host_is_remote: projection.host_is_remote,
             shown: projection.shown,
-            playback: GuiPlaybackState::from(projection.playback),
-            elapsed_clock: projection.elapsed_clock.clone(),
-            remaining_clock: projection.remaining_clock.clone(),
             show_controls: projection.show_controls,
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
             still_caption: projection.still_caption.clone(),
-            finish_clock: projection.finish_clock.clone(),
             chapters: projection.chapters.iter().map(GuiChapter::from).collect(),
             intro_mark: projection.intro_mark.map(GuiSegmentMark::from),
             credits_mark: projection.credits_mark.map(GuiSegmentMark::from),
@@ -433,28 +421,54 @@ impl From<NowPlayingStatus> for GuiNowPlayingStatus {
     }
 }
 
-/// The displayed playback state, mirroring `PlaybackState`.
+/// The playhead anchor (design D5): the position, runtime, paused state, and
+/// active slot at the send, from which the window predicts the position until
+/// the next anchor. The core sends one on a changed fact or a new sample that
+/// drifts past the tolerance; between anchors the window advances the
+/// position itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiPlaybackState {
+pub struct GuiPlayhead {
     /// Whether a transport is active, on any target.
     pub active: bool,
-    /// The playhead's index in the queue that this state was read from.
-    pub active_idx: Option<usize>,
+    /// The slot that carries the now-playing marker (`QueueSlotId::raw`), the
+    /// same whole-list marker the `queue` section's `active` carries.
+    pub active_slot: Option<u64>,
+    /// The reported position at the send, in ticks.
     pub position_ticks: i64,
+    /// The active item's runtime, in ticks.
     pub runtime_ticks: i64,
+    /// Whether the transport is paused: the prediction holds the position
+    /// while it is.
     pub paused: bool,
 }
 
-impl From<PlaybackState> for GuiPlaybackState {
-    fn from(state: PlaybackState) -> Self {
+impl GuiPlayhead {
+    /// The anchor the tick's one `queue_playback_projection` read and the
+    /// Queue Surface state's now-playing marker carry (design D5).
+    #[must_use]
+    pub fn from_surface(playback: &QueuePlaybackProjection, queue: &QueueSurface) -> Self {
+        let state = playback.playback;
         Self {
             active: state.active,
-            active_idx: state.active_idx,
+            active_slot: queue.rows().iter().find_map(active_slot),
             position_ticks: state.position_ticks,
             runtime_ticks: state.runtime_ticks,
             paused: state.paused,
         }
+    }
+}
+
+/// The slot of a row that carries the now-playing marker — the same rule the
+/// queue section's `active` reads (`bridge/frame/queue.rs`).
+fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
+    match row {
+        MediaListRow::Item {
+            target,
+            semantic_state: MediaSemanticState::NowPlaying { .. },
+            ..
+        } => Some(target.raw()),
+        MediaListRow::Item { .. } | MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
     }
 }
 

@@ -17,7 +17,7 @@ use super::frame::chrome::{GuiQueueFooter, GuiStatusBar};
 use super::frame::focus::GuiFocus;
 use super::frame::library::{GuiLibraryContent, GuiSearchFrame};
 use super::frame::overlay::GuiOverlayFrame;
-use super::frame::playback::{GuiQueuePlayback, GuiScrubberHover};
+use super::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
 use super::frame::queue::{GuiQueue, GuiQueueSummary};
 use super::frame::settings::GuiSettingsFrame;
 use super::frame::theme::GuiTheme;
@@ -65,7 +65,8 @@ pub struct GuiSectionBatch {
     /// The open menu or popover, `null` while none is open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub overlay: Option<GuiSection<Option<GuiOverlayFrame>>>,
-    /// The transport band's facts, without the hover preview.
+    /// The transport band's facts, without the hover preview and without the
+    /// playhead facts (design D5: they ride the `playhead` anchor).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playback: Option<GuiSection<GuiQueuePlayback>>,
     /// The scrubber's hover preview, `null` while the pointer is away from the
@@ -90,6 +91,12 @@ pub struct GuiSectionBatch {
     /// The Settings screen, `null` while the screen is closed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<GuiSection<Option<GuiSettingsFrame>>>,
+    /// The playhead anchor (design D5): the position, runtime, paused state,
+    /// and active slot at the send, from which the window predicts the
+    /// position until the next anchor. The core sends one only on the anchor
+    /// rule's triggers, so the field's absence also means "no re-anchor".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub playhead: Option<GuiSection<GuiPlayhead>>,
 }
 
 impl GuiSectionBatch {
