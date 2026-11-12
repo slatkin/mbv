@@ -62,9 +62,9 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 
 ## 8. The Library scroll store (#997 item 1)
 
-- [ ] 8.1 Add `ui/src/lib/library/scroll.ts` with each list's `scrollTop` and `viewportHeight` (design D9). Remove both from `library/state.ts`. Make `LibraryList.svelte` derive its rows from the content, the open nodes, the filter, and the filter state only, and `scrollLibraryList` clamp with the derived row count. Verify: `make ui-test`; `pnpm vitest bench --run` (add the median to `measurements.md`). Test contract, in `scroll.test.ts`: a scroll step changes the scroll store and leaves the derived rows' identity unchanged.
-- [ ] 8.2 Apply the same split to `LibraryShowsList`, `LibraryAudiobooksList`, `LibraryFeedsList`, `LibraryHomeList`, `LibraryEmbyList`, and `LibraryPodcastsList`. Verify: `make ui-test`; `make ui-check`; `make ui-lint`. Test contract: none new (8.1 owns the rule).
-- [ ] 8.3 Update the GUI Library panel row of `docs/architecture/interactive-surface-ledger.md` to name `library/scroll.ts` beside `library/state.ts`. Verify: `rg -n "scroll.ts" docs/architecture/interactive-surface-ledger.md` finds the row.
+- [x] 8.1 Add `ui/src/lib/library/scroll.ts` with each list's `scrollTop` and `viewportHeight` (design D9). Remove both from `library/state.ts`. Make `LibraryList.svelte` derive its rows from the content, the open nodes, the filter, and the filter state only, and `scrollLibraryList` clamp with the derived row count. Verify: `make ui-test`; `pnpm vitest bench --run` (add the median to `measurements.md`). Test contract, in `scroll.test.ts`: a scroll step changes the scroll store and leaves the derived rows' identity unchanged.
+- [x] 8.2 Apply the same split to `LibraryShowsList`, `LibraryAudiobooksList`, `LibraryFeedsList`, `LibraryHomeList`, `LibraryEmbyList`, and `LibraryPodcastsList`. Verify: `make ui-test`; `make ui-check`; `make ui-lint`. Test contract: none new (8.1 owns the rule).
+- [x] 8.3 Update the GUI Library panel row of `docs/architecture/interactive-surface-ledger.md` to name `library/scroll.ts` beside `library/state.ts`. Verify: `rg -n "scroll.ts" docs/architecture/interactive-surface-ledger.md` finds the row.
 
 ## 9. Integration
 
