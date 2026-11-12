@@ -13,8 +13,8 @@ use std::time::Duration;
 use mbv_ctrl::CtrlHello;
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
-    CtrlCmd, CtrlCompatibility, CtrlEvent, DisconnectReason, PlaybackIntent, PlaybackIntentEvent,
-    QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
+    BuildInfo, CtrlCmd, CtrlCompatibility, CtrlEvent, DisconnectReason, PlaybackIntent,
+    PlaybackIntentEvent, QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
 };
 use mbv_net::stream::SocketStream;
 
@@ -286,6 +286,7 @@ struct HandshakeOutcome {
     reader: BufReader<SocketStream>,
     state_event: CtrlEvent,
     ctrl_compatibility: CtrlCompatibility,
+    owner_build: BuildInfo,
     seed: SeedLineRead,
 }
 
@@ -302,13 +303,14 @@ fn run_bounded_handshake(
 ) -> Result<HandshakeOutcome, crate::RemotePlayerError> {
     mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
-            let (mut reader, state_event, ctrl_compatibility) = perform_handshake_with_role(
-                handshake_stream,
-                || Ok(mbv_config::load_or_create_control_credential()?),
-                HandshakeRole::Client,
-                peer_build,
-                pin_swap.as_ref(),
-            )?;
+            let (mut reader, state_event, ctrl_compatibility, owner_build) =
+                perform_handshake_with_role(
+                    handshake_stream,
+                    || Ok(mbv_config::load_or_create_control_credential()?),
+                    HandshakeRole::Client,
+                    peer_build,
+                    pin_swap.as_ref(),
+                )?;
             // An Owner that advertises `playback-output` cold-seeds a
             // claiming Client with `CtrlEvent::PlaybackOutput` right after
             // the initial state, before its command loop (`core_ctrl_spawn`
@@ -326,6 +328,7 @@ fn run_bounded_handshake(
                 reader,
                 state_event,
                 ctrl_compatibility,
+                owner_build,
                 seed,
             })
         },
@@ -364,17 +367,7 @@ fn connect_stream_with_seed_timeout(
     // moved into the writer thread below.
     let disconnect_stream = stream.try_clone()?;
 
-    // Correlation peer (D5 "Ctrl connections"): the owner joins its
-    // `ctrl.client.connected` line to this side's
-    // `ctrl.connection.established` line by an exact `peer=` match.
-    // Unix endpoints peer by this process's pid; TCP endpoints by this side's
-    // local `ip:port`, in the owner's format.
-    let peer = match &stream {
-        SocketStream::Unix(_) => std::process::id().to_string(),
-        SocketStream::Tcp(tcp) => tcp
-            .local_addr()
-            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
-    };
+    let peer = correlation_peer(&stream);
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
@@ -401,6 +394,7 @@ fn connect_stream_with_seed_timeout(
         reader,
         state_event,
         ctrl_compatibility,
+        owner_build,
         seed,
     } = run_bounded_handshake(
         stream.try_clone()?,
@@ -479,6 +473,7 @@ fn connect_stream_with_seed_timeout(
             disconnected,
             shutdown_announced,
             ctrl_compatibility,
+            owner_build,
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,
             next_queue_op_id,
@@ -487,6 +482,20 @@ fn connect_stream_with_seed_timeout(
         },
         event_rx,
     ))
+}
+
+/// Correlation peer (D5 "Ctrl connections"): the owner joins its
+/// `ctrl.client.connected` line to this side's
+/// `ctrl.connection.established` line by an exact `peer=` match.
+/// Unix endpoints peer by this process's pid; TCP endpoints by this side's
+/// local `ip:port`, in the owner's format.
+fn correlation_peer(stream: &SocketStream) -> String {
+    match stream {
+        SocketStream::Unix(_) => std::process::id().to_string(),
+        SocketStream::Tcp(tcp) => tcp
+            .local_addr()
+            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
+    }
 }
 
 fn read_remote_events(reader: impl BufRead, state: ReaderThreadState) {

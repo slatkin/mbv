@@ -5,7 +5,7 @@
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::time::{Duration, Instant};
 
-use mbv_ctrl::{CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
+use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
 use mbv_net::stream::SocketStream;
 
 // Hard wall-clock bound on the post-connect protocol handshake (hello
@@ -17,13 +17,15 @@ use mbv_net::stream::SocketStream;
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 pub(super) const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-/// Whether the handshake must reject an Owner built differently.
+/// Whether the handshake must reject an Owner of a different version or wire.
 ///
 /// The local Owner process is the same binary as this Client, so a differing
-/// `app_version` or `build_id` means a stale process. Every handshake to
-/// `control_socket_path()` compares — the Client attach and both restricted
-/// roles — while explicit `unix://`/`tcp://` endpoints and the packaged
-/// `mbvd` are independent builds and never compare.
+/// application version or wire identity means a stale process or an Owner
+/// whose ctrl messages this Client cannot read. The build identity never
+/// refuses (invariant 15). Every handshake to `control_socket_path()`
+/// compares — the Client attach and both restricted roles — while explicit
+/// `unix://`/`tcp://` endpoints and the packaged `mbvd` are independent
+/// builds and never compare.
 #[derive(Clone, Copy)]
 pub(super) enum PeerBuild {
     Any,
@@ -50,7 +52,7 @@ pub(super) enum HandshakeRole {
 pub(super) fn perform_handshake<F>(
     stream: SocketStream,
     load_control_token: F,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+) -> Result<Handshaken, crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
@@ -66,7 +68,7 @@ where
 pub(super) fn perform_service_setup_admin_handshake<F>(
     stream: SocketStream,
     load_control_token: F,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+) -> Result<Handshaken, crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
@@ -82,18 +84,38 @@ where
     )
 }
 
+/// A completed handshake: the reader positioned after the initial state, the
+/// initial state event, the negotiated compatibility, and the Owner's
+/// identity from its hello (kept for Settings, `RemotePlayer::owner_build`).
+pub(super) type Handshaken = (
+    BufReader<SocketStream>,
+    CtrlEvent,
+    CtrlCompatibility,
+    BuildInfo,
+);
+
+/// The server hello, once validated: the negotiated compatibility and the
+/// Owner's identity.
+pub(super) struct ServerHello {
+    pub(super) compatibility: CtrlCompatibility,
+    pub(super) owner_build: BuildInfo,
+}
+
 pub(super) fn perform_handshake_with_role<F>(
     stream: SocketStream,
     load_control_token: F,
     role: HandshakeRole,
     peer_build: PeerBuild,
     pin_swap: Option<&crate::PinSwapHello>,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+) -> Result<Handshaken, crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
     let mut reader = BufReader::new(stream);
-    let ctrl_compatibility = read_server_hello(&mut reader, peer_build)?;
+    let ServerHello {
+        compatibility: ctrl_compatibility,
+        owner_build,
+    } = read_server_hello(&mut reader, peer_build)?;
     send_client_hello(
         &mut reader,
         &ctrl_compatibility,
@@ -103,13 +125,13 @@ where
     )?;
     let state_event = read_initial_state(&mut reader)?;
 
-    Ok((reader, state_event, ctrl_compatibility))
+    Ok((reader, state_event, ctrl_compatibility, owner_build))
 }
 
 pub(super) fn read_server_hello(
     reader: &mut BufReader<SocketStream>,
     peer_build: PeerBuild,
-) -> Result<CtrlCompatibility, crate::RemotePlayerError> {
+) -> Result<ServerHello, crate::RemotePlayerError> {
     let mut first_line = String::new();
     reader.read_line(&mut first_line).map_err(|e| {
         crate::RemotePlayerError::protocol(format!("failed to read daemon protocol hello: {e}"))
@@ -128,18 +150,21 @@ pub(super) fn read_server_hello(
         ));
     };
     // A local Owner is the same binary as this Client, so a differing
-    // `app_version` or `build_id` means the user is attached to a stale
-    // process (emby-session-output-followups design D3, issue #949 item 3).
-    // An Owner that predates the build-id field sends an empty `build_id`,
-    // which never equals this binary's non-empty identity and is refused
-    // the same way. Refuse here, before `validate_peer` and therefore
-    // before `send_client_hello`, so no control credential leaves this
-    // terminal (invariant 15). Both sides read the workspace version
-    // (`version.workspace = true`), so this compares like with like.
+    // application version or wire identity means the user is attached to a
+    // stale process or to an Owner whose ctrl messages this Client cannot
+    // read (issue #949 item 3, wire-identity change). The build identity is
+    // not compared: it changes with every commit and dirty build. An Owner
+    // that predates the wire-identity field sends an empty `wire_id`, which
+    // never equals this binary's non-empty identity, so it is refused the
+    // same way. Refuse here, before `validate_peer` and therefore before
+    // `send_client_hello`, so no control credential leaves this terminal
+    // (invariant 15). Both sides read the workspace version
+    // (`version.workspace = true`), so the version compares like with like.
+    let owner_build = info.build_info();
     if matches!(peer_build, PeerBuild::MustMatch)
-        && (info.app_version != env!("CARGO_PKG_VERSION") || info.build_id != mbv_ctrl::BUILD_ID)
+        && BuildInfo::current().differs_for_gate(&owner_build)
     {
-        return Err(crate::RemotePlayerError::owner_mismatch(info.build_info()));
+        return Err(crate::RemotePlayerError::owner_mismatch(owner_build));
     }
     info.validate_peer()?;
     let mut compatibility = info.compatibility()?;
@@ -156,7 +181,10 @@ pub(super) fn read_server_hello(
     compatibility.supports_emby_session_output = info.supports_emby_session_output();
     compatibility.supports_twitch_queue = info.supports_twitch_queue();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
-    Ok(compatibility)
+    Ok(ServerHello {
+        compatibility,
+        owner_build,
+    })
 }
 
 pub(super) fn send_client_hello<F>(

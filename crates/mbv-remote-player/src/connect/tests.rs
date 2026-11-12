@@ -172,10 +172,11 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
         )
         .unwrap();
     });
-    let (_, state, _) = perform_service_setup_admin_handshake(SocketStream::Unix(client), || {
-        Ok("admin-control-token".to_string())
-    })
-    .unwrap();
+    let (_, state, _, _) =
+        perform_service_setup_admin_handshake(SocketStream::Unix(client), || {
+            Ok("admin-control-token".to_string())
+        })
+        .unwrap();
     peer.join().unwrap();
     let Ok(CtrlCmd::Hello(hello)) = hello_rx.recv() else {
         panic!("expected client hello");
@@ -333,130 +334,6 @@ fn connect_endpoint_maps_owner_admission_refusals() {
     assert_eq!(shutting_down.to_string(), "the owner is shutting down");
 }
 
-// Issue #559 (design D1) and emby-session-output-followups task 4.2 (issue
-// #949 item 3): the build gate fires on the Owner's hello, before the Client
-// sends its own hello or control credential — on a different version, on a
-// same-version build-id mismatch, and on the empty build id a stale Owner
-// sends (invariant 15). Each case pins the refusal and the prompt text the
-// scenario produces.
-#[rstest]
-#[case::a_different_owner_version(
-    "different-owner-build",
-    "owner-build-1",
-    "version different-owner-build"
-)]
-#[case::a_different_build_id(
-    env!("CARGO_PKG_VERSION"),
-    "a-different-build-id",
-    "build a-different-build-id"
-)]
-#[case::a_stale_owner_without_a_build_id(
-    env!("CARGO_PKG_VERSION"),
-    "",
-    "build unknown"
-)]
-fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
-    #[case] owner_version: &str,
-    #[case] owner_build_id: &str,
-    #[case] message_fragment: &str,
-) {
-    use std::io::{BufRead, Write};
-
-    let (client, daemon) = UnixStream::pair().unwrap();
-    let (received_tx, received_rx) = mpsc::channel();
-    let owner_version = owner_version.to_string();
-    let owner_build_id = owner_build_id.to_string();
-    let peer = std::thread::spawn(move || {
-        let mut writer = daemon.try_clone().unwrap();
-        let mut reader = BufReader::new(daemon);
-        let mut hello = CtrlHello::current();
-        hello.app_version = owner_version;
-        hello.build_id = owner_build_id;
-        hello.wire_id = "owner-wire-1".to_string();
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        received_tx.send(client_hello).unwrap();
-    });
-
-    let error = perform_handshake_with_role(
-        SocketStream::Unix(client),
-        || Ok("unused".to_string()),
-        HandshakeRole::Client,
-        PeerBuild::MustMatch,
-        Some(&crate::PinSwapHello::default()),
-    )
-    .unwrap_err();
-
-    assert!(error.is_owner_mismatch());
-    assert!(
-        error.to_string().contains(message_fragment),
-        "the mismatch message names the Owner's identity: {error}"
-    );
-    assert!(
-        error.to_string().contains("wire owner-wire-1")
-            && error
-                .to_string()
-                .contains(&format!("wire {}", mbv_ctrl::wire_id())),
-        "the mismatch message names both wire identities: {error}"
-    );
-    peer.join().unwrap();
-    assert_eq!(received_rx.recv().unwrap(), "");
-}
-
-#[test]
-// Issue #559: a matching Owner build attaches normally under the build gate.
-fn local_handshake_accepts_identical_owner_build() {
-    use std::io::{BufRead, BufReader, Write};
-
-    let (client, daemon) = UnixStream::pair().unwrap();
-    let peer = std::thread::spawn(move || {
-        let mut writer = daemon.try_clone().unwrap();
-        let mut reader = BufReader::new(daemon);
-        let mut hello = CtrlHello::current();
-        hello.app_version = env!("CARGO_PKG_VERSION").to_string();
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-                status: PlayerStatus::default(),
-                slots: Vec::new(),
-                active_slot: None,
-                revision: 0,
-                source: QueueSource::Unknown,
-                lineage: mbv_queue::QueueLineage::default(),
-                in_flight_transition: None,
-                queued_latest_transition: None,
-            }))
-            .unwrap()
-        )
-        .unwrap();
-    });
-
-    perform_handshake_with_role(
-        SocketStream::Unix(client),
-        || Ok("unused".to_string()),
-        HandshakeRole::Client,
-        PeerBuild::MustMatch,
-        Some(&crate::PinSwapHello::default()),
-    )
-    .unwrap();
-    peer.join().unwrap();
-}
-
 #[test]
 fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     use std::io::{BufRead, BufReader, Write};
@@ -492,7 +369,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility) =
+    let (_reader, _state, compatibility, _) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(compatibility.supports_audio_only);
     assert!(compatibility.supports_answered_queue_ops);
@@ -533,7 +410,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility) =
+    let (_reader, _state, compatibility, _) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(!compatibility.supports_audio_only);
     assert!(!compatibility.supports_answered_queue_ops);
@@ -787,4 +664,5 @@ fn a_late_partial_seed_line_is_never_consumed() {
 
 mod daemon_endpoint;
 mod hello;
+mod owner_gate;
 mod queue;

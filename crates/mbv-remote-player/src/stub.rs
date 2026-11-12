@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
 
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
-use mbv_ctrl::{CtrlCmd, CtrlCompatibility};
+use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 
@@ -69,6 +69,8 @@ impl RemotePlayer {
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         let compat = CtrlCompatibility::current();
+        // A stub stands in for an Owner of this binary.
+        let owner_build = BuildInfo::current();
         (
             RemotePlayer {
                 status,
@@ -79,6 +81,7 @@ impl RemotePlayer {
                 disconnected,
                 shutdown_announced,
                 ctrl_compatibility: compat,
+                owner_build,
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,
                 next_queue_op_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),

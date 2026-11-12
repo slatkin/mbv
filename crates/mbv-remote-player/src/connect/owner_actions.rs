@@ -40,7 +40,7 @@ pub fn signal_local_daemon_service_setup(
                 "restart required (cannot read local daemon ctrl): {error}"
             ))
         })?;
-    let (mut reader, _state, _compatibility) =
+    let (mut reader, _state, _compatibility, _owner_build) =
         perform_service_setup_admin_handshake(SocketStream::Unix(stream), || {
             Ok(mbv_config::load_or_create_control_credential()?)
         })
@@ -145,7 +145,7 @@ pub(super) fn run_owner_action_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    let compatibility = read_server_hello(reader, PeerBuild::MustMatch)?;
+    let compatibility = read_server_hello(reader, PeerBuild::MustMatch)?.compatibility;
     if !compatibility.supports_owner_action {
         return Err(restart_required_too_old(action));
     }
