@@ -100,77 +100,6 @@ signalled.
 - **THEN** mbv SHALL NOT send a signal to any process
 - **THEN** mbv SHALL report that no running instance was found and SHALL exit with a non-zero status
 
-### Requirement: A local Client never attaches to an Owner from a different build
-A Client attaching to the local Owner process SHALL compare the Owner's application version and
-build identity, as reported in the Owner's hello, with its own. The local Owner is the same
-binary as the Client, so those two values are the comparison; ctrl protocol compatibility is
-decided by the `ctrl-protocol` capability alone and this requirement SHALL NOT add, remove, or
-alter it. An Owner whose hello reports no build identity SHALL count as a build mismatch. When
-the application version or the build identity differs, the Client SHALL NOT attach: it SHALL stop
-before sending its own hello, so that no control credential is transmitted to the Owner, no
-client is admitted, and no queue or playback state is received. Instead it SHALL ask the user,
-before any terminal UI starts, whether to stop the Owner and relaunch it from this binary. This
-rule SHALL apply only to the local Owner process; a Client launched against an explicit
-`unix://` or `tcp://` endpoint SHALL NOT apply it.
-
-The prompt SHALL show the Owner's version and build identity and this terminal's version and
-build identity, SHALL state that
-restarting stops playback and closes any other mbv terminals attached to the Owner, and SHALL
-offer exactly two choices: restart, or quit. There SHALL be no choice to continue against the
-mismatched Owner.
-
-#### Scenario: Owner and Client are the same build
-- **WHEN** the Owner's application version and build identity both equal the Client's
-- **THEN** the Client SHALL attach as it would without this requirement
-- **THEN** no prompt SHALL be shown
-
-#### Scenario: Application versions differ
-- **WHEN** a Client attaches to a running Owner whose application version differs from its own
-- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
-- **THEN** the terminal SHALL show the mismatch prompt with both versions and build identities before any UI starts
-
-#### Scenario: Only the ctrl protocol version differs
-- **WHEN** the application versions and build identities are equal but the Owner reports a different ctrl protocol version
-- **THEN** the Client SHALL NOT show the mismatch prompt
-- **THEN** the refusal SHALL be decided by the `ctrl-protocol` capability exactly as without this requirement
-
-#### Scenario: User chooses restart
-- **WHEN** the user chooses restart at the mismatch prompt
-- **THEN** mbv SHALL ask the Owner to stop the same way `mbv -q` does, so the Owner persists its state and exits
-- **THEN** mbv SHALL start a fresh Owner from this binary once the old one has released the lock, and attach to it
-- **THEN** mbv SHALL NOT show the prompt again for the Owner that is stopping
-
-#### Scenario: The old Owner does not exit in time
-- **WHEN** the user chose restart and the old Owner is still running after the bounded wait
-- **THEN** mbv SHALL exit with a non-zero status and a message that the Owner is still shutting down, naming `mbv -q`
-
-#### Scenario: User chooses quit
-- **WHEN** the user chooses quit, presses Enter alone, enters any other input, or input reaches end of file
-- **THEN** mbv SHALL exit with a non-zero status without signalling the Owner
-- **THEN** the message SHALL name `mbv -q` and relaunching as the way to proceed
-
-#### Scenario: Standard input is not a terminal
-- **WHEN** a mismatch is detected and standard input is not a terminal
-- **THEN** mbv SHALL NOT prompt, SHALL NOT signal the Owner, and SHALL exit with a non-zero status
-- **THEN** the message SHALL state both versions and build identities and name `mbv -q`
-
-#### Scenario: Explicit endpoint reports a different version
-- **WHEN** a Client launched with an explicit `unix://` or `tcp://` endpoint receives a hello from a different application version
-- **THEN** the Client SHALL NOT show the mismatch prompt and SHALL NOT signal any process
-- **THEN** ctrl protocol compatibility SHALL be decided by the `ctrl-protocol` capability alone
-
-#### Scenario: Same version, different build identity
-
-- **WHEN** a Client attaches to a running Owner whose application version equals its own but whose build identity differs
-- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
-- **THEN** the terminal SHALL show the mismatch prompt naming the two build identities before any UI starts
-
-#### Scenario: The Owner's hello reports no build identity
-
-- **WHEN** a Client attaches to a running Owner whose hello reports no build identity
-- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
-- **THEN** the terminal SHALL show the mismatch prompt naming the Owner as an unknown build before any UI starts
-
 ### Requirement: The runtime directory is private to the user
 mbv's runtime files (the owner lock, the control socket, the mpv IPC socket and the mpv config
 directory) SHALL live in `$XDG_RUNTIME_DIR` when it is set. Otherwise they SHALL live in a
@@ -193,3 +122,96 @@ directory, is owned by another user, or grants any group or other access.
   user, is a symlink, or grants group or other access
 - **THEN** mbv SHALL exit with a non-zero status and an error naming the directory and the
   reason, before it takes the lock or opens any socket
+
+### Requirement: A local Client never attaches to an Owner with a different version or wire
+
+A Client attaching to the local Owner SHALL compare the application version and wire identity from the Owner's hello with its own. The build identity SHALL NOT take part. A missing Owner wire identity SHALL count as a mismatch. On a mismatch the Client SHALL stop before it sends its hello, so that no control credential leaves it, and SHALL show the mismatch prompt. The rule SHALL apply only to the local Owner, and SHALL NOT alter the `ctrl-protocol` version check.
+
+#### Scenario: Owner and Client have the same version and wire
+- **WHEN** the Owner's application version and wire identity both equal the Client's
+- **THEN** the Client SHALL attach as it would without this requirement
+- **THEN** no prompt SHALL be shown
+
+#### Scenario: Same version and wire, different build identity
+- **WHEN** a Client attaches to a running Owner whose application version and wire identity equal its own but whose build identity differs
+- **THEN** the Client SHALL attach as it would without this requirement
+- **THEN** no prompt, toast, or status text SHALL report the different build identity
+
+#### Scenario: Application versions differ
+- **WHEN** a Client attaches to a running Owner whose application version differs from its own
+- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
+- **THEN** the Client SHALL show the mismatch prompt before any user interface starts
+
+#### Scenario: Same version, different wire identity
+- **WHEN** a Client attaches to a running Owner whose application version equals its own but whose wire identity differs
+- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
+- **THEN** the Client SHALL show the mismatch prompt before any user interface starts
+
+#### Scenario: The Owner's hello reports no wire identity
+- **WHEN** a Client attaches to a running Owner whose hello reports no wire identity
+- **THEN** the Client SHALL NOT send its hello or control credential to that Owner
+- **THEN** the Client SHALL show the mismatch prompt, which names the Owner's wire identity as unknown, before any user interface starts
+
+#### Scenario: Only the ctrl protocol version differs
+- **WHEN** the application versions and wire identities are equal but the Owner reports a different ctrl protocol version
+- **THEN** the Client SHALL NOT show the mismatch prompt
+- **THEN** the refusal SHALL be decided by the `ctrl-protocol` capability exactly as without this requirement
+
+#### Scenario: Explicit endpoint reports a different version
+- **WHEN** a Client launched with an explicit `unix://` or `tcp://` endpoint receives a hello from a different application version or wire identity
+- **THEN** the Client SHALL NOT show the mismatch prompt and SHALL NOT signal any process
+- **THEN** ctrl protocol compatibility SHALL be decided by the `ctrl-protocol` capability alone
+
+### Requirement: The mismatch prompt offers restart or quit
+
+The mismatch prompt SHALL show the application version, build identity, and wire identity of the Owner and of this Client. It SHALL state that restarting stops playback and closes any other mbv Clients attached to the Owner. It SHALL offer exactly two choices, restart and quit. There SHALL be no choice to continue against the mismatched Owner.
+
+#### Scenario: The prompt shows both sides
+- **WHEN** the mismatch prompt is shown
+- **THEN** it SHALL show the application version, build identity, and wire identity of the Owner and of this Client
+
+#### Scenario: User chooses restart
+- **WHEN** the user chooses restart at the mismatch prompt
+- **THEN** mbv SHALL ask the Owner to stop the same way `mbv -q` does, so the Owner persists its state and exits
+- **THEN** mbv SHALL start a fresh Owner from this binary once the old one has released the lock, and attach to it
+- **THEN** mbv SHALL NOT show the prompt again for the Owner that is stopping
+
+#### Scenario: The old Owner does not exit in time
+- **WHEN** the user chose restart and the old Owner is still running after the bounded wait
+- **THEN** mbv SHALL exit with a non-zero status and a message that the Owner is still shutting down, naming `mbv -q`
+
+#### Scenario: User chooses quit
+- **WHEN** the user chooses quit, presses Enter alone, enters any other input, or input reaches end of file
+- **THEN** mbv SHALL exit with a non-zero status without signalling the Owner
+- **THEN** the message SHALL name `mbv -q` and relaunching as the way to proceed
+
+#### Scenario: Standard input is not a terminal
+- **WHEN** a mismatch is detected and standard input is not a terminal
+- **THEN** mbv SHALL NOT prompt, SHALL NOT signal the Owner, and SHALL exit with a non-zero status
+- **THEN** the message SHALL state the version information of both sides and name `mbv -q`
+
+### Requirement: Settings shows the version information of the Client and the Owner
+
+The Session section of Settings SHALL show two read-only rows in the TUI Client and in the GUI Client. One row SHALL show this Client's application version, build identity, and wire identity. The other SHALL show the same three values from the connected Owner's hello. Both rows SHALL always show, also when the values are equal. Activating a row SHALL change nothing and save nothing.
+
+#### Scenario: Settings is opened while attached
+- **WHEN** the user opens the Session section of Settings while the Client is attached to an Owner
+- **THEN** the Client row SHALL show this Client's application version, build identity, and wire identity
+- **THEN** the Owner row SHALL show the application version, build identity, and wire identity from that Owner's hello
+
+#### Scenario: The Owner is a different build of the same version and wire
+- **WHEN** the attached Owner reports a build identity different from this Client's
+- **THEN** the two rows SHALL show the two different build identities
+- **THEN** no other surface SHALL report the difference
+
+#### Scenario: The Owner predates the wire identity
+- **WHEN** the attached Owner's hello reports no build identity or no wire identity
+- **THEN** the Owner row SHALL show that value as unknown
+
+#### Scenario: A version row is activated
+- **WHEN** the user activates either version row
+- **THEN** no setting SHALL change and no configuration save SHALL be scheduled
+
+#### Scenario: The Client is attached through an explicit endpoint
+- **WHEN** the Client is attached to a packaged mbvd or an explicit `unix://` or `tcp://` endpoint
+- **THEN** the Owner row SHALL show the values from that Owner's hello
