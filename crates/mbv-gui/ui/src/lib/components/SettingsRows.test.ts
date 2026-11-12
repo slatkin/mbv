@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiSettingsContent, GuiSettingsFrame } from '$lib/bridge/types';
+import type { GuiSettingRow, GuiSettingsContent, GuiSettingsFrame } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
 import { routeSettingsKey } from '$lib/settings/keys';
 import { pickMenu } from '$lib/settings/pick-menu';
@@ -224,4 +224,49 @@ test('the cursor paints on a choice box after a key moves onto it', () => {
 			.querySelector('[data-settings-entry="choice:hiddenLibraries:music"]')
 			?.hasAttribute('data-settings-cursor'),
 	).toBe(true);
+});
+
+/** A Session section's two version rows: read-only `info` rows. */
+function infoContent(): Extract<GuiSettingsContent, { kind: 'rows' }> {
+	const info = (key: string, label: string, value: string): GuiSettingRow => ({
+		key,
+		label,
+		kind: 'info',
+		value,
+		flag: null,
+		choices: null,
+		choicesKind: null,
+		values: null,
+	});
+	return {
+		kind: 'rows',
+		rows: [
+			info('clientVersion', 'This client', '1.2.3 · abc · def'),
+			info('ownerVersion', 'Owner', '1.2.3 · unknown · unknown'),
+		],
+	};
+}
+
+// An info row paints its label and value with no control, and neither Enter
+// on it nor a click on it sends a command (owner-gate-on-wire-identity design
+// D5).
+test('an info row paints its value with no control, and Enter and a click send no command', async () => {
+	const content = infoContent();
+	const entries = settingsEntries(content, {});
+	const { container, getByText, queryByRole } = render(SettingsRows, {
+		props: { rows: content.rows, entries, cursorId: null },
+	});
+
+	expect(getByText('This client')).toBeTruthy();
+	expect(getByText('1.2.3 · abc · def')).toBeTruthy();
+	expect(queryByRole('button')).toBeNull();
+	expect(queryByRole('switch')).toBeNull();
+
+	focusContent(indexOf(entries, 'setting:clientVersion'));
+	routeSettingsKey(new KeyboardEvent('keydown', { key: 'Enter' }), rowsFrame(content));
+	await fireEvent.click(
+		container.querySelector('[data-settings-info="clientVersion"]') as HTMLElement,
+	);
+
+	expect(invokeMock).not.toHaveBeenCalled();
 });

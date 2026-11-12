@@ -4,8 +4,8 @@
 	// and the way it is edited, painted with the shared Settings parts.
 	//
 	// A toggle row is a switch, a pick row is a pick button with its value
-	// menu, a cycle row is a button carrying the value it steps, and an action
-	// row is a button. A choice list is a checkbox-grid card whose Apply runs
+	// menu, a cycle row is a button carrying the value it steps, an action
+	// row is a button, and an info row is its value text with no control. A choice list is a checkbox-grid card whose Apply runs
 	// the row's own Apply entry, so the grid and the keyboard share one effect.
 	// The cards sit in the canvas's two-column grid, which leaves a
 	// single-card section (mpv) inside the canvas's 560 px.
@@ -39,9 +39,16 @@
 
 	const onpress = (id: string) => pressSettingsEntry(entries, id);
 
-	/** The rows one card holds as setting rows: a toggle, a cycle, or a pick. */
+	/** The rows one card holds as setting rows: a toggle, a cycle, a pick, or an
+	 * info row. */
 	const settingRows = $derived(
-		rows.filter((row) => row.kind === 'toggle' || row.kind === 'cycle' || row.kind === 'pick'),
+		rows.filter(
+			(row) =>
+				row.kind === 'toggle' ||
+				row.kind === 'cycle' ||
+				row.kind === 'pick' ||
+				row.kind === 'info',
+		),
 	);
 	/** The action rows, which the canvas paints as buttons. */
 	const actionRows = $derived(rows.filter((row) => row.kind === 'action'));
@@ -72,6 +79,8 @@
 							checked={row.flag ?? false}
 							onpress={() => onpress(id)}
 						/>
+					{:else if row.kind === 'info'}
+						<span data-settings-info={row.key} style:color="var(--canvas-dim)">{row.value}</span>
 					{:else if row.kind === 'pick'}
 						<SettingsPickButton
 							setting={row.key}
