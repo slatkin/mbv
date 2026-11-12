@@ -15,7 +15,7 @@
 	// its text (design D7's filter rule).
 	import type { GuiFeedsDetail, GuiFeedsList } from '$lib/bridge/types';
 	import {
-		buildFeedsRows,
+		feedsRowsOf,
 		FEEDS_ROW_HEIGHT,
 	} from '$lib/library/feeds-list';
 	import type { FeedsItemRow } from '$lib/library/feeds-list';
@@ -49,7 +49,7 @@
 	/** The header's selection label (design D15): the active pill's name. */
 	const selectionLabel = $derived(list.pills.find((pill) => pill.selected)?.name ?? 'Latest');
 
-	const rows = $derived(buildFeedsRows(list.rows, $feedsUi.filter));
+	const rows = $derived(feedsRowsOf(list.rows, $feedsUi.filter));
 
 
 	/** An entry row's title colour: the canvas's text tone, dimmed on a played

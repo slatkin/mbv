@@ -26,6 +26,7 @@ import {
 	moveCursor,
 } from './list';
 import type { ListMove } from './list';
+import { memoRows } from './row-memo';
 
 /** The letter heading row's height in logical pixels: the Music list's letter
  * heading, which the All series list reuses. */
@@ -348,3 +349,15 @@ export function moveShowsCursor(
 export function showsLetterRail(rows: readonly ShowsListRow[]): RailLetter[] {
 	return letterRail(rows, (row) => (row.kind === 'series' ? row.letter : null));
 }
+
+/** The Shows rows, memoized on the carried content, the view mode, the filter,
+ * and the tree's open and closed nodes (design D9). */
+export const showsRowsOf = memoRows(
+	(
+		shows: GuiShowsList,
+		mode: GuiShowsMode,
+		filter: string,
+		open: readonly string[],
+		closed: readonly string[],
+	): ShowsListRow[] => buildShowsRows(shows, mode, filter, { open, closed }),
+);

@@ -15,7 +15,7 @@
 	// its text (design D7's filter rule).
 	import type { GuiPodcastsDetail, GuiPodcastsList } from '$lib/bridge/types';
 	import {
-		buildPodcastsRows,
+		podcastsRowsOf,
 		PODCASTS_ROW_HEIGHT,
 	} from '$lib/library/podcasts-list';
 	import type { PodcastsItemRow } from '$lib/library/podcasts-list';
@@ -62,7 +62,7 @@
 	/** The painted rows of the flat list (row 10.1): the same model
 	 * `$lib/library/podcasts` builds from the carried content, narrowed by
 	 * the filter's text. */
-	const rows = $derived(buildPodcastsRows(list.rows, $podcastsUi.filter));
+	const rows = $derived(podcastsRowsOf(list.rows, $podcastsUi.filter));
 
 
 	/** An episode row's title colour: the canvas's text tone, dimmed on a

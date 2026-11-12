@@ -17,7 +17,7 @@ import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiFeedPill, GuiFeedsList } from '$lib/bridge/types';
 import { moveCursor } from './list';
 import type { ListMove } from './list';
-import { buildFeedsRows } from './feeds-list';
+import { feedsRowsOf } from './feeds-list';
 import type { FeedsItemRow } from './feeds-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
@@ -52,7 +52,7 @@ const pillList = createPillList<
 >({
 	frame: libraryFeedsList,
 	scroll: feedsScroll,
-	buildRows: (feeds, filter) => buildFeedsRows(feeds.rows, filter),
+	buildRows: (feeds, filter) => feedsRowsOf(feeds.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,
 	pills: (feeds) => feeds.pills,

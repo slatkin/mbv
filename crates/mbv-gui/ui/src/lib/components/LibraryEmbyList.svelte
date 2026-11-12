@@ -21,7 +21,7 @@
 	// `data-library-emby-row`.
 	import type { GuiEmbyDetail, GuiEmbyList } from '$lib/bridge/types';
 	import {
-		buildEmbyRows,
+		embyRowsOf,
 		embyLetterRail,
 		embyRowLetter,
 	} from '$lib/library/emby-list';
@@ -57,7 +57,7 @@
 	/** The painted rows (row 8.1): the plain mode's rows with their headings, or
 	 * the feed-group mode's flat rows with no heading, narrowed by the
 	 * filter's text. */
-	const rows = $derived(buildEmbyRows(list.rows, list.feedGroup, $embyUi.filter));
+	const rows = $derived(embyRowsOf(list.rows, list.feedGroup, $embyUi.filter));
 
 	/** The header's selection label (design D15): the feed-group mode's
 	 * selected group, and `All` for a plain library, whose list is the whole

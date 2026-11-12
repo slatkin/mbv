@@ -9,6 +9,7 @@
 import type { GuiPodcastsRow } from '$lib/bridge/types';
 import { buildFlatRows } from './list';
 import type { FlatRow } from './list';
+import { memoRows } from './row-memo';
 
 /** The episode row's height in logical pixels (design D12): the room a
  * two-line episode title and the date gutter paint into, as a Shows flat
@@ -36,3 +37,6 @@ export function buildPodcastsRows(
 ): PodcastsItemRow[] {
 	return buildFlatRows(rows, PODCASTS_ROW_HEIGHT, filter);
 }
+
+/** The Podcasts rows, memoized on the carried rows and the filter (design D9). */
+export const podcastsRowsOf = memoRows(buildPodcastsRows);

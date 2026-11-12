@@ -9,7 +9,7 @@
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiHomeRowId } from '$lib/bridge/types';
-import { buildHomeRows, moveHomeCursor } from './home-list';
+import { homeRowsOf, moveHomeCursor } from './home-list';
 import type { HomeListRow } from './home-list';
 import type { ListMove } from './list';
 import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
@@ -38,7 +38,8 @@ export const homeUi = writable<HomeUiState>(initialHomeUi());
 /** The painted rows of the carried Home content (design D12), narrowed by the
  * state's filter text. */
 function homeRows(filter = get(homeUi).filter): HomeListRow[] {
-	return buildHomeRows(libraryHomeList()?.rows ?? [], filter);
+	const home = libraryHomeList();
+	return home === null ? [] : homeRowsOf(home.rows, filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */

@@ -19,7 +19,7 @@ import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { jumpToLetter } from './list';
 import type { ListMove } from './list';
 import {
-	buildEmbyRows,
+	embyRowsOf,
 	embyGroupKey,
 	embyLetterRail,
 	moveEmbyCursor,
@@ -54,7 +54,7 @@ const pillList = createPillList<
 >({
 	frame: libraryEmbyList,
 	scroll: embyScroll,
-	buildRows: (emby, filter) => buildEmbyRows(emby.rows, emby.feedGroup, filter),
+	buildRows: (emby, filter) => embyRowsOf(emby.rows, emby.feedGroup, filter),
 	itemOf: (row) => (row.kind === 'item' ? row : null),
 	move: moveEmbyCursor,
 	pills: (emby) => emby.pills,

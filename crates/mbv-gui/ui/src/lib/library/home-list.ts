@@ -10,6 +10,7 @@
 import type { GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiArtRef } from '$lib/bridge/types';
 import { filterMatch, moveCursor } from './list';
 import type { ListMove } from './list';
+import { memoRows } from './row-memo';
 
 /** The section heading row's height in logical pixels: the letter heading
  * height's look, scaled to the section name. */
@@ -148,3 +149,6 @@ export function moveHomeCursor(
 ): string | null {
 	return moveCursor(homeSelectableRows(rows), cursor, move, page);
 }
+
+/** The Home rows, memoized on the carried rows and the filter (design D9). */
+export const homeRowsOf = memoRows(buildHomeRows);

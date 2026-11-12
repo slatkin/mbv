@@ -16,7 +16,7 @@
 	// Enter plays the cursor row, and the press is the selection's half.
 	import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
 	import {
-		buildHomeRows,
+		homeRowsOf,
 		HOME_ITEM_ROW_HEIGHT,
 		homeRowKey,
 	} from '$lib/library/home-list';
@@ -55,7 +55,7 @@
 	/** The painted rows of the flat list (design D12): the same model
 	 * `$lib/library/home` builds from the carried content, narrowed by the
 	 * filter's text. */
-	const rows = $derived(buildHomeRows(list.rows, $homeUi.filter));
+	const rows = $derived(homeRowsOf(list.rows, $homeUi.filter));
 
 
 	/** An item row's name colour: the canvas's text tone, dimmed on a played

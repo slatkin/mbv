@@ -20,7 +20,7 @@
 	// because the chapters it rested on belong to the previous book.
 	import type { GuiAudiobooksDetail, GuiAudiobooksList } from '$lib/bridge/types';
 	import {
-		buildAudiobooksRows,
+		audiobooksRowsOf,
 		audiobooksLetterRail,
 		audiobooksRowLetter,
 	} from '$lib/library/audiobooks-list';
@@ -55,7 +55,7 @@
 
 	/** The painted rows (row 9.1): the book rows with their letter headings,
 	 * narrowed by the filter's text. */
-	const rows = $derived(buildAudiobooksRows(list.rows, $audiobooksUi.filter));
+	const rows = $derived(audiobooksRowsOf(list.rows, $audiobooksUi.filter));
 
 	/** The rail's A–Z letters over the painted rows (row 9.1). */
 	const rail = $derived(audiobooksLetterRail(rows));

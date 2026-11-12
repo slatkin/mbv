@@ -37,6 +37,7 @@ import {
 import { jumpToLetter as railJump } from './list';
 import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
 import { musicScroll } from './scroll';
+import { memoRows } from './row-memo';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
  * the pane past the Hero, but it takes Panel focus through the core's focus
@@ -291,27 +292,21 @@ function rowsOf(ui: LibraryUiState): LibraryRow[] {
 	return libraryRowsOf(libraryTree(ui));
 }
 
-/** The row model the last call built. A scroll step and a cursor move read the
- * same tree, so they read the same rows (design D9). */
-let rowMemo: { tree: LibraryTree; rows: LibraryRow[] } | null = null;
+/** The canvas tree's rows, memoized on the tree's four fields (design D9). */
+const musicRowsOf = memoRows(
+	(
+		artists: LibraryTree['artists'],
+		open: LibraryTree['open'],
+		closed: LibraryTree['closed'],
+		filter: LibraryTree['filter'],
+	): LibraryRow[] => buildLibraryRows({ artists, open, closed, filter }),
+);
 
 /** The canvas tree's painted rows (design D9). The same array comes back while
  * the content, the open nodes, the filter text, and the closed nodes keep their
  * identity, so a scroll step never rebuilds the rows it clamps against. */
 export function libraryRowsOf(tree: LibraryTree): LibraryRow[] {
-	const memo = rowMemo;
-	if (memo !== null && sameTree(memo.tree, tree)) {
-		return memo.rows;
-	}
-	const rows = buildLibraryRows(tree);
-	rowMemo = { tree, rows };
-	return rows;
-}
-
-function sameTree(a: LibraryTree, b: LibraryTree): boolean {
-	return (
-		a.artists === b.artists && a.open === b.open && a.closed === b.closed && a.filter === b.filter
-	);
+	return musicRowsOf(tree.artists, tree.open, tree.closed, tree.filter);
 }
 
 function libraryTree(ui: LibraryUiState): LibraryTree {

@@ -16,7 +16,7 @@ import { libraryAudiobooksList } from './parts';
 import { libraryUi } from './state';
 import { audiobooksScroll } from './scroll';
 import {
-	buildAudiobooksRows,
+	audiobooksRowsOf,
 	moveAudiobooksCursor,
 	audiobooksLetterRail,
 } from './audiobooks-list';
@@ -44,7 +44,7 @@ export const audiobooksUi = writable<AudiobooksUiState>(initialAudiobooksUi());
 /** The painted rows of the carried book content (row 9.1). */
 function bookRows(filter = get(audiobooksUi).filter): AudiobooksListRow[] {
 	const audiobooks = libraryAudiobooksList();
-	return audiobooks === null ? [] : buildAudiobooksRows(audiobooks.rows, filter);
+	return audiobooks === null ? [] : audiobooksRowsOf(audiobooks.rows, filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */

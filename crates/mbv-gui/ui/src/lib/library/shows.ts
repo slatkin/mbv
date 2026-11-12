@@ -18,7 +18,7 @@ import { libraryUi } from './state';
 import { showsScroll } from './scroll';
 import {
 	activeShowsMode,
-	buildShowsRows,
+	showsRowsOf,
 	isShowsNodeRow,
 	moveShowsCursor,
 	showsLetterRail,
@@ -72,10 +72,7 @@ function showsRows(filter = get(showsUi).filter): ShowsListRow[] {
 		return [];
 	}
 	const ui = get(showsUi);
-	return buildShowsRows(shows, activeShowsMode(shows), filter, {
-		open: ui.open,
-		closed: ui.closed,
-	});
+	return showsRowsOf(shows, activeShowsMode(shows), filter, ui.open, ui.closed);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */

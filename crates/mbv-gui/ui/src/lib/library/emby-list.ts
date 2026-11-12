@@ -17,6 +17,7 @@ import {
 	moveCursor,
 } from './list';
 import type { ListMove } from './list';
+import { memoRows } from './row-memo';
 
 /** The letter heading row's height in logical pixels (design D12): the Music
  * list's letter heading, which the plain list reuses. */
@@ -136,3 +137,7 @@ export function embyLetterRail(rows: readonly EmbyListRow[]): RailLetter[] {
 export function embyGroupKey(group: GuiEmbyFeedGroup): string {
 	return group.kind === 'all' ? 'all' : group.kind === 'latest' ? 'latest' : `folder:${group.id}`;
 }
+
+/** The Emby rows, memoized on the carried rows, the feed-group flag, and the
+ * filter (design D9). */
+export const embyRowsOf = memoRows(buildEmbyRows);

@@ -19,8 +19,8 @@
 	import type { GuiShowsDetail, GuiShowsList } from '$lib/bridge/types';
 	import {
 		activeShowsMode,
-		buildShowsRows,
 		showsLetterRail,
+		showsRowsOf,
 		showsRowLetter,
 		showsSeriesMode,
 	} from '$lib/library/shows-list';
@@ -59,10 +59,7 @@
 	/** The painted rows (design D14): the tree in the All mode, the flat rows
 	 * in the Latest and Upcoming modes, narrowed by the filter's text. */
 	const rows = $derived(
-		buildShowsRows(list, mode, $showsUi.filter, {
-			open: $showsUi.open,
-			closed: $showsUi.closed,
-		}),
+		showsRowsOf(list, mode, $showsUi.filter, $showsUi.open, $showsUi.closed),
 	);
 
 	/** The rail's A–Z letters over the painted rows: the All series mode paints

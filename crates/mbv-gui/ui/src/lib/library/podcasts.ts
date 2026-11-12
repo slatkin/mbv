@@ -17,7 +17,7 @@ import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiPodcastPill, GuiPodcastsList } from '$lib/bridge/types';
 import { moveCursor } from './list';
 import type { ListMove } from './list';
-import { buildPodcastsRows } from './podcasts-list';
+import { podcastsRowsOf } from './podcasts-list';
 import type { PodcastsItemRow } from './podcasts-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
@@ -59,7 +59,7 @@ const pillList = createPillList<
 >({
 	frame: libraryPodcastsList,
 	scroll: podcastsScroll,
-	buildRows: (podcasts, filter) => buildPodcastsRows(podcasts.rows, filter),
+	buildRows: (podcasts, filter) => podcastsRowsOf(podcasts.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,
 	pills: (podcasts) => podcasts.pills,
