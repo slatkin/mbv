@@ -4,13 +4,20 @@
 
 ### Requirement: The window updates only the sections that changed
 
-The Client core SHALL send the window an update only when the content of at least one window section changed. An update SHALL carry only the changed sections, each with its own revision. The window SHALL replace only the sections that an update names and SHALL keep every other section as it was. The Client core SHALL send no update on the passage of time alone.
+The Client core SHALL send the window an update only when the content of at least one window section changed. An update SHALL carry only the changed sections, each with its own revision. The window SHALL replace only the sections that an update names and SHALL keep every other section as it was. The Client core SHALL NOT send an update only because a timer fired. When only time passed, it SHALL send only the sections whose content changed with time.
 
 #### Scenario: Nothing changes while the window is idle
 
 - **GIVEN** playback is paused or stopped and no toast is shown
+- **AND** no Library deadline is pending
 - **WHEN** the user gives no input and no Service or Owner event arrives
 - **THEN** the window receives no update
+
+#### Scenario: A Library deadline passes
+
+- **GIVEN** the user selected a Library row and gives no more input
+- **WHEN** the navigation-idle gate of the Hero neighbour warm-up passes, or the retry time of an interrupted art fetch passes
+- **THEN** the window receives an update that carries only the Library sections whose content changed
 
 #### Scenario: One section changes
 

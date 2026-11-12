@@ -6,7 +6,7 @@ status: proposed
 
 The GUI Client's core thread sends the window only the sections whose content
 changed, each with its own revision, in one batch for each tick. It sends no
-update because time passed. The window keeps one store for each section,
+update only because a timer fired. The window keeps one store for each section,
 predicts the playhead between anchors, and loads artwork by URL from the core's
 image cache.
 
@@ -67,8 +67,9 @@ listed the per-frame costs.
 
 ## Consequences
 
-- An idle window gets no events. A playing window gets an event only when a
-  section changes, not on every render interval.
+- An idle window gets no events, except when a toast expires or a Library
+  deadline passes. A playing window gets an event only when a section changes,
+  not on every render interval.
 - A missed dirty mark shows as a stale section until the next input.
   Invariant 32 owns the rule, and the audit runs in every core-thread test.
 - The window formats the elapsed and remaining clocks itself, with a port of

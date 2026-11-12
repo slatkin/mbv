@@ -11,7 +11,7 @@ See `proposal.md` (Why) and the `gui-client` delta spec for behavior. This secti
 - **The playhead.** `GuiQueuePlayback` carries `playback` (position, runtime, paused), `elapsed_clock`, `remaining_clock`, and `finish_clock`, all from Rust. The rail and the compact strip derive their progress from `positionTicks`. mbv has no playback-rate fact: no projection carries a speed.
 - **Settings (PR 998).** `GuiSettingsFrame::build(app, playback)` runs on every frame. It calls `App::gui_settings()` (a `GuiSettingsState` clone) several times, `config_snapshot()` (a full `Config` clone under the lock), and `gui_settings_row_choices` (a `to_vec` per row). The Sessions section reads `playback.target_choices`.
 - **Tests.** `crates/mbv-gui/tests/core_thread.rs` drives `CoreThread::step` over a mocked channel and sink with `mbv` `test`-feature stubs (`stub_app_with_queue`, `stub_app_with_playing_queue`, the `MockHttp` Emby client). Criterion 0.8.2 is a workspace dev-dependency with benches in `mbv-render` and `mbv-components` (`docs/architecture/performance.md`). The UI uses vitest 5.1.0, whose `bench` mode is built in.
-- **File sizes.** `core_thread.rs` has 781 lines, `ui/src/lib/library/state.ts` 790, `bridge/frame/library.rs` 698. New code goes into new modules.
+- **File sizes.** `core_thread.rs` has 796 lines, `ui/src/lib/library/state.ts` 790, `bridge/frame/library.rs` 700. New code goes into new modules.
 
 ## Goals / Non-Goals
 
@@ -64,7 +64,7 @@ The sections, with the tier that decides when they are built (D2):
 
 ### D2. Two build tiers and a section ledger
 
-A new module `crates/mbv-gui/src/sections.rs` holds `SectionLedger`. For each section it keeps the last built value, its revision, and whether the window holds that revision. After each tick that did not ask for a restart, the step calls `SectionLedger::collect`, which returns a batch or `None`. The step sends a batch only when it is `Some`.
+A new module `crates/mbv-gui/src/sections.rs` holds `SectionLedger`. For each section it keeps the last built value, its revision, and whether the window holds that revision. After each tick that did not ask for a restart, the step calls `SectionLedger::collect`, which returns a batch or `None`. The step sends a batch only when it is `Some`. The step keeps `fetch_playback_metadata` and the Queue Surface sync in its per-tick prologue before `collect`: today `emit_frame` is the only GUI caller of `App::fetch_playback_metadata`, and no test fails when its trigger is lost.
 
 - **Compared sections** are built on every tick and compared with the last built value (`PartialEq`). They are small: the queue section holds only the viewport rows, and the other compared sections hold a few fields each. Building them on each 50 ms tick replaces today's full build at up to 6.7 Hz, which also builds the whole Library content, serializes everything, and updates the webview. The idle-step bench (D12) records the cost before and after the ledger lands.
 - **Gated sections** are built only while they carry a dirty mark (D3). A gated build still compares with the last built value, so a mark that changes nothing sends nothing.
@@ -170,7 +170,7 @@ Both are built in one gated pass, because one App projection call (for example `
 
 ### D11. What does not change
 
-`ClientCore::tick`, `ClientTickHost`, the TUI's `Model` run loop, `CLIENT_IDLE_CADENCE`, the Library commands, the key routes, the Queue Surface state rules, and the layout registry's coalescing. The `CoreInput` variants `Key`, `Pointer`, `Layout`, `Library`, `Wake`, and `Close` keep their meaning. `Sync` and `Art` are added.
+`ClientCore::tick`, `ClientTickHost`, the TUI's `Model` run loop, `CLIENT_IDLE_CADENCE`, the Library commands, the key routes, the Queue Surface state rules, and the layout registry's coalescing. The `CoreInput` variants `Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Wake`, and `Close` keep their meaning. `Sync` and `Art` are added.
 
 ### D12. Measure first, and the contract of each test
 
