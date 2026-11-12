@@ -28,6 +28,7 @@ use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
+use crate::art::ArtRequest;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::layout::{
     ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
@@ -83,6 +84,10 @@ pub enum CoreInput {
     /// every section the window holds, so the next batch carries every present
     /// section at its current revision. It marks no section.
     Sync,
+    /// One image load the `mbv-art` scheme raised (design D7 of
+    /// `gui-change-driven-sections`): the tick host answers it through the
+    /// `App`'s read-only cache queries, with no mark and no `input_received`.
+    Art(ArtRequest),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,

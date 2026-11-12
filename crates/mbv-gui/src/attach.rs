@@ -271,7 +271,10 @@ impl<'a> AttachCampaign<'a> {
             }
             // The pre-attach window has no App, so a Library or Settings
             // command has nothing to apply: it is served and dropped as a key
-            // is. A layout report marks nothing and re-sends nothing.
+            // is. A layout report marks nothing and re-sends nothing. An art
+            // request answers `Missing` (design D7), so no responder is left
+            // open before the attach.
+            Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
             Ok(
                 CoreInput::Layout(_)
                 | CoreInput::Key(_)
@@ -326,7 +329,9 @@ impl<'a> AttachCampaign<'a> {
                 }
                 // No App exists before the attach, so no Library or Settings
                 // command can act; a wake serves the tick as it does after the
-                // attach.
+                // attach. An art request answers `Missing` (design D7), so no
+                // responder is left open before the attach.
+                Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
                 Ok(CoreInput::Wake | CoreInput::Library(_) | CoreInput::Settings(_)) => {}
                 Ok(CoreInput::Close) | Err(RecvError) => {
                     return Err(CampaignEnd::Closed);
@@ -405,7 +410,9 @@ impl<'a> AttachCampaign<'a> {
                 // The pre-attach window has no App, so a Library or Settings
                 // command has nothing to apply: it is served and dropped as a
                 // key is. The dead end paints no buttons, so a layout report
-                // carries no region the campaign resolves.
+                // carries no region the campaign resolves. An art request
+                // answers `Missing` (design D7), so no responder is left open.
+                Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
                 Ok(
                     CoreInput::Layout(_)
                     | CoreInput::Key(_)

@@ -41,6 +41,21 @@ pub struct TrickplaySheetKey {
 }
 
 impl TrickplaySheetKey {
+    /// The key a [`Self::wire_key`] names, the inverse of `wire_key`: the item
+    /// id may hold colons, so the width and the sheet ordinal parse from the
+    /// right. `None` for a wire key without the three parts or with a
+    /// non-numeric width or ordinal.
+    #[must_use]
+    pub fn from_wire_key(wire: &str) -> Option<Self> {
+        let (left, sheet) = wire.rsplit_once(':')?;
+        let (item_id, width) = left.rsplit_once(':')?;
+        Some(Self {
+            item_id: item_id.to_owned(),
+            width: width.parse().ok()?,
+            sheet: sheet.parse().ok()?,
+        })
+    }
+
     /// The key as the frame's opaque identity: two frames name the same
     /// sheet exactly when their keys are equal.
     #[must_use]
@@ -88,6 +103,17 @@ pub(in crate::app) enum TrickplaySheetFetch {
 }
 
 impl App {
+    /// The cached trickplay sheet `key` names (design D7 of
+    /// `gui-change-driven-sections`): the read-only read the GUI core answers
+    /// `mbv-art` sheet requests with. It starts no fetch —
+    /// `trickplay_preview_tile` owns those — so a request answers only what
+    /// the cache already holds, and a sheet the server does not hold answers
+    /// nothing, exactly as a key the cache never saw does.
+    #[must_use]
+    pub fn trickplay_sheet_bytes(&self, key: &TrickplaySheetKey) -> Option<Arc<[u8]>> {
+        self.trickplay_sheets.get(key).cloned().flatten()
+    }
+
     /// The active item's trickplay tile at `ticks` (task 6.7): the smallest
     /// offered grid that has a tile for the position, the tile's place in
     /// its sheet, and the sheet's bytes when the cache holds them. Issues the

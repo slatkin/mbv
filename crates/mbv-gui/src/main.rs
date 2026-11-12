@@ -9,6 +9,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
+use mbv_gui::art::{ArtRequest, ArtResponse};
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
 use mbv_gui::bridge::library::GuiLibraryCommand;
@@ -112,6 +113,33 @@ fn push(channel: impl Deref<Target = CoreChannel>, input: CoreInput) {
     }
 }
 
+/// The `mbv-art` scheme's answer as the webview receives it (design D7 of
+/// `gui-change-driven-sections`): a cached source is a 200 with the source's
+/// own MIME type and an immutable-cache header — the cache entry under a key
+/// is final for the process's life, so a URL never names two images. A miss
+/// is a 404 the webview does not keep, so a later load of the same URL asks
+/// the core again.
+fn art_response(response: ArtResponse) -> tauri::http::Response<Vec<u8>> {
+    let status = match &response {
+        ArtResponse::Found { .. } => 200,
+        ArtResponse::Missing => 404,
+    };
+    let cache_control = match &response {
+        ArtResponse::Found { .. } => "max-age=31536000, immutable",
+        ArtResponse::Missing => "no-store",
+    };
+    let (mime, bytes) = match response {
+        ArtResponse::Found { mime, bytes } => (mime, bytes),
+        ArtResponse::Missing => ("text/plain", Vec::new()),
+    };
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Content-Type", mime)
+        .header("Cache-Control", cache_control)
+        .body(bytes)
+        .expect("the static art response headers build")
+}
+
 fn main() -> tauri::Result<()> {
     // The core thread logs its failures through the app subscriber: install
     // it before the thread spawns, into the GUI's own log file so it does
@@ -144,6 +172,25 @@ fn main() -> tauri::Result<()> {
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 push(window.app_handle().state::<CoreChannel>(), CoreInput::Close);
+            }
+        })
+        // The `mbv-art` image scheme (design D7 of
+        // `gui-change-driven-sections`): each request pushes a
+        // [`CoreInput::Art`] into the core channel — the handler never
+        // touches the `App` — with the responder wired into the request's
+        // `reply`, so the core thread's answer resolves the load directly.
+        .register_asynchronous_uri_scheme_protocol("mbv-art", |ctx, request, responder| {
+            let channel = ctx.app_handle().state::<CoreChannel>().inner().0.clone();
+            let path = request.uri().path().trim_start_matches('/').to_owned();
+            let sent = channel.send(CoreInput::Art(ArtRequest {
+                path,
+                reply: Box::new(move |response| responder.respond(art_response(response))),
+            }));
+            if sent.is_err() {
+                tracing::warn!(
+                    target: "gui_commands",
+                    "the core thread is gone; the art request drops unanswered"
+                );
             }
         })
         .setup(move |app| {

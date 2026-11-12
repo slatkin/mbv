@@ -67,6 +67,19 @@ pub enum GuiLibraryArtwork {
 }
 
 impl App {
+    /// The image cache's source under `cache_key`, as the server sent it
+    /// (`gui-change-driven-sections` design D7): the read-only read the GUI
+    /// core answers `mbv-art` card requests with. It starts no fetch — the
+    /// projections that own the fetches (`gui_library_artwork`,
+    /// `queue_card_artwork`) do that — so an art request answers only what the
+    /// cache already holds. The source's bytes clone once per request.
+    #[must_use]
+    pub fn gui_art_source(&self, cache_key: &str) -> Option<SourceImage> {
+        self.images
+            .image(cache_key)
+            .and_then(|entry| entry.source.clone())
+    }
+
     /// Pre-warm the Hero artwork of the entries neighbouring the picked one in
     /// the painted order: the warm window is the TUI's grouped-Music rule
     /// (`App::prefetch_neighbour_album_art`) over this Client's own
