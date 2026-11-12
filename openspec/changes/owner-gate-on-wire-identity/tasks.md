@@ -26,7 +26,7 @@ Each row names its test contract and its owning layer (`docs/architecture/tui-fr
 
 - [x] 4.1 In the GUI Settings frame (`crates/mbv-gui/src/bridge/frame/settings.rs` and its child module for F2 rows), add the row kind `info` and fill its value from `App::version_row_value`. Mirror the kind in `types.ts`. Verify: `cargo nextest run -p mbv-gui`; `pnpm check`. Test contract: extend the existing frame test that carries a section's rows so that an open Session section carries both rows with kind `info` and the `App` values.
 - [x] 4.2 In the Svelte Session section, show an `info` row as a label and a value with no control. A key or pointer activation of it sends no `settings` command. Verify: `pnpm test`; `pnpm check`. Test contract, in the section's component test: activating an `info` row with Enter and with a click sends no bridge command.
-- [ ] 4.3 In `docs/architecture/gui-client.md`, change "the build mismatch" in the attach-states section to the version or wire mismatch, and add the `info` row kind to the Settings screen section. Verify: `rg -n "info" docs/architecture/gui-client.md` finds the row kind in the Settings screen section.
+- [x] 4.3 In `docs/architecture/gui-client.md`, change "the build mismatch" in the attach-states section to the version or wire mismatch, and add the `info` row kind to the Settings screen section. Verify: `rg -n "info" docs/architecture/gui-client.md` finds the row kind in the Settings screen section.
 
 ## 5. Integration checks
 
