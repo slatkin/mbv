@@ -9,7 +9,8 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiHomeFrame, GuiHomeRow, GuiLibraryContent } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from './home-list';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi } from './state';
 import {
 	homeUi,
 	initialHomeUi,
@@ -84,7 +85,7 @@ function content(): GuiLibraryContent {
 /** Carry the Home content, so the panel's presence fact holds and the row
  * model has its rows (design D2, D12). */
 function carry(): void {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	library.set(content());
 }
 
 test('a cursor move that settles on a row selects it by its opaque id', () => {

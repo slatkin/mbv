@@ -11,7 +11,7 @@ import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiPodcastsFrame, GuiPodcastsRow } from '$lib/bridge/types';
 import { initialPodcastsUi, podcastsUi } from '$lib/library/podcasts';
-import { carryLibraryContent } from '$lib/library/state';
+import { library } from '$lib/bridge/sections';
 import LibraryPodcastsList from './LibraryPodcastsList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -73,7 +73,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	podcastsUi.set(initialPodcastsUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	library.set(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -86,10 +86,7 @@ async function mountList(
 	viewportHeight = 300,
 ): Promise<HTMLElement> {
 	const podcasts = frame(rows, facts);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: {
+	library.set({
 			tabs: [],
 			currentTab: 2,
 			music: null,
@@ -100,8 +97,7 @@ async function mountList(
 			feeds: null,
 			rowMenu: null,
 			shows: null,
-		},
-	});
+		});
 	const { container } = render(LibraryPodcastsList, { podcasts });
 	const list = container.querySelector<HTMLElement>('[data-library-podcasts-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });

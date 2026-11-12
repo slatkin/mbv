@@ -25,7 +25,8 @@ import {
 	podcastsCursorRow,
 	podcastsUi,
 } from './podcasts';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -34,7 +35,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	podcastsUi.set(initialPodcastsUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -45,7 +46,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		library: get(library),
+		search: null,
 	};
 }
 
@@ -144,7 +146,7 @@ function carryPodcasts(
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, search: null, content });
+	library.set(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	podcastsUi.set({ ...initialPodcastsUi(), cursor });
 }
@@ -218,7 +220,7 @@ test('the pill walk keeps its place when the frame re-carries equal pills', () =
 	podcastsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'show', id: 'sh1' } }));
 
 	// A new frame: structurally equal pills, all fresh objects.
-	carryLibraryContent({ revision: 2, search: null, content: podcastsContent('show', EPISODES) });
+	library.set(podcastsContent('show', EPISODES));
 
 	press('ArrowRight');
 

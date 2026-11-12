@@ -3,7 +3,7 @@
 // of the canvas" requirement ("text and times show in the two bundled
 // faces"). jsdom applies no CSS, so these tests pin the sources the build
 // ships: `app.css`'s face declarations and `main.ts`'s bundled-face imports.
-// The theme's `--mbv-*` application is `frames.test.ts`'s contract.
+// The theme's `--mbv-*` application is `sections.test.ts`'s contract.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

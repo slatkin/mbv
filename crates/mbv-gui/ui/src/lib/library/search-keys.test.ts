@@ -18,8 +18,8 @@ import type {
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
+import { library } from '$lib/bridge/sections';
 import {
-	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
 } from './state';
@@ -38,7 +38,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	librarySearch.set(initialLibrarySearch());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -52,7 +52,8 @@ function frame(
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		library: get(library),
+		search: null,
 		...rest,
 	};
 }
@@ -86,8 +87,8 @@ function content(): GuiLibraryContent {
 
 /** Panel shown with the carried content, and `search` on the frame. */
 function shownSearch(search: GuiSearchFrame | null): LibraryKeyFrame {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
-	return frame('library', { library: { revision: 1, search, content: content() } });
+	library.set(content());
+	return frame('library', { library: content(), search });
 }
 
 const ROWS: GuiSearchRow[] = [
@@ -149,7 +150,7 @@ test('Ctrl+K out of a Queue panel frame sends the key to the core instead', () =
 	// are unwired, so the core's own Ctrl+K (`[keys]`) keeps the key.
 	const outcome = routeLibraryKey(keyEvent('k', { ctrlKey: true }), {
 		...frame('queue'),
-		library: null,
+		library: get(library),
 	});
 
 	expect(outcome).toBe('core');
@@ -217,7 +218,8 @@ test('the highlight movement walks a new frame by id, not object identity', () =
 	// frame by id — r2 moves to r3 there.
 	focusField();
 	const next = frame('library', {
-		library: { revision: 2, search: results(), content: content() },
+		library: content(),
+		search: results(),
 	});
 	setSearchHighlight('r2');
 	routeLibraryKey(keyEvent('ArrowDown'), next);
@@ -274,7 +276,8 @@ test('Escape closes the carried results after the field lost the keyboard', () =
 test('a core overlay keeps the keyboard even from the focused Search field', () => {
 	focusField();
 	const overlay = frame('library', {
-		library: { revision: 1, search: results(), content: content() },
+		library: content(),
+		search: results(),
 		overlay: { kind: 'confirm' } as LibraryKeyFrame['overlay'],
 	});
 	const outcome = routeLibraryKey(keyEvent('Escape'), overlay);

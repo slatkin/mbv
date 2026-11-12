@@ -11,27 +11,12 @@ import type { GuiEmbyFeedGroup, GuiEmbyFrame } from './library-types-emby';
 import type { GuiFeedsFrame, GuiFeedsLibraryCommand } from './library-types-feeds';
 import type { GuiHomeFrame, GuiHomeRowId, GuiHomeRowState } from './library-types-home';
 import type { GuiPodcastsFrame } from './library-types-podcasts';
-import type {
-	GuiSearchFrame,
-	GuiSearchLibraryCommand,
-} from './library-types-search';
+import type { GuiSearchLibraryCommand } from './library-types-search';
 
-/** The Library panel's section (add-gui-library-panel design D2). A frame
- * re-carries `content` only when `revision` changes; a `reportLayout` reload
- * re-carries it under the revision the window already holds, so the window
- * keeps its last carried content while `content` is `null`. */
-export interface GuiLibraryFrame {
-	revision: number;
-	content: GuiLibraryContent | null;
-	/** The Search facts while a search runs or its results hold (design D12,
-	 * row 12.1); `null` while the section is closed. It rides the frame, not
-	 * `content`, so the revision gating of the carried content never holds a
-	 * stale results section back. */
-	search: GuiSearchFrame | null;
-}
-
-/** The Library panel's content: the top bar's destination tabs and the
- * active destination's section. */
+/** The Library panel's content (add-gui-library-panel design D2): the top
+ * bar's destination tabs and the active destination's section. The `library`
+ * window section's value carries it whole; a section value of `null` clears
+ * it. */
 export interface GuiLibraryContent {
 	/** The presented destination tabs in catalog order (design D2): one per
 	 * Grouped Music and Shows library. The top bar paints only these — no

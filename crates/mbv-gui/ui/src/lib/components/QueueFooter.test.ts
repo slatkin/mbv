@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { footer as footerStore, resetSectionsForTest, status as statusStore } from '$lib/bridge/sections';
 import type { GuiQueueFooter, GuiStatusBar } from '$lib/bridge/types';
 import QueueFooter from './QueueFooter.svelte';
 
@@ -29,6 +30,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	resetSectionsForTest();
 });
 
 const footer: GuiQueueFooter = {
@@ -41,11 +43,10 @@ const footer: GuiQueueFooter = {
 
 const idle: GuiStatusBar = { prefixArmed: false, toast: null };
 
-function renderFooter(
-	foot: GuiQueueFooter = footer,
-	status: GuiStatusBar = idle,
-) {
-	return render(QueueFooter, { footer: foot, status, libraryVisible: false });
+function renderFooter(foot: GuiQueueFooter = footer, status: GuiStatusBar = idle) {
+	footerStore.set(foot);
+	statusStore.set(status);
+	return render(QueueFooter, { props: { libraryVisible: false } });
 }
 
 test('the footer renders the queue source and the session marker', () => {

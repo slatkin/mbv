@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { library, resetSectionsForTest, status } from '$lib/bridge/sections';
 import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
 import type {
 	GuiAudiobooksFrame,
@@ -31,6 +32,7 @@ const invokeMock = vi.mocked(invoke);
 beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
+	resetSectionsForTest();
 	libraryUi.set(initialLibraryUi());
 	// The widths are session state (design D4): a drag held by one test would
 	// outlive it.
@@ -74,12 +76,20 @@ function hero(): GuiMusicHero {
 }
 
 test('a press inside the panel sends the take-focus command', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: music(),
-		status: idle,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -95,12 +105,20 @@ test('a press inside the panel sends the take-focus command', () => {
 });
 
 test('the panel paints the top bar and the pill row above the list region', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: music(),
-		status: idle,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -119,12 +137,20 @@ test('the panel paints the top bar and the pill row above the list region', () =
 // opaque fill that no key dismissed. Row 4.7 paints the Hero into it and gives
 // it the dismissal the review required: a press on the backdrop closes it.
 test('the Narrow overlay paints the Hero and closes on a press on its backdrop', async () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
-		status: idle,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -142,12 +168,20 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 });
 
 test('the Wide Hero pane paints the Hero beside the list', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
-		status: idle,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -164,7 +198,7 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 // place of the Music ones, and the pill row and the letter rail do not paint:
 // Home paints no pills, no filter, and no rail.
 test('the Home content mounts the Home list and Hero and no pills or rail', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
@@ -193,8 +227,15 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 				art: null,
 			},
 		},
-		status: idle,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -212,7 +253,7 @@ test('the Home content mounts the Home list and Hero and no pills or rail', () =
 // The Narrow Hero overlay works for the Home Hero through the same painters
 // the Wide pane uses (design D4, D12), and closes on a press on its backdrop.
 test('the Narrow overlay paints the Home Hero and closes on a press on its backdrop', async () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
@@ -229,8 +270,15 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 				art: null,
 			},
 		},
-		status: idle,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -251,14 +299,20 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 // place of the Music and Home ones — its mode pills, its list, and the series
 // Hero with its Workspace.
 test('the Shows content mounts the mode pills, the Shows list, and the series Hero', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 3, label: 'Shows' }],
 		currentTab: 3,
 		music: null,
 		home: null,
 		shows: shows('all'),
-		status: idle,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -276,14 +330,20 @@ test('the Shows content mounts the mode pills, the Shows list, and the series He
 // The Upcoming mode carries no Hero (design D12): the panel paints its flat
 // list and no Hero in the Wide pane or the Narrow overlay.
 test('the Upcoming Shows content paints no Hero', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 3, label: 'Shows' }],
 		currentTab: 3,
 		music: null,
 		home: null,
 		shows: shows('upcoming'),
-		status: idle,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -332,15 +392,20 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 // painters in place of the Music, Home, and Shows ones — its list with the plain
 // mode's rail, its Hero with no Workspace, and no pill row.
 test('the plain Emby content mounts the Emby list, rail, and Hero and none of the other destinations', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 3, label: 'Movies' }],
 		currentTab: 3,
 		music: null,
 		home: null,
 		shows: null,
 		emby: emby(false),
-		status: idle,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -358,13 +423,20 @@ test('the plain Emby content mounts the Emby list, rail, and Hero and none of th
 });
 
 test('the feed-group Emby content mounts its pill row and no rail', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 3, label: 'Home videos' }],
 		currentTab: 3,
 		music: null,
+		home: null,
+		shows: null,
 		emby: emby(true),
-		status: idle,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -380,7 +452,7 @@ test('the feed-group Emby content mounts its pill row and no rail', () => {
 // with its rail and the book Hero in place of the Music, Home, Shows, and Emby
 // painters, and no pill row rides on the destination.
 test('the Audiobooks content mounts the book list, rail, and Hero and none of the other destinations', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 4, label: 'Audiobooks' }],
 		currentTab: 4,
 		music: null,
@@ -397,8 +469,12 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 			art: null,
 			workspace: null,
 		}),
-		status: idle,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -419,7 +495,7 @@ test('the Audiobooks content mounts the book list, rail, and Hero and none of th
 // A frame without a Hero paints no Hero (row 9.1), and the Narrow overlay
 // stays closed while the selection carries none.
 test('the Hero-less Audiobooks content paints its list and no Hero', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 4, label: 'Audiobooks' }],
 		currentTab: 4,
 		music: null,
@@ -427,8 +503,12 @@ test('the Hero-less Audiobooks content paints its list and no Hero', () => {
 		shows: null,
 		emby: null,
 		audiobooks: audiobooks(null),
-		status: idle,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -443,7 +523,7 @@ test('the Hero-less Audiobooks content paints its list and no Hero', () => {
 // the Wide pane uses (design D4), and — copied from the row-7.1 lesson — a
 // stale Hero paints through an overlay the frame's own selection carries.
 test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its backdrop', async () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 4, label: 'Audiobooks' }],
 		currentTab: 4,
 		music: null,
@@ -460,8 +540,12 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 			art: null,
 			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
 		}),
-		status: idle,
+		podcasts: null,
+		feeds: null,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -504,7 +588,7 @@ function audiobooks(hero: GuiAudiobooksFrame['hero']): GuiAudiobooksFrame {
 // date-gutter list, and the entry Hero, and none of the other destinations'
 // painters.
 test('the Feeds content mounts the Feeds pills, list, and Hero and none of the other destinations', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 5, label: 'Feeds' }],
 		currentTab: 5,
 		music: null,
@@ -520,8 +604,10 @@ test('the Feeds content mounts the Feeds pills, list, and Hero and none of the o
 			progressRow: null,
 			artShape: 'square',
 		}),
-		status: idle,
 		rowMenu: null,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,
@@ -541,7 +627,7 @@ test('the Feeds content mounts the Feeds pills, list, and Hero and none of the o
 // A frame without a Hero paints no Hero (row 11.1), and the Narrow overlay
 // stays closed while the selection carries none.
 test('the Hero-less Feeds content paints its list and no Hero', () => {
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 5, label: 'Feeds' }],
 		currentTab: 5,
 		music: null,
@@ -552,7 +638,9 @@ test('the Hero-less Feeds content paints its list and no Hero', () => {
 		podcasts: null,
 		feeds: feeds(null),
 		rowMenu: null,
-		status: idle,
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'narrow',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 800,
@@ -642,16 +730,23 @@ test('the item menu paints on a destination that is not Music', () => {
 		...ui,
 		rowMenu: { itemId: 's1', x: 40, y: 60 },
 	}));
-	const { container } = render(LibraryPanel, {
+	library.set({
 		tabs: [{ position: 2, label: 'Shows' }],
 		currentTab: 2,
 		music: null,
+		home: null,
 		shows: shows('all'),
-		status: idle,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: null,
 		rowMenu: {
 			itemId: 's1',
 			entries: [{ label: 'Play', keyHint: null, index: 0 }],
 		},
+	});
+	status.set(idle);
+	const { container } = render(LibraryPanel, {
 		arrangement: 'wide',
 		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
 		libraryColumn: 1200,

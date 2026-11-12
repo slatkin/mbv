@@ -12,8 +12,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
+import type { RenderResult } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
+import {
+	focus as focusStore,
+	queue as queueStore,
+	resetSectionsForTest,
+	summary as summaryStore,
+	overlay as overlayStore,
+} from '$lib/bridge/sections';
 import type {
 	GuiOverlayFrame,
 	GuiQueue,
@@ -49,6 +57,9 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	// The panel reads the window's section stores; a section one test carried
+	// would outlive it.
+	resetSectionsForTest();
 });
 
 function queue(
@@ -104,18 +115,22 @@ function rowMenu(): GuiOverlayFrame {
 	};
 }
 
+/** The previous render, unmounted before the next: the section stores are
+ * module state, so two mounted panels would both repaint on a store write. */
+let mounted: RenderResult<typeof QueuePanel> | null = null;
+
 function renderPanel(
 	queueProp: GuiQueue,
 	summaryProp: GuiQueueSummary = summary(),
-	overlay: GuiOverlayFrame | null = null,
+	overlayProp: GuiOverlayFrame | null = null,
 ) {
-	return render(QueuePanel, {
-		queue: queueProp,
-		summary: summaryProp,
-		overlay,
-		focused: true,
-		panelFocused: true,
-	});
+	mounted?.unmount();
+	queueStore.set(queueProp);
+	summaryStore.set(summaryProp);
+	overlayStore.set(overlayProp);
+	focusStore.set({ surface: 'queue', panel: 'queue' });
+	mounted = render(QueuePanel);
+	return mounted;
 }
 
 interface ReportedReport {

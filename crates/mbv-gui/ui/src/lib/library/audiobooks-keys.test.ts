@@ -21,7 +21,8 @@ import { installInput } from '$lib/bridge/input';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { audiobooksCursorRow, audiobooksUi, initialAudiobooksUi } from './audiobooks';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 import { moveAbsChapterCursor, playAbsChapter, queueAbsBook } from './audiobooks-workspace';
 
@@ -44,7 +45,7 @@ beforeEach(() => {
 	queueAbsBookMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	audiobooksUi.set(initialAudiobooksUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -55,7 +56,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		library: get(library),
+		search: null,
 	};
 }
 
@@ -142,7 +144,7 @@ const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 /** Carry the content, focus the pane, and paint the list's cursor. */
 function carry(pane: LibraryPane, cursor: string | null = null): void {
 	const carried = content(pane === 'hero' ? AUIB_HERO : heroFor(pane));
-	carryLibraryContent({ revision: 1, search: null, content: carried });
+	library.set(carried);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
@@ -264,7 +266,7 @@ test('the list pane and a hero-less Hero pane consume every Library key', () => 
 	carry('list');
 	const list = LIBRARY_KEYS.map((key) => routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
-	carryLibraryContent({ revision: 1, search: null, content: content(null) });
+	library.set(content(null));
 	const hero = LIBRARY_KEYS.map((key) =>
 		routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()),
 	);
@@ -298,7 +300,7 @@ test('Tab past the list without a Hero takes Queue Panel focus', () => {
 
 test('Tab walks from the list into the Hero', () => {
 	carry('list');
-	carryLibraryContent({ revision: 1, search: null, content: content(AUIB_HERO) });
+	library.set(content(AUIB_HERO));
 
 	press('Tab');
 

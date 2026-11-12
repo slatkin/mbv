@@ -1,4 +1,5 @@
-// The theme layer (design D7): a frame's role colours go into CSS custom
+// The theme layer (design D7): the theme section's role colours go into CSS
+// custom
 // properties on `:root`, and `app.css` points the shadcn-svelte variables at
 // them, so shadcn components paint in the mbv palette with no second palette.
 

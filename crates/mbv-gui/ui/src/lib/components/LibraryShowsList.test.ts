@@ -18,7 +18,7 @@ import type {
 	GuiShowsSeries,
 } from '$lib/bridge/types';
 import { showsUi, initialShowsUi } from '$lib/library/shows';
-import { carryLibraryContent } from '$lib/library/state';
+import { library } from '$lib/bridge/sections';
 import LibraryShowsList from './LibraryShowsList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -110,7 +110,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	library.set(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -124,11 +124,7 @@ async function mountList(
 	tree: GuiShowsSeries[] = [],
 ): Promise<HTMLElement> {
 	const shows = showsFrame(mode, rows, tree);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 	const { container } = render(LibraryShowsList, { shows });
 	const list = container.querySelector<HTMLElement>('[data-library-shows-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });

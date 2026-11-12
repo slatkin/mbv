@@ -10,8 +10,8 @@ import type {
 	GuiMusicFrame,
 	GuiMusicHero,
 } from '$lib/bridge/types';
+import { library } from '$lib/bridge/sections';
 import {
-	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
 	measureLibraryList,
@@ -20,7 +20,7 @@ import {
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** Twenty artists with no albums above the target, so its row starts below a
@@ -79,7 +79,7 @@ function content(): GuiLibraryContent {
 }
 
 test('a reveal scrolls the picked album row into view once the list is measured', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	library.set(content());
 
 	revealPickedAlbum(music());
 	measureLibraryList(40);

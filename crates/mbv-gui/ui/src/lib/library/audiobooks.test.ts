@@ -10,7 +10,8 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiAudiobooksFrame, GuiAudiobooksRow, GuiLibraryContent } from '$lib/bridge/types';
 import { audiobooksUi, initialAudiobooksUi, jumpAudiobooksToLetter, playAudiobooksRow, pressAudiobooksRow, queueAudiobooksRow } from './audiobooks';
 import { buildAudiobooksRows } from './audiobooks-list';
-import { carryLibraryContent, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { libraryUi } from './state';
 
 vi.mock('@tauri-apps/api/core', () => ({
 	invoke: vi.fn(),
@@ -23,7 +24,7 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	audiobooksUi.set(initialAudiobooksUi());
 	libraryUi.update((ui) => ({ ...ui, heroDismissed: true, itemMenuOpen: true }));
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** The catalog's book rows: two books under `A` and one under `B`. */
@@ -60,7 +61,7 @@ function carry(selected: string | null = 'b1', cursor: string | null = null): vo
 		feeds: null,
 		rowMenu: null,
 	};
-	carryLibraryContent({ revision: 1, search: null, content });
+	library.set(content);
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
 

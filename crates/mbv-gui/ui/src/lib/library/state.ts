@@ -1,7 +1,7 @@
 // The Library panel's own state (add-gui-library-panel design D1): what the
-// window content owns and the core never reads there. Two stores keep the two kinds
-// apart — the content the frame carries, kept from the last frame that carried
-// it, and the interaction state the panel's keys and controls move.
+// window content owns and the core never reads there. Two stores keep the two
+// kinds apart — the content the `library` window section carries, and the
+// interaction state the panel's keys and controls move.
 //
 // The core owns the data selection (which collections are selected, the picked
 // item), so nothing here mirrors it: the pill toggle the keys request is an
@@ -9,13 +9,13 @@
 
 import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
+import { library as librarySection } from '$lib/bridge/sections';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiAudiobooksFrame,
 	GuiEmbyFrame,
 	GuiHomeFrame,
 	GuiLibraryContent,
-	GuiLibraryFrame,
 	GuiMusicFrame,
 	GuiMusicPill,
 	GuiPodcastsFrame,
@@ -163,7 +163,7 @@ export function activeLibraryPanes(): readonly LibraryPane[] {
 	if (podcasts !== null) {
 		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
 	}
-	const feeds = get(libraryContent)?.feeds ?? null;
+	const feeds = get(librarySection)?.feeds ?? null;
 	if (feeds !== null) {
 		return feeds.hero === null ? FEEDS_PANES_NO_HERO : FEEDS_PANES;
 	}
@@ -203,29 +203,13 @@ export function initialLibraryUi(): LibraryUiState {
 /** The Library panel's interaction state. */
 export const libraryUi = writable<LibraryUiState>(initialLibraryUi());
 
-/** The last Library content the core carried (design D2). A frame re-carries
- * it only when its revision changes, so the window keeps what the last
- * carrying frame held. */
-export const libraryContent = writable<GuiLibraryContent | null>(null);
-
-/** Keep the content of a frame that carries it (design D2). */
-export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
-	if (frame?.content) {
-		libraryContent.set(frame.content);
-	}
-}
-
-/** Whether the Library panel shows (design D2, D10, D12): the frame carries
- * the Library section and the window holds the active destination's content
- * — Music's, Home's, Shows', or an Emby library's — to paint. The window
- * mounts the panel on this one fact and the key router gates on it, so no
- * Library key acts while the panel paints nothing. */
-export function libraryShown(
-	library: GuiLibraryFrame | null,
-	content: GuiLibraryContent | null,
-): boolean {
+/** Whether the Library panel shows (design D2, D10, D12): the `library`
+ * section's value names an active destination's content — Music's, Home's,
+ * Shows', or an Emby library's — to paint. The window mounts the panel on
+ * this one fact and the key router gates on it, so no Library key acts while
+ * the panel paints nothing. */
+export function libraryShown(content: GuiLibraryContent | null): boolean {
 	return (
-		library !== null &&
 		content !== null &&
 		(content.music !== null ||
 			content.home !== null ||
@@ -320,38 +304,38 @@ export function applyLibraryPillSelect(libIdx: number): void {
 /** The carried Music content, or `null` while the active destination carries
  * none. */
 export function libraryMusic(): GuiMusicFrame | null {
-	return get(libraryContent)?.music ?? null;
+	return get(librarySection)?.music ?? null;
 }
 
 /** The carried Home content (design D12), or `null` while any other
  * destination is active. The top bar marks the Home icon current exactly
  * while this is present. */
 export function libraryHome(): GuiHomeFrame | null {
-	return get(libraryContent)?.home ?? null;
+	return get(librarySection)?.home ?? null;
 }
 
 /** The carried Shows content (design D12, row 7.1), or `null` while any other
  * destination is active. */
 export function libraryShows(): GuiShowsFrame | null {
-	return get(libraryContent)?.shows ?? null;
+	return get(librarySection)?.shows ?? null;
 }
 
 /** The carried plain Emby-library content (design D12, row 8.1), or `null`
  * while any other destination is active. */
 export function libraryEmby(): GuiEmbyFrame | null {
-	return get(libraryContent)?.emby ?? null;
+	return get(librarySection)?.emby ?? null;
 }
 
 /** The carried Audiobooks destination's content (design D12, row 9.1), or
  * `null` while any other destination is active. */
 export function libraryAudiobooks(): GuiAudiobooksFrame | null {
-	return get(libraryContent)?.audiobooks ?? null;
+	return get(librarySection)?.audiobooks ?? null;
 }
 
 /** The carried Podcasts destination's content (design D12, row 10.1), or
  * `null` while any other destination is active. */
 export function libraryPodcasts(): GuiPodcastsFrame | null {
-	return get(libraryContent)?.podcasts ?? null;
+	return get(librarySection)?.podcasts ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -719,7 +703,7 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 			(libraryEmby()?.hero ?? null) !== null ||
 			(libraryAudiobooks()?.hero ?? null) !== null ||
 			(libraryPodcasts()?.hero ?? null) !== null ||
-			(get(libraryContent)?.feeds?.hero ?? null) !== null)
+			(get(librarySection)?.feeds?.hero ?? null) !== null)
 	);
 }
 

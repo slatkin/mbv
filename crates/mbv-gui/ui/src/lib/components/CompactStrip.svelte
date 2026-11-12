@@ -17,24 +17,26 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
+	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { clampRatio } from '$lib/bridge/time';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
-		GuiQueuePlayback,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	interface Props {
-		playback: GuiQueuePlayback;
 		/** The next item's title (`GuiQueueSummary.nextTitle`, review of this
 		 * row's finding P2), `null` while no slot follows the playhead. */
 		next: string | null;
 		/** The artwork the window carries for the active item (design D10). */
 		art: GuiCardArtwork | null;
 	}
-	const { playback, next, art }: Props = $props();
+	const { next, art }: Props = $props();
+
+	/** The transport band's facts the strip paints. */
+	const playback = $derived($playbackSection);
 
 	/** The still's canvas size (the spec's 96×54). */
 	const STILL_WIDTH_PX = 96;

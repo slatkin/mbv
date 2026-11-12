@@ -7,7 +7,8 @@ import type { GuiChrome, GuiRgb, GuiRole, GuiTheme } from './theme-types';
 // lives in `library-types.ts`; this module re-exports it so every consumer
 // keeps importing from the one bridge module.
 
-import type { GuiLibraryFrame } from './library-types';
+import type { GuiLibraryContent } from './library-types';
+import type { GuiSearchFrame } from './library-types-search';
 import type { GuiSettingsFrame } from './settings-types';
 
 export type {
@@ -57,7 +58,6 @@ export type {
 	GuiMetaSegment,
 	GuiLibraryCommand,
 	GuiLibraryContent,
-	GuiLibraryFrame,
 	GuiLibraryTab,
 	GuiMusicAlbum,
 	GuiMusicArtist,
@@ -101,43 +101,66 @@ export type {
 	GuiShowsWorkspace,
 } from './library-types';
 
-/** One `mbv://frame` payload: the attached slice's frame, or the state of a window whose Owner attach has not finished (design D9). */
-export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
+/** One window section's content and the revision it carries (design D1 of
+ * gui-change-driven-sections): the window keeps the section in its own store
+ * and skips a write whose revision it already holds. */
+export interface GuiSection<T> {
+	revision: number;
+	value: T;
+}
 
-/** The attached slice's frame: every section the window paints. */
-export interface GuiFrame {
+/** The value type of each window section: the key set is the section set, and
+ * a section whose content can be absent carries an `Option` value, so a
+ * section value of `null` clears it (design D1). Each key mirrors one optional
+ * field of `GuiSectionBatch` in crates/mbv-gui/src/bridge/sections.rs. */
+export interface SectionValues {
+	/** The pre-attach state the window shows, `null` once the attach
+	 * succeeds. */
+	attach: GuiAttachState | null;
+	/** The role-to-colour map. */
+	theme: GuiTheme;
+	/** The focused surface and the Panel that holds focus. */
 	focus: GuiFocus;
+	/** The Queue rows inside the viewport, with the cursor, marks, and the
+	 * active slot. */
 	queue: GuiQueue;
-	/** The queue header's facts: the remaining count, the finish clock, the
-	 * right column's mode, and the filter text with its caret fact. */
+	/** The queue summary: the remaining count, the finish clock, the right
+	 * column's mode, and the filter. */
 	summary: GuiQueueSummary;
-	/** The panel toggles the front end picks the layout with (design D10). */
+	/** The panel toggles the front end picks the layout with, and the UI-reset
+	 * counter that resets its interaction stores. */
 	panel: GuiPanelToggles;
-	/** The open menu or popover; `null` while none is open (design D4). */
+	/** The open menu or popover, `null` while none is open. */
 	overlay: GuiOverlayFrame | null;
+	/** The transport band's facts, without the hover preview. */
 	playback: GuiQueuePlayback;
+	/** The scrubber's hover preview, `null` while the pointer is away from
+	 * the bar. */
+	hover: GuiScrubberHover | null;
+	/** The Queue footer's status pills. */
 	footer: GuiQueueFooter;
+	/** The Status bar projection. */
 	status: GuiStatusBar;
-	/** The Library panel's section (add-gui-library-panel design D2): the
-	 * active destination's content under its revision. `null` while no Library
-	 * panel shows. */
-	library: GuiLibraryFrame | null;
-	/** The Settings screen's section (add-gui-settings-screen design D9). `null`
-	 * while the screen is closed: the window replaces the two columns with the
-	 * screen only for a frame that carries it. */
+	/** The Library content of the active destination, `null` while no
+	 * presented destination is active. */
+	library: GuiLibraryContent | null;
+	/** The Search section: the query the top bar answers and its rows, `null`
+	 * while the field is closed. */
+	search: GuiSearchFrame | null;
+	/** The Settings screen, `null` while the screen is closed. */
 	settings: GuiSettingsFrame | null;
-	/** The UI-reset counter (design D10): the front end resets its interaction
-	 * stores when the value changes. */
-	uiResetEpoch: number;
-	/** `null` unless the theme changed for this window (design D7). */
-	theme: GuiTheme | null;
 }
 
-/** The Owner attach state the window shows before a slice exists (design D9). */
-export interface GuiAttachFrame {
-	state: GuiAttachState;
-	theme: GuiTheme | null;
-}
+/** The name of one window section. */
+export type SectionName = keyof SectionValues;
+
+/** One `mbv://sections` payload (design D1): a present field replaces the
+ * window's section at the carried revision, and an absent field leaves the
+ * window's section as it is. The fields mirror `GuiSectionBatch`'s optional
+ * serde fields field for field. */
+export type GuiSectionBatch = {
+	[K in SectionName]?: GuiSection<SectionValues[K]>;
+};
 
 /** One variant per Owner attach outcome, with the text the TUI Client gets. */
 export type GuiAttachState =
@@ -196,10 +219,14 @@ export interface GuiQueueSummary {
 }
 
 /** The canvas panel's collapse and queue-fold facts (design D10): the `z`
- * and `q` toggles the Client core holds. */
+ * and `q` toggles the Client core holds, with the UI-reset counter the window
+ * resets its interaction stores and panel widths on (add-gui-settings-screen
+ * design D10). The counter rides this section so a reset moves the section's
+ * revision. */
 export interface GuiPanelToggles {
 	collapsed: boolean;
 	queueFolded: boolean;
+	uiResetEpoch: number;
 }
 
 /** The open menu or popover (design D4). */
@@ -420,10 +447,6 @@ export interface GuiQueuePlayback {
 	 * cast receivers the Owner offers, each marked with whether it is the
 	 * Owner's attached output. */
 	targetChoices: GuiTargetChoice[];
-	/** The scrubber's hover preview (row 6.4): the pointer's fraction along
-	 * the bar and the time and chapter it names. `null` while the pointer
-	 * is away from the bar. */
-	hover: GuiScrubberHover | null;
 }
 
 /** The scrubber's hover preview (design D4): the position a move over the

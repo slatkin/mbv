@@ -10,8 +10,8 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test } from 'vitest';
 import type { GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
 import { buildLibraryRows, letterRail } from '$lib/library/list';
+import { library } from '$lib/bridge/sections';
 import {
-	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
 	measureLibraryList,
@@ -20,7 +20,7 @@ import LibraryLetterRail from './LibraryLetterRail.svelte';
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** The Beastie Boys artist: one album whose tracks the content does not
@@ -72,7 +72,7 @@ test('a letter with no painted rows is disabled and a press changes nothing', as
 });
 
 test('a press on a letter moves the cursor to its first row and shows that row', async () => {
-	carryLibraryContent({ revision: 1, search: null, content: { tabs: [], currentTab: null, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null } });
+	library.set({ tabs: [], currentTab: null, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 	measureLibraryList(40);
 	const { container } = render(LibraryLetterRail, { letters: letters(), marked: null });
 

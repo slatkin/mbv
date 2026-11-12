@@ -26,22 +26,23 @@
 	// backdrop press closes it, and Esc closes it in the key router (design
 	// D3). The panel also reports the arrangement it paints, so the router
 	// closes an overlay only where one actually paints.
-	import type { GuiArrangement } from '$lib/bridge/arrangement';
-	import type { GuiLibraryRowMenu } from '$lib/bridge/types';
-	import { sendLibraryCommand } from '$lib/bridge/library';
-	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
+		import type { GuiArrangement } from '$lib/bridge/arrangement';
 import type {
 GuiAudiobooksFrame,
 GuiEmbyFrame,
 GuiFeedsFrame,
 GuiHomeFrame,
-GuiLibraryTab,
 GuiMusicFrame,
 GuiPodcastsFrame,
-GuiSearchFrame,
 GuiShowsFrame,
-GuiStatusBar,
 } from '$lib/bridge/types';
+	import { sendLibraryCommand } from '$lib/bridge/library';
+	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
+	import {
+		library as librarySection,
+		search as searchSection,
+		status as statusSection,
+	} from '$lib/bridge/sections';
 import LibraryAudiobooksHero from './LibraryAudiobooksHero.svelte';
 import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
 import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
@@ -74,48 +75,6 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 	} from '$lib/library/state';
 
 	interface Props {
-		/** The presented destination tabs and the active one (design D2): the
-		 * top bar paints them. */
-		tabs: GuiLibraryTab[];
-		currentTab: number | null;
-		/** The carried Music content (design D2): the picked collections, the
-		 * union list, and the Hero; `null` while another destination is
-		 * active. */
-		music: GuiMusicFrame | null;
-		/** The carried Home content (design D12): the flat list and the
-		 * Hero; `null` while another destination is active. */
-		home?: GuiHomeFrame | null;
-		/** The carried Shows content (design D12, row 7.1): the mode pills, the
-		 * active mode's list, and the selected row's Hero with its Workspace;
-		 * `null` while another destination is active. */
-		shows?: GuiShowsFrame | null;
-		/** The carried plain Emby-library content (design D12, row 8.1): the
-		 * feed-group mode's pills, the active list, and the selected row's Hero
-		 * with no Workspace; `null` while another destination is active. */
-		emby?: GuiEmbyFrame | null;
-		/** The carried Audiobooks content (design D12, row 9.1): the catalog's
-		 * book list and the selected book's Hero with its chapters Workspace;
-		 * `null` while another destination is active. */
-		audiobooks?: GuiAudiobooksFrame | null;
-		/** The carried Podcasts content (design D12, row 10.1): the episode
-		 * pills, the active view's date-gutter list, and the selected episode's
-		 * Hero with no Workspace; `null` while another destination is active. */
-		podcasts?: GuiPodcastsFrame | null;
-		/** The carried Feeds content (design D12, row 11.1): the view pills,
-		 * the active pill's date-gutter list, and the selected entry's Hero
-		 * with no Workspace; `null` while another destination is active. */
-		feeds?: GuiFeedsFrame | null;
-		/** The carried Search facts (design D12, row 12.1): the results dropdown
-		 * the top bar paints under its field; `null` while the section is
-		 * closed. */
-		search?: GuiSearchFrame | null;
-		/** The right-click item menu the window content last opened (design
-		 * D8, D15), whichever destination's row named it; `null` while no
-		 * right-click has named an item. */
-		rowMenu: GuiLibraryRowMenu | null;
-		/** The frame's Status bar facts (design D10): the armed prefix and the
-		 * live toast, which the Status bar replaces the hints with. */
-		status: GuiStatusBar;
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
 		/** The list column's painted width (design D4): the session's dragged
@@ -124,23 +83,49 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		/** The Library column the list column sits in: the drag's clamp. */
 		libraryColumn: number;
 	}
-	const {
-		tabs,
-		currentTab,
-		music,
-		home = null,
-		shows = null,
-		emby = null,
-		audiobooks = null,
-		podcasts = null,
-		feeds = null,
-		search = null,
-		rowMenu,
-		status,
-		arrangement,
-		listWidth,
-		libraryColumn,
-	}: Props = $props();
+	const { arrangement, listWidth, libraryColumn }: Props = $props();
+
+	/** The `library` section's value: the active destination's content, `null`
+	 * while no Library panel shows. */
+	const content = $derived($librarySection);
+	/** The presented destination tabs and the active one (design D2): the
+	 * top bar paints them. */
+	const tabs = $derived(content?.tabs ?? []);
+	/** The active tab's position, or `null` while the active destination is
+	 * not one of the tabs. */
+	const currentTab = $derived(content?.currentTab ?? null);
+	/** The carried Music content (design D2): the picked collections, the
+	 * union list, and the Hero; `null` while another destination is active. */
+	const music = $derived(content?.music ?? null);
+	/** The carried Home content (design D12); `null` while another
+	 * destination is active. */
+	const home = $derived(content?.home ?? null);
+	/** The carried Shows content (design D12, row 7.1); `null` while another
+	 * destination is active. */
+	const shows = $derived(content?.shows ?? null);
+	/** The carried plain Emby-library content (design D12, row 8.1); `null`
+	 * while another destination is active. */
+	const emby = $derived(content?.emby ?? null);
+	/** The carried Audiobooks content (design D12, row 9.1); `null` while
+	 * another destination is active. */
+	const audiobooks = $derived(content?.audiobooks ?? null);
+	/** The carried Podcasts content (design D12, row 10.1); `null` while
+	 * another destination is active. */
+	const podcasts = $derived(content?.podcasts ?? null);
+	/** The carried Feeds content (design D12, row 11.1); `null` while another
+	 * destination is active. */
+	const feeds = $derived(content?.feeds ?? null);
+	/** The Search section's results (design D12, row 12.1): the results
+	 * dropdown the top bar paints under its field; `null` while the section
+	 * is closed. */
+	const search = $derived($searchSection);
+	/** The right-click item menu the window content last opened (design
+	 * D8, D15), whichever destination's row named it; `null` while no
+	 * right-click has named an item. */
+	const rowMenu = $derived(content?.rowMenu ?? null);
+	/** The Status bar section's facts (design D10): the armed prefix and the
+	 * live toast, which the Status bar replaces the hints with. */
+	const status = $derived($statusSection);
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');

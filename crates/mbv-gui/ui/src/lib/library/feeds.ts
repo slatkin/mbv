@@ -22,14 +22,14 @@ import { buildFeedsRows } from './feeds-list';
 import type { FeedsItemRow } from './feeds-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
-import { libraryContent } from './state';
+import { library as librarySection } from '$lib/bridge/sections';
 
 /** The carried Feeds content (design D12, row 11.1), or `null` while any
  * other destination is active. The Feeds destination is active while the
  * window holds this content, and every other destination's slice is then
  * `null`. */
 export function libraryFeeds(): GuiFeedsFrame | null {
-	return get(libraryContent)?.feeds ?? null;
+	return get(librarySection)?.feeds ?? null;
 }
 
 /** The Feeds list's interaction state: the shared pill-list state over the

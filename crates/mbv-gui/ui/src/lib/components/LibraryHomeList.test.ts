@@ -13,8 +13,8 @@ import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiHomeFrame, GuiLibraryContent } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from '$lib/library/home-list';
-import { carryLibraryContent } from '$lib/library/state';
 import { homeUi, initialHomeUi } from '$lib/library/home';
+import { library } from '$lib/bridge/sections';
 import LibraryHomeList from './LibraryHomeList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -60,7 +60,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	homeUi.set(initialHomeUi());
-	carryLibraryContent({ revision: 1, search: null, content: carriedContent() });
+	library.set(carriedContent());
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });

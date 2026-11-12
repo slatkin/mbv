@@ -13,7 +13,8 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiAudiobooksFrame, GuiAudiobooksRow } from '$lib/bridge/types';
 import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
 import { audiobooksCursorRow, audiobooksUi, initialAudiobooksUi } from '$lib/library/audiobooks';
-import { carryLibraryContent, libraryUi, initialLibraryUi } from '$lib/library/state';
+import { library } from '$lib/bridge/sections';
+import { libraryUi, initialLibraryUi } from '$lib/library/state';
 import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -71,7 +72,7 @@ beforeEach(() => {
 	resetMock.mockClear();
 	audiobooksUi.set(initialAudiobooksUi());
 	libraryUi.set(initialLibraryUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	library.set(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -83,10 +84,7 @@ async function mountList(
 	selected: string | null = 'b1',
 	viewportHeight = 300,
 ): Promise<HTMLElement> {
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: {
+	library.set({
 			tabs: [],
 			currentTab: 4,
 			music: null,
@@ -97,8 +95,7 @@ async function mountList(
 			podcasts: null,
 			feeds: null,
 			rowMenu: null,
-		},
-	});
+		});
 	const { container } = render(LibraryAudiobooksList, { audiobooks: frame(rows, selected) });
 	const list = container.querySelector<HTMLElement>('[data-library-abs-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
@@ -187,10 +184,7 @@ test('loading and failed paint their placeholder lines', () => {
 		expect(container.querySelector('[data-library-abs-loading]')).toBeNull();
 		expect(container.querySelector('[data-library-abs-failed]')).toBeNull();
 
-		carryLibraryContent({
-			revision: 1,
-			search: null,
-			content: {
+		library.set({
 				tabs: [],
 				currentTab: 4,
 				music: null,
@@ -205,8 +199,7 @@ test('loading and failed paint their placeholder lines', () => {
 				podcasts: null,
 				feeds: null,
 				rowMenu: null,
-			},
-		});
+			});
 		const failed = render(LibraryAudiobooksList, {
 			audiobooks: { ...frame(rows, null), loading: true, failed: true },
 		});
@@ -221,10 +214,7 @@ test('loading and failed paint their placeholder lines', () => {
 // `audiobooks-workspace` contract): the chapters it rested on belong to the
 // previous book.
 test('a selection change calls resetAbsChapterCursor', () => {
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: {
+	library.set({
 			tabs: [],
 			currentTab: 4,
 			music: null,
@@ -235,8 +225,7 @@ test('a selection change calls resetAbsChapterCursor', () => {
 			podcasts: null,
 			feeds: null,
 			rowMenu: null,
-		},
-	});
+		});
 	render(LibraryAudiobooksList, { audiobooks: frame(CATALOG, 'b2') });
 
 	expect(resetMock).toHaveBeenCalledTimes(1);

@@ -10,7 +10,16 @@ import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import { routeSettingsKey } from '$lib/settings/keys';
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiFrame, GuiLibraryTab, GuiPanel, GuiSearchFrame } from '$lib/bridge/types';
+import type {
+	GuiFocus,
+	GuiLibraryContent,
+	GuiLibraryTab,
+	GuiOverlayFrame,
+	GuiPanel,
+	GuiSearchFrame,
+	GuiSettingsFrame,
+	GuiStatusBar,
+} from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import { stepPillFocus } from './list';
 import {
@@ -26,7 +35,6 @@ import {
 	focusedLibraryPill,
 	heroOverlayOpen,
 	libraryAudiobooks,
-	libraryContent,
 	libraryPodcasts,
 	libraryEmby,
 	libraryHome,
@@ -41,6 +49,7 @@ import {
 	setLibraryCursorOpen,
 } from './state';
 import type { LibraryUiState } from './state';
+import { library as librarySection } from '$lib/bridge/sections';
 import {
 	acceptHomeFilter,
 	closeHomeFilter,
@@ -70,13 +79,20 @@ import {
 	searchResultsOf,
 } from './search';
 
-/** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
- * the installer passes the frame it holds; a test builds only these fields. */
-export type LibraryKeyFrame = Pick<
-	GuiFrame,
-	'focus' | 'overlay' | 'status' | 'library' | 'settings'
-> & {
-	summary: Pick<GuiFrame['summary'], 'filterActive'>;
+/** The section facts the routing reads (gui-change-driven-sections design
+ * D6): the values of the sections the router reads, as the installer passes
+ * them from the window's section stores; a test builds only these fields. */
+export type LibraryKeyFrame = {
+	focus: GuiFocus;
+	overlay: GuiOverlayFrame | null;
+	status: GuiStatusBar;
+	summary: { filterActive: boolean };
+	settings: GuiSettingsFrame | null;
+	/** The `library` section's value: the active destination's content, or
+	 * `null` while no Library panel shows. */
+	library: GuiLibraryContent | null;
+	/** The `search` section's value. */
+	search: GuiSearchFrame | null;
 };
 
 /** Whether no modifier is held. */
@@ -87,7 +103,7 @@ function bare(event: KeyboardEvent): boolean {
 /** The carried destination tabs (design D2): the tabs the top bar paints, and
  * the ones the digits open. */
 function carriedTabs(): readonly GuiLibraryTab[] {
-	return get(libraryContent)?.tabs ?? [];
+	return get(librarySection)?.tabs ?? [];
 }
 
 /** The place of the destination tab a digit opens (design D3, step 3): `1`
@@ -128,7 +144,7 @@ function takePaneFocus(panel: GuiPanel, step: number): void {
 
 /** The pills of the carried content. */
 function pills() {
-	return get(libraryContent)?.music?.pills ?? [];
+	return get(librarySection)?.music?.pills ?? [];
 }
 
 /** Move the focused pill one pill along the row (design D3, step 4): Right and
@@ -516,7 +532,7 @@ export function routeLibraryKey(
 	// D2, D10): a frame that carries no Library section takes no Library key,
 	// even while the window still holds the content of an earlier frame. The
 	// content names the active destination's section (design D12).
-	if (!libraryShown(frame.library, get(libraryContent))) {
+	if (!libraryShown(frame.library)) {
 		return 'core';
 	}
 	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
@@ -544,7 +560,7 @@ export function routeLibraryKey(
 	// Both facts must hold: a stale armed fact an unmounted bar retracted must
 	// never route a key under it (the same key-leak gate).
 	if (searchFieldMounted() && searchFieldFocused()) {
-		return routeSearchKey(event, searchResultsOf(frame.library?.search ?? null));
+		return routeSearchKey(event, searchResultsOf(frame.search));
 	}
 	const ui = get(libraryUi);
 	if (ui.filterOpen) {
@@ -569,7 +585,7 @@ export function routeLibraryKey(
 	// (4) The Library keys run while the Library panel has Panel focus. The
 	// carried Search section rides with them: its Esc close needs it.
 	if (frame.focus.panel === 'library') {
-		return routePanelKey(event, ui, frame.library?.search ?? null);
+		return routePanelKey(event, ui, frame.search);
 	}
 	// (5) Every other key goes to the core's keyboard router.
 	return 'core';

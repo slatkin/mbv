@@ -7,6 +7,7 @@
 
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test } from 'vitest';
+import { resetSectionsForTest, settings, status } from '$lib/bridge/sections';
 import type { GuiSettingsFrame, GuiSettingsSection } from '$lib/bridge/types';
 import { initialSettingsUi, settingsUi } from '$lib/settings/state';
 import SettingsScreen from './SettingsScreen.svelte';
@@ -22,6 +23,7 @@ function frame(section: GuiSettingsSection): GuiSettingsFrame {
 
 beforeEach(() => {
 	settingsUi.set(initialSettingsUi());
+	resetSectionsForTest();
 });
 
 test.each<[GuiSettingsSection, string]>([
@@ -29,10 +31,10 @@ test.each<[GuiSettingsSection, string]>([
 	['playback', 'Playback'],
 	['mpv', 'mpv'],
 ])('the content frame titles the %s section with its name', (section, title) => {
+	settings.set(frame(section));
+	status.set({ prefixArmed: false, toast: null });
 	const { container } = render(SettingsScreen, {
 		props: {
-			settings: frame(section),
-			status: { prefixArmed: false, toast: null },
 			arrangement: 'narrow',
 		},
 	});

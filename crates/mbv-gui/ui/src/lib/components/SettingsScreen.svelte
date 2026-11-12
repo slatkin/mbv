@@ -13,7 +13,8 @@
 	// width instead of taking the canvas (live finding, Settings screen).
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { SETTINGS_SIDEBAR_WIDTH_PX } from '$lib/bridge/arrangement';
-	import type { GuiSettingsFrame, GuiSettingsSection, GuiStatusBar } from '$lib/bridge/types';
+	import { settings as settingsSection, status as statusSection } from '$lib/bridge/sections';
+	import type { GuiSettingsSection } from '$lib/bridge/types';
 	import {
 		currentSettingsEntries,
 		cursorEntryId,
@@ -31,16 +32,16 @@
 	import SettingsPlaylists from './SettingsPlaylists.svelte';
 
 	interface Props {
-		/** The frame's Settings section: the shown section, the sidebar's
-		 * sections, and the content. */
-		settings: GuiSettingsFrame;
-		/** The frame's Status bar facts, which the status line paints. */
-		status: GuiStatusBar;
 		/** The arrangement the Library-column measurement picks; only Mini
 		 * changes the paint (one pane instead of two). */
 		arrangement: GuiArrangement;
 	}
-	const { settings, status, arrangement }: Props = $props();
+	const { arrangement }: Props = $props();
+
+	/** The Settings section the screen paints. */
+	const settings = $derived($settingsSection);
+	/** The Status bar section's facts, which the status line paints. */
+	const status = $derived($statusSection);
 
 	/** The section's sidebar label, for the status line and the content's
 	 * title. The Services section shows as Sources at the user's choice (design
@@ -62,7 +63,9 @@
 
 	const mini = $derived(arrangement === 'mini');
 	const pane = $derived($settingsUi.pane);
-	const entries = $derived(currentSettingsEntries(settings.content, $settingsUi));
+	const entries = $derived(
+		settings === null ? [] : currentSettingsEntries(settings.content, $settingsUi),
+	);
 	const cursorId = $derived(
 		pane === 'content' && $settingsUi.keyboard ? cursorEntryId(entries, $settingsUi) : null,
 	);
@@ -85,6 +88,7 @@
 <!-- A pointer press hides the keyboard cursor, like `:focus-visible`. -->
 <svelte:window onpointerdown={hideSettingsCursor} />
 
+{#if settings !== null}
 <div
 	class="flex h-full min-h-0 min-w-0 flex-1 flex-col"
 	style:background="var(--canvas-library-column)"
@@ -146,3 +150,4 @@
 	</div>
 	<SettingsStatusBar {status} section={LABELS[settings.section]} />
 </div>
+{/if}

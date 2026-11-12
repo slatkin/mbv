@@ -21,24 +21,26 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
+	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { clampRatio } from '$lib/bridge/time';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
-		GuiQueuePlayback,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	interface Props {
-		playback: GuiQueuePlayback;
 		/** The artwork the window carries for the active item (design D10):
-		 * the frame arms it on a change and `Panel` keeps it, so the rail
-		 * paints the same art the expanded artboard showed. `null` while the
-		 * window has carried none. */
+		 * the playback section arms it on a change and `Panel` keeps it, so
+		 * the rail paints the same art the expanded artboard showed. `null`
+		 * while the window has carried none. */
 		art: GuiCardArtwork | null;
 	}
-	const { playback, art }: Props = $props();
+	const { art }: Props = $props();
+
+	/** The transport band's facts the rail paints. */
+	const playback = $derived($playbackSection);
 
 	/** The rail's width is the Queue panel's collapsed width
 	 * (`arrangement.ts`), the same number the window measures the Library column

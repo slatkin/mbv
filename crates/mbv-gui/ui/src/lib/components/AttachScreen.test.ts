@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { attach, resetSectionsForTest } from '$lib/bridge/sections';
 import type { GuiAttachState } from '$lib/bridge/types';
 import AttachScreen from './AttachScreen.svelte';
 
@@ -32,47 +33,47 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	// The attach screen reads the attach section's store; a state one test
+	// carried would outlive it.
+	resetSectionsForTest();
 });
 
 const WAITING_TEXT = 'Attaching to the Owner process…';
 
 test('no frame yet renders the waiting state', () => {
-	const { getByText } = render(AttachScreen, { attach: null });
+	attach.set(null);
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText(WAITING_TEXT)).toBeTruthy();
 });
 
 test('a shutting-down Owner renders the waiting state', () => {
-	const { getByText } = render(AttachScreen, {
-		attach: { kind: 'waiting' } satisfies GuiAttachState,
-	});
+	attach.set({ kind: 'waiting' } satisfies GuiAttachState);
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText(WAITING_TEXT)).toBeTruthy();
 });
 
 test('a refusing Owner renders its refusal text', () => {
-	const { getByText } = render(AttachScreen, {
-		attach: { kind: 'refusal', detail: 'the refusal text' },
-	});
+	attach.set({ kind: 'refusal', detail: 'the refusal text' });
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText('the refusal text')).toBeTruthy();
 });
 
 test('an exclusive Owner renders its refusal text', () => {
-	const { getByText } = render(AttachScreen, {
-		attach: { kind: 'exclusiveRefusal', detail: 'the exclusive text' },
-	});
+	attach.set({ kind: 'exclusiveRefusal', detail: 'the exclusive text' });
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText('the exclusive text')).toBeTruthy();
 });
 
 test('a build mismatch renders its text and the Restart and Quit buttons', () => {
-	const { getByText } = render(AttachScreen, {
-		attach: {
-			kind: 'mismatch',
-			detail: 'the mismatch text\nRestarting stops playback and closes any other mbv terminals.',
-		},
+	attach.set({
+		kind: 'mismatch',
+		detail: 'the mismatch text\nRestarting stops playback and closes any other mbv terminals.',
 	});
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText(/the mismatch text/)).toBeTruthy();
 	expect(getByText('Restart')).toBeTruthy();
@@ -80,17 +81,15 @@ test('a build mismatch renders its text and the Restart and Quit buttons', () =>
 });
 
 test('an attach failure renders its text', () => {
-	const { getByText } = render(AttachScreen, {
-		attach: { kind: 'failed', detail: 'failed to attach to Owner process: nope' },
-	});
+	attach.set({ kind: 'failed', detail: 'failed to attach to Owner process: nope' });
+	const { getByText } = render(AttachScreen);
 
 	expect(getByText('failed to attach to Owner process: nope')).toBeTruthy();
 });
 
 test('the mismatch buttons appear in the reported regions', async () => {
-	render(AttachScreen, {
-		attach: { kind: 'mismatch', detail: 'the mismatch text' },
-	});
+	attach.set({ kind: 'mismatch', detail: 'the mismatch text' });
+	render(AttachScreen);
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 

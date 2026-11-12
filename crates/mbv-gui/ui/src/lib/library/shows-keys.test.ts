@@ -23,7 +23,8 @@ import type {
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { initialShowsUi, showsCursorRow, showsUi } from './shows';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -32,7 +33,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	showsUi.set(initialShowsUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -43,7 +44,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		library: get(library),
+		search: null,
 	};
 }
 
@@ -169,7 +171,7 @@ function carryShows(
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, search: null, content });
+	library.set(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	showsUi.set({ ...initialShowsUi(), cursor });
 }

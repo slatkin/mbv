@@ -7,7 +7,26 @@
 import { invoke } from '@tauri-apps/api/core';
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiFrame, GuiPanelToggles, GuiQueue, GuiQueueRow, LayoutSize } from '$lib/bridge/types';
+import {
+	focus as focusStore,
+	footer as footerStore,
+	hover as hoverStore,
+	overlay as overlayStore,
+	panel as panelStore,
+	playback as playbackStore,
+	queue as queueStore,
+	resetSectionsForTest,
+	status as statusStore,
+	summary as summaryStore,
+} from '$lib/bridge/sections';
+import type {
+	GuiPanelToggles,
+	GuiQueue,
+	GuiQueuePlayback,
+	GuiQueueRow,
+	GuiQueueSummary,
+	LayoutSize,
+} from '$lib/bridge/types';
 import Panel from './Panel.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -27,6 +46,9 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	// The panel and its children read the window's section stores; a section
+	// one test carried would outlive it.
+	resetSectionsForTest();
 });
 
 /** One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`). */
@@ -67,70 +89,82 @@ function queue(): GuiQueue {
 	};
 }
 
-/** The attached slice's frame: a playing item with carried artwork, the two
- * slot queue, and the footer line. A case overrides the toggles the state
- * under test reads, and the queue the strip's next-item line must not depend
- * on (review of row 6.6, finding P2). */
-function frame(
-	panel: GuiPanelToggles,
-	overrides: { queue?: GuiQueue; nextTitle?: string | null } = {},
-): GuiFrame {
-	return {
-		focus: { surface: 'queue', panel: 'queue' },
-		queue: overrides.queue ?? queue(),
-		summary: {
-			remaining: 1,
-			nextTitle: overrides.nextTitle === undefined ? 'Second track' : overrides.nextTitle,
-			finishClock: '21:43',
-			rightColumn: 'length',
-			filter: '',
-			filterActive: false,
-		},
-		panel,
-		overlay: null,
-		playback: {
-			status: 'playing',
-			host: 'poo',
-			hostIsRemote: false,
-			shown: true,
-			playback: {
-				active: true,
-				activeIdx: 0,
-				positionTicks: 60 * SECOND,
-				runtimeTicks: 200 * SECOND,
-				paused: false,
-			},
-			elapsedClock: '1:00',
-			remainingClock: '2:20',
-			showControls: true,
-			nowPlayingTitle: 'Track One',
-			parentLine: 'The Show',
-			episodeBadge: null,
-			stillCaption: null,
-			finishClock: '21:00',
-			chapters: [],
-			introMark: null,
-			creditsMark: null,
-			trickplay: null,
-			availability: { stop: false, next: true, previous: true },
-			statusIndicators: null,
-			artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' },
-			trackChips: null,
-			targetChoices: [],
-			hover: null,
-		},
-		footer: {
-			owner: { text: 'woims', role: 'textFocusAccent', bold: false },
-			ownerLive: true,
-			playlist: { text: 'mix', role: 'textMetadata', bold: false },
-			autosave: null,
-			dirty: null,
-		},
-		status: { prefixArmed: false, toast: null },
-		library: null,
-		settings: null,
+/** The attached sections the expanded panel paints: a playing item with
+ * carried artwork, the two slot queue, and the footer line. A case overrides
+ * the sections the state under test reads. */
+function seed(
+	panel: Partial<GuiPanelToggles>,
+	overrides: {
+		queue?: GuiQueue;
+		nextTitle?: string | null;
+		panel?: Partial<GuiPanelToggles>;
+		playback?: Partial<GuiQueuePlayback>;
+		summary?: Partial<GuiQueueSummary>;
+	} = {},
+): void {
+	panelStore.set({
+		collapsed: false,
+		queueFolded: false,
 		uiResetEpoch: 0,
-		theme: null,
+		...panel,
+		...overrides.panel,
+	});
+	focusStore.set({ surface: 'queue', panel: 'queue' });
+	queueStore.set(overrides.queue ?? queue());
+	summaryStore.set({
+		remaining: 1,
+		nextTitle: overrides.nextTitle === undefined ? 'Second track' : overrides.nextTitle,
+		finishClock: '21:43',
+		rightColumn: 'length',
+		filter: '',
+		filterActive: false,
+		...overrides.summary,
+	});
+	overlayStore.set(null);
+	playbackStore.set(playing(overrides.playback));
+	footerStore.set({
+		owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+		ownerLive: true,
+		playlist: { text: 'mix', role: 'textMetadata', bold: false },
+		autosave: null,
+		dirty: null,
+	});
+	statusStore.set({ prefixArmed: false, toast: null });
+	hoverStore.set(null);
+}
+
+/** A playing transport band with the carried artwork the panel adopts. */
+function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
+	return {
+		status: 'playing',
+		host: 'poo',
+		hostIsRemote: false,
+		shown: true,
+		playback: {
+			active: true,
+			activeIdx: 0,
+			positionTicks: 60 * SECOND,
+			runtimeTicks: 200 * SECOND,
+			paused: false,
+		},
+		elapsedClock: '1:00',
+		remainingClock: '2:20',
+		showControls: true,
+		nowPlayingTitle: 'Track One',
+		parentLine: 'The Show',
+		episodeBadge: null,
+		stillCaption: null,
+		finishClock: '21:00',
+		chapters: [],
+		introMark: null,
+		creditsMark: null,
+		trickplay: null,
+		availability: { stop: false, next: true, previous: true },
+		statusIndicators: null,
+		artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' },
+		trackChips: null,
+		targetChoices: [],
+		...overrides,
 	};
 }
 
@@ -144,8 +178,8 @@ function lastReportedRegionIds(): unknown[] {
 }
 
 test('a tall container renders the expanded artboard', () => {
+	seed({ collapsed: false, queueFolded: false });
 	const { container, getByText } = render(Panel, {
-		frame: frame({ collapsed: false, queueFolded: false }),
 		container: TALL,
 		libraryVisible: false,
 	});
@@ -161,11 +195,11 @@ test('a container shorter than 520 px renders the compact strip', async () => {
 	// state the review found (row 6.6, finding P2): with no Queue list painted,
 	// the old viewport reading named no next item. The summary carries it, so
 	// the strip still paints it.
-	const { container, getByText, queryByText } = render(Panel, {
-		frame: frame(
+	seed(
 			{ collapsed: false, queueFolded: false },
 			{ queue: { ...queue(), rows: [item(2, 'Second track')], active: 1 } },
-		),
+		);
+	const { container, getByText, queryByText } = render(Panel, {
 		container: SHORT,
 		libraryVisible: false,
 	});
@@ -182,8 +216,8 @@ test('a container shorter than 520 px renders the compact strip', async () => {
 });
 
 test('the strip paints the parent line alone while no slot follows the playhead', () => {
+	seed({ collapsed: false, queueFolded: false }, { nextTitle: null });
 	const { getByText, queryByText } = render(Panel, {
-		frame: frame({ collapsed: false, queueFolded: false }, { nextTitle: null }),
 		container: SHORT,
 		libraryVisible: false,
 	});
@@ -193,8 +227,8 @@ test('the strip paints the parent line alone while no slot follows the playhead'
 });
 
 test('the queue-fold toggle replaces the rows with one summary line', async () => {
+	seed({ collapsed: false, queueFolded: true });
 	const { container, getByText, queryByText } = render(Panel, {
-		frame: frame({ collapsed: false, queueFolded: true }),
 		container: TALL,
 		libraryVisible: false,
 	});
@@ -212,8 +246,8 @@ test('the queue-fold toggle replaces the rows with one summary line', async () =
 });
 
 test('the collapse toggle renders the 72 px rail', async () => {
+	seed({ collapsed: true, queueFolded: false });
 	const { container, getByText, queryByText } = render(Panel, {
-		frame: frame({ collapsed: true, queueFolded: false }),
 		container: TALL,
 		libraryVisible: false,
 	});
@@ -237,8 +271,8 @@ test('the collapse toggle renders the 72 px rail', async () => {
 });
 
 test('the collapsed rail paints the dim canvas fill, the TUI BgDim slot', () => {
+	seed({ collapsed: true, queueFolded: false });
 	const { container } = render(Panel, {
-		frame: frame({ collapsed: true, queueFolded: false }),
 		container: TALL,
 		libraryVisible: false,
 	});

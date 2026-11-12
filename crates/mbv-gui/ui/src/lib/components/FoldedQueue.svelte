@@ -12,13 +12,12 @@
 	import { onMount } from 'svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { summary as summarySection } from '$lib/bridge/sections';
 	import { roleVar } from '$lib/bridge/theme';
-	import type { GuiQueueSummary, LayoutRegion } from '$lib/bridge/types';
+	import type { LayoutRegion } from '$lib/bridge/types';
 
-	interface Props {
-		summary: GuiQueueSummary;
-	}
-	const { summary }: Props = $props();
+	/** The queue summary the line paints. */
+	const summary = $derived($summarySection);
 
 	const reportKey = Symbol('folded-queue');
 	let lineEl: HTMLElement | undefined = $state();

@@ -49,22 +49,26 @@
 	import { onMount } from 'svelte';
 	import { SaveCheck, SaveOff } from '@lucide/svelte';
 	import { observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { footer as footerSection, status as statusSection } from '$lib/bridge/sections';
 	import { toastColor } from '$lib/bridge/status';
 	import { roleVar } from '$lib/bridge/theme';
-	import type { GuiQueueFooter, GuiStatusBar, LayoutRegion } from '$lib/bridge/types';
+	import type { LayoutRegion } from '$lib/bridge/types';
 
 	interface Props {
-		footer: GuiQueueFooter;
-		status: GuiStatusBar;
 		/** Whether the Library panel shows (design D10): the Library Status
 		 * bar owns the armed prefix and the live toast then, so this line
 		 * paints neither. */
 		libraryVisible: boolean;
 	}
-	const { footer, status, libraryVisible }: Props = $props();
+	const { libraryVisible }: Props = $props();
 
-	/** The toast this line paints: the frame's live toast, or `null` while the
-	 * Library panel shows and its Status bar paints it (design D10). */
+	/** The footer section's pills. */
+	const footer = $derived($footerSection);
+	/** The Status bar section's facts. */
+	const status = $derived($statusSection);
+
+	/** The toast this line paints: the section's live toast, or `null` while
+	 * the Library panel shows and its Status bar paints it (design D10). */
 	const toast = $derived(libraryVisible ? null : status.toast);
 
 	/** Whether this line paints the armed prefix badge: prefix mode is armed,

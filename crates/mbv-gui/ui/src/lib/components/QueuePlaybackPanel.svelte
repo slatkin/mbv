@@ -8,7 +8,7 @@
 	// The scrubber paints the canvas geometry: a 6 px track, the intro and
 	// credits blocks, the played fill, 2×14 chapter ticks, a 16 px thumb, the
 	// hover position line, and the elapsed and `−remaining · ends HH:MM`
-	// labels. Its hover preview paints from the frame's `hover` datum (the
+	// labels. Its hover preview paints from the `hover` section (the
 	// core resolves the pointer move against the painted bar), so the
 	// component holds no hover state; the trickplay tile stays a `[trickplay]`
 	// box until a sheet is cached. A press on the bar forwards like every
@@ -18,7 +18,7 @@
 	//
 	// The header's playback target reports `playbackTarget`; its press opens
 	// the core's chooser, whose popover paints under the header from the
-	// frame's `targetChooser` overlay. Each row reports its `targetChoice`
+	// overlay section's `targetChooser` variant. Each row reports its `targetChoice`
 	// index — the core resolves a row press against the same live choice list
 	// the frame carries — under a second report key, first inserted when the
 	// chooser opens: this component mounts before the queue panel and footer,
@@ -45,6 +45,7 @@
 		SkipForward
 	} from '@lucide/svelte';
 	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { hover, overlay, playback } from '$lib/bridge/sections';
 	import TrackChips from './TrackChips.svelte';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import { clampRatio, minus } from '$lib/bridge/time';
@@ -52,8 +53,6 @@
 		GuiCardArtwork,
 		GuiChapter,
 		GuiNowPlayingStatus,
-		GuiOverlayFrame,
-		GuiQueuePlayback,
 		GuiSegmentMark,
 		GuiTrickplaySheet,
 		LayoutRegion,
@@ -61,25 +60,18 @@
 	} from '$lib/bridge/types';
 
 	interface Props {
-		playback: GuiQueuePlayback;
-		/** The open menu or popover (design D4): the playback-target chooser
-		 * paints under the header while it is the open overlay. `null` while
-		 * none is open. */
-		overlay: GuiOverlayFrame | null;
 		/** The artwork the window carried for the active item (design D10),
 		 * held by the panel above this one so a state that mounts later paints
-		 * it too. `null` in a bare render, where the frame's own `artwork` is
+		 * it too. `null` in a bare render, where the section's own `artwork` is
 		 * the only source. */
 		carried?: GuiCardArtwork | null;
 		/** The trickplay sheet the window carried (task 6.7), held by the panel
-		 * above this one: a frame re-carries the sheet's image only when the
+		 * above this one: a section re-carries the sheet's image only when the
 		 * hovered sheet changes, so the preview repaints the latched image while
 		 * the tile names its key. `null` in a bare render. */
 		carriedSheet?: GuiTrickplaySheet | null;
 	}
 	const {
-		playback,
-		overlay,
 		carried = null,
 		carriedSheet = null,
 	}: Props = $props();
@@ -98,21 +90,21 @@
 	let collapseEl: HTMLElement | undefined = $state();
 	let chooserEl: HTMLElement | undefined = $state();
 
-	/** The art the panel paints: this frame's carried value when it has one,
+	/** The art the panel paints: this batch's carried value when it has one,
 	 * else the value the panel above carried for the window (design D10). */
-	const art = $derived(playback.artwork ?? carried);
+	const art = $derived($playback.artwork ?? carried);
 
 	/** The open playback-target chooser, or `null` while another overlay (or
 	 * none) is up. The rows paint the core's live choice list; a row's press
 	 * resolves against its reported `targetChoice` index, so no cursor or
 	 * open state lives here. */
-	const chooser = $derived(overlay?.kind === 'targetChooser' ? overlay : null);
+	const chooser = $derived($overlay?.kind === 'targetChooser' ? $overlay : null);
 
 	/** The played fraction of the scrubber, clamped to `[0, 1]`. */
 	const progress = $derived(
 		clampRatio(
-			playback.playback.positionTicks,
-			playback.playback.runtimeTicks,
+			$playback.playback.positionTicks,
+			$playback.playback.runtimeTicks,
 		),
 	);
 
@@ -121,27 +113,27 @@
 	 * fractions. */
 	const chapterTicks = $derived(
 		visibleChapters(
-			playback.chapters,
-			playback.playback.runtimeTicks,
+			$playback.chapters,
+			$playback.playback.runtimeTicks,
 		),
 	);
 
 	/** The intro and credits marks' starts in bar fractions (`main` audit 10);
 	 * `null` while a mark is unknown. */
 	const introLeft = $derived(
-		markLeft(playback.introMark, playback.playback.runtimeTicks),
+		markLeft($playback.introMark, $playback.playback.runtimeTicks),
 	);
 	const creditsLeft = $derived(
-		markLeft(playback.creditsMark, playback.playback.runtimeTicks),
+		markLeft($playback.creditsMark, $playback.playback.runtimeTicks),
 	);
 
-	/** The scrubber's hover preview, painted from the frame: the pointer's
+	/** The scrubber's hover preview, painted from the hover section: the pointer's
 	 * fraction, the time it names, the chapter covering it, and the trickplay
 	 * tile (task 6.7). The tile is present while the item offers one — the
 	 * preview paints it cropped or as the in-flight box — and `null` for a
 	 * position without trickplay, where the preview paints the label chip
 	 * alone. `null` while the pointer is away from the bar. */
-	const hover = $derived(playback.hover);
+	const hoverPreview = $derived($hover);
 
 	/** The preview thumbnail's painted width: the canvas's `w-32` box. */
 	const TILE_WIDTH_PX = 128;
@@ -151,7 +143,7 @@
 	 * `null` while no sheet is latched for the hovered tile, so the preview
 	 * falls back to the placeholder. */
 	const tileCrop = $derived.by(() => {
-		const tile = hover?.tile;
+		const tile = hoverPreview?.tile;
 		const image = tile
 			? (tile.sheet ??
 				(carriedSheet?.key === tile.sheetKey ? carriedSheet.image : null))
@@ -271,11 +263,11 @@
 	// Each paint that moved a region reports (design D4): this effect runs
 	// after the DOM update, and the ResizeObserver reports layout-driven
 	// moves. Reading the overlay registers the chooser's rows, which appear
-	// and disappear with that frame section; the chooser's key retracts while
+	// and disappear with that section; the chooser's key retracts while
 	// none is open. The reporter dedupes an unchanged contribution.
 	$effect(() => {
-		void playback;
-		void overlay;
+		void $playback;
+		void $overlay;
 		report();
 		if (!chooser) {
 			retractLayout(chooserKey);
@@ -322,7 +314,7 @@
 	<!-- The header row: the playback target at the left, then the state
 		label and the collapse control at the right. The target button is the
 		`playbackTarget` region; its press opens the core's chooser, whose
-		popover paints below it from the frame's `targetChooser` overlay. Each
+		popover paints below it from the overlay section's `targetChooser`. Each
 		chooser row is its own `targetChoice` region; Esc and an outside press
 		close the popover in the core. The canvas paints no queue-fold control
 		here (`main` audit 4): `q` stays a chord. -->
@@ -341,7 +333,7 @@
 			style:padding="0 10px"
 			style:gap="8px"
 			style:font-size="13px"
-			style:color={playback.hostIsRemote
+			style:color={$playback.hostIsRemote
 				? roleVar('playbackTargetRemoteFg')
 				: roleVar('playbackTargetLocalFg')}
 			bind:this={targetEl}
@@ -349,8 +341,8 @@
 			aria-label="Cast to device"
 		>
 			<Cast size={18} strokeWidth={1.8} color="currentColor" />
-			{#if playback.host}
-				<span class="truncate">{playback.host}</span>
+			{#if $playback.host}
+				<span class="truncate">{$playback.host}</span>
 			{/if}
 			<ChevronDown size={12} strokeWidth={2} color="currentColor" />
 		</button>
@@ -360,8 +352,8 @@
 				style:font-size="11px"
 				style:letter-spacing="0.08em"
 				style:padding="0 8px"
-				style:color={statusColor(playback.status)}
-				>{`\u25CF ${statusWord(playback.status)}`}</span
+				style:color={statusColor($playback.status)}
+				>{`\u25CF ${statusWord($playback.status)}`}</span
 			>
 			<button
 				type="button"
@@ -412,7 +404,7 @@
 			</div>
 		{/if}
 	</div>
-	{#if playback.nowPlayingTitle}
+	{#if $playback.nowPlayingTitle}
 		<!-- The still slot (`main` audit 6): a fixed 225 px box on the raised
 			control fill, the artwork inside it, and the canvas caption while no
 			image lands. The wrapper is the visual slot's painted region. The
@@ -438,16 +430,16 @@
 						(design D4a's still slot): the frame's still-caption
 						fact, one `[...]` line per item kind; an item with no
 						image source paints no caption. -->
-					{#if playback.stillCaption}
+					{#if $playback.stillCaption}
 						<span
 							class="font-mono"
 							style:font-size="12px"
 							style:color={roleVar('textMuted')}
-							>{`[${playback.stillCaption}]`}</span
+							>{`[${$playback.stillCaption}]`}</span
 						>
 					{/if}
 				{/if}
-				{#if playback.episodeBadge}
+				{#if $playback.episodeBadge}
 					<span
 						class="absolute font-mono"
 						style:left="12px"
@@ -457,7 +449,7 @@
 						style:border-radius="4px"
 						style:background="var(--mbv-background)"
 						style:color="var(--canvas-type-count)"
-						>{playback.episodeBadge}</span
+						>{$playback.episodeBadge}</span
 					>
 				{/if}
 			</div>
@@ -471,17 +463,17 @@
 				class="truncate"
 				style:font-size="18px"
 				style:font-weight="600"
-				style:color={roleVar('playbackTitleFg')}>{playback.nowPlayingTitle}</span
+				style:color={roleVar('playbackTitleFg')}>{$playback.nowPlayingTitle}</span
 			>
-			{#if playback.parentLine}
+			{#if $playback.parentLine}
 				<span
 					class="truncate"
 					style:font-size="13px"
-					style:color="var(--canvas-type-secondary)">{playback.parentLine}</span
+					style:color="var(--canvas-type-secondary)">{$playback.parentLine}</span
 				>
 			{/if}
 		</div>
-		{#if playback.showControls}
+		{#if $playback.showControls}
 			<!-- The scrubber (`main` audits 9–12): the 60 px block with the
 				track at 22 px, the intro and credits blocks, the played fill,
 				the chapter ticks, the pointer's position line, the thumb, and
@@ -501,7 +493,7 @@
 					bind:this={seekbarEl}
 					data-target="seekbar"
 				>
-					{#if hover}
+					{#if hoverPreview}
 						<!-- The hover preview (`main` audit 12): the 128×72
 							trickplay tile stacked over the label chip, which reads
 							the time and the covering chapter's number, not its
@@ -512,12 +504,12 @@
 							spec's no-trickplay scenario). -->
 						<div
 							class="pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center"
-							style:left="{hover.fraction * 100}%"
+							style:left="{hoverPreview.fraction * 100}%"
 							style:top="-84px"
 							style:width="128px"
 							style:gap="4px"
 						>
-							{#if hover.tile}
+							{#if hoverPreview.tile}
 								{#if tileCrop}
 									<div
 										class="overflow-hidden bg-no-repeat"
@@ -550,8 +542,8 @@
 								style:border-radius="3px"
 								style:background="var(--mbv-background)"
 								style:color={roleVar('playbackTitleFg')}
-								>{hover.timeLabel}{hover.chapterNumber !== null
-									? ` · Ch. ${hover.chapterNumber}`
+								>{hoverPreview.timeLabel}{hoverPreview.chapterNumber !== null
+									? ` · Ch. ${hoverPreview.chapterNumber}`
 									: ''}</div
 							>
 						</div>
@@ -606,11 +598,11 @@
 							title="Credits"
 						></div>
 					{/if}
-					{#if hover}
+					{#if hoverPreview}
 						<div
 							class="pointer-events-none absolute"
 							data-hover-line
-							style:left="{hover.fraction * 100}%"
+							style:left="{hoverPreview.fraction * 100}%"
 							style:top="14px"
 							style:width="1px"
 							style:height="22px"
@@ -635,10 +627,10 @@
 						<!-- A clock is time (design D14): the elapsed label paints the time
 							token, and the remaining label paints it at 0.75, as the canvas
 							draws the scrubber's two ends. -->
-						<span style:color="var(--canvas-type-time)">{playback.elapsedClock}</span>
+						<span style:color="var(--canvas-type-time)">{$playback.elapsedClock}</span>
 						<span style:color="var(--canvas-type-time)" style:opacity="0.75"
-							>{minus(playback.remainingClock)}{playback.finishClock
-								? ` · ends ${playback.finishClock}`
+							>{minus($playback.remainingClock)}{$playback.finishClock
+								? ` · ends ${$playback.finishClock}`
 								: ''}</span
 						>
 					</div>
@@ -664,8 +656,8 @@
 				>
 					<SkipBack
 						size={20}
-						fill={glyphColor(playback.availability.previous, 'textPrimary')}
-						color={glyphColor(playback.availability.previous, 'textPrimary')}
+						fill={glyphColor($playback.availability.previous, 'textPrimary')}
+						color={glyphColor($playback.availability.previous, 'textPrimary')}
 					/>
 				</button>
 				<button
@@ -690,9 +682,9 @@
 					style:background="var(--mbv-accent)"
 					bind:this={playPauseEl}
 					data-target="playPause"
-					aria-label={playback.playback.paused ? 'Play' : 'Pause'}
+					aria-label={$playback.playback.paused ? 'Play' : 'Pause'}
 				>
-					{#if playback.playback.paused}
+					{#if $playback.playback.paused}
 						<Play
 							size={22}
 							fill={roleVar('textOnAccent')}
@@ -731,8 +723,8 @@
 				>
 					<SkipForward
 						size={20}
-						fill={glyphColor(playback.availability.next, 'textPrimary')}
-						color={glyphColor(playback.availability.next, 'textPrimary')}
+						fill={glyphColor($playback.availability.next, 'textPrimary')}
+						color={glyphColor($playback.availability.next, 'textPrimary')}
 					/>
 				</button>
 			</div>
@@ -741,7 +733,7 @@
 				its chip, right-aligned. `trackChips` is `null` while the local
 				player is inactive, so the row is absent then, as the
 				status-indicator cluster is. -->
-			<TrackChips chips={playback.trackChips} {overlay} />
+			<TrackChips chips={$playback.trackChips} overlay={$overlay} />
 		{/if}
 	{/if}
 </div>

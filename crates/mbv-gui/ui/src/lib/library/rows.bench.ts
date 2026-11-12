@@ -10,7 +10,8 @@
 import { test } from 'vitest';
 import type { GuiLibraryContent, GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
 import { NODE_ROW_HEIGHT, RAIL_LETTERS } from './list';
-import { initialLibraryUi, libraryContent, libraryUi, measureLibraryList, scrollLibraryList } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi, measureLibraryList, scrollLibraryList } from './state';
 
 /** Artists in the fixture; each closed artist is one row under its letter. */
 const ARTISTS = 5_000;
@@ -63,7 +64,7 @@ function musicContent(): GuiLibraryContent {
 
 // The content and the viewport are the list's inputs, not the scroll: they
 // are set once, when the module loads, so the bench times only the steps.
-libraryContent.set(musicContent());
+library.set(musicContent());
 libraryUi.set(initialLibraryUi());
 measureLibraryList(VIEWPORT_HEIGHT);
 

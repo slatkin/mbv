@@ -54,12 +54,15 @@
 	import { onMount } from 'svelte';
 	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
+	import {
+		focus,
+		queue as queueSection,
+		overlay as overlaySection,
+		summary as summarySection,
+	} from '$lib/bridge/sections';
 	import { canvasVar, roleVar } from '$lib/bridge/theme';
 	import type {
-		GuiOverlayFrame,
-		GuiQueue,
 		GuiQueueRow,
-		GuiQueueSummary,
 		LayoutRegion,
 		QueueTargetId,
 	} from '$lib/bridge/types';
@@ -74,43 +77,23 @@
 	 * title and the percent only). */
 	type RowChrome = 'row' | 'hover' | 'ghost';
 
-	interface Props {
-		queue: GuiQueue;
-		/** The queue header's facts (design D4): the remaining count, the
-		 * finish clock, the right-column mode, and the filter. Optional so
-		 * a bare render still compiles — `App.svelte` always carries it. */
-		summary?: GuiQueueSummary;
-		/** The open menu or popover (design D4): the row menu paints while
-		 * `rowMenu` is the open overlay. `null` while none is open. */
-		overlay?: GuiOverlayFrame | null;
-		/** Whether the queue surface holds interaction focus
-		 * (`GuiFocus::surface`): the selection bar's rule, the TUI's
-		 * `focused || multi_selected`. */
-		focused: boolean;
-		/** Whether the queue Panel holds the frame's appearance focus
-		 * (`GuiFocus::panel`): the TUI's `panel_appearance_focus`, which
-		 * picks the focused fills of the focus-reactive `QueuePanel` and
-		 * `QueueColumn` surfaces. */
-		panelFocused: boolean;
-	}
-	/** The summary a bare render falls back to: an empty queue's header
-	 * facts. `App.svelte` always carries the frame's real section. */
-	const EMPTY_SUMMARY: GuiQueueSummary = {
-		remaining: 0,
-		nextTitle: null,
-		finishClock: null,
-		rightColumn: 'length',
-		filter: '',
-		filterActive: false,
-	};
-
-	const {
-		queue,
-		summary = EMPTY_SUMMARY,
-		overlay = null,
-		focused,
-		panelFocused,
-	}: Props = $props();
+	/** The Queue section's value the rows paint. */
+	const queue = $derived($queueSection);
+	/** The queue header's facts (design D4): the remaining count, the finish
+	 * clock, the right-column mode, and the filter. */
+	const summary = $derived($summarySection);
+	/** The open menu or popover (design D4): the row menu paints while
+	 * `rowMenu` is the open overlay. `null` while none is open. */
+	const overlay = $derived($overlaySection);
+	/** Whether the queue surface holds interaction focus
+	 * (`GuiFocus::surface`): the selection bar's rule, the TUI's
+	 * `focused || multi_selected`. */
+	const focused = $derived($focus.surface === 'queue');
+	/** Whether the queue Panel holds the appearance focus
+	 * (`GuiFocus::panel`): the TUI's `panel_appearance_focus`, which picks the
+	 * focused fills of the focus-reactive `QueuePanel` and `QueueColumn`
+	 * surfaces. */
+	const panelFocused = $derived($focus.panel === 'queue');
 
 	/** The canvas's fixed queue row height in logical pixels (the spec's
 	 * 30 px rows). Capacity is whole rows. */

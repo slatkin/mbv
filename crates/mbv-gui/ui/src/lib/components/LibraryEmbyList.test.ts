@@ -11,7 +11,7 @@ import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiEmbyFrame, GuiEmbyRow } from '$lib/bridge/types';
 import { embyUi, initialEmbyUi } from '$lib/library/emby';
-import { carryLibraryContent } from '$lib/library/state';
+import { library } from '$lib/bridge/sections';
 import LibraryEmbyList from './LibraryEmbyList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -81,7 +81,7 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	library.set(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -94,11 +94,7 @@ async function mountList(
 	viewportHeight = 300,
 ): Promise<HTMLElement> {
 	const emby = embyFrame(feedGroup, rows);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 	const { container } = render(LibraryEmbyList, { emby });
 	const list = container.querySelector<HTMLElement>('[data-library-emby-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
@@ -195,11 +191,7 @@ test('a double-click on a collection row plays it', async () => {
 
 test('a list that has not landed paints the loading line', async () => {
 	const emby = { ...embyFrame(false, []), loading: true };
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 
 	const { container } = render(LibraryEmbyList, { emby });
 
@@ -208,11 +200,7 @@ test('a list that has not landed paints the loading line', async () => {
 
 test('a failed plain-mode fetch paints the failure line', async () => {
 	const emby = { ...embyFrame(false, []), failed: true };
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 
 	const { container } = render(LibraryEmbyList, { emby });
 
@@ -224,11 +212,7 @@ test('a failed plain-mode fetch paints the failure line', async () => {
 // field — so the plain Emby destination stopped opening with a bare filter.
 test('the list paints the library header with the selection label', async () => {
 	const emby = embyFrame(false, MOVIES);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 
 	const { container } = render(LibraryEmbyList, { emby });
 
@@ -240,11 +224,7 @@ test('the list paints the library header with the selection label', async () => 
 // Music list's `No artists` line does, instead of painting a blank column.
 test('a landed library with no row paints the empty line', async () => {
 	const emby = embyFrame(false, []);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	});
+	library.set({ tabs: [], currentTab: 3, music: null, home: null, shows: null, emby, audiobooks: null, podcasts: null, feeds: null, rowMenu: null });
 
 	const { container } = render(LibraryEmbyList, { emby });
 

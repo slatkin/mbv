@@ -10,13 +10,26 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
+import type { RenderResult } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
+import {
+	focus as focusStore,
+	footer as footerStore,
+	hover as hoverStore,
+	overlay as overlayStore,
+	playback as playbackStore,
+	queue as queueStore,
+	resetSectionsForTest,
+	status as statusStore,
+	summary as summaryStore,
+} from '$lib/bridge/sections';
 import type {
 	GuiOverlayFrame,
 	GuiQueue,
 	GuiQueueFooter,
 	GuiQueuePlayback,
+	GuiScrubberHover,
 	GuiScrubberTile,
 	GuiStatusBar,
 	GuiTrickplayGrid,
@@ -43,6 +56,9 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	// The panel reads the window's section stores; a section one test carried
+	// would outlive it.
+	resetSectionsForTest();
 });
 
 /** One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`). */
@@ -83,7 +99,6 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		trickplay: null,
 		trackChips: null,
 		targetChoices: [],
-		hover: null,
 		...overrides,
 	};
 }
@@ -108,12 +123,32 @@ function chooserOverlay(): GuiOverlayFrame {
 	};
 }
 
+/** The previous render, unmounted before the next: the section stores are
+ * module state, so two mounted panels would both repaint on a store write. */
+let mounted: RenderResult<typeof QueuePlaybackPanel> | null = null;
+
 function renderPanel(
-	playback: GuiQueuePlayback = playing(),
-	overlay: GuiOverlayFrame | null = null,
+	playbackValue: GuiQueuePlayback = playing(),
+	overlayValue: GuiOverlayFrame | null = null,
 	carriedSheet: GuiTrickplaySheet | null = null,
+	hoverValue: GuiScrubberHover | null = null,
 ) {
-	return render(QueuePlaybackPanel, { playback, overlay, carriedSheet });
+	mounted?.unmount();
+	playbackStore.set(playbackValue);
+	overlayStore.set(overlayValue);
+	hoverStore.set(hoverValue);
+	mounted = render(QueuePlaybackPanel, { props: { carriedSheet } });
+	return mounted;
+}
+
+/** The hovered scrubber preview the `hover` section carries. */
+function hovered(
+	fraction: number,
+	tile: GuiScrubberTile | null,
+	chapter: string | null = null,
+	chapterNumber: number | null = null,
+): GuiScrubberHover {
+	return { fraction, timeLabel: '1:40', chapter, chapterNumber, tile };
 }
 
 /** One trickplay grid the preview reads: a 320-wide thumbnail series whose
@@ -332,15 +367,10 @@ test('a press on the scrubber forwards a pointer press with its position', async
 
 test('the scrubber paints the hover preview from the frame', () => {
 	const { container, getByText } = renderPanel(
-		playing({
-			hover: {
-				fraction: 0.75,
-				timeLabel: '2:30',
-				chapter: 'Chapter Two',
-				chapterNumber: 2,
-				tile: null,
-			},
-		}),
+		playing(),
+		null,
+		null,
+		{ fraction: 0.75, timeLabel: '2:30', chapter: 'Chapter Two', chapterNumber: 2, tile: null },
 	);
 
 	// The preview label reads the canvas's `12:31 · Ch. 2` form: the time and
@@ -369,10 +399,10 @@ test('the scrubber paints the hover preview from the frame', () => {
 // window fetches nothing.
 test('the hover preview paints the trickplay tile the frame carries', () => {
 	const { container } = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(SHEET) },
-		}),
+		playing({ trickplay: [trickplayGrid()] }),
+		null,
+		null,
+		hovered(0.5, tile(SHEET)),
 	);
 
 	const thumb = tileElement(container);
@@ -385,12 +415,10 @@ test('the hover preview paints the trickplay tile the frame carries', () => {
 // keeps the placeholder.
 test('the hover preview repaints the latched sheet, else the in-flight box', () => {
 	const latched = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
-		}),
+		playing({ trickplay: [trickplayGrid()] }),
 		null,
 		{ key: 'item:320:0', image: SHEET },
+		hovered(0.5, tile(null)),
 	);
 	expect(tileElement(latched.container)?.style.backgroundImage).toContain(
 		SHEET,
@@ -400,10 +428,10 @@ test('the hover preview repaints the latched sheet, else the in-flight box', () 
 	// `[trickplay]` box while the fetch is in flight — the placeholder paints
 	// only while the frame carries the tile fact.
 	const bare = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
-		}),
+		playing({ trickplay: [trickplayGrid()] }),
+		null,
+		null,
+		hovered(0.5, tile(null)),
 	);
 	expect(tileElement(bare.container)).toBeNull();
 	expect(bare.getByText('[trickplay]')).toBeTruthy();
@@ -433,10 +461,23 @@ test('an open target chooser reports one region per row', async () => {
 // every other surface's key.
 test('an open chooser reports its rows after the queue and footer regions', async () => {
 	const { rerender } = renderPanel();
-	render(QueuePanel, { queue: queue(), focused: false, panelFocused: false });
-	render(QueueFooter, { footer, status: idle, libraryVisible: false });
+	queueStore.set(queue());
+	summaryStore.set({
+		remaining: 0,
+		nextTitle: null,
+		finishClock: null,
+		rightColumn: 'length',
+		filter: '',
+		filterActive: false,
+	});
+	focusStore.set({ surface: null, panel: 'queue' });
+	footerStore.set(footer);
+	statusStore.set(idle);
+	render(QueuePanel);
+	render(QueueFooter, { props: { libraryVisible: false } });
 
-	await rerender({ playback: playing(), overlay: chooserOverlay() });
+	overlayStore.set(chooserOverlay());
+	await rerender({});
 
 	await vi.waitFor(() =>
 		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 1 }),
@@ -455,7 +496,8 @@ test('closing the chooser retracts its row regions', async () => {
 		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 0 }),
 	);
 
-	await rerender({ playback: playing(), overlay: null });
+	overlayStore.set(null);
+	await rerender({});
 
 	await vi.waitFor(() => {
 		const ids = lastReportedRegionIds();

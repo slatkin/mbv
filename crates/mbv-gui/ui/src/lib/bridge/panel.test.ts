@@ -11,7 +11,7 @@ const TALL = { width: 640, height: 900 };
 const SHORT = { width: 640, height: COMPACT_STRIP_MAX_HEIGHT - 1 };
 
 function toggles(panel: Partial<GuiPanelToggles> = {}): GuiPanelToggles {
-	return { collapsed: false, queueFolded: false, ...panel };
+	return { collapsed: false, queueFolded: false, uiResetEpoch: 0, ...panel };
 }
 
 test.each([

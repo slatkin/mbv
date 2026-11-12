@@ -14,7 +14,8 @@ import type { GuiFeedsFrame, GuiLibraryContent, GuiPanel } from '$lib/bridge/typ
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { feedsPillKey, feedsCursorRow, feedsUi, initialFeedsUi } from './feeds';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { library } from '$lib/bridge/sections';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -23,7 +24,7 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	feedsUi.set(initialFeedsUi());
-	carryLibraryContent(null);
+	library.set(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -34,7 +35,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		library: get(library),
+		search: null,
 	};
 }
 
@@ -143,7 +145,7 @@ function carryFeeds(
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, search: null, content });
+	library.set(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	feedsUi.set({ ...initialFeedsUi(), cursor });
 }
@@ -220,7 +222,7 @@ test('the pill walk keeps its place when the frame re-carries equal pills', () =
 	feedsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'subscription', id: 'https://sub.one' } }));
 
 	// A new frame: structurally equal pills, all fresh objects.
-	carryLibraryContent({ revision: 2, search: null, content: feedsContent('subscription', ENTRIES) });
+	library.set(feedsContent('subscription', ENTRIES));
 
 	press('ArrowRight');
 
