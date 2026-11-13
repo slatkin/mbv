@@ -10,7 +10,7 @@ The Blitz spike (`blitz-queue-panel-spike`, branch `feat/blitz-queue-panel-spike
 
 Facts checked on 2026-11-13 in the pinned crate sources:
 
-- `dioxus-native-dom` 0.8.0-alpha.3 converts pointer, mouse, click, context-menu, double-click, wheel, scroll, focus, blur, key, and input events. It panics (`unimplemented!`) on resize, visible, drag, transition, animation, clipboard, composition, selection, and toggle data. Event handlers honour `prevent_default` and `stop_propagation`.
+- `dioxus-native-dom` 0.8.0-alpha.3 converts pointer, mouse, click, context-menu, double-click, wheel, scroll, focus, blur, key, and input events. It panics (`unimplemented!`) on cancel, before-input, resize, visible, drag, transition, animation, clipboard, composition, image, media, selection, and toggle data (D8 lists every handler name). Event handlers honour `prevent_default` and `stop_propagation`.
 - `MountedData` supports `get_client_rect`, `get_scroll_offset`, `get_scroll_size`, `scroll_to` (scroll into view), `scroll`, and `set_focus`.
 - `blitz-dom` 0.3.0-beta.4 has text input, focus, IME, and scrolling. It has no `text-overflow` painting (gap G1, issue #888). Its `NetHandler` has no error callback (G8). Its font context is `pub(crate)`. It exports `decode_font_bytes`, which decodes WOFF2.
 - `blitz-dom` uses `parley` 0.12 (locked 0.12.0) and `wuff` 0.2.
@@ -127,7 +127,7 @@ The `ArtEvent` route is the only way the window learns of a failure, because `Ne
 - **Pointer:** the root has `onpointerdown`, `onpointerup`, `onpointermove`, `onwheel`, and `oncontextmenu` handlers. Each builds `DomPointer` (the existing struct in `bridge/pointer.rs`) from the Dioxus event's client coordinates, buttons, and modifiers and sends `neutral_pointer(dom_pointer)` when it is `Some`. `oncontextmenu` calls `prevent_default`. Front-end-owned surfaces (Library, Settings) take their pointer events in their own handlers and call `stop_propagation`, as the Svelte handlers do.
 - The serde derives on `DomKey` and `DomPointer` go at the switch (D18). The structs stay as the translation's input.
 
-No handler uses an event kind that `dioxus-native-dom` does not convert: resize, visible, drag and drop, transition, animation, clipboard (copy, cut, paste), composition, selection (select), toggle, cancel, `beforeinput`, image (`error`, `load`), and media (`abort`, `canplay`, `canplaythrough`, `durationchange`, `emptied`, `encrypted`, `ended`, `loadeddata`, `loadedmetadata`, `loadstart`, `pause`, `play`, `playing`, `progress`, `ratechange`, `seeked`, `seeking`, `stalled`, `suspend`, `timeupdate`, `volumechange`, `waiting`). Each of these panics at run time. A component's own callback prop is named in snake case with an underscore (`on_play`, `on_select`), so it never takes an element event name. `rg` for those handler names in `src/window` is part of the switch task's verification.
+No handler uses an event kind that `dioxus-native-dom` does not convert: resize, visible, drag and drop, transition, animation, clipboard (copy, cut, paste), composition, selection (`select`, `selectstart`, `selectionchange`), toggle (`toggle`, `beforetoggle`), cancel, `beforeinput`, image (`error`, `load`), and media (`abort`, `canplay`, `canplaythrough`, `durationchange`, `emptied`, `encrypted`, `ended`, `loadeddata`, `loadedmetadata`, `loadstart`, `pause`, `play`, `playing`, `progress`, `ratechange`, `seeked`, `seeking`, `stalled`, `suspend`, `timeupdate`, `volumechange`, `waiting`). Each of these panics at run time. A component's own callback prop is named in snake case with an underscore (`on_play`, `on_select`), so it never takes an element event name. `rg` for those handler names in `src/window` is part of the switch task's verification.
 
 ### D9. Layout reports and container sizes
 
@@ -228,7 +228,7 @@ The last phase deletes the Tauri path in one change set: `crates/mbv-gui/ui/`, `
 | G10 | Transform painting (#663) | the scrubber thumb's `translate` | Accepted as the spike showed it. |
 | G13 | Wayland resize slowness and surface timeout (#293) | every resize | Accepted. |
 | G14 | No GPU: panic at surface creation (#1505) | hosts with no Vulkan or GL | Accepted. The packages depend on the Vulkan loader. |
-| G-Events | Resize, visible, drag, transition, and animation events panic | none | D8: no handler uses them. D9 replaces `ResizeObserver`. |
+| G-Events | The event kinds that D8 lists panic | none | D8: no handler uses them. D9 replaces `ResizeObserver`. |
 | G-Reload | No window-content reload | dev reload | The spec deltas drop the reload scenarios. |
 
 ## Risks / Trade-offs
