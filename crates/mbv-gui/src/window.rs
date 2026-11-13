@@ -7,6 +7,7 @@ pub mod arrangement;
 pub mod cells;
 pub mod channel;
 pub mod clock;
+pub mod components;
 pub mod icons;
 pub mod input;
 pub mod launch;

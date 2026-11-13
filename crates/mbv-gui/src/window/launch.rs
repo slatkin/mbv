@@ -26,7 +26,8 @@ use futures_util::StreamExt;
 
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
-use crate::window::clock::Clock;
+use crate::window::clock::{Clock, FiredTimers};
+use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::layout::LayoutEpoch;
 use crate::window::net::MbvNetProvider;
 
@@ -46,15 +47,28 @@ const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
 #[component]
 pub fn root() -> Element {
     let proxy = use_hook(consume_context::<BlitzShellProxy>);
-    let window_id = use_window().id();
+    let window = use_window();
+    let window_id = window.id();
     let slot = use_hook(consume_context::<EventSlot>);
     let epoch = use_hook(LayoutEpoch::new);
     provide_context(epoch);
+    let art_events = use_hook(ArtEvents::new);
+    provide_context(art_events);
+    let fired = use_hook(FiredTimers::new);
+    provide_context(fired);
+    let scale_window = std::sync::Arc::clone(&window);
+    let scale = use_hook(move || ScaleFactor(Signal::new(scale_window.scale_factor())));
+    provide_context(scale);
     use_future(move || {
         let proxy = proxy.clone();
         let slot = slot.clone();
+        let drain_window = std::sync::Arc::clone(&window);
         async move {
             let mut epoch = epoch;
+            let mut art_events = art_events;
+            let mut fired = fired;
+            let mut scale = scale;
+            let scale_window = drain_window;
             let Some(mut events) = slot.take() else {
                 return;
             };
@@ -64,18 +78,21 @@ pub fn root() -> Element {
                         proxy.send_event(BlitzShellEvent::CloseWindow { window_id });
                     }
                     // A viewport change is a layout fact (D9): every
-                    // measurement effect re-measures.
-                    WindowEvent::Viewport => epoch.bump(),
+                    // measurement effect re-measures, and the scale factor the
+                    // natural-size caps divide by rewrites (D7).
+                    WindowEvent::Viewport => {
+                        scale.0.set(scale_window.scale_factor());
+                        epoch.bump();
+                    }
+                    // An art answer reaches its `ArtImage` through the store
+                    // (D7).
+                    WindowEvent::Art(event) => art_events.push(event),
+                    // A passed timer reaches the surface that armed it (D10).
+                    WindowEvent::Timer(timer) => fired.push(timer),
                     // Section batches reach their sections from task 3.1
-                    // on, art answers reach `ArtImage` from task 3.6 on (D7),
-                    // timers reach their surfaces as their retry and debounce
-                    // modules land, and frames reach the playhead with it.
-                    // Until then the window needs no reaction (documented
-                    // no-op).
-                    WindowEvent::Batch(_)
-                    | WindowEvent::Art(_)
-                    | WindowEvent::Timer(_)
-                    | WindowEvent::Frame => {}
+                    // on, and frames reach the playhead with it. Until then
+                    // the window needs no reaction (documented no-op).
+                    WindowEvent::Batch(_) | WindowEvent::Frame => {}
                 }
             }
         }

@@ -39,6 +39,25 @@ pub enum ArtEvent {
     },
 }
 
+/// The last fact an art URL reported (D7): the store
+/// (`window/components/art_image.rs`) holds one per URL, and a mounted
+/// `ArtImage` reads its painted URL's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtStatus {
+    /// The source loaded: its natural size, in device pixels.
+    Loaded {
+        /// The natural width, in device pixels.
+        width: u32,
+        /// The natural height, in device pixels.
+        height: u32,
+    },
+    /// The source missed once more: the misses since its last load.
+    Failed {
+        /// The misses since the URL's last load.
+        misses: u64,
+    },
+}
+
 /// The in-process net provider (D7). It holds the core thread's sender, so an
 /// art request reaches the core, and the window channel's sender, so the art
 /// answers report to the root.

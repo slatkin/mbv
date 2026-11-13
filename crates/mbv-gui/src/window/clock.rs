@@ -11,6 +11,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dioxus_native::prelude::{ReadableExt, Signal, WritableExt, WritableVecExt};
+
 use crate::window::channel::{WindowEvent, WindowEventSender};
 
 /// One timer's identity, as [`Clock::after`] returns it and
@@ -110,6 +112,47 @@ impl Clock for TimerClock {
     }
 }
 
+/// The timers that fired (D10): the root's drain task forwards every passed
+/// timer's id here, and the surface that armed the timer consumes its own id.
+/// A signal, so a surface's effect re-runs when its timer lands.
+#[derive(Clone, Copy, Debug)]
+pub struct FiredTimers {
+    timers: Signal<Vec<TimerId>>,
+}
+
+impl Default for FiredTimers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FiredTimers {
+    /// A router with no fired timers.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            timers: Signal::new(Vec::new()),
+        }
+    }
+
+    /// A timer the clock passed (D10): the root's drain task forwards it.
+    pub fn push(&mut self, timer: TimerId) {
+        self.timers.push(timer);
+    }
+
+    /// Whether `timer` fired, and remove it: the armed surface consumes its
+    /// own id, so the router cannot grow.
+    pub fn take(&mut self, timer: TimerId) -> bool {
+        let mut timers = self.timers.cloned();
+        let Some(index) = timers.iter().position(|armed| *armed == timer) else {
+            return false;
+        };
+        timers.remove(index);
+        self.timers.set(timers);
+        true
+    }
+}
+
 /// The timer thread (D10): wait over the deadline queue, and send each passed
 /// timer's id through the window channel. A new timer or a cancel wakes the
 /// wait, so the earliest deadline is recomputed each time.
@@ -167,6 +210,22 @@ impl RecordingClock {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// How many timers are armed and neither fired nor cancelled — a test's
+    /// view of the queue.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the clock's state mutex is poisoned, which no test should
+    /// be able to cause.
+    #[must_use]
+    pub fn pending(&self) -> usize {
+        self.deadlines
+            .lock()
+            .expect("the test clock lives")
+            .queue
+            .len()
     }
 
     /// Send every timer whose deadline passed and that no [`Clock::cancel`]
