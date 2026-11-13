@@ -53,7 +53,9 @@ fn the_right_column_paints_the_modes_value_as_a_repeated_time() {
     );
     let expected = expected_row_end();
     assert_eq!(fixture_text_of_row_value(&ends), expected);
-    let token = ends.style_of("[data-meta-kind=\"time\"]");
+    // The header's finish clock also paints a time segment, so the row's
+    // own token reads from its slot's value.
+    let token = ends.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
     assert!(token.contains("color: var(--canvas-type-time)"), "{token}");
     assert!(
         token.contains("opacity: var(--canvas-type-repeat-opacity)"),
@@ -63,7 +65,7 @@ fn the_right_column_paints_the_modes_value_as_a_repeated_time() {
 
     let length = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
     assert!(length.text().contains("3:12"));
-    let token = length.style_of("[data-meta-kind=\"time\"]");
+    let token = length.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
     assert!(token.contains("color: var(--canvas-type-time)"), "{token}");
 }
 

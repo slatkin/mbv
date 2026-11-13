@@ -8,13 +8,13 @@ use super::harness::*;
 use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
 use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 
-/// Contract (`QueuePlaybackPanel.test.ts`, deferred to 5.5): an open chooser
-/// reports its rows after the queue's regions — the hit map's last push
-/// wins where a chooser row paints over a queue row beneath it. The
-/// footer's regions and the header's `rightColumn` and `filter` regions
-/// join the front with their ports (task 5.6).
+/// Contract (`QueuePlaybackPanel.test.ts`): an open chooser reports its rows
+/// after the queue and footer regions — the hit map's last push wins where
+/// a chooser row paints over a queue row beneath it. The header's
+/// `rightColumn` and `filter` regions lead the queue's, the footer's line
+/// reports none.
 #[test]
-fn an_open_chooser_reports_its_rows_after_the_queue_regions() {
+fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     let mut fixture = built_sized(panel_tree_app);
     let mut sections = fixture.sections.clone();
     let anchor = anchor();
@@ -43,10 +43,13 @@ fn an_open_chooser_reports_its_rows_after_the_queue_regions() {
         })
         .expect("the chooser reports its rows");
     let before = &targets[..first_choice];
-    assert!(
-        before.contains(&RegionTarget::Queue(QueueTargetId::Slot(1))),
-        "{targets:?}"
-    );
+    for wanted in [
+        RegionTarget::Queue(QueueTargetId::RightColumn),
+        RegionTarget::Queue(QueueTargetId::Filter),
+        RegionTarget::Queue(QueueTargetId::Slot(1)),
+    ] {
+        assert!(before.contains(&wanted), "{targets:?}");
+    }
     assert_eq!(
         &targets[first_choice..],
         &[
@@ -56,9 +59,9 @@ fn an_open_chooser_reports_its_rows_after_the_queue_regions() {
     );
 }
 
-/// Contract (`QueuePlaybackPanel.test.ts`, deferred to 5.5): a paint reports
-/// the player panel's transport, seek, header, seekbar, and target regions,
-/// then the queue rows' slot regions — the two panels mount in that order
+/// Contract (`QueuePlaybackPanel.test.ts`): a paint reports the player
+/// panel's transport, seek, header, seekbar, and target regions, then the
+/// queue header's and rows' regions — the two panels mount in that order
 /// under the expanded artboard.
 #[test]
 fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
@@ -90,6 +93,8 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+            RegionTarget::Queue(QueueTargetId::RightColumn),
+            RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
         ]
     );

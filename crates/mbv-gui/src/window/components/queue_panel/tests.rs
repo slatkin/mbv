@@ -7,13 +7,16 @@
 //! reports — plus the two region-order contracts
 //! `QueuePlaybackPanel.test.ts` deferred until this panel existed (an open
 //! chooser's rows reporting after the queue's, and the full player panel's
-//! region order). The presses are not ported: they are the root input
-//! layer's contract (`window/input.rs`), which the panel forwards to
-//! untouched. The core channel is a mock pair; the clocks are the injected
-//! recorders (D10); no test opens a window, sleeps, or reaches the core.
+//! region order). The header's own contracts (the header tests of
+//! `QueuePanel.test.ts`) arrived with the header's port (task 5.6). The
+//! presses are not ported: they are the root input layer's contract
+//! (`window/input.rs`), which the panel forwards to untouched. The core
+//! channel is a mock pair; the clocks are the injected recorders (D10); no
+//! test opens a window, sleeps, or reaches the core.
 
 mod cross_panel;
 mod harness;
+mod header;
 mod menu_drag;
 mod regions;
 mod rows;

@@ -11,7 +11,7 @@
 //! `repeat`.
 //!
 //! (Ported with task 5.5, which the Queue panel's right column needed; the
-//! contracts of `TypedText.test.ts` travel with task 5.6.)
+//! contracts of `TypedText.test.ts` are its own `tests/` module, task 5.6.)
 
 use dioxus_native::prelude::*;
 
@@ -86,3 +86,6 @@ pub fn TypedText(props: TypedTextProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

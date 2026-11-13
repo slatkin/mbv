@@ -33,6 +33,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::components::queue_footer::QueueFooter;
 use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::playhead::{Playhead, Times};
@@ -334,6 +335,9 @@ pub(super) fn panel_tree_app(props: FixtureProps) -> Element {
     rsx! {
         QueuePlaybackPanel {}
         QueuePanel {}
+        QueueFooter {
+            library_visible: false,
+        }
     }
 }
 

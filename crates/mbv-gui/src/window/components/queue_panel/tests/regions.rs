@@ -5,6 +5,35 @@
 use super::harness::*;
 use crate::bridge::layout::{ListId, ListRows, QueueTargetId, RegionTarget};
 
+/// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
+/// grip, actions, and menu-entry ids, menu last — the header's
+/// `rightColumn` and `filter` targets lead, the rows follow, the hovered
+/// row's chrome trails them, and the menu's entries report last.
+#[test]
+fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last() {
+    let rows = vec![item(1), item(2)];
+    let mut rows_frame = queue(rows);
+    rows_frame.hover = Some(2);
+    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), Some(row_menu()));
+
+    assert_eq!(
+        fixture.last_reported_targets(),
+        vec![
+            RegionTarget::Queue(QueueTargetId::RightColumn),
+            RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::Slot(1)),
+            RegionTarget::Queue(QueueTargetId::Slot(2)),
+            RegionTarget::Queue(QueueTargetId::RowGrip(2)),
+            RegionTarget::Queue(QueueTargetId::RowActions(2)),
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(0)),
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(2)),
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
+        ]
+    );
+}
+
 /// Contract (`QueuePanel.test.ts`): the report carries the queue list's
 /// capacity and the painted regions, with the panel container's size — the
 /// shape the core's queue viewport and hit map read (D4, D9). The headless
@@ -42,7 +71,11 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
             .iter()
             .map(|region| region.target)
             .collect::<Vec<_>>(),
-        vec![RegionTarget::Queue(QueueTargetId::Slot(7))]
+        vec![
+            RegionTarget::Queue(QueueTargetId::RightColumn),
+            RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::Slot(7)),
+        ]
     );
     assert_eq!(report.container_size.width, 0.0);
     assert_eq!(report.container_size.height, 0.0);

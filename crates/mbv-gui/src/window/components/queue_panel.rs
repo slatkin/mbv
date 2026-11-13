@@ -31,9 +31,10 @@
 //! request.
 //!
 //! The regions report in paint order: the header's Length / Ends-at switch
-//! and filter resolve to their `rightColumn` and `filter` targets (they
-//! start reporting when the header's port lands, task 5.6), the rows resolve
-//! to their stable slots, then the hovered row's `rowGrip` and `rowActions`
+//! and filter resolve to their `rightColumn` and `filter` targets first —
+//! the switch's inactive segment's mounted handle, by the summary's mode,
+//! and the filter's — then the rows resolve to their stable slots, then the
+//! hovered row's `rowGrip` and `rowActions`
 //! — pushed after the row's `slot` region so the chrome wins where it paints
 //! over the row (the hit map's last push wins). The open row menu's entries
 //! (`QueueRowMenu`, presentation-only) report their `rowMenuEntry` indices
@@ -56,7 +57,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::focus::{GuiPanel, GuiSurface};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiRightColumn};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_header::QueueHeader;
@@ -188,6 +189,14 @@ pub fn QueuePanel() -> Element {
     let menu_key = use_hook(LayoutKey::next);
 
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    // The header's controls' handles (the Svelte parent's `querySelectorAll`
+    // over `'[data-right-column-segment]'` and `'[data-filter]'`): the two
+    // switch segments' mounted events, keyed by the mode each paints, and
+    // the filter control's mounted event. The panel picks the inactive
+    // segment's handle from the summary's mode.
+    let right_column_handles: Signal<Vec<(GuiRightColumn, Event<MountedData>)>> =
+        use_signal(Vec::new);
+    let filter_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     // The painted rows' mounted events, by their stable slot — the handles
     // the row regions read (the Svelte `querySelectorAll('[data-slot]')`).
     let slot_handles: Signal<Vec<(u64, Event<MountedData>)>> = use_signal(Vec::new);
@@ -259,9 +268,10 @@ pub fn QueuePanel() -> Element {
     let watch_overlay = sections.overlay;
     use_effect(move || {
         let queue = watch_queue.cloned();
-        // The summary's changes move the header's controls once they report
-        // (task 5.6); reading it keeps the re-report on their paint.
-        let _summary = watch_summary.cloned();
+        // The summary's changes move the header's controls: reading it keeps
+        // the re-report on their paint, and its mode picks which switch
+        // segment reports.
+        let summary = watch_summary.cloned();
         let overlay_open = watch_overlay.cloned();
         let _epoch = epoch.0.cloned();
         let list = list_mounted.cloned();
@@ -269,6 +279,8 @@ pub fn QueuePanel() -> Element {
         let grip = grip_mounted.cloned();
         let actions = actions_mounted.cloned();
         let menu_row_handles = menu_rows.cloned();
+        let right_column = right_column_handles.cloned();
+        let filter = filter_handle.cloned();
         let menu = match overlay_open.as_ref() {
             Some(frame @ GuiOverlayFrame::RowMenu { .. }) => Some(frame.clone()),
             _ => None,
@@ -286,7 +298,23 @@ pub fn QueuePanel() -> Element {
             }
             let mut regions: Vec<LayoutRegion> = Vec::new();
             // The queue header's `rightColumn` and `filter` segments report
-            // here, before the rows, when the header's port lands (5.6).
+            // first (the Svelte `currentRegions` queries them before the
+            // rows): the switch's inactive segment — the active one reports
+            // no target, a press on it would toggle away from the mode it
+            // shows — and the filter control.
+            if let Some((_, mounted)) = right_column
+                .iter()
+                .find(|(mode, _)| *mode != summary.right_column)
+            {
+                regions.extend(
+                    element_region(mounted, RegionTarget::Queue(QueueTargetId::RightColumn)).await,
+                );
+            }
+            if let Some(mounted) = filter.as_ref() {
+                regions.extend(
+                    element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await,
+                );
+            }
             for slot in queue
                 .rows
                 .iter()
@@ -372,7 +400,11 @@ pub fn QueuePanel() -> Element {
             div {
                 class: "relative flex min-h-0 flex-1 flex-col",
                 style: "margin-inline: calc(var(--mbv-cell-col) * 2); background: {box_background};",
-                QueueHeader { summary: summary.clone() }
+                QueueHeader {
+                    summary: summary.clone(),
+                    right_column: right_column_handles,
+                    filter: filter_handle,
+                }
                 div {
                     class: "relative min-h-0 flex-1 overflow-hidden",
                     style: "padding-inline: 8px;",

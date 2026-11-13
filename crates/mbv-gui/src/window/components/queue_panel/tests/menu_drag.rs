@@ -7,7 +7,6 @@ use blitz_dom::local_name;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueInsertion, GuiSemanticState};
-use crate::bridge::layout::{QueueTargetId, RegionTarget};
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.2): the open row
 /// menu paints the canvas chrome — a 230 px card in the menu fill, border,
@@ -151,33 +150,6 @@ fn the_drag_ghost_paints_no_percent_when_the_dragged_row_has_no_progress() {
 
     assert!(fixture.presents("[data-ghost]"));
     assert!(!fixture.presents("[data-ghost-percent]"));
-}
-
-/// Contract (`QueuePanel.test.ts`): the rows report their slot regions, the
-/// hovered row its grip and actions regions after them, and the open menu
-/// its entry regions last — the header's `rightColumn` and `filter` regions
-/// join the front of the list with the header's port (task 5.6).
-#[test]
-fn the_regions_carry_the_slot_grip_actions_and_menu_entry_ids_menu_last() {
-    let rows = vec![item(1), item(2)];
-    let mut rows_frame = queue(rows);
-    rows_frame.hover = Some(2);
-    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), Some(row_menu()));
-
-    assert_eq!(
-        fixture.last_reported_targets(),
-        vec![
-            RegionTarget::Queue(QueueTargetId::Slot(1)),
-            RegionTarget::Queue(QueueTargetId::Slot(2)),
-            RegionTarget::Queue(QueueTargetId::RowGrip(2)),
-            RegionTarget::Queue(QueueTargetId::RowActions(2)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(0)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(1)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(2)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(3)),
-            RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
-        ]
-    );
 }
 
 /// Contract (`QueuePanel.test.ts`): the open menu overlaps the bottom edge
