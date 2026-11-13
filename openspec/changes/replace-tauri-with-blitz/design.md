@@ -14,7 +14,7 @@ Facts checked on 2026-11-13 in the pinned crate sources:
 - `MountedData` supports `get_client_rect`, `get_scroll_offset`, `get_scroll_size`, `scroll_to` (scroll into view), `scroll`, and `set_focus`.
 - `blitz-dom` 0.3.0-beta.4 has text input, focus, IME, and scrolling. It has no `text-overflow` painting (gap G1, issue #888). Its `NetHandler` has no error callback (G8). Its font context is `pub(crate)`. It exports `decode_font_bytes`, which decodes WOFF2.
 - `blitz-dom` uses `parley` 0.12 (locked 0.12.0) and `wuff` 0.2.
-- The GUI front end uses no `bits-ui`, no drag-and-drop events, no `IntersectionObserver`, and no clipboard. It uses `ResizeObserver` in 12 files, `requestAnimationFrame` in the playhead, `setTimeout` for the search debounce, the art retry, and the minute clock, and `localStorage` for the dragged panel widths. It uses 22 Lucide icons.
+- The GUI front end uses no `bits-ui`, no drag-and-drop events, no `IntersectionObserver`, and no clipboard. It uses `ResizeObserver` in 10 Svelte files, `requestAnimationFrame` in the playhead, `setTimeout` for the search debounce, the art retry, and the minute clock, and `localStorage` for the dragged panel widths. It imports 36 Lucide icons (multi-line `import { … } from '@lucide/svelte'` blocks included).
 - The latest Tailwind CSS release is v4.3.5. The front end locks 4.3.4.
 
 ## Goals / Non-Goals
@@ -163,7 +163,7 @@ The class strings in `rsx!` are the Svelte class strings, character for characte
 
 ### D13. Icons
 
-`window/icons.rs` holds the 22 Lucide icons the front end imports (`AudioLines`, `Captions`, `Check`, `ChevronDown`, `ChevronRight`, `ChevronsRight`, `Ellipsis`, `GripVertical`, `ListEnd`, `LoaderCircle`, `MonitorPlay`, `Pause`, `Play`, `Plus`, `RotateCcw`, `SaveCheck`, `SaveOff`, `Search`, `Settings`, `Shuffle`, `SkipForward`, `X`). Each is a function that renders an inline `svg` with Lucide's default attributes (24 × 24 view box, `stroke="currentColor"`, `stroke-width="2"`, round caps and joins, no fill) and the child elements copied from `@lucide/svelte` 1.70.0. Each takes the `class` and `size` props that the Svelte call sites pass. Lucide is ISC-licensed; the notice goes into `assets/vendor/`.
+`window/icons.rs` holds the 36 Lucide icons the front end imports (`ArrowLeft`, `AudioLines`, `Captions`, `Cast`, `Check`, `ChevronDown`, `ChevronRight`, `ChevronsRight`, `Clock`, `Ellipsis`, `GripVertical`, `Keyboard`, `Library`, `ListEnd`, `ListOrdered`, `ListPlus`, `LoaderCircle`, `Maximize2`, `Monitor`, `MonitorPlay`, `Pause`, `Play`, `Plus`, `RotateCcw`, `Rss`, `SaveCheck`, `SaveOff`, `Search`, `Server`, `Settings`, `Shuffle`, `SkipBack`, `SkipForward`, `SquarePlay`, `X`, `Zap`). Before the port, the implementing agent re-reads every `@lucide/svelte` import in `ui/src` (multi-line blocks included) and adds any icon this list misses. Each is a function that renders an inline `svg` with Lucide's default attributes (24 × 24 view box, `stroke="currentColor"`, `stroke-width="2"`, round caps and joins, no fill) and the child elements copied from `@lucide/svelte` 1.70.0. Each takes the `class` and `size` props that the Svelte call sites pass. Lucide is ISC-licensed; the notice goes into `assets/vendor/`.
 
 ### D14. Panel widths
 
