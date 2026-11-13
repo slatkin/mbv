@@ -200,6 +200,17 @@ impl Fixture {
             .to_owned()
     }
 
+    /// The `class` attribute of the node the selector names.
+    fn class_of(&self, selector: &str) -> Option<String> {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")?;
+        dom.get_node(id)?
+            .attr(local_name!("class"))
+            .map(str::to_owned)
+    }
+
     /// Poll the document until the effects have run and their re-renders
     /// landed.
     fn poll_until_idle(&mut self) {
@@ -264,6 +275,22 @@ fn built() -> Fixture {
     };
     fixture.poll_until_idle();
     fixture
+}
+
+/// Contract: the slider box carries `relative` — every painted part of the
+/// bar is `absolute`, so the box is the only positioned ancestor between
+/// them and the app root; without it the bar paints window-wide (the
+/// Svelte markup's `class="relative"`, `main` audits 9–12).
+#[test]
+fn the_slider_box_is_positioned_so_the_bar_paints_inside_it() {
+    let fixture = built();
+    let class = fixture
+        .class_of("[data-target=\"seekbar\"]")
+        .expect("the slider box paints");
+    assert!(
+        class.split_whitespace().any(|name| name == "relative"),
+        "{class}"
+    );
 }
 
 /// Contract (`QueuePlaybackPanel.test.ts`, the clocks): the scrubber's two

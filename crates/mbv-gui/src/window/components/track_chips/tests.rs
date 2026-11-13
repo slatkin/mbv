@@ -9,6 +9,8 @@
 //! which the chips forward to untouched. The core channel is a mock pair;
 //! no test opens a window, sleeps, or reaches the core.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use blitz_dom::{Document as _, local_name};
@@ -105,28 +107,39 @@ struct FixtureProps {
     sender: Sender<CoreInput>,
     chips: Option<GuiTrackChips>,
     overlay: Option<GuiOverlayFrame>,
+    /// The slot the root hands the overlay signal back out through, so a
+    /// test drives the frame's overlay the way the core's overlay section
+    /// would.
+    handle: Rc<RefCell<Option<Signal<Option<GuiOverlayFrame>>>>>,
 }
 
 /// The root: provides the reporter's contexts and paints the chips row, as
-/// the player panel paints it inside its controls block.
+/// the player panel paints it inside its controls block. The overlay rides
+/// a signal, so a test closes the popover by re-rendering the row with new
+/// props.
 fn chips_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
         chips,
         overlay,
+        handle,
     } = props;
     provide_context(CoreLink::new(sender));
     let reporter = use_layout_reporter();
     provide_context(reporter);
     provide_context(use_hook(LayoutEpoch::new));
+    let overlay = use_signal(move || overlay);
+    handle.borrow_mut().replace(overlay);
     rsx! {
-        TrackChips { chips, overlay }
+        TrackChips { chips, overlay: overlay.cloned() }
     }
 }
 
 struct Fixture {
     doc: DioxusDocument,
     receiver: Receiver<CoreInput>,
+    /// The overlay signal the root renders the row's props from.
+    overlay: Signal<Option<GuiOverlayFrame>>,
 }
 
 impl Fixture {
@@ -186,6 +199,15 @@ impl Fixture {
         panic!("document did not become idle");
     }
 
+    /// Close the open popover: write `None` into the overlay signal, as
+    /// the drain task would carry the next overlay section, and let the
+    /// re-render land.
+    fn close_popover(&mut self) {
+        let mut overlay = self.overlay;
+        self.doc.vdom.in_runtime(move || overlay.set(None));
+        self.poll_until_idle();
+    }
+
     /// The region targets of the last merged layout report.
     fn last_reported_targets(&self) -> Vec<RegionTarget> {
         self.receiver
@@ -207,6 +229,7 @@ impl Fixture {
 
 fn built(chips: Option<GuiTrackChips>, overlay: Option<GuiOverlayFrame>) -> Fixture {
     let (sender, receiver) = channel();
+    let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
             chips_app,
@@ -214,12 +237,21 @@ fn built(chips: Option<GuiTrackChips>, overlay: Option<GuiOverlayFrame>) -> Fixt
                 sender,
                 chips,
                 overlay,
+                handle: Rc::clone(&handle),
             },
         ),
         DocumentConfig::default(),
     );
     doc.initial_build();
-    let mut fixture = Fixture { doc, receiver };
+    let overlay = handle
+        .borrow_mut()
+        .take()
+        .expect("the root handed the overlay signal over");
+    let mut fixture = Fixture {
+        doc,
+        receiver,
+        overlay,
+    };
     fixture.poll_until_idle();
     fixture
 }
@@ -419,6 +451,34 @@ fn an_open_popover_reports_one_track_popover_choice_region_per_row_last() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(0)),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(1)),
+        ]
+    );
+}
+
+/// Contract: closing the popover retracts the popover key's row regions
+/// from the merged report — a stale popover report would keep merging last
+/// and swallow presses on the surfaces beneath its rows (the hit map's
+/// last push wins).
+#[test]
+fn closing_the_popover_retracts_its_row_regions() {
+    let mut fixture = built(Some(chips()), Some(subtitle_popover()));
+    assert!(
+        fixture
+            .last_reported_targets()
+            .contains(&RegionTarget::QueuePlayback(
+                QueuePlaybackTargetId::TrackPopoverChoice(1)
+            )),
+        "the open popover reports its rows: {:?}",
+        fixture.last_reported_targets()
+    );
+
+    fixture.close_popover();
+
+    assert_eq!(
+        fixture.last_reported_targets(),
+        vec![
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::AudioChip),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip),
         ]
     );
 }

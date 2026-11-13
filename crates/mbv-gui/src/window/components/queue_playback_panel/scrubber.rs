@@ -142,6 +142,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
         div {
             style: "padding: 10px 16px 4px;",
             div {
+                class: "relative",
                 role: "slider",
                 tabindex: 0,
                 "aria-label": "Seek",

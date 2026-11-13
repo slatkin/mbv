@@ -115,69 +115,74 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
 
     let popover = open_popover(props.overlay.as_ref());
 
-    // Each paint that moved a region reports (design D4): this effect runs
-    // after the DOM update, and the layout epoch reports layout-driven moves
-    // (the Svelte row observer the D9 port replaces). Reading the overlay
-    // registers the popover's rows, which appear and disappear with that
-    // frame section; the popover's key retracts while none is open. The
-    // reporter dedupes an unchanged contribution.
-    let watch_chips = props.chips.clone();
-    let watch_overlay = props.overlay.clone();
-    use_effect(move || {
-        let _epoch = epoch.0.cloned();
-        let _chips = watch_chips.clone();
-        let overlay_open = matches!(
-            watch_overlay.as_ref(),
-            Some(GuiOverlayFrame::TrackPopover { .. })
-        );
-        let audio = audio_mounted.cloned();
-        let subtitle = subtitle_mounted.cloned();
-        let rows = popover_rows.cloned();
-        let mut effect_reporter = reporter.clone();
-        spawn(async move {
-            let mut regions: Vec<LayoutRegion> = Vec::new();
-            for (mounted, id) in [
-                (audio, QueuePlaybackTargetId::AudioChip),
-                (subtitle, QueuePlaybackTargetId::SubtitleChip),
-            ] {
-                if let Some(mounted) = mounted {
-                    regions.extend(element_region(&mounted, RegionTarget::QueuePlayback(id)).await);
+    // Each paint that moved a region reports (design D4): the frame's chips
+    // and overlay re-run the report — the popover's key retracts while none
+    // is open, and a closed popover or a shrinking choice list drops the
+    // stale row handles. The row handles are read as peeks (the confirm
+    // modal's idiom): the effect's subscriptions are the reactive props and
+    // the layout epoch, so the clear's write cannot re-run it. The reporter
+    // dedupes an unchanged contribution.
+    use_effect(use_reactive(
+        (&props.chips.clone(), &props.overlay.clone()),
+        move |(_chips, overlay)| {
+            let _epoch = epoch.0.cloned();
+            let audio = audio_mounted.peek().cloned();
+            let subtitle = subtitle_mounted.peek().cloned();
+            let open = open_popover(overlay.as_ref());
+            let row_count = open.as_ref().map_or(0, |(_, _, choices)| choices.len());
+            let mut effect_reporter = reporter.clone();
+            let mut rows_signal = popover_rows;
+            spawn(async move {
+                if rows_signal.peek().len() > row_count {
+                    rows_signal.write().truncate(row_count);
                 }
-            }
-            effect_reporter.report_layout(
-                key,
-                LayoutContribution {
-                    lists: Vec::new(),
-                    regions,
-                },
-            );
-            if overlay_open {
-                let mut popover_regions: Vec<LayoutRegion> = Vec::new();
-                for (index, mounted) in rows.iter().enumerate() {
+                let mut regions: Vec<LayoutRegion> = Vec::new();
+                for (mounted, id) in [
+                    (audio, QueuePlaybackTargetId::AudioChip),
+                    (subtitle, QueuePlaybackTargetId::SubtitleChip),
+                ] {
                     if let Some(mounted) = mounted {
-                        popover_regions.extend(
-                            element_region(
-                                mounted,
-                                RegionTarget::QueuePlayback(
-                                    QueuePlaybackTargetId::TrackPopoverChoice(index),
-                                ),
-                            )
-                            .await,
+                        regions.extend(
+                            element_region(&mounted, RegionTarget::QueuePlayback(id)).await,
                         );
                     }
                 }
                 effect_reporter.report_layout(
-                    popover_key,
+                    key,
                     LayoutContribution {
                         lists: Vec::new(),
-                        regions: popover_regions,
+                        regions,
                     },
                 );
-            } else {
-                effect_reporter.retract_layout(popover_key);
-            }
-        });
-    });
+                if open.is_some() {
+                    let rows = rows_signal.peek().clone();
+                    let mut popover_regions: Vec<LayoutRegion> = Vec::new();
+                    for (index, mounted) in rows.iter().enumerate() {
+                        if let Some(mounted) = mounted {
+                            popover_regions.extend(
+                                element_region(
+                                    mounted,
+                                    RegionTarget::QueuePlayback(
+                                        QueuePlaybackTargetId::TrackPopoverChoice(index),
+                                    ),
+                                )
+                                .await,
+                            );
+                        }
+                    }
+                    effect_reporter.report_layout(
+                        popover_key,
+                        LayoutContribution {
+                            lists: Vec::new(),
+                            regions: popover_regions,
+                        },
+                    );
+                } else {
+                    effect_reporter.retract_layout(popover_key);
+                }
+            });
+        },
+    ));
 
     use_drop(move || {
         drop_reporter.retract_layout(key);
