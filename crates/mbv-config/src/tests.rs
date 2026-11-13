@@ -9,6 +9,8 @@ mod emby_admin;
 #[cfg(test)]
 mod gui_launch_state;
 #[cfg(test)]
+mod gui_panel_widths;
+#[cfg(test)]
 mod launch_state;
 mod paths_migration;
 mod script_source;
