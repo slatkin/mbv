@@ -1,27 +1,27 @@
 # Spec Delta
 
 ## Purpose
-Defines the native window Client spike: a Client of the Owner that presents only the Queue panel in a native window, with its state and artwork supplied in process by the Client core. It exists to measure the native path against the GUI Client, so it is not a full GUI Client.
+Defines the Blitz Client spike: a Client of the Owner that presents only the Queue panel in a Blitz-rendered window, with its state and artwork supplied in process by the Client core. It exists to measure the Blitz path against the GUI Client, so it is not a full GUI Client.
 
 ## ADDED Requirements
 
-### Requirement: The native window is a Client of the Owner process
+### Requirement: The Blitz Client is a Client of the Owner process
 
-The native window SHALL be a Client of the Owner process under the same rules as the GUI Client. It SHALL find, start, and attach to the Owner process as the GUI Client does. It SHALL declare itself as a Client that does not take part in Pin swap. It SHALL NOT hold the owner lock, SHALL NOT become a Player owner, and SHALL NOT run playback.
+The Blitz Client SHALL be a Client of the Owner process under the same rules as the GUI Client. It SHALL find, start, and attach to the Owner process as the GUI Client does. It SHALL declare itself as a Client that does not take part in Pin swap. It SHALL NOT hold the owner lock, SHALL NOT become a Player owner, and SHALL NOT run playback.
 
 #### Scenario: The window opens with the Owner running
 
-- **WHEN** the native window starts and an Owner process is running
+- **WHEN** the Blitz Client window starts and an Owner process is running
 - **THEN** the window attaches to that Owner as a Client and shows the Owner's queue
 
 #### Scenario: The window opens with no Owner running
 
-- **WHEN** the native window starts and no Owner process is running
+- **WHEN** the Blitz Client window starts and no Owner process is running
 - **THEN** the window starts the Owner from the sibling `mbv` program and attaches to it
 
-### Requirement: The native window paints only the Queue panel
+### Requirement: The Blitz Client window paints only the Queue panel
 
-The native window SHALL show the Queue panel only. The Queue panel SHALL show the queue list, the scrubber, the playback artwork, and the playhead. The window SHALL NOT show any other panel, overlay, or control.
+The Blitz Client window SHALL show the Queue panel only. The Queue panel SHALL show the queue list, the scrubber, the playback artwork, and the playhead. The window SHALL NOT show any other panel, overlay, or control.
 
 #### Scenario: The window shows the queue
 
@@ -86,5 +86,5 @@ The window's close SHALL end the Client core run. The Owner process SHALL keep i
 
 #### Scenario: The user closes the window
 
-- **WHEN** the user closes the native window
+- **WHEN** the user closes the Blitz Client window
 - **THEN** the Client core run ends and the window exits without a crash or panic
