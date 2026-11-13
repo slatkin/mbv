@@ -35,7 +35,12 @@ pub enum KeyOutcome {
 /// The handler the forwarder runs before it sends a keydown (D8). The window
 /// content installs one; its answer decides whether the core ever sees the
 /// key.
-pub type KeyRoute = dyn Fn(&DomKey) -> KeyOutcome + Send + Sync;
+/// The handler the forwarder runs before it sends a keydown (D8). The window
+/// content installs one; its answer decides whether the core ever sees the
+/// key. The route runs on the window's main thread only, and the Dioxus
+/// signals the Library steps read are single-threaded storage (D15), so the
+/// route carries no thread bound.
+pub type KeyRoute = dyn Fn(&DomKey) -> KeyOutcome;
 
 /// The router that takes nothing: every key goes to the core.
 #[must_use]

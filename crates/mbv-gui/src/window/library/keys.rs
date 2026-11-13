@@ -1,0 +1,409 @@
+//! The Library panel's key routing (`add-gui-library-panel` design D3, the
+//! port of `lib/library/keys.ts`): the router the window content installs in
+//! [`crate::window::input`], where it runs before the forwarder and decides
+//! whether the core ever sees a keydown. The order is the design's: an open
+//! core overlay or an armed prefix keeps the keyboard with the core, an open
+//! text field of the panel types, the window keys (Tab across the panes, `1`–`7`
+//! for the destination tabs) and the Library keys run in the front end while the
+//! Library panel shows, and every other key goes to the core.
+
+use crate::bridge::frame::chrome::GuiStatusBar;
+use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
+use crate::bridge::frame::library::{
+    GuiLibraryList, GuiMusicList, GuiMusicPillFrame, GuiSearchFrame,
+};
+use crate::bridge::frame::overlay::GuiOverlayFrame;
+use crate::bridge::frame::settings::GuiSettingsFrame;
+use crate::bridge::keys::DomKey;
+use crate::bridge::library::GuiLibraryCommand;
+use crate::window::input::KeyOutcome;
+use dioxus_native::prelude::*;
+
+use super::keys_shared::{bare, cursor_move, is_list_and_hero_key};
+use super::list::step_pill_focus;
+use super::state::{LibraryPane, LibraryState};
+
+/// The section facts the routing reads (`gui-change-driven-sections` design
+/// D6): the values of the sections the router reads, as the installer builds
+/// them from the window's section stores; a test builds only these fields.
+#[derive(Debug, Clone)]
+pub struct LibraryKeyFrame {
+    /// The focused surface and the Panel that holds it.
+    pub focus: GuiFocus,
+    /// The open menu or popover, `None` while none is open.
+    pub overlay: Option<GuiOverlayFrame>,
+    /// The Status bar's facts, with the armed prefix among them.
+    pub status: GuiStatusBar,
+    /// Whether the Queue filter's text entry holds the keyboard.
+    pub filter_active: bool,
+    /// The Settings screen's frame, `None` while the screen is closed.
+    pub settings: Option<GuiSettingsFrame>,
+    /// The `libraryList` section's value: the active destination's list part,
+    /// or `None` while no Library panel shows.
+    pub library_list: Option<GuiLibraryList>,
+    /// The `search` section's value. The Search routes — the `Ctrl+K` arm,
+    /// the field's own route, and the carried section's Esc close — arrive
+    /// with `search.ts` (row 6.8); until then the frame carries the value and
+    /// no step reads it.
+    pub search: Option<GuiSearchFrame>,
+}
+
+/// The place of the destination tab a digit opens (design D3, step 3): `1`
+/// opens the first tab after Home, so the digit is the tab's place in the
+/// carried list rather than a tab position.
+fn destination_place(key: &DomKey) -> Option<usize> {
+    if !bare(key) || key.key.len() != 1 {
+        return None;
+    }
+    let place: usize = key.key.parse().ok()?;
+    (1..=7).contains(&place).then_some(place)
+}
+
+/// Move the pane focus (design D3, step 3, D12): Tab and Shift+Tab walk the
+/// panes the active destination paints — the pill row, the list, and the Hero on
+/// Music; the list and the Hero on Home; the mode pills, the list, and the Hero
+/// on Shows, without the Hero the Upcoming mode does not paint. The ends of that
+/// walk cross the panel boundary (design D4): Tab past the last pane and
+/// Shift+Tab before the first give the Queue panel Panel focus, and Queue Panel
+/// focus gives the Library panel's near end the keyboard, because Panel focus
+/// lives in the core.
+fn take_pane_focus(state: &LibraryState, panel: GuiPanel, step: i32) {
+    let walk = state.active_library_panes();
+    if panel == GuiPanel::Queue {
+        state.link.library(GuiLibraryCommand::TakeFocus);
+        let pane = if step > 0 {
+            walk[0]
+        } else {
+            walk[walk.len() - 1]
+        };
+        state.focus_library_pane(pane);
+        return;
+    }
+    let ui = state.ui.peek().clone();
+    let back = step < 0;
+    let boundary = match (ui.pane, back) {
+        (Some(pane), true) => walk
+            .iter()
+            .position(|walked| *walked == pane)
+            .is_none_or(|at| at == 0),
+        (Some(pane), false) => walk
+            .iter()
+            .position(|walked| *walked == pane)
+            .is_none_or(|at| at == walk.len() - 1),
+        // A pane the walk does not paint: Tab lands the walk's near end, and
+        // Shift+Tab crosses the boundary.
+        (None, true) => true,
+        (None, false) => false,
+    };
+    if boundary {
+        state.link.library(GuiLibraryCommand::TakeQueueFocus);
+        return;
+    }
+    state.move_library_pane(step);
+}
+
+/// The pills of the carried Music content.
+fn pills(library_list: Option<&GuiLibraryList>) -> &[GuiMusicPillFrame] {
+    super::parts::library_music_list(library_list).map_or(&[], |music| music.pills.as_slice())
+}
+
+/// Close the active destination's filter with Esc (design D3, step 2): the
+/// open field is the one list's own, so its close and accept run the
+/// destination's own resolve, in the same order `routePanelKey` hands keys
+/// over. Each destination's own resolve arrives with its port (rows 6.4 to
+/// 6.8); until then every destination's close is the Music one.
+fn close_active_filter(state: &LibraryState) {
+    state.close_library_filter();
+}
+
+/// Accept the active destination's filter with Enter (design D3, step 2):
+/// the field closes and the list keeps its text. Each destination's own
+/// resolve arrives with its port (rows 6.4 to 6.8).
+fn accept_active_filter(state: &LibraryState) {
+    state.accept_library_filter();
+}
+
+/// Route a key while the filter field holds the keyboard (design D3, step 2).
+fn route_filter_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
+    match key.key.as_str() {
+        "Escape" => {
+            close_active_filter(state);
+            KeyOutcome::Handled
+        }
+        "Enter" => {
+            accept_active_filter(state);
+            KeyOutcome::Handled
+        }
+        // The field takes the rest: the browser types the key, and the core
+        // gets none.
+        _ => KeyOutcome::Text,
+    }
+}
+
+/// Play the item the focused pane's cursor names (design D3's Enter): the list
+/// row, or the Hero's tracklist track while that pane has the pane focus. With
+/// no item under the cursor the key sends no command. Enter never picks: a mouse
+/// press picks the item for the Hero, and Enter plays.
+fn play_focused_item(state: &LibraryState) {
+    if let Some(item_id) = state.focused_item_id() {
+        state.link.library(GuiLibraryCommand::Play { item_id });
+    }
+}
+
+/// Route a movement or open key to the list's cursor (design D3, D7): the
+/// arrows, Page Up, Page Down, Home, and End move the cursor, Right opens the
+/// cursor's node, Left closes it, and Enter plays the item under it.
+fn route_list_key(state: &LibraryState, key: &DomKey) -> bool {
+    if let Some(mv) = cursor_move(&key.key) {
+        state.move_library_cursor(mv);
+        return true;
+    }
+    match key.key.as_str() {
+        "ArrowRight" => {
+            state.set_library_cursor_open(true);
+            true
+        }
+        "ArrowLeft" => {
+            state.set_library_cursor_open(false);
+            true
+        }
+        "Enter" => {
+            play_focused_item(state);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Route a movement or Enter key to the Hero's tracklist cursor (design D3):
+/// the movement keys move the tracklist's cursor, and Enter plays the track it
+/// rests on.
+fn route_tracklist_key(state: &LibraryState, key: &DomKey) -> bool {
+    if let Some(mv) = cursor_move(&key.key) {
+        state.move_library_track_cursor(mv);
+        return true;
+    }
+    if key.key == "Enter" {
+        play_focused_item(state);
+        return true;
+    }
+    false
+}
+
+/// Route `n` and `a` to the item the focused pane's cursor names (design D3,
+/// step 4, D8): play next and add to queue. The Library takes both keys while
+/// it has Library Panel focus, so the core's `a` chord never runs from here;
+/// with no item under the cursor the key sends no command.
+fn route_item_key(state: &LibraryState, key: &DomKey) {
+    let Some(item_id) = state.focused_item_id() else {
+        return;
+    };
+    match key.key.as_str() {
+        "n" => state.link.library(GuiLibraryCommand::PlayNext { item_id }),
+        _ => state
+            .link
+            .library(GuiLibraryCommand::AddToQueue { item_id }),
+    }
+}
+
+/// Close the front end's open menu or overlay with Esc (design D3): the right-click
+/// item menu and the picked item's menu first, then the Narrow arrangement's Hero
+/// overlay, then the carried Search section. Whether one paints decides the
+/// answer, so an Esc with nothing open may not leave the core's Esc unclaimed.
+/// The Search close arrives with `search.ts` (row 6.8); until then a carried
+/// Search section answers nothing here.
+fn route_escape_key(state: &LibraryState, ui: &super::state::LibraryUiState) -> KeyOutcome {
+    if ui.row_menu.is_some() {
+        state.close_library_row_menu();
+        return KeyOutcome::Handled;
+    }
+    if ui.item_menu_open {
+        state.close_library_item_menu();
+        return KeyOutcome::Handled;
+    }
+    if state.hero_overlay_open(ui) {
+        state.close_library_hero();
+        return KeyOutcome::Handled;
+    }
+    KeyOutcome::Core
+}
+
+/// Move the focused pill one pill along the row (design D3, step 4): Right and
+/// Left walk the pills, and the first of them with no pill focused takes the
+/// end it walks from.
+fn move_pill_focus(state: &LibraryState, library_list: Option<&GuiLibraryList>, step: i32) {
+    let focused = state.ui.peek().focused_pill.clone();
+    let moved = step_pill_focus(
+        pills(library_list),
+        focused.as_deref(),
+        |pill| pill.group_id.as_str(),
+        step,
+    );
+    if let Some(pill) = moved {
+        state.focus_library_pill(Some(pill.group_id));
+    }
+}
+
+/// Route a key to the Music keys (design D3, step 4), with the pane the window
+/// content focused deciding which control the key acts on. The other
+/// destinations' routers arrive with their ports (rows 6.4 to 6.8); until they
+/// land, an active non-Music destination answers the core here.
+fn route_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    ui: &super::state::LibraryUiState,
+    library_list: Option<&GuiLibraryList>,
+) -> KeyOutcome {
+    if key.key == "Escape" && bare(key) {
+        return route_escape_key(state, ui);
+    }
+    let music = super::parts::library_music_list(library_list);
+    let Some(music) = music else {
+        // The Home, Shows, Emby, Audiobooks, Podcasts, and Feeds keys route
+        // with their ports (rows 6.4 to 6.8); until they land, a key under
+        // such a destination goes to the core's router.
+        return KeyOutcome::Core;
+    };
+    route_music_panel_key(state, key, ui, library_list, music)
+}
+
+/// The Music destination's own keys (design D3, D12), over the carried Music
+/// content.
+fn route_music_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    ui: &super::state::LibraryUiState,
+    library_list: Option<&GuiLibraryList>,
+    music: &GuiMusicList,
+) -> KeyOutcome {
+    if key.key == "/" && bare(key) {
+        state.open_library_filter();
+        return KeyOutcome::Handled;
+    }
+    // Space selects the focused pill (design D6). With
+    // no pill focused, it is the core's: Space plays and pauses (design D3,
+    // step 5).
+    if key.key == " " && !key.modifiers.ctrl_key && !key.meta_key {
+        let pill = state.focused_library_pill(&music.pills, ui);
+        let Some(pill) = pill else {
+            return KeyOutcome::Core;
+        };
+        state.request_library_pill_select(pill.group_id.clone());
+        return KeyOutcome::Handled;
+    }
+    if ui.pane == Some(LibraryPane::Pills) && bare(key) {
+        match key.key.as_str() {
+            "ArrowRight" => {
+                move_pill_focus(state, library_list, 1);
+                return KeyOutcome::Handled;
+            }
+            "ArrowLeft" => {
+                move_pill_focus(state, library_list, -1);
+                return KeyOutcome::Handled;
+            }
+            // Enter presses the focused pill, as Space does (design D3, step
+            // 4, D6).
+            "Enter" => {
+                if let Some(pill) = state.focused_library_pill(&music.pills, ui) {
+                    let group_id = pill.group_id.clone();
+                    state.request_library_pill_select(group_id);
+                    return KeyOutcome::Handled;
+                }
+            }
+            _ => {}
+        }
+    }
+    if ui.pane == Some(LibraryPane::List) && bare(key) && route_list_key(state, key) {
+        return KeyOutcome::Handled;
+    }
+    if ui.pane == Some(LibraryPane::Hero) && bare(key) && route_tracklist_key(state, key) {
+        return KeyOutcome::Handled;
+    }
+    if bare(key) && (key.key == "n" || key.key == "a") {
+        route_item_key(state, key);
+        return KeyOutcome::Handled;
+    }
+    if bare(key) && is_list_and_hero_key(&key.key) {
+        return KeyOutcome::Handled;
+    }
+    // Nothing else of the Library's answers this key: the core's router does.
+    KeyOutcome::Core
+}
+
+/// Route one keydown (design D3): the front end does its part, and the answer is
+/// what the input forwarder must do with the key.
+#[must_use]
+pub fn route_library_key(
+    key: &DomKey,
+    frame: Option<&LibraryKeyFrame>,
+    state: &LibraryState,
+) -> KeyOutcome {
+    let Some(frame) = frame else {
+        return KeyOutcome::Core;
+    };
+    // (1) An open core overlay or an armed prefix keeps the keyboard with the
+    // core: both are in the frame, and the core's own router answers them.
+    if frame.overlay.is_some() || frame.status.prefix_armed {
+        return KeyOutcome::Core;
+    }
+    // The Queue filter's text entry is the core's, so while it holds the
+    // keyboard every key is the core's to type (`text_entry_focused` in
+    // `src/app/input/gui.rs`).
+    if frame.filter_active {
+        return KeyOutcome::Core;
+    }
+    // The Settings screen takes every key the overlay step leaves while its
+    // frame section is present (add-gui-settings-screen design D11): the
+    // window paints the screen in place of the two panels then, so no Library
+    // step runs. The Settings keys route with their port (row 8.1); until
+    // they land, a key while the screen is open answers the core.
+    if frame.settings.is_some() {
+        return KeyOutcome::Core;
+    }
+    // The attach states carry no slice, and no Library panel means no Library
+    // keys: the core takes every one of them. The panel's presence is the
+    // window's mount fact (design D2, D10), so a key never acts on a panel that
+    // paints nothing.
+    // The panel's presence is one fact for the window and the router (design
+    // D2, D10): a frame that carries no Library section takes no Library key,
+    // even while the window still holds the content of an earlier frame. The
+    // content names the active destination's section (design D12).
+    if !LibraryState::library_shown(frame.library_list.as_ref()) {
+        return KeyOutcome::Core;
+    }
+    let ui = state.ui.peek().clone();
+    if ui.filter_open {
+        return route_filter_key(state, key);
+    }
+    // (3) The window keys run whenever the Library panel shows.
+    if key.key == "Tab" && !key.modifiers.ctrl_key && !key.meta_key && !key.modifiers.alt_key {
+        let step = if key.modifiers.shift_key { -1 } else { 1 };
+        take_pane_focus(state, frame.focus.panel, step);
+        return KeyOutcome::Handled;
+    }
+    if let Some(place) = destination_place(key) {
+        // A digit names a carried tab, never a raw position: it opens the tab
+        // the top bar paints at that place, and a digit past the carried tabs
+        // opens nothing (design D3, step 3).
+        if let Some(tab) = frame
+            .library_list
+            .as_ref()
+            .and_then(|list| list.tabs.get(place.wrapping_sub(1)))
+        {
+            state.link.library(GuiLibraryCommand::OpenDestination {
+                position: tab.position,
+            });
+        }
+        return KeyOutcome::Handled;
+    }
+    // (4) The Library keys run while the Library panel has Panel focus. The
+    // carried Search section rides with them: its Esc close needs it.
+    if frame.focus.panel == GuiPanel::Library {
+        return route_panel_key(state, key, &ui, frame.library_list.as_ref());
+    }
+    // (5) Every other key goes to the core's keyboard router.
+    KeyOutcome::Core
+}
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,248 @@
+//! The `panes` contracts of `keys.test.ts` (D16), over the shared harness.
+
+use super::*;
+
+#[test]
+fn tab_with_queue_panel_focus_takes_library_focus() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let mut held = frame(Some(
+            &state.sections.library_list.peek().clone().expect("list"),
+        ));
+        held.focus.panel = GuiPanel::Queue;
+        route(state, facts, "tab", "Tab", false, &held);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(commands(&rx), vec![GuiLibraryCommand::TakeFocus.into()]);
+    assert!(facts[1].contains("pane=Some(Pills)"));
+}
+
+// The walks cross the panel boundary at their ends (design D3, D4): Tab past
+// the Hero and Shift+Tab before the pill row give the Queue panel Panel focus.
+#[test]
+fn tab_past_the_last_library_pane_takes_queue_panel_focus() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
+        let frame = frame(Some(
+            &state.sections.library_list.peek().clone().expect("list"),
+        ));
+        route(state, facts, "tab", "Tab", false, &frame);
+    });
+    assert_eq!(
+        commands(&rx),
+        vec![GuiLibraryCommand::TakeQueueFocus.into()]
+    );
+    assert_eq!(facts, ["tab=Handled"]);
+}
+#[test]
+fn shift_tab_before_the_first_library_pane_takes_queue_panel_focus() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let frame = frame(Some(
+            &state.sections.library_list.peek().clone().expect("list"),
+        ));
+        route(state, facts, "shift_tab", "Tab", true, &frame);
+    });
+    assert_eq!(
+        commands(&rx),
+        vec![GuiLibraryCommand::TakeQueueFocus.into()]
+    );
+    assert_eq!(facts, ["shift_tab=Handled"]);
+}
+
+// A digit names a carried tab, never a raw position (design D3, step 3): the
+// presented destinations are the tabs the top bar paints.
+#[test]
+fn a_digit_opens_the_carried_tab_at_its_place() {
+    let mut list = music_list(Vec::new());
+    list.tabs = vec![
+        GuiLibraryTabFrame {
+            position: 1,
+            label: "Music".to_owned(),
+        },
+        GuiLibraryTabFrame {
+            position: 4,
+            label: "Audiobooks".to_owned(),
+        },
+    ];
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let frame = frame(Some(
+            &state.sections.library_list.peek().clone().expect("list"),
+        ));
+        route(state, facts, "digit", "2", false, &frame);
+    });
+    assert_eq!(
+        commands(&rx),
+        [GuiLibraryCommand::OpenDestination { position: 4 }.into()]
+    );
+    assert_eq!(facts, ["digit=Handled"]);
+}
+#[test]
+fn a_digit_past_the_carried_tabs_opens_nothing() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let frame = frame(Some(
+            &state.sections.library_list.peek().clone().expect("list"),
+        ));
+        route(state, facts, "digit", "2", false, &frame);
+    });
+    assert_eq!(commands(&rx), []);
+    assert_eq!(facts, ["digit=Handled"]);
+}
+
+// The open filter takes a typed key without preventing its default: the
+// browser types the key, and the core gets none.
+#[test]
+fn tab_onto_the_hero_in_narrow_paints_its_overlay_again() {
+    let artists = vec![beastie()];
+    let list = music_list(artists);
+    let detail = music_detail(Some(hero()));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), detail.clone());
+        state.report_library_arrangement(GuiArrangement::Narrow);
+        let mut ui = state.ui;
+        ui.with_mut(|ui| {
+            ui.pane = Some(LibraryPane::List);
+            ui.hero_dismissed = true;
+        });
+        let frame = carried_frame(state);
+        route(state, facts, "tab", "Tab", false, &frame);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert!(facts[1].contains("pane=Some(Hero)"));
+    assert!(facts[1].contains("dismissed=false"));
+    assert_eq!(commands(&rx), []);
+}
+
+// The other half of the same invariant: closing the overlay while the Hero
+// pane held the focus moves the focus back to the painted list.
+#[test]
+fn esc_with_the_hero_pane_focused_returns_the_pane_focus_to_the_list() {
+    let artists = vec![beastie()];
+    let list = music_list(artists);
+    let detail = music_detail(Some(hero()));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), detail.clone());
+        state.report_library_arrangement(GuiArrangement::Narrow);
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
+        let frame = carried_frame(state);
+        route(state, facts, "escape", "Escape", false, &frame);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(
+        facts,
+        vec![
+            "escape=Handled",
+            "pane=Some(List) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
+        ]
+    );
+    assert_eq!(commands(&rx), []);
+}
+
+// Review of row 4.7, finding P2-b: the cursor was seeded only when a pane
+// took the focus, so a tracklist whose cache landed afterwards painted no
+// cursor and Enter did nothing. The cursor now derives from the tracks that
+// paint.
+#[test]
+fn esc_closes_the_narrow_hero_overlay() {
+    let artists = vec![beastie()];
+    let list = music_list(artists);
+    let detail = music_detail(Some(hero()));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), detail.clone());
+        state.report_library_arrangement(GuiArrangement::Narrow);
+        let frame = carried_frame(state);
+        route(state, facts, "escape", "Escape", false, &frame);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(
+        facts,
+        vec![
+            "escape=Handled",
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
+        ]
+    );
+    assert_eq!(commands(&rx), []);
+}
+
+// The overlay paints only in Narrow (design D4): the Esc that would close it
+// elsewhere still belongs to the core's router.
+#[test]
+fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
+    let artists = vec![beastie()];
+    let list = music_list(artists);
+    let detail = music_detail(Some(hero()));
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), detail.clone());
+        state.report_library_arrangement(GuiArrangement::Wide);
+        let frame = carried_frame(state);
+        route(state, facts, "escape", "Escape", false, &frame);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(
+        facts,
+        vec![
+            "escape=Core",
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+        ]
+    );
+    assert_eq!(commands(&rx), []);
+}
+
+// add-gui-library-panel row 6.2: the Home keys route with their port (task
+// 6.4). The pane-walk contracts of the Home section need only the state's
+// walk facts, so they hold now.
+
+// The pane walk skips the panes Home does not paint (design D12): no pill
+// row, so Tab from the Queue panel focuses the list.
+#[test]
+fn tab_from_the_queue_panel_focuses_the_list_pane_on_home() {
+    let list = home_list();
+    let (facts, rx) = run(move |state, facts| {
+        carry(
+            state,
+            list.clone(),
+            GuiLibraryDetail::Home(crate::bridge::frame::library::GuiHomeDetail {
+                selected: None,
+                hero: None,
+            }),
+        );
+        let mut held = carried_frame(state);
+        held.focus.panel = GuiPanel::Queue;
+        route(state, facts, "tab", "Tab", false, &held);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(commands(&rx), vec![GuiLibraryCommand::TakeFocus.into()]);
+    assert!(facts[1].contains("pane=Some(List)"));
+}
+#[test]
+fn tab_past_the_hero_on_home_takes_queue_panel_focus() {
+    let list = home_list();
+    let (facts, rx) = run(move |state, facts| {
+        carry(
+            state,
+            list.clone(),
+            GuiLibraryDetail::Home(crate::bridge::frame::library::GuiHomeDetail {
+                selected: None,
+                hero: None,
+            }),
+        );
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
+        let frame = carried_frame(state);
+        route(state, facts, "tab", "Tab", false, &frame);
+    });
+    assert_eq!(
+        commands(&rx),
+        vec![GuiLibraryCommand::TakeQueueFocus.into()]
+    );
+    assert_eq!(facts, ["tab=Handled"]);
+}

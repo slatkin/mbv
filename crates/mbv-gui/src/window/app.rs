@@ -18,6 +18,7 @@ use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
 use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
+use crate::bridge::keys::DomKey;
 use crate::bridge::layout::LayoutSize;
 use crate::bridge::pointer::DomPointerKind;
 use crate::bridge::sections::GuiSectionBatch;
@@ -35,7 +36,9 @@ use crate::window::components::panel_divider::{
     DividerDrag, DividerName, DividerSide, PanelDivider,
 };
 use crate::window::components::settings_screen::SettingsScreen;
+use crate::window::input::KeyOutcome;
 use crate::window::layout::{LayoutEpoch, track_container_size, use_layout_reporter};
+use crate::window::library::keys::{LibraryKeyFrame, route_library_key};
 use crate::window::library::reset::reset_library_interaction;
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, SystemTimes, Times};
@@ -169,6 +172,47 @@ fn note_panel_ui_reset(store: &mut PanelWidthsStore, sections: &Sections) -> boo
     store.note_ui_reset_epoch(panel.ui_reset_epoch)
 }
 
+/// The window content's key router (D8, task 6.2): the frame one keydown
+/// routes with builds from the sections the window holds, and the Library
+/// steps answer it before the forwarder sends the key to the core. The router
+/// owns its sections and interaction store, so the handler's `move` closure
+/// can hand the trait object up.
+/// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
+/// port of `reset.ts`): a changed value resets the panel widths and the
+/// Library interaction stores on the same fact. The Settings state resets
+/// with its port (task 8.1).
+fn note_ui_reset(store: &mut PanelWidthsStore, sections: &Sections, library: &LibraryState) {
+    let reset = note_panel_ui_reset(store, sections);
+    if reset {
+        reset_library_interaction(library);
+    }
+}
+
+fn library_key_router(
+    library: LibraryState,
+    sections: &Sections,
+) -> impl Fn(&DomKey) -> KeyOutcome + 'static {
+    let focus = sections.focus;
+    let overlay = sections.overlay;
+    let status = sections.status;
+    let summary = sections.summary;
+    let settings = sections.settings;
+    let library_list = sections.library_list;
+    let search = sections.search;
+    move |key| {
+        let frame = LibraryKeyFrame {
+            focus: focus.cloned(),
+            overlay: overlay.cloned(),
+            status: status.cloned(),
+            filter_active: summary.cloned().filter_active,
+            settings: settings.cloned(),
+            library_list: library_list.cloned(),
+            search: search.cloned(),
+        };
+        route_library_key(key, Some(&frame), &library)
+    }
+}
+
 /// The window's root (D6).
 #[component]
 pub fn App() -> Element {
@@ -253,10 +297,7 @@ pub fn App() -> Element {
     let reset_sections = sections.clone();
     let reset_library = library.clone();
     use_effect(move || {
-        let reset = note_panel_ui_reset(&mut reset_store, &reset_sections);
-        if reset {
-            reset_library_interaction(&reset_library);
-        }
+        note_ui_reset(&mut reset_store, &reset_sections, &reset_library);
     });
 
     // The panel container the layout report carries the size of (D9): the
@@ -331,9 +372,10 @@ pub fn App() -> Element {
                 // Every keydown meets the window content's router first,
                 // which takes the keys it handles and lets the forwarder send
                 // the rest (add-gui-library-panel design D3). The Library
-                // steps install with task 6.2; until then the router lets
-                // every key through to the core.
-                input::on_keydown(&event, &input::forward_every_key, &key_link);
+                // steps read the frame's sections and the interaction store
+                // (task 6.2).
+                let router = library_key_router(library.clone(), &sections);
+                input::on_keydown(&event, &router, &key_link);
             },
             onpointerdown: move |event: PointerEvent| {
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
