@@ -5,5 +5,6 @@
 
 pub mod channel;
 pub mod clock;
+pub mod icons;
 pub mod launch;
 pub mod net;
