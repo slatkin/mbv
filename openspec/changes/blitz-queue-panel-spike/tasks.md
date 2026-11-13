@@ -29,12 +29,12 @@ Each task names how to verify it. Verification uses commands, tests, or delivere
 
 ## 5. The Queue panel
 
-- [ ] 5.1 Add the Dioxus root in `crates/mbv-native/src/app.rs`. A `use_future` drains the batch receiver and writes each section into its signal (D7). Verify: `cargo check -p mbv-native` passes.
-- [ ] 5.2 Build the queue list from the `queue` section: the viewport rows, the active marker, and the active row's played fraction (D9). Verify: `cargo check -p mbv-native` passes.
-- [ ] 5.3 Build the scrubber from the `playback` and `playhead` sections: the played fill, the chapter ticks, the intro and credits marks, and the elapsed and remaining clocks (D9). Verify: `cargo check -p mbv-native` passes.
-- [ ] 5.4 Paint the playback artwork (B5). A pure function `art_src(&GuiArtRef) -> Option<&str>` returns `src` for `Image` and `Placeholder`, and `None` for `Loading` and an absent reference. Test that `Loading` yields `None`. Verify: `cargo nextest run -p mbv-native` passes.
-- [ ] 5.5 Add the playhead tick (D8): a std thread sends a tick every 250 ms while the anchor is active and not paused. The signal receives the unquantized predicted position, and the clock text changes only on a whole-second change. Test contract 5 of D17 on the pure function `playhead_write`. Verify: `cargo nextest run -p mbv-native` passes.
-- [ ] 5.6 Add `crates/mbv-native/assets/queue.css` (D11), included with `include_str!` in one `style` element. Vendor the six WOFF2 files (D12) from `@fontsource` 5.3.0 into `crates/mbv-native/assets/fonts/`, and declare their `@font-face` rules in the same style element. Verify: `fd -e woff2 . crates/mbv-native/assets/fonts` lists six files, and `rg -n 'include_str' crates/mbv-native/src` finds the CSS.
+- [x] 5.1 Add the Dioxus root in `crates/mbv-native/src/app.rs`. A `use_future` drains the batch receiver and writes each section into its signal (D7). Verify: `cargo check -p mbv-native` passes.
+- [x] 5.2 Build the queue list from the `queue` section: the viewport rows, the active marker, and the active row's played fraction (D9). Verify: `cargo check -p mbv-native` passes.
+- [x] 5.3 Build the scrubber from the `playback` and `playhead` sections: the played fill, the chapter ticks, the intro and credits marks, and the elapsed and remaining clocks (D9). Verify: `cargo check -p mbv-native` passes.
+- [x] 5.4 Paint the playback artwork (B5). A pure function `art_src(&GuiArtRef) -> Option<&str>` returns `src` for `Image` and `Placeholder`, and `None` for `Loading` and an absent reference. Test that `Loading` yields `None`. Verify: `cargo nextest run -p mbv-native` passes.
+- [x] 5.5 Add the playhead tick (D8): a std thread sends a tick every 250 ms while the anchor is active and not paused. The signal receives the unquantized predicted position, and the clock text changes only on a whole-second change. Test contract 5 of D17 on the pure function `playhead_write`. Verify: `cargo nextest run -p mbv-native` passes.
+- [x] 5.6 Add `crates/mbv-native/assets/queue.css` (D11), included with `include_str!` in one `style` element. Vendor the six WOFF2 files (D12) from `@fontsource` 5.3.0 into `crates/mbv-native/assets/fonts/`, and declare their `@font-face` rules in the same style element. Verify: `fd -e woff2 . crates/mbv-native/assets/fonts` lists six files, and `rg -n 'include_str' crates/mbv-native/src` finds the CSS.
 
 ## 6. First-build checks
 
