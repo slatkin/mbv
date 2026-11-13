@@ -9,6 +9,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
+use blitz_dom::Document as _;
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
 use blitz_traits::net::NetProvider;
 use dioxus_native::prelude::*;
@@ -25,6 +26,7 @@ use futures_util::StreamExt;
 
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
+use crate::window::clock::Clock;
 use crate::window::net::MbvNetProvider;
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
@@ -51,16 +53,18 @@ pub fn root() -> Element {
                     WindowEvent::Quit => {
                         proxy.send_event(BlitzShellEvent::CloseWindow { window_id });
                     }
-                    // Section batches reach their sections from task 3.1 on,
-                    // and the layout epoch reads the viewport from task 3.5
-                    // on (D9); until then the window needs no reaction
-                    // (documented no-op).
-                    // Section batches reach their sections from task 3.1 on,
-                    // art answers reach `ArtImage` from task 3.6 on (D7), and
-                    // the layout epoch reads the viewport from task 3.5 on
-                    // (D9); until then the window needs no reaction
-                    // (documented no-op).
-                    WindowEvent::Batch(_) | WindowEvent::Art(_) | WindowEvent::Viewport => {}
+                    // Section batches reach their sections from task 3.1
+                    // on, art answers reach `ArtImage` from task 3.6 on (D7),
+                    // timers reach their surfaces as their retry and debounce
+                    // modules land, the layout epoch reads the viewport from
+                    // task 3.5 on (D9), and frames reach the playhead with it.
+                    // Until then the window needs no reaction (documented
+                    // no-op).
+                    WindowEvent::Batch(_)
+                    | WindowEvent::Art(_)
+                    | WindowEvent::Timer(_)
+                    | WindowEvent::Frame
+                    | WindowEvent::Viewport => {}
                 }
             }
         }
@@ -70,10 +74,14 @@ pub fn root() -> Element {
 
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes
-/// report after the shell has handled them (D9; D10 adds the frame hook).
+/// report after the shell has handled them (D9, D10).
 struct MbvApplication {
     inner: DioxusNativeApplication,
+    proxy: BlitzShellProxy,
+    /// The document's id, so the frame hook requests the next redraw (D10).
+    doc_id: usize,
     events: WindowEventSender,
+    clock: Arc<dyn Clock>,
 }
 
 impl ApplicationHandler for MbvApplication {
@@ -117,9 +125,18 @@ impl ApplicationHandler for MbvApplication {
             &event,
             WinitWindowEvent::SurfaceResized(_) | WinitWindowEvent::ScaleFactorChanged { .. }
         );
+        let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
             let _ = self.events.unbounded_send(WindowEvent::Viewport);
+        }
+        // D10: while frames are wanted, every presented frame reports and
+        // requests the next redraw, which paces the loop at vsync.
+        if redraw && self.clock.frames_wanted() {
+            let _ = self.events.unbounded_send(WindowEvent::Frame);
+            self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+                doc_id: self.doc_id,
+            });
         }
     }
 }
@@ -138,6 +155,7 @@ pub fn launch(
     core: Sender<CoreInput>,
     events: WindowEventSender,
     event_receiver: UnboundedReceiver<WindowEvent>,
+    clock: Arc<dyn Clock>,
 ) {
     let event_loop = create_default_event_loop();
     let winit_proxy = event_loop.create_proxy();
@@ -152,6 +170,7 @@ pub fn launch(
         Arc::new(MbvNetProvider::new(core.clone(), events.clone()));
     vdom.provide_root_context(CoreLink::new(core));
     vdom.provide_root_context(Arc::clone(&net_provider));
+    vdom.provide_root_context(Arc::clone(&clock));
     vdom.provide_root_context(EventSlot::new(event_receiver));
     vdom.provide_root_context(proxy.clone());
 
@@ -164,6 +183,7 @@ pub fn launch(
             ..Default::default()
         },
     );
+    let doc_id = doc.id();
     let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
         base_color: None,
         alpha_mode: None,
@@ -176,11 +196,14 @@ pub fn launch(
             WindowAttributesWayland::default().with_name(APP_ID, "mbv"),
         ));
     let config = WindowConfig::with_attributes(Box::new(doc) as _, renderer, attributes);
-    let application = DioxusNativeApplication::new(proxy, event_queue, config);
+    let application = DioxusNativeApplication::new(proxy.clone(), event_queue, config);
 
     let application = MbvApplication {
         inner: application,
+        proxy,
+        doc_id,
         events,
+        clock,
     };
     event_loop
         .run_app(application)

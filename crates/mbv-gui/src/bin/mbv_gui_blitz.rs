@@ -5,11 +5,13 @@
 //! the window's commands back. This binary replaces `mbv-gui` at the switch
 //! (D18).
 
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use futures_channel::mpsc::unbounded;
 use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
 use mbv_gui::window::channel::WindowEvent;
+use mbv_gui::window::clock::{Clock, TimerClock};
 use mbv_gui::window::launch::{launch, root};
 use mimalloc::MiMalloc;
 
@@ -45,7 +47,11 @@ fn main() {
         }
     });
     let (core, core_handle) = mbv_gui::core_thread::spawn(sink, quit);
-    launch(root, core.clone(), events, event_receiver);
+    // The window's clocks (D10): the timer thread and the frame gate. The
+    // root's drain task routes a passed timer to the surface that asked for
+    // it, and the playhead gates its frames.
+    let clock: Arc<dyn Clock> = Arc::new(TimerClock::new(events.clone()));
+    launch(root, core.clone(), events, event_receiver, clock);
     // The window has closed. Close the core thread, then hold the process
     // until its exit teardown completes (D4): the run's shared teardown
     // persists its state, and the join would otherwise let the process exit

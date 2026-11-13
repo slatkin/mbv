@@ -4,5 +4,6 @@
 //! module under `crates/mbv-gui/ui/src/` (D15).
 
 pub mod channel;
+pub mod clock;
 pub mod launch;
 pub mod net;

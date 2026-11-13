@@ -14,6 +14,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::core_thread::CoreInput;
+use crate::window::clock::TimerId;
 use crate::window::net::ArtEvent;
 
 /// One event that reaches the window's Dioxus tree from outside it (D4).
@@ -27,6 +28,11 @@ pub enum WindowEvent {
     /// An art route answer (D7): the natural size of a found source, or the
     /// failure of a missed one.
     Art(ArtEvent),
+    /// A timer the clock (D10) passed: the id routes it to the surface that
+    /// asked for it.
+    Timer(TimerId),
+    /// One presented frame (D10), while frames are wanted.
+    Frame,
     /// The window moved, resized, or its scale factor changed (D5, D9). The
     /// layout epoch reads it from task 3.5 on; the root needs no reaction
     /// before then.
