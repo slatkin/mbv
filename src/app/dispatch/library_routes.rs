@@ -153,25 +153,35 @@ impl App {
             );
             return None;
         }
-        // Writes the selected device route into config, or removes the
-        // override when the automatic (index 0) entry is chosen.
-        {
-            let mut c = self.config.lock().unwrap();
-            if let Some((_, Some(endpoint))) = device {
-                c.library_routes
-                    .insert(library_lower.to_string(), endpoint.clone());
-                tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
-            } else {
-                c.library_routes.remove(library_lower);
-                tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
-            }
-        }
+        self.write_library_route_choice(library_lower, device);
         let cfg = self.config.lock().unwrap().clone();
         self.library_routes = cfg.library_routes.clone();
         tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.library_routes.len(), "runtime route table synchronized");
-        match crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes) {
+        self.save_library_routes_or_flash(&cfg)?;
+        self.refresh_library_rows_after_save(library_lower, &cfg)
+    }
+
+    /// Writes the selected device route into config, or removes the
+    /// override when the automatic (index 0) entry is chosen.
+    fn write_library_route_choice(&self, library_lower: &str, device: Option<&DeviceRouteRow>) {
+        let mut c = self.config.lock().unwrap();
+        if let Some((_, Some(endpoint))) = device {
+            c.library_routes
+                .insert(library_lower.to_string(), endpoint.clone());
+            tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
+        } else {
+            c.library_routes.remove(library_lower);
+            tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
+        }
+    }
+
+    /// Saves the library-routes section; a failed save flashes an error and
+    /// yields `None`.
+    fn save_library_routes_or_flash(&mut self, cfg: &crate::config::Config) -> Option<()> {
+        match crate::config::save_config_section(cfg, mbv_config::ConfigSection::LibraryRoutes) {
             Ok(()) => {
                 tracing::info!(name: "library_route.config_save.succeeded", target: "library_route", "config save succeeded");
+                Some(())
             }
             Err(e) => {
                 tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error = %e }, "config save failed");
@@ -179,9 +189,18 @@ impl App {
                     format!("⚠ Library route changed but config save failed ({e})"),
                     ToastSeverity::Error,
                 );
-                return None;
+                None
             }
         }
+    }
+
+    /// Re-fetches the libraries after a save and returns the refreshed rows
+    /// with the cursor restored to `library_lower`.
+    fn refresh_library_rows_after_save(
+        &mut self,
+        library_lower: &str,
+        cfg: &crate::config::Config,
+    ) -> Option<(Vec<LibraryRouteRow>, usize)> {
         let client = self.emby_client()?;
         let refresh_result = { client.lock().unwrap().get_views() };
         let all = match refresh_result {

@@ -426,47 +426,53 @@ pub(super) fn load_state_at<T: serde::de::DeserializeOwned>(
     let value: serde_json::Value = match serde_json::from_str(&text) {
         Ok(value) => value,
         Err(e) => {
-            tracing::warn!(
-                name: "launch_state.restore.failed",
-                target: "launch_state",
-                error = %e,
-                "launch state not restored"
-            );
+            log_restore_failed(&e);
             return None;
         }
     };
-    match value
-        .get("version")
-        .map(<u32 as serde::Deserialize>::deserialize)
-    {
-        // An absent field loses nothing — the snapshot type's serde default
-        // fills the current version — so the file is read at the expected
-        // one; a wrong-typed field is reported by the structured re-read
-        // below.
-        None | Some(Err(_)) => {}
-        Some(Ok(found)) if found == expected_version => {}
-        Some(Ok(found)) => {
-            tracing::warn!(
-                name: "launch_state.restore.unsupported_version",
-                target: "launch_state",
-                version = found,
-                "launch state not restored"
-            );
-            return None;
-        }
+    if !snapshot_version_accepted(&value, expected_version) {
+        return None;
     }
     match serde_json::from_value::<T>(value) {
         Ok(state) => Some(state),
         Err(e) => {
-            tracing::warn!(
-                name: "launch_state.restore.failed",
-                target: "launch_state",
-                error = %e,
-                "launch state not restored"
-            );
+            log_restore_failed(&e);
             None
         }
     }
+}
+
+/// Gate a parsed snapshot on its `version` field. An absent or wrong-typed
+/// field passes: an absent field loses nothing (the snapshot type's serde
+/// default fills the current version), and a wrong-typed field is reported
+/// by the structured re-read in [`load_state_at`] as malformed.
+fn snapshot_version_accepted(value: &serde_json::Value, expected_version: u32) -> bool {
+    let found = match value
+        .get("version")
+        .map(<u32 as serde::Deserialize>::deserialize)
+    {
+        None | Some(Err(_)) => return true,
+        Some(Ok(found)) => found,
+    };
+    if found == expected_version {
+        return true;
+    }
+    tracing::warn!(
+        name: "launch_state.restore.unsupported_version",
+        target: "launch_state",
+        version = found,
+        "launch state not restored"
+    );
+    false
+}
+
+fn log_restore_failed(error: &serde_json::Error) {
+    tracing::warn!(
+        name: "launch_state.restore.failed",
+        target: "launch_state",
+        error = %error,
+        "launch state not restored"
+    );
 }
 
 /// Process-unique sibling path for the atomic replace: same directory (so

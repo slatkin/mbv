@@ -207,20 +207,8 @@ impl App {
     fn persist_auto_reconnect_target(&mut self) {
         let last = self.current_auto_reconnect_target();
         tracing::info!(name: "auto_reconnect.target_persist.decided", target: "auto_reconnect", target_state = ?last, left_remote_this_run = self.left_remote_this_run, "auto-reconnect persistence decision made");
-        let outcome = match last {
-            Some(last) => mbv_config::save_last_remote_connection(Some(&last)),
-            // A clear applies only when this run itself left the remote it
-            // held by an explicit user action (`left_remote_this_run`). An
-            // exit that merely had no remote at the moment -- a Client
-            // attached to the local Owner that never touched the connection,
-            // a failed or never-attempted launch restore, a Client that
-            // launched local-only, a mid-run daemon death -- must not erase
-            // the record another Client saved (#issue-local-exit-erase).
-            None if self.left_remote_this_run => mbv_config::save_last_remote_connection(None),
-            None => {
-                tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "no_remote_left_this_run", "no remote left this run; keeping the saved target");
-                return;
-            }
+        let Some(outcome) = self.save_auto_reconnect_target(last) else {
+            return;
         };
         match outcome {
             Ok(()) => {
@@ -228,6 +216,31 @@ impl App {
             }
             Err(e) => {
                 tracing::warn!(name: "auto_reconnect.target_persist.failed", target: "auto_reconnect", error = %e, "auto-reconnect state persistence failed");
+            }
+        }
+    }
+
+    /// Saves the decided target. Returns `None` when this run keeps the saved
+    /// record and writes nothing.
+    ///
+    /// A clear applies only when this run itself left the remote it held by an
+    /// explicit user action (`left_remote_this_run`). An exit that merely had
+    /// no remote at the moment -- a Client attached to the local Owner that
+    /// never touched the connection, a failed or never-attempted launch
+    /// restore, a Client that launched local-only, a mid-run daemon death --
+    /// must not erase the record another Client saved (#issue-local-exit-erase).
+    fn save_auto_reconnect_target(
+        &self,
+        last: Option<mbv_config::LastRemoteConnection>,
+    ) -> Option<Result<(), mbv_config::ConfigError>> {
+        match last {
+            Some(last) => Some(mbv_config::save_last_remote_connection(Some(&last))),
+            None if self.left_remote_this_run => {
+                Some(mbv_config::save_last_remote_connection(None))
+            }
+            None => {
+                tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "no_remote_left_this_run", "no remote left this run; keeping the saved target");
+                None
             }
         }
     }
