@@ -127,7 +127,6 @@ pub trait NetProvider: Send + Sync + 'static {
 }
 pub trait NetHandler: Send + Sync + 'static {
     fn bytes(self: Box<Self>, resolved_url: String, bytes: Bytes);
-    fn error(self: Box<Self>, url: String, error: String) {}  // default: no-op
 }
 ```
 
@@ -138,7 +137,7 @@ The image handler decodes with `image::ImageReader`, calls `into_rgba8().into_ra
 **The provider.** `MbvNetProvider` holds the core's `Sender<CoreInput>`.
 
 - `mbv-art://localhost/<path>`: the path (without its leading slash) goes into `ArtRequest { path, reply }`. The `reply` closure keeps the `handler` and the resolved URL. On `Found { bytes, .. }`, it decodes the source, scales it to a long edge of at most 512 px, encodes PNG, and calls `handler.bytes(url, Bytes::from(png))`. On `Missing`, it sends the bundled placeholder (`QUEUE_CARD_PLACEHOLDER_BYTES`, WebP) through the same call.
-- The `Missing` path does not call `handler.error`, because the 0.3 `ResourceHandler` does not implement it (G8). A placeholder answer keeps the image painted.
+- The `Missing` path does not call `handler.error`, because `NetHandler` in `blitz-traits` 0.3.0-beta.4 has no `error` method (G8). A placeholder answer keeps the image painted.
 - `mbv-asset://localhost/font/<file>`: the vendored WOFF2 bytes (`include_bytes!`), answered in place (D12).
 
 **Downscale before Blitz decodes.** The reply downscales on the core thread, so Blitz decodes a small PNG and holds a small RGBA8 copy. The probe measured the 512 px cap on a 1024×768 source: the node holds 512×384 RGBA8. The measured cost of the decode on the core thread is recorded in `measurements.md`.
@@ -215,7 +214,7 @@ The protocol uses commands only, and writes no script (AGENTS.md, Tooling). Comm
 - GPU driver share: read `/proc/<pid>/smaps` and sum the `Pss:` lines of mappings whose path names a driver library (`libvulkan`, `libGL`, `libEGL`, `libgallium`, or the NVIDIA driver libraries). Record the sum on its own line.
 - Threads: `rg '^Threads:' /proc/<pid>/status`, and `ps -L -p <pid> | wc -l` as a cross-check.
 - CPU: `/proc/<pid>/stat` fields 14 and 15 (utime and stime, in clock ticks) at two times 300 s apart, divided by 300 times `getconf CLK_TCK`.
-- Heap: a profiling build with `--features profiling`, which drops the global allocator. Run `heaptrack ./target/profiling/mbv-native`, then `heaptrack_print`, and read the peak heap.
+- Heap: build with `cargo build --release -p mbv-native --features profiling`, which drops the global allocator. Run `heaptrack ./target/release/mbv-native`, then `heaptrack_print`, and read the peak heap.
 
 The GUI baseline (2026-11-13: about 505 MB PSS, 248 MB `mbv-gui`, 222 MB `WebKitWebProcess`, 35 MB network process, heaptrack peak 59.5 MB) is the comparison. Before the spike's run, the same protocol runs against the GUI on the same machine, with the same Owner and the same item. Its thread count is the threads baseline.
 
@@ -261,7 +260,7 @@ Status values: **present** (the code path exists in the pinned crate), **absent*
 | G5 | Element geometry (`get_client_rect`) | blocks input (D10) | 0.7.10 returned `NotSupported`; 0.8.0-alpha.3 implements it through `get_client_bounding_rect` (`dioxus-native-dom` `src/events.rs`) | **present** (changed from absent in 0.7.10). |
 | G6 | `<img>` decodes to RGBA8 in the handler | every art image | `blitz-dom` 0.3.0-beta.4 `ImageHandler::parse`: `into_rgba8().into_raw()`. The 0.2 double clone is gone. Probe P4: a 512×384 raster from a 1024×768 source | **present** (no clone in 0.3). Mitigated by the downscale (D6). |
 | G7 | No replaceable image provider for renderer-owned textures | would avoid the decode | issue #896 open | **open**. |
-| G8 | Error results are dropped | missing art | `NetHandler::error` defaults to a no-op, and `ResourceHandler` implements no `error` (grep of `blitz-dom` 0.3.0-beta.4 `net.rs`) | **absent**. Mitigated by the placeholder answer (P4). Upstream draft (task 7.3). |
+| G8 | Error results are dropped | missing art | `NetHandler` in `blitz-traits` 0.3.0-beta.4 (`src/net.rs`) has only `bytes()`, so a failed fetch has no callback. `error()` exists on `blitz` `main` only: `StylesheetHandler` forwards it (PR #1318); `ImageHandler` waits on open PR #1423; `FontFaceHandler` does not forward it | **absent**. Mitigated by the placeholder answer (P4). Upstream draft (task 7.3). |
 | G9 | The launch installs its own net provider; no injection point | art and fonts in process | `dioxus-native` 0.8.0-alpha.3 `launch_cfg_with_props`; the provider type is private (`mod assets`) | **absent**. Mitigated by the launch copy (P2). Upstream draft (task 7.3). |
 | G10 | Static transforms (the `translate` centring and the thumb) | the scrubber thumb | issues #840 (transitioned transform not painted) and #663 (transform affects coordinates), both open | **verify** (no transition is used, so #840 does not apply; #663 needs the fixture run). |
 | G11 | Inline SVG (Lucide icons) | none in the queue rows; the transport buttons are out of scope | `svg` feature (`usvg` 0.48.1) is on; issues #260 and #1543 (parity) open | **present, parity open**. Verify icon output in task 6.2. |

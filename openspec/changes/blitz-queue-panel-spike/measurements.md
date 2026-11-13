@@ -56,12 +56,12 @@ The fields are utime and stime, in clock ticks. Average CPU is `((utime2 + stime
 ### 6. Heap (profiling build)
 
 ```
-cargo build -p mbv-native --features profiling
-heaptrack ./target/debug/mbv-native
+cargo build --release -p mbv-native --features profiling
+heaptrack ./target/release/mbv-native
 heaptrack_print <heaptrack data file>
 ```
 
-Read the peak heap from `heaptrack_print`. Design D16 names `./target/profiling/mbv-native`. The workspace has no Cargo profile named `profiling`, so this file uses the debug build path. Resolve the path before the run.
+Read the peak heap from `heaptrack_print`.
 
 ## GUI thread-count baseline
 
