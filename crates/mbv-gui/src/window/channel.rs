@@ -14,6 +14,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::core_thread::CoreInput;
+use crate::window::net::ArtEvent;
 
 /// One event that reaches the window's Dioxus tree from outside it (D4).
 #[derive(Debug)]
@@ -23,6 +24,9 @@ pub enum WindowEvent {
     Batch(Box<GuiSectionBatch>),
     /// The core's quit edge (D4): the root answers with the shell's close.
     Quit,
+    /// An art route answer (D7): the natural size of a found source, or the
+    /// failure of a missed one.
+    Art(ArtEvent),
     /// The window moved, resized, or its scale factor changed (D5, D9). The
     /// layout epoch reads it from task 3.5 on; the root needs no reaction
     /// before then.

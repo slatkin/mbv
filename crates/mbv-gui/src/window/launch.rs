@@ -6,9 +6,11 @@
 //! spike's `crates/mbv-native/src/launch.rs` at commit `2a0510d2a` is a
 //! reference.
 
+use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
+use blitz_traits::net::NetProvider;
 use dioxus_native::prelude::*;
 use dioxus_native::winit::application::ApplicationHandler;
 use dioxus_native::winit::event::{StartCause, WindowEvent as WinitWindowEvent};
@@ -23,6 +25,7 @@ use futures_util::StreamExt;
 
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
+use crate::window::net::MbvNetProvider;
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
@@ -52,7 +55,12 @@ pub fn root() -> Element {
                     // and the layout epoch reads the viewport from task 3.5
                     // on (D9); until then the window needs no reaction
                     // (documented no-op).
-                    WindowEvent::Batch(_) | WindowEvent::Viewport => {}
+                    // Section batches reach their sections from task 3.1 on,
+                    // art answers reach `ArtImage` from task 3.6 on (D7), and
+                    // the layout epoch reads the viewport from task 3.5 on
+                    // (D9); until then the window needs no reaction
+                    // (documented no-op).
+                    WindowEvent::Batch(_) | WindowEvent::Art(_) | WindowEvent::Viewport => {}
                 }
             }
         }
@@ -136,19 +144,23 @@ pub fn launch(
     let (proxy, event_queue) = BlitzShellProxy::new(winit_proxy);
 
     // Build the virtual DOM first; the window-bound contexts attach as root
-    // contexts, as the original copy does.
+    // contexts, as the original copy does. The net provider is this crate's
+    // (D7), and the root's context copy lets the document's fetch paths find
+    // it, as the original copy's provider context does.
     let vdom = VirtualDom::new(app);
+    let net_provider: Arc<dyn NetProvider> =
+        Arc::new(MbvNetProvider::new(core.clone(), events.clone()));
     vdom.provide_root_context(CoreLink::new(core));
+    vdom.provide_root_context(Arc::clone(&net_provider));
     vdom.provide_root_context(EventSlot::new(event_receiver));
     vdom.provide_root_context(proxy.clone());
 
     let doc = DioxusDocument::new(
         vdom,
         DocumentConfig {
-            // Task 1.5 installs `MbvNetProvider` (D7).
-            net_provider: None,
-            navigation_provider: None, // D5: no navigation provider
-            font_ctx: None,            // D5
+            net_provider: Some(net_provider), // D7
+            navigation_provider: None,        // D5: no navigation provider
+            font_ctx: None,                   // D5
             ..Default::default()
         },
     );
