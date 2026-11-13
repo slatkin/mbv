@@ -58,8 +58,10 @@ impl ImageCache {
     /// Builds a fresh cache entry for a just-fetched image: keeps the decoded
     /// source so it can be re-encoded with a different protocol picker later
     /// (#451), and encodes the protocol for the active suffix.
-    /// `img: None` records a resolved-but-empty fetch (the "no art" marker
-    /// renderers branch on).
+    /// `img: None` with a `source` is a source-only fetch (design D14): no
+    /// protocol is encoded, since no picker paints in such a Client.
+    /// `img: None` with no `source` records a resolved-but-empty fetch (the
+    /// "no art" marker renderers branch on).
     #[must_use]
     pub fn build_cached_image(
         &self,

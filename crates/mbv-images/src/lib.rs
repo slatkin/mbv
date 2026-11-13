@@ -111,7 +111,11 @@ pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
     )
 }
 pub struct CachedImage {
-    /// `None` marks a fetch that resolved without artwork.
+    /// The decoded image. `None` for a fetch that resolved without artwork,
+    /// and for every fetch a [`ImageDecode::SourceOnly`] Client keeps (design
+    /// D14): such an entry holds only `source`. Read it only where pixels are
+    /// needed; readiness and size go through [`CachedImage::has_art`] and
+    /// [`CachedImage::dimensions`].
     pub img: Option<image::DynamicImage>,
     /// The bytes `img` decoded from, as the server sent them. `Some` for a
     /// fetched image, `None` for an entry the app derived itself (a composed
@@ -143,25 +147,67 @@ impl CachedImage {
             applied_logo_key: None,
         }
     }
+
+    /// Whether the entry holds art a surface can show: the decoded image in a
+    /// pixel Client, the source bytes in a source-only Client (design D14). A
+    /// fetch that resolved without art holds neither.
+    #[must_use]
+    pub fn has_art(&self) -> bool {
+        self.img.is_some() || self.source.is_some()
+    }
+
+    /// The art's pixel size: the decoded image's, else the size the source
+    /// header declares. `None` when the entry holds no art.
+    #[must_use]
+    pub fn dimensions(&self) -> Option<(u32, u32)> {
+        self.img
+            .as_ref()
+            .map(image::GenericImageView::dimensions)
+            .or_else(|| self.source.as_ref().map(|source| source.dimensions))
+    }
 }
 
-/// An image exactly as the server sent it: its bytes and the MIME type those
-/// bytes declare. A Client that paints no terminal protocol hands these to
-/// its own image pipeline unchanged, so the pixels it shows are the pixels
-/// the terminal protocols decode.
+/// What a fetched image keeps (design D14). A Client chooses it once, when it
+/// builds its `App`, and the image fetch path applies it to every fetch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageDecode {
+    /// Decode the bytes to pixels. The TUI paints them through its terminal
+    /// protocols, which need the pixels.
+    Pixels,
+    /// Keep the source bytes and read the size from the header; decode no
+    /// pixels. The GUI paints the server's bytes, so it holds no decoded
+    /// image.
+    SourceOnly,
+}
+
+/// An image exactly as the server sent it: its bytes, the MIME type those
+/// bytes declare, and the size the header declares. A Client that paints no
+/// terminal protocol hands these to its own image pipeline unchanged, so the
+/// pixels it shows are the pixels the terminal protocols decode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceImage {
     pub bytes: Vec<u8>,
     pub mime: &'static str,
+    /// The pixel size the header of `bytes` declares, read without decoding
+    /// the pixels.
+    pub dimensions: (u32, u32),
 }
 
 impl SourceImage {
     /// The image `bytes` hold, or `None` when they are not a recognised image
-    /// format.
+    /// format or their header declares no size. Reads the header only.
     #[must_use]
     pub fn sniff(bytes: Vec<u8>) -> Option<Self> {
-        let mime = image::guess_format(&bytes).ok()?.to_mime_type();
-        Some(Self { bytes, mime })
+        let reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()
+            .ok()?;
+        let mime = reader.format()?.to_mime_type();
+        let dimensions = reader.into_dimensions().ok()?;
+        Some(Self {
+            bytes,
+            mime,
+            dimensions,
+        })
     }
 }
 
@@ -169,7 +215,9 @@ impl SourceImage {
 #[derive(Debug)]
 pub enum ImageFetchOutcome {
     Image {
-        img: image::DynamicImage,
+        /// The decoded image, `None` when the fetch kept the source only
+        /// ([`ImageDecode::SourceOnly`]).
+        img: Option<image::DynamicImage>,
         source: SourceImage,
     },
     /// The server answered and no usable image exists. Final.

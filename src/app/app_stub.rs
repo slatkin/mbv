@@ -601,6 +601,7 @@ fn built_app(
         use_nerd_fonts: false,
         indicator_style: mbv_render::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
+        image_decode: mbv_images::ImageDecode::Pixels,
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
         card_image_tx,
         card_image_rx,

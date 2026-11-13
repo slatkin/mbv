@@ -390,7 +390,7 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
             OwnerState::Refuse => pin::fatal(owner_link::refusal_text()),
         }
 
-        match owner_link::attach_owner(config, None) {
+        match owner_link::attach_owner(config, None, mbv_images::ImageDecode::Pixels) {
             Ok(app) => {
                 run_tui(app);
                 return;

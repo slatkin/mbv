@@ -31,6 +31,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) indicator_style: mbv_render::indicators::IndicatorStyle,
     pub(in crate::app) image_cache_size: usize,
+    pub(in crate::app) image_decode: mbv_images::ImageDecode,
     pub(in crate::app) visualizer_glyph: String,
     pub(in crate::app) card_image_tx: mpsc::Sender<(String, mbv_images::ImageFetchOutcome)>,
     pub(in crate::app) card_image_rx: mpsc::Receiver<(String, mbv_images::ImageFetchOutcome)>,

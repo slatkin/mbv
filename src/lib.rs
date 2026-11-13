@@ -59,6 +59,7 @@ pub use self::owner_link::{
     find_owner, refusal_text, start_owner,
 };
 pub use self::startup::run;
+pub use mbv_images::ImageDecode;
 pub use mbv_ui_msg::TrackChipKind;
 
 /// The `App` stub construction a Client's own tests build their `App` from

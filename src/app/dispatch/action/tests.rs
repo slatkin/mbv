@@ -150,6 +150,7 @@ fn remote_app_without_service_setup_opens_services_settings() {
         player_rx,
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         crate::config::Config::default(),
+        mbv_images::ImageDecode::Pixels,
     );
 
     assert_eq!(

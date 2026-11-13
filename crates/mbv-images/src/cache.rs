@@ -306,7 +306,7 @@ impl ImageCache {
         self.interrupted_fetches.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
         self.remove_derived_variants_for(&key);
-        if entry.img.is_some() {
+        if entry.has_art() {
             self.image_lru.retain(|cached| cached != &key);
             self.image_lru.push_back(key.clone());
             while self.image_lru.len() > self.cache_size_total {

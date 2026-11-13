@@ -175,10 +175,14 @@ impl App {
         let Some(GuiLibraryArtwork::Image { key, .. }) = art else {
             return declared;
         };
-        let Some(img) = self.images.image(key).and_then(|entry| entry.img.as_ref()) else {
+        let Some((width, height)) = self
+            .images
+            .image(key)
+            .and_then(mbv_images::CachedImage::dimensions)
+        else {
             return declared;
         };
-        painted_shape_for_pixels(img.width(), img.height())
+        painted_shape_for_pixels(width, height)
     }
 
     /// The Hero's artwork for the artwork policy's declared Emby source

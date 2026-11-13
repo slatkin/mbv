@@ -537,7 +537,7 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
     }
 
     fn attach(&self, program: &Path) -> Result<App, RemotePlayerError> {
-        attach_owner(self.config, Some(program))
+        attach_owner(self.config, Some(program), mbv::ImageDecode::SourceOnly)
     }
 
     fn wait_tick(&self) -> OwnerWait {

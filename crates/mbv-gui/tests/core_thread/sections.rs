@@ -223,7 +223,7 @@ fn land_card_image(test: &mut TestCore) {
     test.core.app_mut().enable_card_images_for_test();
     test.core.app_mut().complete_card_image_for_test(
         &mbv_images::emby_card_cache_key("alb-paul", ""),
-        image::DynamicImage::new_rgb8(4, 4),
+        &image::DynamicImage::new_rgb8(4, 4),
     );
 }
 

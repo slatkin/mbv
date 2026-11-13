@@ -226,15 +226,17 @@ impl App {
         );
     }
 
-    /// Deliver `key`'s image as a completed fetch would (add-gui-library-panel
-    /// design D13): the next tick's card-image drain lands it in the cache, so
-    /// a frame test observes the art with no request and no thread.
+    /// Deliver `key`'s image as a completed GUI fetch would (add-gui-library-panel
+    /// design D13, design D14 of `gui-change-driven-sections`): the outcome
+    /// keeps the source bytes and no decoded image, so the next tick's
+    /// card-image drain lands it in the cache the way the GUI Client does,
+    /// with no request and no thread.
     #[cfg(feature = "test")]
-    pub fn complete_card_image_for_test(&self, key: &str, img: image::DynamicImage) {
-        let source = crate::app::queue_card_artwork::test_source(&img);
+    pub fn complete_card_image_for_test(&self, key: &str, img: &image::DynamicImage) {
+        let source = crate::app::queue_card_artwork::test_source(img);
         let _ = self.images.card_image_tx().send((
             key.to_string(),
-            mbv_images::ImageFetchOutcome::Image { img, source },
+            mbv_images::ImageFetchOutcome::Image { img: None, source },
         ));
     }
 

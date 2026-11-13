@@ -171,7 +171,7 @@ fn the_hero_art_rides_the_section_after_the_image_lands() {
     test.core.app_mut().enable_card_images_for_test();
     test.core.app_mut().complete_card_image_for_test(
         &mbv_images::emby_card_cache_key("alb-paul", ""),
-        image::DynamicImage::new_rgb8(4, 4),
+        &image::DynamicImage::new_rgb8(4, 4),
     );
     test.waker.wake();
     assert!(test.core.step());
