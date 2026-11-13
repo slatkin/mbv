@@ -158,7 +158,7 @@ fn a_tall_container_renders_the_expanded_artboard() {
         "the expanded state paints"
     );
     assert!(
-        fixture.presents("[data-panel-child=\"QueuePanel\"]"),
+        fixture.presents("[data-queue-list]"),
         "the expanded artboard paints the queue rows"
     );
     assert!(
@@ -207,7 +207,7 @@ fn the_queue_fold_toggle_replaces_the_queue_rows_with_the_folded_summary() {
         "the folded state paints the one-line summary"
     );
     assert!(
-        !fixture.presents("[data-panel-child=\"QueuePanel\"]"),
+        !fixture.presents("[data-queue-list]"),
         "the folded state paints no queue rows"
     );
 }
