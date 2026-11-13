@@ -33,6 +33,11 @@ use crate::window::net::MbvNetProvider;
 /// desktop entry still matches.
 const APP_ID: &str = "io.github.slatkin.mbv-gui";
 
+/// The generated stylesheet (D11): `make gui-css` builds it from
+/// `assets/app.css` over the Rust sources, and the output is committed. Task
+/// 4.1 moves the mount into `window/app.rs` with the cell-unit rule first.
+const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
+
 /// The window's temporary root (task 4.1 ports `App.svelte` over it): it
 /// renders an empty element and drains the window channel (D4), answering
 /// [`WindowEvent::Quit`] with the shell's close (D4, D5).
@@ -69,7 +74,9 @@ pub fn root() -> Element {
             }
         }
     });
-    rsx! {}
+    rsx! {
+        style { dangerous_inner_html: APP_GENERATED_CSS }
+    }
 }
 
 /// The dioxus-native application with its window event handler wrapped (D5):
