@@ -131,6 +131,10 @@ GUI Client:
 The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters and translates its raw input into neutral events.
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
+Blitz Client:
+The Client kind that presents a native window through the Blitz renderer, in process. It exists only as the spike of change `blitz-queue-panel-spike`. It is a Client like every other: it attaches to an out-of-process Player owner over ctrl, and it never touches mpv. It presents only the Queue panel, and it sends no input. It is not the GUI Client. A full replacement would fold the Blitz Client into the GUI Client. Its program is `mbv-native`.
+_Avoid_: GUI Client (for this kind), Blitz window, native spike
+
 Client core:
 The layer of interaction behaviour that the TUI Client and the GUI Client share for the surfaces that both present. It holds each of their interaction rules one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. For those surfaces a Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events, and it never reimplements an interaction rule. A surface that one Client presents alone, such as the *GUI Library panel*, keeps its rules in that Client.
 _Avoid_: core (bare), shared UI layer, interaction layer (bare)
