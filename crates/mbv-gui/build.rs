@@ -10,6 +10,11 @@
 //! test `crates/mbv-gui/tests/capabilities.rs`).
 
 fn main() {
+    // D3 (replace-tauri-with-blitz): the Tauri build inputs only matter for the
+    // Tauri binary; the Blitz build runs with no build script work.
+    if std::env::var_os("CARGO_FEATURE_TAURI").is_none() {
+        return;
+    }
     // The failure path mirrors `tauri_build::build`'s own: print the error
     // and end the build script with a nonzero exit, no panic.
     let attributes =

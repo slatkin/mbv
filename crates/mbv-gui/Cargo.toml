@@ -10,6 +10,22 @@ categories.workspace = true
 description = "Native window Client for mbv, built with Tauri 2."
 readme = "../../README.md"
 
+[features]
+default = ["tauri", "blitz"]
+tauri = ["dep:tauri"]
+# Filled with the D2 window dependencies in row 1.2.
+blitz = []
+
+[[bin]]
+name = "mbv-gui"
+path = "src/main.rs"
+required-features = ["tauri"]
+
+[[bin]]
+name = "mbv-gui-blitz"
+path = "src/bin/mbv_gui_blitz.rs"
+required-features = ["blitz"]
+
 [lints]
 workspace = true
 
@@ -32,7 +48,7 @@ mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
-tauri = "=2.12.5"
+tauri = { version = "=2.12.5", optional = true }
 tracing.workspace = true
 
 [build-dependencies]
