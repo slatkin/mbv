@@ -428,3 +428,16 @@ fn a_blur_forwards_the_neutral_cancel() {
     assert_eq!(event.kind, PointerKind::Cancel);
     assert_eq!((event.position.x, event.position.y), (0.0, 0.0));
 }
+
+/// A coordinate or delta that is not finite, or that lies outside `f32`'s
+/// range, reads as the neutral 0.0 — none of it round-trips as NaN or an
+/// infinity the neutral position cannot name (review P2-1 of
+/// replace-tauri-with-blitz).
+#[test]
+fn a_non_finite_or_out_of_range_value_reads_as_the_neutral_zero() {
+    assert_eq!(super::f32_from_f64(f64::NAN), 0.0);
+    assert_eq!(super::f32_from_f64(f64::INFINITY), 0.0);
+    assert_eq!(super::f32_from_f64(f64::NEG_INFINITY), 0.0);
+    assert_eq!(super::f32_from_f64(1.0e300), 0.0);
+    assert_eq!(super::f32_from_f64(-1.0e300), 0.0);
+}

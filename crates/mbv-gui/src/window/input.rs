@@ -188,10 +188,13 @@ pub fn on_wheel(event: &WheelData, viewport_height: f64, link: &CoreLink) {
     send_pointer(dom_wheel(event, viewport_height), link);
 }
 
-/// The context-menu forward (D8): the webview's own menu does not run, and
-/// the press goes to the core as the pointerdown does.
-pub fn on_contextmenu(event: &PointerData, link: &CoreLink) {
-    send_pointer(dom_pointer(DomPointerKind::Press, event), link);
+/// The context-menu default (D8): the webview's own menu does not run — the
+/// job `App.svelte`'s `preventContextMenu` did. No pointer is forwarded:
+/// the right click's `pointerdown` already carried the press to the core,
+/// and a second forward would duplicate the neutral right press (input.ts
+/// has no contextmenu listener for the same reason).
+pub fn on_contextmenu(event: &PointerEvent) {
+    event.prevent_default();
 }
 
 /// The `pointercancel` forward (D8): the window lost the gesture, so the
@@ -224,10 +227,18 @@ fn send_pointer(pointer: DomPointer, link: &CoreLink) {
 /// The DOM's `clientX`/`clientY` are `f64` at the Dioxus layer, and the wheel
 /// delta is `f64`; the wire `DomPointer` and the neutral `Position` are `f32`
 /// — the same rounding the webview's serde deserialization did. A coordinate
-/// or delta that is not finite, or that does not fit `f32`'s range, reads as
+/// or delta that is not finite, or that lies outside `f32`'s range, reads as
 /// the neutral 0.0.
 fn f32_from_f64(value: f64) -> f32 {
-    num_traits::cast(value).unwrap_or(0.0)
+    // The checked cast alone is not enough: num-traits' f64→f32 answer is
+    // `Some(value as f32)` for every value, so a non-finite or out-of-range
+    // value would round-trip NaN or infinity through. The range bound is the
+    // widened `f32::MAX`, exact in f64.
+    if value.is_finite() && value.abs() <= f64::from(f32::MAX) {
+        num_traits::cast(value).unwrap_or(0.0)
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
