@@ -74,7 +74,7 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 ## 10. The GUI does not decode images
 
 - [x] 10.1 Add the per-Client decode setting to the image fetch path (design D14): the GUI Client keeps the source bytes and the header size and no decoded image; the TUI is unchanged. Make every GUI-path read of `CachedImage::img` (card readiness, Music artist detail, Library art shape) read the source or the header size instead. Verify: `cargo nextest run -p mbv -p mbv-gui`; `cargo clippy --workspace --all-targets -- -D warnings`. Test contract: in the existing image-fetch protocol tests, a GUI-mode fetch caches the source and no decoded image, and a TUI-mode fetch still decodes.
-- [ ] 10.2 Re-run the `heaptrack` check of the GUI and add the decode site's peak before and after to `measurements.md`. Verify: the decode site no longer appears in the GUI's peak heap.
+- [x] 10.2 Re-run the `heaptrack` check of the GUI and add the decode site's peak before and after to `measurements.md`. Verify: the decode site no longer appears in the GUI's peak heap.
 
 ## Workflow follow-up
 

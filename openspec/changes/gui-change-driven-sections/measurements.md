@@ -211,3 +211,14 @@ the scroll store, and the rows come back from the memo, so the clamp is the
 only work left.
 
 **Music bench check (after task 9.1).** In one session, `music_grouped` ran 259.8 µs at HEAD `bae0a17e4` and 276.2 µs with the task 7.1 and 7.2 code put back to `dbcc74804`. The pre-7.x code is not faster, so tasks 7.1 and 7.2 did not cause the rise against the task 6.6 run (242.3 µs). The `music_grouped` code at `dbcc74804` is the same as at the task 6.6 run, so the same code gave 242.3 µs in that session and 276.2 µs in this one. The cause of that difference between sessions is not known.
+
+## Task 10.2: the GUI does not decode images
+
+`heaptrack` runs of a release `mbv-gui` with the system allocator and line-level symbols (mimalloc removed only for the profiling build), one Library visit and video playback each. Peak heap is the live heap at its highest point, Rust and C together.
+
+| Run | Length | Peak heap | `decode_fetched` at peak | Image fetch thread at peak |
+| --- | --- | --- | --- | --- |
+| Before (HEAD `82bb0540d`) | 4.5 min | 63.66 MB | 8.99 MB | 9.35 MB |
+| After (HEAD `d2e2b053a`) | 18.6 min | 59.52 MB | not present | 0.36 MB |
+
+The decode site no longer appears in the GUI's peak heap. The rest of the peak is mostly C code on the GTK main thread (about 34 MB in both runs) and WebKit's GL context.

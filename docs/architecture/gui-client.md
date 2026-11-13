@@ -147,7 +147,9 @@ bytes, so the section does not grow with the artwork. The `mbv-art` scheme
 answers a cached key with 200, the source's own MIME type, and
 `Cache-Control: max-age=31536000, immutable`; a key with no entry answers 404
 with `Cache-Control: no-store`, so the webview asks the core again on its next
-load. The panel
+load. The GUI attaches with `ImageDecode::SourceOnly`, so its image cache keeps
+only the server bytes and the size from the image header, and never decodes
+pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
 element's resizes report the regions a swapped bitmap moved.
 
