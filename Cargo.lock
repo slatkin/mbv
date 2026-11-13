@@ -4777,6 +4777,7 @@ dependencies = [
  "mbv-ui-model",
  "mbv-ui-msg",
  "mimalloc",
+ "num-traits",
  "parley",
  "rstest",
  "serde",

@@ -10,7 +10,7 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::Sections;
+use super::{Sections, fresh_footer, fresh_queue, fresh_summary};
 use crate::bridge::frame::chrome::GuiQueueFooter;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -22,7 +22,7 @@ fn summary_batch(revision: u64, remaining: usize) -> GuiSectionBatch {
             revision,
             value: GuiQueueSummary {
                 remaining,
-                ..summary_fresh()
+                ..fresh_summary()
             },
         }),
         ..GuiSectionBatch::default()
@@ -54,46 +54,6 @@ fn footer_batch(revision: u64, owner_live: bool) -> GuiSectionBatch {
             },
         }),
         ..GuiSectionBatch::default()
-    }
-}
-
-/// A fresh summary, the same values the store starts from.
-fn summary_fresh() -> GuiQueueSummary {
-    GuiQueueSummary {
-        remaining: 0,
-        next_title: None,
-        tail_secs: None,
-        right_column: crate::bridge::frame::queue::GuiRightColumn::Length,
-        filter: String::new(),
-        filter_active: false,
-    }
-}
-
-/// A fresh queue, the same values the store starts from.
-fn fresh_queue() -> GuiQueue {
-    GuiQueue {
-        rows: Vec::new(),
-        cursor: None,
-        marks: Vec::new(),
-        active: None,
-        hover: None,
-        drag: None,
-    }
-}
-
-/// A fresh footer, the same values the store starts from.
-fn fresh_footer() -> GuiQueueFooter {
-    let pill = crate::bridge::frame::chrome::GuiFooterPill {
-        text: String::new(),
-        role: crate::bridge::frame::theme::GuiRole::TextPrimary,
-        bold: false,
-    };
-    GuiQueueFooter {
-        owner: pill.clone(),
-        owner_live: false,
-        playlist: pill,
-        autosave: None,
-        dirty: None,
     }
 }
 

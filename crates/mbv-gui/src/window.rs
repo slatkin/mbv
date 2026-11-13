@@ -7,6 +7,7 @@ pub mod cells;
 pub mod channel;
 pub mod clock;
 pub mod icons;
+pub mod input;
 pub mod launch;
 pub mod net;
 pub mod playhead;

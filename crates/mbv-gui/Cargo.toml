@@ -25,6 +25,7 @@ blitz = [
   "dep:image",
   "dep:unicode-segmentation",
   "dep:time",
+  "dep:num-traits",
 ]
 
 [[bin]]
@@ -94,6 +95,10 @@ futures-util = { version = "=0.3.34", optional = true, default-features = false,
 image = { workspace = true, optional = true, features = ["png", "jpeg", "webp"] }
 # Grapheme boundaries for the ellipsis cut (D12).
 unicode-segmentation = { version = "1.13", optional = true }
+# The Dioxus event data's f64 coordinates and wheel deltas narrow to the wire
+# `DomPointer`'s f32 through num-traits' checked cast (D8), which the blitz
+# tree already carries.
+num-traits = { version = "0.2", optional = true, default-features = false }
 # The playhead's wall clocks and the local zone they paint in (D10): the
 # workspace `time` crate the TUI's projections share, with `local-offset` for
 # the window's own zone.
