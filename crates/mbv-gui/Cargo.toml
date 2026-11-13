@@ -23,6 +23,7 @@ blitz = [
   "dep:futures-channel",
   "dep:futures-util",
   "dep:image",
+  "dep:unicode-segmentation",
 ]
 
 [[bin]]
@@ -90,6 +91,8 @@ futures-channel = { version = "=0.3.34", optional = true }
 futures-util = { version = "=0.3.34", optional = true, default-features = false, features = ["std"] }
 # Art headers for the natural size (D7).
 image = { workspace = true, optional = true, features = ["png", "jpeg", "webp"] }
+# Grapheme boundaries for the ellipsis cut (D12).
+unicode-segmentation = { version = "1.13", optional = true }
 
 [build-dependencies]
 tauri-build = "=2.7.4"

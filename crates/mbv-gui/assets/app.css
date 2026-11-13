@@ -3,8 +3,12 @@
 @import "./vendor/shadcn-svelte/tailwind.css";
 
 /* The Rust sources hold every class string now (replace-tauri-with-blitz
-   design D11): Tailwind scans the window half instead of the Svelte tree. */
+   design D11): Tailwind scans the window half instead of the Svelte tree.
+   The vendor directory is out of the scan: its licence notices are prose
+   (the ISC list names `zoom-out`, which is not a class the window uses) and
+   its utility definitions arrive through the imports above. */
 @source "../src/window";
+@source not "./vendor";
 
 /* The six Latin faces the binary bundles (D11), served in process through
    the net provider's `mbv-asset` font route (D7). The webview's package CSS

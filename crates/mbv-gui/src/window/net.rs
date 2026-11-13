@@ -140,8 +140,9 @@ fn fetch_font(url: &Url, handler: Box<dyn NetHandler>) {
 }
 
 /// The vendored WOFF2 bytes for `file` (D7, D11): the six Latin faces (weights
-/// 400, 500, 600) of `IBM Plex Sans` and `JetBrains Mono` 5.3.0.
-fn font_bytes(file: &str) -> Option<&'static [u8]> {
+/// 400, 500, 600) of `IBM Plex Sans` and `JetBrains Mono` 5.3.0. The ellipsis
+/// measure (`window/truncate.rs`) registers the same bytes.
+pub(crate) fn font_bytes(file: &str) -> Option<&'static [u8]> {
     match file {
         "ibm-plex-sans-latin-400-normal.woff2" => Some(FONT_IBM_PLEX_SANS_400),
         "ibm-plex-sans-latin-500-normal.woff2" => Some(FONT_IBM_PLEX_SANS_500),

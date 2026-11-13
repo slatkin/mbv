@@ -4784,6 +4784,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tracing",
+ "unicode-segmentation",
 ]
 
 [[package]]
