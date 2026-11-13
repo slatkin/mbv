@@ -3,9 +3,13 @@
 //! port lands them. One Rust module per Svelte component or TypeScript
 //! module under `crates/mbv-gui/ui/src/` (D15).
 
+pub mod cells;
 pub mod channel;
 pub mod clock;
 pub mod icons;
 pub mod launch;
 pub mod net;
+pub mod sections;
+pub mod status;
+pub mod theme;
 pub mod truncate;

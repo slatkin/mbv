@@ -265,6 +265,60 @@ impl GuiRole {
         Self::PillSelectedFg,
         Self::PillOverflowFg,
     ];
+
+    /// The role's camelCase name, spelled out for the window's CSS
+    /// custom-property writer (`window/theme.rs`): the same name the serde
+    /// `rename_all = "camelCase"` gives the wire shape, which stays the
+    /// authority this match must not drift from.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TextPrimary => "textPrimary",
+            Self::TextSecondary => "textSecondary",
+            Self::TextMuted => "textMuted",
+            Self::TextStrong => "textStrong",
+            Self::TextEmphasis => "textEmphasis",
+            Self::TabSelectedUnderline => "tabSelectedUnderline",
+            Self::TextFocusAccent => "textFocusAccent",
+            Self::TextHeroTitle => "textHeroTitle",
+            Self::WorkspaceHeaderFg => "workspaceHeaderFg",
+            Self::TextOnAccent => "textOnAccent",
+            Self::TextAccentMuted => "textAccentMuted",
+            Self::PlaylistLoadedFg => "playlistLoadedFg",
+            Self::TextDetailMeta => "textDetailMeta",
+            Self::TextMetadata => "textMetadata",
+            Self::SelectedRowFg => "selectedRowFg",
+            Self::SelectedRowProgressFg => "selectedRowProgressFg",
+            Self::StatusError => "statusError",
+            Self::StatusAvailable => "statusAvailable",
+            Self::Duration => "duration",
+            Self::SplitRowContextFg => "splitRowContextFg",
+            Self::SplitRowTitleFg => "splitRowTitleFg",
+            Self::IndicatorResolutionFg => "indicatorResolutionFg",
+            Self::IndicatorAudioFg => "indicatorAudioFg",
+            Self::PlaybackValueFg => "playbackValueFg",
+            Self::PlaybackMetaFg => "playbackMetaFg",
+            Self::PlaybackTitleFg => "playbackTitleFg",
+            Self::PlaybackContextFg => "playbackContextFg",
+            Self::PlaybackHostRemoteFg => "playbackHostRemoteFg",
+            Self::PlaybackTargetLocalFg => "playbackTargetLocalFg",
+            Self::PlaybackTargetRemoteFg => "playbackTargetRemoteFg",
+            Self::IdleFeedTitleFg => "idleFeedTitleFg",
+            Self::ProgressTrack => "progressTrack",
+            Self::ProgressPercent => "progressPercent",
+            Self::GroupHeadingFg => "groupHeadingFg",
+            Self::EmptyQueueFg => "emptyQueueFg",
+            Self::Scrollbar => "scrollbar",
+            Self::SidebarScrollbar => "sidebarScrollbar",
+            Self::HeroOverviewSeparator => "heroOverviewSeparator",
+            Self::HeroCreditsName => "heroCreditsName",
+            Self::Accent => "accent",
+            Self::AccentActive => "accentActive",
+            Self::AccentAudiobookshelf => "accentAudiobookshelf",
+            Self::PillSelectedFg => "pillSelectedFg",
+            Self::PillOverflowFg => "pillOverflowFg",
+        }
+    }
 }
 
 impl From<Role> for GuiRole {
