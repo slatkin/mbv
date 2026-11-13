@@ -10,8 +10,8 @@
 //! (plus one `lucide-<alias>` per alias), and the icon's child elements. The
 //! ports keep those attributes and class lists character for character, so
 //! the ported tests that query `svg.lucide-check` and friends keep working.
-//! Call sites that pass more props (`color`, `fill`, `strokeWidth`) port when
-//! their task lands; the shared shell already names them in the attributes it
+//! Call sites that pass more props (`color`, `fill`, `strokeWidth`) pass the
+//! same values here; the shared shell names them in the attributes it
 //! writes.
 
 use dioxus_native::prelude::*;
@@ -31,6 +31,14 @@ pub struct IconProps {
     /// Lucide's default is `currentColor`.
     #[props(default = "currentColor".to_owned())]
     pub color: String,
+    /// The svg's fill, as a Svelte call site's `fill={...}` value. Lucide's
+    /// default is `none`.
+    #[props(default = "none".to_owned())]
+    pub fill: String,
+    /// The svg's stroke width, as a Svelte call site's `strokeWidth={...}`
+    /// value. Lucide's default is 2.
+    #[props(default = 2.0)]
+    pub stroke_width: f32,
 }
 
 impl std::fmt::Debug for IconProps {
@@ -39,6 +47,8 @@ impl std::fmt::Debug for IconProps {
             .field("class", &self.class)
             .field("size", &self.size)
             .field("color", &self.color)
+            .field("fill", &self.fill)
+            .field("stroke_width", &self.stroke_width)
             .finish()
     }
 }
@@ -61,15 +71,17 @@ fn icon_shell(
     }
     let size = props.size;
     let stroke = &props.color;
+    let fill = &props.fill;
+    let stroke_width = props.stroke_width;
     rsx! {
         svg {
             xmlns: "http://www.w3.org/2000/svg",
             width: "{size}",
             height: "{size}",
             view_box: "0 0 24 24",
-            fill: "none",
+            fill: "{fill}",
             stroke: "{stroke}",
-            stroke_width: "2",
+            stroke_width: "{stroke_width}",
             stroke_linecap: "round",
             stroke_linejoin: "round",
             class: "{class}",

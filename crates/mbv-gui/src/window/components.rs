@@ -15,3 +15,4 @@ pub mod queue_footer;
 pub mod queue_panel;
 pub mod queue_playback_panel;
 pub mod settings_screen;
+pub mod track_chips;
