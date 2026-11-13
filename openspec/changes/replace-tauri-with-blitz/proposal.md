@@ -16,7 +16,7 @@ The GUI Client runs in a Tauri 2 window: a WebKitGTK webview that runs a Svelte 
 - A window-content reload no longer exists. The window asks for every section when it opens, as before.
 - At the end of the change, Tauri, WebKitGTK, the Svelte front end, `tauri.conf.json`, the Node build, and the pnpm and webkit2gtk steps in CI and packaging are deleted. **BREAKING** (packaging): the packages no longer depend on WebKitGTK 4.1. They depend on the Vulkan loader and fontconfig.
 - Until that last step, the Tauri program still builds behind a default Cargo feature, so the GUI stays usable while the port runs.
-- The `blitz-queue-panel-spike` change leaves the repository: its directory under `openspec/changes/` is deleted, and its branch and PR are not merged.
+- The `blitz-queue-panel-spike` change is not merged. Its directory left `openspec/changes/` with this proposal's commit (`ceed22764`).
 - A new ADR records the move to Dioxus Native on Blitz. It keeps the decisions of ADRs 0036, 0037, and 0038 and replaces their webview transport.
 
 ## Capabilities

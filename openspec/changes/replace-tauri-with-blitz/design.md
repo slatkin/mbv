@@ -77,7 +77,7 @@ Both features are default, so `cargo clippy --workspace --all-targets` and `carg
 `main` installs the app log as today (`mbv-gui.log`), then calls `core_thread::spawn(sink, quit)` as the Tauri `setup` does.
 
 - **Sink:** `Box<dyn Fn(GuiSectionBatch) + Send>` that calls `unbounded_send(WindowEvent::Batch(batch))` on the window channel (`futures_channel::mpsc::UnboundedSender<WindowEvent>`). The batch is the Rust value. No serde runs.
-- **Quit:** sends `WindowEvent::Quit`. The root component answers it by closing the window through the Dioxus window handle. This replaces `window.close()`.
+- **Quit:** sends `WindowEvent::Quit`. The Dioxus window handle (`use_window()`, a winit `Window`) has no close, so the root answers `Quit` by sending `BlitzShellEvent::CloseWindow { window_id }` through the `BlitzShellProxy` that the launch copy (D5) provides as a context value. The shell handles that event as it handles `WindowEvent::CloseRequested`, so the event loop ends and the close path below runs. This replaces `window.close()`.
 - **Inputs:** the window holds the core's `Sender<CoreInput>` in a context value (`CoreLink`). Every former Tauri command is a method on it: `key(KeyEvent)`, `pointer(PointerEvent)`, `layout(LayoutReport)`, `library(LibraryCommand)`, `settings(SettingsCommand)`, `sync()`. A failed send logs and drops, as `push` does today.
 - **Close:** when the event loop ends, `main` sends `CoreInput::Close` and joins the core thread, as today.
 
@@ -85,12 +85,13 @@ Both features are default, so `cargo clippy --workspace --all-targets` and `carg
 
 ### D5. The launch copy
 
-`window/launch.rs` copies the body of `launch_cfg_with_props` from `dioxus-native` 0.8.0-alpha.3 (about 100 lines; the spike's `launch.rs` is the source). It changes four things:
+`window/launch.rs` copies the body of `launch_cfg_with_props` from `dioxus-native` 0.8.0-alpha.3 (about 100 lines). The spike's copy, `crates/mbv-native/src/launch.rs` at commit `2a0510d2a`, is a reference while that commit is reachable; the pinned crate source is the authority. It changes five things:
 
 1. It installs `MbvNetProvider` (D7) as the document's net provider, and `navigation_provider: None`.
 2. It wraps the application's window event handler: on `Resized` and `ScaleFactorChanged` it sends `WindowEvent::Viewport` after the shell handles the event (D9), and on `RedrawRequested` it sends `WindowEvent::Frame` while a frame is wanted (D10).
 3. Window attributes: title `mbv`, the Wayland app id `io.github.slatkin.mbv-gui` (the GUI's current id, so the desktop entry still matches), set through `WindowAttributesWayland::with_name`.
-4. It creates no tokio runtime.
+4. It provides the `BlitzShellProxy` it creates to the root as a context value, for the Quit close (D4).
+5. It creates no tokio runtime.
 
 Renderer options: `base_color`, `alpha_mode`, `features`, and `limits` are `None`, as in the spike. `font_ctx` is `None`.
 
@@ -98,11 +99,13 @@ Renderer options: `base_color`, `alpha_mode`, `features`, and `limits` are `None
 
 `window/app.rs` is the port of `App.svelte` and `main.ts`. It mounts the stylesheet (D11), the theme style (below), and the attach, overlay, Library, Settings, and player trees exactly as `App.svelte` composes them. On first mount it calls `CoreLink::sync()`, as `App.svelte` calls `sync`.
 
-`window/sections.rs` is the port of `lib/bridge/sections.ts`: one `Signal` for each section, a revision check that ignores a section at or below the held revision, and one write pass for a batch. All writes of one batch happen in one task poll, so Dioxus renders the batch once and no frame shows half a batch (ADR 0038).
+`window/sections.rs` is the port of `lib/bridge/sections.ts`: one `Signal` for each section, a revision check that ignores a section at the held revision (an equal revision, as `applyBatch` checks; a different revision, lower or higher, is written), and one write pass for a batch. All writes of one batch happen in one task poll, so Dioxus renders the batch once and no frame shows half a batch (ADR 0038).
 
 `window/theme.rs` is the port of `lib/bridge/theme.ts`: it renders a `style` element whose `:root` rule sets each `--mbv-<name>` custom property from the theme section. `app.css`'s fallbacks stay, so the chrome paints before the first theme.
 
-The TypeScript type mirrors (`lib/bridge/types.ts`, `library-types*.ts`, `settings-types.ts`, `theme-types.ts`, `art.ts`, `cells.ts`, `status.ts`) are not ported. The window reads the Rust types in `bridge/` directly.
+`window/cells.rs` is the port of `lib/bridge/cells.ts`: `CELL_ROW_PX = 28`, `CELL_COL_PX = 14`, and the root style that writes `--mbv-cell-row` and `--mbv-cell-col`. The root renders that rule in the same `style` element as the stylesheet, before any other child, so the first paint resolves every `calc()` over the two properties, as `applyCellUnit` in `main.ts` does before mount. `window/status.rs` is the port of `lib/bridge/status.ts`: `toast_color(severity)`, with the same four `var(--mbv-…)` values, for the Queue footer, the Library Status bar, and the Settings Status bar.
+
+The TypeScript type mirrors (`lib/bridge/types.ts`, `library-types*.ts`, `settings-types.ts`, `theme-types.ts`, `art.ts`) are not ported. The window reads the Rust types in `bridge/` directly.
 
 ### D7. Art, fonts, and the net provider
 
@@ -112,7 +115,7 @@ The TypeScript type mirrors (`lib/bridge/types.ts`, `library-types*.ts`, `settin
 - `mbv-asset://localhost/font/<file>`: answers the six bundled WOFF2 files (D11) from `include_bytes!`.
 - Any other URL: dropped with a debug log.
 
-`window/art_image.rs` is the port of `ArtImage.svelte`. The webview's `onerror` becomes `ArtEvent::Failed` for the painted URL, and the image's natural size (`capToNaturalSize`, `lib/bridge/natural-size.ts`) comes from `ArtEvent::Loaded`. The retry keeps its rules: the fill paints, the wait starts at 1 s and doubles to a 30 s cap (D10's timer), and when it ends the `img` element is recreated with the same `src`, so Blitz requests it again. A new URL drops the failure and its timer. Invariant 27 stays true: a missing key paints the loading fill and asks the core again later.
+`window/art_image.rs` is the port of `ArtImage.svelte`. The webview's `onerror` becomes `ArtEvent::Failed` for the painted URL, and the image's natural size (`capToNaturalSize`, `lib/bridge/natural-size.ts`) comes from `ArtEvent::Loaded`. `ArtEvent::Loaded` carries device pixels. As `capToNaturalSize` divides by `devicePixelRatio`, the port divides by the window's scale factor (`Window::scale_factor()` from `use_window()`), and recomputes on `WindowEvent::Viewport`, which a `ScaleFactorChanged` sends (D5). The `img` element has no `onerror` or `onload` handler (D8): a failure arrives only as `ArtEvent::Failed`, and a load only as `ArtEvent::Loaded`. The retry keeps its rules: the fill paints, the wait starts at 1 s and doubles to a 30 s cap (D10's timer), and when it ends the `img` element is recreated with the same `src`, so Blitz requests it again. A new URL drops the failure and its timer. Invariant 27 stays true: a missing key paints the loading fill and asks the core again later.
 
 The `ArtEvent` route is the only way the window learns of a failure, because `NetHandler` has no `error` (G8).
 
@@ -124,7 +127,7 @@ The `ArtEvent` route is the only way the window learns of a failure, because `Ne
 - **Pointer:** the root has `onpointerdown`, `onpointerup`, `onpointermove`, `onwheel`, and `oncontextmenu` handlers. Each builds `DomPointer` (the existing struct in `bridge/pointer.rs`) from the Dioxus event's client coordinates, buttons, and modifiers and sends `neutral_pointer(dom_pointer)` when it is `Some`. `oncontextmenu` calls `prevent_default`. Front-end-owned surfaces (Library, Settings) take their pointer events in their own handlers and call `stop_propagation`, as the Svelte handlers do.
 - The serde derives on `DomKey` and `DomPointer` go at the switch (D18). The structs stay as the translation's input.
 
-No handler uses an event kind that `dioxus-native-dom` does not convert (resize, visible, drag, transition, animation, clipboard, composition, selection, toggle). `rg` for those handler names in `src/window` is part of the switch task's verification, because a use panics at run time.
+No handler uses an event kind that `dioxus-native-dom` does not convert: resize, visible, drag and drop, transition, animation, clipboard (copy, cut, paste), composition, selection (select), toggle, cancel, `beforeinput`, image (`error`, `load`), and media (`abort`, `canplay`, `canplaythrough`, `durationchange`, `emptied`, `encrypted`, `ended`, `loadeddata`, `loadedmetadata`, `loadstart`, `pause`, `play`, `playing`, `progress`, `ratechange`, `seeked`, `seeking`, `stalled`, `suspend`, `timeupdate`, `volumechange`, `waiting`). Each of these panics at run time. A component's own callback prop is named in snake case with an underscore (`on_play`, `on_select`), so it never takes an element event name. `rg` for those handler names in `src/window` is part of the switch task's verification.
 
 ### D9. Layout reports and container sizes
 
@@ -149,7 +152,9 @@ The class strings in `rsx!` are the Svelte class strings, character for characte
 
 - `crates/mbv-gui/assets/app.css` is the port of `ui/src/app.css`. Its three imports change: `@import "tailwindcss"` stays; `tw-animate-css` 1.4.0 and `shadcn-svelte/tailwind.css` 1.8.0 are copied from the installed packages into `assets/vendor/` (MIT) and imported by relative path. It adds `@source "../src/window";`, so Tailwind scans the Rust sources, and the six `@font-face` rules that the `@fontsource` CSS gave, with `src: url('mbv-asset://localhost/font/<file>') format('woff2')`.
 - `crates/mbv-gui/assets/fonts/` holds the six Latin WOFF2 files of `@fontsource/ibm-plex-sans` and `@fontsource/jetbrains-mono` 5.3.0 (weights 400, 500, 600; SIL OFL 1.1), copied from the installed packages.
-- The Tailwind v4.3.5 standalone CLI builds `assets/app.generated.css` from `assets/app.css`: `tailwindcss -i crates/mbv-gui/assets/app.css -o crates/mbv-gui/assets/app.generated.css --minify`, run as `make gui-css`. The output is committed. `window/app.rs` includes it with `include_str!` in one `style` element. A normal build runs no CSS tool.
+- The CLI is the release asset `tailwindcss-linux-x64` of Tailwind CSS v4.3.5 (https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.5/tailwindcss-linux-x64, SHA-256 `e47695cee3f0d90623a91f3939b08bdee610eb5ad99340adff9d4145b284d6cc`). It is not in the repository. The developer installs it on `PATH` as `tailwindcss`. The Makefile variable `TAILWINDCSS ?= tailwindcss` names it, and `make gui-css` first runs `$(TAILWINDCSS) --help` and stops with an install message naming the URL and the checksum when the binary is missing. No target falls back to `npx` or `pnpm dlx`.
+- CI does not run the CLI and does not check the committed stylesheet against the sources.
+- The CLI builds `assets/app.generated.css` from `assets/app.css`: `tailwindcss -i crates/mbv-gui/assets/app.css -o crates/mbv-gui/assets/app.generated.css --minify`, run as `make gui-css`. The output is committed. `window/app.rs` includes it with `include_str!` in one `style` element. A normal build runs no CSS tool.
 - A class added to the Rust sources needs `make gui-css` before its commit. The tasks that add markup run it.
 
 ### D12. Ellipsis in mbv
@@ -206,12 +211,11 @@ The last phase deletes the Tauri path in one change set: `crates/mbv-gui/ui/`, `
 
 ### D19. Records
 
-- A new ADR, `docs/adr/0039-gui-client-renders-with-dioxus-native-on-blitz.md`, status `proposed`: the decision (Dioxus Native on Blitz, in process, no webview), the considered options (keep Tauri, GPUI as rejected in `replace-tauri-with-gpui`, Blitz), and the consequences (no reload, the art failure route, the ellipsis in mbv, the alpha pin). It keeps ADRs 0036, 0037, and 0038 and replaces only their transport: "window content" is the Dioxus tree, the `mbv://sections` event is the window channel, and the CSP goes.
+- A new ADR, `docs/adr/0039-gui-client-renders-with-dioxus-native-on-blitz.md`, status `proposed`: the decision (Dioxus Native on Blitz, in process, no webview), the considered options (keep Tauri, GPUI, rejected in commit `402aa1163`, and Blitz). It cites the GPUI and spike work by commit, because neither change was archived, and the consequences (no reload, the art failure route, the ellipsis in mbv, the alpha pin). It keeps ADRs 0036, 0037, and 0038 and replaces only their transport: "window content" is the Dioxus tree, the `mbv://sections` event is the window channel, and the CSP goes.
 - `CONTEXT.md`: the **GUI Client** entry names Dioxus Native on Blitz in place of the webview.
 - `docs/architecture/gui-client.md`: the process shape, the bridge contract (now the window channel and `CoreLink`), the layout reports (D9), the clocks (D10), the stylesheet (D11), the ellipsis (D12), and the Blitz gap list replace the Tauri, webview, and WebKitGTK sections.
 - `AGENTS.md`: the `crates/mbv-gui/` map entry, the ADR 0036 note in the input map entry, and the tokio edge reason.
 - `docs/recipes.md`, `docs/architecture/performance.md`, `docs/architecture/interactive-surface-ledger.md`, and the invariants that name the webview, `app.css` paths, or Svelte files (27 included) are updated to name the Rust modules.
-- The `blitz-queue-panel-spike` change directory is deleted from `openspec/changes/` with this proposal.
 
 ### D20. Blitz gaps that the port meets
 
@@ -239,12 +243,11 @@ The last phase deletes the Tauri path in one change set: `crates/mbv-gui/ui/`, `
 
 ## Migration Plan
 
-1. Delete the spike's change directory (with this proposal's commit).
-2. Phase 1: the feature gate, the dependencies, the launch copy, the net provider, the clock, the stylesheet pipeline, the fonts, the icons, the ellipsis, the sections, the theme, and the input and layout layers.
-3. Phase 2: the attach screen, the overlays, the player panel, the Queue panel, the Status bar, and the four panel states.
-4. Phase 3: the Library panel and its destinations.
-5. Phase 4: the Settings screen.
-6. Phase 5: the switch (D18), packaging (D17), and records (D19).
+1. Phase 1: the feature gate, the dependencies, the launch copy, the net provider, the clock, the stylesheet pipeline, the fonts, the icons, the ellipsis, the sections, the theme, and the input and layout layers.
+2. Phase 2: the attach screen, the overlays, the player panel, the Queue panel, the Status bar, and the four panel states.
+3. Phase 3: the Library panel and its destinations.
+4. Phase 4: the Settings screen.
+5. Phase 5: the switch (D18), packaging (D17), and records (D19).
 
 The Tauri binary builds and runs through phases 1 to 4. Rollback before the switch is the removal of `src/window/`, the `blitz` binary, and the feature. After the switch, rollback is a revert of the switch commits.
 
