@@ -1,17 +1,13 @@
 //! Blitz spike: the Queue panel as a Dioxus-native window, in process beside
-//! the GUI core thread. The root component is a placeholder until task 5.1 of
-//! `blitz-queue-panel-spike` adds the Queue panel.
+//! the GUI core thread. The root component lives in `app.rs`.
 
+mod app;
 mod art_net;
 mod launch;
 
-use dioxus_native::prelude::*;
 use futures_channel::mpsc::unbounded;
-use futures_util::StreamExt;
 use mbv_gui::bridge::sections::GuiSectionBatch;
 use mbv_gui::core_thread::{self, CoreInput, QuitSink, SectionSink};
-
-use crate::launch::BatchSlot;
 
 // `profiling` drops the allocator so heaptrack sees the real heap (D16).
 #[cfg(not(feature = "profiling"))]
@@ -32,7 +28,7 @@ fn main() {
     // handle to close. The window stays open until the user closes it.
     let quit: QuitSink = Box::new(|| {});
     let (core, core_handle) = core_thread::spawn(sink, quit);
-    launch::launch(root, core.clone(), batch_rx);
+    launch::launch(app::root, core.clone(), batch_rx);
     // The window has closed. Close the core thread, then hold the process
     // until its exit teardown completes. The core may have ended already, so
     // a failed send is expected.
@@ -42,23 +38,3 @@ fn main() {
         std::process::exit(1);
     }
 }
-
-/// The root component. Until task 5.1 it only drains the batch receiver.
-fn root() -> Element {
-    let slot = use_hook(consume_context::<BatchSlot>);
-    use_future(move || {
-        let slot = slot.clone();
-        async move {
-            if let Some(mut batches) = slot.take() {
-                while batches.next().await.is_some() {}
-            }
-        }
-    });
-    rsx! {
-        style { {QUEUE_CSS} }
-        div { "mbv" }
-    }
-}
-
-/// The Queue panel's stylesheet, with its six `@font-face` rules (D11, D12).
-const QUEUE_CSS: &str = include_str!("../assets/queue.css");

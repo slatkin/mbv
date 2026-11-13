@@ -4820,9 +4820,12 @@ dependencies = [
  "futures-util",
  "image",
  "mbv",
+ "mbv-emby-model",
  "mbv-gui",
  "mbv-images",
+ "mbv-ui-model",
  "mimalloc",
+ "rstest",
 ]
 
 [[package]]
