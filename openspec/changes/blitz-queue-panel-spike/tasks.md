@@ -46,8 +46,8 @@ Each task names how to verify it. Verification uses commands, tests, or delivere
 - [x] 7.1 Add the term **Blitz Client** to `CONTEXT.md` (D19). The entry says what the Blitz Client is, that it is not the GUI Client, that it presents only the Queue panel, and that a full replacement folds it into the GUI Client. Verify: `rg -n 'Blitz Client' CONTEXT.md` finds the entry.
 - [x] 7.2 Write `openspec/changes/blitz-queue-panel-spike/measurements.md`. It holds the D16 protocol as commands only, a blank table for the GUI thread-count baseline, the go and no-go table with the bounds in "Go / No-Go", and a blank results section. Do not run the protocol. Verify: the file names every command in D16.
 - [x] 7.3 Draft upstream reports for G1, G8, and G9 in `openspec/changes/blitz-queue-panel-spike/upstream/`. Each draft has a minimal HTML and CSS repro where one applies, and it names the existing issues and WPT tests searched. Post nothing. Verify: three files exist, and each names what was searched.
-- [ ] 7.4 Run `cargo fmt --all -- --check`, `cargo clippy -p mbv-native -p mbv-gui --all-targets -- -D warnings`, and `cargo nextest run -p mbv-native -p mbv-gui`. Fix each failure this change causes. Verify: all three commands pass.
-- [ ] 7.5 Before the push, run `make check-code-file-lines`. Verify: the command reports no file over 800 lines.
+- [x] 7.4 Run `cargo fmt --all -- --check`, `cargo clippy -p mbv-native -p mbv-gui --all-targets -- -D warnings`, and `cargo nextest run -p mbv-native -p mbv-gui`. Fix each failure this change causes. Verify: all three commands pass.
+- [x] 7.5 Before the push, run `make check-code-file-lines`. Verify: the command reports no file over 800 lines.
 
 ## Workflow follow-up
 

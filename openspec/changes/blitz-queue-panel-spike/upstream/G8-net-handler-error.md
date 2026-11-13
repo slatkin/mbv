@@ -50,5 +50,5 @@ Status of this repro: not run. The expected and actual results come from the sou
 ## Notes for the user
 
 - The spike does not depend on the error callback. The `MbvNetProvider` answers a missing art path with the placeholder bytes (design D6), so the image is never a failed fetch in the spike. G8 stays in the gap table as `absent`.
-- The design's G8 evidence says "`NetHandler::error` defaults to a no-op". That is true on `main` only. In 0.3.0-beta.4 the method does not exist. The design text needs a fix; this change does not edit it.
+- The design's G8 evidence says "`NetHandler::error` defaults to a no-op". That is true on `main` only. In 0.3.0-beta.4 the method does not exist. The design text was corrected to match.
 - Do not post this draft until the user approves it.
