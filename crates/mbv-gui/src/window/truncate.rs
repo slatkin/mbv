@@ -191,6 +191,12 @@ pub struct TruncateProps {
     /// The Svelte class string, without `truncate` — the component appends it.
     #[props(default)]
     pub class: String,
+    /// The Svelte element's inline `style:` string — the attributes the
+    /// markup carried beside the `truncate` class (the colour and font size
+    /// the text paints at, which the [`TextStyle`] only mirrors for the
+    /// measure).
+    #[props(default)]
+    pub css: String,
     /// The style the class string names, for the measure.
     pub style: TextStyle,
 }
@@ -200,6 +206,7 @@ impl std::fmt::Debug for TruncateProps {
         f.debug_struct("TruncateProps")
             .field("text", &self.text)
             .field("class", &self.class)
+            .field("css", &self.css)
             .field("style", &self.style)
             .finish()
     }
@@ -247,6 +254,7 @@ pub fn Truncate(props: TruncateProps) -> Element {
     rsx! {
         div {
             class: "{class}",
+            style: "{props.css}",
             onmounted: move |event| mounted.set(Some(event)),
             "{display}"
         }

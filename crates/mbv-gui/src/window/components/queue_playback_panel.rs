@@ -52,6 +52,7 @@ use crate::window::natural_size::NaturalSizeBounds;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
 use crate::window::theme::{glyph_color, role_var};
+use crate::window::truncate::{TextStyle, Truncate};
 
 mod scrubber;
 
@@ -280,16 +281,17 @@ pub fn QueuePlaybackPanel() -> Element {
                 div {
                     class: "flex min-w-0 flex-col",
                     style: "padding: 14px 16px 6px; gap: 2px;",
-                    span {
-                        class: "truncate",
-                        style: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};",
-                        "{title}"
+                    Truncate {
+                        text: title.clone(),
+                        css: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};"
+                            .to_owned(),
+                        style: TextStyle::sans(18.0, 600.0),
                     }
                     if let Some(parent_line) = playback.parent_line.as_ref() {
-                        span {
-                            class: "truncate",
-                            style: "font-size: 13px; color: var(--canvas-type-secondary);",
-                            "{parent_line}"
+                        Truncate {
+                            text: parent_line.clone(),
+                            css: "font-size: 13px; color: var(--canvas-type-secondary);".to_owned(),
+                            style: TextStyle::sans(13.0, 400.0),
                         }
                     }
                 }
@@ -389,7 +391,12 @@ fn TargetChooserPopover(mut props: TargetChooserPopoverProps) -> Element {
                             if matches!(choice.key, GuiTargetKey::Local) {
                                 Monitor { size: 14, color: role_var(GuiRole::PlaybackTargetLocalFg) }
                             }
-                            span { class: "truncate", "{choice.label}" }
+                            Truncate {
+                                text: choice.label.clone(),
+                                // The chooser button names no font size: the
+                                // label inherits the document's 16 px body face.
+                                style: TextStyle::sans(16.0, 400.0),
+                            }
                         }
                     }
                 }
@@ -633,7 +640,12 @@ fn HeaderRow(mut props: HeaderRowProps) -> Element {
                 onmounted: move |event| props.target_mounted.set(Some(event)),
                 Cast { size: 18, stroke_width: 1.8, color: "currentColor" }
                 if !props.host.is_empty() {
-                    span { class: "truncate", "{props.host}" }
+                    // The 13 px the button's style sets is the label's inherited
+                    // size and weight: the box carries no style of its own.
+                    Truncate {
+                        text: props.host.clone(),
+                        style: TextStyle::sans(13.0, 400.0),
+                    }
                 }
                 ChevronDown { size: 12, color: "currentColor" }
             }

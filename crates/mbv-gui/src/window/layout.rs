@@ -14,7 +14,6 @@
 //! which is already CSS pixels (the taffy layout's viewport is the logical
 //! size) — the unit every threshold and report value names.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus_native::prelude::*;
@@ -71,11 +70,16 @@ impl LayoutKey {
 
 /// The layout reporter (D9). The root creates it once and provides it as
 /// context; its send effect merges the contributions into one report and
-/// pushes it through the [`CoreLink`] when it differs from the last one sent.
+/// pushes it through the [`CoreLink`] when it differs from the last one
+/// sent. The merge walks the contributions in key-insertion order — the
+/// TypeScript module's `Map` order, held in a `Vec` instead of a `HashMap`,
+/// whose iteration order is the process's hash order, not paint order — so
+/// a key registered later merges after an earlier key and its regions paint
+/// over them in the core's hit map (the hit map's last push wins).
 #[derive(Clone, Debug)]
 pub struct LayoutReporter {
     link: CoreLink,
-    contributions: Signal<HashMap<LayoutKey, LayoutContribution>>,
+    contributions: Signal<Vec<(LayoutKey, LayoutContribution)>>,
     container_size: Signal<LayoutSize>,
     last_sent: Signal<Option<LayoutReport>>,
 }
@@ -88,7 +92,7 @@ pub fn use_layout_reporter() -> LayoutReporter {
     let link = consume_context::<CoreLink>();
     let reporter = use_hook(|| LayoutReporter {
         link,
-        contributions: Signal::new(HashMap::new()),
+        contributions: Signal::new(Vec::new()),
         container_size: Signal::new(LayoutSize::default()),
         last_sent: Signal::new(None),
     });
@@ -104,7 +108,7 @@ pub fn use_layout_reporter() -> LayoutReporter {
             regions: Vec::new(),
             container_size: container_size.cloned(),
         };
-        for contribution in contributions.cloned().into_values() {
+        for (_, contribution) in contributions.cloned() {
             report.lists.extend(contribution.lists);
             report.regions.extend(contribution.regions);
         }
@@ -143,16 +147,23 @@ impl LayoutReporter {
     /// the key is a no-op.
     pub fn report_layout(&mut self, key: LayoutKey, contribution: LayoutContribution) {
         let mut contributions = self.contributions.write();
-        if contributions.get(&key) == Some(&contribution) {
+        if let Some(held) = contributions.iter_mut().find(|(held, _)| *held == key) {
+            if held.1 == contribution {
+                return;
+            }
+            // A re-set updates in place: the TypeScript `Map`'s `set` keeps
+            // the key's original insertion position, so the surface keeps
+            // its paint layer in the merged report.
+            held.1 = contribution;
             return;
         }
-        contributions.insert(key, contribution);
+        contributions.push((key, contribution));
     }
 
     /// Removes a surface's contribution (D9): an unmounted surface owns no
     /// regions, so the next merged report drops them.
     pub fn retract_layout(&mut self, key: LayoutKey) {
-        self.contributions.write().remove(&key);
+        self.contributions.write().retain(|(held, _)| *held != key);
     }
 }
 
@@ -222,3 +233,6 @@ pub async fn element_region(
         target,
     })
 }
+
+#[cfg(test)]
+mod tests;
