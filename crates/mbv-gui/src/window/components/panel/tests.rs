@@ -3,16 +3,15 @@
 //! size and the core's two toggles pick, and the composition each state
 //! paints. The assertions over each child's own painted content (the strip's
 //! next-item line, the folded queue's summary, the rail's ring and remaining
-//! time, the regions the transport reports) travel with the children's rows:
-//! 5.2 (`QueuePlaybackPanel`), 5.5 (`QueuePanel`, `FoldedQueue`), 5.6
-//! (`QueueFooter`), and 5.7 (`CompactStrip`, `CollapsedRail`), which replace
-//! the markers the placeholders paint. The core channel is a mock pair; no
-//! test opens a window, sleeps, or reaches the core.
+//! time, the regions the transport reports) arrived with the children's
+//! rows: 5.2 (`QueuePlaybackPanel`), 5.5 (`QueuePanel`), 5.6 (`QueueFooter`),
+//! and 5.7 (`FoldedQueue`, `CompactStrip`, `CollapsedRail`). The core
+//! channel is a mock pair; no test opens a window, sleeps, or reaches the core.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
@@ -20,7 +19,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::Panel;
 use crate::bridge::frame::GuiPanelToggles;
-use crate::bridge::layout::LayoutSize;
+use crate::bridge::layout::{LayoutSize, QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
@@ -64,6 +63,9 @@ fn panel_app(props: FixtureProps) -> Element {
     let sections = use_hook(Sections::new);
     provide_context(sections.clone());
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+    // The art painter's retry clock (D7): the same context the app root
+    // provides.
+    provide_context(Arc::clone(&clock));
     let times: Arc<dyn Times> = Arc::new(SystemTimes::new());
     let playhead = use_hook(move || Playhead::new(Arc::clone(&clock), times));
     provide_context(playhead.clone());
@@ -86,6 +88,7 @@ fn panel_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     sections: Sections,
+    receiver: Receiver<CoreInput>,
 }
 
 impl Fixture {
@@ -106,6 +109,25 @@ impl Fixture {
         panic!("document did not become idle");
     }
 
+    /// The region targets of the last merged layout report.
+    fn last_reported_targets(&self) -> Vec<RegionTarget> {
+        self.receiver
+            .try_iter()
+            .filter_map(|input| match input {
+                CoreInput::Layout(report) => Some(report),
+                _ => None,
+            })
+            .last()
+            .map(|report| {
+                report
+                    .regions
+                    .into_iter()
+                    .map(|region| region.target)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Write the core's two toggles, as the drain task would, and let the
     /// re-render land.
     fn set_toggles(&mut self, collapsed: bool, queue_folded: bool) {
@@ -123,7 +145,6 @@ impl Fixture {
 
 fn built(container: LayoutSize) -> Fixture {
     let (sender, receiver) = channel::<CoreInput>();
-    let _ = receiver;
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
@@ -141,7 +162,11 @@ fn built(container: LayoutSize) -> Fixture {
         .borrow_mut()
         .take()
         .expect("the root handed the section stores over");
-    let mut fixture = Fixture { doc, sections };
+    let mut fixture = Fixture {
+        doc,
+        sections,
+        receiver,
+    };
     fixture.poll_until_idle();
     fixture
 }
@@ -162,7 +187,7 @@ fn a_tall_container_renders_the_expanded_artboard() {
         "the expanded artboard paints the queue rows"
     );
     assert!(
-        fixture.presents("[data-panel-child=\"QueueFooter\"]"),
+        fixture.presents("[data-footer-line]"),
         "the expanded artboard paints the footer line"
     );
     assert!(
@@ -182,7 +207,7 @@ fn a_container_shorter_than_520px_renders_the_compact_strip() {
         "the compact strip state paints"
     );
     assert!(
-        fixture.presents("[data-panel-child=\"CompactStrip\"]"),
+        fixture.presents("[data-target=\"visualSlot\"]"),
         "the compact strip paints the strip"
     );
     assert!(
@@ -203,7 +228,7 @@ fn the_queue_fold_toggle_replaces_the_queue_rows_with_the_folded_summary() {
         "the folded state paints"
     );
     assert!(
-        fixture.presents("[data-panel-child=\"FoldedQueue\"]"),
+        fixture.presents("[data-target=\"queueFold\"]"),
         "the folded state paints the one-line summary"
     );
     assert!(
@@ -220,15 +245,71 @@ fn the_collapse_toggle_renders_the_rail() {
     let mut fixture = built(TALL);
     fixture.set_toggles(true, false);
     assert!(
-        fixture.presents("[data-panel-child=\"CollapsedRail\"]"),
+        fixture.presents("[data-panel-state=\"rail\"]"),
         "the collapsed state paints the rail"
     );
+    // The rail paints its own state attribute, and no state wrapper mounts
+    // around it (the Svelte contract's `expanded`/`compactStrip` wrappers
+    // name the other two states).
     assert!(
-        !fixture.presents("[data-panel-state]"),
-        "the rail paints no state wrapper of its own"
+        !fixture.presents("[data-panel-state=\"expanded\"]"),
+        "the rail mounts no expanded artboard"
     );
     assert!(
         !fixture.presents("[data-target=\"playbackTarget\"]"),
         "the rail paints no expanded artboard"
+    );
+}
+
+/// Contract (`Panel.test.ts`): the compact strip reports the still's slot
+/// and the transport's two controls — `visualSlot`, `playPause`, `next` —
+/// its whole region list, since no expanded artboard mounts beside it.
+#[test]
+fn the_compact_strip_reports_the_still_and_transport_regions() {
+    let fixture = built(SHORT);
+
+    assert_eq!(
+        fixture.last_reported_targets(),
+        vec![
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayPause),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next),
+        ]
+    );
+}
+
+/// Contract (`Panel.test.ts`): the folded queue reports the expand control's
+/// `queueFold` target — the line's one interactive target.
+#[test]
+fn the_folded_queue_reports_the_expand_control_region() {
+    let mut fixture = built(TALL);
+    fixture.set_toggles(false, true);
+
+    let targets = fixture.last_reported_targets();
+    assert!(
+        targets.contains(&RegionTarget::QueuePlayback(
+            QueuePlaybackTargetId::QueueFold
+        )),
+        "{targets:?}"
+    );
+}
+
+/// Contract (`Panel.test.ts`): the rail reports the transport's two controls,
+/// the artwork slot, and the expand control, in paint order — its whole
+/// region list, since the queue and the footer belong to the expanded
+/// artboard.
+#[test]
+fn the_rail_reports_the_transport_artwork_and_expand_regions() {
+    let mut fixture = built(TALL);
+    fixture.set_toggles(true, false);
+
+    assert_eq!(
+        fixture.last_reported_targets(),
+        vec![
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayPause),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
+        ]
     );
 }
