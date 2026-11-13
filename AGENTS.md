@@ -100,7 +100,7 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 * Run `cargo fmt` for each Rust change (stock edition-2024, max-width-100). Accept all reflow and never revert it. `cargo fmt --all -- --check` is a read-only check.
 * Write custom domain error types (for example, `AudiobookshelfError`). Do not introduce `anyhow`, `thiserror`, or `eyre`.
 * Lay out modules as one file per module through `mod`. Never splice a module across files with `include!` or `#[path]`. Give a module with children as `foo.rs` plus a `foo/` directory to hold them (tests as `foo/tests.rs`, or `foo/tests.rs` plus `foo/tests/` when split). Never use `mod.rs`.
-* Prefer synchronous code first. `tokio` is edge-only (`crates/mbv-desktop`, `crates/mbv-gui` — Tauri's runtime only, `zbus`). Do not spread it.
+* Prefer synchronous code first. `tokio` is edge-only (`crates/mbv-desktop`, `crates/mbv-gui` — Tauri's runtime only, `zbus`; `crates/mbv-native` — `dioxus-native`'s always-on `native` asset-resolver edge, no tokio API used). Do not spread it.
 * For sharing, prefer owned data and `Msg` identities over new `Arc` or `Rc`.
 * For docs and concept discovery (ADRs, openspec, CONTEXT.md), run `qmd query "..."` (collection `mbv`). Use `rg` only for exact strings.
 * Do not write openspec changes without being prompted. Treat bug reports as issues to be fixed immediately.
