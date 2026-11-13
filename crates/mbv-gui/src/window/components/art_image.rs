@@ -327,13 +327,13 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
     });
 
     // The natural size (D7): the `Loaded` answer carries it, in device pixels.
+    // The effect reads the URL reactively too: Blitz serves an already-cached
+    // URL from its image cache without a fetch, so no new `Loaded` arrives —
+    // the URL change itself must re-read the store, or the cap is lost.
     let url = src.clone();
-    use_effect(move || {
-        let Some(url) = url.clone() else {
-            return;
-        };
-        loaded_natural(state, &art_events, &url);
-    });
+    use_effect(use_reactive((&url,), move |(url,)| {
+        loaded_natural(state, &art_events, url.as_deref().unwrap_or(""));
+    }));
 
     // No retry outlives the box.
     use_drop(move || {

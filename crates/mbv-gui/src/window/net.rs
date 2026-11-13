@@ -101,7 +101,9 @@ impl MbvNetProvider {
                         handler.bytes(resolved, Bytes::from(bytes));
                     }
                     // A source whose header does not read cannot carry a size,
-                    // so it answers as a miss.
+                    // so it answers as a miss — the same answer a miss gives,
+                    // so Blitz clears the URL's pending-images entry and the
+                    // node stays unloaded.
                     Err(error) => {
                         tracing::debug!(
                             target: "gui_art",
@@ -109,16 +111,20 @@ impl MbvNetProvider {
                             error = %error,
                             "the art source's image header does not read"
                         );
-                        drop(handler);
+                        handler.bytes(resolved.clone(), Bytes::new());
                         let _ = events
                             .unbounded_send(WindowEvent::Art(ArtEvent::Failed { url: resolved }));
                     }
                 }
             }
             ArtResponse::Missing => {
-                // Gap G8: no error callback, so the handler drops unanswered
-                // and the node stays unloaded (D7).
-                drop(handler);
+                // Gap G8: no error callback, so the handler answers with empty
+                // bytes — `ImageHandler::parse` fails on them, so Blitz clears
+                // the URL's pending-images entry and the node stays unloaded.
+                // A dropped handler would leave the entry pending forever: the
+                // retry's recreated `img` would join a dead waiting list and
+                // never ask the core again (D7's retry contract, invariant 27).
+                handler.bytes(resolved.clone(), Bytes::new());
                 let _ = events.unbounded_send(WindowEvent::Art(ArtEvent::Failed { url: resolved }));
             }
         });

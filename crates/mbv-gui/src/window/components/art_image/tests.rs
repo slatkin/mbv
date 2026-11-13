@@ -32,21 +32,28 @@ fn cover() -> GuiArtRef {
 struct FixtureProps {
     art: Option<GuiArtRef>,
     clock: Arc<RecordingClock>,
-    handle: Rc<RefCell<Option<(ArtEvents, FiredTimers)>>>,
+    handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
+/// The context handles the root hands the test: the store, the timer router,
+/// and the art reference the fixture paints.
+type FixtureHandles = (ArtEvents, FiredTimers, Signal<Option<GuiArtRef>>);
+
 fn art_app(props: FixtureProps) -> Element {
+    let FixtureProps { art, clock, handle } = props;
+    let art = use_signal(move || art);
     let events = use_hook(ArtEvents::new);
     let fired = use_hook(FiredTimers::new);
     provide_context(events);
-    provide_context(Arc::clone(&props.clock) as Arc<dyn Clock>);
+    provide_context(clock as Arc<dyn Clock>);
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
-    props.handle.borrow_mut().replace((events, fired));
+    handle.borrow_mut().replace((events, fired, art));
+    let current = art.cloned();
     rsx! {
         div {
             ArtImage {
-                art: props.art,
+                art: current,
                 alt: "cover",
                 fallback: rsx! { "FILL" },
             }
@@ -61,6 +68,8 @@ struct Fixture {
     events: ArtEvents,
     /// The `FiredTimers` copy the test drives.
     fired: FiredTimers,
+    /// The art reference the fixture paints, so a test changes the URL.
+    art: Signal<Option<GuiArtRef>>,
     clock: Arc<RecordingClock>,
 }
 
@@ -106,7 +115,7 @@ fn built(art: Option<GuiArtRef>) -> Fixture {
         DocumentConfig::default(),
     );
     doc.initial_build();
-    let (events, fired) = handle
+    let (events, fired, art) = handle
         .borrow()
         .as_ref()
         .expect("the root handed the store and the timer router over")
@@ -115,6 +124,7 @@ fn built(art: Option<GuiArtRef>) -> Fixture {
         doc,
         events,
         fired,
+        art,
         clock,
     }
 }
@@ -170,4 +180,62 @@ fn a_loading_reference_paints_the_fill() {
     let mut fixture = built(Some(GuiArtRef::Loading));
     fixture.poll_until_idle();
     assert_eq!(fixture.painted(), None);
+}
+
+/// The `style` attribute the painted `img` carries, `None` while the fill
+/// paints.
+fn img_style(fixture: &Fixture) -> Option<String> {
+    let dom = fixture.doc.inner();
+    let node = dom.query_selector("img").expect("the selector is valid")?;
+    let node = dom.get_node(node).expect("the node is in the document");
+    node.attr(local_name!("style")).map(str::to_owned)
+}
+
+/// Contract (D7): art never paints above its own pixels — a URL change
+/// re-reads the store, so an already-cached URL (Blitz answers it from its
+/// image cache without a fetch, so no new `Loaded` arrives) still caps at its
+/// own natural size. The switch paints `second`, whose `Loaded` the store
+/// already holds from an earlier load.
+#[test]
+fn a_url_change_re_reads_the_natural_size_of_the_new_url() {
+    let mut fixture = built(Some(GuiArtRef::Image {
+        src: art_url("card/first"),
+    }));
+    fixture.poll_until_idle();
+    let loaded = |url: &str, width: u32, height: u32| crate::window::net::ArtEvent::Loaded {
+        url: url.to_owned(),
+        width,
+        height,
+    };
+    let first = art_url("card/first");
+    let second = art_url("card/second");
+    let mut events = fixture.events;
+    fixture.in_runtime(|| {
+        events.push(loaded(&first, 400, 300));
+        events.push(loaded(&second, 100, 50));
+    });
+    fixture.poll_until_idle();
+    assert!(
+        img_style(&fixture).is_some_and(|style| style.contains("max-width: 400px")),
+        "{:?}",
+        img_style(&fixture)
+    );
+
+    // The switch to a URL the store already holds: Blitz serves it from its
+    // image cache without a fetch, so the store's own `Loaded` size is the
+    // only fact the cap can come from.
+    let mut art = fixture.art;
+    fixture.in_runtime(|| {
+        art.set(Some(GuiArtRef::Image {
+            src: second.clone(),
+        }));
+    });
+    fixture.poll_until_idle();
+
+    assert_eq!(fixture.painted().as_deref(), Some(second.as_str()));
+    assert!(
+        img_style(&fixture).is_some_and(|style| style.contains("max-width: 100px")),
+        "{:?}",
+        img_style(&fixture)
+    );
 }

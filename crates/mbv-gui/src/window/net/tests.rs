@@ -2,9 +2,12 @@
 //! a `Found` answer gives the `img` node a raster and reports the source
 //! size, a `Missing` answer leaves the node unloaded and reports the
 //! failure, and an inline `@font-face` source is requested through the
-//! provider. No test opens a window or sleeps.
+//! provider — plus the retry contract of task 3.6: a missed URL is requested
+//! again once the `img` is recreated. No test opens a window or sleeps.
 
+use std::cell::RefCell;
 use std::io::Cursor;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 
@@ -191,4 +194,110 @@ fn inline_font_face_is_requested_through_the_provider() {
         .expect("the request log is not poisoned")
         .clone();
     assert!(urls.iter().any(|url| url == FONT_URL), "{urls:?}");
+}
+
+/// An `img` that mounts and unmounts on a signal, so a test recreates the node
+/// the way `ArtImage`'s retry does.
+#[component]
+fn retry_app(props: RetryProps) -> Element {
+    let visible = use_signal(|| true);
+    props.handle.borrow_mut().replace(visible);
+    if visible.cloned() {
+        rsx! { img { src: ART_URL } }
+    } else {
+        rsx! { div { "hidden" } }
+    }
+}
+
+/// The toggle handle the root hands the test.
+#[derive(Clone)]
+struct RetryProps {
+    handle: Rc<RefCell<Option<Signal<bool>>>>,
+}
+
+/// The handles `built_retry_document` returns: the document, the core
+/// channel's receive end, the window channel's receive end, the request log,
+/// and the mount toggle.
+type RetryFixture = (
+    DioxusDocument,
+    Receiver<CoreInput>,
+    UnboundedReceiver<WindowEvent>,
+    Arc<Mutex<Vec<String>>>,
+    Signal<bool>,
+);
+
+/// A document whose `img` loads through a recording provider, and the toggle
+/// that recreates its node.
+fn built_retry_document() -> RetryFixture {
+    let (core, core_receiver) = channel();
+    let (events, event_receiver) = unbounded();
+    let requested = Arc::new(Mutex::new(Vec::new()));
+    let provider = Recording {
+        inner: MbvNetProvider::new(core, events),
+        requested: Arc::clone(&requested),
+    };
+    let handle = Rc::new(RefCell::new(None));
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new_with_props(
+            retry_app,
+            RetryProps {
+                handle: Rc::clone(&handle),
+            },
+        ),
+        DocumentConfig {
+            net_provider: Some(Arc::new(provider)),
+            ..Default::default()
+        },
+    );
+    doc.initial_build();
+    let visible = handle
+        .borrow()
+        .as_ref()
+        .expect("the root handed the toggle over")
+        .to_owned();
+    (doc, core_receiver, event_receiver, requested, visible)
+}
+
+/// Retry contract (task 3.6): a miss answers the handler, so Blitz clears the
+/// URL's pending-images entry — after the retry recreates the `img`, the
+/// provider is asked again for the same URL, and the second miss reports
+/// `Failed` again. An unanswered miss would leave the entry pending forever:
+/// the recreated `img` would join a dead waiting list, and no fetch, no
+/// `Failed`, and no second retry would ever come (D7, invariant 27).
+#[test]
+fn a_missed_url_is_requested_again_after_the_retry_recreates_the_img() {
+    let (mut doc, core, mut events, requested, mut visible) = built_retry_document();
+
+    // The first load: the miss answers the handler and reports `Failed`.
+    (art_request(&core).reply)(ArtResponse::Missing);
+    doc.inner_mut().handle_messages();
+    assert_eq!(
+        reported(&mut events),
+        ArtEvent::Failed {
+            url: ART_URL.to_owned(),
+        }
+    );
+
+    // The retry recreates the `img`: the provider is asked again for the same
+    // URL, and the second miss reports `Failed` again.
+    doc.vdom.in_runtime(|| visible.set(false));
+    assert!(doc.poll(None));
+    doc.vdom.in_runtime(|| visible.set(true));
+    assert!(doc.poll(None));
+
+    (art_request(&core).reply)(ArtResponse::Missing);
+    doc.inner_mut().handle_messages();
+
+    let urls = requested
+        .lock()
+        .expect("the request log is not poisoned")
+        .clone();
+    assert_eq!(urls, vec![ART_URL.to_owned(), ART_URL.to_owned()]);
+    assert_eq!(
+        reported(&mut events),
+        ArtEvent::Failed {
+            url: ART_URL.to_owned(),
+        }
+    );
+    assert_eq!(image_raster(&doc), None);
 }
