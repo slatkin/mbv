@@ -1,6 +1,10 @@
 //! Public-API tests of the GUI core thread (`mbv_gui::core_thread`): the
-//! step unit the run loop drives, over a mocked channel and a mocked frame
+//! step unit the run loop drives, over a mocked channel and a mocked section
 //! sink (design D13 — no Tauri runtime, no webview, no live Owner).
+//!
+//! The sink receives the section batches a tick sent (design D1). The
+//! [`Held`] view merges them the way the front end's stores do, so a test
+//! reads what the window holds: a section a batch omits keeps its last value.
 //!
 //! The pointer half — the gestures a `CoreInput::Pointer` recognizes and
 //! resolves against the reported regions — lives in
@@ -8,7 +12,7 @@
 //! resolve under `tests/core_thread/` (one binary per crate; no `mod.rs`).
 
 use std::sync::mpsc::{self, TryRecvError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use mbv::{
     App, load_config, stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
@@ -19,22 +23,34 @@ use mbv_config::{
     gui_launch_state_path, load_tui_launch_state, save_tui_launch_state,
 };
 use mbv_emby::EmbyClient;
-use mbv_gui::bridge::frame::playback::GuiCardArtwork;
-use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
+use mbv_gui::bridge::frame::GuiPanelToggles;
+use mbv_gui::bridge::frame::chrome::GuiStatusBar;
+use mbv_gui::bridge::frame::focus::GuiFocus;
+use mbv_gui::bridge::frame::library::{
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
+};
+use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
+use mbv_gui::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
+use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
+use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
 use mbv_gui::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows, RegionTarget,
 };
-use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
+use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
+use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod art;
     mod home;
     mod launch;
     mod library;
     mod overlay;
+    mod playhead;
     mod pointer;
     mod queue;
+    mod sections;
     mod settings;
 }
 
@@ -117,14 +133,134 @@ pub(crate) fn move_at(x: f32, y: f32) -> CoreInput {
     ))
 }
 
-/// The sink emitted no frame: the channel is empty while the core's sink
-/// sender is still alive.
-fn assert_no_frame(frames: &mpsc::Receiver<GuiWindowFrame>) {
-    assert_eq!(frames.try_recv(), Err(TryRecvError::Empty));
+/// The sink sent no batch: the channel is empty while the core's sink sender
+/// is still alive.
+fn assert_no_batch(batches: &mpsc::Receiver<GuiSectionBatch>) {
+    assert_eq!(batches.try_recv(), Err(TryRecvError::Empty));
+}
+
+/// One section's value from a batch's section field. A section that was never
+/// sent names the missing section in the panic.
+fn section_value<'a, T>(section: Option<&'a GuiSection<T>>, name: &str) -> &'a T {
+    &section
+        .unwrap_or_else(|| panic!("the window holds no {name} section"))
+        .value
+}
+
+/// One optional section's value: a section that carries `null`, or a section
+/// the window never received, reads as `None`.
+fn optional_value<T>(section: Option<&GuiSection<Option<T>>>) -> Option<&T> {
+    section.and_then(|section| section.value.as_ref())
+}
+
+/// What the window holds: every batch the core sent, merged the way the
+/// front end's stores merge them. A present section replaces the held one;
+/// an absent section keeps it (design D1).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Held {
+    batch: GuiSectionBatch,
+}
+
+impl Held {
+    /// Merge one batch into the held sections.
+    fn merge(&mut self, batch: GuiSectionBatch) {
+        let held = &mut self.batch;
+        held.attach = batch.attach.or(held.attach.take());
+        held.theme = batch.theme.or(held.theme.take());
+        held.focus = batch.focus.or(held.focus.take());
+        held.queue = batch.queue.or(held.queue.take());
+        held.summary = batch.summary.or(held.summary.take());
+        held.panel = batch.panel.or(held.panel.take());
+        held.overlay = batch.overlay.or(held.overlay.take());
+        held.playback = batch.playback.or(held.playback.take());
+        held.hover = batch.hover.or(held.hover.take());
+        held.footer = batch.footer.or(held.footer.take());
+        held.status = batch.status.or(held.status.take());
+        held.library_list = batch.library_list.or(held.library_list.take());
+        held.library_detail = batch.library_detail.or(held.library_detail.take());
+        held.row_menu = batch.row_menu.or(held.row_menu.take());
+        held.search = batch.search.or(held.search.take());
+        held.settings = batch.settings.or(held.settings.take());
+        held.playhead = batch.playhead.or(held.playhead.take());
+    }
+
+    /// The panel section's value: the toggles and the UI-reset counter.
+    pub(crate) fn panel(&self) -> &GuiPanelToggles {
+        section_value(self.batch.panel.as_ref(), "panel")
+    }
+
+    /// The Queue section's value.
+    pub(crate) fn queue(&self) -> &GuiQueue {
+        section_value(self.batch.queue.as_ref(), "queue")
+    }
+
+    /// The queue summary section's value.
+    pub(crate) fn summary(&self) -> &GuiQueueSummary {
+        section_value(self.batch.summary.as_ref(), "summary")
+    }
+
+    /// The focus section's value.
+    pub(crate) fn focus(&self) -> &GuiFocus {
+        section_value(self.batch.focus.as_ref(), "focus")
+    }
+
+    /// The open overlay, `None` while none is open.
+    pub(crate) fn overlay(&self) -> Option<&GuiOverlayFrame> {
+        optional_value(self.batch.overlay.as_ref())
+    }
+
+    /// The transport band's section value.
+    pub(crate) fn playback(&self) -> &GuiQueuePlayback {
+        section_value(self.batch.playback.as_ref(), "playback")
+    }
+
+    /// The scrubber's hover preview, `None` while the pointer is away.
+    pub(crate) fn hover(&self) -> Option<&GuiScrubberHover> {
+        optional_value(self.batch.hover.as_ref())
+    }
+
+    /// The Status bar section's value.
+    pub(crate) fn status(&self) -> &GuiStatusBar {
+        section_value(self.batch.status.as_ref(), "status")
+    }
+
+    /// The Library list section (design D8), `None` while no presented
+    /// destination is active.
+    pub(crate) fn library_list(&self) -> Option<&GuiLibraryList> {
+        optional_value(self.batch.library_list.as_ref())
+    }
+
+    /// The Library detail section (design D8), `None` while no presented
+    /// destination is active.
+    pub(crate) fn library_detail(&self) -> Option<&GuiLibraryDetail> {
+        optional_value(self.batch.library_detail.as_ref())
+    }
+
+    /// The right-click item menu section, `None` while no menu is open.
+    pub(crate) fn row_menu(&self) -> Option<&GuiLibraryRowMenuFrame> {
+        optional_value(self.batch.row_menu.as_ref())
+    }
+
+    /// The Search section, `None` while the field is closed.
+    pub(crate) fn search(&self) -> Option<&GuiSearchFrame> {
+        optional_value(self.batch.search.as_ref())
+    }
+
+    /// The Settings screen, `None` while the screen is closed.
+    pub(crate) fn settings(&self) -> Option<&GuiSettingsFrame> {
+        optional_value(self.batch.settings.as_ref())
+    }
+
+    /// The playhead section the window holds: the anchor and the revision it
+    /// carries, `None` while no anchor was sent. A tick that sends no new
+    /// anchor leaves both as they were.
+    pub(crate) fn playhead_section(&self) -> Option<&GuiSection<GuiPlayhead>> {
+        self.batch.playhead.as_ref()
+    }
 }
 
 /// A core thread over a stub queue of `slots`: the sender for its channel,
-/// the capture end of its frame sink, and the App's waker. The wait cadence
+/// the capture end of its section sink, and the App's waker. The wait cadence
 /// is zeroed, so a step with nothing queued is non-blocking.
 pub(crate) struct TestCore {
     /// The scratch state directory the construction read: the core thread
@@ -136,32 +272,28 @@ pub(crate) struct TestCore {
     pub(crate) core: CoreThread,
     pub(crate) tx: mpsc::Sender<CoreInput>,
     waker: mbv::ClientWaker,
-    frames: mpsc::Receiver<GuiWindowFrame>,
+    batches: mpsc::Receiver<GuiSectionBatch>,
+    held: Held,
     quits: mpsc::Receiver<()>,
 }
 
 impl TestCore {
-    /// The next emitted frame's slice, as every core-thread frame is one.
-    pub(crate) fn next_frame(&self) -> GuiFrame {
-        match self.frames.try_recv().expect("the core emitted a frame") {
-            GuiWindowFrame::Slice(frame) => *frame,
-            GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
-        }
+    /// The next batch the core sent, merged into the window's held sections.
+    /// Panics when the core sent none.
+    pub(crate) fn next_batch(&mut self) -> GuiSectionBatch {
+        let batch = self.batches.try_recv().expect("the core sent a batch");
+        self.held.merge(batch.clone());
+        batch
     }
 
-    /// The newest frame the core has emitted, draining the older ones: a
-    /// test that pumps steps between commands reads the frame the last
-    /// emitted state built, never an intermediate one. `None` while the core
-    /// has emitted no frame at all.
-    pub(crate) fn latest_frame(&self) -> Option<GuiFrame> {
-        let mut latest = None;
-        while let Ok(frame) = self.frames.try_recv() {
-            latest = Some(match frame {
-                GuiWindowFrame::Slice(frame) => *frame,
-                GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
-            });
+    /// What the window holds after every batch the core has sent: the batches
+    /// not yet read are merged first. A test that pumps steps between commands
+    /// reads the state the last step left.
+    pub(crate) fn held(&mut self) -> Held {
+        while let Ok(batch) = self.batches.try_recv() {
+            self.held.merge(batch);
         }
-        latest
+        self.held.clone()
     }
 }
 
@@ -184,9 +316,9 @@ pub(crate) fn test_emby_client(http: &MockHttp) -> EmbyClient {
 pub(crate) fn test_core_with(app: App) -> TestCore {
     let waker = app.client_waker();
     let (tx, rx) = mpsc::channel();
-    let (frame_tx, frame_rx) = mpsc::channel();
-    let sink: FrameSink = Box::new(move |frame| {
-        let _ = frame_tx.send(frame);
+    let (batch_tx, batch_rx) = mpsc::channel();
+    let sink: SectionSink = Box::new(move |batch| {
+        let _ = batch_tx.send(batch);
     });
     let (quit_tx, quit_rx) = mpsc::channel();
     let quit: QuitSink = Box::new(move || {
@@ -197,104 +329,68 @@ pub(crate) fn test_core_with(app: App) -> TestCore {
     let state_dir_ownership = TestStateDirGuard::new_if_unset();
     let mut core = CoreThread::new(app, rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
+    // Every core-thread test audits its section marks (design D3): a clean
+    // gated section must match its fresh build, so a missed mark fails here.
+    core.set_section_audit_for_test(true);
     core.install_waker(tx.clone());
     TestCore {
         _state_dir: state_dir_ownership,
         core,
         tx,
         waker,
-        frames: frame_rx,
+        batches: batch_rx,
+        held: Held::default(),
         quits: quit_rx,
     }
 }
 
-/// One input on the channel yields exactly one frame from one step, and the
-/// frame carries the Queue rows the projection pushed; a step with nothing
-/// queued changes nothing and emits no frame (design D3).
+/// The first step sends the queue rows the projection pushed (design D2): the
+/// queue section is built on the first tick, whatever the input.
 #[test]
-fn one_input_yields_one_frame() {
+fn the_first_batch_carries_the_queue_rows() {
     let mut test = test_core(2);
     test.tx.send(key_press()).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert_eq!(frame.queue.rows.len(), 2);
-    assert_no_frame(&test.frames);
-    assert!(test.core.step());
-    assert_no_frame(&test.frames);
+    assert_eq!(test.held().queue().rows.len(), 2);
 }
 
-/// A timeout tick whose render cadence elapsed emits the frame (design D3's
-/// changed-state rule): the Owner applies the playhead's progress without an
-/// event the core's drains see, so the shared cadence is what keeps the panel
-/// moving while the window takes no input. Regression for the user report of
-/// 2026-11-07: the now-playing panel froze until the window had focus, the
-/// pointer moves being the only inputs a frame followed.
+/// An idle tick with nothing changed sends no batch (design D2): the timeout
+/// tick builds the compared sections and finds each equal to its last value.
 #[test]
-fn a_cadence_due_timeout_tick_emits_the_frame() {
+fn an_idle_tick_with_nothing_changed_sends_no_batch() {
     let mut test = test_core(2);
     assert!(test.core.step());
-    test.next_frame();
+    test.next_batch();
 
-    // The cadence interval (1 s idle) elapsed since the last frame; the step
-    // takes no input — the recv timeout only.
-    test.core
-        .set_last_frame_for_test(Instant::now().checked_sub(Duration::from_secs(2)).unwrap());
     assert!(test.core.step());
-    test.next_frame();
-    assert_no_frame(&test.frames);
+    assert_no_batch(&test.batches);
 }
 
-/// A waker wake feeds the channel and the next step ticks on it (design D3).
+/// A layout report that moves nothing sends nothing (design D4): the report
+/// applies the layout and marks no section, so an unchanged layout builds to
+/// the values the window holds.
 #[test]
-fn waker_wake_yields_a_tick() {
+fn a_layout_report_that_moves_nothing_sends_nothing() {
     let mut test = test_core(2);
-    test.waker.wake();
     assert!(test.core.step());
-    test.next_frame();
-    assert_no_frame(&test.frames);
-}
+    test.next_batch();
 
-/// A `report_layout` emits the current frame with no state change behind it
-/// (design D3).
-#[test]
-fn layout_report_emits_a_frame_without_a_state_change() {
-    let mut test = test_core(2);
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
-    assert_no_frame(&test.frames);
+    assert_no_batch(&test.batches);
 }
 
-/// The first emitted frame carries the theme; a later frame does not repeat
-/// it (design D7).
+/// The theme section rides the first batch and is not sent again while the
+/// palette is unchanged (design D2's gated theme).
 #[test]
-fn only_the_first_frame_carries_the_theme() {
+fn the_theme_section_is_sent_once() {
     let mut test = test_core(2);
-    test.tx.send(key_press()).unwrap();
     assert!(test.core.step());
-    let first = test.next_frame();
-    assert!(first.theme.is_some());
-    test.waker.wake();
-    assert!(test.core.step());
-    let second = test.next_frame();
-    assert!(second.theme.is_none());
-}
+    assert!(test.next_batch().theme.is_some());
 
-/// A `report_layout` re-arms the theme (design D7): the front end sends the
-/// report when it mounts, so the frame after a webview reload carries the
-/// theme again.
-#[test]
-fn a_layout_report_after_the_first_frame_carries_the_theme_again() {
-    let mut test = test_core(2);
-    test.tx.send(key_press()).unwrap();
-    assert!(test.core.step());
-    assert!(test.next_frame().theme.is_some());
     test.waker.wake();
     assert!(test.core.step());
-    assert!(test.next_frame().theme.is_none());
-    test.tx.send(layout_report()).unwrap();
-    assert!(test.core.step());
-    assert!(test.next_frame().theme.is_some());
+    assert_no_batch(&test.batches);
 }
 
 /// A reported capacity of 14 sets the paging stride (task row 2.4): a
@@ -306,7 +402,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
     let mut test = test_core(20);
     test.tx.send(measured_layout(14, vec![])).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx
         .send(CoreInput::Key(KeyEvent::new(
@@ -315,9 +411,9 @@ fn a_reported_capacity_sets_the_paging_stride() {
         )))
         .unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert_eq!(frame.queue.cursor, Some(14));
-    assert_eq!(frame.queue.rows.len(), 14);
+    let held = test.held();
+    assert_eq!(held.queue().cursor, Some(14));
+    assert_eq!(held.queue().rows.len(), 14);
 }
 
 /// A routed quit key fires the quit edge and ends the run (design D9): the
@@ -426,11 +522,11 @@ fn an_announced_owner_shutdown_ends_the_run_and_saves_the_launch_location() {
     );
 }
 
-/// The visual slot's artwork rides the frame when the image is cached
-/// (design D10): the first frame carries the cached image's own bytes as
-/// a `data:` URL, and a later frame arms it again only when the art changed.
+/// The visual slot's artwork rides the playback section when the image is
+/// cached (design D7): the first batch carries the cached image's `mbv-art`
+/// reference, and a tick that changes nothing sends no playback section.
 #[test]
-fn a_cached_artwork_rides_the_frame_once() {
+fn a_cached_artwork_rides_the_playback_section() {
     let mut app = stub_app_with_playing_queue(1);
     app.enable_card_images_for_test();
     app.seed_card_image_for_test(
@@ -439,15 +535,18 @@ fn a_cached_artwork_rides_the_frame_once() {
     );
     let mut test = test_core_with(app);
     assert!(test.core.step());
-    let frame = test.next_frame();
-    match frame.playback.artwork {
-        Some(GuiCardArtwork::Image(detail)) => {
-            assert!(detail.starts_with("data:image/png;base64,"));
+    match test.held().playback().artwork.clone() {
+        Some(mbv_gui::art::GuiArtRef::Image { src }) => {
+            assert_eq!(
+                src,
+                mbv_gui::art::art_url(&mbv_gui::art::card_path(
+                    &mbv_images::emby_queue_landscape_cache_key("id")
+                ))
+            );
         }
-        artwork => panic!("the frame carries the cached artwork: {artwork:?}"),
+        artwork => panic!("the window holds the cached artwork: {artwork:?}"),
     }
     test.waker.wake();
     assert!(test.core.step());
-    let second = test.next_frame();
-    assert!(second.playback.artwork.is_none());
+    assert_no_batch(&test.batches);
 }

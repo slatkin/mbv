@@ -6,7 +6,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiShowsFrame } from '$lib/bridge/types';
+import { initialListScroll, showsScroll } from '$lib/library/scroll';
+import type { GuiShowsList } from '$lib/bridge/types';
 import { initialShowsUi, showsUi } from '$lib/library/shows';
 import LibraryShowsPills from './LibraryShowsPills.svelte';
 
@@ -20,10 +21,11 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
+	showsScroll.set(initialListScroll());
 });
 
 /** The carried Shows content with `all` selected (design D12). */
-function showsFrame(): GuiShowsFrame {
+function showsFrame(): GuiShowsList {
 	return {
 		libIdx: 0,
 		pills: [
@@ -33,17 +35,14 @@ function showsFrame(): GuiShowsFrame {
 		],
 		collectionNames: ['All series'],
 		loading: false,
-		workspaceLoading: false,
 		series: [],
 		upcomingFailed: false,
 		rows: [],
-		selected: null,
-		hero: null,
 	};
 }
 
 test('the pills paint the core\u2019s selection and never none', () => {
-	const { container } = render(LibraryShowsPills, { shows: showsFrame() });
+	const { container } = render(LibraryShowsPills, { list: showsFrame() });
 	const pressed = [...container.querySelectorAll('[data-library-pill]')].map((el) => [
 		el.getAttribute('data-library-pill'),
 		el.getAttribute('aria-pressed'),
@@ -57,7 +56,7 @@ test('the pills paint the core\u2019s selection and never none', () => {
 });
 
 test('a press sends the set-mode command with the pill\u2019s mode', async () => {
-	const { container } = render(LibraryShowsPills, { shows: showsFrame() });
+	const { container } = render(LibraryShowsPills, { list: showsFrame() });
 
 	await fireEvent.click(container.querySelector('[data-library-pill="upcoming"]') as HTMLElement);
 

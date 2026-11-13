@@ -11,17 +11,21 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, audiobooksScroll } from './scroll';
 import type {
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
 	GuiAudiobooksRow,
-	GuiLibraryContent,
 	GuiPanel,
 } from '$lib/bridge/types';
 import { installInput } from '$lib/bridge/input';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { audiobooksCursorRow, audiobooksUi, initialAudiobooksUi } from './audiobooks';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 import { moveAbsChapterCursor, playAbsChapter, queueAbsBook } from './audiobooks-workspace';
 
@@ -44,7 +48,8 @@ beforeEach(() => {
 	queueAbsBookMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	audiobooksUi.set(initialAudiobooksUi());
-	carryLibraryContent(null);
+	audiobooksScroll.set(initialListScroll());
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -55,7 +60,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		libraryList: get(libraryList),
+		search: null,
 	};
 }
 
@@ -96,39 +102,40 @@ const CATALOG: GuiAudiobooksRow[] = [
 	{ id: 'b3', title: 'Blindsight', subtitle: 'Peter Watts', duration: '10:02', sortLetter: 'B' },
 ];
 
-/** The carried Audiobooks frame: the catalog's first book selected. */
-const AUIB_FRAME: GuiAudiobooksFrame = {
+/** The carried Audiobooks list part: the catalog, its load facts. */
+const AUIB_LIST: GuiAudiobooksList = {
 	libIdx: 4,
 	loading: false,
 	failed: false,
-	workspaceLoading: false,
 	rows: CATALOG,
+};
+
+/** The carried Audiobooks detail part: the catalog's first book selected. */
+const AUIB_DETAIL: GuiAudiobooksDetail = {
+	workspaceLoading: false,
 	selected: 'b1',
+	playingBookId: null,
 	hero: null,
 };
 
 /** The carried Audiobooks content with a Hero on `hero`, and no Hero on
  * `null`. */
-function content(hero: GuiAudiobooksFrame['hero']): GuiLibraryContent {
+function content(hero: GuiAudiobooksDetail['hero']): LibrarySections {
 	return {
-		tabs: [
-			{ position: 1, label: 'Music' },
-			{ position: 4, label: 'Audiobooks' },
-		],
-		currentTab: 4,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: { ...AUIB_FRAME, hero },
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		list: {
+			tabs: [
+				{ position: 1, label: 'Music' },
+				{ position: 4, label: 'Audiobooks' },
+			],
+			currentTab: 4,
+			destination: { kind: 'audiobooks', ...AUIB_LIST },
+		},
+		detail: { kind: 'audiobooks', ...AUIB_DETAIL, hero },
 	};
 }
 
 /** The selected book's Hero facts with its Workspace's chapter rows. */
-const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
+const AUIB_HERO: NonNullable<GuiAudiobooksDetail['hero']> = {
 	title: 'Aftermath',
 	metaRows: [[{ text: 'Bill Wyman', kind: 'plain' }], [{ text: '4:32', kind: 'time' }]],
 	durationRow: 0,
@@ -136,19 +143,19 @@ const AUIB_HERO: NonNullable<GuiAudiobooksFrame['hero']> = {
 	overview: null,
 	artShape: 'portrait',
 	art: null,
-	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
+	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
 };
 
 /** Carry the content, focus the pane, and paint the list's cursor. */
 function carry(pane: LibraryPane, cursor: string | null = null): void {
 	const carried = content(pane === 'hero' ? AUIB_HERO : heroFor(pane));
-	carryLibraryContent({ revision: 1, search: null, content: carried });
+	carryLibrary(carried);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
 
 /** A hero-less pane still carries no Hero: the Upcoming-like frame. */
-function heroFor(pane: LibraryPane): GuiAudiobooksFrame['hero'] {
+function heroFor(pane: LibraryPane): GuiAudiobooksDetail['hero'] {
 	return pane === 'hero' ? AUIB_HERO : null;
 }
 
@@ -264,7 +271,7 @@ test('the list pane and a hero-less Hero pane consume every Library key', () => 
 	carry('list');
 	const list = LIBRARY_KEYS.map((key) => routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
-	carryLibraryContent({ revision: 1, search: null, content: content(null) });
+	carryLibrary(content(null));
 	const hero = LIBRARY_KEYS.map((key) =>
 		routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()),
 	);
@@ -298,7 +305,7 @@ test('Tab past the list without a Hero takes Queue Panel focus', () => {
 
 test('Tab walks from the list into the Hero', () => {
 	carry('list');
-	carryLibraryContent({ revision: 1, search: null, content: content(AUIB_HERO) });
+	carryLibrary(content(AUIB_HERO));
 
 	press('Tab');
 

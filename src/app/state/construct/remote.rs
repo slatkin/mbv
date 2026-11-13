@@ -167,9 +167,18 @@ impl App {
         endpoint: &DaemonEndpoint,
         config: crate::config::Config,
     ) -> Self {
-        Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
+        Self::new_remote_optional_with_config(
+            Some(client),
+            remote,
+            player_rx,
+            endpoint,
+            config,
+            mbv_images::ImageDecode::Pixels,
+        )
     }
 
+    /// The remote App a Client attaches with. `image_decode` is the Client's
+    /// image setting (design D14): the TUI keeps pixels, the GUI keeps source.
     #[must_use]
     pub(crate) fn new_remote_optional_with_config(
         client: Option<EmbyClient>,
@@ -177,6 +186,7 @@ impl App {
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &DaemonEndpoint,
         app_config: crate::config::Config,
+        image_decode: mbv_images::ImageDecode,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
         let (_, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
@@ -240,6 +250,7 @@ impl App {
             use_nerd_fonts: ui_config.use_nerd_fonts,
             indicator_style: ui_config.indicator_style.parse().unwrap_or_default(),
             image_cache_size: ui_config.image_cache_size,
+            image_decode,
             visualizer_glyph: ui_config.visualizer_glyph,
             card_image_tx,
             card_image_rx,
@@ -275,6 +286,7 @@ mod tests {
             player_rx,
             &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
             config,
+            mbv_images::ImageDecode::Pixels,
         )
     }
 

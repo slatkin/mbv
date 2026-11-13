@@ -6,33 +6,26 @@
 // re-exported below, so every call site keeps importing from the one bridge
 // module.
 
-import type { GuiAudiobooksFrame } from './library-types-audiobooks';
-import type { GuiEmbyFeedGroup, GuiEmbyFrame } from './library-types-emby';
-import type { GuiFeedsFrame, GuiFeedsLibraryCommand } from './library-types-feeds';
-import type { GuiHomeFrame, GuiHomeRowId, GuiHomeRowState } from './library-types-home';
-import type { GuiPodcastsFrame } from './library-types-podcasts';
+import type { GuiArtRef } from './art';
 import type {
-	GuiSearchFrame,
-	GuiSearchLibraryCommand,
-} from './library-types-search';
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
+} from './library-types-audiobooks';
+import type { GuiEmbyDetail, GuiEmbyFeedGroup, GuiEmbyList } from './library-types-emby';
+import type { GuiFeedsDetail, GuiFeedsLibraryCommand, GuiFeedsList } from './library-types-feeds';
+import type {
+	GuiHomeDetail,
+	GuiHomeList,
+	GuiHomeRowId,
+	GuiHomeRowState,
+} from './library-types-home';
+import type { GuiPodcastsDetail, GuiPodcastsList } from './library-types-podcasts';
+import type { GuiSearchLibraryCommand } from './library-types-search';
 
-/** The Library panel's section (add-gui-library-panel design D2). A frame
- * re-carries `content` only when `revision` changes; a `reportLayout` reload
- * re-carries it under the revision the window already holds, so the window
- * keeps its last carried content while `content` is `null`. */
-export interface GuiLibraryFrame {
-	revision: number;
-	content: GuiLibraryContent | null;
-	/** The Search facts while a search runs or its results hold (design D12,
-	 * row 12.1); `null` while the section is closed. It rides the frame, not
-	 * `content`, so the revision gating of the carried content never holds a
-	 * stale results section back. */
-	search: GuiSearchFrame | null;
-}
-
-/** The Library panel's content: the top bar's destination tabs and the
- * active destination's section. */
-export interface GuiLibraryContent {
+/** The `libraryList` section's value (gui-change-driven-sections design D8):
+ * the top bar's destination tabs and the active destination's list part. The
+ * whole section is `null` while no presented destination is active. */
+export interface GuiLibraryList {
 	/** The presented destination tabs in catalog order (design D2): one per
 	 * Grouped Music and Shows library. The top bar paints only these — no
 	 * stub for a destination the GUI does not present yet. */
@@ -41,39 +34,33 @@ export interface GuiLibraryContent {
 	 * tabs (design D2): the tab the top bar marks current. `null` for Home,
 	 * Feeds, and every destination the GUI does not present yet. */
 	currentTab: number | null;
-	/** The Grouped Music library's content while Music is active; `null` for a
-	 * destination that presents no content yet. */
-	music: GuiMusicFrame | null;
-	/** The Home destination's content while Home is active (design D12);
-	 * `null` while any other destination is active. The top bar marks the
-	 * Home icon current exactly while this field is present. */
-	home: GuiHomeFrame | null;
-	/** The Shows destination's content while a Shows library is active
-	 * (design D12, row 7.1); `null` while any other destination is active. */
-	shows: GuiShowsFrame | null;
-	/** The plain Emby-library destination's content while a plain Emby
-	 * library is active (design D12, row 8.1); `null` while any other
-	 * destination is active. */
-	emby: GuiEmbyFrame | null;
-	/** The Audiobooks destination's content while an Audiobookshelf book
-	 * library is active (design D12, row 9.1); `null` while any other
-	 * destination is active. */
-	audiobooks: GuiAudiobooksFrame | null;
-	/** The Podcasts destination's content while an Audiobookshelf podcast
-	 * library is active (design D12, row 10.1); `null` while any other
-	 * destination is active. */
-	podcasts: GuiPodcastsFrame | null;
-	/** The Feeds destination's content while Feeds is the active destination
-	 * (design D12, row 11.1); `null` while any other destination is active. A
-	 * Client holds one feed tab, so no library index names it. */
-	feeds: GuiFeedsFrame | null;
-	/** The right-click item menu the window content last opened (the row-menu
-	 * command), whichever destination's row named it (design D8, D15): the
-	 * item with the TUI menu builder's entries for it. `null` while no
-	 * right-click has named an item. It rides the content, not a destination's
-	 * section, because every destination's rows open the same menu. */
-	rowMenu: GuiLibraryRowMenu | null;
+	/** The active destination's list part, tagged with its `kind`. */
+	destination: GuiDestinationList;
 }
+
+/** The active destination's list part (design D8), tagged by `kind` the way
+ * the core's `GuiDestinationList` is. Narrow on `kind` to read one shape. */
+export type GuiDestinationList =
+	| ({ kind: 'music' } & GuiMusicList)
+	| ({ kind: 'home' } & GuiHomeList)
+	| ({ kind: 'shows' } & GuiShowsList)
+	| ({ kind: 'emby' } & GuiEmbyList)
+	| ({ kind: 'audiobooks' } & GuiAudiobooksList)
+	| ({ kind: 'podcasts' } & GuiPodcastsList)
+	| ({ kind: 'feeds' } & GuiFeedsList);
+
+/** The `libraryDetail` section's value (gui-change-driven-sections design D8):
+ * the active destination's detail part — the selection, the Hero, the
+ * Workspace, and the playing marks. `null` while no presented destination is
+ * active. */
+export type GuiLibraryDetail =
+	| ({ kind: 'music' } & GuiMusicDetail)
+	| ({ kind: 'home' } & GuiHomeDetail)
+	| ({ kind: 'shows' } & GuiShowsDetail)
+	| ({ kind: 'emby' } & GuiEmbyDetail)
+	| ({ kind: 'audiobooks' } & GuiAudiobooksDetail)
+	| ({ kind: 'podcasts' } & GuiPodcastsDetail)
+	| ({ kind: 'feeds' } & GuiFeedsDetail);
 
 /** One destination tab of the top bar (design D2). */
 export interface GuiLibraryTab {
@@ -301,8 +288,10 @@ export type GuiPodcastPill =
  * filters on, named as the TUI's `AudiobookshelfEpisodeFilter` names it. */
 export type GuiPodcastState = 'all' | 'unplayed' | 'played';
 
-/** The Music destination's content (design D5). */
-export interface GuiMusicFrame {
+/** The Music destination's list part (design D8): the group pills, the union
+ * of the selected groups' artists with their albums and cached tracklists, and
+ * the load facts. */
+export interface GuiMusicList {
 	/** The Grouped Music library index the set-collections command names
 	 * (design D2, D6): the library whose group pills these are. */
 	libIdx: number;
@@ -319,10 +308,15 @@ export interface GuiMusicFrame {
 	failure: string | null;
 	/** The union of the selected groups' artists in artist sort-name order. */
 	artists: GuiMusicArtist[];
+}
+
+/** The Music destination's detail part (design D8): the Hero of the picked
+ * album, its square artwork, and the id of the playing track. */
+export interface GuiMusicDetail {
 	/** The Hero's facts; `null` while no album of the union is picked. */
 	hero: GuiMusicHero | null;
 	/** The Hero's square artwork, present exactly when `hero` is. */
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The id of the Emby track playing at the playhead (the Library's
 	 * playing row): the Queue panel's own authority, carried so a tracklist
 	 * row and a list track row paint what the Queue's active slot paints.
@@ -423,12 +417,7 @@ export interface GuiMusicMenuEntryFrame {
 	index: number;
 }
 
-/** The Library Hero's square artwork (design D5). The image and placeholder
- * payloads are `data:` URLs the core encoded from the mbv image cache. */
-export type GuiLibraryArt =
-	| { kind: 'image'; detail: string }
-	| { kind: 'placeholder'; detail: string }
-	| { kind: 'loading' };
+export type { GuiArtRef };
 
 /** The data type a meta segment carries; colour carries the type in the
  * window (design D14). */
@@ -448,11 +437,10 @@ export type GuiMetaRow = GuiMetaSegment[];
  * list's letter rail replaces them. */
 export type GuiShowsMode = 'latest' | 'upcoming' | 'all';
 
-/** The Shows destination's content (design D14), present while a Shows
- * library is the active destination: the view-mode pills, the active mode's
- * rows — the All mode's tree or the flat lists — the core's selected row, and
- * its Hero. */
-export interface GuiShowsFrame {
+/** The Shows destination's list part (design D14, D8): the view-mode pills,
+ * the active mode's rows — the All mode's tree or the flat lists — and the
+ * load facts. */
+export interface GuiShowsList {
 	/** The Shows library index the Shows commands name (design D2, D12). */
 	libIdx: number;
 	/** The three view-mode pills in the design's order (design D12). */
@@ -462,9 +450,6 @@ export interface GuiShowsFrame {
 	collectionNames: string[];
 	/** Whether the active mode's list has not landed yet. */
 	loading: boolean;
-	/** Whether the selected series' detail or the selected season's episodes
-	 * fetch has not landed yet (the All series mode only). */
-	workspaceLoading: boolean;
 	/** The All series mode's tree (design D14): the series nodes with their
 	 * seasons and loaded episodes. Empty in the flat modes. */
 	series: GuiShowsSeries[];
@@ -473,6 +458,14 @@ export interface GuiShowsFrame {
 	upcomingFailed: boolean;
 	/** The active mode's rows in the list's order (the flat lists). */
 	rows: GuiShowsRow[];
+}
+
+/** The Shows destination's detail part (design D8): the core's selected row,
+ * its Hero, and the Workspace's load fact. */
+export interface GuiShowsDetail {
+	/** Whether the selected series' detail or the selected season's episodes
+	 * fetch has not landed yet (the All series mode only). */
+	workspaceLoading: boolean;
 	/** The core's selected row (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first row is the Hero default. */
 	selected: string | null;
@@ -557,7 +550,7 @@ export interface GuiShowsHero {
 	 * arm: landscape for a series and a thumb-declared episode, portrait
 	 * for a poster-declared one). */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The series Hero's Workspace; `null` on the Latest mode's episode
 	 * Hero and while the selected series' detail has not landed. */
 	workspace: GuiShowsWorkspace | null;
@@ -602,8 +595,9 @@ export interface GuiShowsEpisodeRow {
 
 export type {
 	GuiHomeContentId,
-	GuiHomeFrame,
+	GuiHomeDetail,
 	GuiHomeHero,
+	GuiHomeList,
 	GuiHomeRow,
 	GuiHomeRowId,
 	GuiHomeRowKind,
@@ -620,25 +614,28 @@ export type {
 
 export type {
 	GuiFeedPill,
-	GuiFeedsFrame,
+	GuiFeedsDetail,
 	GuiFeedsHero,
 	GuiFeedsLibraryCommand,
+	GuiFeedsList,
 	GuiFeedsPill,
 	GuiFeedsRow,
 } from './library-types-feeds';
 
 export type {
-	GuiPodcastsFrame,
+	GuiPodcastsDetail,
 	GuiPodcastsHero,
+	GuiPodcastsList,
 	GuiPodcastsPill,
 	GuiPodcastsRow,
 } from './library-types-podcasts';
 
 export type {
+	GuiEmbyDetail,
 	GuiEmbyFeedGroup,
-	GuiEmbyFrame,
 	GuiEmbyHero,
 	GuiEmbyHeroCredit,
+	GuiEmbyList,
 	GuiEmbyPill,
 	GuiEmbyRow,
 	GuiEmbyRowKind,
@@ -646,8 +643,9 @@ export type {
 
 export type {
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
 	GuiAudiobooksHero,
+	GuiAudiobooksList,
 	GuiAudiobooksRow,
 	GuiAudiobooksWorkspace,
 } from './library-types-audiobooks';

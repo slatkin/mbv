@@ -13,6 +13,7 @@ import type { GuiAudiobooksRow } from '$lib/bridge/types';
 import type { RailLetter } from './list';
 import { LETTER_ROW_HEIGHT, filterMatch, letterRail, moveCursor } from './list';
 import type { ListMove } from './list';
+import { memoRows } from './row-memo';
 
 /** The letter heading row's height in logical pixels (design D12, row 9.1):
  * the Music list's letter heading, which the book list reuses. */
@@ -111,3 +112,6 @@ export function moveAudiobooksCursor(
 export function audiobooksLetterRail(rows: readonly AudiobooksListRow[]): RailLetter[] {
 	return letterRail(rows, (row) => (row.kind === 'item' ? row.row.sortLetter : null));
 }
+
+/** The Audiobooks rows, memoized on the carried rows and the filter (design D9). */
+export const audiobooksRowsOf = memoRows(buildAudiobooksRows);

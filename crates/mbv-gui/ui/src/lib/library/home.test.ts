@@ -7,9 +7,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiHomeFrame, GuiHomeRow, GuiLibraryContent } from '$lib/bridge/types';
+import { initialListScroll, homeScroll } from './scroll';
+import type { GuiHomeDetail, GuiHomeList, GuiHomeRow } from '$lib/bridge/types';
 import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from './home-list';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
+import { initialLibraryUi, libraryUi } from './state';
 import {
 	homeUi,
 	initialHomeUi,
@@ -26,6 +29,7 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	libraryUi.set(initialLibraryUi());
 	homeUi.set(initialHomeUi());
+	homeScroll.set(initialListScroll());
 });
 
 /** The item row's narrowed type: the union's arm a populated row carries. */
@@ -56,35 +60,38 @@ const ADDED: ItemRow = {
 };
 
 /** The carried content while Home is active (design D12). */
-function content(): GuiLibraryContent {
-	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: null,
-		music: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-		home: { loading: false,
-			rows: [
-				{ row: 'heading', text: 'Continue watching' },
-				CONTINUED,
-				{ row: 'spacer' },
-				{ row: 'heading', text: 'Recently added' },
-				ADDED,
-			],
-			selected: CONTINUED.id,
-			hero: null,
-		} satisfies GuiHomeFrame,
+function content(): LibrarySections {
+	const list: GuiHomeList = {
+		loading: false,
+		rows: [
+			{ row: 'heading', text: 'Continue watching' },
+			CONTINUED,
+			{ row: 'spacer' },
+			{ row: 'heading', text: 'Recently added' },
+			ADDED,
+		],
 	};
+	const detail: GuiHomeDetail = { selected: CONTINUED.id, hero: null };
+	return {
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: null,
+			destination: { kind: 'home', ...list },
+		},
+		detail: { kind: 'home', ...detail },
+	};
+}
+
+/** The carried Home rows, as the flat list paints them (design D12). */
+function carriedRows(): GuiHomeRow[] {
+	const destination = content().list.destination;
+	return destination.kind === 'home' ? destination.rows : [];
 }
 
 /** Carry the Home content, so the panel's presence fact holds and the row
  * model has its rows (design D2, D12). */
 function carry(): void {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 }
 
 test('a cursor move that settles on a row selects it by its opaque id', () => {
@@ -94,7 +101,7 @@ test('a cursor move that settles on a row selects it by its opaque id', () => {
 	moveHomeListCursor('down');
 
 	expect(get(homeUi).cursor).toBe(homeRowKey(ADDED.id));
-	expect(get(homeUi).scrollTop).toBe(0);
+	expect(get(homeScroll).scrollTop).toBe(0);
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'homeSelect', row: ADDED.id },
 	});
@@ -105,7 +112,7 @@ test('a cursor move past a section scrolls the row into view', () => {
 	measureHomeList(HOME_ITEM_ROW_HEIGHT * 3);
 	homeUi.set({ ...get(homeUi), cursor: homeRowKey(CONTINUED.id) });
 
-	const rows = buildHomeRows(content().home?.rows ?? []);
+	const rows = buildHomeRows(carriedRows());
 	const adRow = rows.find((row) => row.id === homeRowKey(ADDED.id)) as {
 		top: number;
 		height: number;
@@ -114,7 +121,7 @@ test('a cursor move past a section scrolls the row into view', () => {
 	moveHomeListCursor('end');
 
 	expect(get(homeUi).cursor).toBe(homeRowKey(ADDED.id));
-	expect(get(homeUi).scrollTop).toBe(adRow.top + adRow.height - HOME_ITEM_ROW_HEIGHT * 3);
+	expect(get(homeScroll).scrollTop).toBe(adRow.top + adRow.height - HOME_ITEM_ROW_HEIGHT * 3);
 });
 
 // The press is the selection's half only (design D12): it selects, and Enter
@@ -122,7 +129,7 @@ test('a cursor move past a section scrolls the row into view', () => {
 // its press changes nothing.
 test('a press on a heading selects nothing', () => {
 	carry();
-	const heading = buildHomeRows(content().home?.rows ?? [])[0];
+	const heading = buildHomeRows(carriedRows())[0];
 
 	pressHomeRow(heading);
 

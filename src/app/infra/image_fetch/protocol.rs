@@ -1,7 +1,7 @@
 use super::super::super::{App, MusicEvent};
 use super::CardImageDrain;
 use mbv_images::{
-    ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
+    ImageDecode, ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
     QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, SourceImage, cover_fill_hero_box,
 };
 use mbv_theme as palette;
@@ -263,7 +263,7 @@ impl App {
                 .log_decision(cache_key, item_kind, "NoBaseEntry", None);
             return None;
         };
-        let source_dimensions = entry.img.as_ref().map(image::GenericImageView::dimensions);
+        let source_dimensions = entry.dimensions();
         let Some(size) = self.title_protocol_size(cache_key, available) else {
             self.title_log_gate.log_decision(
                 cache_key,
@@ -506,7 +506,7 @@ impl App {
                 cache_key.contains(mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX);
             let interrupted = matches!(outcome, ImageFetchOutcome::Interrupted);
             let (img_opt, source) = match outcome {
-                ImageFetchOutcome::Image { img, source } => (Some(img), Some(source)),
+                ImageFetchOutcome::Image { img, source } => (img, Some(source)),
                 ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => (None, None),
             };
             let entry = self.images.build_cached_image(
@@ -530,7 +530,7 @@ impl App {
                             artist_id: identity.artist_id,
                             revision: identity.revision,
                             cache_key: cache_key.clone(),
-                            available: entry.img.is_some(),
+                            available: entry.has_art(),
                         })
                     });
             if interrupted && artist_completion.is_none() {
@@ -558,6 +558,7 @@ impl App {
             (String::new(), String::new())
         };
         let tx = self.images.card_image_tx().clone();
+        let decode = self.image_decode;
         std::thread::spawn(move || {
             // catch_unwind so a panic during fetch/decode still reports a result,
             // freeing the in-flight slot and the loading reservation (H9). Exactly
@@ -568,7 +569,7 @@ impl App {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 // Decode off the UI thread; the main loop only builds the protocol.
                 let outcome = match fetch_image_bytes(req, &server_url, &token) {
-                    FetchedBytes::Bytes(bytes) => decode_fetched(bytes),
+                    FetchedBytes::Bytes(bytes) => decode_fetched(bytes, decode),
                     FetchedBytes::Missing => ImageFetchOutcome::Empty,
                     FetchedBytes::Interrupted => ImageFetchOutcome::Interrupted,
                 };
@@ -581,15 +582,28 @@ impl App {
     }
 }
 
-/// The decoded image and the server bytes it came from, or `Empty` when the
-/// bytes are no image.
-fn decode_fetched(bytes: Vec<u8>) -> ImageFetchOutcome {
-    let Ok(img) = image::load_from_memory(&bytes) else {
-        return ImageFetchOutcome::Empty;
-    };
-    SourceImage::sniff(bytes).map_or(ImageFetchOutcome::Empty, |source| {
-        ImageFetchOutcome::Image { img, source }
-    })
+/// The server bytes a fetch kept, with the decoded image when `decode` asks
+/// for pixels (design D14), or `Empty` when the bytes are no image. A
+/// source-only fetch reads the header alone, so its size and MIME type come
+/// from the bytes without a pixel decode.
+fn decode_fetched(bytes: Vec<u8>, decode: ImageDecode) -> ImageFetchOutcome {
+    match decode {
+        ImageDecode::Pixels => {
+            let Ok(img) = image::load_from_memory(&bytes) else {
+                return ImageFetchOutcome::Empty;
+            };
+            SourceImage::sniff(bytes).map_or(ImageFetchOutcome::Empty, |source| {
+                ImageFetchOutcome::Image {
+                    img: Some(img),
+                    source,
+                }
+            })
+        }
+        ImageDecode::SourceOnly => SourceImage::sniff(bytes)
+            .map_or(ImageFetchOutcome::Empty, |source| {
+                ImageFetchOutcome::Image { img: None, source }
+            }),
+    }
 }
 
 /// One image request's result (invariant 27).

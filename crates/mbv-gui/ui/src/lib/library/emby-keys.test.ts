@@ -11,18 +11,22 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, embyScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type {
-	GuiEmbyFrame,
+	GuiEmbyDetail,
+	GuiEmbyList,
 	GuiEmbyHero,
 	GuiEmbyRow,
-	GuiLibraryContent,
 	GuiPanel,
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { embyCursorRow, embyUi, initialEmbyUi } from './emby';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -31,7 +35,8 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	embyUi.set(initialEmbyUi());
-	carryLibraryContent(null);
+	embyScroll.set(initialListScroll());
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -42,7 +47,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		libraryList: get(libraryList),
+		search: null,
 	};
 }
 
@@ -115,8 +121,8 @@ function embyContent(
 	feedGroup: boolean,
 	rows: GuiEmbyRow[],
 	hero: GuiEmbyHero | null = null,
-): GuiLibraryContent {
-	const emby: GuiEmbyFrame = {
+): LibrarySections {
+	const emby: GuiEmbyList = {
 		libIdx: 3,
 		libraryName: 'Movies',
 		pills: feedGroup
@@ -135,33 +141,28 @@ function embyContent(
 		loading: false,
 		failed: false,
 		rows,
-		selected: rows[0]?.id ?? null,
-		hero,
 	};
+	const detail: GuiEmbyDetail = { selected: rows[0]?.id ?? null, hero };
 	return {
-		tabs: [
-			{ position: 1, label: 'Music' },
-			{ position: 3, label: 'Movies' },
-		],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: null,
-		emby,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		list: {
+			tabs: [
+				{ position: 1, label: 'Music' },
+				{ position: 3, label: 'Movies' },
+			],
+			currentTab: 3,
+			destination: { kind: 'emby', ...emby },
+		},
+		detail: { kind: 'emby', ...detail },
 	};
 }
 
 /** Carry the Emby content and focus the pane the key acts on. */
 function carryEmby(
-	content: GuiLibraryContent,
+	content: LibrarySections,
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, search: null, content });
+	carryLibrary(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	embyUi.set({ ...initialEmbyUi(), cursor });
 }

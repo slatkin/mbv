@@ -1,10 +1,10 @@
-//! The open overlay's frame section (add-tauri-gui-client rows 6.2 and
+//! The open overlay's section (add-tauri-gui-client rows 6.2 and
 //! 6.4, design D4): the row menu with its key hints, a track chip's popover
 //! with its choices, or the playback-target chooser with its choices. Each
 //! field mirrors one fact of the library's `GuiOverlayProjection`, built
-//! from the same playback projection read the frame carries, so the
+//! from the same playback projection read in the same tick, so the
 //! popover's choices and the track chips, and the chooser's choices and the
-//! header's target fact, cannot disagree inside one frame.
+//! header's target fact, cannot disagree inside one tick.
 
 use mbv::{GuiOverlayProjection, RowMenuEntryProjection, TrackPopoverChoice};
 use mbv_ui_msg::TrackChipKind;
@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use super::playback::GuiTargetChoice;
 
-/// The open menu or popover the window paints. `None` in the frame while no
+/// The open menu or popover the window paints. `None` in the section while no
 /// overlay is open.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -152,7 +152,7 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
     }
 }
 
-/// One row-menu entry as the frame carries it: the label, the key chord that
+/// One row-menu entry as the section carries it: the label, the key chord that
 /// selects the entry directly when it has one, and whether it is
 /// destructive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

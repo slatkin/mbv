@@ -7,7 +7,9 @@ import type { GuiChrome, GuiRgb, GuiRole, GuiTheme } from './theme-types';
 // lives in `library-types.ts`; this module re-exports it so every consumer
 // keeps importing from the one bridge module.
 
-import type { GuiLibraryFrame } from './library-types';
+import type { GuiArtRef } from './art';
+import type { GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenu } from './library-types';
+import type { GuiSearchFrame } from './library-types-search';
 import type { GuiSettingsFrame } from './settings-types';
 
 export type {
@@ -40,28 +42,32 @@ export type {
 export type {
 	GuiArtistKey,
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
 	GuiAudiobooksHero,
 	GuiAudiobooksRow,
 	GuiAudiobooksWorkspace,
 	GuiHomeContentId,
-	GuiHomeFrame,
+	GuiHomeDetail,
+	GuiHomeList,
 	GuiHomeHero,
 	GuiHomeRow,
 	GuiHomeRowId,
 	GuiHomeRowKind,
 	GuiHomeRowState,
-	GuiLibraryArt,
+	GuiArtRef,
 	GuiMetaKind,
 	GuiMetaRow,
 	GuiMetaSegment,
 	GuiLibraryCommand,
-	GuiLibraryContent,
-	GuiLibraryFrame,
+	GuiDestinationList,
+	GuiLibraryDetail,
+	GuiLibraryList,
 	GuiLibraryTab,
 	GuiMusicAlbum,
 	GuiMusicArtist,
-	GuiMusicFrame,
+	GuiMusicDetail,
+	GuiMusicList,
 	GuiMusicHero,
 	GuiMusicMenuEntryFrame,
 	GuiMusicPill,
@@ -69,18 +75,21 @@ export type {
 	GuiMusicTrack,
 	GuiMusicTrackTotal,
 	GuiPodcastPill,
-	GuiPodcastsFrame,
+	GuiPodcastsDetail,
+	GuiPodcastsList,
 	GuiPodcastsHero,
 	GuiPodcastsPill,
 	GuiPodcastsRow,
 	GuiEmbyFeedGroup,
-	GuiEmbyFrame,
+	GuiEmbyDetail,
+	GuiEmbyList,
 	GuiEmbyHero,
 	GuiEmbyHeroCredit,
 	GuiEmbyPill,
 	GuiEmbyRow,
 	GuiFeedPill,
-	GuiFeedsFrame,
+	GuiFeedsDetail,
+	GuiFeedsList,
 	GuiFeedsHero,
 	GuiFeedsLibraryCommand,
 	GuiFeedsPill,
@@ -90,7 +99,8 @@ export type {
 	GuiSearchRow,
 	GuiEmbyRowKind,
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsDetail,
+	GuiShowsList,
 	GuiShowsHero,
 	GuiShowsMode,
 	GuiShowsPill,
@@ -101,43 +111,75 @@ export type {
 	GuiShowsWorkspace,
 } from './library-types';
 
-/** One `mbv://frame` payload: the attached slice's frame, or the state of a window whose Owner attach has not finished (design D9). */
-export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
+/** One window section's content and the revision it carries (design D1 of
+ * gui-change-driven-sections): the window keeps the section in its own store
+ * and skips a write whose revision it already holds. */
+export interface GuiSection<T> {
+	revision: number;
+	value: T;
+}
 
-/** The attached slice's frame: every section the window paints. */
-export interface GuiFrame {
+/** The value type of each window section: the key set is the section set, and
+ * a section whose content can be absent carries an `Option` value, so a
+ * section value of `null` clears it (design D1). Each key mirrors one optional
+ * field of `GuiSectionBatch` in crates/mbv-gui/src/bridge/sections.rs. */
+export interface SectionValues {
+	/** The pre-attach state the window shows, `null` once the attach
+	 * succeeds. */
+	attach: GuiAttachState | null;
+	/** The role-to-colour map. */
+	theme: GuiTheme;
+	/** The focused surface and the Panel that holds focus. */
 	focus: GuiFocus;
+	/** The Queue rows inside the viewport, with the cursor, marks, and the
+	 * active slot. */
 	queue: GuiQueue;
-	/** The queue header's facts: the remaining count, the finish clock, the
-	 * right column's mode, and the filter text with its caret fact. */
+	/** The queue summary: the remaining count, the finish clock, the right
+	 * column's mode, and the filter. */
 	summary: GuiQueueSummary;
-	/** The panel toggles the front end picks the layout with (design D10). */
+	/** The panel toggles the front end picks the layout with, and the UI-reset
+	 * counter that resets its interaction stores. */
 	panel: GuiPanelToggles;
-	/** The open menu or popover; `null` while none is open (design D4). */
+	/** The open menu or popover, `null` while none is open. */
 	overlay: GuiOverlayFrame | null;
+	/** The transport band's facts, without the hover preview. */
 	playback: GuiQueuePlayback;
+	/** The scrubber's hover preview, `null` while the pointer is away from
+	 * the bar. */
+	hover: GuiScrubberHover | null;
+	/** The Queue footer's status pills. */
 	footer: GuiQueueFooter;
+	/** The Status bar projection. */
 	status: GuiStatusBar;
-	/** The Library panel's section (add-gui-library-panel design D2): the
-	 * active destination's content under its revision. `null` while no Library
-	 * panel shows. */
-	library: GuiLibraryFrame | null;
-	/** The Settings screen's section (add-gui-settings-screen design D9). `null`
-	 * while the screen is closed: the window replaces the two columns with the
-	 * screen only for a frame that carries it. */
+	/** The Library list: the destination tabs and the active destination's list
+	 * part, `null` while no presented destination is active. */
+	libraryList: GuiLibraryList | null;
+	/** The Library detail: the active destination's selection, Hero, Workspace,
+	 * and playing marks, `null` while no presented destination is active. */
+	libraryDetail: GuiLibraryDetail | null;
+	/** The right-click item menu the window last opened, `null` while none is
+	 * open. */
+	rowMenu: GuiLibraryRowMenu | null;
+	/** The Search section: the query the top bar answers and its rows, `null`
+	 * while the field is closed. */
+	search: GuiSearchFrame | null;
+	/** The Settings screen, `null` while the screen is closed. */
 	settings: GuiSettingsFrame | null;
-	/** The UI-reset counter (design D10): the front end resets its interaction
-	 * stores when the value changes. */
-	uiResetEpoch: number;
-	/** `null` unless the theme changed for this window (design D7). */
-	theme: GuiTheme | null;
 }
 
-/** The Owner attach state the window shows before a slice exists (design D9). */
-export interface GuiAttachFrame {
-	state: GuiAttachState;
-	theme: GuiTheme | null;
-}
+/** The name of one window section. */
+export type SectionName = keyof SectionValues;
+
+/** One `mbv://sections` payload (design D1): a present field replaces the
+ * window's section at the carried revision, and an absent field leaves the
+ * window's section as it is. The fields mirror `GuiSectionBatch`'s optional
+ * serde fields field for field. The `playhead` anchor (design D5) rides the
+ * batch too, but it is not a section store: `sections.ts` stamps it into
+ * `playhead.ts`'s prediction stores, so it is an explicit field here, not a
+ * mapped one over `SectionValues`. */
+export type GuiSectionBatch = {
+	[K in SectionName]?: GuiSection<SectionValues[K]>;
+} & { playhead?: GuiSection<GuiPlayhead> };
 
 /** One variant per Owner attach outcome, with the text the TUI Client gets. */
 export type GuiAttachState =
@@ -172,7 +214,7 @@ export type GuiPopup = 'multiselect' | 'libraryRoutes' | 'feedManage';
 export type GuiPanel = 'queue' | 'library';
 
 /** The queue summary the header paints: the remaining count, the queue
- * finish clock, the right column's mode, and the filter text. */
+ * finish's tail offset, the right column's mode, and the filter text. */
 export interface GuiQueueSummary {
 	/** The slots after the active index; the whole queue while no slot
 	 * carries the playhead. */
@@ -182,9 +224,11 @@ export interface GuiQueueSummary {
 	 * queue, not from the painted rows, because the strip paints no Queue
 	 * list. `null` while no slot follows the playhead. */
 	nextTitle: string | null;
-	/** The wall-clock time the shown queue finishes; `null` while no slot
+	/** The shown queue's tail (design D5): the queue's finish as seconds
+	 * after the end of the active item, which the window adds to the wall
+	 * clock now plus the active item's remaining time. `null` while no slot
 	 * carries the playhead or a pending runtime in the chain is unknown. */
-	finishClock: string | null;
+	tailSecs: number | null;
 	/** Which value the rows' right column paints. */
 	rightColumn: GuiRightColumn;
 	/** The queue filter's text, which narrows the projected rows locally;
@@ -196,10 +240,14 @@ export interface GuiQueueSummary {
 }
 
 /** The canvas panel's collapse and queue-fold facts (design D10): the `z`
- * and `q` toggles the Client core holds. */
+ * and `q` toggles the Client core holds, with the UI-reset counter the window
+ * resets its interaction stores and panel widths on (add-gui-settings-screen
+ * design D10). The counter rides this section so a reset moves the section's
+ * revision. */
 export interface GuiPanelToggles {
 	collapsed: boolean;
 	queueFolded: boolean;
+	uiResetEpoch: number;
 }
 
 /** The open menu or popover (design D4). */
@@ -336,10 +384,12 @@ export type GuiQueueRow =
 			trailing: GuiTrailing | null;
 			/** The right column's "Length" value. */
 			duration: string | null;
-			/** The right column's "Ends at" value; `null` for a slot before the
-			 * playhead and for a slot whose finish chain an unknown runtime
-			 * broke. */
-			endsAt: string | null;
+			/** The row's end as seconds after the active item's end (design
+			 * D5): the right column's "Ends at" fact, which the window turns
+			 * into a wall clock from the playhead anchor. `null` for a slot
+			 * before the playhead and for a slot whose end chain an unknown
+			 * runtime broke. */
+			endsAfterSecs: number | null;
 			kind: GuiMediaKind;
 			state: GuiSemanticState;
 			/** Whether the row takes the alternating `QueueColumn` fill — the
@@ -357,21 +407,19 @@ export type GuiSemanticState =
 	| { state: 'ordinary' }
 	| { state: 'played' }
 	| { state: 'active'; progress: number | null }
-	| { state: 'nowPlaying'; progress: number | null };
+	/** The now-playing state carries no progress (design D5): the window
+	 * reads the playhead's played fraction for the row whose slot is the
+	 * active slot. */
+	| { state: 'nowPlaying' };
 
-/** The Queue playback transport band's facts. */
+/** The Queue playback transport band's facts, without the playhead facts
+ * (design D5): they ride the `playhead` anchor, which the window predicts
+ * from between anchors. */
 export interface GuiQueuePlayback {
 	status: GuiNowPlayingStatus;
 	host: string;
 	hostIsRemote: boolean;
 	shown: boolean;
-	playback: GuiPlaybackState;
-	/** The seek row's left clock (the playhead's elapsed time), formatted by
-	 * the TUI's shared duration formatter. */
-	elapsedClock: string;
-	/** The seek row's right clock (the time left in the active item), in the
-	 * same format. The window paints the minus sign before it. */
-	remainingClock: string;
 	showControls: boolean;
 	nowPlayingTitle: string | null;
 	/** The now-playing parent line: the series of an episode, the artist of
@@ -385,9 +433,6 @@ export interface GuiQueuePlayback {
 	 * active item's kind. `null` while nothing to caption — idle, a
 	 * slotless output, or an item kind with no image source. */
 	stillCaption: string | null;
-	/** The active item's wall-clock end time; the scrubber's finish clock.
-	 * `null` while no item plays or the runtime is unknown. */
-	finishClock: string | null;
 	/** The active item's chapter boundaries with their names (design D4a):
 	 * the scrubber's boundary ticks and the hover preview's chapter name.
 	 * Empty while the item's fetch has not landed or carries none. */
@@ -408,9 +453,9 @@ export interface GuiQueuePlayback {
 	 * source is the local player's stream, so a band whose playback rides a
 	 * remote output paints none, as the TUI's does. */
 	statusIndicators: GuiStatusIndicator[] | null;
-	/** The visual slot's artwork; `null` unless the art changed for this
-	 * window (design D10) — the component keeps the last carried value. */
-	artwork: GuiCardArtwork | null;
+	/** The visual slot's artwork reference (design D7), carried on every
+	 * build; `null` hides the slot. */
+	artwork: GuiArtRef | null;
 	/** The track chips under the transport: the video stream's resolved
 	 * label, and the audio and subtitle tracks each with its choices and the
 	 * chosen one. `null` while the local player is inactive, as the
@@ -420,10 +465,6 @@ export interface GuiQueuePlayback {
 	 * cast receivers the Owner offers, each marked with whether it is the
 	 * Owner's attached output. */
 	targetChoices: GuiTargetChoice[];
-	/** The scrubber's hover preview (row 6.4): the pointer's fraction along
-	 * the bar and the time and chapter it names. `null` while the pointer
-	 * is away from the bar. */
-	hover: GuiScrubberHover | null;
 }
 
 /** The scrubber's hover preview (design D4): the position a move over the
@@ -449,12 +490,11 @@ export interface GuiScrubberHover {
 }
 
 /** The hovered trickplay tile (task 6.7): the thumbnail's place in its sheet,
- * the thumbnail's pixel size, and the sheet's bytes as a `data:image/jpeg`
- * URL. The window fetches nothing — the core's cache supplies the bytes, so
- * the CSP keeps its `data:` image source (design D11). */
+ * the thumbnail's pixel size, and the sheet's image reference. The window
+ * loads the sheet by its URL through the `mbv-art` scheme (design D7). */
 export interface GuiScrubberTile {
-	/** The sheet's opaque identity: the window repaints the sheet it latched
-	 * for this key while `sheet` is `null`. */
+	/** The sheet's opaque identity (the item, the thumbnail width, and the
+	 * sheet's ordinal). */
 	sheetKey: string;
 	/** The thumbnail's pixel width within the sheet. */
 	width: number;
@@ -466,20 +506,8 @@ export interface GuiScrubberTile {
 	column: number;
 	/** The thumbnail's row in the sheet. */
 	row: number;
-	/** The sheet image as a `data:image/jpeg` URL; `null` when the frame does
-	 * not re-carry it — the hovered sheet is the one already latched. */
-	sheet: string | null;
-}
-
-/** The trickplay sheet the window latches for the hover preview (task 6.7):
- * the image last carried and the sheet key it belongs to. A frame re-carries
- * the image only when the hovered sheet changes, so the preview repaints the
- * latched one while the tile names the same key. */
-export interface GuiTrickplaySheet {
-	/** The sheet's opaque identity, as the tile's `sheetKey` names it. */
-	key: string;
-	/** The sheet image as a `data:image/jpeg` URL. */
-	image: string;
+	/** The sheet image's reference: the URL the cached sheet loads through. */
+	sheet: GuiArtRef;
 }
 
 /** One chapter boundary of the active item: the scrubber's boundary tick
@@ -561,21 +589,24 @@ export interface GuiStatusIndicator {
 	role: GuiRole;
 }
 
-/** The visual slot's artwork one frame carries (design D10). The image and
- * placeholder payloads are `data:` URLs the core encoded from its cache. */
-export type GuiCardArtwork =
-	| { kind: 'image'; detail: string }
-	| { kind: 'placeholder'; detail: string }
-	| { kind: 'loading' }
-	| { kind: 'hidden' };
-
 export type GuiNowPlayingStatus = 'playing' | 'paused' | 'idle';
 
-export interface GuiPlaybackState {
+/** The playhead anchor (design D5): the position, runtime, paused state,
+ * and active slot at the core's send, from which the window predicts the
+ * position until the next anchor. The window stamps it with its own clock
+ * at receipt (`playhead.ts`); no timestamp crosses the wire. */
+export interface GuiPlayhead {
+	/** Whether a transport is active, on any target. */
 	active: boolean;
-	activeIdx: number | null;
+	/** The slot that carries the now-playing marker (`QueueSlotId::raw`),
+	 * the same whole-list marker the `queue` section's `active` carries. */
+	activeSlot: number | null;
+	/** The reported position at the send, in ticks. */
 	positionTicks: number;
+	/** The active item's runtime, in ticks. */
 	runtimeTicks: number;
+	/** Whether the transport is paused: the prediction holds the position
+	 * while it is. */
 	paused: boolean;
 }
 

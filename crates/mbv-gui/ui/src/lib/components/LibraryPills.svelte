@@ -8,7 +8,7 @@
 	//
 	// The row itself is the shared `LibraryPillRow` the other destinations paint
 	// too (design D15), so the canvas's pill form has one owner.
-	import type { GuiMusicFrame } from '$lib/bridge/types';
+	import type { GuiMusicList } from '$lib/bridge/types';
 	import {
 		applyLibraryPillSelect,
 		focusedLibraryPill,
@@ -20,13 +20,13 @@
 	interface Props {
 		/** The carried Music content: the pills and the library index the
 		 * select-collection command names (design D2, D6). */
-		music: GuiMusicFrame;
+		list: GuiMusicList;
 	}
-	const { music }: Props = $props();
+	const { list }: Props = $props();
 
 	/** The pills the row paints, keyed by the group id the command names. */
 	const pills = $derived(
-		music.pills.map((pill) => ({
+		list.pills.map((pill) => ({
 			key: pill.groupId,
 			name: pill.name,
 			selected: pill.selected,
@@ -34,11 +34,11 @@
 	);
 
 	/** The pill the keys' focus holds, or `null` while no pill has it. */
-	const focused = $derived(focusedLibraryPill(music.pills, $libraryUi)?.groupId ?? null);
+	const focused = $derived(focusedLibraryPill(list.pills, $libraryUi)?.groupId ?? null);
 
 	/** Press a pill: select it (design D6). */
 	function press(key: string): void {
-		selectLibraryPill(music.libIdx, key);
+		selectLibraryPill(list.libIdx, key);
 	}
 
 	// The keys' pill request becomes the command a press sends (design D6): the
@@ -46,7 +46,7 @@
 	// consumes it so a repaint sends nothing.
 	$effect(() => {
 		void $libraryUi.pillSelect;
-		applyLibraryPillSelect(music.libIdx);
+		applyLibraryPillSelect(list.libIdx);
 	});
 </script>
 

@@ -1,6 +1,7 @@
 // The Home destination's interaction state (add-gui-library-panel design D1,
-// D12): what the window content owns and the core never reads — the cursor,
-// the scroll offset, and the measured viewport. The core owns the selection
+// D12): what the window content owns and the core never reads — the cursor.
+// The scroll offset and the measured viewport live in `./scroll` (design D9).
+// The core owns the selection
 // (the frame's `selected` row), so nothing here mirrors it: a press and the
 // cursor's settle send the select command, and the frame carries the
 // selection back. The row model is `$lib/library/home-list`'s; the panel's
@@ -9,22 +10,19 @@
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiHomeRowId } from '$lib/bridge/types';
-import { buildHomeRows, moveHomeCursor } from './home-list';
+import { homeRowsOf, moveHomeCursor } from './home-list';
 import type { HomeListRow } from './home-list';
 import type { ListMove } from './list';
 import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
-import { libraryHome, libraryUi } from './state';
+import { libraryHomeList } from './parts';
+import { libraryUi } from './state';
+import { homeScroll } from './scroll';
 
 /** The Home list's interaction state. */
 export interface HomeUiState {
 	/** The cursor's row key, or `null` while no row carries the cursor
 	 * (design D12). The cursor moves over the item rows only. */
 	cursor: string | null;
-	/** The list's native scroll offset in pixels (design D12). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The `/` filter's text: the list paints only the item rows whose title
 	 * contains it, without case (design D7's filter rule). */
 	filter: string;
@@ -32,7 +30,7 @@ export interface HomeUiState {
 
 /** The state a freshly mounted Home list starts with. */
 export function initialHomeUi(): HomeUiState {
-	return { cursor: null, scrollTop: 0, viewportHeight: 0, filter: '' };
+	return { cursor: null, filter: '' };
 }
 
 /** The Home list's interaction state. */
@@ -41,7 +39,8 @@ export const homeUi = writable<HomeUiState>(initialHomeUi());
 /** The painted rows of the carried Home content (design D12), narrowed by the
  * state's filter text. */
 function homeRows(filter = get(homeUi).filter): HomeListRow[] {
-	return buildHomeRows(libraryHome()?.rows ?? [], filter);
+	const home = libraryHomeList();
+	return home === null ? [] : homeRowsOf(home.rows, filter);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -57,20 +56,29 @@ export function homeCursorRowId(): GuiHomeRowId | null {
 	return row !== null && row.kind === 'item' ? row.rowId : null;
 }
 
-/** The state once the painted rows may have narrowed (design D12): the
+/** Scroll the list so the cursor's row paints fully, in the scroll store
+ * (design D12, D9). */
+function followHomeCursor(list: readonly HomeListRow[], cursor: string | null): void {
+	homeScroll.update((scroll) => {
+		const scrollTop = scrollTopToShowCursor(list, cursor, scroll.scrollTop, scroll.viewportHeight);
+		return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+	});
+}
+
+/** Settle the cursor once the painted rows may have narrowed (design D12): the
  * cursor keeps its row while that row still paints, and falls to the first
- * item row otherwise, with the scroll offset showing it — the Music filter's
- * own resolve (design D7). */
-function resolveHomeCursor(ui: HomeUiState): HomeUiState {
+ * item row otherwise. The scroll store then shows the cursor — the Music
+ * filter's own resolve (design D7). */
+function settleHomeCursor(): void {
+	const ui = get(homeUi);
 	const list = homeRows(ui.filter);
 	const cursor = list.some((row) => row.id === ui.cursor)
 		? ui.cursor
 		: moveHomeCursor(list, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	if (cursor !== ui.cursor) {
+		homeUi.update((current) => ({ ...current, cursor }));
+	}
+	followHomeCursor(list, cursor);
 }
 
 /** Narrow the list to the titles that contain `filter`, without case (design
@@ -78,7 +86,8 @@ function resolveHomeCursor(ui: HomeUiState): HomeUiState {
  * row it rests on, as a cursor move does. */
 export function setHomeFilter(filter: string): void {
 	const before = get(homeUi).cursor;
-	homeUi.update((ui) => resolveHomeCursor({ ...ui, filter }));
+	homeUi.update((ui) => ({ ...ui, filter }));
+	settleHomeCursor();
 	const after = get(homeUi).cursor;
 	if (after !== before) {
 		settleSelection(cursorRow(homeRows(), after));
@@ -91,7 +100,8 @@ export function setHomeFilter(filter: string): void {
 export function closeHomeFilter(): void {
 	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
 	const before = get(homeUi).cursor;
-	homeUi.update((ui) => resolveHomeCursor({ ...ui, filter: '' }));
+	homeUi.update((ui) => ({ ...ui, filter: '' }));
+	settleHomeCursor();
 	const after = get(homeUi).cursor;
 	if (after !== before) {
 		settleSelection(cursorRow(homeRows(), after));
@@ -153,34 +163,32 @@ export function queueHomeRow(rowId: GuiHomeRowId): void {
 export function moveHomeListCursor(move: ListMove): void {
 	const list = homeRows();
 	const current = get(homeUi);
-	const view = listWindow(list, current.scrollTop, current.viewportHeight);
+	const scroll = get(homeScroll);
+	const view = listWindow(list, scroll.scrollTop, scroll.viewportHeight);
 	const cursor = moveHomeCursor(list, current.cursor, move, view.end - view.start);
 	if (cursor === current.cursor) {
 		return;
 	}
-	homeUi.update((ui) => ({
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	}));
+	homeUi.update((ui) => ({ ...ui, cursor }));
+	followHomeCursor(list, cursor);
 	settleSelection(cursorRow(list, cursor));
 }
 
 /** Report the Home list's measured viewport height (design D12): the rows in
  * view follow it, and the scroll offset stays inside the narrower range. */
 export function measureHomeList(viewportHeight: number): void {
-	homeUi.update((ui) => ({
-		...ui,
+	homeScroll.update((scroll) => ({
+		...scroll,
 		viewportHeight,
-		scrollTop: clampScrollTop(homeRows(), ui.scrollTop, viewportHeight),
+		scrollTop: clampScrollTop(homeRows(), scroll.scrollTop, viewportHeight),
 	}));
 }
 
 /** Report the Home list's native scroll offset (design D12): a user scroll
  * moves the rows in view, and the offset stays inside the list's range. */
 export function scrollHomeList(scrollTop: number): void {
-	homeUi.update((ui) => {
-		const top = clampScrollTop(homeRows(), Math.max(scrollTop, 0), ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	homeScroll.update((scroll) => {
+		const top = clampScrollTop(homeRows(), Math.max(scrollTop, 0), scroll.viewportHeight);
+		return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 	});
 }

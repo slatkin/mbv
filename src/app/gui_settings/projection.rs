@@ -271,28 +271,30 @@ impl App {
         let Some(state) = self.gui_settings() else {
             return Vec::new();
         };
-        let cfg = self.config_snapshot();
         let ui = self.ui_config_snapshot();
-        state
-            .section
-            .shown_rows()
-            .into_iter()
-            .filter(|key| *key != SettingKey::LibraryRoutes)
-            .map(|key| GuiSettingsRowProjection {
-                key,
-                label: setting_label(key).to_string(),
-                kind: gui_settings_row_kind(key),
-                value: if setting_kind(key) == SettingValueKind::Info {
-                    self.version_row_value(key)
-                } else {
-                    setting_value(key, &cfg, &ui)
-                },
-                flag: setting_flag(key, &cfg),
-                choices: gui_settings_row_choices(&state, key),
-                choices_kind: key.multiselect_kind(),
-                values: gui_settings_values(key, &cfg.my_languages),
-            })
-            .collect()
+        self.with_config(|cfg| {
+            state
+                .section
+                .shown_rows()
+                .into_iter()
+                .filter(|key| *key != SettingKey::LibraryRoutes)
+                .map(|key| GuiSettingsRowProjection {
+                    key,
+                    label: setting_label(key).to_string(),
+                    kind: gui_settings_row_kind(key),
+                    value: if setting_kind(key) == SettingValueKind::Info {
+                        self.version_row_value(key)
+                    } else {
+                        setting_value(key, cfg, &ui)
+                    },
+                    flag: setting_flag(key, cfg),
+                    choices: gui_settings_row_choices(state, key)
+                        .map(<[GuiSettingsChoiceProjection]>::to_vec),
+                    choices_kind: key.multiselect_kind(),
+                    values: gui_settings_values(key, &cfg.my_languages),
+                })
+                .collect()
+        })
     }
 
     /// The Services section's content (design D9): each Service's state, the
@@ -346,16 +348,16 @@ impl App {
     /// config, and whether an add is in flight.
     #[must_use]
     pub fn gui_settings_feeds(&self) -> GuiSettingsFeedsProjection {
-        let subscriptions = self
-            .config_snapshot()
-            .feeds
-            .iter()
-            .map(|sub| GuiSettingsFeedProjection {
-                name: sub.name.clone(),
-                url: sub.url.clone(),
-                kind: sub.kind,
-            })
-            .collect();
+        let subscriptions = self.with_config(|cfg| {
+            cfg.feeds
+                .iter()
+                .map(|sub| GuiSettingsFeedProjection {
+                    name: sub.name.clone(),
+                    url: sub.url.clone(),
+                    kind: sub.kind,
+                })
+                .collect()
+        });
         let adding = self
             .feeds_manage
             .as_ref()
@@ -372,38 +374,40 @@ impl App {
     /// (design D4).
     #[must_use]
     pub fn gui_settings_keys(&self) -> GuiSettingsKeysProjection {
-        let keybinds = self.config_snapshot().keybinds;
-        let rows = mbv_keybinds::KEY_SECTIONS
-            .iter()
-            .flat_map(|section| {
-                mbv_keybinds::KEYBIND_ACTIONS
-                    .iter()
-                    .filter(move |action| action.section == *section)
-            })
-            .filter(|action| action.scope == mbv_keybinds::ActionScope::AllClients)
-            .map(|action| GuiSettingsKeyRowProjection {
-                id: action.id,
-                label: action.id.to_string(),
-                section: action.section.name(),
-                chords: keybinds
-                    .router_chords(action)
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect(),
-                prefix_chord: keybinds
-                    .prefix_assignment(action.id)
-                    .map(|chord| chord.to_string()),
-                changed: keybinds
-                    .router_override(action.id)
-                    .is_some_and(|chord| !action.parsed_default_chords().contains(&chord)),
-                prefix_addressable: action.prefix_addressable,
-            })
-            .collect();
-        GuiSettingsKeysProjection {
-            prefix: keybinds.prefix.map(|chord| chord.to_string()),
-            rows,
-            refusal: self.gui_settings().and_then(|state| state.refusal),
-        }
+        self.with_config(|config| {
+            let keybinds = &config.keybinds;
+            let rows = mbv_keybinds::KEY_SECTIONS
+                .iter()
+                .flat_map(|section| {
+                    mbv_keybinds::KEYBIND_ACTIONS
+                        .iter()
+                        .filter(move |action| action.section == *section)
+                })
+                .filter(|action| action.scope == mbv_keybinds::ActionScope::AllClients)
+                .map(|action| GuiSettingsKeyRowProjection {
+                    id: action.id,
+                    label: action.id.to_string(),
+                    section: action.section.name(),
+                    chords: keybinds
+                        .router_chords(action)
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect(),
+                    prefix_chord: keybinds
+                        .prefix_assignment(action.id)
+                        .map(|chord| chord.to_string()),
+                    changed: keybinds
+                        .router_override(action.id)
+                        .is_some_and(|chord| !action.parsed_default_chords().contains(&chord)),
+                    prefix_addressable: action.prefix_addressable,
+                })
+                .collect();
+            GuiSettingsKeysProjection {
+                prefix: keybinds.prefix.map(|chord| chord.to_string()),
+                rows,
+                refusal: self.gui_settings().and_then(|state| state.refusal.clone()),
+            }
+        })
     }
 
     /// The Library section's content (design D9): its F2 choice rows, the
@@ -415,11 +419,9 @@ impl App {
         let state = self.gui_settings();
         GuiSettingsLibraryProjection {
             rows: self.gui_settings_rows(),
-            routes: state.as_ref().and_then(|state| state.routes.clone()),
-            selected: state
-                .as_ref()
-                .and_then(|state| state.route_selection.clone()),
-            devices: state.and_then(|state| state.route_devices),
+            routes: state.and_then(|state| state.routes.clone()),
+            selected: state.and_then(|state| state.route_selection.clone()),
+            devices: state.and_then(|state| state.route_devices.clone()),
         }
     }
 
@@ -466,15 +468,14 @@ fn playlist_item(item: &EmbyItem) -> GuiSettingsPlaylistItemProjection {
 }
 
 /// The choices a row paints (design D9): `None` for a row that is no choice
-/// list, and for one whose load has not landed yet.
+/// list, and for one whose load has not landed yet. The slice borrows the
+/// state; the row's DTO copies it once, when the section is built (design D10).
 fn gui_settings_row_choices(
     state: &GuiSettingsState,
     key: SettingKey,
-) -> Option<Vec<GuiSettingsChoiceProjection>> {
+) -> Option<&[GuiSettingsChoiceProjection]> {
     let kind = key.multiselect_kind()?;
-    state
-        .choices(kind)
-        .map(<[GuiSettingsChoiceProjection]>::to_vec)
+    state.choices(kind)
 }
 
 /// How an F2 row is edited (design D9, D13). A boolean row is a toggle, the

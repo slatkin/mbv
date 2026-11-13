@@ -1,7 +1,7 @@
 // The Shows destination's interaction state (add-gui-library-panel design D1,
 // D14): what the window content owns and the core never reads — the cursor,
-// the tree's open and closed nodes, the scroll offset, the measured viewport,
-// and the pill row's focus. The core owns the view mode and the selection (the
+// the tree's open and closed nodes, and the pill row's focus. The scroll offset
+// and the measured viewport live in `./scroll` (design D9). The core owns the view mode and the selection (the
 // frame's `pills` and `selected`), so nothing here mirrors them: a press and
 // an Enter send the select command, and the frame carries the selection back.
 // The row model is `$lib/library/shows-list`'s; the Hero's episode cursor
@@ -10,13 +10,15 @@
 
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiShowsFrame, GuiShowsMode } from '$lib/bridge/types';
+import type { GuiShowsList, GuiShowsMode } from '$lib/bridge/types';
 import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
 import type { ListMove } from './list';
-import { libraryShows, libraryUi } from './state';
+import { libraryShowsList } from './parts';
+import { libraryUi } from './state';
+import { showsScroll } from './scroll';
 import {
 	activeShowsMode,
-	buildShowsRows,
+	showsRowsOf,
 	isShowsNodeRow,
 	moveShowsCursor,
 	showsLetterRail,
@@ -28,11 +30,6 @@ export interface ShowsUiState {
 	/** The cursor's row id, or `null` while no row carries the cursor
 	 * (design D12). The cursor moves over the item rows only. */
 	cursor: string | null;
-	/** The list's native scroll offset in pixels (design D12). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The mode pill the pill row's Left and Right move the focus to, or
 	 * `null` while no pill has it (design D6, D12). */
 	focusedPill: GuiShowsMode | null;
@@ -56,8 +53,6 @@ export interface ShowsUiState {
 export function initialShowsUi(): ShowsUiState {
 	return {
 		cursor: null,
-		scrollTop: 0,
-		viewportHeight: 0,
 		focusedPill: null,
 		pillSelect: null,
 		filter: '',
@@ -72,15 +67,12 @@ export const showsUi = writable<ShowsUiState>(initialShowsUi());
 /** The painted rows of the carried Shows content (design D14), narrowed by
  * the state's filter text. */
 function showsRows(filter = get(showsUi).filter): ShowsListRow[] {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return [];
 	}
 	const ui = get(showsUi);
-	return buildShowsRows(shows, activeShowsMode(shows), filter, {
-		open: ui.open,
-		closed: ui.closed,
-	});
+	return showsRowsOf(shows, activeShowsMode(shows), filter, ui.open, ui.closed);
 }
 
 /** The row the cursor rests on, or `null` while no painted row carries it. */
@@ -95,33 +87,44 @@ export function showsCursorRow(): ShowsItemRow | null {
 	return cursorRow(showsRows(), get(showsUi).cursor);
 }
 
-/** The state once the painted rows may have narrowed (design D12): the
+/** Scroll the list so the cursor's row paints fully, in the scroll store
+ * (design D12, D9). */
+function followShowsCursor(list: readonly ShowsListRow[], cursor: string | null): void {
+	showsScroll.update((scroll) => {
+		const scrollTop = scrollTopToShowCursor(list, cursor, scroll.scrollTop, scroll.viewportHeight);
+		return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+	});
+}
+
+/** Settle the cursor once the painted rows may have narrowed (design D12): the
  * cursor keeps its row while that row still paints, and falls to the first
- * painted row otherwise, with the scroll offset showing it — the Music
+ * painted row otherwise. The scroll store then shows the cursor — the Music
  * filter's own resolve (design D7). */
-function resolveShowsCursor(ui: ShowsUiState): ShowsUiState {
+function settleShowsCursor(): void {
+	const ui = get(showsUi);
 	const list = showsRows(ui.filter);
 	const cursor = list.some((row) => row.id === ui.cursor)
 		? ui.cursor
 		: moveShowsCursor(list, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	if (cursor !== ui.cursor) {
+		showsUi.update((current) => ({ ...current, cursor }));
+	}
+	followShowsCursor(list, cursor);
 }
 
 /** Narrow the list to the titles that contain `filter`, without case (design
  * D7's filter rule): the cursor follows the rows. */
 export function setShowsFilter(filter: string): void {
-	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter }));
+	showsUi.update((ui) => ({ ...ui, filter }));
+	settleShowsCursor();
 }
 
 /** Close the filter with Esc: the text goes with it, so a closed filter
  * narrows nothing (design D3, step 2). The cursor follows the widened rows. */
 export function closeShowsFilter(): void {
 	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
-	showsUi.update((ui) => resolveShowsCursor({ ...ui, filter: '' }));
+	showsUi.update((ui) => ({ ...ui, filter: '' }));
+	settleShowsCursor();
 }
 
 /** Accept the filter with Enter: the field closes and the list keeps the
@@ -138,7 +141,7 @@ export function acceptShowsFilter(): void {
  * arrangement's Hero overlay and closes an open menu, because the facts they
  * paint belong to the previous row, as a Music pick's do. */
 export function selectShowsRow(row: ShowsListRow): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null || row.kind === 'heading') {
 		return;
 	}
@@ -220,7 +223,7 @@ export function pressShowsRow(row: ShowsListRow): void {
 /** Play a Shows episode (design D12): Enter on a flat row, and a
  * double-click's play. The row id is the episode's stable Service id. */
 export function playShowsRow(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -229,7 +232,7 @@ export function playShowsRow(rowId: string): void {
 
 /** Play a Shows episode next (design D12): `n` on a flat row. */
 export function playShowsRowNext(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -238,7 +241,7 @@ export function playShowsRowNext(rowId: string): void {
 
 /** Add a Shows episode to the queue's tail (design D12): `a` on a flat row. */
 export function queueShowsRow(rowId: string): void {
-	const shows = libraryShows();
+	const shows = libraryShowsList();
 	if (shows === null) {
 		return;
 	}
@@ -252,16 +255,14 @@ export function queueShowsRow(rowId: string): void {
 export function moveShowsListCursor(move: ListMove): void {
 	const list = showsRows();
 	const current = get(showsUi);
-	const view = listWindow(list, current.scrollTop, current.viewportHeight);
+	const scroll = get(showsScroll);
+	const view = listWindow(list, scroll.scrollTop, scroll.viewportHeight);
 	const cursor = moveShowsCursor(list, current.cursor, move, view.end - view.start);
 	if (cursor === current.cursor) {
 		return;
 	}
-	showsUi.update((ui) => ({
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
-	}));
+	showsUi.update((ui) => ({ ...ui, cursor }));
+	followShowsCursor(list, cursor);
 }
 
 /** Jump to a letter of the rail (design D12): the cursor moves to the first
@@ -269,35 +270,37 @@ export function moveShowsListCursor(move: ListMove): void {
  * without rows changes nothing. */
 export function jumpShowsToLetter(letter: string): void {
 	const list = showsRows();
-	showsUi.update((ui) => {
-		const jump = jumpToLetter(showsLetterRail(list), list, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const jump = jumpToLetter(showsLetterRail(list), list, letter, get(showsScroll));
+	if (jump === null) {
+		return;
+	}
+	showsUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	showsScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (design D12): the rows in view
  * follow it, and the scroll offset stays inside the narrower range. */
 export function measureShowsList(viewportHeight: number): void {
-	showsUi.update((ui) => ({
-		...ui,
+	showsScroll.update((scroll) => ({
+		...scroll,
 		viewportHeight,
-		scrollTop: clampScrollTop(showsRows(), ui.scrollTop, viewportHeight),
+		scrollTop: clampScrollTop(showsRows(), scroll.scrollTop, viewportHeight),
 	}));
 }
 
 /** Report the list's native scroll offset (design D12): a user scroll moves
  * the rows in view, and the offset stays inside the list's range. */
 export function scrollShowsList(scrollTop: number): void {
-	showsUi.update((ui) => {
-		const top = clampScrollTop(showsRows(), Math.max(scrollTop, 0), ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	showsScroll.update((scroll) => {
+		const top = clampScrollTop(showsRows(), Math.max(scrollTop, 0), scroll.viewportHeight);
+		return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 	});
 }
 
 /** The pill the pill row's focus holds, resolved against the carried pills so
  * a stale mode focuses nothing: the mode the keys' Space and Enter select, and
  * the pill the row paints the accent outline on (design D6, D12). */
-export function focusedShowsPill(shows: GuiShowsFrame): GuiShowsMode | null {
+export function focusedShowsPill(shows: GuiShowsList): GuiShowsMode | null {
 	const { focusedPill } = get(showsUi);
 	if (focusedPill === null) {
 		return null;
@@ -316,7 +319,7 @@ function focusShowsPill(mode: GuiShowsMode | null): void {
  * walks from. */
 export function moveShowsPillFocus(step: number): void {
 	const pill = stepPillFocus(
-		libraryShows()?.pills ?? [],
+		libraryShowsList()?.pills ?? [],
 		get(showsUi).focusedPill,
 		(entry) => entry.mode,
 		step,

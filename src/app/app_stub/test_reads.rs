@@ -11,6 +11,10 @@ use super::App;
 /// child module so this file stays within its line ceiling.
 mod gui_feeds;
 
+/// The GUI core's mark seams (`gui-change-driven-sections` rows 2.7, 2.8) sit
+/// in their own child module for the same reason.
+mod gui_marks;
+
 /// The GUI Search data path's test seam (row 12.1) sits in its own child
 /// module for the same reason.
 mod search;
@@ -222,15 +226,17 @@ impl App {
         );
     }
 
-    /// Deliver `key`'s image as a completed fetch would (add-gui-library-panel
-    /// design D13): the next tick's card-image drain lands it in the cache, so
-    /// a frame test observes the art with no request and no thread.
+    /// Deliver `key`'s image as a completed GUI fetch would (add-gui-library-panel
+    /// design D13, design D14 of `gui-change-driven-sections`): the outcome
+    /// keeps the source bytes and no decoded image, so the next tick's
+    /// card-image drain lands it in the cache the way the GUI Client does,
+    /// with no request and no thread.
     #[cfg(feature = "test")]
-    pub fn complete_card_image_for_test(&self, key: &str, img: image::DynamicImage) {
-        let source = crate::app::queue_card_artwork::test_source(&img);
+    pub fn complete_card_image_for_test(&self, key: &str, img: &image::DynamicImage) {
+        let source = crate::app::queue_card_artwork::test_source(img);
         let _ = self.images.card_image_tx().send((
             key.to_string(),
-            mbv_images::ImageFetchOutcome::Image { img, source },
+            mbv_images::ImageFetchOutcome::Image { img: None, source },
         ));
     }
 
@@ -741,12 +747,14 @@ impl App {
         ));
     }
 
-    /// Block until one library event lands on the lib channel and apply it
-    /// through the same App arm the tick's drain runs (add-gui-library-panel
+    /// Block until one library event lands on the lib channel, then put it
+    /// back on that channel for the next tick's drain (add-gui-library-panel
     /// design D13): a Client test that pumps GUI ticks over a mocked fetch
     /// waits here for the completion instead of sleeping between steps, so a
     /// passing pump spends no real time and the fetch workers never starve
-    /// behind a spinning test. Returns whether an event landed within
+    /// behind a spinning test. The tick's own `drain_lib_events` hook applies
+    /// the event and marks its sections (design D3 rule 2), exactly as it does
+    /// for a completion a worker sent. Returns whether an event landed within
     /// `bound` — a safety net that fails a broken pipeline instead of hanging
     /// the test, never a cadence a passing pump spends.
     #[cfg(feature = "test")]
@@ -755,7 +763,7 @@ impl App {
         let Ok(event) = self.channels.lib_rx.recv_timeout(bound) else {
             return false;
         };
-        self.handle_lib_event(event);
+        let _ = self.channels.lib_tx.send(event);
         true
     }
 

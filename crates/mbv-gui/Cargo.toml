@@ -30,9 +30,6 @@ mbv-text = { path = "../mbv-text" }
 mbv-theme = { path = "../mbv-theme" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
-# The frame's artwork payloads ride as `data:` URLs (design D10): the
-# image bytes the core encodes base64 into the URL string.
-base64 = "0.23.1"
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tauri = "=2.12.5"
@@ -55,3 +52,10 @@ mbv-net = { path = "../mbv-net", features = ["test"] }
 image = { workspace = true, features = ["png"] }
 rstest.workspace = true
 serde_json.workspace = true
+# The `sections` bench times one core step per fixture (design D12 of
+# `gui-change-driven-sections`); it runs only on a manual `cargo bench`.
+criterion = { workspace = true }
+
+[[bench]]
+name = "sections"
+harness = false

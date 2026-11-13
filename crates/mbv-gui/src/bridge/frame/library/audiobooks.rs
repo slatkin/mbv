@@ -10,15 +10,16 @@ use mbv::{
 };
 use serde::Serialize;
 
+use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiLibraryArt};
+use crate::art::GuiArtRef;
 
-/// The Audiobooks destination's content (add-gui-library-panel design D12,
-/// row 9.1): the book list, the core's selected book, and its Hero. No pill
-/// rides here — the letter rail replaces the TUI's surname buckets.
+/// The Audiobooks destination's list part (add-gui-library-panel design D12,
+/// row 9.1; `gui-change-driven-sections` design D8): the book list and the
+/// catalog's load facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiAudiobooksFrame {
+pub struct GuiAudiobooksList {
     /// The Audiobooks library index the Audiobooks commands name (design
     /// D2, D12): the library whose content this is.
     pub lib_idx: usize,
@@ -26,14 +27,27 @@ pub struct GuiAudiobooksFrame {
     pub loading: bool,
     /// Whether the catalog fetch failed.
     pub failed: bool,
+    /// The catalog's books in the TUI's sort order.
+    pub rows: Vec<GuiAudiobooksRowFrame>,
+}
+
+/// The Audiobooks destination's detail part (`gui-change-driven-sections`
+/// design D8): the core's selected book, the playing book, and its Hero with
+/// the chapters Workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiAudiobooksDetail {
     /// Whether the selected book's detail fetch has not landed yet: the
     /// Workspace's loading state.
     pub workspace_loading: bool,
-    /// The catalog's books in the TUI's sort order.
-    pub rows: Vec<GuiAudiobooksRowFrame>,
     /// The core's selected book (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first book is the Hero default.
     pub selected: Option<String>,
+    /// The Audiobooks book playing at the playhead (`gui-change-driven-sections`
+    /// design D5): its stable `library_item_id`, the fact the window compares
+    /// with the Hero's book before it marks a chapter row from the position.
+    /// `None` while no book plays or the active slot is pending.
+    pub playing_book_id: Option<String>,
     /// The selected book's Hero facts; `None` while no book is selected.
     pub hero: Option<GuiAudiobooksHeroFrame>,
 }
@@ -79,7 +93,7 @@ pub struct GuiAudiobooksHeroFrame {
     /// The Hero's cover artwork, present exactly while the book obtains art
     /// from the image cache; the window paints its own placeholder while
     /// `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The book's chapter rows; `None` while the book's detail has not
     /// landed, which the frame's `workspaceLoading` names.
     pub workspace: Option<GuiAudiobooksWorkspaceFrame>,
@@ -107,27 +121,40 @@ pub struct GuiAudiobooksChapterRowFrame {
     pub title: String,
     /// The row's duration, the TUI's duration gutter; empty when unknown.
     pub duration: String,
-    /// Whether this chapter is playing. A frame re-carries the content when
-    /// the mark moves, so the Workspace paints what the Queue's active slot
-    /// paints.
-    pub current: bool,
+    /// The chapter's start on the book's merged timeline, in ticks (design
+    /// D5). An audio-part row carries no span — the window marks the row
+    /// whose span holds the playhead position, and an empty span never
+    /// holds one.
+    pub start_ticks: i64,
+    /// The chapter's end on the book's merged timeline, in ticks (design D5).
+    pub end_ticks: i64,
 }
 
-impl GuiAudiobooksFrame {
-    /// The Audiobooks destination's content for `projection` (row 9.1), with
-    /// the library index the Audiobooks commands name.
+impl GuiAudiobooksList {
+    /// The Audiobooks list part for `projection` (row 9.1), with the library
+    /// index the Audiobooks commands name.
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiAudiobooksProjection) -> Self {
         Self {
             lib_idx,
             loading: projection.loading,
             failed: projection.failed,
-            workspace_loading: projection.workspace_loading,
             rows: projection
                 .rows
                 .iter()
                 .map(GuiAudiobooksRowFrame::from)
                 .collect(),
+        }
+    }
+}
+
+impl GuiAudiobooksDetail {
+    /// The Audiobooks detail part for `projection` (row 9.1): the selection,
+    /// the playing book, and the Hero with its chapters Workspace.
+    pub(crate) fn from_projection(projection: &GuiAudiobooksProjection) -> Self {
+        Self {
+            workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
+            playing_book_id: projection.playing_book_id.clone(),
             hero: projection.hero.as_ref().map(GuiAudiobooksHeroFrame::from),
         }
     }
@@ -154,7 +181,7 @@ impl From<&GuiAudiobooksHero> for GuiAudiobooksHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero
                 .workspace
                 .as_ref()
@@ -181,7 +208,8 @@ impl From<&GuiAudiobooksChapterRow> for GuiAudiobooksChapterRowFrame {
             chapter: row.chapter,
             title: row.title.clone(),
             duration: row.duration.clone(),
-            current: row.current,
+            start_ticks: row.start_ticks,
+            end_ticks: row.end_ticks,
         }
     }
 }

@@ -2,8 +2,9 @@
 // tree of artists, albums, and tracks, the 24 px letter headings above the
 // first artist of each letter, the rows in view, the cursor's movement, and
 // the A–Z letter rail. The list paints fixed-height rows over native scroll,
-// and the window content owns the cursor, the open nodes, the scroll, and the
-// filter (design D1), so this module is plain data: `state.ts` applies it and
+// and the window content owns the cursor, the open nodes, and the filter
+// (design D1), while the scroll store owns the scroll (design D9). This module
+// is plain data: `state.ts` applies it and
 // the components paint it. Keeping it apart from both keeps the geometry
 // testable without a layout, which jsdom does not have.
 
@@ -466,7 +467,7 @@ function artistAnchor(row: GeometryRow): string | null {
  * row under `letter`, scrolled so it paints fully — or `null` while no
  * painted row carries the letter, so the press changes nothing. `view` is
  * the list's scroll offset and measured viewport height, the fields every
- * destination's interaction state carries.
+ * destination's scroll store carries.
  */
 export function jumpToLetter(
 	rail: readonly RailLetter[],

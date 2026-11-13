@@ -5,7 +5,7 @@
 // `library-types.ts` re-exports this family with the rest of the Library's
 // wire types, so every call site keeps importing from the one bridge module.
 
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 
 /** One Home row's stable identity (add-gui-library-panel design D12): the
  * identity the Home paths resolve, addressed by Service ids and never by a
@@ -28,12 +28,9 @@ export type GuiHomeContentId =
 	| { provider: 'AudiobookshelfBook'; value: { library_item_id: string } }
 	| { provider: 'Twitch'; value: string };
 
-/** The Home destination's content (design D12, the USER-APPROVED GUI Home
- * design), present while Home is the active destination: the flat list's
- * rows, the core's selected row, and its Hero. No pill, no letter rail,
- * and no Workspace ride here; the top bar marks the Home icon current
- * exactly while this field is present. */
-export interface GuiHomeFrame {
+/** The Home destination's list part (design D12, D8): the flat list's rows
+ * and its load fact. No pill, no letter rail, and no Workspace ride here. */
+export interface GuiHomeList {
 	/** Whether the Home content's first fetch has not landed yet: the list
 	 * paints its loading line. */
 	loading: boolean;
@@ -41,6 +38,12 @@ export interface GuiHomeFrame {
 	 * heading rows and item rows, with the spacer between two non-empty
 	 * sections. */
 	rows: GuiHomeRow[];
+}
+
+/** The Home destination's detail part (design D8): the core's selected row and
+ * its Hero. The top bar marks the Home icon current while Home is the active
+ * destination. */
+export interface GuiHomeDetail {
 	/** The core's selected row (design D2, D12), as the frame painted it:
 	 * a select, play, or enqueue command sends it back. */
 	selected: GuiHomeRowId | null;
@@ -57,7 +60,7 @@ export type GuiHomeRow =
 			text: string;
 	  }
 	| { row: 'spacer' }
-	| { row: 'item'; id: GuiHomeRowId; title: string; subtitle: string | null; date: string | null; kind: GuiHomeRowKind; state: GuiHomeRowState; art: GuiLibraryArt | null };
+	| { row: 'item'; id: GuiHomeRowId; title: string; subtitle: string | null; date: string | null; kind: GuiHomeRowKind; state: GuiHomeRowState; art: GuiArtRef | null };
 
 /** The kind one item row paints (design D12): `collection` when the row
  * targets a container the play path refuses, `media` on a playable leaf. */
@@ -88,5 +91,5 @@ export interface GuiHomeHero {
 	/** The Hero's artwork, present exactly while the row's item obtains art
 	 * from the image cache; the window paints its own placeholder while
 	 * `null`. */
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 }

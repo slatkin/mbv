@@ -1,4 +1,4 @@
-//! The Feeds section's frame content (`add-gui-settings-screen` design D9):
+//! The Feeds section's content (`add-gui-settings-screen` design D9):
 //! the subscriptions, addressed by URL, and whether an add is in flight.
 
 use mbv::GuiSettingsFeedProjection;

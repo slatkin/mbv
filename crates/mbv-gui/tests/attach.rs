@@ -14,11 +14,13 @@ use std::time::Duration;
 use mbv::{App, OwnerState, exclusive_owner_refusal_text, stub_app_with_queue};
 use mbv_daemon::SignalOwnerError;
 use mbv_gui::attach::{AttachCampaign, CampaignEnd, OwnerSteps, OwnerWait};
-use mbv_gui::bridge::frame::{GuiAttachState, GuiWindowFrame};
+use mbv_gui::bridge::frame::GuiAttachState;
 use mbv_gui::bridge::layout::{
     AttachTargetId, LayoutRect, LayoutRegion, LayoutReport, LayoutSize, RegionTarget,
 };
-use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
+use mbv_gui::bridge::sections::GuiSectionBatch;
+use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
+use mbv_gui::sections::SentRevisions;
 use mbv_remote_player::RemotePlayerError;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
@@ -205,9 +207,9 @@ fn mock_for(outcome: InjectedOutcome) -> MockSteps {
 /// window's close — the input the runs end on — or the inputs a state
 /// answers.
 struct Harness {
-    sink: FrameSink,
+    sink: SectionSink,
     quit: QuitSink,
-    frames: mpsc::Receiver<GuiWindowFrame>,
+    frames: mpsc::Receiver<GuiSectionBatch>,
     quits: mpsc::Receiver<()>,
 }
 
@@ -218,8 +220,8 @@ impl Harness {
         let (tx, rx) = mpsc::channel();
         let (frame_tx, frames) = mpsc::channel();
         let (quit_tx, quits) = mpsc::channel();
-        let sink: FrameSink = Box::new(move |frame| {
-            let _ = frame_tx.send(frame);
+        let sink: SectionSink = Box::new(move |batch| {
+            let _ = frame_tx.send(batch);
         });
         let quit: QuitSink = Box::new(move || {
             let _ = quit_tx.send(());
@@ -240,10 +242,7 @@ impl Harness {
     fn attach_states(&self) -> Vec<GuiAttachState> {
         self.drain()
             .into_iter()
-            .filter_map(|frame| match frame {
-                GuiWindowFrame::Attach(attach) => Some(attach.state),
-                GuiWindowFrame::Slice(_) => None,
-            })
+            .filter_map(|batch| batch.attach.and_then(|section| section.value))
             .collect()
     }
 
@@ -251,11 +250,8 @@ impl Harness {
     /// tick loop.
     fn assert_no_slice_frames(&self) {
         assert!(
-            !self
-                .drain()
-                .iter()
-                .any(|frame| matches!(frame, GuiWindowFrame::Slice(_))),
-            "the campaign emitted a slice frame"
+            !self.drain().iter().any(|batch| batch.attach.is_none()),
+            "the campaign sent a batch with no attach section"
         );
     }
 
@@ -264,7 +260,7 @@ impl Harness {
         self.quits.try_recv().expect("the quit edge fired");
     }
 
-    fn drain(&self) -> Vec<GuiWindowFrame> {
+    fn drain(&self) -> Vec<GuiSectionBatch> {
         std::iter::from_fn(|| self.frames.try_recv().ok()).collect()
     }
 }
@@ -273,7 +269,7 @@ impl Harness {
 /// end, and the injected steps. The wait's poll interval is zeroed, so a
 /// poll step never blocks.
 fn campaign<'a>(
-    sink: &'a FrameSink,
+    sink: &'a SectionSink,
     quit: &'a QuitSink,
     rx: &'a mpsc::Receiver<CoreInput>,
     steps: &'a dyn OwnerSteps,
@@ -493,10 +489,9 @@ fn the_restart_button_resolves_through_the_reported_regions() {
     assert!(outcome.is_ok(), "the button restart attached: {outcome:?}");
     assert_eq!(steps.restarts(), 1);
     let states = harness.attach_states();
-    assert_eq!(states.len(), 3);
+    assert_eq!(states.len(), 2);
     assert!(ShownState::Mismatch.matches(&states[0]));
-    assert!(ShownState::Mismatch.matches(&states[1]));
-    assert!(ShownState::Waiting.matches(&states[2]));
+    assert!(ShownState::Waiting.matches(&states[1]));
 }
 
 /// The Quit button resolves through the reported regions (design D9): a
@@ -612,42 +607,76 @@ fn a_wait_past_its_deadline_shows_the_still_shutting_down_state() {
     );
 }
 
-/// A report during a dead-end state re-shows the state (design D3's emission
-/// rule carried to the pre-attach phase): a reload of the window content
-/// re-shows the state it is parked in.
+/// The batch a state's frame carries, as the campaign sends it: the attach
+/// section's state, or `None` when the batch carries no attach state.
+fn state_of(batch: &GuiSectionBatch) -> Option<&GuiAttachState> {
+    batch.attach.as_ref()?.value.as_ref()
+}
+
+/// A `sync` in a dead-end state re-sends the state and the theme (design D4):
+/// the re-sent batch equals the first one, so the window keeps the same
+/// revisions it held.
 #[test]
-fn a_report_during_a_dead_end_re_shows_the_state() {
+fn a_sync_during_a_dead_end_re_sends_the_state_and_theme() {
     let (harness, tx, rx) = Harness::new();
-    tx.send(layout_with(vec![])).unwrap();
+    tx.send(CoreInput::Sync).unwrap();
     tx.send(close_input()).unwrap();
     let steps = MockSteps::refusing_probe();
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let outcome = campaign.run();
     assert!(matches!(outcome, Err(CampaignEnd::Closed)));
-    let states = harness.attach_states();
-    assert_eq!(states.len(), 2);
-    assert!(ShownState::Refusal.matches(&states[0]));
-    assert!(ShownState::Refusal.matches(&states[1]));
-    harness.assert_no_slice_frames();
+    let frames = harness.drain();
+    assert_eq!(frames.len(), 2);
+    assert!(frames[1].theme.is_some());
+    assert!(ShownState::Refusal.matches(state_of(&frames[1]).unwrap()));
+    assert_eq!(frames[1], frames[0]);
 }
 
-/// A report re-arms the attach frame's theme (design D7): the first attach
-/// frame carries the theme, and the frame a report triggers carries it
-/// again, so a reload re-shows the state with its theme.
+/// A layout report in a dead-end state sends nothing (design D4): the dead
+/// end re-sends on `sync` only, so the report marks no section.
 #[test]
-fn a_report_re_arms_the_attach_theme() {
+fn a_layout_report_in_a_dead_end_sends_nothing() {
     let (harness, tx, rx) = Harness::new();
     tx.send(layout_with(vec![])).unwrap();
     tx.send(close_input()).unwrap();
     let steps = MockSteps::refusing_probe();
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
+    assert_eq!(harness.drain().len(), 1);
+}
+
+/// The waiting state answers `sync` with its state and the theme (design D4):
+/// the re-sent batch equals the first one, and the wait then ends attached.
+#[test]
+fn the_waiting_state_answers_sync_with_its_state_and_theme() {
+    let (harness, tx, rx) = Harness::new();
+    tx.send(CoreInput::Sync).unwrap();
+    let steps = MockSteps::attach_fails(vec![shutting_down_error()], vec![OwnerWait::Exited]);
+    let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
+    let outcome = campaign.run();
+    assert!(outcome.is_ok(), "the wait attached: {outcome:?}");
     let frames = harness.drain();
     assert_eq!(frames.len(), 2);
-    let (first, second) = (&frames[0], &frames[1]);
-    let (GuiWindowFrame::Attach(first), GuiWindowFrame::Attach(second)) = (first, second) else {
-        panic!("the campaign emitted only attach frames");
-    };
-    assert!(first.theme.is_some());
-    assert!(second.theme.is_some());
+    assert!(frames[1].theme.is_some());
+    assert!(ShownState::Waiting.matches(state_of(&frames[1]).unwrap()));
+    assert_eq!(frames[1], frames[0]);
+}
+
+/// The campaign's revisions carry to the attached core (design D4): the
+/// campaign's theme revision steps once for the palette it sent, and the
+/// attach revision steps once for each state it showed.
+#[test]
+fn the_campaign_reports_the_revisions_it_sent() {
+    let (harness, tx, rx) = Harness::new();
+    tx.send(close_input()).unwrap();
+    let steps = MockSteps::attach_fails(vec![mismatch_error()], vec![]);
+    let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
+    let _outcome = campaign.run();
+    assert_eq!(
+        campaign.sent_revisions(),
+        SentRevisions {
+            attach: 1,
+            theme: 1,
+        }
+    );
 }

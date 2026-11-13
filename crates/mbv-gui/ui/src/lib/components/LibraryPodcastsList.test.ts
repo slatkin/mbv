@@ -9,9 +9,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiPodcastsFrame, GuiPodcastsRow } from '$lib/bridge/types';
+import { initialListScroll, podcastsScroll } from '$lib/library/scroll';
+import type { GuiPodcastsDetail, GuiPodcastsList, GuiPodcastsRow } from '$lib/bridge/types';
 import { initialPodcastsUi, podcastsUi } from '$lib/library/podcasts';
-import { carryLibraryContent } from '$lib/library/state';
+import { carryLibrary } from '$lib/bridge/test-library';
 import LibraryPodcastsList from './LibraryPodcastsList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -54,26 +55,36 @@ const EPISODES: GuiPodcastsRow[] = [
 
 /** The carried Podcasts content over `rows`, with the frame's other facts as
  * the caller sets them (design D12). */
-function frame(rows: GuiPodcastsRow[], facts: Partial<GuiPodcastsFrame> = {}): GuiPodcastsFrame {
+function frame(
+	rows: GuiPodcastsRow[],
+	facts: { loading?: boolean; failed?: boolean } = {},
+): GuiPodcastsList {
 	return {
 		libIdx: 0,
 		pills: [
 			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
 		],
-		loading: false,
-		failed: false,
+		loading: facts.loading ?? false,
+		failed: facts.failed ?? false,
 		rows,
-		selected: rows[0]?.id ?? null,
-		hero: null,
-		...facts,
 	};
+}
+
+/** The Podcasts detail part: the first row selected unless `selected` names
+ * one, and no Hero. */
+function detail(
+	rows: GuiPodcastsRow[],
+	selected: string | null = rows[0]?.id ?? null,
+): GuiPodcastsDetail {
+	return { selected, hero: null };
 }
 
 beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	podcastsUi.set(initialPodcastsUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	podcastsScroll.set(initialListScroll());
+	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -82,27 +93,16 @@ beforeEach(() => {
  * viewport: an unmeasured viewport paints nothing, as the Music list does. */
 async function mountList(
 	rows: GuiPodcastsRow[],
-	facts: Partial<GuiPodcastsFrame> = {},
+	facts: { loading?: boolean; failed?: boolean; selected?: string | null } = {},
 	viewportHeight = 300,
 ): Promise<HTMLElement> {
 	const podcasts = frame(rows, facts);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: {
-			tabs: [],
-			currentTab: 2,
-			music: null,
-			home: null,
-			emby: null,
-			audiobooks: null,
-			podcasts,
-			feeds: null,
-			rowMenu: null,
-			shows: null,
-		},
+	const picked = detail(rows, facts.selected);
+	carryLibrary({
+		list: { tabs: [], currentTab: 2, destination: { kind: 'podcasts', ...podcasts } },
+		detail: { kind: 'podcasts', ...picked },
 	});
-	const { container } = render(LibraryPodcastsList, { podcasts });
+	const { container } = render(LibraryPodcastsList, { list: podcasts, detail: picked });
 	const list = container.querySelector<HTMLElement>('[data-library-podcasts-list]');
 	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();

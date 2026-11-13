@@ -1,7 +1,7 @@
 // The Library panel's own state (add-gui-library-panel design D1): what the
-// window content owns and the core never reads there. Two stores keep the two kinds
-// apart — the content the frame carries, kept from the last frame that carried
-// it, and the interaction state the panel's keys and controls move.
+// window content owns and the core never reads there. Two stores keep the two
+// kinds apart — the content the `library` window section carries, and the
+// interaction state the panel's keys and controls move.
 //
 // The core owns the data selection (which collections are selected, the picked
 // item), so nothing here mirrors it: the pill toggle the keys request is an
@@ -9,18 +9,20 @@
 
 import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
+import { libraryDetail } from '$lib/bridge/sections';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
-	GuiAudiobooksFrame,
-	GuiEmbyFrame,
-	GuiHomeFrame,
-	GuiLibraryContent,
-	GuiLibraryFrame,
-	GuiMusicFrame,
+	GuiLibraryList,
+	GuiMusicDetail,
+	GuiMusicList,
 	GuiMusicPill,
-	GuiPodcastsFrame,
-	GuiShowsFrame,
 } from '$lib/bridge/types';
+import {
+	activeLibraryDestination,
+	libraryEmbyList,
+	libraryMusicDetail,
+	libraryMusicList,
+} from './parts';
 import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
 import {
 	albumRowId,
@@ -34,6 +36,8 @@ import {
 } from './list';
 import { jumpToLetter as railJump } from './list';
 import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
+import { musicScroll } from './scroll';
+import { memoRows } from './row-memo';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
  * the pane past the Hero, but it takes Panel focus through the core's focus
@@ -72,11 +76,6 @@ export interface LibraryUiState {
 	 * override to stay shut (design D7's open and close). A new filter and a
 	 * cleared one drop it. */
 	filterClosed: string[];
-	/** The list's native scroll offset in pixels (design D7). */
-	scrollTop: number;
-	/** The list's measured viewport height in pixels: `0` until the list
-	 * measures, and then the rows that paint are the rows in view. */
-	viewportHeight: number;
 	/** The tracklist's cursor track id (design D3): the Hero's tracklist row
 	 * the movement keys rest on while the Hero pane has the pane focus. */
 	trackCursor: string | null;
@@ -144,39 +143,37 @@ export const FEEDS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
  * Upcoming mode does not paint, and on an Emby library it skips the pill row a
  * plain library does not paint and the Hero a frame without one does not. */
 export function activeLibraryPanes(): readonly LibraryPane[] {
-	if (libraryHome() !== null) {
-		return HOME_PANES;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			return HOME_PANES;
+		case 'shows':
+			return libraryDetailHasHero() ? SHOWS_PANES : SHOWS_PANES_NO_HERO;
+		case 'emby':
+			return embyPanes(libraryEmbyList()?.feedGroup ?? false, libraryDetailHasHero());
+		case 'audiobooks':
+			return libraryDetailHasHero() ? AUIB_PANES : AUIB_PANES_NO_HERO;
+		case 'podcasts':
+			return libraryDetailHasHero() ? PODCASTS_PANES : PODCASTS_PANES_NO_HERO;
+		case 'feeds':
+			return libraryDetailHasHero() ? FEEDS_PANES : FEEDS_PANES_NO_HERO;
+		default:
+			return PANES;
 	}
-	const shows = libraryShows();
-	if (shows !== null) {
-		return shows.hero === null ? SHOWS_PANES_NO_HERO : SHOWS_PANES;
-	}
-	const emby = libraryEmby();
-	if (emby !== null) {
-		return embyPanes(emby);
-	}
-	const audiobooks = libraryAudiobooks();
-	if (audiobooks !== null) {
-		return audiobooks.hero === null ? AUIB_PANES_NO_HERO : AUIB_PANES;
-	}
-	const podcasts = libraryPodcasts();
-	if (podcasts !== null) {
-		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
-	}
-	const feeds = get(libraryContent)?.feeds ?? null;
-	if (feeds !== null) {
-		return feeds.hero === null ? FEEDS_PANES_NO_HERO : FEEDS_PANES;
-	}
-	return PANES;
 }
 
 /** The Emby walk's panes: the feed-group mode's pill row and the Hero ride
  * only where the frame paints them (row 8.1). */
-function embyPanes(emby: GuiEmbyFrame): readonly LibraryPane[] {
-	if (emby.feedGroup) {
-		return emby.hero === null ? EMBY_FEED_PANES_NO_HERO : EMBY_FEED_PANES;
+function embyPanes(feedGroup: boolean, hasHero: boolean): readonly LibraryPane[] {
+	if (feedGroup) {
+		return hasHero ? EMBY_FEED_PANES : EMBY_FEED_PANES_NO_HERO;
 	}
-	return emby.hero === null ? EMBY_PANES_NO_HERO : EMBY_PANES;
+	return hasHero ? EMBY_PANES : EMBY_PANES_NO_HERO;
+}
+
+/** Whether the active destination's detail part paints a Hero: every
+ * destination's detail carries a `hero`, `null` while none is picked. */
+function libraryDetailHasHero(): boolean {
+	return (get(libraryDetail)?.hero ?? null) !== null;
 }
 
 /** The state a freshly mounted window content starts with. */
@@ -190,8 +187,6 @@ export function initialLibraryUi(): LibraryUiState {
 		cursor: null,
 		openNodes: [],
 		filterClosed: [],
-		scrollTop: 0,
-		viewportHeight: 0,
 		trackCursor: null,
 		heroDismissed: false,
 		itemMenuOpen: false,
@@ -203,38 +198,12 @@ export function initialLibraryUi(): LibraryUiState {
 /** The Library panel's interaction state. */
 export const libraryUi = writable<LibraryUiState>(initialLibraryUi());
 
-/** The last Library content the core carried (design D2). A frame re-carries
- * it only when its revision changes, so the window keeps what the last
- * carrying frame held. */
-export const libraryContent = writable<GuiLibraryContent | null>(null);
-
-/** Keep the content of a frame that carries it (design D2). */
-export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
-	if (frame?.content) {
-		libraryContent.set(frame.content);
-	}
-}
-
-/** Whether the Library panel shows (design D2, D10, D12): the frame carries
- * the Library section and the window holds the active destination's content
- * — Music's, Home's, Shows', or an Emby library's — to paint. The window
- * mounts the panel on this one fact and the key router gates on it, so no
- * Library key acts while the panel paints nothing. */
-export function libraryShown(
-	library: GuiLibraryFrame | null,
-	content: GuiLibraryContent | null,
-): boolean {
-	return (
-		library !== null &&
-		content !== null &&
-		(content.music !== null ||
-			content.home !== null ||
-			content.shows !== null ||
-			content.emby !== null ||
-			content.audiobooks !== null ||
-			content.podcasts !== null ||
-			content.feeds !== null)
-	);
+/** Whether the Library panel shows (design D2, D10, D12): the `libraryList`
+ * section's value names an active destination to paint. The window mounts the
+ * panel on this one fact and the key router gates on it, so no Library key acts
+ * while the panel paints nothing. */
+export function libraryShown(list: GuiLibraryList | null): boolean {
+	return list !== null;
 }
 
 /** Open the list's filter: `/` with Library Panel focus (design D3, step 4). */
@@ -247,16 +216,16 @@ export function openLibraryFilter(): void {
  * widened rows, and the filter's own open and close over the nodes goes with
  * the text. */
 export function closeLibraryFilter(): void {
-	libraryUi.update((ui) =>
-		resolveCursor({ ...ui, filterOpen: false, filter: '', filterClosed: [] }),
-	);
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false, filter: '', filterClosed: [] }));
+	settleCursor();
 }
 
 /** Accept the filter with Enter: the field closes and the list keeps the text
  * (design D3, step 2). The cursor and the scroll follow the rows the same way
  * a text change moves them. */
 export function acceptLibraryFilter(): void {
-	libraryUi.update((ui) => resolveCursor({ ...ui, filterOpen: false }));
+	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	settleCursor();
 }
 
 /** Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3).
@@ -317,73 +286,62 @@ export function applyLibraryPillSelect(libIdx: number): void {
 	selectLibraryPill(libIdx, pillSelect.groupId);
 }
 
-/** The carried Music content, or `null` while the active destination carries
- * none. */
-export function libraryMusic(): GuiMusicFrame | null {
-	return get(libraryContent)?.music ?? null;
-}
-
-/** The carried Home content (design D12), or `null` while any other
- * destination is active. The top bar marks the Home icon current exactly
- * while this is present. */
-export function libraryHome(): GuiHomeFrame | null {
-	return get(libraryContent)?.home ?? null;
-}
-
-/** The carried Shows content (design D12, row 7.1), or `null` while any other
- * destination is active. */
-export function libraryShows(): GuiShowsFrame | null {
-	return get(libraryContent)?.shows ?? null;
-}
-
-/** The carried plain Emby-library content (design D12, row 8.1), or `null`
- * while any other destination is active. */
-export function libraryEmby(): GuiEmbyFrame | null {
-	return get(libraryContent)?.emby ?? null;
-}
-
-/** The carried Audiobooks destination's content (design D12, row 9.1), or
- * `null` while any other destination is active. */
-export function libraryAudiobooks(): GuiAudiobooksFrame | null {
-	return get(libraryContent)?.audiobooks ?? null;
-}
-
-/** The carried Podcasts destination's content (design D12, row 10.1), or
- * `null` while any other destination is active. */
-export function libraryPodcasts(): GuiPodcastsFrame | null {
-	return get(libraryContent)?.podcasts ?? null;
-}
-
 /** The row model under one interaction state (design D7): the carried union,
  * the open nodes, and the filter text. */
 function rowsOf(ui: LibraryUiState): LibraryRow[] {
-	return buildLibraryRows(libraryTree(ui));
+	return libraryRowsOf(libraryTree(ui));
+}
+
+/** The canvas tree's rows, memoized on the tree's four fields (design D9). */
+const musicRowsOf = memoRows(
+	(
+		artists: LibraryTree['artists'],
+		open: LibraryTree['open'],
+		closed: LibraryTree['closed'],
+		filter: LibraryTree['filter'],
+	): LibraryRow[] => buildLibraryRows({ artists, open, closed, filter }),
+);
+
+/** The canvas tree's painted rows (design D9). The same array comes back while
+ * the content, the open nodes, the filter text, and the closed nodes keep their
+ * identity, so a scroll step never rebuilds the rows it clamps against. */
+export function libraryRowsOf(tree: LibraryTree): LibraryRow[] {
+	return musicRowsOf(tree.artists, tree.open, tree.closed, tree.filter);
 }
 
 function libraryTree(ui: LibraryUiState): LibraryTree {
 	return {
-		artists: libraryMusic()?.artists ?? [],
+		artists: libraryMusicList()?.artists ?? [],
 		open: ui.openNodes,
 		closed: ui.filterClosed,
 		filter: ui.filter,
 	};
 }
 
-/** The interaction state once the painted rows may have changed: the cursor
- * keeps its row while that row still paints, and falls to the first painted row
- * otherwise, with the scroll offset showing it (design D7). A filter's text
- * change and its clear both run this, so the cursor never rests on a row that
- * no longer paints. */
-function resolveCursor(ui: LibraryUiState): LibraryUiState {
+/** Settle the cursor and the scroll once the painted rows may have changed
+ * (design D7): the cursor keeps its row while that row still paints, and falls
+ * to the first painted row otherwise. The scroll store then shows the cursor. A
+ * filter's text change and its clear both run this, so the cursor never rests on
+ * a row that no longer paints. */
+function settleCursor(): void {
+	const ui = get(libraryUi);
 	const rows = rowsOf(ui);
 	const cursor = rows.some((row) => row.id === ui.cursor)
 		? ui.cursor
 		: moveListCursor(rows, null, 'home');
-	return {
-		...ui,
-		cursor,
-		scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
-	};
+	if (cursor !== ui.cursor) {
+		libraryUi.update((current) => ({ ...current, cursor }));
+	}
+	followCursor(rows, cursor);
+}
+
+/** Scroll the list so the cursor's row paints fully, in the scroll store (design
+ * D7, D9). */
+function followCursor(rows: readonly LibraryRow[], cursor: string | null): void {
+	musicScroll.update((scroll) => {
+		const scrollTop = scrollTopToShowCursor(rows, cursor, scroll.scrollTop, scroll.viewportHeight);
+		return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
+	});
 }
 
 /** The cursor's row, or `null` while no painted row carries the cursor. */
@@ -480,35 +438,30 @@ let pendingRevealRow: string | null = null;
  * and its artist opens, so the row shows. An album whose tracks are not loaded
  * is opened through the same command a press sends, which is what loads them.
  * A restored pick and a pill's last pick reach the Hero this way. */
-export function revealPickedAlbum(music: GuiMusicFrame): void {
-	const album = music.hero?.album;
+export function revealPickedAlbum(list: GuiMusicList, detail: GuiMusicDetail): void {
+	const album = detail.hero?.album;
 	if (!album) {
 		return;
 	}
-	const artist = music.artists.find((candidate) =>
+	const artist = list.artists.find((candidate) =>
 		candidate.albums.some((row) => row.albumId === album.albumId),
 	);
 	if (!artist) {
 		return;
 	}
 	const albumRow = albumRowId(album.albumId);
-	libraryUi.update((ui) => {
-		const next = {
-			...ui,
-			openNodes: withId(ui.openNodes, artistRowId(artist), true),
-			cursor: albumRow,
-		};
-		if (ui.viewportHeight <= 0) {
-			// The list is not measured yet, so the row cannot scroll into view.
-			// The first measurement takes the scroll.
-			pendingRevealRow = albumRow;
-			return next;
-		}
-		return {
-			...next,
-			scrollTop: scrollTopToShowCursor(rowsOf(next), albumRow, ui.scrollTop, ui.viewportHeight),
-		};
-	});
+	libraryUi.update((ui) => ({
+		...ui,
+		openNodes: withId(ui.openNodes, artistRowId(artist), true),
+		cursor: albumRow,
+	}));
+	if (get(musicScroll).viewportHeight <= 0) {
+		// The list is not measured yet, so the row cannot scroll into view.
+		// The first measurement takes the scroll.
+		pendingRevealRow = albumRow;
+	} else {
+		followCursor(rowsOf(get(libraryUi)), albumRow);
+	}
 	if (album.tracks === null) {
 		void sendLibraryCommand({ command: 'openAlbum', albumId: album.albumId });
 	}
@@ -542,14 +495,8 @@ export function pressLibraryRow(row: LibraryRow): void {
 		return;
 	}
 	if (row.kind === 'track') {
-		libraryUi.update((ui) => {
-			const rows = rowsOf(ui);
-			return {
-				...ui,
-				cursor: row.id,
-				scrollTop: scrollTopToShowCursor(rows, row.id, ui.scrollTop, ui.viewportHeight),
-			};
-		});
+		libraryUi.update((ui) => ({ ...ui, cursor: row.id }));
+		followCursor(rowsOf(get(libraryUi)), row.id);
 		showDetail(pickedItemId(row));
 		return;
 	}
@@ -562,16 +509,13 @@ export function pressLibraryRow(row: LibraryRow): void {
  * take the list's ends. The scroll offset follows, so the cursor row stays
  * fully visible. */
 export function moveLibraryCursor(move: ListMove): void {
-	libraryUi.update((ui) => {
-		const rows = rowsOf(ui);
-		const view = listWindow(rows, ui.scrollTop, ui.viewportHeight);
-		const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
-		return {
-			...ui,
-			cursor,
-			scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
-		};
-	});
+	const ui = get(libraryUi);
+	const rows = rowsOf(ui);
+	const scroll = get(musicScroll);
+	const view = listWindow(rows, scroll.scrollTop, scroll.viewportHeight);
+	const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
+	libraryUi.update((current) => ({ ...current, cursor }));
+	followCursor(rows, cursor);
 }
 
 /** Open or close the cursor's node (design D7's Right and Left). */
@@ -588,53 +532,51 @@ export function setLibraryCursorOpen(open: boolean): void {
  * New text starts the filter's own open and close over: the nodes the user
  * closed under the old text open again. */
 export function setLibraryFilter(filter: string): void {
-	libraryUi.update((ui) => {
-		const next = {
-			...ui,
-			filter,
-			filterClosed: filter === ui.filter ? ui.filterClosed : [],
-		};
-		return resolveCursor(next);
-	});
+	libraryUi.update((ui) => ({
+		...ui,
+		filter,
+		filterClosed: filter === ui.filter ? ui.filterClosed : [],
+	}));
+	settleCursor();
 }
 
 /** Jump to a letter of the rail (design D7): the cursor moves to the first row
  * under the letter and that row scrolls into view. A letter without rows
  * changes nothing. */
 export function jumpToLetter(letter: string): void {
-	libraryUi.update((ui) => {
-		const rows = rowsOf(ui);
-		const jump = railJump(letterRail(rows), rows, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const rows = rowsOf(get(libraryUi));
+	const jump = railJump(letterRail(rows), rows, letter, get(musicScroll));
+	if (jump === null) {
+		return;
+	}
+	libraryUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	musicScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (design D7): the rows in view
  * follow it, and the scroll offset stays inside the narrower range. */
 export function measureLibraryList(viewportHeight: number): void {
-	libraryUi.update((ui) => {
-		const next = { ...ui, viewportHeight };
-		if (pendingRevealRow !== null && viewportHeight > 0) {
-			const row = pendingRevealRow;
-			pendingRevealRow = null;
-			return {
-				...next,
-				scrollTop: scrollTopToShowCursor(rowsOf(next), row, next.scrollTop, viewportHeight),
-			};
-		}
-		return {
-			...next,
-			scrollTop: clampScrollTop(rowsOf(next), next.scrollTop, viewportHeight),
-		};
-	});
+	musicScroll.update((scroll) => ({ ...scroll, viewportHeight }));
+	const rows = rowsOf(get(libraryUi));
+	if (pendingRevealRow !== null && viewportHeight > 0) {
+		const row = pendingRevealRow;
+		pendingRevealRow = null;
+		followCursor(rows, row);
+		return;
+	}
+	musicScroll.update((scroll) => ({
+		...scroll,
+		scrollTop: clampScrollTop(rows, scroll.scrollTop, viewportHeight),
+	}));
 }
 
 /** Report the list's native scroll offset (design D7): a user scroll moves the
  * rows in view, and the offset stays inside the list's range. */
 export function scrollLibraryList(scrollTop: number): void {
-	libraryUi.update((ui) => {
-		const top = clampScrollTop(rowsOf(ui), scrollTop, ui.viewportHeight);
-		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	const rows = rowsOf(get(libraryUi));
+	musicScroll.update((scroll) => {
+		const top = clampScrollTop(rows, scrollTop, scroll.viewportHeight);
+		return top === scroll.scrollTop ? scroll : { ...scroll, scrollTop: top };
 	});
 }
 
@@ -664,7 +606,7 @@ function withHeroPane(ui: LibraryUiState): LibraryUiState {
  * tracklist shows, so the first key lands beside it. */
 export function moveLibraryTrackCursor(move: ListMove): void {
 	libraryUi.update((ui) => {
-		const tracks = heroTracks(libraryMusic()?.hero ?? null);
+		const tracks = heroTracks(libraryMusicDetail()?.hero ?? null);
 		const cursor = moveTrackCursor(
 			tracks,
 			resolveTrackCursor(tracks, ui.trackCursor),
@@ -684,7 +626,7 @@ export function focusedItemId(): string | null {
 	const ui = get(libraryUi);
 	if (ui.pane === 'hero') {
 		return resolveTrackCursor(
-			heroTracks(libraryMusic()?.hero ?? null),
+			heroTracks(libraryMusicDetail()?.hero ?? null),
 			ui.trackCursor,
 		);
 	}
@@ -713,13 +655,7 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 	return (
 		ui.arrangement === 'narrow' &&
 		!ui.heroDismissed &&
-		((libraryMusic()?.hero ?? null) !== null ||
-			(libraryHome()?.hero ?? null) !== null ||
-			(libraryShows()?.hero ?? null) !== null ||
-			(libraryEmby()?.hero ?? null) !== null ||
-			(libraryAudiobooks()?.hero ?? null) !== null ||
-			(libraryPodcasts()?.hero ?? null) !== null ||
-			(get(libraryContent)?.feeds?.hero ?? null) !== null)
+		libraryDetailHasHero()
 	);
 }
 

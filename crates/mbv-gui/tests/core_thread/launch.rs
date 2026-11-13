@@ -316,10 +316,7 @@ fn a_saved_destination_the_catalog_lost_applies_the_saved_focus_and_opens_nothin
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.latest_frame()
-            .expect("the step emitted a frame")
-            .focus
-            .panel,
+        test.held().focus().panel,
         GuiPanel::Library,
         "the saved focus reaches the frame too"
     );
@@ -553,11 +550,15 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     // lands, and the frame carries it.
     send_library(&mut test, GuiLibraryCommand::TakeFocus);
     assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
-    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
+    assert_eq!(test.held().focus().panel, GuiPanel::Library);
 
     // The catalog lands: the destination jump still runs, and the saved
     // Queue focus does not replace the taken Library focus.
     test.core.app_mut().seed_gui_music_library_tab_for_test();
+    // The startup drain marks every gated section when it lands a catalog
+    // (design D3 rule 2); this seed lands it between ticks, so it marks what that
+    // drain would.
+    test.core.mark_startup_landing_for_test();
     assert!(test.core.step());
 
     assert_eq!(
@@ -574,5 +575,5 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     );
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
+    assert_eq!(test.held().focus().panel, GuiPanel::Library);
 }

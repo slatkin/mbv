@@ -1,17 +1,22 @@
-//! The Queue playback section of a frame: the transport band's facts (design
-//! D4). Each field mirrors one fact of `QueuePlaybackProjection`.
+//! The Queue playback section: the transport band's facts (design
+//! D4). Each field mirrors one fact of `QueuePlaybackProjection`, except the
+//! playhead facts: they ride the `playhead` anchor section (design D5), which
+//! the window predicts from between anchors.
 
 use mbv::{
-    PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
-    TrackChips, TrackChoice, TrickplayGrid,
+    PlaybackChapter, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection, SegmentMark,
+    TrackChip, TrackChips, TrackChoice, TrickplayGrid,
 };
+use mbv_queue::QueueSlotId;
+use mbv_surfaces::queue::QueueSurface;
+use mbv_ui_model::media_list::{MediaListRow, MediaSemanticState};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
-use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::{Deserialize, Serialize};
 
 use super::theme::GuiRole;
-/// The Queue playback band's facts for one frame.
+use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
+/// The Queue playback band's facts for one build.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueuePlayback {
@@ -23,14 +28,6 @@ pub struct GuiQueuePlayback {
     pub host_is_remote: bool,
     /// Whether the transport section paints. Idle collapses it.
     pub shown: bool,
-    /// The displayed playback state: the seek row's position, runtime, and paused flag.
-    pub playback: GuiPlaybackState,
-    /// The seek row's left clock, formatted by the TUI's shared duration
-    /// formatter. The front end paints the text verbatim.
-    pub elapsed_clock: String,
-    /// The seek row's right clock (the time left in the active item), in the
-    /// same format. The front end paints the minus sign before it.
-    pub remaining_clock: String,
     /// Whether the controls and seekbar carry playback.
     pub show_controls: bool,
     /// The plain now-playing title, if there is one.
@@ -47,10 +44,6 @@ pub struct GuiQueuePlayback {
     /// the active item's kind. `None` while nothing to caption — idle, a
     /// slotless output, or a kind with no image source.
     pub still_caption: Option<String>,
-    /// The active item's wall-clock end time, formatted in the local zone:
-    /// the scrubber's finish clock. `None` while no item plays or the runtime
-    /// is unknown.
-    pub finish_clock: Option<String>,
     /// The active item's chapter boundaries with their names (design D4a):
     /// the scrubber's boundary ticks and the hover preview's chapter name.
     /// Empty while the item's fetch has not landed or carries none.
@@ -72,10 +65,12 @@ pub struct GuiQueuePlayback {
     /// source is the local player's stream, so a band whose playback rides a
     /// remote output paints none, as the TUI's does.
     pub status_indicators: Option<Vec<GuiStatusIndicator>>,
-    /// The visual slot's artwork (design D10): `None` unless the slot's art
-    /// changed for this window — the theme's arming rule (design D7). The
-    /// front end keeps the last carried value and paints it until the next.
-    pub artwork: Option<GuiCardArtwork>,
+    /// The visual slot's artwork (design D7): the image reference the slot
+    /// paints, carried on every build — a URL names the cache entry, so the
+    /// reference is small and needs no arming latch. `None` paints nothing:
+    /// idle, the user's hide toggle, images off, or the visualizer owning
+    /// the slot.
+    pub artwork: Option<GuiArtRef>,
     /// The track chips the canvas paints under the transport (design D4):
     /// the video stream's resolved label, and the audio and subtitle tracks
     /// each with its choices and the chosen one. `None` while the local
@@ -85,10 +80,6 @@ pub struct GuiQueuePlayback {
     /// receivers the Owner offers, each marked with whether it is the Owner's
     /// attached output.
     pub target_choices: Vec<GuiTargetChoice>,
-    /// The scrubber's hover preview (add-tauri-gui-client row 6.4): the
-    /// pointer's fraction along the bar and the time and chapter it names.
-    /// `None` while the pointer is away from the bar.
-    pub hover: Option<GuiScrubberHover>,
 }
 
 /// The scrubber's hover preview (design D4): the position a move over the
@@ -115,16 +106,14 @@ pub struct GuiScrubberHover {
 }
 
 /// The hovered trickplay tile the preview paints (task 6.7): the thumbnail's
-/// place in its sheet, the thumbnail's pixel size, and the sheet's bytes as
-/// the `data:image/jpeg` URL the window paints. The webview fetches nothing:
-/// the bytes are the core's cache, so the CSP keeps its `data:` image source
-/// and admits no remote origin (design D11).
+/// place in its sheet, the thumbnail's pixel size, and the sheet's image
+/// reference (design D7). The webview loads the sheet from the core's cache
+/// through the `mbv-art` scheme; it makes no other request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiScrubberTile {
     /// The sheet's opaque identity (the item, the thumbnail width, and the
-    /// sheet's ordinal). The window repaints the sheet it latched for this
-    /// key while `sheet` is `None`.
+    /// sheet's ordinal).
     pub sheet_key: String,
     /// The thumbnail's pixel width within the sheet.
     pub width: u32,
@@ -136,10 +125,8 @@ pub struct GuiScrubberTile {
     pub column: u32,
     /// The thumbnail's row in the sheet.
     pub row: u32,
-    /// The sheet image as a `data:image/jpeg` URL. `None` when the frame does
-    /// not re-carry it — the hovered sheet is the one the window already
-    /// holds — as the artwork's arming rule works (design D10).
-    pub sheet: Option<String>,
+    /// The sheet image's reference: the URL the cached sheet loads through.
+    pub sheet: GuiArtRef,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -152,24 +139,21 @@ pub struct GuiStatusIndicator {
     pub role: GuiRole,
 }
 
-/// The Queue playback visual slot's artwork one frame carries (design D10).
-/// The image and placeholder payloads are `data:` URLs: the artwork the
-/// window paints is the core's encoded cache bytes, never a fetch the
-/// webview makes (the CSP allows a `data:` image source for exactly this).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
-pub enum GuiCardArtwork {
-    /// The slot paints this image: the cached artwork's own bytes, as a
-    /// `data:` URL carrying the MIME type those bytes declare.
-    Image(String),
-    /// The slot paints the bundled placeholder, as a `data:image/webp` URL.
-    Placeholder(String),
-    /// The slot paints the loading fill: a fetch is in flight or awaits its
-    /// retry.
-    Loading,
-    /// The slot paints nothing: idle, the user's hide toggle, images off, or
-    /// the visualizer owning the slot.
-    Hidden,
+/// The visual slot's artwork reference for one `QueueCardArtwork` state
+/// (design D7): the cached image and the bundled placeholder as the URLs the
+/// `mbv-art` scheme answers, a fetch in flight as `Loading`, and the hidden
+/// state as `None` — the slot paints nothing.
+pub(crate) fn card_artwork_ref(artwork: &QueueCardArtwork) -> Option<GuiArtRef> {
+    match artwork {
+        QueueCardArtwork::Image { key, .. } => Some(GuiArtRef::Image {
+            src: art_url(&card_path(key)),
+        }),
+        QueueCardArtwork::Placeholder => Some(GuiArtRef::Placeholder {
+            src: art_url(PLACEHOLDER_PATH),
+        }),
+        QueueCardArtwork::Loading => Some(GuiArtRef::Loading),
+        QueueCardArtwork::Hidden => None,
+    }
 }
 
 impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
@@ -179,15 +163,11 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             host: projection.host.clone(),
             host_is_remote: projection.host_is_remote,
             shown: projection.shown,
-            playback: GuiPlaybackState::from(projection.playback),
-            elapsed_clock: projection.elapsed_clock.clone(),
-            remaining_clock: projection.remaining_clock.clone(),
             show_controls: projection.show_controls,
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
             still_caption: projection.still_caption.clone(),
-            finish_clock: projection.finish_clock.clone(),
             chapters: projection.chapters.iter().map(GuiChapter::from).collect(),
             intro_mark: projection.intro_mark.map(GuiSegmentMark::from),
             credits_mark: projection.credits_mark.map(GuiSegmentMark::from),
@@ -209,6 +189,8 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                     })
                     .collect()
             }),
+            // The section build overrides this with the slot's art reference
+            // (design D7); the projection alone cannot name it.
             artwork: None,
             track_chips: projection.track_chips.as_ref().map(GuiTrackChips::from),
             target_choices: projection
@@ -216,7 +198,6 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 .iter()
                 .map(GuiTargetChoice::from)
                 .collect(),
-            hover: None,
         }
     }
 }
@@ -316,7 +297,7 @@ pub enum GuiTargetKey {
     Cast(String),
 }
 
-/// The reverse of the frame's `GuiTargetKey` projection (the `selectTarget`
+/// The reverse of the `GuiTargetKey` projection (the `selectTarget`
 /// command, and a painted chooser row's press): the stable identity a painted
 /// row names, back in the shared vocabulary the selection request carries. A
 /// function, not a `From` impl: the conversion is this bridge's, and an impl on
@@ -438,28 +419,54 @@ impl From<NowPlayingStatus> for GuiNowPlayingStatus {
     }
 }
 
-/// The displayed playback state, mirroring `PlaybackState`.
+/// The playhead anchor (design D5): the position, runtime, paused state, and
+/// active slot at the send, from which the window predicts the position until
+/// the next anchor. The core sends one on a changed fact or a new sample that
+/// drifts past the tolerance; between anchors the window advances the
+/// position itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiPlaybackState {
+pub struct GuiPlayhead {
     /// Whether a transport is active, on any target.
     pub active: bool,
-    /// The playhead's index in the queue that this state was read from.
-    pub active_idx: Option<usize>,
+    /// The slot that carries the now-playing marker (`QueueSlotId::raw`), the
+    /// same whole-list marker the `queue` section's `active` carries.
+    pub active_slot: Option<u64>,
+    /// The reported position at the send, in ticks.
     pub position_ticks: i64,
+    /// The active item's runtime, in ticks.
     pub runtime_ticks: i64,
+    /// Whether the transport is paused: the prediction holds the position
+    /// while it is.
     pub paused: bool,
 }
 
-impl From<PlaybackState> for GuiPlaybackState {
-    fn from(state: PlaybackState) -> Self {
+impl GuiPlayhead {
+    /// The anchor the tick's one `queue_playback_projection` read and the
+    /// Queue Surface state's now-playing marker carry (design D5).
+    #[must_use]
+    pub fn from_surface(playback: &QueuePlaybackProjection, queue: &QueueSurface) -> Self {
+        let state = playback.playback;
         Self {
             active: state.active,
-            active_idx: state.active_idx,
+            active_slot: queue.rows().iter().find_map(active_slot),
             position_ticks: state.position_ticks,
             runtime_ticks: state.runtime_ticks,
             paused: state.paused,
         }
+    }
+}
+
+/// The slot of a row that carries the now-playing marker — the same rule the
+/// queue section's `active` reads (`bridge/frame/queue.rs`).
+fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
+    match row {
+        MediaListRow::Item {
+            target,
+            semantic_state: MediaSemanticState::NowPlaying { .. },
+            ..
+        } => Some(target.raw()),
+        MediaListRow::Item { .. } | MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
     }
 }
 

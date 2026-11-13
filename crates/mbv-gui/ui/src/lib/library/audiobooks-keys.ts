@@ -14,11 +14,11 @@
 // play-next: `n` is consumed and does nothing.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiAudiobooksFrame } from '$lib/bridge/types';
+import type { GuiAudiobooksList } from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS, routePanelListKey } from './keys-shared';
 import type { PanelKeys } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryAudiobooks } from './state';
+import { libraryAudiobooksDetail, libraryAudiobooksList } from './parts';
 import {
 	audiobooksCursorRow,
 	moveAudiobooksListCursor,
@@ -36,10 +36,10 @@ import {
  * no pill row rides on the destination, the item the play and queue commands
  * name is the book the cursor row carries, the Hero routes its own chapter
  * Workspace, and there is no play-next. */
-const AUDIOBOOKS_KEYS: PanelKeys<GuiAudiobooksFrame, AudiobooksItemRow> = {
-	frame: libraryAudiobooks,
-	hasHero: (audiobooks) => audiobooks.hero !== null,
-	selectedItemId: (audiobooks) => audiobooks.selected,
+const AUDIOBOOKS_KEYS: PanelKeys<GuiAudiobooksList, AudiobooksItemRow> = {
+	frame: libraryAudiobooksList,
+	hasHero: () => (libraryAudiobooksDetail()?.hero ?? null) !== null,
+	selectedItemId: () => libraryAudiobooksDetail()?.selected ?? null,
 	cursorRow: audiobooksCursorRow,
 	itemId: (row) => row.row.id,
 	moveListCursor: moveAudiobooksListCursor,
@@ -60,18 +60,22 @@ export function routeAudiobooksPanelKey(event: KeyboardEvent, ui: LibraryUiState
  * move the chapter cursor, Enter plays or seeks from the chapter, and `a`
  * queues the selected book. `n` is consumed and does nothing, because books
  * have no play-next. */
-function routeWorkspaceKey(event: KeyboardEvent, audiobooks: GuiAudiobooksFrame): KeyOutcome {
+function routeWorkspaceKey(event: KeyboardEvent, list: GuiAudiobooksList): KeyOutcome {
+	const detail = libraryAudiobooksDetail();
+	if (detail === null) {
+		return 'core';
+	}
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
-		moveAbsChapterCursor(move, audiobooks);
+		moveAbsChapterCursor(move, detail);
 		return 'handled';
 	}
 	if (event.key === 'Enter') {
-		playAbsChapter(audiobooks);
+		playAbsChapter(list.libIdx, detail);
 		return 'handled';
 	}
 	if (event.key === 'a') {
-		queueAbsBook(audiobooks);
+		queueAbsBook(list.libIdx, detail);
 		return 'handled';
 	}
 	if (event.key === 'n') {

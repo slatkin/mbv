@@ -5,27 +5,29 @@
 // 600 px tall. The Tauri event and IPC APIs are mocked; the frame is the
 // serde wire shape of bridge/frame.rs.
 
-import { listen } from '@tauri-apps/api/event';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { frames } from '$lib/bridge/frames';
+import {
+	connected,
+	focus,
+	panel as panelStore,
+	resetSectionsForTest,
+	settings,
+	status as statusStore,
+} from '$lib/bridge/sections';
 import { DEFAULT_DRAGGED_WIDTHS, draggedWidths } from '$lib/bridge/resize';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import type {
-	GuiFrame,
-	GuiLibraryContent,
-	GuiMusicFrame,
+	GuiSettingsFrame,
 	GuiMusicHero,
 	GuiPanel,
-	GuiWindowFrame,
 	LayoutSize,
 } from '$lib/bridge/types';
-import { libraryContent } from '$lib/library/state';
 import { initialSettingsUi, settingsUi } from '$lib/settings/state';
 import { selectSettingsSection } from '$lib/settings/state';
 import App from './App.svelte';
-
-const listenMock = vi.mocked(listen);
 
 /** A ResizeObserver stub: jsdom has none and no layout. The test fires the
  * observer after render, so the measured size lands outside the effect that
@@ -49,9 +51,7 @@ class ResizeObserverStub {
 }
 
 beforeEach(() => {
-	listenMock.mockReset();
-	listenMock.mockResolvedValue(() => {});
-	libraryContent.set(null);
+	resetSectionsForTest();
 	settingsUi.set(initialSettingsUi());
 	// The divider widths are session state (design D4): a drag one test holds
 	// would outlive it.
@@ -61,17 +61,22 @@ beforeEach(() => {
 });
 
 /** The Music content with an optional picked album for the Hero. */
-function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
+function music(hero: GuiMusicHero | null = null): LibrarySections {
 	return {
-		libIdx: 0,
-		pills: [],
-		collectionNames: [],
-		loading: false,
-		failure: null,
-		artists: [],
-		hero,
-		art: null,
-		playingTrackId: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: {
+				kind: 'music',
+				libIdx: 0,
+				pills: [],
+				collectionNames: [],
+				loading: false,
+				failure: null,
+				artists: [],
+			},
+		},
+		detail: { kind: 'music', hero, art: null, playingTrackId: null },
 	};
 }
 
@@ -93,103 +98,34 @@ function hero(): GuiMusicHero {
 	};
 }
 
-/** The attached slice's frame: an empty queue, the given Panel focus, and the
- * given carried Library content. */
-function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
-	return {
-		focus: { surface: 'queue', panel },
-		queue: { rows: [], cursor: null, marks: [], active: null, hover: null, drag: null },
-		summary: {
-			remaining: 0,
-			nextTitle: null,
-			finishClock: null,
-			rightColumn: 'length',
-			filter: '',
-			filterActive: false,
-		},
-		panel: { collapsed: false, queueFolded: false },
-		overlay: null,
-		playback: {
-			status: 'idle',
-			host: '',
-			hostIsRemote: false,
-			shown: false,
-			playback: {
-				active: false,
-				activeIdx: null,
-				positionTicks: 0,
-				runtimeTicks: 0,
-				paused: false,
-			},
-			elapsedClock: '0:00',
-			remainingClock: '0:00',
-			showControls: false,
-			nowPlayingTitle: null,
-			parentLine: null,
-			episodeBadge: null,
-			stillCaption: null,
-			finishClock: null,
-			availability: { stop: false, next: false, previous: false },
-			statusIndicators: null,
-			artwork: null,
-			chapters: [],
-			introMark: null,
-			creditsMark: null,
-			trickplay: null,
-			trackChips: null,
-			targetChoices: [],
-			hover: null,
-		},
-		footer: {
-			owner: { text: '', role: 'textPrimary', bold: false },
-			ownerLive: false,
-			playlist: { text: '', role: 'textPrimary', bold: false },
-			autosave: null,
-			dirty: null,
-		},
-		status: { prefixArmed: false, toast: null },
-		library:
-			libraryMusic === null
-				? null
-				: {
-						revision: 1,
-						search: null,
-						content: {
-							tabs: [{ position: 1, label: 'Music' }],
-							currentTab: 1,
-							music: libraryMusic,
-							home: null,
-							shows: null,
-							emby: null,
-							audiobooks: null,
-							podcasts: null,
-							feeds: null,
-							rowMenu: null,
-						},
-					},
-		settings: null,
+/** Seeds the window's section stores with an empty queue, the given Panel
+ * focus, the given carried Music content, and any section overrides. */
+function seed(
+	panel: GuiPanel,
+	libraryMusic: LibrarySections | null,
+	overrides: {
+		panel?: Partial<{ collapsed: boolean; queueFolded: boolean; uiResetEpoch: number }>;
+		status?: { prefixArmed: boolean; toast: { text: string; severity: 'neutral' | 'success' | 'warning' | 'error' } | null };
+		settings?: GuiSettingsFrame | null;
+		library?: LibrarySections | null;
+	} = {},
+): void {
+	connected.set(true);
+	focus.set({ surface: panel, panel });
+	panelStore.set({
+		collapsed: false,
+		queueFolded: false,
 		uiResetEpoch: 0,
-		theme: null,
-	};
+		...overrides.panel,
+	});
+	statusStore.set(overrides.status ?? { prefixArmed: false, toast: null });
+	settings.set(overrides.settings ?? null);
+	carryLibrary(overrides.library ?? libraryMusic);
 }
 
-/** Seeds the frame store and the Library content the window holds, renders the
- * window at `size`, and returns the rendered view once the observer's
- * measurement has painted. */
-async function mount(
-	size: LayoutSize,
-	slice: GuiFrame,
-	carried: GuiLibraryContent | null = null,
-) {
-	await frames.listen();
-	const handler = listenMock.mock.calls.at(-1)?.[1] as (
-		event: { payload: GuiWindowFrame },
-	) => void;
-	handler({ payload: { slice } });
-	// The frame store keeps the seeded slice; a stale carried value from
-	// another test would outlive the reset, so set the store rather than the
-	// frame.
-	libraryContent.set(carried);
+/** Renders the window over the seeded section stores at `size`, and returns
+ * the rendered view once the observer's measurement has painted. */
+async function mount(size: LayoutSize) {
 	ResizeObserverStub.size = size;
 	const view = render(App);
 	await tick();
@@ -213,7 +149,8 @@ test('prevents the default context menu', () => {
 });
 
 test('without Music content the Queue panel paints alone', async () => {
-	const { container } = await mount({ width: 1600, height: 900 }, frame('queue', null));
+	seed('queue', null);
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'wide',
@@ -227,25 +164,14 @@ test('without Music content the Queue panel paints alone', async () => {
 // footer keeps painting both while it does not. The frame's `status` is one
 // fact carried to both surfaces, never consumed by either.
 test('the Queue footer keeps the prefix and the toast while the Library panel does not show', async () => {
-	const slice = frame('queue', null);
-	slice.status = { prefixArmed: true, toast: null };
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('queue', null, { status: { prefixArmed: true, toast: null } });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	expect(container.querySelector('[data-library-panel]')).toBeNull();
 	expect(container.querySelector('[data-footer-line]')?.textContent).toContain('PREFIX');
 
-	// The next frame carries a toast: the footer paints it in the same line.
-	const handler = listenMock.mock.calls.at(-1)?.[1] as (
-		event: { payload: GuiWindowFrame },
-	) => void;
-	handler({
-		payload: {
-			slice: {
-				...slice,
-				status: { prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } },
-			},
-		},
-	});
+	// The next batch carries a toast: the footer paints it in the same line.
+	statusStore.set({ prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } });
 	await tick();
 
 	expect(container.querySelector('[data-library-panel]')).toBeNull();
@@ -256,27 +182,16 @@ test('the Queue footer keeps the prefix and the toast while the Library panel do
 // Library Status bar paints the frame's armed prefix and live toast, and the
 // Queue footer line paints neither — each fact paints once a frame.
 test('the Queue footer drops the prefix and the toast while the Library panel shows', async () => {
-	const slice = frame('queue', music());
-	slice.status = { prefixArmed: true, toast: null };
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('queue', music(), { status: { prefixArmed: true, toast: null } });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	expect(container.querySelector('[data-library-panel]')).toBeTruthy();
 	expect(container.querySelector('[data-library-status-prefix]')?.textContent).toContain('PREFIX');
 	expect(container.querySelector('[data-footer-line]')?.textContent).not.toContain('PREFIX');
 
-	// The next frame carries a toast: the Library Status bar paints it, and the
+	// The next batch carries a toast: the Library Status bar paints it, and the
 	// footer line stays clear of it.
-	const handler = listenMock.mock.calls.at(-1)?.[1] as (
-		event: { payload: GuiWindowFrame },
-	) => void;
-	handler({
-		payload: {
-			slice: {
-				...slice,
-				status: { prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } },
-			},
-		},
-	});
+	statusStore.set({ prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } });
 	await tick();
 
 	expect(container.querySelector('[data-library-status-toast]')?.textContent).toContain('Scanning');
@@ -287,11 +202,8 @@ test('the Queue footer drops the prefix and the toast while the Library panel sh
 // no Library section paints no panel and hides no Queue panel, whatever content
 // the window kept from an earlier frame.
 test('a frame without the Library section paints only the Queue panel', async () => {
-	const { container } = await mount(
-		{ width: 700, height: 900 },
-		frame('library', null),
-		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
-	);
+	seed('library', null);
+	const { container } = await mount({ width: 700, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'mini',
@@ -301,7 +213,8 @@ test('a frame without the Library section paints only the Queue panel', async ()
 });
 
 test('Mini below 480 px mounts only the Queue panel while Panel focus is queue', async () => {
-	const { container } = await mount({ width: 700, height: 900 }, frame('queue', music()));
+	seed('queue', music());
+	const { container } = await mount({ width: 700, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'mini',
@@ -311,7 +224,8 @@ test('Mini below 480 px mounts only the Queue panel while Panel focus is queue',
 });
 
 test('Mini mounts only the Library panel while Panel focus is library', async () => {
-	const { container } = await mount({ width: 700, height: 900 }, frame('library', music()));
+	seed('library', music());
+	const { container } = await mount({ width: 700, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'mini',
@@ -323,7 +237,8 @@ test('Mini mounts only the Library panel while Panel focus is library', async ()
 });
 
 test('Narrow mounts both panels without a Hero pane', async () => {
-	const { container } = await mount({ width: 1200, height: 900 }, frame('library', music()));
+	seed('library', music());
+	const { container } = await mount({ width: 1200, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'narrow',
@@ -337,19 +252,15 @@ test('Narrow mounts both panels without a Hero pane', async () => {
 });
 
 test('Narrow opens the Hero overlay once an album is picked', async () => {
-	const { container } = await mount(
-		{ width: 1200, height: 900 },
-		frame('library', music(hero())),
-	);
+	seed('library', music(hero()));
+	const { container } = await mount({ width: 1200, height: 900 });
 
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeTruthy();
 });
 
 test('Wide mounts the Hero pane beside the list', async () => {
-	const { container } = await mount(
-		{ width: 1600, height: 900 },
-		frame('library', music(hero())),
-	);
+	seed('library', music(hero()));
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'wide',
@@ -363,7 +274,8 @@ test('Wide mounts the Hero pane beside the list', async () => {
 });
 
 test('880 px wide but short of 600 px falls back to Narrow', async () => {
-	const { container } = await mount({ width: 1280, height: 500 }, frame('library', music()));
+	seed('library', music());
+	const { container } = await mount({ width: 1280, height: 500 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'narrow',
@@ -372,10 +284,8 @@ test('880 px wide but short of 600 px falls back to Narrow', async () => {
 });
 
 test('the collapsed rail leaves a wider Library column', async () => {
-	const slice = frame('library', music());
-	slice.panel = { collapsed: true, queueFolded: false };
-
-	const { container } = await mount({ width: 1000, height: 900 }, slice);
+	seed('library', music(), { panel: { collapsed: true, queueFolded: false } });
+	const { container } = await mount({ width: 1000, height: 900 });
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'wide',
@@ -387,10 +297,8 @@ test('the collapsed rail leaves a wider Library column', async () => {
 // double-click returns the column to its default. jsdom has no PointerEvent, so
 // the drag's coordinates ride a MouseEvent of the same type.
 test('dragging the Queue divider resizes the column and a double-click resets it', async () => {
-	const { container } = await mount(
-		{ width: 1600, height: 900 },
-		frame('library', music(hero())),
-	);
+	seed('library', music(hero()));
+	const { container } = await mount({ width: 1600, height: 900 });
 	const column = container.querySelector('[data-queue-column]') as HTMLElement;
 	const divider = container.querySelector('[data-divider="queue"]') as HTMLElement;
 
@@ -418,7 +326,7 @@ test('dragging the Queue divider resizes the column and a double-click resets it
 // only the pane that holds the keyboard — the content once a section opens.
 
 /** A Settings frame section over the Queue section (design D9). */
-function settingsFrame(): GuiFrame['settings'] {
+function settingsFrame(): GuiSettingsFrame {
 	return {
 		section: 'queue',
 		sections: ['services', 'playback', 'queue', 'actions', 'keys', 'sessions', 'playlists'],
@@ -441,9 +349,8 @@ function settingsFrame(): GuiFrame['settings'] {
 }
 
 test('the open Settings screen mounts no Queue or Library panel', async () => {
-	const slice = frame('library', music());
-	slice.settings = settingsFrame();
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('library', music(), { settings: settingsFrame() });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	expect(container.querySelector('[data-settings-screen]')).toBeTruthy();
 	expect(container.querySelector('[data-panel-state]')).toBeNull();
@@ -452,9 +359,8 @@ test('the open Settings screen mounts no Queue or Library panel', async () => {
 });
 
 test('the Settings sidebar lists the frame sections in order', async () => {
-	const slice = frame('queue', null);
-	slice.settings = settingsFrame();
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('queue', null, { settings: settingsFrame() });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	const sections = [...container.querySelectorAll('[data-settings-section]')].map(
 		(el) => el.getAttribute('data-settings-section'),
@@ -475,9 +381,8 @@ test('the Settings sidebar lists the frame sections in order', async () => {
 // pane that holds the keyboard paints — the sidebar first, and the content
 // once the user opens a section.
 test('in Mini, opening a section shows only its content', async () => {
-	const slice = frame('queue', null);
-	slice.settings = settingsFrame();
-	const { container } = await mount({ width: 700, height: 900 }, slice);
+	seed('queue', null, { settings: settingsFrame() });
+	const { container } = await mount({ width: 700, height: 900 });
 
 	expect(container.querySelector('[data-settings-sidebar-pane]')).toBeTruthy();
 	expect(container.querySelector('[data-settings-content]')).toBeNull();
@@ -494,9 +399,8 @@ test('in Mini, opening a section shows only its content', async () => {
 // painters — its list, its rail, and its Hero — as it does for the other
 // destinations.
 test('the Emby content mounts the Library panel with the Emby painters', async () => {
-	const slice = frame('library', null);
-	slice.library = { revision: 1, search: null, content: embyContent() };
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('library', null, { library: embyContent() });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	const panel = container.querySelector('[data-library-panel]');
 
@@ -514,9 +418,8 @@ test('the Emby content mounts the Library panel with the Emby painters', async (
 // Podcasts painters — its pills, its date-gutter list, and its Hero — and
 // none of the other destinations' painters.
 test('the Podcasts content mounts the Library panel with the Podcasts painters', async () => {
-	const slice = frame('library', null);
-	slice.library = { revision: 1, search: null, content: podcastsContent() };
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('library', null, { library: podcastsContent() });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	const panel = container.querySelector('[data-library-panel]');
 
@@ -536,9 +439,8 @@ test('the Podcasts content mounts the Library panel with the Podcasts painters',
 // Feeds painters — its pills, its date-gutter list, and its Hero — and none
 // of the other destinations' painters.
 test('the Feeds content mounts the Library panel with the Feeds painters', async () => {
-	const slice = frame('library', null);
-	slice.library = { revision: 1, search: null, content: feedsContent() };
-	const { container } = await mount({ width: 1600, height: 900 }, slice);
+	seed('library', null, { library: feedsContent() });
+	const { container } = await mount({ width: 1600, height: 900 });
 
 	const panel = container.querySelector('[data-library-panel]');
 
@@ -556,38 +458,37 @@ test('the Feeds content mounts the Library panel with the Feeds painters', async
 /** The carried content while the Feeds destination is active: the Latest
  * and one subscription pill, one merged entry row, and the selected entry's
  * Hero (design D12, row 11.1). */
-function feedsContent(): GuiLibraryContent {
+function feedsContent(): LibrarySections {
 	return {
-		rowMenu: null,
-		tabs: [{ position: 5, label: 'Feeds' }],
-		currentTab: 5,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: {
-			pills: [
-				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-				{
-					pill: { kind: 'subscription', id: 'https://sub.one' },
-					name: 'Sub One',
-					selected: false,
-					collection: false,
-				},
-			],
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 's1::e1',
-					title: 'Entry A',
-					subtitle: 'Sub One',
-					date: '12 May',
-					state: 'ordinary',
-				},
-			],
+		list: {
+			tabs: [{ position: 5, label: 'Feeds' }],
+			currentTab: 5,
+			destination: {
+				kind: 'feeds',
+				pills: [
+					{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+					{
+						pill: { kind: 'subscription', id: 'https://sub.one' },
+						name: 'Sub One',
+						selected: false,
+						collection: false,
+					},
+				],
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 's1::e1',
+						title: 'Entry A',
+						subtitle: 'Sub One',
+						date: '12 May',
+						state: 'ordinary',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'feeds',
 			selected: 's1::e1',
 			hero: {
 				title: 'Entry A',
@@ -603,32 +504,33 @@ function feedsContent(): GuiLibraryContent {
 /** The carried content while a Podcasts library is active: the Latest pill
  * and a show pill, one merged episode row, and the selected episode's Hero
  * (design D12, row 10.1). */
-function podcastsContent(): GuiLibraryContent {
+function podcastsContent(): LibrarySections {
 	return {
-		tabs: [{ position: 2, label: 'Podcasts' }],
-		currentTab: 2,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: {
-			libIdx: 2,
-			pills: [
-				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-				{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
-			],
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 'e1:ep1',
-					title: 'Episode A',
-					subtitle: 'Show One',
-					date: '12 May',
-					state: 'ordinary',
-				},
-			],
+		list: {
+			tabs: [{ position: 2, label: 'Podcasts' }],
+			currentTab: 2,
+			destination: {
+				kind: 'podcasts',
+				libIdx: 2,
+				pills: [
+					{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+					{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
+				],
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 'e1:ep1',
+						title: 'Episode A',
+						subtitle: 'Show One',
+						date: '12 May',
+						state: 'ordinary',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'podcasts',
 			selected: 'e1:ep1',
 			hero: {
 				title: 'Episode A',
@@ -640,38 +542,39 @@ function podcastsContent(): GuiLibraryContent {
 				art: null,
 			},
 		},
-		feeds: null,
-		rowMenu: null,
 	};
 }
 
 /** The carried content while a plain Emby library is active: one name-sorted
  * row with its rail letter and its Hero (design D12, row 8.1). */
-function embyContent(): GuiLibraryContent {
+function embyContent(): LibrarySections {
 	return {
-		tabs: [{ position: 3, label: 'Movies' }],
-		currentTab: 3,
-		music: null,
-		home: null,
-		shows: null,
-		emby: {
-			libIdx: 3,
-			libraryName: 'Movies',
-			pills: [],
-			collectionNames: [],
-			feedGroup: false,
-			loading: false,
-			failed: false,
-			rows: [
-				{
-					id: 'm1',
-					title: 'Alien',
-					subtitle: '1979',
-					date: null,
-					sortLetter: 'A',
-					kind: 'media',
-				},
-			],
+		list: {
+			tabs: [{ position: 3, label: 'Movies' }],
+			currentTab: 3,
+			destination: {
+				kind: 'emby',
+				libIdx: 3,
+				libraryName: 'Movies',
+				pills: [],
+				collectionNames: [],
+				feedGroup: false,
+				loading: false,
+				failed: false,
+				rows: [
+					{
+						id: 'm1',
+						title: 'Alien',
+						subtitle: '1979',
+						date: null,
+						sortLetter: 'A',
+						kind: 'media',
+					},
+				],
+			},
+		},
+		detail: {
+			kind: 'emby',
 			selected: 'm1',
 			hero: {
 				kind: 'movie',
@@ -686,9 +589,5 @@ function embyContent(): GuiLibraryContent {
 				imdbUrl: null,
 			},
 		},
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
 	};
 }

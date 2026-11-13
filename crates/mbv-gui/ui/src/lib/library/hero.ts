@@ -11,7 +11,7 @@
 // kinds through `TypedText`.
 
 import type {
-	GuiMusicFrame,
+	GuiMusicList,
 	GuiMusicHero,
 	GuiMusicTrack,
 	GuiMetaRow,
@@ -91,7 +91,7 @@ export function albumFacts(hero: GuiMusicHero): Segments {
  * The union artist is the one that owns the picked album, so a name the
  * Service repeats cannot pick the wrong artist; the picked album alone is the
  * fallback while the union holds no owner. */
-export function artistUnionAlbums(music: GuiMusicFrame, hero: GuiMusicHero): string[] {
+export function artistUnionAlbums(music: GuiMusicList, hero: GuiMusicHero): string[] {
 	const owner = music.artists.find((artist) =>
 		artist.albums.some((album) => album.albumId === hero.album.albumId),
 	);

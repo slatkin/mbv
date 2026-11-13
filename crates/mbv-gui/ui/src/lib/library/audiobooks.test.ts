@@ -7,10 +7,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiAudiobooksFrame, GuiAudiobooksRow, GuiLibraryContent } from '$lib/bridge/types';
+import { initialListScroll, audiobooksScroll } from './scroll';
+import type { GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRow } from '$lib/bridge/types';
 import { audiobooksUi, initialAudiobooksUi, jumpAudiobooksToLetter, playAudiobooksRow, pressAudiobooksRow, queueAudiobooksRow } from './audiobooks';
 import { buildAudiobooksRows } from './audiobooks-list';
-import { carryLibraryContent, libraryUi } from './state';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
+import { libraryUi } from './state';
 
 vi.mock('@tauri-apps/api/core', () => ({
 	invoke: vi.fn(),
@@ -22,8 +25,9 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	audiobooksUi.set(initialAudiobooksUi());
+	audiobooksScroll.set(initialListScroll());
 	libraryUi.update((ui) => ({ ...ui, heroDismissed: true, itemMenuOpen: true }));
-	carryLibraryContent(null);
+	carryLibrary(null);
 });
 
 /** The catalog's book rows: two books under `A` and one under `B`. */
@@ -33,34 +37,30 @@ const CATALOG: GuiAudiobooksRow[] = [
 	{ id: 'b3', title: 'Blindsight', subtitle: 'Peter Watts', duration: '10:02', sortLetter: 'B' },
 ];
 
-/** The carried Audiobooks content with `selected` picked (row 9.1). */
-function frame(selected: string | null = 'b1'): GuiAudiobooksFrame {
+/** The carried Audiobooks list part: the catalog, its load facts. */
+const LIST: GuiAudiobooksList = { libIdx: 4, loading: false, failed: false, rows: CATALOG };
+
+/** The carried Audiobooks detail part with `selected` picked (row 9.1). */
+function detail(selected: string | null = 'b1'): GuiAudiobooksDetail {
 	return {
-		libIdx: 4,
-		loading: false,
-		failed: false,
 		workspaceLoading: false,
-		rows: CATALOG,
 		selected,
+		playingBookId: null,
 		hero: null,
 	};
 }
 
 /** Carry the content and paint the list's cursor at `cursor`. */
 function carry(selected: string | null = 'b1', cursor: string | null = null): void {
-	const content: GuiLibraryContent = {
-		tabs: [{ position: 4, label: 'Audiobooks' }],
-		currentTab: 4,
-		music: null,
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: frame(selected),
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+	const content: LibrarySections = {
+		list: {
+			tabs: [{ position: 4, label: 'Audiobooks' }],
+			currentTab: 4,
+			destination: { kind: 'audiobooks', ...LIST },
+		},
+		detail: { kind: 'audiobooks', ...detail(selected) },
 	};
-	carryLibraryContent({ revision: 1, search: null, content });
+	carryLibrary(content);
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });
 }
 

@@ -5,22 +5,25 @@
 import { beforeEach, expect, test } from 'vitest';
 import { get } from 'svelte/store';
 import type {
-	GuiLibraryContent,
 	GuiMusicArtist,
-	GuiMusicFrame,
+	GuiMusicDetail,
+	GuiMusicList,
 	GuiMusicHero,
 } from '$lib/bridge/types';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import {
-	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
 	measureLibraryList,
 	revealPickedAlbum,
 } from './state';
+import { initialListScroll, musicScroll } from './scroll';
 
 beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
-	carryLibraryContent(null);
+	musicScroll.set(initialListScroll());
+	carryLibrary(null);
 });
 
 /** Twenty artists with no albums above the target, so its row starts below a
@@ -49,7 +52,7 @@ const HERO: GuiMusicHero = {
 	menu: [],
 };
 
-function music(): GuiMusicFrame {
+function music(): GuiMusicList {
 	return {
 		libIdx: 0,
 		pills: [{ groupId: 'g1', name: 'Rock', selected: true, collection: true }],
@@ -57,32 +60,29 @@ function music(): GuiMusicFrame {
 		loading: false,
 		failure: null,
 		artists: [...FILLER, BRAND],
-		hero: HERO,
-		art: null,
-		playingTrackId: null,
 	};
 }
 
-function content(): GuiLibraryContent {
+function musicDetail(): GuiMusicDetail {
+	return { hero: HERO, art: null, playingTrackId: null };
+}
+
+function content(): LibrarySections {
 	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: music(),
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: { kind: 'music', ...music() },
+		},
+		detail: { kind: 'music', ...musicDetail() },
 	};
 }
 
 test('a reveal scrolls the picked album row into view once the list is measured', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 
-	revealPickedAlbum(music());
+	revealPickedAlbum(music(), musicDetail());
 	measureLibraryList(40);
 
-	expect(get(libraryUi).scrollTop).toBeGreaterThan(0);
+	expect(get(musicScroll).scrollTop).toBeGreaterThan(0);
 });

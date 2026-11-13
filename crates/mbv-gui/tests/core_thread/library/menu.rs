@@ -7,7 +7,9 @@ use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 
-use super::{TRACKS, library_of, replacement, seeded_music_core, send_library, send_library_frame};
+use super::{
+    TRACKS, music_detail, replacement, seeded_music_core, send_library, send_library_frame,
+};
 
 /// The item menu (design D8): the frame carries the picked album's entries,
 /// and a chosen entry runs through the shared context-action executor for that
@@ -32,10 +34,8 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
         },
     );
 
-    let menu = library_of(picked)
-        .content
-        .and_then(|content| content.music)
-        .and_then(|music| music.hero)
+    let menu = music_detail(&picked)
+        .and_then(|detail| detail.hero)
         .expect("the picked album has a Hero")
         .menu;
     let labels: Vec<&str> = menu.iter().map(|entry| entry.label.as_str()).collect();
@@ -86,9 +86,9 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
         },
     );
 
-    let row_menu = library_of(frame)
-        .content
-        .and_then(|content| content.row_menu)
+    let row_menu = frame
+        .row_menu()
+        .cloned()
         .expect("the right-clicked item has a menu");
     assert_eq!(row_menu.item_id, "alb-ill");
     let labels: Vec<&str> = row_menu
@@ -115,10 +115,7 @@ fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
     );
 
     assert!(
-        library_of(frame)
-            .content
-            .and_then(|content| content.row_menu)
-            .is_none(),
+        frame.row_menu().is_none(),
         "a stale right-click carries no menu"
     );
 }

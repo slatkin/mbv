@@ -9,16 +9,14 @@
 // wire types, so every call site keeps importing from the one bridge module.
 
 import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 import type { GuiPodcastPill } from './library-types';
 
-/** The Podcasts destination's content (design D12, row 10.1), present while
- * an Audiobookshelf podcast library is the active destination: the
- * single-select pill row of Latest and one pill per show, the active pill's
- * episode rows in the date gutter, the core's selected episode, and its Hero
- * with the parent show's Square cover. No letter rail rides here — the list
- * is sorted by date — and no Workspace. */
-export interface GuiPodcastsFrame {
+/** The Podcasts destination's list part (design D12, row 10.1, D8): the
+ * single-select pill row of Latest and one pill per show, and the active pill's
+ * episode rows in the date gutter. No letter rail rides here — the list is
+ * sorted by date — and no Workspace. */
+export interface GuiPodcastsList {
 	/** The Podcasts library index the Podcasts commands name (design D2,
 	 * D12). */
 	libIdx: number;
@@ -33,6 +31,11 @@ export interface GuiPodcastsFrame {
 	 * episodes, a show pill holds that one show's, both newest first with
 	 * undated episodes last. */
 	rows: GuiPodcastsRow[];
+}
+
+/** The Podcasts destination's detail part (design D8): the core's selected
+ * episode and its Hero, the parent show's Square cover included. */
+export interface GuiPodcastsDetail {
 	/** The core's selected episode (design D2, D12), as the frame painted it:
 	 * a select, play, or enqueue command sends it back. The first row is the
 	 * Hero default. */
@@ -73,5 +76,5 @@ export interface GuiPodcastsHero {
 	/** The artwork box the Hero reserves: the episode artwork policy's
 	 * Square. */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 }

@@ -24,10 +24,10 @@ import {
 } from './resize';
 
 /** The core's toggles: the expanded panel with its queue painted. */
-const expanded = { collapsed: false, queueFolded: false };
+const expanded = { collapsed: false, queueFolded: false, uiResetEpoch: 0 };
 
 /** The collapsed panel: the 72 px rail, whatever the dragged width is. */
-const collapsed = { collapsed: true, queueFolded: false };
+const collapsed = { collapsed: true, queueFolded: false, uiResetEpoch: 0 };
 
 const container = { width: 1600, height: 900 };
 

@@ -1,4 +1,4 @@
-//! The focus section of a frame: the surface that holds focus and the Panel that
+//! The focus section: the surface that holds focus and the Panel that
 //! holds it (design D4). The surface mirrors `ComponentId` variant for variant,
 //! and the nested overlay, modal, and popup ids mirror their own enums.
 

@@ -6,8 +6,8 @@
 
 import type { DomKey, GuiTargetChoice, GuiTargetKey } from './types';
 
-/** The Settings screen's frame section (design D9). `null` on `GuiFrame` while
- * the screen is closed. */
+/** The Settings screen's section (design D9). `null` on the `settings` section
+ * while the screen is closed. */
 export interface GuiSettingsFrame {
 	/** The section the window shows. */
 	section: GuiSettingsSection;

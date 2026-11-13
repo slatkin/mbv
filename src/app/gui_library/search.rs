@@ -156,15 +156,20 @@ impl App {
         applied
     }
 
-    /// The Search projection the GUI Library panel paints (row 12.1).
+    /// The Search projection the GUI Library panel paints (row 12.1), or
+    /// `None` at once while the store holds no query and no row (design D10):
+    /// a closed field projects nothing, so the frame rides it as `null`.
     #[must_use]
-    pub fn gui_search_projection(&self) -> GuiSearchProjection {
-        GuiSearchProjection {
+    pub fn gui_search_projection(&self) -> Option<GuiSearchProjection> {
+        if self.gui_search.query.trim().is_empty() && self.gui_search.rows.is_empty() {
+            return None;
+        }
+        Some(GuiSearchProjection {
             query: self.gui_search.query.clone(),
             loading: self.gui_search.loading,
             failed: self.gui_search.failed,
             rows: self.gui_search.rows.clone(),
-        }
+        })
     }
 
     /// Apply one landed result (row 12.1). A result answering an older query

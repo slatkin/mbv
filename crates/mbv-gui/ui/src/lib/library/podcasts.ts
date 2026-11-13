@@ -1,6 +1,7 @@
 // The Podcasts destination's interaction state (add-gui-library-panel design
 // D12, row 10.1): what the window content owns and the core never reads — the
-// cursor, the scroll offset, the measured viewport, and the pill row's focus.
+// cursor and the pill row's focus. The scroll offset and the measured viewport
+// live in `./scroll` (design D9).
 // The core owns the pill selection and the selected episode (the frame's
 // `pills` and `selected`), so nothing here mirrors them: a press sends the
 // select command, and the frame carries the choice back. The row model is
@@ -8,20 +9,21 @@
 // stay in `./state`'s shared store. There is no play-next: `n` is consumed
 // and does nothing.
 //
-// The state, the filter, the cursor, the scroll, and the pill focus are the
+// The state, the filter, the cursor, the scroll store, and the pill focus are the
 // pill-list controller's (`./pill-list`, row 7C.1); this module keeps the
 // Podcasts frame, the Podcasts rows, the Podcasts command shapes, and the
 // Podcasts names.
 
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiPodcastPill, GuiPodcastsFrame } from '$lib/bridge/types';
+import type { GuiPodcastPill, GuiPodcastsList } from '$lib/bridge/types';
 import { moveCursor } from './list';
 import type { ListMove } from './list';
-import { buildPodcastsRows } from './podcasts-list';
+import { podcastsRowsOf } from './podcasts-list';
 import type { PodcastsItemRow } from './podcasts-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
-import { libraryPodcasts } from './state';
+import { podcastsScroll } from './scroll';
+import { libraryPodcastsList } from './parts';
 
 /** The Podcasts list's interaction state: the shared pill-list state over
  * the Podcasts pill (design D12). */
@@ -49,15 +51,16 @@ export function podcastPillKey(pill: GuiPodcastPill): string {
  * the filter, the plain cursor movement, and the pill focus stored as the
  * pill itself (row 7C.1). */
 const pillList = createPillList<
-	GuiPodcastsFrame,
+	GuiPodcastsList,
 	PodcastsItemRow,
 	PodcastsItemRow,
 	GuiPodcastPill,
 	GuiPodcastPill,
-	GuiPodcastsFrame['pills'][number]
+	GuiPodcastsList['pills'][number]
 >({
-	frame: libraryPodcasts,
-	buildRows: (podcasts, filter) => buildPodcastsRows(podcasts.rows, filter),
+	frame: libraryPodcastsList,
+	scroll: podcastsScroll,
+	buildRows: (podcasts, filter) => podcastsRowsOf(podcasts.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,
 	pills: (podcasts) => podcasts.pills,
@@ -113,7 +116,7 @@ export function pressPodcastsRow(row: PodcastsItemRow): void {
  * the shared play path. The row id is the episode's stable identity the frame
  * carried. */
 export function playPodcastsRow(itemId: string): void {
-	sendIfLoaded(libraryPodcasts(), (podcasts) => ({
+	sendIfLoaded(libraryPodcastsList(), (podcasts) => ({
 		command: 'podcastsPlay',
 		libIdx: podcasts.libIdx,
 		itemId,
@@ -123,7 +126,7 @@ export function playPodcastsRow(itemId: string): void {
 /** Add an episode to the queue (design D12): `a` on the row's episode. There
  * is no play-next on the destination, so `n` sends no command. */
 export function queuePodcastsRow(itemId: string): void {
-	sendIfLoaded(libraryPodcasts(), (podcasts) => ({
+	sendIfLoaded(libraryPodcastsList(), (podcasts) => ({
 		command: 'podcastsQueue',
 		libIdx: podcasts.libIdx,
 		itemId,
@@ -153,7 +156,7 @@ export function scrollPodcastsList(scrollTop: number): void {
 /** The pill the pill row's focus holds, resolved against the carried pills so
  * a stale pill focuses nothing: the pill the keys' Space and Enter select, and
  * the pill the row paints the accent outline on (design D6, D12). */
-export function focusedPodcastsPill(podcasts: GuiPodcastsFrame): GuiPodcastPill | null {
+export function focusedPodcastsPill(podcasts: GuiPodcastsList): GuiPodcastPill | null {
 	return pillList.focusedPill(podcasts);
 }
 

@@ -179,6 +179,16 @@ impl ImageCache {
             .is_some_and(|retry_at| Instant::now() < *retry_at)
     }
 
+    /// Whether any interrupted key's retry time falls in `(after, until]`: the
+    /// retry passed since the caller last looked. A surface that waits on an
+    /// interrupted fetch polls this with the instant of its previous look.
+    #[must_use]
+    pub fn retry_passed_between(&self, after: Instant, until: Instant) -> bool {
+        self.interrupted_fetches
+            .values()
+            .any(|retry_at| *retry_at > after && *retry_at <= until)
+    }
+
     #[must_use]
     pub fn image(&self, key: &str) -> Option<&CachedImage> {
         self.card_image_states.get(key)
@@ -296,7 +306,7 @@ impl ImageCache {
         self.interrupted_fetches.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
         self.remove_derived_variants_for(&key);
-        if entry.img.is_some() {
+        if entry.has_art() {
             self.image_lru.retain(|cached| cached != &key);
             self.image_lru.push_back(key.clone());
             while self.image_lru.len() > self.cache_size_total {

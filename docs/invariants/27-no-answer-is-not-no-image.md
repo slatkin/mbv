@@ -30,6 +30,14 @@ during playback that evening, while their neighbours showed art.
   for it, so a server outage costs one request per displayed key per delay.
 - While a key is interrupted, the queue card paints the loading block and the title stays in the
   header (`is_fetch_interrupted`). The hero already reports `Loading` for a key with no entry.
+- The GUI's `mbv-art` scheme (`crates/mbv-gui/src/art.rs`, answered by `App::gui_art_source` in the core
+  tick) answers a cached key with 200 and `Cache-Control: max-age=31536000, immutable`, and answers a
+  key with no entry, or no usable source, with 404 and `Cache-Control: no-store`. The webview keeps no
+  404, so a later load of the same URL asks the core again. An interrupted key has no entry, so its
+  reference is `loading`, with no URL and no request. Its retry deadline is a mark: `App::gui_art_retry_due`
+  (design D3 rule 4, `crates/mbv-gui/src/sections/deadlines.rs`) marks the Library section once the retry
+  time passes, so the next section carries the key's state after the wait. A failed `<img>` load retries
+  its URL in `ArtImage.svelte` with a 1 s wait that doubles to a 30 s cap.
 
 ## Where it still fails
 

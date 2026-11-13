@@ -12,15 +12,29 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
+import {
+	focus as focusStore,
+	footer as footerStore,
+	hover as hoverStore,
+	overlay as overlayStore,
+	playback as playbackStore,
+	queue as queueStore,
+	resetSectionsForTest,
+	status as statusStore,
+	summary as summaryStore,
+} from '$lib/bridge/sections';
 import type {
 	GuiOverlayFrame,
+	GuiPlayhead,
 	GuiQueue,
 	GuiQueueFooter,
 	GuiQueuePlayback,
+	GuiScrubberHover,
 	GuiScrubberTile,
 	GuiStatusBar,
 	GuiTrickplayGrid,
-	GuiTrickplaySheet,
+	GuiArtRef,
 } from '$lib/bridge/types';
 import QueueFooter from './QueueFooter.svelte';
 import QueuePanel from './QueuePanel.svelte';
@@ -43,34 +57,25 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+	// The panel reads the window's section stores; a section one test carried
+	// would outlive it.
+	resetSectionsForTest();
 });
 
-/** One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`). */
-const SECOND = 10_000_000;
-
+/** The playing transport band's facts, without the playhead facts (design
+ * D5): the clocks and the paused fact ride the playhead, which the render
+ * helper stamps. */
 function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 	return {
 		status: 'playing',
 		host: 'poo',
 		hostIsRemote: true,
 		shown: true,
-		playback: {
-			active: true,
-			activeIdx: 0,
-			positionTicks: 60 * SECOND,
-			runtimeTicks: 200 * SECOND,
-			paused: false,
-		},
-		// The frame carries the two clocks formatted (the TUI's shared
-		// duration formatter): 1:00 elapsed, 2:20 left of 3:20.
-		elapsedClock: '1:00',
-		remainingClock: '2:20',
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		parentLine: 'The Show',
 		episodeBadge: 'S2 · E5',
 		stillCaption: 'Episode still · Emby Primary / Thumb',
-		finishClock: '21:00',
 		availability: { stop: true, next: true, previous: false },
 		statusIndicators: null,
 		artwork: null,
@@ -83,7 +88,6 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		trickplay: null,
 		trackChips: null,
 		targetChoices: [],
-		hover: null,
 		...overrides,
 	};
 }
@@ -108,12 +112,44 @@ function chooserOverlay(): GuiOverlayFrame {
 	};
 }
 
+/** The previous render, unmounted before the next: the section stores are
+ * module state, so two mounted panels would both repaint on a store write. */
+let mounted: { unmount(): void } | null = null;
+
 function renderPanel(
-	playback: GuiQueuePlayback = playing(),
-	overlay: GuiOverlayFrame | null = null,
-	carriedSheet: GuiTrickplaySheet | null = null,
+	playbackValue: GuiQueuePlayback = playing(),
+	overlayValue: GuiOverlayFrame | null = null,
+	hoverValue: GuiScrubberHover | null = null,
+	playhead: Partial<GuiPlayhead> = {},
 ) {
-	return render(QueuePlaybackPanel, { playback, overlay, carriedSheet });
+	mounted?.unmount();
+	playbackStore.set(playbackValue);
+	overlayStore.set(overlayValue);
+	hoverStore.set(hoverValue);
+	// The clocks ride the playhead (design D5), not the playback section: the
+	// fixed test clocks hold the position at its anchor and the finish clock
+	// at 21:00.
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 60 * SECOND,
+		runtimeTicks: 200 * SECOND,
+		paused: false,
+		...playhead,
+	});
+	const rendered = render(QueuePlaybackPanel);
+	mounted = rendered;
+	return rendered;
+}
+
+/** The hovered scrubber preview the `hover` section carries. */
+function hovered(
+	fraction: number,
+	tile: GuiScrubberTile | null,
+	chapter: string | null = null,
+	chapterNumber: number | null = null,
+): GuiScrubberHover {
+	return { fraction, timeLabel: '1:40', chapter, chapterNumber, tile };
 }
 
 /** One trickplay grid the preview reads: a 320-wide thumbnail series whose
@@ -130,9 +166,9 @@ function trickplayGrid(): GuiTrickplayGrid {
 	};
 }
 
-/** One hovered trickplay tile: column two, row one of the sheet `sheet`
- * carries the image of (`null` when the frame does not re-carry it). */
-function tile(sheet: string | null): GuiScrubberTile {
+/** One hovered trickplay tile: column two, row one of a sheet
+ * whose image reference is `sheet`. */
+function tile(sheet: GuiArtRef): GuiScrubberTile {
 	return {
 		sheetKey: 'item:320:0',
 		width: 320,
@@ -144,7 +180,8 @@ function tile(sheet: string | null): GuiScrubberTile {
 	};
 }
 
-const SHEET = 'data:image/jpeg;base64,anBlZw==';
+const SHEET_URL = 'mbv-art://localhost/trickplay/item%3A320%3A0';
+const SHEET: GuiArtRef = { kind: 'image', src: SHEET_URL };
 
 /** The preview's painted thumbnail: the only element that crops a sprite. */
 function tileElement(container: HTMLElement): HTMLElement | null {
@@ -163,7 +200,7 @@ function queue(): GuiQueue {
 				secondary: null,
 				trailing: null,
 				duration: '3:12',
-				endsAt: null,
+				endsAfterSecs: null,
 				kind: 'media',
 				state: { state: 'ordinary' },
 				striped: false,
@@ -221,7 +258,7 @@ function isChoice(id: unknown): boolean {
 
 test('a playing frame renders the header, artwork badge, title, and clocks', () => {
 	const { getByText, container } = renderPanel(
-		playing({ artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' } }),
+		playing({ artwork: { kind: 'image', src: 'mbv-art://localhost/card/k' } }),
 	);
 
 	// The canvas header (`main` audits 1–5): the cast target carries the
@@ -284,7 +321,7 @@ test('the still slot paints the canvas caption while no image lands', () => {
 });
 
 test('a paint reports the transport, seek, header, seekbar, and target regions', async () => {
-	renderPanel(playing({ artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' } }));
+	renderPanel(playing({ artwork: { kind: 'image', src: 'mbv-art://localhost/card/k' } }));
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
 	expect(reportedRegionIds()).toEqual([
@@ -332,15 +369,9 @@ test('a press on the scrubber forwards a pointer press with its position', async
 
 test('the scrubber paints the hover preview from the frame', () => {
 	const { container, getByText } = renderPanel(
-		playing({
-			hover: {
-				fraction: 0.75,
-				timeLabel: '2:30',
-				chapter: 'Chapter Two',
-				chapterNumber: 2,
-				tile: null,
-			},
-		}),
+		playing(),
+		null,
+		{ fraction: 0.75, timeLabel: '2:30', chapter: 'Chapter Two', chapterNumber: 2, tile: null },
 	);
 
 	// The preview label reads the canvas's `12:31 · Ch. 2` form: the time and
@@ -369,41 +400,25 @@ test('the scrubber paints the hover preview from the frame', () => {
 // window fetches nothing.
 test('the hover preview paints the trickplay tile the frame carries', () => {
 	const { container } = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(SHEET) },
-		}),
+		playing({ trickplay: [trickplayGrid()] }),
+		null,
+		hovered(0.5, tile(SHEET)),
 	);
 
 	const thumb = tileElement(container);
-	expect(thumb?.style.backgroundImage).toContain(SHEET);
+	expect(thumb?.style.backgroundImage).toContain(SHEET_URL);
 	expect(thumb?.style.backgroundPosition).toBe('-256px -72px');
 });
 
-// The frame re-carries the sheet's image only when the hovered sheet changes,
-// so the preview repaints the sheet the panel latched; with none latched, it
-// keeps the placeholder.
-test('the hover preview repaints the latched sheet, else the in-flight box', () => {
-	const latched = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
-		}),
-		null,
-		{ key: 'item:320:0', image: SHEET },
-	);
-	expect(tileElement(latched.container)?.style.backgroundImage).toContain(
-		SHEET,
-	);
-
-	// A hovered tile whose sheet is not yet latched is the canvas's
+// A sheet still loading paints the canvas's in-flight box, not a sprite.
+test('the hover preview paints the in-flight box while its sheet loads', () => {
+	// A hovered tile whose sheet is still loading is the canvas's
 	// `[trickplay]` box while the fetch is in flight — the placeholder paints
 	// only while the frame carries the tile fact.
 	const bare = renderPanel(
-		playing({
-			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
-		}),
+		playing({ trickplay: [trickplayGrid()] }),
+		null,
+		hovered(0.5, tile({ kind: 'loading' })),
 	);
 	expect(tileElement(bare.container)).toBeNull();
 	expect(bare.getByText('[trickplay]')).toBeTruthy();
@@ -433,10 +448,23 @@ test('an open target chooser reports one region per row', async () => {
 // every other surface's key.
 test('an open chooser reports its rows after the queue and footer regions', async () => {
 	const { rerender } = renderPanel();
-	render(QueuePanel, { queue: queue(), focused: false, panelFocused: false });
-	render(QueueFooter, { footer, status: idle, libraryVisible: false });
+	queueStore.set(queue());
+	summaryStore.set({
+		remaining: 0,
+		nextTitle: null,
+		tailSecs: null,
+		rightColumn: 'length',
+		filter: '',
+		filterActive: false,
+	});
+	focusStore.set({ surface: null, panel: 'queue' });
+	footerStore.set(footer);
+	statusStore.set(idle);
+	render(QueuePanel);
+	render(QueueFooter, { props: { libraryVisible: false } });
 
-	await rerender({ playback: playing(), overlay: chooserOverlay() });
+	overlayStore.set(chooserOverlay());
+	await rerender({});
 
 	await vi.waitFor(() =>
 		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 1 }),
@@ -455,7 +483,8 @@ test('closing the chooser retracts its row regions', async () => {
 		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 0 }),
 	);
 
-	await rerender({ playback: playing(), overlay: null });
+	overlayStore.set(null);
+	await rerender({});
 
 	await vi.waitFor(() => {
 		const ids = lastReportedRegionIds();

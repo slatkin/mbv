@@ -18,13 +18,15 @@
 	// the book the frame painted and never a position.
 	
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import { playhead } from '$lib/bridge/playhead';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
-	import type { GuiAudiobooksChapterRow, GuiAudiobooksFrame } from '$lib/bridge/types';
+	import type { GuiAudiobooksChapterRow, GuiAudiobooksDetail, GuiAudiobooksList } from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
+		currentChapterRow,
 		pressAbsChapter,
 		resolveAbsChapterCursor,
 	} from '$lib/library/audiobooks-workspace';
@@ -32,12 +34,13 @@
 	interface Props {
 		/** The carried Audiobooks content (design D12, row 9.1): the selected
 		 * book, its Hero facts, and its chapter Workspace. */
-		audiobooks: GuiAudiobooksFrame;
+		list: GuiAudiobooksList;
+		detail: GuiAudiobooksDetail;
 	}
-	const { audiobooks }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** The Hero's facts, present exactly while the pane paints. */
-	const hero = $derived(audiobooks.hero);
+	const hero = $derived(detail.hero);
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'audiobook'));
@@ -46,20 +49,38 @@
 	 * landed. */
 	const workspace = $derived(hero?.workspace ?? null);
 
+	/** The playhead's predicted position (design D5): the mark reads it. */
+	const { position: playheadPosition } = playhead;
+
+	/** The chapter the Hero marks: the row whose span holds the predicted
+	 * position while the Hero's book is the playing book (design D5); `null`
+	 * while another book plays or none does. The marked row's identity is
+	 * stable within its span, so the per-frame prediction re-renders the
+	 * Workspace only when the mark moves. */
+	const markedChapter = $derived.by(() => {
+		if (
+			detail.playingBookId === null ||
+			detail.playingBookId !== detail.selected
+		) {
+			return null;
+		}
+		return currentChapterRow(workspace?.rows ?? [], $playheadPosition);
+	});
+
 	/** The chapter the cursor rests on: the state's chapter while the carried
-	 * Workspace paints it, the playing chapter, or the first chapter otherwise
+	 * Workspace paints it, the marked chapter, or the first chapter otherwise
 	 * (design D12). */
 	const cursorChapter = $derived(
-		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor)?.chapter ?? null,
+		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor, markedChapter)?.chapter ?? null,
 	);
 
 
 	/** Send the book command for the frame's selected book (design D12, row
 	 * 9.1): the book the frame painted, never a position. */
 	function actBook(command: 'absPlay' | 'absQueue'): void {
-		const itemId = audiobooks.selected;
+		const itemId = detail.selected;
 		if (itemId !== null && hero !== null) {
-			void sendLibraryCommand({ command, libIdx: audiobooks.libIdx, itemId });
+			void sendLibraryCommand({ command, libIdx: list.libIdx, itemId });
 		}
 	}
 
@@ -67,11 +88,11 @@
 	 * row's hover play control send the chapter the row names — the Service
 	 * discriminator the TUI's chapter activation addresses. */
 	function play(chapter: GuiAudiobooksChapterRow): void {
-		const bookId = audiobooks.selected;
+		const bookId = detail.selected;
 		if (bookId !== null) {
 			void sendLibraryCommand({
 				command: 'absPlayChapter',
-				libIdx: audiobooks.libIdx,
+				libIdx: list.libIdx,
 				bookId,
 				chapter: chapter.chapter,
 			});
@@ -79,14 +100,14 @@
 	}
 
 	/** The Workspace table's rows: each chapter with its number, its title, its
-	 * duration, and the playing mark. */
+	 * duration, and the playing mark from the predicted position (design D5). */
 	const chapterRows = $derived(
 		(workspace?.rows ?? []).map((row) => ({
 			id: String(row.chapter),
 			number: String(row.chapter),
 			name: row.title,
 			duration: row.duration,
-			playing: row.current,
+			playing: row.chapter === markedChapter?.chapter,
 		})),
 	);
 
@@ -121,7 +142,7 @@
 			/>
 		{/snippet}
 
-		{#if workspace !== null || audiobooks.workspaceLoading}
+		{#if workspace !== null || detail.workspaceLoading}
 			<!-- The book Hero's Workspace (design D12): the book's chapter rows, or
 			the loading line while the detail fetch has not landed. -->
 			<LibraryWorkspaceTable

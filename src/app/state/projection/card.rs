@@ -111,10 +111,7 @@ fn title_site_skip_reason(
         Some(TitleSiteGate::ForceHeader("NoActiveItem"))
     } else if projection.cache_key.as_deref().is_some_and(|key| {
         app.images.is_fetch_interrupted(key)
-            || app
-                .images
-                .image(key)
-                .is_some_and(|entry| entry.img.is_none())
+            || app.images.image(key).is_some_and(|entry| !entry.has_art())
     }) {
         // The fetch resolved empty, or got no answer and may never: no art
         // carries the title, so the header stays its home. A pending fetch
@@ -302,7 +299,7 @@ impl App {
         let artwork_key = projection.cache_key.clone().filter(|key| {
             self.images
                 .image(key)
-                .is_none_or(|entry| entry.img.is_some())
+                .is_none_or(mbv_images::CachedImage::has_art)
         });
         let placeholder_slot = artwork_key.is_none();
         if placeholder_slot {
@@ -333,7 +330,7 @@ impl App {
         let fallback_key = projection.plain_cache_key.as_deref().filter(|key| {
             self.images
                 .image(key)
-                .is_some_and(|entry| entry.img.is_some())
+                .is_some_and(mbv_images::CachedImage::has_art)
         });
         let mut plain_fallback_painted = false;
         let mut out = (height, width, loading);
@@ -615,8 +612,7 @@ impl App {
             .cache_key
             .as_deref()
             .and_then(|key| self.images.image(key))
-            .and_then(|entry| entry.img.as_ref())
-            .map(image::GenericImageView::dimensions);
+            .and_then(mbv_images::CachedImage::dimensions);
         let reason = title_site_skip_reason(
             self,
             projection,
@@ -698,8 +694,7 @@ impl App {
         let base_dimensions = self
             .images
             .image(&key)
-            .and_then(|entry| entry.img.as_ref())
-            .map(image::GenericImageView::dimensions);
+            .and_then(mbv_images::CachedImage::dimensions);
         let text = mbv_images::title_overlay::TitleOverlayText {
             context: parts.context.as_ref().map(|part| part.text.as_str()),
             title: &parts.title.text,

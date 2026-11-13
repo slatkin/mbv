@@ -10,7 +10,8 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type {
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsDetail,
+	GuiShowsList,
 	GuiShowsHero,
 	GuiShowsWorkspace,
 } from '$lib/bridge/types';
@@ -62,25 +63,27 @@ function hero(overrides: Partial<GuiShowsHero> = {}): GuiShowsHero {
 	};
 }
 
-/** The carried Shows content with the hero picked. */
-function shows(facts: GuiShowsHero | null): GuiShowsFrame {
+/** The carried Shows list part: the series mode's rows and tree. */
+function shows(): GuiShowsList {
 	return {
 		libIdx: 2,
 		pills: [],
 		collectionNames: ['All series'],
 		loading: false,
-		workspaceLoading: false,
 		series: [],
 		upcomingFailed: false,
 		rows: [],
-		selected: 'series1',
-		hero: facts,
 	};
+}
+
+/** The Shows detail part: the series row selected, with the Hero `facts`. */
+function showsDetail(facts: GuiShowsHero | null): GuiShowsDetail {
+	return { workspaceLoading: false, selected: 'series1', hero: facts };
 }
 
 /** Render the Shows Hero for the carried content. */
 function mount(facts: GuiShowsHero | null = hero()): HTMLElement {
-	return render(LibraryShowsHero, { shows: shows(facts) }).container;
+	return render(LibraryShowsHero, { list: shows(), detail: showsDetail(facts) }).container;
 }
 
 /** One episode row of the painted Workspace. */

@@ -1,24 +1,25 @@
 // The plain Emby-library destination's interaction state (add-gui-library-panel
 // design D12, row 8.1): what the window content owns and the core never reads —
-// the cursor, the scroll offset, the measured viewport, and the feed-group pill
-// row's focus. The core owns the selected row and the feed-group selection (the
+// the cursor and the feed-group pill row's focus. The scroll offset and the
+// measured viewport live in `./scroll` (design D9). The core owns the selected row and the feed-group selection (the
 // frame's `selected` and `pills`), so nothing here mirrors them: a press and an
 // Enter send the command, and the frame carries the choice back. The row model
 // is `$lib/library/emby-list`'s; the panel's pane focus and the Hero overlay
 // stay in `./state`'s shared store, and the Hero carries no Workspace and no
 // cursor of its own.
 //
-// The state, the filter, the cursor, the scroll, and the pill focus are the
+// The state, the filter, the cursor, the scroll store, and the pill focus are the
 // pill-list controller's (`./pill-list`, row 7C.1); this module keeps the Emby
 // frame, the Emby rows and their letter headings, the letter rail, the play-next
 // command, the Emby command shapes, and the Emby names.
 
+import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiEmbyFeedGroup, GuiEmbyFrame } from '$lib/bridge/types';
+import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { jumpToLetter } from './list';
 import type { ListMove } from './list';
 import {
-	buildEmbyRows,
+	embyRowsOf,
 	embyGroupKey,
 	embyLetterRail,
 	moveEmbyCursor,
@@ -26,7 +27,8 @@ import {
 import type { EmbyItemRow, EmbyListRow } from './emby-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
-import { libraryEmby } from './state';
+import { embyScroll } from './scroll';
+import { libraryEmbyList } from './parts';
 
 /** The Emby list's interaction state: the shared pill-list state over the
  * feed-group pill, whose focus the pill row keeps as the group's stable key
@@ -43,15 +45,16 @@ export function initialEmbyUi(): EmbyUiState {
  * flat rows — the heading-skipping cursor movement, and the pill focus stored
  * as the group's key (row 7C.1). */
 const pillList = createPillList<
-	GuiEmbyFrame,
+	GuiEmbyList,
 	EmbyListRow,
 	EmbyItemRow,
 	GuiEmbyFeedGroup,
 	string,
-	GuiEmbyFrame['pills'][number]
+	GuiEmbyList['pills'][number]
 >({
-	frame: libraryEmby,
-	buildRows: (emby, filter) => buildEmbyRows(emby.rows, emby.feedGroup, filter),
+	frame: libraryEmbyList,
+	scroll: embyScroll,
+	buildRows: (emby, filter) => embyRowsOf(emby.rows, emby.feedGroup, filter),
 	itemOf: (row) => (row.kind === 'item' ? row : null),
 	move: moveEmbyCursor,
 	pills: (emby) => emby.pills,
@@ -116,7 +119,7 @@ export function pressEmbyRow(row: EmbyListRow): void {
  * folder-play rule expands a collection row. The row id is the item's stable
  * Service id. */
 export function playEmbyRow(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyPlay',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -125,7 +128,7 @@ export function playEmbyRow(rowId: string): void {
 
 /** Play a row next (row 8.1): `n` on the cursor row. */
 export function playEmbyRowNext(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyPlayNext',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -134,7 +137,7 @@ export function playEmbyRowNext(rowId: string): void {
 
 /** Add a row to the queue's tail (row 8.1): `a` on the cursor row. */
 export function queueEmbyRow(rowId: string): void {
-	sendIfLoaded(libraryEmby(), (emby) => ({
+	sendIfLoaded(libraryEmbyList(), (emby) => ({
 		command: 'embyQueue',
 		libIdx: emby.libIdx,
 		itemId: rowId,
@@ -154,10 +157,12 @@ export function moveEmbyListCursor(move: ListMove): void {
  * rows changes nothing. */
 export function jumpEmbyToLetter(letter: string): void {
 	const list = embyRows();
-	embyUi.update((ui) => {
-		const jump = jumpToLetter(embyLetterRail(list), list, letter, ui);
-		return jump === null ? ui : { ...ui, ...jump };
-	});
+	const jump = jumpToLetter(embyLetterRail(list), list, letter, get(embyScroll));
+	if (jump === null) {
+		return;
+	}
+	embyUi.update((ui) => ({ ...ui, cursor: jump.cursor }));
+	embyScroll.update((scroll) => ({ ...scroll, scrollTop: jump.scrollTop }));
 }
 
 /** Report the list's measured viewport height (row 8.1): the rows in view
@@ -174,7 +179,7 @@ export function scrollEmbyList(scrollTop: number): void {
 
 /** The pill the pill row's focus holds, resolved against the carried pills so a
  * stale group focuses nothing (row 8.1). */
-export function focusedEmbyPill(emby: GuiEmbyFrame): GuiEmbyFeedGroup | null {
+export function focusedEmbyPill(emby: GuiEmbyList): GuiEmbyFeedGroup | null {
 	return pillList.focusedPill(emby);
 }
 

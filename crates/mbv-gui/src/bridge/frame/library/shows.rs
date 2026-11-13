@@ -12,14 +12,15 @@ use mbv::{
 use serde::Serialize;
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryArt};
+use super::{GuiArtShapeFrame, GuiHomeRowStateFrame};
+use crate::art::GuiArtRef;
 
-/// The Shows destination's content (add-gui-library-panel design D12, the
-/// USER-APPROVED GUI Shows design): the view-mode pills, the active mode's
-/// rows, the core's selected row, and its Hero.
+/// The Shows destination's list part (add-gui-library-panel design D12, the
+/// USER-APPROVED GUI Shows design; `gui-change-driven-sections` design D8): the
+/// view-mode pills, the active mode's rows, and the load facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GuiShowsFrame {
+pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
@@ -31,9 +32,6 @@ pub struct GuiShowsFrame {
     pub collection_names: Vec<String>,
     /// Whether the active mode's list has not landed yet.
     pub loading: bool,
-    /// Whether the selected series' detail or the selected season's episodes
-    /// fetch has not landed yet (the All series mode only).
-    pub workspace_loading: bool,
     /// The All series mode's tree (design D14): the series nodes with their
     /// seasons and loaded episodes. Empty in the flat modes, whose list the
     /// `rows` carry.
@@ -44,6 +42,16 @@ pub struct GuiShowsFrame {
     /// The active mode's rows in the list's order (the flat Latest and
     /// Upcoming lists).
     pub rows: Vec<GuiShowsRowFrame>,
+}
+
+/// The Shows destination's detail part (`gui-change-driven-sections` design
+/// D8): the core's selected row, its Hero, and the Workspace's load fact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiShowsDetail {
+    /// Whether the selected series' detail or the selected season's episodes
+    /// fetch has not landed yet (the All series mode only).
+    pub workspace_loading: bool,
     /// The core's selected row (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first row is the Hero default.
     pub selected: Option<String>,
@@ -167,7 +175,7 @@ pub struct GuiShowsHeroFrame {
     pub art_shape: GuiArtShapeFrame,
     /// The Hero's artwork, present exactly while the item obtains art from
     /// the image cache; the window paints its own placeholder while `None`.
-    pub art: Option<GuiLibraryArt>,
+    pub art: Option<GuiArtRef>,
     /// The series Hero's Workspace; `None` on the Latest mode's episode Hero
     /// and while the selected series' detail has not landed.
     pub workspace: Option<GuiShowsWorkspaceFrame>,
@@ -217,9 +225,9 @@ pub struct GuiShowsEpisodeRowFrame {
     pub state: GuiHomeRowStateFrame,
 }
 
-impl GuiShowsFrame {
-    /// The Shows destination's content for `projection` (design D12), with
-    /// the library index the Shows commands name.
+impl GuiShowsList {
+    /// The Shows list part for `projection`, with the library index the Shows
+    /// commands name.
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiShowsProjection) -> Self {
         Self {
             lib_idx,
@@ -230,7 +238,6 @@ impl GuiShowsFrame {
                 .collect(),
             collection_names: projection.collection_names.clone(),
             loading: projection.loading,
-            workspace_loading: projection.workspace_loading,
             series: projection
                 .series
                 .iter()
@@ -238,6 +245,16 @@ impl GuiShowsFrame {
                 .collect(),
             upcoming_failed: projection.upcoming_failed,
             rows: projection.rows.iter().map(GuiShowsRowFrame::from).collect(),
+        }
+    }
+}
+
+impl GuiShowsDetail {
+    /// The Shows detail part for `projection`: the selection and the Hero with
+    /// its series Workspace.
+    pub(crate) fn from_projection(projection: &GuiShowsProjection) -> Self {
+        Self {
+            workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiShowsHeroFrame::from),
         }
@@ -306,7 +323,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
             progress_row: hero.progress_row,
             overview: hero.overview.clone(),
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
-            art: hero.art.as_ref().map(GuiLibraryArt::from),
+            art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero.workspace.as_ref().map(GuiShowsWorkspaceFrame::from),
         }
     }

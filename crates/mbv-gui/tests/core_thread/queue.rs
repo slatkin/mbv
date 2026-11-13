@@ -81,29 +81,29 @@ fn the_frame_carries_the_hovered_row() {
     let mut test = test_core(3);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // A move over the second row's region.
     test.tx.send(move_at(10.0, 30.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.hover, Some(2));
+    assert_eq!(test.held().queue().hover, Some(2));
 
     // The report the hovered row's own chrome regions cause keeps the hover:
     // clearing it dropped the chrome the report measured, so it flickered on
     // every move.
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.hover, Some(2));
+    assert_eq!(test.held().queue().hover, Some(2));
 
     // A move onto the first row's grip keeps that row hovered.
     test.tx.send(move_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.hover, Some(1));
+    assert_eq!(test.held().queue().hover, Some(1));
 
     // A move away from every row clears it.
     test.tx.send(move_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.hover, None);
+    assert_eq!(test.held().queue().hover, None);
 }
 
 /// A drag's motion previews the drop index and the frame's ghost and
@@ -116,14 +116,15 @@ fn a_drag_move_previews_the_drop_index_and_the_ghost() {
     let mut test = test_core(4);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    let started = test.next_frame();
+    let started = test.held();
     let drag = started
-        .queue
+        .queue()
         .drag
+        .clone()
         .expect("the grip's press starts the drag");
     assert_eq!(drag.slot, 1);
     assert_eq!(drag.drop_index, 0);
@@ -133,8 +134,8 @@ fn a_drag_move_previews_the_drop_index_and_the_ghost() {
     // side.
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let drag = frame.queue.drag.expect("the drag keeps running");
+    let frame = test.held();
+    let drag = frame.queue().drag.clone().expect("the drag keeps running");
     assert_eq!(drag.slot, 1);
     assert_eq!(drag.drop_index, 2);
     assert_eq!(drag.insertion, GuiQueueInsertion::After { slot: 3 });
@@ -150,21 +151,21 @@ fn a_drag_release_sends_one_move_request() {
     let mut test = test_core_with(app);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![], "a press sends no request");
 
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![], "motion sends no request");
 
     test.tx.send(release_at(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().queue.drag.is_none(), "the drag ended");
+    assert!(test.held().queue().drag.is_none(), "the drag ended");
     assert_eq!(slot_moves(&cmd_rx), vec![(1, 2)]);
 }
 
@@ -176,24 +177,24 @@ fn a_cancelled_drag_sends_no_move_request() {
     let mut test = test_core_with(app);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx
         .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().queue.drag.is_none());
+    assert!(test.held().queue().drag.is_none());
 
     test.tx.send(release_at(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![]);
 }
 
@@ -216,11 +217,11 @@ fn a_row_menu_entry_press_removes_its_row() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(90.0, 30.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().overlay.is_some());
+    assert!(test.held().overlay().is_some());
 
     // The menu's paint reports its rows; the remove entry is the fifth.
     test.tx
@@ -234,13 +235,13 @@ fn a_row_menu_entry_press_removes_its_row() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 210.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
+    let frame = test.held();
     assert!(
-        frame.overlay.is_none(),
+        frame.overlay().is_none(),
         "the executed entry closed the menu"
     );
     let removed: Vec<u64> = cmd_rx
@@ -286,12 +287,12 @@ fn a_right_column_press_switches_the_rows_right_column() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.next_frame().summary.right_column,
+        test.held().summary().right_column,
         mbv_gui::bridge::frame::queue::GuiRightColumn::EndsAt
     );
 }
@@ -312,11 +313,11 @@ fn a_filter_press_focuses_the_filter_text_entry() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().summary.filter_active);
+    assert!(test.held().summary().filter_active);
 }
 
 /// The row menu's frame names the row it opened on (add-tauri-gui-client row
@@ -337,7 +338,7 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // The context-menu chord opens the menu over the cursor row, slot 1.
     test.tx
@@ -347,29 +348,29 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
         )))
         .unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay else {
-        panic!("the chord opened the row menu: {:?}", frame.overlay);
+    let frame = test.held();
+    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay() else {
+        panic!("the chord opened the row menu: {:?}", frame.overlay());
     };
-    assert_eq!(anchor_slot, 1);
+    assert_eq!(*anchor_slot, 1);
 
     // Esc dismisses it; the actions button then opens it over its own row.
     test.tx
         .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
-    assert!(test.next_frame().overlay.is_none());
+    assert!(test.held().overlay().is_none());
 
     test.tx.send(press_at(90.0, 60.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay else {
+    let frame = test.held();
+    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay() else {
         panic!(
             "the actions button opened the row menu: {:?}",
-            frame.overlay
+            frame.overlay()
         );
     };
-    assert_eq!(anchor_slot, 3);
+    assert_eq!(*anchor_slot, 3);
 }
 
 /// The GUI-only ``Alt+J``/``Alt+K`` row move addresses the row the window
@@ -382,14 +383,14 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
     let mut test = test_core_with(app);
     test.tx.send(measured_layout(3, vec![])).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx
         .send(CoreInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.next_frame().queue.cursor,
+        test.held().queue().cursor,
         Some(2),
         "the key moved the painted cursor to the second slot"
     );
@@ -401,7 +402,7 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
         )))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     assert_eq!(
         slot_moves(&cmd_rx),
@@ -419,17 +420,18 @@ fn a_cancelled_drag_then_click_sends_no_move_review_u65_p1_2() {
     let mut test = test_core_with(app);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.next_frame()
-            .queue
+        test.held()
+            .queue()
             .drag
+            .clone()
             .expect("the drag holds")
             .drop_index,
         2
@@ -438,17 +440,17 @@ fn a_cancelled_drag_then_click_sends_no_move_review_u65_p1_2() {
     test.tx.send(cancel_pointer()).unwrap();
     assert!(test.core.step());
     assert!(
-        test.next_frame().queue.drag.is_none(),
+        test.held().queue().drag.is_none(),
         "the cancel clears the drag"
     );
 
     // The next click is a fresh gesture and moves nothing.
     test.tx.send(press_at(10.0, 30.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(release_at(10.0, 30.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![]);
 }
 
@@ -461,21 +463,21 @@ fn a_pointer_cancel_sends_no_move_review_u65_p1_2() {
     let mut test = test_core_with(app);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(cancel_pointer()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(release_at(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![]);
 }
 
@@ -488,25 +490,25 @@ fn a_new_press_discards_the_stale_drag_review_u65_p1_2() {
     let mut test = test_core_with(app);
     test.tx.send(rows_with_first_grip()).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(drag_to(10.0, 66.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // The lost release never arrives: the next press starts a new gesture
     // and the stale drag must be gone before its release resolves.
     test.tx.send(press_at(10.0, 30.0)).unwrap();
     assert!(test.core.step());
     assert!(
-        test.next_frame().queue.drag.is_none(),
+        test.held().queue().drag.is_none(),
         "the new press discarded the stale drag"
     );
     test.tx.send(release_at(10.0, 30.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     assert_eq!(slot_moves(&cmd_rx), vec![]);
 }

@@ -31,9 +31,9 @@ pub use self::app::{
     GuiInput, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryCommand, GuiLibraryMenuItem,
     GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
     GuiMusicPill, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiOverlayProjection,
-    GuiPillOption, GuiPodcastEpisodeId, GuiPodcastPill, GuiPodcastsHero, GuiPodcastsPillOption,
-    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow,
-    GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
+    GuiPillOption, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastPill, GuiPodcastsHero,
+    GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection,
+    GuiSearchRow, GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
     GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
     GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
     GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
@@ -45,13 +45,13 @@ pub use self::app::{
     GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace, GuiSurfaceLeaf,
     HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
     PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
-    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
-    QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
-    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
-    WorkspaceRelayout, resolve_router_outcome_with_focused,
+    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueEndOffsets,
+    QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection,
+    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
+    RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SegmentMark, SetupSecret,
+    ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
+    TrackChoice, TrackPopoverChoice, TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey,
+    TrickplayTile, VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
@@ -59,6 +59,7 @@ pub use self::owner_link::{
     find_owner, refusal_text, start_owner,
 };
 pub use self::startup::run;
+pub use mbv_images::ImageDecode;
 pub use mbv_ui_msg::TrackChipKind;
 
 /// The `App` stub construction a Client's own tests build their `App` from

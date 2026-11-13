@@ -11,14 +11,12 @@
 import type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
 import type { GuiMetaRow } from './library-types';
 
-/** The Feeds destination's content (design D12, row 11.1), present while
- * Feeds is the active destination: the single-select pill row of Latest and
- * one pill per subscription, the active pill's entry rows in the date gutter,
- * the core's selected entry, and its Hero with the placeholder artwork's
- * shape. A Client holds one feed tab, so no library index names it. No letter
- * rail rides here — the list is sorted by date — no state filter, and no
- * Workspace. */
-export interface GuiFeedsFrame {
+/** The Feeds destination's list part (design D12, row 11.1, D8): the
+ * single-select pill row of Latest and one pill per subscription, and the
+ * active pill's entry rows in the date gutter. A Client holds one feed tab, so
+ * no library index names it. No letter rail rides here — the list is sorted by
+ * date — no state filter, and no Workspace. */
+export interface GuiFeedsList {
 	/** The pill row in paint order: Latest, then each configured subscription
 	 * by its name. */
 	pills: GuiFeedsPill[];
@@ -32,6 +30,11 @@ export interface GuiFeedsFrame {
 	 * entries, a subscription pill holds that one subscription's, both newest
 	 * first with undated entries last. */
 	rows: GuiFeedsRow[];
+}
+
+/** The Feeds destination's detail part (design D8): the core's selected entry
+ * and its Hero, with the placeholder artwork's shape. */
+export interface GuiFeedsDetail {
 	/** The core's selected entry (design D2, D12), as the frame painted it: a
 	 * select, play, or enqueue command sends it back. The first row is the
 	 * Hero default. */

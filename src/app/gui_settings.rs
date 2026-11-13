@@ -227,10 +227,10 @@ impl GuiSettingsState {
 
 impl App {
     /// The open Settings screen's state, `None` while the screen is closed
-    /// (design D2).
+    /// (design D2). A caller borrows the state; it is not cloned (design D10).
     #[must_use]
-    pub fn gui_settings(&self) -> Option<GuiSettingsState> {
-        self.gui_settings.clone()
+    pub fn gui_settings(&self) -> Option<&GuiSettingsState> {
+        self.gui_settings.as_ref()
     }
 
     /// Whether the Settings screen is open (design D2): the fact the router

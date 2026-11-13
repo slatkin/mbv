@@ -10,7 +10,11 @@
 use mbv::ClientTickHost;
 use mbv_net::mock_http::MockHttp;
 
-use super::{LIB_EVENT_BOUND, TestCore, pump_until, send_library};
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiLibraryDetail, GuiShowsDetail, GuiShowsList,
+};
+
+use super::{LIB_EVENT_BOUND, TestCore, detail_of, list_of, pump_until, send_library};
 use crate::{test_core_with, test_emby_client};
 
 /// A Shows library's series listing, as the mode load's ranged fetch
@@ -69,12 +73,16 @@ fn pump_until_root_rows(test: &mut TestCore) {
     }
 }
 
-/// The Shows section a frame carries, present only while a Shows
+/// The Shows list and detail parts a frame carries, present only while a Shows
 /// destination presents.
-fn shows_section(
-    frame: &mbv_gui::bridge::frame::GuiFrame,
-) -> Option<&mbv_gui::bridge::frame::library::GuiShowsFrame> {
-    frame.library.as_ref()?.content.as_ref()?.shows.as_ref()
+fn shows_parts(frame: &crate::Held) -> Option<(GuiShowsList, GuiShowsDetail)> {
+    let GuiDestinationList::Shows(list) = list_of(frame)?.destination else {
+        return None;
+    };
+    let GuiLibraryDetail::Shows(detail) = detail_of(frame)? else {
+        return None;
+    };
+    Some((list, detail))
 }
 
 /// Pump GUI ticks until the Shows section a frame carries satisfies `want`,
@@ -83,10 +91,14 @@ fn shows_section(
 /// for the fetch that changes it.
 fn pump_until_shows(
     test: &mut TestCore,
-    want: impl Fn(&mbv_gui::bridge::frame::library::GuiShowsFrame) -> bool,
+    want: impl Fn(&GuiShowsList, &GuiShowsDetail) -> bool,
     what: &str,
 ) {
-    pump_until(test, |frame| shows_section(frame).is_some_and(&want), what);
+    pump_until(
+        test,
+        |frame| shows_parts(frame).is_some_and(|(list, detail)| want(&list, &detail)),
+        what,
+    );
 }
 
 /// A core thread over an App whose catalog holds a grouped Music library
@@ -161,16 +173,17 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
     // presented destination is the Shows library, and the launch restore's
     // first-presented open activates it.
     assert!(test.core.step());
-    let frame = test.latest_frame().expect("the bootstrap's frame emitted");
-    let shows = shows_section(&frame).expect("the open Shows destination presents its content");
+    let frame = test.held();
+    let (list, detail) =
+        shows_parts(&frame).expect("the open Shows destination presents its content");
 
     assert_eq!(
-        shows.lib_idx, 0,
+        list.lib_idx, 0,
         "the frame names the library the commands carry"
     );
-    let names: Vec<&str> = shows.pills.iter().map(|pill| pill.name.as_str()).collect();
+    let names: Vec<&str> = list.pills.iter().map(|pill| pill.name.as_str()).collect();
     assert_eq!(names, ["New", "Upcoming", "All"]);
-    let selected: Vec<&str> = shows
+    let selected: Vec<&str> = list
         .pills
         .iter()
         .filter(|pill| pill.selected)
@@ -182,11 +195,11 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "one mode pill is selected, the resolved default"
     );
     assert!(
-        !shows.pills.iter().any(|pill| pill.collection),
+        !list.pills.iter().any(|pill| pill.collection),
         "the mode pills are single-select"
     );
     assert!(
-        shows.rows.is_empty() && shows.hero.is_none(),
+        list.rows.is_empty() && detail.hero.is_none(),
         "the default mode's root load has not landed rows yet"
     );
 }
@@ -199,10 +212,10 @@ fn open_shows_destination(test: &mut TestCore, position: usize, lib_idx: usize) 
         test,
         mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position },
     );
-    let frame = test.latest_frame().expect("the open's frame emitted");
-    let shows = shows_section(&frame).expect("the open's frame carries the Shows content");
+    let frame = test.held();
+    let (list, _) = shows_parts(&frame).expect("the open's frame carries the Shows content");
     assert_eq!(
-        shows.lib_idx, lib_idx,
+        list.lib_idx, lib_idx,
         "the frame names the library the commands carry"
     );
 }
@@ -212,10 +225,10 @@ fn open_shows_destination(test: &mut TestCore, position: usize, lib_idx: usize) 
 fn pump_until_series_hero(test: &mut TestCore, series: &str, title: &str) {
     pump_until_shows(
         test,
-        |shows| {
-            shows.series.len() == 2
-                && shows.selected.as_deref() == Some(series)
-                && shows.hero.as_ref().is_some_and(|hero| hero.title == title)
+        |list, detail| {
+            list.series.len() == 2
+                && detail.selected.as_deref() == Some(series)
+                && detail.hero.as_ref().is_some_and(|hero| hero.title == title)
         },
         "the All series mode's rows and Hero",
     );
@@ -225,8 +238,8 @@ fn pump_until_series_hero(test: &mut TestCore, series: &str, title: &str) {
 fn pump_until_workspace(test: &mut TestCore, season_id: &str, episode_id: &str, what: &str) {
     pump_until_shows(
         test,
-        |shows| {
-            shows
+        |_, detail| {
+            detail
                 .hero
                 .as_ref()
                 .and_then(|hero| hero.workspace.as_ref())
@@ -287,15 +300,15 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
             row: "series-b".into(),
         },
     );
-    let frame = test.latest_frame().expect("the select's frame emitted");
-    let shows = shows_section(&frame).expect("the frame carries the Shows content");
+    let frame = test.held();
+    let (_, detail) = shows_parts(&frame).expect("the frame carries the Shows content");
     assert_eq!(
-        shows.selected.as_deref(),
+        detail.selected.as_deref(),
         Some("series-b"),
         "the frame paints the core's selection"
     );
     assert_eq!(
-        shows.hero.as_ref().expect("the Hero moved").title,
+        detail.hero.as_ref().expect("the Hero moved").title,
         "Bridgerton",
         "the Hero's facts follow the selected series"
     );

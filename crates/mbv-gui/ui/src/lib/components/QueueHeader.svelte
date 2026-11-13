@@ -17,6 +17,7 @@
 	// chord run one path. The active segment reports no target: pressing it
 	// would toggle away from the mode it already shows.
 	import { Search } from '@lucide/svelte';
+	import { playhead, queueFinishText } from '$lib/bridge/playhead';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
 	import { canvasVar } from '$lib/bridge/theme';
 	import TypedText from './TypedText.svelte';
@@ -26,6 +27,15 @@
 	}
 	const { summary }: Props = $props();
 
+
+	/** The playhead's finish-facts store (design D5): the queue's finish
+	 * clock is the wall clock at the summary's tail past the active item's
+	 * end, with its ` +1d` suffix. */
+	const { finish: playheadFinish } = playhead;
+
+	/** The queue's finish clock, `null` while no finish facts hold or the
+	 * summary carries no tail. */
+	const queueFinish = $derived(queueFinishText($playheadFinish, summary.tailSecs));
 
 	/** The right-column switch's two modes in paint order. */
 	const MODES: { mode: GuiRightColumn; label: string }[] = [
@@ -58,7 +68,7 @@
 				]}
 			/>
 		</span>
-		{#if summary.finishClock}
+		{#if queueFinish}
 			<span
 				class="font-mono"
 				style:font-size="11px"
@@ -69,7 +79,7 @@
 				<TypedText
 					segments={[
 						{ text: 'queue ends ', kind: 'plain' },
-						{ text: summary.finishClock, kind: 'time' },
+						{ text: queueFinish, kind: 'time' },
 					]}
 				/>
 			</span>

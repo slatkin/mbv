@@ -31,7 +31,7 @@ const WATCHED: GuiHomeRow = {
 	date: null,
 	kind: 'media',
 	state: 'played',
-	art: { kind: 'image', detail: 'data:image/png;base64,x' },
+	art: { kind: 'image', src: 'mbv-art://localhost/card/x' },
 };
 
 /** One `Recently added` row: the Feed content id the key encodes. */

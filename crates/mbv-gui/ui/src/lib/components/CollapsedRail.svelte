@@ -12,8 +12,8 @@
 	// and the footer belong to the expanded artboard, and the core keeps
 	// their state while the rail is up (the `gui-client` spec: the window
 	// holds no interaction state).
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
+	import ArtImage from './ArtImage.svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
 	import { QUEUE_RAIL_WIDTH_PX } from '$lib/bridge/arrangement';
 	import {
@@ -21,24 +21,35 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
-	import { clampRatio } from '$lib/bridge/time';
+	import { playhead } from '$lib/bridge/playhead';
+	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
-		GuiCardArtwork,
-		GuiQueuePlayback,
+		GuiArtRef,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
+	/** The playhead's stores (design D5): the ring paints the predicted
+	 * played fraction, and the remaining time is the prediction's. */
+	const {
+		anchor: playheadAnchor,
+		runtime: runtimeTicks,
+		fraction,
+		remaining
+	} = playhead;
+
 	interface Props {
-		playback: GuiQueuePlayback;
 		/** The artwork the window carries for the active item (design D10):
-		 * the frame arms it on a change and `Panel` keeps it, so the rail
-		 * paints the same art the expanded artboard showed. `null` while the
-		 * window has carried none. */
-		art: GuiCardArtwork | null;
+		 * the playback section arms it on a change and `Panel` keeps it, so
+		 * the rail paints the same art the expanded artboard showed. `null`
+		 * while the window has carried none. */
+		art: GuiArtRef | null;
 	}
-	const { playback, art }: Props = $props();
+	const { art }: Props = $props();
+
+	/** The transport band's facts the rail paints. */
+	const playback = $derived($playbackSection);
 
 	/** The rail's width is the Queue panel's collapsed width
 	 * (`arrangement.ts`), the same number the window measures the Library column
@@ -57,12 +68,13 @@
 	let nextEl: HTMLElement | undefined = $state();
 	let expandEl: HTMLElement | undefined = $state();
 
-	/** The played fraction the ring paints, clamped to `[0, 1]`. */
-	const progress = $derived(clampRatio(playback.playback.positionTicks, playback.playback.runtimeTicks));
+	/** The played fraction the ring paints, clamped to `[0, 1]`: the
+	 * playhead's prediction (design D5). */
+	const progress = $derived($fraction);
 
-	/** The artwork's bitmap, `null` while the item has none (a placeholder,
-	 * loading, or hidden slot paints the empty ring). */
-	const image = $derived(art?.kind === 'image' ? art.detail : null);
+	/** Whether the transport is paused: the anchor's fact (design D5). `true`
+	 * while no anchor holds — the idle transport paints a play control. */
+	const paused = $derived($playheadAnchor?.paused ?? true);
 
 	/** The played arc's length in ring pixels. */
 	const playedArc = $derived(progress * RING_CIRCUMFERENCE_PX);
@@ -148,23 +160,21 @@
 				stroke-dasharray="{playedArc} {RING_CIRCUMFERENCE_PX}"
 			/>
 		</svg>
-		{#if image}
-			<img
-				class="rounded-full object-cover"
-				alt=""
-				src={image}
-				use:capToNaturalSize
-				style:width="{ART_SIZE_PX}px"
-				style:height="{ART_SIZE_PX}px"
-			/>
-		{:else}
-			<div
-				class="rounded-full"
-				style:width="{ART_SIZE_PX}px"
-				style:height="{ART_SIZE_PX}px"
-				style:background="var(--mbv-textMuted)"
-			></div>
-		{/if}
+		<ArtImage
+			{art}
+			alt=""
+			class="rounded-full object-cover"
+			style="width: {ART_SIZE_PX}px; height: {ART_SIZE_PX}px"
+		>
+			{#snippet fallback()}
+				<div
+					class="rounded-full"
+					style:width="{ART_SIZE_PX}px"
+					style:height="{ART_SIZE_PX}px"
+					style:background="var(--mbv-textMuted)"
+				></div>
+			{/snippet}
+		</ArtImage>
 	</div>
 	<!-- The transport's play/pause and next, the rail's two controls (the
 		spec's rail list). -->
@@ -173,11 +183,11 @@
 		class="flex items-center justify-center rounded-full p-1"
 		bind:this={playPauseEl}
 		data-target="playPause"
-		aria-label={playback.playback.paused ? 'Play' : 'Pause'}
-		title={playback.playback.paused ? 'Play' : 'Pause'}
+		aria-label={paused ? 'Play' : 'Pause'}
+		title={paused ? 'Play' : 'Pause'}
 		style:background="var(--mbv-secondary)"
 	>
-		{#if playback.playback.paused}
+		{#if paused}
 			<Play size={16} fill={roleVar('accent')} color={roleVar('accent')} />
 		{:else}
 			<Pause size={16} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />
@@ -197,13 +207,15 @@
 			color={glyphColor(playback.availability.next, 'textStrong')}
 		/>
 	</button>
-	{#if playback.playback.runtimeTicks > 0}
+	{#if $runtimeTicks > 0}
 		<!-- The remaining time: the same `-M:SS` the expanded scrubber's right
-			end paints. -->
+			end paints, from the playhead's prediction (design D5). The rail
+			paints a literal `-` until the collapsed-states work picks the
+			canvas's U+2212 convention up. -->
 		<span
 			class="font-mono text-xs tabular-nums"
 			style:color={roleVar('playbackMetaFg')}
-			data-remaining>-{playback.remainingClock}</span
+			data-remaining>-{$remaining}</span
 		>
 	{/if}
 	<span class="flex-1"></span>

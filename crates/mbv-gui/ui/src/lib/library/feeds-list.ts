@@ -9,6 +9,7 @@
 import type { GuiFeedsRow } from '$lib/bridge/types';
 import { buildFlatRows } from './list';
 import type { FlatRow } from './list';
+import { memoRows } from './row-memo';
 
 /** The entry row's height in logical pixels (design D12): the room a
  * two-line entry title and the date gutter paint into, as a Shows flat row. */
@@ -32,3 +33,6 @@ export type FeedsItemRow = FlatRow<GuiFeedsRow>;
 export function buildFeedsRows(rows: readonly GuiFeedsRow[], filter = ''): FeedsItemRow[] {
 	return buildFlatRows(rows, FEEDS_ROW_HEIGHT, filter);
 }
+
+/** The Feeds rows, memoized on the carried rows and the filter (design D9). */
+export const feedsRowsOf = memoRows(buildFeedsRows);

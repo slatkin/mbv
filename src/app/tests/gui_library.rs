@@ -734,3 +734,25 @@ fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
         "the https url opened and the javascript url dropped"
     );
 }
+
+/// An interrupted art fetch's retry is reported by the window that holds its
+/// retry time (design D3 rule 3, invariant 27): the core keeps each window's
+/// start, so the next window does not report it again.
+#[test]
+fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let start = std::time::Instant::now();
+    app.images.fetch_interrupted("alb-1:P".to_owned());
+    let hour = std::time::Duration::from_secs(3600);
+    let later = start + hour;
+
+    assert!(
+        app.gui_art_retry_due(start, later),
+        "the window holds the retry time"
+    );
+    assert!(
+        !app.gui_art_retry_due(later, later + hour),
+        "the next window starts after the retry time"
+    );
+}

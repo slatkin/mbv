@@ -1,29 +1,31 @@
 //! The `mbv-gui` program: a native window Client of the Owner process. The
 //! core thread (design D3 of `add-tauri-gui-client`) attaches to the Owner
 //! and runs behind the window; the three bridge commands push into its
-//! channel, and the `mbv://frame` event carries its frames to the window
-//! (design D4, task row 2.5).
+//! channel, and the `mbv://sections` event carries its section batches to the
+//! window (design D4, task row 2.9).
 
 use std::ops::Deref;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use mbv_gui::bridge::frame::GuiWindowFrame;
+use mbv_gui::art::{ArtRequest, ArtResponse};
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::pointer::{DomPointer, neutral_pointer};
+use mbv_gui::bridge::sections::GuiSectionBatch;
 use mbv_gui::bridge::settings::GuiSettingsCommand;
-use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
+use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
 use mimalloc::MiMalloc;
 use tauri::{Emitter, Manager, State};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-/// The event the core thread's frames reach the window through (design D4).
-const FRAME_EVENT: &str = "mbv://frame";
+/// The event the core thread's section batches reach the window through
+/// (design D4).
+const SECTIONS_EVENT: &str = "mbv://sections";
 
 /// The managed sender of the core thread's channel (design D3): every
 /// command pushes through it and never touches the `App`. The window's
@@ -55,11 +57,19 @@ fn pointer(channel: State<'_, CoreChannel>, event: DomPointer) {
 }
 
 /// The `report_layout` command (design D4): the report pushes into the core
-/// channel, where the core applies it to the capacity and the hit map and
-/// emits the current frame, changed or not (design D3).
+/// channel, where the core applies it to the capacity and the hit map. It
+/// marks no section and forces no batch.
 #[tauri::command]
 fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
     push(channel, CoreInput::Layout(report));
+}
+
+/// The `sync` command (design D4): the window asks for a full snapshot once its
+/// section listener is subscribed. The core releases the sections the window
+/// holds, so the next batch carries every present section at its revision.
+#[tauri::command]
+fn sync(channel: State<'_, CoreChannel>) {
+    push(channel, CoreInput::Sync);
 }
 
 /// The `library` command (add-gui-library-panel design D2): the Library
@@ -75,7 +85,7 @@ fn library(channel: State<'_, CoreChannel>, command: GuiLibraryCommand) {
 /// screen's window content sends one semantic request, the bridge translates it
 /// to the neutral command, and it pushes into the core channel as a
 /// [`CoreInput::Settings`]. A request this build cannot address — a setting
-/// name no key declares — logs and drops, so a stale frame's edit reaches
+/// name no key declares — logs and drops, so a stale window's edit reaches
 /// nothing.
 #[tauri::command]
 fn settings(channel: State<'_, CoreChannel>, command: GuiSettingsCommand) {
@@ -101,6 +111,33 @@ fn push(channel: impl Deref<Target = CoreChannel>, input: CoreInput) {
             "the core thread is gone; the input drops"
         );
     }
+}
+
+/// The `mbv-art` scheme's answer as the webview receives it (design D7 of
+/// `gui-change-driven-sections`): a cached source is a 200 with the source's
+/// own MIME type and an immutable-cache header — the cache entry under a key
+/// is final for the process's life, so a URL never names two images. A miss
+/// is a 404 the webview does not keep, so a later load of the same URL asks
+/// the core again.
+fn art_response(response: ArtResponse) -> tauri::http::Response<Vec<u8>> {
+    let status = match &response {
+        ArtResponse::Found { .. } => 200,
+        ArtResponse::Missing => 404,
+    };
+    let cache_control = match &response {
+        ArtResponse::Found { .. } => "max-age=31536000, immutable",
+        ArtResponse::Missing => "no-store",
+    };
+    let (mime, bytes) = match response {
+        ArtResponse::Found { mime, bytes } => (mime, bytes),
+        ArtResponse::Missing => ("text/plain", Vec::new()),
+    };
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Content-Type", mime)
+        .header("Cache-Control", cache_control)
+        .body(bytes)
+        .expect("the static art response headers build")
 }
 
 fn main() -> tauri::Result<()> {
@@ -137,16 +174,35 @@ fn main() -> tauri::Result<()> {
                 push(window.app_handle().state::<CoreChannel>(), CoreInput::Close);
             }
         })
+        // The `mbv-art` image scheme (design D7 of
+        // `gui-change-driven-sections`): each request pushes a
+        // [`CoreInput::Art`] into the core channel — the handler never
+        // touches the `App` — with the responder wired into the request's
+        // `reply`, so the core thread's answer resolves the load directly.
+        .register_asynchronous_uri_scheme_protocol("mbv-art", |ctx, request, responder| {
+            let channel = ctx.app_handle().state::<CoreChannel>().inner().0.clone();
+            let path = request.uri().path().trim_start_matches('/').to_owned();
+            let sent = channel.send(CoreInput::Art(ArtRequest {
+                path,
+                reply: Box::new(move |response| responder.respond(art_response(response))),
+            }));
+            if sent.is_err() {
+                tracing::warn!(
+                    target: "gui_commands",
+                    "the core thread is gone; the art request drops unanswered"
+                );
+            }
+        })
         .setup(move |app| {
-            // The frames emit from the core thread, any thread, through the
-            // window event loop (design D3).
+            // The section batches emit from the core thread, any thread,
+            // through the window event loop (design D3).
             let handle = app.handle().clone();
-            let sink: FrameSink = Box::new(move |frame: GuiWindowFrame| {
-                if let Err(error) = handle.emit(FRAME_EVENT, frame) {
+            let sink: SectionSink = Box::new(move |batch: GuiSectionBatch| {
+                if let Err(error) = handle.emit(SECTIONS_EVENT, batch) {
                     tracing::warn!(
                         target: "gui_commands",
                         error = %error,
-                        "the frame emit failed"
+                        "the section batch emit failed"
                     );
                 }
             });
@@ -176,7 +232,8 @@ fn main() -> tauri::Result<()> {
             pointer,
             report_layout,
             library,
-            settings
+            settings,
+            sync
         ])
         .build(tauri::generate_context!())?;
     // The event loop ends on the window's destroy or the quit edge's close.

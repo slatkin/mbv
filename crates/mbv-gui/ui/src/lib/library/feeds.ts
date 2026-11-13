@@ -1,6 +1,7 @@
 // The Feeds destination's interaction state (add-gui-library-panel design
 // D12, row 11.1): what the window content owns and the core never reads — the
-// cursor, the scroll offset, the measured viewport, and the pill row's focus.
+// cursor and the pill row's focus. The scroll offset and the measured viewport
+// live in `./scroll` (design D9).
 // The core owns the pill selection and the selected entry (the frame's
 // `pills` and `selected`), so nothing here mirrors them: a press sends the
 // select command, and the frame carries the choice back. The row model is
@@ -9,28 +10,20 @@
 // and does nothing. A Client holds one feed tab,
 // so no library index rides the commands.
 //
-// The state, the filter, the cursor, the scroll, and the pill focus are the
+// The state, the filter, the cursor, the scroll store, and the pill focus are the
 // pill-list controller's (`./pill-list`, row 7C.1); this module keeps the
 // Feeds frame, the Feeds rows, the Feeds command shapes, and the Feeds names.
 
-import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type { GuiFeedPill, GuiFeedsFrame } from '$lib/bridge/types';
+import type { GuiFeedPill, GuiFeedsList } from '$lib/bridge/types';
 import { moveCursor } from './list';
 import type { ListMove } from './list';
-import { buildFeedsRows } from './feeds-list';
+import { feedsRowsOf } from './feeds-list';
 import type { FeedsItemRow } from './feeds-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';
-import { libraryContent } from './state';
-
-/** The carried Feeds content (design D12, row 11.1), or `null` while any
- * other destination is active. The Feeds destination is active while the
- * window holds this content, and every other destination's slice is then
- * `null`. */
-export function libraryFeeds(): GuiFeedsFrame | null {
-	return get(libraryContent)?.feeds ?? null;
-}
+import { feedsScroll } from './scroll';
+import { libraryFeedsList } from './parts';
 
 /** The Feeds list's interaction state: the shared pill-list state over the
  * Feeds pill (design D12). */
@@ -51,15 +44,16 @@ export function feedsPillKey(pill: GuiFeedPill): string {
  * filter, the plain cursor movement, and the pill focus stored as the pill
  * itself (row 7C.1). */
 const pillList = createPillList<
-	GuiFeedsFrame,
+	GuiFeedsList,
 	FeedsItemRow,
 	FeedsItemRow,
 	GuiFeedPill,
 	GuiFeedPill,
-	GuiFeedsFrame['pills'][number]
+	GuiFeedsList['pills'][number]
 >({
-	frame: libraryFeeds,
-	buildRows: (feeds, filter) => buildFeedsRows(feeds.rows, filter),
+	frame: libraryFeedsList,
+	scroll: feedsScroll,
+	buildRows: (feeds, filter) => feedsRowsOf(feeds.rows, filter),
 	itemOf: (row) => row,
 	move: moveCursor,
 	pills: (feeds) => feeds.pills,
@@ -114,13 +108,13 @@ export function pressFeedsRow(row: FeedsItemRow): void {
  * play. The queue is replaced, as the TUI's feeds play replaces it. The row
  * id is the entry's stable identity the frame carried. */
 export function playFeedsRow(itemId: string): void {
-	sendIfLoaded(libraryFeeds(), () => ({ command: 'feedsPlay', itemId }));
+	sendIfLoaded(libraryFeedsList(), () => ({ command: 'feedsPlay', itemId }));
 }
 
 /** Add an entry to the queue (design D12): `a` on the row's entry. There is
  * no play-next on the destination, so `n` sends no command. */
 export function queueFeedsRow(itemId: string): void {
-	sendIfLoaded(libraryFeeds(), () => ({ command: 'feedsQueue', itemId }));
+	sendIfLoaded(libraryFeedsList(), () => ({ command: 'feedsQueue', itemId }));
 }
 
 /** Move the list's cursor one movement along (design D12): Up and Down move a
@@ -146,7 +140,7 @@ export function scrollFeedsList(scrollTop: number): void {
 /** The pill the pill row's focus holds, resolved against the carried pills so
  * a stale pill focuses nothing: the pill the keys' Space and Enter select, and
  * the pill the row paints the accent outline on (design D6, D12). */
-export function focusedFeedsPill(feeds: GuiFeedsFrame): GuiFeedPill | null {
+export function focusedFeedsPill(feeds: GuiFeedsList): GuiFeedPill | null {
 	return pillList.focusedPill(feeds);
 }
 

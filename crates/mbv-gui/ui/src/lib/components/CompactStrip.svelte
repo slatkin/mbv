@@ -9,32 +9,42 @@
 	// own control brings the panel back. Both controls report the
 	// `QueuePlayback` target ids, so a press resolves through the same core
 	// arms as the expanded header's controls.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
 	import { onMount } from 'svelte';
+	import ArtImage from './ArtImage.svelte';
 	import { Pause, Play, SkipForward } from '@lucide/svelte';
 	import {
 		elementRegion,
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
-	import { clampRatio } from '$lib/bridge/time';
+	import { playhead } from '$lib/bridge/playhead';
+	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
-		GuiCardArtwork,
-		GuiQueuePlayback,
+		GuiArtRef,
 		LayoutRegion,
 		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	interface Props {
-		playback: GuiQueuePlayback;
 		/** The next item's title (`GuiQueueSummary.nextTitle`, review of this
 		 * row's finding P2), `null` while no slot follows the playhead. */
 		next: string | null;
 		/** The artwork the window carries for the active item (design D10). */
-		art: GuiCardArtwork | null;
+		art: GuiArtRef | null;
 	}
-	const { playback, next, art }: Props = $props();
+	const { next, art }: Props = $props();
+
+	/** The transport band's facts the strip paints. */
+	const playback = $derived($playbackSection);
+
+	/** The playhead's played-fraction store (design D5): the thin progress
+	 * line paints the prediction. */
+	const { anchor: playheadAnchor, fraction } = playhead;
+
+	/** Whether the transport is paused: the anchor's fact (design D5). `true`
+	 * while no anchor holds — the idle transport paints a play control. */
+	const paused = $derived($playheadAnchor?.paused ?? true);
 
 	/** The still's canvas size (the spec's 96×54). */
 	const STILL_WIDTH_PX = 96;
@@ -46,13 +56,9 @@
 	let playPauseEl: HTMLElement | undefined = $state();
 	let nextEl: HTMLElement | undefined = $state();
 
-	/** The played fraction of the thin progress line, clamped to `[0, 1]`. */
-	const progress = $derived(
-		clampRatio(playback.playback.positionTicks, playback.playback.runtimeTicks),
-	);
-
-	/** The artwork's bitmap, `null` while the item has none. */
-	const image = $derived(art?.kind === 'image' ? art.detail : null);
+	/** The played fraction of the thin progress line, clamped to `[0, 1]`:
+	 * the playhead's prediction (design D5). */
+	const progress = $derived($fraction);
 
 	/** The meta line: the parent line and the next item, whichever the frame
 	 * carries, joined as one truncating line. */
@@ -113,11 +119,11 @@
 		bind:this={stillEl}
 		data-target="visualSlot"
 	>
-		{#if image}
-			<img class="h-full w-full object-cover" alt="" src={image} use:capToNaturalSize />
-		{:else}
-			<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
-		{/if}
+		<ArtImage art={art} alt="" class="h-full w-full object-cover">
+			{#snippet fallback()}
+				<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
+			{/snippet}
+		</ArtImage>
 	</div>
 	<div class="flex min-w-0 flex-1 flex-col" style:gap="calc(var(--mbv-cell-row) / 4)">
 		<span
@@ -146,11 +152,11 @@
 		class="flex shrink-0 items-center justify-center rounded-full p-1"
 		bind:this={playPauseEl}
 		data-target="playPause"
-		aria-label={playback.playback.paused ? 'Play' : 'Pause'}
-		title={playback.playback.paused ? 'Play' : 'Pause'}
+		aria-label={paused ? 'Play' : 'Pause'}
+		title={paused ? 'Play' : 'Pause'}
 		style:background="var(--mbv-secondary)"
 	>
-		{#if playback.playback.paused}
+		{#if paused}
 			<Play size={16} fill={roleVar('accent')} color={roleVar('accent')} />
 		{:else}
 			<Pause size={16} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />

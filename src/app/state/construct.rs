@@ -131,6 +131,7 @@ impl App {
                 resize_register_tx,
                 resize_response_rx,
             ),
+            image_decode: init.image_decode,
             library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,

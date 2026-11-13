@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { homeScroll, initialListScroll, musicScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import {
 	initialHomeUi,
@@ -15,8 +16,6 @@ import {
 } from './home';
 import { homeRowKey } from './home-list';
 import type {
-	GuiHomeFrame,
-	GuiLibraryContent,
 	GuiLibraryTab,
 	GuiMusicArtist,
 	GuiMusicHero,
@@ -25,8 +24,10 @@ import type {
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
 import {
-	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
 	measureLibraryList,
@@ -40,8 +41,10 @@ const invokeMock = vi.mocked(invoke);
 beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
+	musicScroll.set(initialListScroll());
 	homeUi.set(initialHomeUi());
-	carryLibraryContent(null);
+	homeScroll.set(initialListScroll());
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -55,7 +58,8 @@ function frame(
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		libraryList: get(libraryList),
+		search: null,
 		...rest,
 	};
 }
@@ -95,42 +99,37 @@ const BRAND: GuiMusicArtist = {
 function content(
 	artists: GuiMusicArtist[] = [],
 	hero: GuiMusicHero | null = null,
-): GuiLibraryContent {
+): LibrarySections {
 	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: 1,
-		music: {
-			libIdx: 0,
-			pills,
-			collectionNames: ['Rock'],
-			loading: false,
-			failure: null,
-			artists,
-			hero,
-			art: null,
-			playingTrackId: null,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: 1,
+			destination: {
+				kind: 'music',
+				libIdx: 0,
+				pills,
+				collectionNames: ['Rock'],
+				loading: false,
+				failure: null,
+				artists,
+			},
 		},
-		home: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
+		detail: { kind: 'music', hero, art: null, playingTrackId: null },
 	};
 }
 
 /** Carry the content the panel paints, so the window holds the Music content
  * its presence fact needs (design D2, D10). */
 function carryPanel(): void {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 }
 
 /** Carry the content with the given destination tabs (design D2): the tabs the
  * digits open.
  */
 function carryTabs(tabs: GuiLibraryTab[]): void {
-	carryLibraryContent({ revision: 1, search: null, content: { ...content(), tabs } });
+	const sections = content();
+	carryLibrary({ ...sections, list: { ...sections.list, tabs } });
 }
 
 /** The picked album's Hero facts: the tracklist the Hero pane's keys move
@@ -155,7 +154,7 @@ const HERO: GuiMusicHero = {
 
 /** Carry the union the list keys move through, with the list pane focused. */
 function carryList(open: string[] = []): void {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE, BRAND]) });
+	carryLibrary(content([BEASTIE, BRAND]));
 	libraryUi.update((ui) => ({ ...ui, pane: 'list', openNodes: open }));
 	measureLibraryList(40);
 }
@@ -240,7 +239,7 @@ test('an open core overlay sends a Library key to the core', () => {
 test('a frame without the Library section leaves every Library key to the core', () => {
 	carryPanel();
 
-	press('/', {}, frame('library', { library: null }));
+	press('/', {}, frame('library', { libraryList: null }));
 
 	expect(get(libraryUi).filterOpen).toBe(false);
 	expect(invokeMock).not.toHaveBeenCalledWith('library', expect.anything());
@@ -250,7 +249,7 @@ test('a frame without the Library section leaves every Library key to the core',
 });
 
 test('Space on a focused pill asks for its toggle and sends no key', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 	libraryUi.update((ui) => ({ ...ui, focusedPill: 'g2' }));
 
 	press(' ');
@@ -260,7 +259,7 @@ test('Space on a focused pill asks for its toggle and sends no key', () => {
 });
 
 test('Space with no focused pill is sent to the core', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 
 	press(' ');
 
@@ -271,7 +270,7 @@ test('Space with no focused pill is sent to the core', () => {
 });
 
 test('Right with no focused pill focuses the first pill and sends no key', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content() });
+	carryLibrary(content());
 
 	press('ArrowRight');
 
@@ -381,7 +380,7 @@ test('a cursor move below the rows in view scrolls its row into view', () => {
 	press('ArrowDown');
 
 	expect(get(libraryUi).cursor).toBe('artist:service:a2');
-	expect(get(libraryUi).scrollTop).toBe(44);
+	expect(get(musicScroll).scrollTop).toBe(44);
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
@@ -458,7 +457,7 @@ test('n with the list cursor on an album sends play next for that album', () => 
 });
 
 test('a with the Hero pane focused sends add to queue for the tracklist cursor track', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: 't1' }));
 
 	press('a');
@@ -469,7 +468,7 @@ test('a with the Hero pane focused sends add to queue for the tracklist cursor t
 });
 
 test('Down with the Hero pane focused moves the tracklist cursor', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: 't1' }));
 
 	press('ArrowDown');
@@ -482,7 +481,7 @@ test('Down with the Hero pane focused moves the tracklist cursor', () => {
 // while its overlay was dismissed, so the movement keys, `n`/`a`, and Enter
 // acted on a pane that painted nothing. Taking the Hero's pane paints it again.
 test('Tab onto the Hero in Narrow paints its overlay again', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	reportLibraryArrangement('narrow');
 	libraryUi.update((ui) => ({ ...ui, pane: 'list', heroDismissed: true }));
 
@@ -495,7 +494,7 @@ test('Tab onto the Hero in Narrow paints its overlay again', () => {
 // The other half of the same invariant: closing the overlay while the Hero pane
 // held the focus moves the focus back to the painted list.
 test('Esc with the Hero pane focused returns the pane focus to the list', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	reportLibraryArrangement('narrow');
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
 
@@ -509,7 +508,7 @@ test('Esc with the Hero pane focused returns the pane focus to the list', () => 
 // the focus, so a tracklist whose cache landed afterwards painted no cursor and
 // Enter did nothing. The cursor now derives from the tracks that paint.
 test('Enter in the Hero pane plays the track the painted tracklist shows', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: null }));
 
 	press('Enter');
@@ -530,7 +529,7 @@ test('Esc closes the open item menu and sends no key', () => {
 });
 
 test('Esc closes the Narrow Hero overlay and sends no key', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	reportLibraryArrangement('narrow');
 
 	press('Escape');
@@ -542,7 +541,7 @@ test('Esc closes the Narrow Hero overlay and sends no key', () => {
 // The overlay paints only in Narrow (design D4): the Esc that would close it
 // elsewhere still belongs to the core's router.
 test('Esc with no overlay or menu open is the core\u2019s key', () => {
-	carryLibraryContent({ revision: 1, search: null, content: content([BEASTIE], HERO) });
+	carryLibrary(content([BEASTIE], HERO));
 	reportLibraryArrangement('wide');
 
 	press('Escape');
@@ -584,33 +583,29 @@ const ADDED_ROW = {
 
 /** The carried content while Home is active (design D12): no Music content,
  * the flat list's rules, and the Home rows. */
-function homeContent(): GuiLibraryContent {
+function homeContent(): LibrarySections {
 	return {
-		tabs: [{ position: 1, label: 'Music' }],
-		currentTab: null,
-		music: null,
-		shows: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: null,
-		feeds: null,
-		rowMenu: null,
-		home: { loading: false,
-			rows: [
-				{ row: 'heading', text: 'Continue watching' },
-				CONTINUED_ROW,
-				{ row: 'spacer' },
-				{ row: 'heading', text: 'Recently added' },
-				ADDED_ROW,
-			],
-			selected: CONTINUED_ROW.id,
-			hero: null,
-		} satisfies GuiHomeFrame,
+		list: {
+			tabs: [{ position: 1, label: 'Music' }],
+			currentTab: null,
+			destination: {
+				kind: 'home',
+				loading: false,
+				rows: [
+					{ row: 'heading', text: 'Continue watching' },
+					CONTINUED_ROW,
+					{ row: 'spacer' },
+					{ row: 'heading', text: 'Recently added' },
+					ADDED_ROW,
+				],
+			},
+		},
+		detail: { kind: 'home', selected: CONTINUED_ROW.id, hero: null },
 	};
 }
 
 function carryHome(): void {
-	carryLibraryContent({ revision: 1, search: null, content: homeContent() });
+	carryLibrary(homeContent());
 }
 
 test('Enter on Home plays the cursor row by its opaque id', () => {

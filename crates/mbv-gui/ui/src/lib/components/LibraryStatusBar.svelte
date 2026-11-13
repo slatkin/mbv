@@ -16,17 +16,12 @@
 	// band paints no interactive region: a point on it resolves to no target,
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
-import type {
-GuiAudiobooksFrame,
-GuiEmbyFrame,
-GuiFeedsFrame,
-GuiHomeFrame,
-GuiLibraryTab,
-GuiMusicFrame,
-GuiPodcastsFrame,
-GuiShowsFrame,
-GuiStatusBar,
-} from '$lib/bridge/types';
+	import type {
+		GuiDestinationList,
+		GuiLibraryDetail,
+		GuiLibraryTab,
+		GuiStatusBar,
+	} from '$lib/bridge/types';
 	import { libraryLocation } from '$lib/library/status';
 
 	interface Props {
@@ -35,30 +30,14 @@ GuiStatusBar,
 		 * location's segments come from it. */
 		tabs: GuiLibraryTab[];
 		currentTab: number | null;
-		/** The carried Music content (design D2): the selected collections and
-		 * the picked item's Hero. */
-		music: GuiMusicFrame | null;
-		/** The carried Home content (design D12): the location reads `Home` on
-		 * it. */
-		home?: GuiHomeFrame | null;
-		/** The carried Shows content (design D12, row 7.1): the location reads
-		 * the destination, the view mode, and the selected row on it. */
-		shows?: GuiShowsFrame | null;
-		/** The carried plain Emby-library content (design D12, row 8.1): the
-		 * location reads the destination, the selected feed pill in
-		 * feed-group mode, and the selected row on it. */
-		emby?: GuiEmbyFrame | null;
-		/** The carried Audiobooks content (design D12, row 9.1): the location
-		 * reads the destination and the selected book on it. */
-		audiobooks?: GuiAudiobooksFrame | null;
-		/** The carried Podcasts content (design D12, row 10.1): the location
-		 * reads the destination, the selected pill, and the selected episode
-		 * on it. */
-		podcasts?: GuiPodcastsFrame | null;
-		/** The carried Feeds content (design D12, row 11.1): the location
-		 * reads the destination, the selected pill, and the selected entry
-		 * on it. */
-		feeds?: GuiFeedsFrame | null;
+		/** The active destination's list part (gui-change-driven-sections design
+		 * D8): the location's destination, the selected collections, and the
+		 * selected row's title. `null` while no destination is active. */
+		list?: GuiDestinationList | null;
+		/** The active destination's detail part: the picked item's Hero title,
+		 * and the selected row the location names. `null` while no destination is
+		 * active. */
+		detail?: GuiLibraryDetail | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
@@ -66,13 +45,8 @@ GuiStatusBar,
 	const {
 		tabs,
 		currentTab,
-		music,
-		home = null,
-		shows = null,
-		emby = null,
-		audiobooks = null,
-		podcasts = null,
-		feeds = null,
+		list = null,
+		detail = null,
 		status,
 	}: Props = $props();
 
@@ -97,7 +71,7 @@ GuiStatusBar,
 	 * Feeds destination the tab's label, the selected pill, and the selected
 	 * entry (row 11.1). */
 	const location = $derived(
-		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks, podcasts, feeds),
+		libraryLocation(tabs, currentTab, list, detail),
 	);
 </script>
 

@@ -17,6 +17,7 @@ mod home;
 mod item_actions;
 mod item_menu;
 mod launch;
+mod marks;
 mod podcasts;
 mod podcasts_projection;
 mod projection;
@@ -52,6 +53,7 @@ pub use self::home::{
 };
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
+pub use self::marks::GuiPlayheadMarks;
 pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,

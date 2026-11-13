@@ -14,7 +14,7 @@
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroArt from './LibraryHeroArt.svelte';
 	import TypedText from './TypedText.svelte';
-	import type { GuiLibraryArt, GuiMetaRow } from '$lib/bridge/library-types';
+	import type { GuiArtRef, GuiMetaRow } from '$lib/bridge/library-types';
 
 	/** The facts every Hero carries, as its frame declares them. */
 	interface HeroFacts {
@@ -26,7 +26,7 @@
 		overview?: string | null;
 		artShape: 'landscape' | 'square' | 'portrait';
 		/** The fetched artwork; a destination whose rows carry none omits it. */
-		art?: GuiLibraryArt | null;
+		art?: GuiArtRef | null;
 	}
 
 	interface Props {

@@ -3,9 +3,10 @@
 	// state the window shows while the core thread's attach campaign has no
 	// slice to paint — one variant per `GuiAttachState`, with the text the
 	// campaign carries (the same text `startup::run_local_instance` gives the
-	// TUI Client). A `null` attach state is the wait before the first frame:
-	// the core emits a frame only after the first layout report, so this
-	// screen also paints while the subscription is still listening.
+	// TUI Client). A `null` attach value is the wait before the first batch
+	// and the attached window's cleared section alike; the window paints this
+	// screen until the first batch lands, and the main content once the
+	// section's value is `null` (gui-change-driven-sections design D6).
 	//
 	// The mismatch state paints the Restart and Quit buttons (key R and key
 	// Q, as the TUI prompt's `[R] Restart  [Q] Quit` line reads) and reports
@@ -22,14 +23,13 @@
 		observeLayout,
 		reportLayout
 	} from '$lib/bridge/layout';
+	import { attach as attachSection } from '$lib/bridge/sections';
 	import { roleVar } from '$lib/bridge/theme';
-	import type { AttachTargetId, GuiAttachState, LayoutRegion } from '$lib/bridge/types';
+	import type { AttachTargetId, LayoutRegion } from '$lib/bridge/types';
 
-	interface Props {
-		/** The attach state the frame carries, or `null` before the first frame. */
-		attach: GuiAttachState | null;
-	}
-	const { attach }: Props = $props();
+	/** The attach section's value: the state the campaign carries, `null`
+	 * while the core has sent no batch or once the attach succeeds. */
+	const attach = $derived($attachSection);
 
 	const reportKey = Symbol('attach-screen');
 	let screenEl: HTMLElement | undefined = $state();

@@ -26,7 +26,7 @@ use crate::{
 fn step_input(test: &mut TestCore, input: CoreInput) {
     test.tx.send(input).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 }
 
 /// A report that carries a new container size re-binds the capacity and the
@@ -49,10 +49,10 @@ fn a_reported_container_size_rebinds_capacity_and_regions() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.cursor, Some(2));
+    assert_eq!(test.held().queue().cursor, Some(2));
 
     // The container resize painted a shorter list and moved the row
     // region: the next report carries the new layout.
@@ -74,18 +74,18 @@ fn a_reported_container_size_rebinds_capacity_and_regions() {
         }))
         .unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.rows.len(), 3);
+    assert_eq!(test.held().queue().rows.len(), 3);
 
     // The first report's region is gone: the press there resolves to
     // nothing, so the cursor stays put.
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.cursor, Some(2));
+    assert_eq!(test.held().queue().cursor, Some(2));
 
     // The resized layout's region resolves its slot.
     test.tx.send(press_at(250.0, 110.0)).unwrap();
     assert!(test.core.step());
-    assert_eq!(test.next_frame().queue.cursor, Some(1));
+    assert_eq!(test.held().queue().cursor, Some(1));
 }
 
 /// A press resolves against the last reported regions (task row 2.4): the
@@ -106,17 +106,17 @@ fn a_press_resolves_against_the_last_reported_regions() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert_eq!(frame.queue.cursor, Some(2));
+    let frame = test.held();
+    assert_eq!(frame.queue().cursor, Some(2));
 
     test.tx.send(press_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert_eq!(frame.queue.cursor, Some(2));
+    let frame = test.held();
+    assert_eq!(frame.queue().cursor, Some(2));
 }
 
 /// A press on the play/pause region dispatches the playback request while
@@ -136,12 +136,16 @@ fn a_press_on_the_play_pause_region_dispatches_the_playback_request() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(20.0, 110.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let toast = frame.status.toast.expect("the toggle flashed a toast");
+    let frame = test.held();
+    let toast = frame
+        .status()
+        .toast
+        .clone()
+        .expect("the toggle flashed a toast");
     assert_eq!(toast.text, "Pause requested");
 }
 
@@ -162,18 +166,18 @@ fn the_wheel_over_a_reported_row_moves_the_viewport_by_the_wheel_step() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(wheel_down_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let GuiQueueRow::Item { slot, .. } = &frame.queue.rows[0] else {
+    let frame = test.held();
+    let GuiQueueRow::Item { slot, .. } = &frame.queue().rows[0] else {
         panic!("the first viewport row is an item row");
     };
     // One wheel notch is the uniform three-row step: the viewport's first
     // row moves from slot 1 to slot 4.
     assert_eq!(*slot, 4);
-    assert_eq!(frame.queue.cursor, Some(1));
+    assert_eq!(frame.queue().cursor, Some(1));
 }
 
 /// Any pointer event cancels an armed prefix, even one that resolves to no
@@ -186,8 +190,8 @@ fn an_untargeted_pointer_press_cancels_an_armed_prefix() {
     let mut test = test_core_with(stub_app_with_prefix_and_toast("prefix armed"));
     test.tx.send(press_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert!(!frame.status.prefix_armed);
+    let frame = test.held();
+    assert!(!frame.status().prefix_armed);
 }
 
 /// The header's playback-target press opens the chooser, and a chooser
@@ -210,13 +214,13 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::TargetChooser { cursor, choices }) = &frame.overlay else {
-        panic!("the target press opened the chooser: {:?}", frame.overlay);
+    let frame = test.held();
+    let Some(GuiOverlayFrame::TargetChooser { cursor, choices }) = &frame.overlay() else {
+        panic!("the target press opened the chooser: {:?}", frame.overlay());
     };
     assert_eq!(*cursor, 0);
     assert_eq!(choices.len(), 2, "the local row leads the remote target");
@@ -235,12 +239,15 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert!(frame.overlay.is_none(), "the selection closed the chooser");
+    let frame = test.held();
+    assert!(
+        frame.overlay().is_none(),
+        "the selection closed the chooser"
+    );
     let selections: Vec<_> = cmd_rx
         .try_iter()
         .filter(|cmd| matches!(cmd, mbv_ctrl::CtrlCmd::SelectPlaybackOutput(_)))
@@ -281,7 +288,7 @@ fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     // One step per input: the seek-back press, the seek-forward press, and
     // the two chords each land their own command.
@@ -325,11 +332,11 @@ fn a_single_seekbar_press_seeks_to_the_pressed_position() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     let seeks: Vec<f64> = cmd_rx
         .try_iter()
@@ -359,12 +366,12 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(move_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let hover = frame.playback.hover.expect("the move set the hover");
+    let frame = test.held();
+    let hover = frame.hover().expect("the move set the hover");
     assert_eq!(hover.fraction, 0.5);
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
@@ -374,8 +381,8 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
 
     test.tx.send(move_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert_eq!(frame.playback.hover, None);
+    let frame = test.held();
+    assert_eq!(frame.hover(), None);
 }
 
 /// A chip press opens its track popover (the `gui-client` spec's "the
@@ -397,13 +404,13 @@ fn a_chip_press_opens_its_popover_and_the_same_press_closes() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay else {
-        panic!("the chip press opened its popover: {:?}", frame.overlay);
+    let frame = test.held();
+    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay() else {
+        panic!("the chip press opened its popover: {:?}", frame.overlay());
     };
     assert_eq!(*chip, GuiTrackChipKind::Audio);
     assert_eq!(
@@ -416,8 +423,11 @@ fn a_chip_press_opens_its_popover_and_the_same_press_closes() {
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert!(frame.overlay.is_none(), "the same press closed the popover");
+    let frame = test.held();
+    assert!(
+        frame.overlay().is_none(),
+        "the same press closed the popover"
+    );
 }
 
 /// A track popover row's press selects that choice through the popover's
@@ -443,15 +453,15 @@ fn a_popover_row_press_sends_the_track_switch() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay else {
+    let frame = test.held();
+    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay() else {
         panic!(
             "the chip press opened the subtitle popover: {:?}",
-            frame.overlay
+            frame.overlay()
         );
     };
     assert_eq!(*chip, GuiTrackChipKind::Subtitles);
@@ -470,12 +480,15 @@ fn a_popover_row_press_sends_the_track_switch() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.next_frame();
+    test.held();
 
     test.tx.send(press_at(10.0, 60.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    assert!(frame.overlay.is_none(), "the selection closed the popover");
+    let frame = test.held();
+    assert!(
+        frame.overlay().is_none(),
+        "the selection closed the popover"
+    );
     let switches: Vec<i64> = cmd_rx
         .try_iter()
         .filter_map(|cmd| match cmd {

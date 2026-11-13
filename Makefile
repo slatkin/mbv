@@ -4,7 +4,7 @@ DATA_DIR    := $(HOME)/.local/share/mbv
 CONFIG_DIR  := $(HOME)/.config/mbv
 UI_DIR      := crates/mbv-gui/ui
 
-.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines ui-install ui-build ui-check ui-lint ui-test dev
+.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines ui-install ui-build ui-check ui-lint ui-test dev dev-release
 
 all: build
 
@@ -39,6 +39,12 @@ ui-test: ui-install
 dev: ui-build
 	cargo build -p mbv -p mbv-gui
 	cargo run -p mbv-gui
+
+# The same as `dev`, with the release profile: an optimized build that maps
+# far less code than the debug binary, for memory and speed checks.
+dev-release: ui-build
+	cargo build --release -p mbv -p mbv-gui
+	cargo run --release -p mbv-gui
 
 check-code-file-lines:
 	./scripts/check-code-file-lines.sh

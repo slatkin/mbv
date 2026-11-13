@@ -14,10 +14,13 @@
 
 use std::sync::mpsc::Receiver;
 
+use crate::Held;
 use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::GuiFrame;
-use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame};
+use mbv_gui::art::{GuiArtRef, PLACEHOLDER_PATH, art_url};
+use mbv_gui::bridge::frame::library::{
+    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiMusicDetail, GuiMusicList,
+};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -50,10 +53,10 @@ const LIB_EVENT_BOUND: std::time::Duration = std::time::Duration::from_secs(30);
 /// workers never starve behind a spinning test and a passing pump spends no
 /// real time; the bound only fires when the pipeline has stopped, and the
 /// panic then names `what`.
-fn pump_until(test: &mut TestCore, want: impl Fn(&GuiFrame) -> bool, what: &str) {
+fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
     loop {
         assert!(test.core.step(), "the core thread never quits mid-drain");
-        if test.latest_frame().as_ref().is_some_and(&want) {
+        if want(&test.held()) {
             return;
         }
         assert!(
@@ -62,8 +65,8 @@ fn pump_until(test: &mut TestCore, want: impl Fn(&GuiFrame) -> bool, what: &str)
                 .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
             "no library completion landed while waiting for {what}"
         );
-        // The applied completion frames on the next step: an input the core
-        // answers with a frame, as the drain's own arm does.
+        // The next step drains the requeued completion, which marks its sections
+        // (design D3 rule 2), and the wake makes that step run at once.
         test.waker.wake();
     }
 }
@@ -150,39 +153,58 @@ fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
 }
 
 /// Send one Library command and read the frame its step emitted.
-fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> GuiFrame {
+fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> Held {
     send_library(test, command);
-    test.next_frame()
+    test.held()
 }
 
-/// The Library section a frame carries (design D2).
-fn library_of(frame: GuiFrame) -> GuiLibraryFrame {
-    frame
-        .library
-        .expect("the slice carries the Library section")
+/// The Library list section a frame carries (design D8).
+fn list_of(frame: &Held) -> Option<GuiLibraryList> {
+    frame.library_list().cloned()
 }
 
-/// The Hero's artwork value of a frame that carries the Library content.
-fn hero_art(frame: GuiFrame) -> GuiLibraryArt {
-    library_of(frame)
-        .content
-        .and_then(|content| content.music)
-        .and_then(|music| music.art)
+/// The Library detail section a frame carries (design D8).
+fn detail_of(frame: &Held) -> Option<GuiLibraryDetail> {
+    frame.library_detail().cloned()
+}
+
+/// The Music list part a frame carries, `None` while another destination is
+/// active.
+fn music_list(frame: &Held) -> Option<GuiMusicList> {
+    let GuiDestinationList::Music(list) = list_of(frame)?.destination else {
+        return None;
+    };
+    Some(list)
+}
+
+/// The Music detail part a frame carries, `None` while another destination is
+/// active.
+fn music_detail(frame: &Held) -> Option<GuiMusicDetail> {
+    let GuiLibraryDetail::Music(detail) = detail_of(frame)? else {
+        return None;
+    };
+    Some(detail)
+}
+
+/// The Hero's artwork value of a frame that carries the Music detail.
+fn hero_art(frame: &Held) -> GuiArtRef {
+    music_detail(frame)
+        .and_then(|detail| detail.art)
         .expect("the frame carries the Hero's art")
 }
 
-/// The Hero paints the bundled placeholder as a `data:image/webp` URL.
-fn assert_placeholder(art: GuiLibraryArt) {
-    let GuiLibraryArt::Placeholder(url) = art else {
+/// The Hero paints the bundled placeholder's `mbv-art` reference (design D7).
+fn assert_placeholder(art: GuiArtRef) {
+    let GuiArtRef::Placeholder { src } = art else {
         panic!("the Hero paints the placeholder, not {art:?}");
     };
-    assert!(url.starts_with("data:image/webp;base64,"));
+    assert_eq!(src, art_url(PLACEHOLDER_PATH));
 }
 
-/// The Hero paints the cached art as a `data:` URL of the image's own bytes.
-fn assert_image(art: GuiLibraryArt) {
-    let GuiLibraryArt::Image(url) = art else {
+/// The Hero paints the cached art's `mbv-art` card reference (design D7).
+fn assert_image(art: GuiArtRef) {
+    let GuiArtRef::Image { src } = art else {
         panic!("the Hero paints the cached art, not {art:?}");
     };
-    assert!(url.starts_with("data:image/png;base64,"));
+    assert!(src.starts_with("mbv-art://localhost/card/"), "{src}");
 }

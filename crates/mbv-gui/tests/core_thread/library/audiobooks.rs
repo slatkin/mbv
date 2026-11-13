@@ -6,11 +6,14 @@
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
-use mbv_gui::bridge::frame::library::GuiLibraryFrame;
+use mbv_gui::bridge::frame::library::{
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiLibraryDetail,
+};
 use mbv_queue::AudiobookshelfItem;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{library_of, send_library};
+use super::{detail_of, list_of, send_library};
+use crate::Held;
 
 /// A core thread over an App whose catalog holds one Audiobookshelf book
 /// library and one podcast library, with no Emby library: the Audiobooks and
@@ -64,12 +67,17 @@ fn seeded_audiobooks_core() -> (crate::TestCore, std::sync::mpsc::Receiver<CtrlC
     (test, cmd_rx)
 }
 
-/// The Audiobooks section a frame carries (row 9.1).
-fn audiobooks_of(frame: GuiLibraryFrame) -> mbv_gui::bridge::frame::library::GuiAudiobooksFrame {
-    frame
-        .content
-        .and_then(|content| content.audiobooks)
-        .expect("the frame carries the Audiobooks section")
+/// The Audiobooks list and detail parts a frame carries (row 9.1).
+fn audiobooks_parts(frame: &Held) -> (GuiAudiobooksList, GuiAudiobooksDetail) {
+    let Some(GuiDestinationList::Audiobooks(list)) =
+        list_of(frame).map(|section| section.destination)
+    else {
+        panic!("the frame carries the Audiobooks list");
+    };
+    let Some(GuiLibraryDetail::Audiobooks(detail)) = detail_of(frame) else {
+        panic!("the frame carries the Audiobooks detail");
+    };
+    (list, detail)
 }
 
 /// The Audiobooks book id a queue command names, from the recording stub
@@ -165,27 +173,27 @@ fn the_frame_carries_the_book_list_after_the_open() {
         mbv_gui::bridge::library::GuiLibraryCommand::OpenDestination { position },
     );
 
-    let audiobooks = audiobooks_of(library_of(test.next_frame()));
-    assert_eq!(audiobooks.lib_idx, 0);
-    assert!(!audiobooks.loading && !audiobooks.failed);
-    let ids: Vec<&str> = audiobooks.rows.iter().map(|row| row.id.as_str()).collect();
+    let (list, detail) = audiobooks_parts(&test.held());
+    assert_eq!(list.lib_idx, 0);
+    assert!(!list.loading && !list.failed);
+    let ids: Vec<&str> = list.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
         ["book-a", "book-b"],
         "the rows are the catalog in its order"
     );
-    let letters: Vec<char> = audiobooks.rows.iter().map(|row| row.sort_letter).collect();
+    let letters: Vec<char> = list.rows.iter().map(|row| row.sort_letter).collect();
     assert_eq!(
         letters,
         ['A', 'F'],
         "the rail letters read the author sort keys"
     );
     assert_eq!(
-        audiobooks.selected.as_deref(),
+        detail.selected.as_deref(),
         Some("book-a"),
         "the first book is the Hero default"
     );
-    let hero = audiobooks.hero.expect("the Hero paints");
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Austen's End");
     let texts: Vec<String> = hero
         .meta_rows
@@ -201,7 +209,7 @@ fn the_frame_carries_the_book_list_after_the_open() {
 
 /// A select moves the Hero and its Workspace (row 9.1): the select command
 /// stores the pick, the next frame's Hero shows that book, and the seeded
-/// detail's chapters ride the Workspace with no current mark.
+/// detail's chapters ride the Workspace with their spans (design D5).
 #[test]
 fn the_select_command_moves_the_hero_and_workspace() {
     let (mut test, _cmd_rx) = seeded_audiobooks_core();
@@ -214,9 +222,9 @@ fn the_select_command_moves_the_hero_and_workspace() {
         },
     );
 
-    let audiobooks = audiobooks_of(library_of(test.next_frame()));
-    assert_eq!(audiobooks.selected.as_deref(), Some("book-b"));
-    let hero = audiobooks.hero.expect("the Hero paints");
+    let (_, detail) = audiobooks_parts(&test.held());
+    assert_eq!(detail.selected.as_deref(), Some("book-b"));
+    let hero = detail.hero.expect("the Hero paints");
     assert_eq!(hero.title, "Bovary");
     let workspace = hero
         .workspace
@@ -227,7 +235,18 @@ fn the_select_command_moves_the_hero_and_workspace() {
         .map(|row| row.title.as_str())
         .collect();
     assert_eq!(titles, ["Chapter One", "Chapter Two"]);
-    assert!(workspace.rows.iter().all(|row| !row.current));
+    // The spans ride in ticks (design D5): the window marks the row whose
+    // span holds the playhead position, from the playing book id the frame
+    // carries.
+    let minutes = 60 * mbv_emby_model::TICKS_PER_SECOND;
+    assert_eq!(workspace.rows[0].start_ticks, 0);
+    assert_eq!(workspace.rows[0].end_ticks, 30 * minutes);
+    assert_eq!(workspace.rows[1].start_ticks, 30 * minutes);
+    assert_eq!(workspace.rows[1].end_ticks, 60 * minutes);
+    assert_eq!(
+        detail.playing_book_id, None,
+        "no book plays, so the frame names no playing book"
+    );
 }
 
 /// The play and queue commands reach the Owner through the admission (row
@@ -280,9 +299,10 @@ fn a_denied_owner_submits_nothing_and_flashes_the_owner_unavailable_toast() {
     );
 
     let toast = test
-        .next_frame()
-        .status
+        .held()
+        .status()
         .toast
+        .clone()
         .expect("the refusal flashed a toast");
     assert_eq!(toast.text, "Audiobookshelf playback owner is unavailable");
 }
@@ -302,5 +322,5 @@ fn a_stale_book_id_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(test.next_frame().status.toast.is_none());
+    assert!(test.held().status().toast.is_none());
 }

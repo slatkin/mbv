@@ -4,7 +4,7 @@
 //!
 //! Search is cross-destination — its rows name items in any destination and
 //! the activate command opens the one the row names — so it rides the
-//! `GuiLibraryFrame` itself, beside the revision-gated content and never
+//! the Search section of the batch, beside the Library content and never
 //! inside it: a result that lands between two content changes still reaches
 //! the window, and a closed field rides as the section's `null`.
 
@@ -48,36 +48,30 @@ pub struct GuiSearchRowFrame {
 }
 
 impl GuiSearchFrame {
-    /// The Search section `projection` describes, or `None` while the store
-    /// holds no query and no row (design D12, row 12.1): a closed field must
-    /// ride as the section's `null`, not as an empty one.
-    pub(crate) fn carried(projection: &GuiSearchProjection) -> Option<Self> {
-        (!projection.query.is_empty() || !projection.rows.is_empty())
-            .then(|| Self::from_projection(projection))
-    }
-
-    /// The section for `projection`.
-    pub(crate) fn from_projection(projection: &GuiSearchProjection) -> Self {
+    /// The section for `projection` (design D10). The projection's rows move
+    /// into the frame, so they are not cloned a second time. The caller maps
+    /// an absent projection to the section's `null` while the store is closed.
+    pub(crate) fn from_projection(projection: GuiSearchProjection) -> Self {
         Self {
-            query: projection.query.clone(),
+            query: projection.query,
             loading: projection.loading,
             failed: projection.failed,
             results: projection
                 .rows
-                .iter()
+                .into_iter()
                 .map(GuiSearchRowFrame::from)
                 .collect(),
         }
     }
 }
 
-impl From<&GuiSearchRow> for GuiSearchRowFrame {
-    fn from(row: &GuiSearchRow) -> Self {
+impl From<GuiSearchRow> for GuiSearchRowFrame {
+    fn from(row: GuiSearchRow) -> Self {
         Self {
-            id: row.id.clone(),
-            item_type: row.item_type.clone(),
-            title: row.title.clone(),
-            subtitle: row.subtitle.clone().unwrap_or_default(),
+            id: row.id,
+            item_type: row.item_type,
+            title: row.title,
+            subtitle: row.subtitle.unwrap_or_default(),
         }
     }
 }

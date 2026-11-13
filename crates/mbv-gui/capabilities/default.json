@@ -9,6 +9,7 @@
     "allow-report-layout",
     "allow-library",
     "allow-settings",
+    "allow-sync",
     "core:event:allow-listen"
   ]
 }

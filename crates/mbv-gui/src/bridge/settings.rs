@@ -3,7 +3,7 @@
 //! neutral [`mbv::GuiSettingsCommand`] this module builds from it is what the
 //! Client core applies. Identities are stable — a setting name, a playlist id,
 //! a feed URL, a chord — never row positions, so a command built from a stale
-//! frame addresses what that frame painted or nothing.
+//! window addresses what that window painted or nothing.
 
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::SettingKey;
@@ -164,7 +164,7 @@ impl From<GuiPlaylistAction> for MusicTreeAction {
 
 /// Translate the wire form into the neutral command (design D5). `None` for a
 /// request this build cannot address — a setting name no `SettingKey`
-/// declares — so a stale frame's edit reaches nothing.
+/// declares — so a stale window's edit reaches nothing.
 #[must_use]
 pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
     Some(match command {

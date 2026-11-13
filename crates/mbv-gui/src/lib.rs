@@ -2,11 +2,10 @@
 //! of `add-tauri-gui-client`) and the bridge between the window's front end
 //! and the Rust Client core (design D4).
 
-pub mod artwork;
+pub mod art;
 pub mod attach;
 pub mod bridge;
 pub mod core_thread;
 mod leaves;
-mod library_frames;
 mod painted_choices;
-pub mod trickplay;
+pub mod sections;

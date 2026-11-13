@@ -1,4 +1,4 @@
-//! The Queue footer and Status bar sections of a frame (design D4). Each type
+//! The Queue footer and Status bar sections (design D4). Each type
 //! mirrors one library projection, so the front end paints what the Clients
 //! paint from the same rules.
 
@@ -61,7 +61,7 @@ impl From<&FooterPill> for GuiFooterPill {
     }
 }
 
-/// The Status bar's facts for one frame, mirroring `StatusBarProjection`.
+/// The Status bar's facts for one section value, mirroring `StatusBarProjection`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiStatusBar {

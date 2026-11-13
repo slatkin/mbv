@@ -11,7 +11,7 @@
 
 import type {
 	GuiShowsEpisodeRow,
-	GuiShowsFrame,
+	GuiShowsList,
 	GuiShowsMode,
 	GuiShowsRow,
 	GuiShowsSeries,
@@ -26,6 +26,7 @@ import {
 	moveCursor,
 } from './list';
 import type { ListMove } from './list';
+import { memoRows } from './row-memo';
 
 /** The letter heading row's height in logical pixels: the Music list's letter
  * heading, which the All series list reuses. */
@@ -146,7 +147,7 @@ export function episodeRowId(episodeId: string): string {
 /** The active view mode: the pill the core marked selected. A frame that
  * marks none falls back to the rows' own shape — the tree-carrying frame is
  * the All series list — so the list always has one mode. */
-export function activeShowsMode(shows: GuiShowsFrame): GuiShowsMode {
+export function activeShowsMode(shows: GuiShowsList): GuiShowsMode {
 	const selected = shows.pills.find((pill) => pill.selected);
 	if (selected !== undefined) {
 		return selected.mode;
@@ -177,7 +178,7 @@ export function showsSeriesMode(mode: GuiShowsMode): boolean {
  * native scroll.
  */
 export function buildShowsRows(
-	shows: GuiShowsFrame,
+	shows: GuiShowsList,
 	mode: GuiShowsMode,
 	filter = '',
 	tree: ShowsTreeState = { open: [], closed: [] },
@@ -348,3 +349,15 @@ export function moveShowsCursor(
 export function showsLetterRail(rows: readonly ShowsListRow[]): RailLetter[] {
 	return letterRail(rows, (row) => (row.kind === 'series' ? row.letter : null));
 }
+
+/** The Shows rows, memoized on the carried content, the view mode, the filter,
+ * and the tree's open and closed nodes (design D9). */
+export const showsRowsOf = memoRows(
+	(
+		shows: GuiShowsList,
+		mode: GuiShowsMode,
+		filter: string,
+		open: readonly string[],
+		closed: readonly string[],
+	): ShowsListRow[] => buildShowsRows(shows, mode, filter, { open, closed }),
+);

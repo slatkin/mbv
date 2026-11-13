@@ -10,15 +10,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, showsScroll } from '$lib/library/scroll';
 import type {
-	GuiShowsFrame,
+	GuiShowsDetail,
+	GuiShowsList,
 	GuiShowsMode,
 	GuiShowsPill,
 	GuiShowsRow,
 	GuiShowsSeries,
 } from '$lib/bridge/types';
 import { showsUi, initialShowsUi } from '$lib/library/shows';
-import { carryLibraryContent } from '$lib/library/state';
+import { carryLibrary } from '$lib/bridge/test-library';
 import LibraryShowsList from './LibraryShowsList.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -59,19 +61,21 @@ function showsFrame(
 	mode: GuiShowsMode,
 	rows: GuiShowsRow[],
 	tree: GuiShowsSeries[] = [],
-): GuiShowsFrame {
+): GuiShowsList {
 	return {
 		libIdx: 0,
 		pills: pills(mode),
 		collectionNames: [mode],
 		loading: false,
-		workspaceLoading: false,
 		series: tree,
 		upcomingFailed: false,
 		rows,
-		selected: rows[0]?.id ?? null,
-		hero: null,
 	};
+}
+
+/** The Shows detail part: the first row selected, and no Hero painted here. */
+function showsDetail(rows: GuiShowsRow[]): GuiShowsDetail {
+	return { workspaceLoading: false, selected: rows[0]?.id ?? null, hero: null };
 }
 
 /** The All series mode's tree (design D14): Atlanta with one season, then
@@ -110,7 +114,8 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	showsUi.set(initialShowsUi());
-	carryLibraryContent({ revision: 1, search: null, content: null });
+	showsScroll.set(initialListScroll());
+	carryLibrary(null);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -124,14 +129,14 @@ async function mountList(
 	tree: GuiShowsSeries[] = [],
 ): Promise<HTMLElement> {
 	const shows = showsFrame(mode, rows, tree);
-	carryLibraryContent({
-		revision: 1,
-		search: null,
-		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null, audiobooks: null, podcasts: null, feeds: null, rowMenu: null },
+	const detail = showsDetail(rows);
+	carryLibrary({
+		list: { tabs: [], currentTab: 2, destination: { kind: 'shows', ...shows } },
+		detail: { kind: 'shows', ...detail },
 	});
-	const { container } = render(LibraryShowsList, { shows });
-	const list = container.querySelector<HTMLElement>('[data-library-shows-list]');
-	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
+	const { container } = render(LibraryShowsList, { list: shows, detail });
+	const listEl = container.querySelector<HTMLElement>('[data-library-shows-list]');
+	Object.defineProperty(listEl, 'clientHeight', { value: viewportHeight, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();
 	tick();
 	return container;

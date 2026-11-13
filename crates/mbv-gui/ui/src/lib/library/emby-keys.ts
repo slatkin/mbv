@@ -14,11 +14,11 @@
 // play-next.
 
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiEmbyFeedGroup, GuiEmbyFrame } from '$lib/bridge/types';
+import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { routePanelListKey } from './keys-shared';
 import type { PanelKeys } from './keys-shared';
 import type { LibraryUiState } from './state';
-import { libraryEmby } from './state';
+import { libraryEmbyDetail, libraryEmbyList } from './parts';
 import {
 	embyCursorRow,
 	focusedEmbyPill,
@@ -34,16 +34,16 @@ import type { EmbyItemRow } from './emby-list';
 /** The Emby facts the shared panel key handler routes over (row 7C.2): the
  * feed-group pills are painted in feed-group mode only, the item the play
  * and queue commands name is the row's item, and `n` plays it next. */
-const EMBY_KEYS: PanelKeys<GuiEmbyFrame, EmbyItemRow, GuiEmbyFeedGroup> = {
-	frame: libraryEmby,
+const EMBY_KEYS: PanelKeys<GuiEmbyList, EmbyItemRow, GuiEmbyFeedGroup> = {
+	frame: libraryEmbyList,
 	pills: {
 		available: (emby) => emby.feedGroup,
 		focused: focusedEmbyPill,
 		request: requestEmbyPillSelect,
 		moveFocus: moveEmbyPillFocus,
 	},
-	hasHero: (emby) => emby.hero !== null,
-	selectedItemId: (emby) => emby.selected,
+	hasHero: () => (libraryEmbyDetail()?.hero ?? null) !== null,
+	selectedItemId: () => libraryEmbyDetail()?.selected ?? null,
 	cursorRow: embyCursorRow,
 	itemId: (row) => row.row.id,
 	moveListCursor: moveEmbyListCursor,

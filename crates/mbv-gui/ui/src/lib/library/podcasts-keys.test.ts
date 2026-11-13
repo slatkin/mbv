@@ -10,11 +10,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { initialListScroll, podcastsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type {
-	GuiLibraryContent,
 	GuiPanel,
-	GuiPodcastsFrame,
+	GuiPodcastsDetail,
 	GuiPodcastsPill,
 } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
@@ -25,7 +25,10 @@ import {
 	podcastsCursorRow,
 	podcastsUi,
 } from './podcasts';
-import { carryLibraryContent, initialLibraryUi, libraryUi } from './state';
+import { libraryList } from '$lib/bridge/sections';
+import { carryLibrary } from '$lib/bridge/test-library';
+import type { LibrarySections } from '$lib/bridge/test-library';
+import { initialLibraryUi, libraryUi } from './state';
 import type { LibraryPane } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -34,7 +37,8 @@ beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
 	podcastsUi.set(initialPodcastsUi());
-	carryLibraryContent(null);
+	podcastsScroll.set(initialListScroll());
+	carryLibrary(null);
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
@@ -45,7 +49,8 @@ function frame(panel: GuiPanel = 'library'): LibraryKeyFrame {
 		status: { prefixArmed: false, toast: null },
 		summary: { filterActive: false },
 		settings: null,
-		library: { revision: 1, search: null, content: null },
+		libraryList: get(libraryList),
+		search: null,
 	};
 }
 
@@ -95,7 +100,7 @@ function pills(selected: 'latest' | 'show'): GuiPodcastsPill[] {
 }
 
 /** The episode Hero a selected episode paints (design D12, row 10.1). */
-const HERO: NonNullable<GuiPodcastsFrame['hero']> = {
+const HERO: NonNullable<GuiPodcastsDetail['hero']> = {
 	title: 'Episode A',
 	metaRows: [[{ text: 'Show One', kind: 'plain' }], [{ text: '34:00', kind: 'time' }]],
 	durationRow: 1,
@@ -110,41 +115,36 @@ const HERO: NonNullable<GuiPodcastsFrame['hero']> = {
 function podcastsContent(
 	pillSelection: 'latest' | 'show',
 	rows: typeof EPISODES,
-	hero: NonNullable<GuiPodcastsFrame['hero']> | null = null,
+	hero: NonNullable<GuiPodcastsDetail['hero']> | null = null,
 	selected: string | null = rows[0]?.id ?? null,
-): GuiLibraryContent {
+): LibrarySections {
 	return {
-		tabs: [
-			{ position: 1, label: 'Music' },
-			{ position: 2, label: 'Podcasts' },
-		],
-		currentTab: 2,
-		music: null,
-		home: null,
-		emby: null,
-		audiobooks: null,
-		podcasts: {
-			libIdx: 0,
-			pills: pills(pillSelection),
-			loading: false,
-			failed: false,
-			rows,
-			selected,
-			hero,
+		list: {
+			tabs: [
+				{ position: 1, label: 'Music' },
+				{ position: 2, label: 'Podcasts' },
+			],
+			currentTab: 2,
+			destination: {
+				kind: 'podcasts',
+				libIdx: 0,
+				pills: pills(pillSelection),
+				loading: false,
+				failed: false,
+				rows,
+			},
 		},
-		feeds: null,
-		rowMenu: null,
-		shows: null,
+		detail: { kind: 'podcasts', selected, hero },
 	};
 }
 
 /** Carry the Podcasts content and focus the pane the key acts on. */
 function carryPodcasts(
-	content: GuiLibraryContent,
+	content: LibrarySections,
 	pane: LibraryPane,
 	cursor: string | null = null,
 ): void {
-	carryLibraryContent({ revision: 1, search: null, content });
+	carryLibrary(content);
 	libraryUi.update((ui) => ({ ...ui, pane }));
 	podcastsUi.set({ ...initialPodcastsUi(), cursor });
 }
@@ -218,7 +218,7 @@ test('the pill walk keeps its place when the frame re-carries equal pills', () =
 	podcastsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'show', id: 'sh1' } }));
 
 	// A new frame: structurally equal pills, all fresh objects.
-	carryLibraryContent({ revision: 2, search: null, content: podcastsContent('show', EPISODES) });
+	carryLibrary(podcastsContent('show', EPISODES));
 
 	press('ArrowRight');
 

@@ -8,16 +8,16 @@
 //! answers come from the in-memory mock transport, so no request leaves the
 //! process and no live Service runs (design D13).
 
+use crate::Held;
 use mbv::{ClientTickHost, GuiDestinationKind};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::GuiFrame;
-use mbv_gui::bridge::frame::library::GuiSearchFrame;
+use mbv_gui::bridge::frame::library::{GuiDestinationList, GuiSearchFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::{LIB_EVENT_BOUND, library_of, send_library};
+use super::{LIB_EVENT_BOUND, list_of, send_library};
 use crate::{TestCore, test_core_with, test_emby_client};
 
 /// The query the tests type into the field.
@@ -38,17 +38,23 @@ const MOVIE: &str = r#"{"Id":"m-blue","Name":"Blue Train","Type":"Movie","MediaT
 
 /// A core over an App whose Search field has sent `QUERY`, with the Emby
 /// Service attached and a Movies library beside the seeded Music one. The
-/// query lands while no Service is attached, so the production worker starts
-/// nothing and the seam owns the result the test asserts.
+/// query applies after the Service attaches, so the production search worker
+/// starts one request. The mock answers it with no script, so the worker stalls
+/// and its result never lands: the seam owns the result the test asserts.
 fn search_core(http: &MockHttp) -> TestCore {
     let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SearchQuery {
-            query: QUERY.into(),
-        },
-    );
+    // The query is queued before the libraries are seeded, and the step that
+    // applies it runs after the seeds: every App change lands inside a tick that
+    // carries an input, so the section audit sees each change marked.
+    test.tx
+        .send(mbv_gui::core_thread::CoreInput::Library(
+            GuiLibraryCommand::SearchQuery {
+                query: QUERY.into(),
+            }
+            .into(),
+        ))
+        .unwrap();
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
     core.push_gui_library_tab_for_test(EmbyItem::folder(
@@ -56,6 +62,7 @@ fn search_core(http: &MockHttp) -> TestCore {
         "Movies".into(),
         "movies".into(),
     ));
+    assert!(test.core.step());
     test
 }
 
@@ -88,9 +95,10 @@ fn land_result(test: &mut TestCore) {
 }
 
 /// The Search section a frame carries (row 12.1).
-fn search_of(frame: GuiFrame) -> GuiSearchFrame {
-    library_of(frame)
-        .search
+fn search_of(frame: &Held) -> GuiSearchFrame {
+    frame
+        .search()
+        .cloned()
         .expect("the frame carries the Search section")
 }
 
@@ -120,12 +128,12 @@ fn pump_until_movies_destination(test: &mut TestCore) {
 /// The newest frame, built with the Library content re-carried by a layout
 /// report, as a window content reload sends one: the read sees the destination
 /// the activation opened, whatever the memo carried before.
-fn reloaded_frame(test: &mut TestCore) -> GuiFrame {
+fn reloaded_frame(test: &mut TestCore) -> Held {
     test.tx
         .send(crate::measured_layout(10, Vec::new()))
         .unwrap();
     assert!(test.core.step(), "the core thread never quits mid-drain");
-    test.latest_frame().expect("the report emitted a frame")
+    test.held()
 }
 
 /// Contract: a landed query fills the store the GUI tick host drains, and the
@@ -137,7 +145,7 @@ fn the_search_result_reaches_the_next_frame() {
     let mut test = search_core(&http);
     land_result(&mut test);
 
-    let search = search_of(test.latest_frame().expect("the drain emitted a frame"));
+    let search = search_of(&test.held());
     assert_eq!(search.query, QUERY);
     assert!(!search.loading);
     assert!(!search.failed);
@@ -156,7 +164,7 @@ fn activating_a_result_opens_its_destination() {
     script_navigation(&http);
     let mut test = search_core(&http);
     land_result(&mut test);
-    let row = search_of(test.latest_frame().expect("the drain emitted a frame"))
+    let row = search_of(&test.held())
         .results
         .first()
         .cloned()
@@ -189,16 +197,12 @@ fn activating_a_result_opens_its_destination() {
         "the TUI's navigation landed the library level on the activated item"
     );
     let frame = reloaded_frame(&mut test);
-    let library = library_of(frame);
     assert!(
-        library
-            .content
-            .as_ref()
-            .is_some_and(|content| content.emby.is_some()),
+        list_of(&frame).is_some_and(|list| matches!(list.destination, GuiDestinationList::Emby(_))),
         "the frame paints the activated row's destination"
     );
     assert!(
-        library.search.is_none(),
+        frame.search().is_none(),
         "the activation closes the results, as the TUI's dismiss unmounts them"
     );
 }
@@ -210,14 +214,14 @@ fn the_close_command_clears_the_section() {
     let http = MockHttp::new();
     let mut test = search_core(&http);
     land_result(&mut test);
-    let landed = search_of(test.latest_frame().expect("the drain emitted a frame"));
+    let landed = search_of(&test.held());
     assert_eq!(landed.results.len(), 1, "the result list holds the row");
 
     send_library(&mut test, GuiLibraryCommand::SearchClose);
 
-    let frame = test.latest_frame().expect("the close emitted a frame");
+    let frame = test.held();
     assert!(
-        library_of(frame).search.is_none(),
+        frame.search().is_none(),
         "the closed Search rides as the section's null"
     );
 }

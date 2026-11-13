@@ -17,6 +17,11 @@
 	// `$lib/library/home`, and `$lib/library/shows`, and its keys in
 	// `$lib/library/keys`, so this shell holds no state of its own.
 	//
+	// The panel reads the `libraryList`, `libraryDetail`, and `rowMenu` sections
+	// (gui-change-driven-sections design D8). Each destination's painters take
+	// the list part and the detail part they read, narrowed together by
+	// `libraryPair`.
+	//
 	// A press inside the panel sends the take-focus command (design D4): the
 	// core sets the focus stack and Panel focus together, and the press that
 	// follows acts on the row. The panel paints through the GUI-local
@@ -27,24 +32,18 @@
 	// D3). The panel also reports the arrangement it paints, so the router
 	// closes an overlay only where one actually paints.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
-	import type { GuiLibraryRowMenu } from '$lib/bridge/types';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
-import type {
-GuiAudiobooksFrame,
-GuiEmbyFrame,
-GuiFeedsFrame,
-GuiHomeFrame,
-GuiLibraryTab,
-GuiMusicFrame,
-GuiPodcastsFrame,
-GuiSearchFrame,
-GuiShowsFrame,
-GuiStatusBar,
-} from '$lib/bridge/types';
-import LibraryAudiobooksHero from './LibraryAudiobooksHero.svelte';
-import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
-import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
+	import {
+		libraryDetail,
+		libraryList,
+		rowMenu,
+		search as searchSection,
+		status as statusSection,
+	} from '$lib/bridge/sections';
+	import LibraryAudiobooksHero from './LibraryAudiobooksHero.svelte';
+	import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
+	import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	import LibraryEmbyList from '$lib/components/LibraryEmbyList.svelte';
 	import LibraryEmbyPills from '$lib/components/LibraryEmbyPills.svelte';
 	import LibraryFeedsHero from '$lib/components/LibraryFeedsHero.svelte';
@@ -55,9 +54,9 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	import LibraryHomeList from '$lib/components/LibraryHomeList.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
-import LibraryPodcastsHero from '$lib/components/LibraryPodcastsHero.svelte';
-import LibraryPodcastsList from '$lib/components/LibraryPodcastsList.svelte';
-import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
+	import LibraryPodcastsHero from '$lib/components/LibraryPodcastsHero.svelte';
+	import LibraryPodcastsList from '$lib/components/LibraryPodcastsList.svelte';
+	import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 	import LibraryShowsHero from '$lib/components/LibraryShowsHero.svelte';
 	import LibraryShowsList from '$lib/components/LibraryShowsList.svelte';
 	import LibraryShowsPills from '$lib/components/LibraryShowsPills.svelte';
@@ -65,6 +64,7 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
 	import PanelDivider from '$lib/components/PanelDivider.svelte';
 	import QueueRowMenu from '$lib/components/QueueRowMenu.svelte';
+	import { libraryPair } from '$lib/library/parts';
 	import {
 		closeLibraryHero,
 		closeLibraryRowMenu,
@@ -74,48 +74,6 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 	} from '$lib/library/state';
 
 	interface Props {
-		/** The presented destination tabs and the active one (design D2): the
-		 * top bar paints them. */
-		tabs: GuiLibraryTab[];
-		currentTab: number | null;
-		/** The carried Music content (design D2): the picked collections, the
-		 * union list, and the Hero; `null` while another destination is
-		 * active. */
-		music: GuiMusicFrame | null;
-		/** The carried Home content (design D12): the flat list and the
-		 * Hero; `null` while another destination is active. */
-		home?: GuiHomeFrame | null;
-		/** The carried Shows content (design D12, row 7.1): the mode pills, the
-		 * active mode's list, and the selected row's Hero with its Workspace;
-		 * `null` while another destination is active. */
-		shows?: GuiShowsFrame | null;
-		/** The carried plain Emby-library content (design D12, row 8.1): the
-		 * feed-group mode's pills, the active list, and the selected row's Hero
-		 * with no Workspace; `null` while another destination is active. */
-		emby?: GuiEmbyFrame | null;
-		/** The carried Audiobooks content (design D12, row 9.1): the catalog's
-		 * book list and the selected book's Hero with its chapters Workspace;
-		 * `null` while another destination is active. */
-		audiobooks?: GuiAudiobooksFrame | null;
-		/** The carried Podcasts content (design D12, row 10.1): the episode
-		 * pills, the active view's date-gutter list, and the selected episode's
-		 * Hero with no Workspace; `null` while another destination is active. */
-		podcasts?: GuiPodcastsFrame | null;
-		/** The carried Feeds content (design D12, row 11.1): the view pills,
-		 * the active pill's date-gutter list, and the selected entry's Hero
-		 * with no Workspace; `null` while another destination is active. */
-		feeds?: GuiFeedsFrame | null;
-		/** The carried Search facts (design D12, row 12.1): the results dropdown
-		 * the top bar paints under its field; `null` while the section is
-		 * closed. */
-		search?: GuiSearchFrame | null;
-		/** The right-click item menu the window content last opened (design
-		 * D8, D15), whichever destination's row named it; `null` while no
-		 * right-click has named an item. */
-		rowMenu: GuiLibraryRowMenu | null;
-		/** The frame's Status bar facts (design D10): the armed prefix and the
-		 * live toast, which the Status bar replaces the hints with. */
-		status: GuiStatusBar;
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
 		/** The list column's painted width (design D4): the session's dragged
@@ -124,57 +82,38 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		/** The Library column the list column sits in: the drag's clamp. */
 		libraryColumn: number;
 	}
-	const {
-		tabs,
-		currentTab,
-		music,
-		home = null,
-		shows = null,
-		emby = null,
-		audiobooks = null,
-		podcasts = null,
-		feeds = null,
-		search = null,
-		rowMenu,
-		status,
-		arrangement,
-		listWidth,
-		libraryColumn,
-	}: Props = $props();
+	const { arrangement, listWidth, libraryColumn }: Props = $props();
+
+	/** The presented destination tabs and the active one (design D2): the
+	 * top bar paints them. */
+	const tabs = $derived($libraryList?.tabs ?? []);
+	/** The active tab's position, or `null` while the active destination is
+	 * not one of the tabs. */
+	const currentTab = $derived($libraryList?.currentTab ?? null);
+	/** The active destination's list part (design D8); `null` while no Library
+	 * panel shows. */
+	const list = $derived($libraryList?.destination ?? null);
+	/** The active destination's list and detail parts, narrowed together on the
+	 * destination's kind (design D8); `null` while no Library panel shows. */
+	const pair = $derived(libraryPair(list, $libraryDetail));
+	/** The Search section's results (design D12, row 12.1): the results
+	 * dropdown the top bar paints under its field; `null` while the section
+	 * is closed. */
+	const search = $derived($searchSection);
+	/** The right-click item menu the window last opened (design D8, D15),
+	 * whichever destination's row named it; `null` while no right-click has
+	 * named an item. */
+	const menu = $derived($rowMenu);
+	/** The Status bar section's facts (design D10): the armed prefix and the
+	 * live toast, which the Status bar replaces the hints with. */
+	const status = $derived($statusSection);
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');
 
-	/** The Narrow Hero overlay's facts, whichever destination carries them:
-	 * Music's picked album, the Home frame's selected row, the Shows frame's
-	 * selected row with its Workspace, or a plain Emby library's selected row
-	 * (design D12). */
-type OverlayHero =
-		| { kind: 'music'; music: GuiMusicFrame }
-		| { kind: 'home'; home: GuiHomeFrame }
-		| { kind: 'shows'; shows: GuiShowsFrame }
-		| { kind: 'emby'; emby: GuiEmbyFrame }
-		| { kind: 'audiobooks'; audiobooks: GuiAudiobooksFrame }
-		| { kind: 'podcasts'; podcasts: GuiPodcastsFrame }
-		| { kind: 'feeds'; feeds: GuiFeedsFrame }
-		| null;
-	const overlayHero: OverlayHero = $derived(
-		music !== null && music.hero !== null
-			? { kind: 'music', music }
-			: home !== null && home.hero !== null
-				? { kind: 'home', home }
-				: shows !== null && shows.hero !== null
-					? { kind: 'shows', shows }
-					: emby !== null && emby.hero !== null
-						? { kind: 'emby', emby }
-						: audiobooks !== null && audiobooks.hero !== null
-							? { kind: 'audiobooks', audiobooks }
-							: podcasts !== null && podcasts.hero !== null
-								? { kind: 'podcasts', podcasts }
-								: feeds !== null && feeds.hero !== null
-									? { kind: 'feeds', feeds }
-									: null,
-	);
+	/** The Narrow Hero overlay's facts: the active destination's pair while its
+	 * detail paints a Hero (design D4, D12). */
+	const overlayHero = $derived(pair !== null && pair.detail.hero !== null ? pair : null);
 
 	let panelEl: HTMLElement | undefined = $state();
 
@@ -232,28 +171,28 @@ type OverlayHero =
 	data-library-panel=""
 	data-library-arrangement={arrangement}
 >
-	<LibraryTopBar {tabs} {currentTab} {search} homeActive={home !== null} />
-	{#if music !== null}
+	<LibraryTopBar {tabs} {currentTab} {search} homeActive={pair?.kind === 'home'} />
+	{#if pair?.kind === 'music'}
 		<!-- The Music destination's pills (design D6): Home paints none
 			(design D12), so the row is absent on it, not collapsed. -->
-		<LibraryPills {music} />
-	{:else if shows !== null}
+		<LibraryPills list={pair.list} />
+	{:else if pair?.kind === 'shows'}
 		<!-- The Shows destination's mode pills (design D12, row 7.1): single
 			select over the three view modes. -->
-		<LibraryShowsPills {shows} />
-	{:else if emby !== null && emby.feedGroup}
+		<LibraryShowsPills list={pair.list} />
+	{:else if pair?.kind === 'emby' && pair.list.feedGroup}
 		<!-- The feed-group Emby library's pills (design D12, row 8.1): All and
 			each root folder that holds items. A plain library paints no pill row at
 			all — its letter rail replaces the TUI's letter-range pill row. -->
-		<LibraryEmbyPills {emby} />
-	{:else if podcasts !== null}
+		<LibraryEmbyPills list={pair.list} />
+	{:else if pair?.kind === 'podcasts'}
 		<!-- The Podcasts destination's episode pills (design D12, row 10.1):
 			single select over Latest and each show. -->
-		<LibraryPodcastsPills {podcasts} />
-	{:else if feeds !== null}
+		<LibraryPodcastsPills list={pair.list} />
+	{:else if pair?.kind === 'feeds'}
 		<!-- The Feeds destination's view pills (design D12, row 11.1):
 			single select over Latest and each subscription. -->
-		<LibraryFeedsPills {feeds} />
+		<LibraryFeedsPills list={pair.list} />
 	{/if}
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
@@ -265,43 +204,43 @@ type OverlayHero =
 				style:background="var(--canvas-library-column)"
 				style:overflow-y="auto"
 			>
-				{#if music !== null}
-					{#if music.hero}
-						<LibraryHero {music} />
+				{#if pair?.kind === 'music'}
+					{#if pair.detail.hero}
+						<LibraryHero list={pair.list} detail={pair.detail} />
 					{/if}
-				{:else if home !== null}
-					{#if home.hero !== null}
-						<LibraryHomeHero {home} />
+				{:else if pair?.kind === 'home'}
+					{#if pair.detail.hero !== null}
+						<LibraryHomeHero detail={pair.detail} />
 					{/if}
-				{:else if shows !== null}
+				{:else if pair?.kind === 'shows'}
 					<!-- The series Hero with its Workspace (design D12, row 7.1): the
 						Upcoming mode carries no Hero, so the pane stays empty there. -->
-					{#if shows.hero !== null}
-						<LibraryShowsHero {shows} />
+					{#if pair.detail.hero !== null}
+						<LibraryShowsHero list={pair.list} detail={pair.detail} />
 					{/if}
-				{:else if emby !== null}
+				{:else if pair?.kind === 'emby'}
 					<!-- The Emby library's Hero with no Workspace (design D12, row 8.1):
 						a frame without one leaves the pane empty. -->
-					{#if emby.hero !== null}
-						<LibraryEmbyHero {emby} />
+					{#if pair.detail.hero !== null}
+						<LibraryEmbyHero list={pair.list} detail={pair.detail} />
 					{/if}
-				{:else if audiobooks !== null}
+				{:else if pair?.kind === 'audiobooks'}
 					<!-- The book Hero with its chapters Workspace (design D12, row
 						9.1): a frame without one leaves the pane empty. -->
-					{#if audiobooks.hero !== null}
-						<LibraryAudiobooksHero {audiobooks} />
+					{#if pair.detail.hero !== null}
+						<LibraryAudiobooksHero list={pair.list} detail={pair.detail} />
 					{/if}
-				{:else if podcasts !== null}
+				{:else if pair?.kind === 'podcasts'}
 					<!-- The episode Hero with no Workspace (design D12, row 10.1):
 						a frame without one leaves the pane empty. -->
-					{#if podcasts.hero !== null}
-						<LibraryPodcastsHero {podcasts} />
+					{#if pair.detail.hero !== null}
+						<LibraryPodcastsHero list={pair.list} detail={pair.detail} />
 					{/if}
-				{:else if feeds !== null}
+				{:else if pair?.kind === 'feeds'}
 					<!-- The entry Hero with no Workspace (design D12, row 11.1):
 						a frame without one leaves the pane empty. -->
-					{#if feeds.hero !== null}
-						<LibraryFeedsHero {feeds} />
+					{#if pair.detail.hero !== null}
+						<LibraryFeedsHero list={pair.list} detail={pair.detail} />
 					{/if}
 				{/if}
 			</div>
@@ -327,20 +266,20 @@ type OverlayHero =
 			style:background="var(--canvas-library-panel)"
 			style:border-color="var(--canvas-border)"
 		>
-			{#if music !== null}
-				<LibraryList {music} />
-			{:else if home !== null}
-				<LibraryHomeList {home} />
-			{:else if shows !== null}
-				<LibraryShowsList {shows} />
-			{:else if emby !== null}
-				<LibraryEmbyList {emby} />
-			{:else if audiobooks !== null}
-				<LibraryAudiobooksList {audiobooks} />
-			{:else if podcasts !== null}
-				<LibraryPodcastsList {podcasts} />
-			{:else if feeds !== null}
-				<LibraryFeedsList {feeds} />
+			{#if pair?.kind === 'music'}
+				<LibraryList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'home'}
+				<LibraryHomeList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'shows'}
+				<LibraryShowsList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'emby'}
+				<LibraryEmbyList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'audiobooks'}
+				<LibraryAudiobooksList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'podcasts'}
+				<LibraryPodcastsList list={pair.list} detail={pair.detail} />
+			{:else if pair?.kind === 'feeds'}
+				<LibraryFeedsList list={pair.list} detail={pair.detail} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -372,19 +311,19 @@ type OverlayHero =
 					data-library-hero-card=""
 				>
 					{#if overlayHero.kind === 'music'}
-						<LibraryHero music={overlayHero.music} />
+						<LibraryHero list={overlayHero.list} detail={overlayHero.detail} />
 					{:else if overlayHero.kind === 'home'}
-						<LibraryHomeHero home={overlayHero.home} />
+						<LibraryHomeHero detail={overlayHero.detail} />
 					{:else if overlayHero.kind === 'shows'}
-						<LibraryShowsHero shows={overlayHero.shows} />
+						<LibraryShowsHero list={overlayHero.list} detail={overlayHero.detail} />
 					{:else if overlayHero.kind === 'audiobooks'}
-						<LibraryAudiobooksHero audiobooks={overlayHero.audiobooks} />
+						<LibraryAudiobooksHero list={overlayHero.list} detail={overlayHero.detail} />
 					{:else if overlayHero.kind === 'podcasts'}
-						<LibraryPodcastsHero podcasts={overlayHero.podcasts} />
+						<LibraryPodcastsHero list={overlayHero.list} detail={overlayHero.detail} />
 					{:else if overlayHero.kind === 'feeds'}
-						<LibraryFeedsHero feeds={overlayHero.feeds} />
+						<LibraryFeedsHero list={overlayHero.list} detail={overlayHero.detail} />
 					{:else}
-						<LibraryEmbyHero emby={overlayHero.emby} />
+						<LibraryEmbyHero list={overlayHero.list} detail={overlayHero.detail} />
 					{/if}
 				</div>
 			</div>
@@ -393,29 +332,18 @@ type OverlayHero =
 	<!-- The Library Status bar (design D10): under the list region, closing the
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
-	<LibraryStatusBar
-		{tabs}
-		{currentTab}
-		{music}
-		{home}
-		{shows}
-		{emby}
-		{audiobooks}
-		{podcasts}
-		{feeds}
-		{status}
-	/>
+	<LibraryStatusBar {tabs} {currentTab} {list} detail={$libraryDetail} {status} />
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
 		card at the pointer position, painted while the content carries the
 		named item's entries. It belongs to the Library, not to one destination
 		(design D15), so a row of any destination opens it. A press runs the
 		entry the core built, resolved by that item's stable id. -->
-	{#if rowMenu !== null && $libraryUi.rowMenu !== null}
-		{#if rowMenu.itemId === $libraryUi.rowMenu.itemId && rowMenu.entries.length > 0}
+	{#if menu !== null && $libraryUi.rowMenu !== null}
+		{#if menu.itemId === $libraryUi.rowMenu.itemId && menu.entries.length > 0}
 			<div class="fixed" style:left="0" style:top="0" style:width="0" style:height="0">
 				<QueueRowMenu
 					cursor={-1}
-					entries={rowMenu.entries}
+					entries={menu.entries}
 					top="{$libraryUi.rowMenu.y}px"
 					left="{$libraryUi.rowMenu.x}px"
 					onSelect={runLibraryRowMenuEntry}

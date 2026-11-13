@@ -288,7 +288,7 @@ impl App {
             let bitmap_cached = self
                 .images
                 .image(&cache_key)
-                .is_some_and(|entry| entry.img.is_some());
+                .is_some_and(mbv_images::CachedImage::has_art);
             if *status != ArtistArtworkStatus::Ready || bitmap_cached {
                 return;
             }
@@ -297,7 +297,7 @@ impl App {
         if let Some(entry) = self.images.image(&cache_key) {
             self.artist_artwork_status.insert(
                 key,
-                if entry.img.is_some() {
+                if entry.has_art() {
                     ArtistArtworkStatus::Ready
                 } else {
                     ArtistArtworkStatus::None

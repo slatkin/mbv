@@ -1,7 +1,7 @@
 use super::super::App;
 use super::{FetchedBytes, decode_fetched, first_image, request_failure};
 use crate::app::tests::make_app_stub;
-use mbv_images::{CachedImage, ImageFetchOutcome};
+use mbv_images::{CachedImage, ImageDecode, ImageFetchOutcome};
 use ratatui_image::picker::{Picker, ProtocolType};
 
 const BASE_KEY: &str = "hero-base";
@@ -259,11 +259,57 @@ fn resize_drag_hold_paints_a_box_matching_the_kept_encoding() {
 fn a_fetched_image_carries_the_servers_bytes_unchanged() {
     let bytes = crate::app::queue_card_artwork::test_source(&image(4, 4)).bytes;
 
-    let outcome = decode_fetched(bytes.clone());
+    let outcome = decode_fetched(bytes.clone(), ImageDecode::Pixels);
 
     let ImageFetchOutcome::Image { source, .. } = outcome else {
         panic!("a decodable image yields an image outcome: {outcome:?}");
     };
     assert_eq!(source.bytes, bytes);
     assert_eq!(source.mime, "image/png");
+}
+
+/// Design D14: only a pixel Client decodes the fetched image. Both modes keep
+/// the server's bytes and the size the header declares.
+#[rstest::rstest]
+#[case::pixel_client_decodes(ImageDecode::Pixels, true)]
+#[case::source_only_client_keeps_no_pixels(ImageDecode::SourceOnly, false)]
+fn a_fetch_decodes_pixels_only_in_a_pixel_client(
+    #[case] decode: ImageDecode,
+    #[case] decoded: bool,
+) {
+    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 3)).bytes;
+
+    let outcome = decode_fetched(bytes.clone(), decode);
+
+    let ImageFetchOutcome::Image { img, source } = outcome else {
+        panic!("a decodable image yields an image outcome: {outcome:?}");
+    };
+    assert_eq!(img.is_some(), decoded);
+    assert_eq!(source.bytes, bytes);
+    assert_eq!(source.dimensions, (4, 3));
+}
+
+/// Design D14: a source-only Client's completion lands in the cache as the
+/// source alone, and the entry still reads as art at the header's size.
+#[test]
+fn a_source_only_completion_caches_the_source_and_no_pixels() {
+    const KEY: &str = "gui-card:P";
+    let mut app = make_app_stub();
+    let bytes = crate::app::queue_card_artwork::test_source(&image(4, 3)).bytes;
+    let outcome = decode_fetched(bytes, ImageDecode::SourceOnly);
+    app.images
+        .card_image_tx()
+        .send((KEY.to_owned(), outcome))
+        .expect("the completion channel is open");
+
+    app.drain_card_image_completions();
+
+    let entry = app
+        .images
+        .image(KEY)
+        .expect("the completion lands in the cache");
+    assert!(entry.img.is_none());
+    assert!(entry.source.is_some());
+    assert!(entry.has_art());
+    assert_eq!(entry.dimensions(), Some((4, 3)));
 }

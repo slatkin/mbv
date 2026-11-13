@@ -9,7 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiHomeFrame, GuiHomeHero } from '$lib/bridge/types';
+import type { GuiHomeDetail, GuiHomeHero } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryHomeHero from './LibraryHomeHero.svelte';
 
@@ -42,14 +42,14 @@ function hero(artShape: GuiHomeHero['artShape'] = 'landscape'): GuiHomeHero {
 	};
 }
 
-/** The carried Home content with the hero picked. */
-function home(facts: GuiHomeHero): GuiHomeFrame {
-	return { loading: false, rows: [], selected: SELECTED, hero: facts };
+/** The Home detail part with the hero picked. */
+function home(facts: GuiHomeHero): GuiHomeDetail {
+	return { selected: SELECTED, hero: facts };
 }
 
 /** Render the Hero for the carried content. */
 function mountHero(facts: GuiHomeHero = hero()): HTMLElement {
-	return render(LibraryHomeHero, { home: home(facts) }).container;
+	return render(LibraryHomeHero, { detail: home(facts) }).container;
 }
 
 test('the Hero paints the title, the meta rows, and the overview, and no Workspace', () => {

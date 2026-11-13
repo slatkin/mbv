@@ -7,7 +7,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiEmbyFrame } from '$lib/bridge/types';
+import { initialListScroll, embyScroll } from '$lib/library/scroll';
+import type { GuiEmbyList } from '$lib/bridge/types';
 import { embyUi, initialEmbyUi } from '$lib/library/emby';
 import LibraryEmbyPills from './LibraryEmbyPills.svelte';
 
@@ -21,11 +22,12 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	embyUi.set(initialEmbyUi());
+	embyScroll.set(initialListScroll());
 });
 
 /** The carried Emby content in the feed-group mode with `All` selected (row
  * 8.1). */
-function embyFrame(): GuiEmbyFrame {
+function embyFrame(): GuiEmbyList {
 	return {
 		libIdx: 3,
 		libraryName: 'Movies',
@@ -43,13 +45,11 @@ function embyFrame(): GuiEmbyFrame {
 		loading: false,
 		failed: false,
 		rows: [],
-		selected: null,
-		hero: null,
 	};
 }
 
 test('the pills paint the core\u2019s selection and never none', () => {
-	const { container } = render(LibraryEmbyPills, { emby: embyFrame() });
+	const { container } = render(LibraryEmbyPills, { list: embyFrame() });
 	const pressed = [...container.querySelectorAll('[data-library-emby-pill]')].map((el) => [
 		el.getAttribute('data-library-emby-pill'),
 		el.getAttribute('aria-pressed'),
@@ -62,7 +62,7 @@ test('the pills paint the core\u2019s selection and never none', () => {
 });
 
 test('a press sends the set-feed-group command with the pill\u2019s group', async () => {
-	const { container } = render(LibraryEmbyPills, { emby: embyFrame() });
+	const { container } = render(LibraryEmbyPills, { list: embyFrame() });
 
 	await fireEvent.click(
 		container.querySelector('[data-library-emby-pill="folder:folder-1"]') as HTMLElement,
@@ -82,7 +82,7 @@ test('a press sends the set-feed-group command with the pill\u2019s group', asyn
 test('the keys\u2019 pill request sends the set-feed-group command', () => {
 	embyUi.update((ui) => ({ ...ui, pillSelect: { kind: 'folder', id: 'folder-1' } }));
 
-	render(LibraryEmbyPills, { emby: embyFrame() });
+	render(LibraryEmbyPills, { list: embyFrame() });
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: {

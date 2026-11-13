@@ -1,7 +1,7 @@
 //! The GUI Library Audiobooks projection's tests (add-gui-library-panel
 //! design D12, row 9.1): the book list's rows, letters, and default pick,
 //! the book Hero's facts and its chapter Workspace (the `Part N` fallback
-//! and the current-chapter mark included), and the play, chapter, select,
+//! and the chapter spans), and the play, chapter, select,
 //! and queue commands through the Owner's Audiobookshelf admission. The
 //! row, hero, and activation rules are the TUI's own. The Audiobookshelf
 //! boundary is the lib event channel, so no request leaves the process.
@@ -168,7 +168,21 @@ fn the_book_hero_projects_the_tui_facts_and_the_chapter_workspace() {
         "the discriminator is the chapter id"
     );
     assert_eq!(workspace.rows[0].duration, "30:00");
-    assert!(workspace.rows.iter().all(|row| !row.current));
+    // The span rides in ticks (design D5): the window marks the row whose
+    // span holds the playhead position.
+    assert_eq!(workspace.rows[0].start_ticks, 0);
+    assert_eq!(
+        workspace.rows[0].end_ticks,
+        1800 * mbv_emby_model::TICKS_PER_SECOND
+    );
+    assert_eq!(
+        workspace.rows[1].start_ticks,
+        1800 * mbv_emby_model::TICKS_PER_SECOND
+    );
+    assert_eq!(
+        workspace.rows[1].end_ticks,
+        3600 * mbv_emby_model::TICKS_PER_SECOND
+    );
 }
 
 /// A chapter's row duration is the chapter's own span, not its absolute end
@@ -246,15 +260,19 @@ fn the_workspace_falls_back_to_part_rows_without_chapters() {
         "the discriminator is the file index"
     );
     assert_eq!(workspace.rows[0].duration, "1:00");
-    assert!(workspace.rows.iter().all(|row| !row.current));
+    // An audio-part row carries no span (design D5): the window marks the
+    // row whose span holds the position, and an empty span never holds one —
+    // the TUI's part rows never light either.
+    assert_eq!(workspace.rows[0].start_ticks, 0);
+    assert_eq!(workspace.rows[0].end_ticks, 0);
 }
 
-/// The current chapter is marked while that book plays (row 9.1): the
-/// Owner's active item is the book and the playback position sits in its
-/// second chapter, derived exactly as the TUI's `WorkspaceNowPlaying::Chapter`
-/// projection derives it, and no other row carries the mark.
+/// The playing book rides the projection (design D5, D3 rule 4): the
+/// Owner's active item is the book, so the projection's `playing_book_id`
+/// names it, and the window marks the chapter row whose span holds the
+/// position while the Hero's book is that one.
 #[test]
-fn the_playing_chapter_is_marked_in_the_workspace() {
+fn the_playing_book_rides_the_projection() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app(
         &[authored_book(
@@ -295,15 +313,10 @@ fn the_playing_chapter_is_marked_in_the_workspace() {
 
     let projection = app.gui_audiobooks_projection(0);
 
-    let workspace = projection
-        .hero
-        .and_then(|hero| hero.workspace)
-        .expect("the seeded detail holds the Workspace");
-    let currents: Vec<bool> = workspace.rows.iter().map(|row| row.current).collect();
     assert_eq!(
-        currents,
-        [false, true],
-        "the chapter the position sits in is the marked one"
+        projection.playing_book_id.as_deref(),
+        Some("book-a"),
+        "the playing book's id rides the projection"
     );
 }
 

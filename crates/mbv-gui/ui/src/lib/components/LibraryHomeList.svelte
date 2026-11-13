@@ -9,15 +9,15 @@
 	//
 	// The rows paint at the fixed heights of `$lib/library/home-list` over
 	// native scroll, and only the rows in view paint, so a long list stays
-	// fast. The cursor, the scroll offset, and the viewport are the
-	// window content's own in `$lib/library/home` (design D1); this component
+	// fast. The cursor is the window content's own in `$lib/library/home`
+	// (design D1). The scroll offset and the viewport are in
+	// `$lib/library/scroll` (design D9); this component
 	// paints that state and reports the two facts only the DOM holds. A press
 	// selects the row, and a double-click plays it (design D12): the keys'
 	// Enter plays the cursor row, and the press is the selection's half.
-	import { capToNaturalSize } from '$lib/bridge/natural-size';
-	import type { GuiHomeFrame } from '$lib/bridge/types';
+	import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
 	import {
-		buildHomeRows,
+		homeRowsOf,
 		HOME_ITEM_ROW_HEIGHT,
 		homeRowKey,
 	} from '$lib/library/home-list';
@@ -31,7 +31,9 @@
 		scrollHomeList,
 		setHomeFilter,
 	} from '$lib/library/home';
+	import { homeScroll } from '$lib/library/scroll';
 	import { openRowMenuAt } from '$lib/library/state';
+	import ArtImage from './ArtImage.svelte';
 	import LibraryListHeader from './LibraryListHeader.svelte';
 	import LibraryListNotice from './LibraryListNotice.svelte';
 	import LibraryVirtualList from './LibraryVirtualList.svelte';
@@ -39,9 +41,10 @@
 
 	interface Props {
 		/** The carried Home content (design D12): the flat list's rows. */
-		home: GuiHomeFrame;
+		list: GuiHomeList;
+		detail: GuiHomeDetail;
 	}
-	const { home }: Props = $props();
+	const { list, detail }: Props = $props();
 
 	/** Open the item's right-click menu (the row-menu command): the row's own
 	 * stable id, whose item the core resolves for the shared menu (design D8,
@@ -53,7 +56,7 @@
 	/** The painted rows of the flat list (design D12): the same model
 	 * `$lib/library/home` builds from the carried content, narrowed by the
 	 * filter's text. */
-	const rows = $derived(buildHomeRows(home.rows, $homeUi.filter));
+	const rows = $derived(homeRowsOf(list.rows, $homeUi.filter));
 
 
 	/** An item row's name colour: the canvas's text tone, dimmed on a played
@@ -69,7 +72,7 @@
 	 * shows. */
 	function isSelectedRow(row: HomeListRow): boolean {
 		return (
-			row.kind === 'item' && home.selected !== null && row.id === homeRowKey(home.selected)
+			row.kind === 'item' && detail.selected !== null && row.id === homeRowKey(detail.selected)
 		);
 	}
 
@@ -106,20 +109,20 @@
 			onaccept={acceptHomeFilter}
 		/>
 	</div>
-	{#if home.loading}
+	{#if list.loading}
 		<!-- The Home content has not landed yet (design D12): one placeholder
 		line holds the list's place, as the TUI's loading slot does. -->
 		<LibraryListNotice text="Loading…" attr="data-library-home-loading" />
 	{/if}
-	{#if !home.loading && home.rows.length === 0}
+	{#if !list.loading && list.rows.length === 0}
 		<!-- Home holds nothing to play: one line says so, as the Music list's
 		empty line does. -->
 		<LibraryListNotice text="Nothing to play" attr="data-library-home-empty" />
 	{/if}
 	<LibraryVirtualList
 		{rows}
-		scrollTop={$homeUi.scrollTop}
-		viewportHeight={$homeUi.viewportHeight}
+		scrollTop={$homeScroll.scrollTop}
+		viewportHeight={$homeScroll.viewportHeight}
 		attr="home"
 		onmeasure={measureHomeList}
 		onscroll={scrollHomeList}
@@ -159,9 +162,9 @@
 					oncontextmenu={(event) => rowMenu(event, row)}
 				>
 					{#if row.art !== null}
-						<!-- The row's card art (design D12): the frame's data URL, or
-							the art box while the cache still encodes it. The rows without
-							art paint no box at all. -->
+						<!-- The row's card art (design D12): the frame's image reference,
+							or the empty box while it is loading. The rows without art paint
+							no box at all. -->
 						<span
 							class="flex flex-none items-center justify-center"
 							style:width="40px"
@@ -171,14 +174,7 @@
 							style:overflow="hidden"
 							data-library-home-art={row.art.kind}
 						>
-							{#if row.art.kind !== 'loading'}
-								<img
-									class="h-full w-full object-cover"
-									src={row.art.detail}
-									alt=""
-									use:capToNaturalSize
-								/>
-							{/if}
+							<ArtImage art={row.art} alt="" class="h-full w-full object-cover" />
 						</span>
 					{/if}
 					<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">

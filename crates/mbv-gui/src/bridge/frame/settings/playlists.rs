@@ -1,4 +1,4 @@
-//! The Playlists section's frame content (`add-gui-settings-screen` design D9):
+//! The Playlists section's content (`add-gui-settings-screen` design D9):
 //! the saved playlists with their item counts, the open playlist and its items,
 //! and the two loading flags.
 

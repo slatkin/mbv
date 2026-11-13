@@ -12,16 +12,15 @@
 use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_abs_book;
 use mbv_emby_model::saturating_i64_from_f64;
+use mbv_emby_model::seconds_to_ticks;
 use mbv_ui_model::audiobookshelf_browse::BookRow;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_item;
-use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 use super::GuiLibraryArtwork;
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
-use crate::app::shell::now_playing::derive_workspace_now_playing;
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
 
 /// One row of the book list (row 9.1). The identity is the book's stable
@@ -86,7 +85,10 @@ pub struct GuiAudiobooksWorkspace {
 /// chapter-row projection (`book_content::chapter_rows`). The chapter value
 /// is the stable Service discriminator the TUI's chapter activation
 /// addresses — the chapter number on a chapter row, the audio-part index on
-/// a `Part N` row — never a display position.
+/// a `Part N` row — never a display position. The current-chapter mark is
+/// not here (design D5): the rows carry the chapter's span instead, and the
+/// window marks the row whose span holds the playhead position while the
+/// Hero's book is the playing book.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiAudiobooksChapterRow {
     /// The row's stable Service discriminator.
@@ -95,11 +97,12 @@ pub struct GuiAudiobooksChapterRow {
     pub title: String,
     /// The row's duration, the TUI's duration gutter; empty when unknown.
     pub duration: String,
-    /// Whether this chapter is playing: the Owner's active item is this
-    /// book and the playback position sits in this chapter, derived exactly
-    /// as the TUI's `WorkspaceNowPlaying::Chapter` projection derives it.
-    /// An audio-part row never carries it, as the TUI's rows never light.
-    pub current: bool,
+    /// The chapter's start on the book's merged timeline, in ticks. An
+    /// audio-part row carries no span — an empty one never holds the
+    /// position — as the TUI's part rows never light.
+    pub start_ticks: i64,
+    /// The chapter's end on the book's merged timeline, in ticks.
+    pub end_ticks: i64,
 }
 
 /// The Audiobooks projection the GUI Library panel paints (row 9.1): the
@@ -126,6 +129,12 @@ pub struct GuiAudiobooksProjection {
     /// Whether the selected book's detail fetch has not landed yet: the
     /// Workspace's loading state.
     pub workspace_loading: bool,
+    /// The Audiobooks book playing at the playhead (design D5, D3 rule 4):
+    /// its stable `library_item_id`, the same fact the playhead marks sample.
+    /// The window marks the chapter row whose span holds the position while
+    /// the Hero's book is this one. `None` while no book plays or the active
+    /// slot is pending.
+    pub playing_book_id: Option<String>,
 }
 
 impl App {
@@ -149,7 +158,6 @@ impl App {
         if !self.gui_abs_book_library(lib_idx) {
             return GuiAudiobooksProjection::default();
         }
-        let now_playing = derive_workspace_now_playing(self);
         let Some(state) = self.audiobookshelf_book_browse.get(lib_idx) else {
             return GuiAudiobooksProjection {
                 loading: true,
@@ -167,7 +175,7 @@ impl App {
             .is_some_and(|pick| state.detail_loading_ids.contains_key(pick));
         let hero = selected
             .as_deref()
-            .and_then(|pick| self.gui_abs_hero(lib_idx, pick, now_playing.as_ref()));
+            .and_then(|pick| self.gui_abs_hero(lib_idx, pick));
         GuiAudiobooksProjection {
             loading,
             failed,
@@ -175,6 +183,7 @@ impl App {
             selected,
             hero,
             workspace_loading,
+            playing_book_id: self.gui_playing_book_id(),
         }
     }
 
@@ -185,12 +194,7 @@ impl App {
     /// `resolved_hero_data` builds them (design D15) — the cover fetched
     /// through the Service-scoped book cover chain, and the Workspace the
     /// book's detail holds.
-    fn gui_abs_hero(
-        &mut self,
-        lib_idx: usize,
-        book_id: &str,
-        now_playing: Option<&WorkspaceNowPlaying>,
-    ) -> Option<GuiAudiobooksHero> {
+    fn gui_abs_hero(&mut self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksHero> {
         let state = self.audiobookshelf_book_browse.get(lib_idx)?;
         let book = audiobookshelf_book_item(state, book_id)?;
         // The catalog's own record beside the queue item: the narrator, the
@@ -233,7 +237,7 @@ impl App {
             }) => self.gui_abs_hero_artwork(library_item_id),
             Some(_) | None => None,
         };
-        let workspace = self.gui_abs_workspace(lib_idx, book_id, now_playing);
+        let workspace = self.gui_abs_workspace(lib_idx, book_id);
         Some(GuiAudiobooksHero {
             title: content.facts.title.clone(),
             meta_rows: content.facts.meta_rows.clone(),
@@ -261,17 +265,12 @@ impl App {
     /// TUI's `visible_rows` order, the `Part N` fallback over the audio
     /// files when the book holds no chapters. `None` while the book's
     /// detail has not landed.
-    fn gui_abs_workspace(
-        &self,
-        lib_idx: usize,
-        book_id: &str,
-        now_playing: Option<&WorkspaceNowPlaying>,
-    ) -> Option<GuiAudiobooksWorkspace> {
+    fn gui_abs_workspace(&self, lib_idx: usize, book_id: &str) -> Option<GuiAudiobooksWorkspace> {
         let state = self.audiobookshelf_book_browse.get(lib_idx)?;
         let rows = state
             .visible_rows(book_id)
             .into_iter()
-            .map(|row| chapter_row(row, book_id, now_playing))
+            .map(chapter_row)
             .collect();
         Some(GuiAudiobooksWorkspace { rows })
     }
@@ -294,22 +293,10 @@ fn book_row(book: &mbv_audiobookshelf::AudiobookshelfBook) -> GuiAudiobooksRow {
 }
 
 /// One chapter row (row 9.1): the TUI chapter-row projection's labels — the
-/// chapter title or the `Part N` fallback — with the duration gutter and
-/// the current-chapter mark. Only a chapter row can carry the mark, as the
-/// TUI's rows never light on an audio part.
-fn chapter_row(
-    row: BookRow,
-    book_id: &str,
-    now_playing: Option<&WorkspaceNowPlaying>,
-) -> GuiAudiobooksChapterRow {
-    let current = matches!(
-        now_playing,
-        Some(WorkspaceNowPlaying::Chapter {
-            library_item_id,
-            chapter_id,
-            ..
-        }) if library_item_id == book_id
-    );
+/// chapter title or the `Part N` fallback — with the duration gutter and the
+/// chapter's span on the book's merged timeline (design D5). An audio-part
+/// row carries no span, as the TUI's rows never light on one.
+fn chapter_row(row: BookRow) -> GuiAudiobooksChapterRow {
     match row {
         BookRow::Chapter {
             id,
@@ -322,14 +309,15 @@ fn chapter_row(
             // The chapter's own span, the TUI chapter row's duration: `end`
             // is the chapter's absolute end on the merged timeline.
             duration: gutter(end - start),
-            current: current
-                && matches!(now_playing, Some(WorkspaceNowPlaying::Chapter { chapter_id: playing, .. }) if *playing == id),
+            start_ticks: seconds_to_ticks(start),
+            end_ticks: seconds_to_ticks(end),
         },
         BookRow::AudioFile { index, duration } => GuiAudiobooksChapterRow {
             chapter: index,
             title: format!("Part {index}"),
             duration: gutter(duration),
-            current: false,
+            start_ticks: 0,
+            end_ticks: 0,
         },
     }
 }

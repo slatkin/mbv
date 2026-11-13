@@ -96,7 +96,14 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
 /// itself (`on_player_ready` is wired to a no-op in `crates/mbvd/src/main.rs`),
 /// so this Client is the only thing that will ever own the name for a
 /// daemon-connected session.
-pub fn attach_owner(config: &Config, owner_exe: Option<&Path>) -> Result<App, RemotePlayerError> {
+///
+/// `image_decode` is the calling Client's image setting (design D14): the TUI
+/// keeps decoded pixels, the GUI keeps the server's bytes only.
+pub fn attach_owner(
+    config: &Config,
+    owner_exe: Option<&Path>,
+    image_decode: mbv_images::ImageDecode,
+) -> Result<App, RemotePlayerError> {
     let client = cached_emby_client(config);
     let (remote, player_rx) = RemotePlayer::connect_endpoint(
         &DaemonEndpoint::Local,
@@ -108,6 +115,7 @@ pub fn attach_owner(config: &Config, owner_exe: Option<&Path>) -> Result<App, Re
         player_rx,
         &DaemonEndpoint::Local,
         config.clone(),
+        image_decode,
     );
     app.set_owner_exe(owner_exe.map(Path::to_path_buf));
     Ok(app)

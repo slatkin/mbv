@@ -13,7 +13,7 @@
 //! motion previews the drop, and the release emits the one move request
 //! (add-tauri-gui-client row 6.5). The chooser and popover presses resolve
 //! their painted row indexes against [`PaintedChoices`], the lists the last
-//! emitted frame painted, so a change between paint and press selects the
+//! window painted, so a change between paint and press selects the
 //! painted choice or nothing.
 
 use mbv::GuiSurfaceLeaf;
@@ -255,7 +255,7 @@ impl<'a> QueueLeaf<'a> {
             MediaListOperation::Scroll(delta),
             self.viewport_len(),
         );
-        // The mutation stands on the Surface state; the next frame carries it.
+        // The mutation stands on the Surface state; the next batch carries it.
         None
     }
 
@@ -339,7 +339,7 @@ pub(crate) struct TransportAvailability {
 
 /// The Queue playback panel's leaf: the Queue playback Surface state, the
 /// reported regions, the transport availability, and the choice lists the
-/// last emitted frame painted.
+/// last window paint.
 ///
 /// The arms mirror the TUI Queue playback panel's pointer path: the transport
 /// glyphs act on a left press — the second press of a double-click pair
@@ -359,7 +359,7 @@ pub(crate) struct PlaybackLeaf<'a> {
     surface: &'a mut QueuePlaybackSurface,
     regions: &'a HitMap<RegionTarget>,
     availability: TransportAvailability,
-    /// The choice lists the last emitted frame painted: a chooser or popover
+    /// The choice lists the window last painted: a chooser or popover
     /// row's index resolves against what the window shows, not a fresh
     /// projection that may have shifted under it.
     painted: &'a PaintedChoices,
@@ -445,7 +445,7 @@ impl<'a> PlaybackLeaf<'a> {
                 Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
             ),
             // A track popover row resolves its painted index to the track id
-            // the frame painted, so a list change between paint and press
+            // the window painted, so a list change between paint and press
             // switches that track or none, never the neighbour; the App runs
             // the same execution the popover's Enter applies.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(index))) => {
@@ -532,7 +532,7 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
 /// The volume pill takes the uniform wheel step as one shared
 /// [`VOLUME_STEP`] per notch (the TUI's wheel mapping), and the mute pill
 /// toggles mute on a press. The visual-mode indicator's clear action is a
-/// shell-level projection the GUI frame does not carry — the status
+/// shell-level projection the GUI sections do not carry — the status
 /// projection names the armed pill and the toast only — so no region can
 /// report it until a later slice carries the fact.
 pub(crate) struct StatusBarLeaf<'a> {

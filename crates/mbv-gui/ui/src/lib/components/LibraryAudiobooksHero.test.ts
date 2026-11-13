@@ -10,9 +10,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { playhead } from '$lib/bridge/playhead';
+import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
 import type {
 	GuiAudiobooksChapterRow,
-	GuiAudiobooksFrame,
+	GuiAudiobooksDetail,
+	GuiAudiobooksList,
 	GuiAudiobooksHero,
 } from '$lib/bridge/types';
 import { initialAudiobooksWorkspace, audiobooksWorkspace } from '$lib/library/audiobooks-workspace';
@@ -28,15 +31,23 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	audiobooksWorkspace.set(initialAudiobooksWorkspace());
+	playhead.reset();
 });
 
 /** The library index the Audiobooks commands name. */
 const LIB_IDX = 4;
 
-/** A book's chapters: one untouched, one playing at the playhead. */
+/** A book's chapters on the merged timeline: the first spans 0–21:00, the
+ * second 21:00–45:00 (design D5's `startTicks`/`endTicks`). */
 const CHAPTERS: GuiAudiobooksChapterRow[] = [
-	{ chapter: 1, title: 'First Contact', duration: '21:00', current: false },
-	{ chapter: 2, title: 'Fallen Angel', duration: '24:00', current: true },
+	{ chapter: 1, title: 'First Contact', duration: '21:00', startTicks: 0, endTicks: 21 * 60 * SECOND },
+	{
+		chapter: 2,
+		title: 'Fallen Angel',
+		duration: '24:00',
+		startTicks: 21 * 60 * SECOND,
+		endTicks: 45 * 60 * SECOND,
+	},
 ];
 
 /**
@@ -44,12 +55,15 @@ const CHAPTERS: GuiAudiobooksChapterRow[] = [
  * rows with their roles, and the chapter Workspace (design D12, row 9.1).
  * `factOverrides` and `frameOverrides` re-shape one test's payload.
  */
-function mountFrame(heroFacts: GuiAudiobooksHero | null, frameLoading = false): HTMLElement {
-	const frame: GuiAudiobooksFrame = {
+function mountFrame(
+	heroFacts: GuiAudiobooksHero | null,
+	frameLoading = false,
+	playingBook: string | null = null,
+): HTMLElement {
+	const list: GuiAudiobooksList = {
 		libIdx: LIB_IDX,
 		loading: false,
 		failed: false,
-		workspaceLoading: frameLoading,
 		rows: [
 			{
 				id: 'book1',
@@ -59,10 +73,26 @@ function mountFrame(heroFacts: GuiAudiobooksHero | null, frameLoading = false): 
 				sortLetter: 'A',
 			},
 		],
+	};
+	const detail: GuiAudiobooksDetail = {
+		workspaceLoading: frameLoading,
 		selected: 'book1',
+		playingBookId: playingBook,
 		hero: heroFacts,
 	};
-	return render(LibraryAudiobooksHero, { audiobooks: frame }).container;
+	return render(LibraryAudiobooksHero, { list, detail }).container;
+}
+
+/** Stamp the playhead mid-chapter-two, the book the frame selects, so the
+ * Workspace marks it (design D5). */
+function stampAtChapterTwo(): void {
+	stampPlayheadForTest({
+		active: true,
+		activeSlot: 1,
+		positionTicks: 30 * 60 * SECOND,
+		runtimeTicks: 45 * 60 * SECOND,
+		paused: false,
+	});
 }
 
 /** The selected book's Hero facts over the shared chapter Workspace. */
@@ -131,15 +161,24 @@ test('the Workspace paints the chapter rows once the chapters have landed', () =
 	).toBe('24:00');
 });
 
-// The chapter that plays carries the tracklist's play glyph: a highlight marks
-// focus only, so the row keeps its own fill.
-test('the Workspace marks the playing chapter with the play glyph', () => {
-	const container = mountFrame(hero());
+// The chapter whose span holds the predicted position carries the
+// tracklist's play glyph, while the Hero's book is the playing book (design
+// D5): a highlight marks focus only, so the row keeps its own fill.
+test('the Workspace marks the chapter the predicted position holds', () => {
+	stampAtChapterTwo();
+	const container = mountFrame(hero(), false, 'book1');
 
 	expect(chapterRow(container, 2).getAttribute('data-library-abs-chapter-playing')).toBe('');
 	expect(chapterRow(container, 2).querySelector('[data-library-abs-chapter-glyph]')).not.toBeNull();
 	expect(chapterRow(container, 1).getAttribute('data-library-abs-chapter-playing')).toBeNull();
 	expect(chapterRow(container, 1).querySelector('[data-library-abs-chapter-glyph]')).toBeNull();
+});
+
+test('a different playing book marks no chapter', () => {
+	stampAtChapterTwo();
+	const container = mountFrame(hero(), false, 'book2');
+
+	expect(chapterRow(container, 2).getAttribute('data-library-abs-chapter-playing')).toBeNull();
 });
 
 // A book whose detail has not landed paints the loading line instead of rows.

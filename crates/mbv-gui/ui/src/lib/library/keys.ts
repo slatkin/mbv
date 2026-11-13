@@ -10,7 +10,16 @@ import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import { routeSettingsKey } from '$lib/settings/keys';
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiFrame, GuiLibraryTab, GuiPanel, GuiSearchFrame } from '$lib/bridge/types';
+import type {
+	GuiFocus,
+	GuiLibraryList,
+	GuiLibraryTab,
+	GuiOverlayFrame,
+	GuiPanel,
+	GuiSearchFrame,
+	GuiSettingsFrame,
+	GuiStatusBar,
+} from '$lib/bridge/types';
 import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import { stepPillFocus } from './list';
 import {
@@ -25,12 +34,6 @@ import {
 	focusedItemId,
 	focusedLibraryPill,
 	heroOverlayOpen,
-	libraryAudiobooks,
-	libraryContent,
-	libraryPodcasts,
-	libraryEmby,
-	libraryHome,
-	libraryShows,
 	libraryShown,
 	libraryUi,
 	moveLibraryCursor,
@@ -41,6 +44,8 @@ import {
 	setLibraryCursorOpen,
 } from './state';
 import type { LibraryUiState } from './state';
+import { libraryList } from '$lib/bridge/sections';
+import { activeLibraryDestination, libraryMusicList } from './parts';
 import {
 	acceptHomeFilter,
 	closeHomeFilter,
@@ -59,7 +64,7 @@ import { acceptAudiobooksFilter, closeAudiobooksFilter } from './audiobooks';
 import { routePodcastsPanelKey } from './podcasts-keys';
 import { acceptPodcastsFilter, closePodcastsFilter } from './podcasts';
 import { routeFeedsPanelKey } from './feeds-keys';
-import { acceptFeedsFilter, closeFeedsFilter, libraryFeeds } from './feeds';
+import { acceptFeedsFilter, closeFeedsFilter } from './feeds';
 import {
 	activateSearchHighlight,
 	closeLibrarySearch,
@@ -70,13 +75,20 @@ import {
 	searchResultsOf,
 } from './search';
 
-/** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
- * the installer passes the frame it holds; a test builds only these fields. */
-export type LibraryKeyFrame = Pick<
-	GuiFrame,
-	'focus' | 'overlay' | 'status' | 'library' | 'settings'
-> & {
-	summary: Pick<GuiFrame['summary'], 'filterActive'>;
+/** The section facts the routing reads (gui-change-driven-sections design
+ * D6): the values of the sections the router reads, as the installer passes
+ * them from the window's section stores; a test builds only these fields. */
+export type LibraryKeyFrame = {
+	focus: GuiFocus;
+	overlay: GuiOverlayFrame | null;
+	status: GuiStatusBar;
+	summary: { filterActive: boolean };
+	settings: GuiSettingsFrame | null;
+	/** The `libraryList` section's value: the active destination's list part, or
+	 * `null` while no Library panel shows. */
+	libraryList: GuiLibraryList | null;
+	/** The `search` section's value. */
+	search: GuiSearchFrame | null;
 };
 
 /** Whether no modifier is held. */
@@ -87,7 +99,7 @@ function bare(event: KeyboardEvent): boolean {
 /** The carried destination tabs (design D2): the tabs the top bar paints, and
  * the ones the digits open. */
 function carriedTabs(): readonly GuiLibraryTab[] {
-	return get(libraryContent)?.tabs ?? [];
+	return get(libraryList)?.tabs ?? [];
 }
 
 /** The place of the destination tab a digit opens (design D3, step 3): `1`
@@ -128,7 +140,7 @@ function takePaneFocus(panel: GuiPanel, step: number): void {
 
 /** The pills of the carried content. */
 function pills() {
-	return get(libraryContent)?.music?.pills ?? [];
+	return libraryMusicList()?.pills ?? [];
 }
 
 /** Move the focused pill one pill along the row (design D3, step 4): Right and
@@ -151,61 +163,55 @@ function movePillFocus(step: number): void {
  * destination's own resolve, in the same order `routePanelKey` hands keys
  * over. */
 function closeActiveFilter(): void {
-	if (libraryHome() !== null) {
-		closeHomeFilter();
-		return;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			closeHomeFilter();
+			return;
+		case 'shows':
+			closeShowsFilter();
+			return;
+		case 'emby':
+			closeEmbyFilter();
+			return;
+		case 'audiobooks':
+			closeAudiobooksFilter();
+			return;
+		case 'podcasts':
+			closePodcastsFilter();
+			return;
+		case 'feeds':
+			closeFeedsFilter();
+			return;
+		default:
+			closeLibraryFilter();
 	}
-	if (libraryShows() !== null) {
-		closeShowsFilter();
-		return;
-	}
-	if (libraryEmby() !== null) {
-		closeEmbyFilter();
-		return;
-	}
-	if (libraryAudiobooks() !== null) {
-		closeAudiobooksFilter();
-		return;
-	}
-	if (libraryPodcasts() !== null) {
-		closePodcastsFilter();
-		return;
-	}
-	if (libraryFeeds() !== null) {
-		closeFeedsFilter();
-		return;
-	}
-	closeLibraryFilter();
 }
 
 /** Accept the active destination's filter with Enter (design D3, step 2):
  * the field closes and the list keeps its text. */
 function acceptActiveFilter(): void {
-	if (libraryHome() !== null) {
-		acceptHomeFilter();
-		return;
+	switch (activeLibraryDestination()) {
+		case 'home':
+			acceptHomeFilter();
+			return;
+		case 'shows':
+			acceptShowsFilter();
+			return;
+		case 'emby':
+			acceptEmbyFilter();
+			return;
+		case 'audiobooks':
+			acceptAudiobooksFilter();
+			return;
+		case 'podcasts':
+			acceptPodcastsFilter();
+			return;
+		case 'feeds':
+			acceptFeedsFilter();
+			return;
+		default:
+			acceptLibraryFilter();
 	}
-	if (libraryShows() !== null) {
-		acceptShowsFilter();
-		return;
-	}
-	if (libraryEmby() !== null) {
-		acceptEmbyFilter();
-		return;
-	}
-	if (libraryAudiobooks() !== null) {
-		acceptAudiobooksFilter();
-		return;
-	}
-	if (libraryPodcasts() !== null) {
-		acceptPodcastsFilter();
-		return;
-	}
-	if (libraryFeeds() !== null) {
-		acceptFeedsFilter();
-		return;
-	}
-	acceptLibraryFilter();
 }
 
 /** Route a key while the filter field holds the keyboard (design D3, step 2). */
@@ -331,23 +337,21 @@ function routePanelKey(
 	if (event.key === 'Escape' && bare(event)) {
 		return routeEscapeKey(ui, search);
 	}
-	if (libraryHome() !== null) {
-		return routeHomePanelKey(event);
-	}
-	if (libraryShows() !== null) {
-		return routeShowsPanelKey(event, ui);
-	}
-	if (libraryEmby() !== null) {
-		return routeEmbyPanelKey(event, ui);
-	}
-	if (libraryAudiobooks() !== null) {
-		return routeAudiobooksPanelKey(event, ui);
-	}
-	if (libraryPodcasts() !== null) {
-		return routePodcastsPanelKey(event, ui);
-	}
-	if (libraryFeeds() !== null) {
-		return routeFeedsPanelKey(event, ui);
+	switch (activeLibraryDestination()) {
+		case 'home':
+			return routeHomePanelKey(event);
+		case 'shows':
+			return routeShowsPanelKey(event, ui);
+		case 'emby':
+			return routeEmbyPanelKey(event, ui);
+		case 'audiobooks':
+			return routeAudiobooksPanelKey(event, ui);
+		case 'podcasts':
+			return routePodcastsPanelKey(event, ui);
+		case 'feeds':
+			return routeFeedsPanelKey(event, ui);
+		default:
+			break;
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();
@@ -516,7 +520,7 @@ export function routeLibraryKey(
 	// D2, D10): a frame that carries no Library section takes no Library key,
 	// even while the window still holds the content of an earlier frame. The
 	// content names the active destination's section (design D12).
-	if (!libraryShown(frame.library, get(libraryContent))) {
+	if (!libraryShown(frame.libraryList)) {
 		return 'core';
 	}
 	// The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
@@ -544,7 +548,7 @@ export function routeLibraryKey(
 	// Both facts must hold: a stale armed fact an unmounted bar retracted must
 	// never route a key under it (the same key-leak gate).
 	if (searchFieldMounted() && searchFieldFocused()) {
-		return routeSearchKey(event, searchResultsOf(frame.library?.search ?? null));
+		return routeSearchKey(event, searchResultsOf(frame.search));
 	}
 	const ui = get(libraryUi);
 	if (ui.filterOpen) {
@@ -569,7 +573,7 @@ export function routeLibraryKey(
 	// (4) The Library keys run while the Library panel has Panel focus. The
 	// carried Search section rides with them: its Esc close needs it.
 	if (frame.focus.panel === 'library') {
-		return routePanelKey(event, ui, frame.library?.search ?? null);
+		return routePanelKey(event, ui, frame.search);
 	}
 	// (5) Every other key goes to the core's keyboard router.
 	return 'core';

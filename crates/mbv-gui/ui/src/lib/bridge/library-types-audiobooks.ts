@@ -1,14 +1,12 @@
 // The Audiobooks destination's wire types (add-gui-library-panel design D12,
 // row 9.1), split out of library-types.ts; re-exported there.
 
-import type { GuiLibraryArt, GuiMetaRow } from './library-types';
+import type { GuiArtRef, GuiMetaRow } from './library-types';
 
-/** The Audiobooks destination's content (design D12, row 9.1), present
- * while an Audiobookshelf book library is the active destination: the flat
- * book list with its rail letters, the core's selected book, and its Hero
- * with the chapters Workspace. No pill rides here — the letter rail
- * replaces the TUI's surname buckets. */
-export interface GuiAudiobooksFrame {
+/** The Audiobooks destination's list part (design D12, row 9.1, D8): the flat
+ * book list with its rail letters and the catalog's load facts. No pill rides
+ * here — the letter rail replaces the TUI's surname buckets. */
+export interface GuiAudiobooksList {
 	/** The Audiobooks library index the Audiobooks commands name (design
 	 * D2, D12). */
 	libIdx: number;
@@ -16,15 +14,25 @@ export interface GuiAudiobooksFrame {
 	loading: boolean;
 	/** Whether the catalog fetch failed. */
 	failed: boolean;
-	/** Whether the selected book's detail fetch has not landed yet: the
-	 * Workspace's loading state. */
-	workspaceLoading: boolean;
 	/** The catalog's books in the TUI's sort order: author sort key, then
 	 * title. */
 	rows: GuiAudiobooksRow[];
+}
+
+/** The Audiobooks destination's detail part (design D8): the core's selected
+ * book, the playing book, and its Hero with the chapters Workspace. */
+export interface GuiAudiobooksDetail {
+	/** Whether the selected book's detail fetch has not landed yet: the
+	 * Workspace's loading state. */
+	workspaceLoading: boolean;
 	/** The core's selected book (design D2, D12), as the frame painted it:
 	 * a select command sends it back. The first book is the Hero default. */
 	selected: string | null;
+	/** The Audiobooks book playing at the playhead (`gui-change-driven-sections`
+	 * design D5): its stable `library_item_id`, the fact the window compares
+	 * with the Hero's book before it marks a chapter row from the position.
+	 * `null` while no book plays or the active slot is pending. */
+	playingBookId: string | null;
 	/** The selected book's Hero facts; `null` while no book is selected. */
 	hero: GuiAudiobooksHero | null;
 }
@@ -63,7 +71,7 @@ export interface GuiAudiobooksHero {
 	/** The artwork box the Hero reserves: the book artwork policy's
 	 * portrait. */
 	artShape: 'landscape' | 'square' | 'portrait';
-	art: GuiLibraryArt | null;
+	art: GuiArtRef | null;
 	/** The book's chapter rows; `null` while the book's detail has not
 	 * landed, which the frame's `workspaceLoading` names. */
 	workspace: GuiAudiobooksWorkspace | null;
@@ -87,8 +95,12 @@ export interface GuiAudiobooksChapterRow {
 	title: string;
 	/** The row's duration, the TUI's duration gutter; empty when unknown. */
 	duration: string;
-	/** Whether this chapter is playing. A frame re-carries the content when
-	 * the mark moves, so the Workspace paints what the Queue's active slot
-		 * paints. */
-		current: boolean;
+	/** The chapter's start on the book's merged timeline, in ticks (design
+	 * D5). The window marks the row whose span holds the predicted position;
+	 * an audio-part row carries no span — its `startTicks` and `endTicks`
+	 * are both `0`, and an empty span never holds one. */
+	startTicks: number;
+	/** The chapter's end on the book's merged timeline, in ticks (design
+	 * D5). The span's end is exclusive. */
+	endTicks: number;
 }

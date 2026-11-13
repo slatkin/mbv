@@ -1,4 +1,4 @@
-//! The theme section of a frame: the role-to-colour map and the chrome fills
+//! The theme section: the role-to-colour map and the chrome fills
 //! (design D7).
 //!
 //! `mbv-theme` keeps its role list crate-private, so the GUI mirrors the closed
@@ -54,7 +54,7 @@ impl GuiTheme {
 /// the two `focused` fields resolve the same surface's focused fill, for
 /// the surface table's focus-reactive rows the queue column paints
 /// (`QueueColumn`, `QueuePanel`) — the front end picks between the pair on
-/// the frame's Panel-focus fact, the way the TUI's
+/// the window's Panel-focus fact, the way the TUI's
 /// `panel_appearance_focus` picks. The fill tiers the front end aliases
 /// are named in the field docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -93,7 +93,7 @@ pub struct GuiChrome {
     /// The queue column's focused backdrop: `Surface::QueueColumn` resolved
     /// with the focused bit. The queue column is one of the surface table's
     /// focus-reactive rows (resting `Bg1`, focused `Bg2`), so the front end
-    /// picks between this and `queue_column` on the frame's Panel-focus fact
+    /// picks between this and `queue_column` on the window's Panel-focus fact
     /// the way the TUI's `panel_appearance_focus` picks.
     pub queue_column_focused: GuiRgb,
     /// The queue panel's recessed box: `Surface::QueuePanel`'s resting fill,

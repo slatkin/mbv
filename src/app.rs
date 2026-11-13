@@ -63,8 +63,8 @@ pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
     GuiFeedsSelection, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu,
     GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPodcastEpisodeId, GuiPodcastPill,
-    GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId,
+    GuiPodcastPill, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
     GuiSearchProjection, GuiSearchRow,
 };
 pub use self::gui_settings::{
@@ -99,7 +99,9 @@ pub use self::queue_playback_projection::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid, TrickplayTile,
 };
-pub use self::queue_summary_projection::{QueueRightColumn, QueueSummaryProjection};
+pub use self::queue_summary_projection::{
+    QueueEndOffsets, QueueRightColumn, QueueSummaryProjection,
+};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;

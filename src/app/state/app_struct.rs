@@ -611,6 +611,9 @@ pub struct App {
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
+    /// What this Client's image fetches keep (design D14), chosen at
+    /// construction and passed to every fetch thread.
+    pub(in crate::app) image_decode: mbv_images::ImageDecode,
     pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
     pub(in crate::app) feed_tab: FeedTabState,
