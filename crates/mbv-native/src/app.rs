@@ -116,3 +116,70 @@ fn tick(sections: Sections, now: Instant) {
         position_signal.set(position);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::thread;
+
+    use blitz_dom::Document as _;
+    use dioxus_native::prelude::VirtualDom;
+    use dioxus_native::{DioxusDocument, DocumentConfig};
+    use futures_channel::mpsc::unbounded;
+    use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueRow};
+    use mbv_gui::bridge::sections::GuiSection;
+
+    use super::{GuiSectionBatch, root};
+    use crate::launch::BatchSlot;
+
+    /// A batch whose queue section holds one heading row with `text`.
+    fn heading_batch(text: &str) -> GuiSectionBatch {
+        GuiSectionBatch {
+            queue: Some(GuiSection {
+                revision: 1,
+                value: GuiQueue {
+                    rows: vec![GuiQueueRow::Heading {
+                        text: text.to_owned(),
+                    }],
+                    cursor: None,
+                    marks: Vec::new(),
+                    active: None,
+                    hover: None,
+                    drag: None,
+                },
+            }),
+            ..GuiSectionBatch::default()
+        }
+    }
+
+    /// The text of the first heading row the document paints, if any.
+    fn heading_text(doc: &DioxusDocument) -> Option<String> {
+        let inner = doc.inner();
+        let node = inner
+            .query_selector(".row-heading")
+            .expect("the selector is valid")?;
+        Some(inner.get_node(node)?.text_content())
+    }
+
+    /// Contract 4 (D17): a batch sent from another thread paints after one
+    /// poll. The window is idle first, so the root's task is parked on the
+    /// batch receiver when the send arrives.
+    #[test]
+    fn batch_sent_from_another_thread_paints_after_one_poll() {
+        let (tx, rx) = unbounded();
+        let vdom = VirtualDom::new(root).with_root_context(BatchSlot::new(rx));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        doc.poll(None);
+        assert_eq!(heading_text(&doc), None);
+
+        thread::spawn(move || {
+            tx.unbounded_send(heading_batch("Up next"))
+                .expect("the window's receiver is open");
+        })
+        .join()
+        .expect("the sender thread does not panic");
+        doc.poll(None);
+
+        assert_eq!(heading_text(&doc).as_deref(), Some("Up next"));
+    }
+}

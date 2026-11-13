@@ -31,6 +31,12 @@ const APP_ID: &str = "io.github.slatkin.mbv-native";
 pub struct BatchSlot(Arc<Mutex<Option<UnboundedReceiver<GuiSectionBatch>>>>);
 
 impl BatchSlot {
+    /// A slot that holds `batches` until the first `take`.
+    #[must_use]
+    pub fn new(batches: UnboundedReceiver<GuiSectionBatch>) -> Self {
+        Self(Arc::new(Mutex::new(Some(batches))))
+    }
+
     /// The receiver, for the first caller only.
     #[must_use]
     pub fn take(&self) -> Option<UnboundedReceiver<GuiSectionBatch>> {
@@ -53,7 +59,7 @@ pub fn launch(
     let net_provider: Arc<dyn NetProvider> = Arc::new(MbvNetProvider::new(core));
     let vdom = VirtualDom::new(app);
     vdom.provide_root_context(Arc::clone(&net_provider));
-    vdom.provide_root_context(BatchSlot(Arc::new(Mutex::new(Some(batches)))));
+    vdom.provide_root_context(BatchSlot::new(batches));
 
     let doc = DioxusDocument::new(
         vdom,
