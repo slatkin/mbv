@@ -10,6 +10,12 @@
 //! test `crates/mbv-gui/tests/capabilities.rs`).
 
 fn main() {
+    // Without the `tauri` feature (blitz-queue-panel-spike D18) the library
+    // needs no Tauri context, so the build script does nothing. A `cfg(feature)`
+    // check does not work in a build script; the environment variable is the gate.
+    if std::env::var_os("CARGO_FEATURE_TAURI").is_none() {
+        return;
+    }
     // The failure path mirrors `tauri_build::build`'s own: print the error
     // and end the build script with a nonzero exit, no panic.
     let attributes =

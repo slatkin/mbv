@@ -14,6 +14,19 @@ readme = "../../README.md"
 workspace = true
 
 # Exact pins per openspec/changes/add-tauri-gui-client/design.md D2.
+#
+# `tauri` is optional (blitz-queue-panel-spike D18). Without the default
+# `tauri` feature the library builds with no Tauri or WebKit in its graph, so
+# a library consumer such as `mbv-native` does not pull them in.
+[features]
+default = ["tauri"]
+tauri = ["dep:tauri"]
+
+[[bin]]
+name = "mbv-gui"
+path = "src/main.rs"
+required-features = ["tauri"]
+
 [dependencies]
 mbv = { path = "../.." }
 mbv-config = { path = "../mbv-config" }
@@ -32,7 +45,7 @@ mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
-tauri = "=2.12.5"
+tauri = { version = "=2.12.5", optional = true }
 tracing.workspace = true
 
 [build-dependencies]
