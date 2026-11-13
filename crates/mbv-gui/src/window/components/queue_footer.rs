@@ -223,3 +223,6 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
