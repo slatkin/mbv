@@ -71,6 +71,11 @@ Each row names its test contract and its owning layer (design D12, `docs/invaria
 - [x] 9.1 Re-run every bench and write a "Final" table beside the baseline in `measurements.md`. Verify: each of the eight benches has a baseline and a final median.
 - [x] 9.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, `make ui-check`, `make ui-lint`, `make ui-test`, and, just before the push, `make check-code-file-lines`. Verify: every gate passes.
 
+## 10. The GUI does not decode images
+
+- [ ] 10.1 Add the per-Client decode setting to the image fetch path (design D14): the GUI Client keeps the source bytes and the header size and no decoded image; the TUI is unchanged. Make every GUI-path read of `CachedImage::img` (card readiness, Music artist detail, Library art shape) read the source or the header size instead. Verify: `cargo nextest run -p mbv -p mbv-gui`; `cargo clippy --workspace --all-targets -- -D warnings`. Test contract: in the existing image-fetch protocol tests, a GUI-mode fetch caches the source and no decoded image, and a TUI-mode fetch still decodes.
+- [ ] 10.2 Re-run the `heaptrack` check of the GUI and add the decode site's peak before and after to `measurements.md`. Verify: the decode site no longer appears in the GUI's peak heap.
+
 ## Workflow follow-up
 
 - Change ADR 0038's `status` from `proposed` to `accepted` when the user approves the PR for merge.

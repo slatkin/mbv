@@ -238,6 +238,10 @@ These terms go into `CONTEXT.md` with the code (task 2.11):
 - *Section batch*: the one update that carries the window sections that changed in one tick. Avoid: frame, snapshot (except for the full batch that answers `sync`).
 - *Playhead anchor*: the position, runtime, paused state, and active slot that the Client core sends on a discontinuity, from which the window predicts the position. Avoid: progress tick, position update.
 
+### D14. The GUI does not decode images
+
+The GUI shows the server bytes through `mbv-art` (D7), so a decoded `DynamicImage` is only cost for it: a 600×600 cover is about 1.4 MB decoded against about 60 KB as JPEG, and a `heaptrack` run showed about 9 MB of decoded art at peak. The image fetch path gets a per-Client setting. The GUI keeps only the `SourceImage` and reads the size from the image header; the TUI decodes as it does today, because its terminal graphics need the pixels. Every GUI read that asks "is the image cached" asks about the source, not the decoded image. Images the App derives itself (the bundled placeholder, composed overlays) keep their current form when the GUI does not read them as pixels.
+
 ## Risks / Trade-offs
 
 - [A missed dirty mark leaves a section stale until the next input] → The test-only audit (D3) fails every core-thread test that exercises the missed source. The mark table is one exhaustive `match`. Invariant 32 records the rule.
