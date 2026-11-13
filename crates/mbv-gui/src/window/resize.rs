@@ -219,8 +219,14 @@ impl PanelWidthsStore {
     /// defaults. Returns whether the value changed, so the caller resets the
     /// other interaction stores on the same fact. The first value only seeds
     /// it.
+    ///
+    /// The held epoch is read with `peek`, never `cloned`: every signal
+    /// write marks its subscribers (an equal value included), so a caller
+    /// whose effect reads this signal here would re-queue itself on the
+    /// write below and never settle. The caller's effect subscribes to the
+    /// `panel` section alone.
     pub fn note_ui_reset_epoch(&mut self, epoch: u64) -> bool {
-        let held = self.last_ui_reset_epoch.cloned();
+        let held = *self.last_ui_reset_epoch.peek();
         let changed = held.is_some() && held != Some(epoch);
         self.last_ui_reset_epoch.set(Some(epoch));
         if changed {

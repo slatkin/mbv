@@ -154,6 +154,17 @@ fn use_window_drain(drain: Drain, slot: EventSlot) {
     });
 }
 
+/// Fold one frame's `uiResetEpoch` into the width store (D14): the effect
+/// body the root runs, shared with the headless test that proves it
+/// settles. Reads the `panel` section only — a read of the width store's
+/// own `uiResetEpoch` signal here would re-queue the effect forever, since
+/// every signal write marks its subscribers (an equal value included).
+#[must_use]
+fn note_panel_ui_reset(store: &mut PanelWidthsStore, sections: &Sections) -> bool {
+    let panel = sections.panel.cloned();
+    store.note_ui_reset_epoch(panel.ui_reset_epoch)
+}
+
 /// The window's root (D6).
 #[component]
 pub fn App() -> Element {
@@ -228,9 +239,9 @@ pub fn App() -> Element {
     // with their ports (tasks 6.1 and 8.1, as `resetLibraryInteraction` and
     // `resetSettingsUi` do).
     let mut reset_store = widths_store.clone();
+    let reset_sections = sections.clone();
     use_effect(move || {
-        let panel = sections.panel.cloned();
-        let _reset = reset_store.note_ui_reset_epoch(panel.ui_reset_epoch);
+        let _reset = note_panel_ui_reset(&mut reset_store, &reset_sections);
     });
 
     // The panel container the layout report carries the size of (D9): the
@@ -415,3 +426,6 @@ pub fn App() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
