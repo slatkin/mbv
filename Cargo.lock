@@ -4783,6 +4783,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "time",
  "tracing",
  "unicode-segmentation",
 ]
