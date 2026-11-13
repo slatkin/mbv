@@ -79,10 +79,31 @@ fn fetch_font(url: &Url, handler: Box<dyn NetHandler>) {
     }
 }
 
-/// The vendored WOFF2 bytes for `_file`. Task 5.6 vendors the six files and
-/// adds one `include_bytes!` arm per file here.
-fn font_bytes(_file: &str) -> Option<&'static [u8]> {
-    None
+/// The vendored WOFF2 bytes for `file`: the six Latin faces of `IBM Plex Sans`
+/// and `JetBrains Mono` at weights 400, 500, and 600 (D12). Any other file has
+/// no bytes.
+fn font_bytes(file: &str) -> Option<&'static [u8]> {
+    match file {
+        "ibm-plex-sans-400.woff2" => {
+            Some(include_bytes!("../assets/fonts/ibm-plex-sans-400.woff2"))
+        }
+        "ibm-plex-sans-500.woff2" => {
+            Some(include_bytes!("../assets/fonts/ibm-plex-sans-500.woff2"))
+        }
+        "ibm-plex-sans-600.woff2" => {
+            Some(include_bytes!("../assets/fonts/ibm-plex-sans-600.woff2"))
+        }
+        "jetbrains-mono-400.woff2" => {
+            Some(include_bytes!("../assets/fonts/jetbrains-mono-400.woff2"))
+        }
+        "jetbrains-mono-500.woff2" => {
+            Some(include_bytes!("../assets/fonts/jetbrains-mono-500.woff2"))
+        }
+        "jetbrains-mono-600.woff2" => {
+            Some(include_bytes!("../assets/fonts/jetbrains-mono-600.woff2"))
+        }
+        _ => None,
+    }
 }
 
 /// The source decoded and scaled to the long-edge cap, as PNG. `None` when the

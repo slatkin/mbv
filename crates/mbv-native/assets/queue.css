@@ -1,0 +1,244 @@
+/* The Queue panel's styles (design D11 and D12 of blitz-queue-panel-spike).
+   The colours are the GUI's canvas tokens from its app.css as sRGB hex, so
+   no oklch conversion runs here. The font faces load through the one
+   net provider at mbv-asset://localhost/font/<file> (D12). */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('mbv-asset://localhost/font/ibm-plex-sans-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  src: url('mbv-asset://localhost/font/ibm-plex-sans-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  src: url('mbv-asset://localhost/font/ibm-plex-sans-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('mbv-asset://localhost/font/jetbrains-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  src: url('mbv-asset://localhost/font/jetbrains-mono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  src: url('mbv-asset://localhost/font/jetbrains-mono-600.woff2') format('woff2');
+}
+
+:root {
+  --canvas-queue-column: #1e2326;
+  --canvas-well: #232a2e;
+  --canvas-ink: #232a2e;
+  --canvas-text: #d3c6aa;
+  --canvas-heading: #e9e1cc;
+  --canvas-muted: #9da9a0;
+  --canvas-ordinal: #7f897d;
+  --canvas-accent: #a7c080;
+  --canvas-partial: #e69875;
+  --canvas-track: #414b50;
+  --canvas-track-current: #7d9460;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--canvas-queue-column);
+}
+
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--canvas-queue-column);
+  color: var(--canvas-text);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Artwork */
+
+.artwork-slot {
+  padding: 14px 16px 6px;
+}
+
+.artwork {
+  display: block;
+  width: 100%;
+  max-height: 225px;
+}
+
+/* Scrubber (D9): the track, the played fill, chapter ticks, marks, clocks */
+
+.scrubber {
+  padding: 10px 16px 4px;
+}
+
+.scrubber-track {
+  position: relative;
+  height: 6px;
+  margin-top: 16px;
+  background: var(--canvas-track);
+  border-radius: 3px;
+}
+
+.played {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 6px;
+  background: var(--canvas-accent);
+  border-radius: 3px;
+}
+
+.chapter-tick {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  background: var(--canvas-muted);
+}
+
+.mark {
+  position: absolute;
+  top: 0;
+  height: 6px;
+  background: var(--canvas-partial);
+}
+
+.mark-intro {
+  width: 6px;
+  border-radius: 3px 0 0 3px;
+}
+
+.mark-credits {
+  width: 4px;
+}
+
+.clocks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--canvas-accent);
+}
+
+.clocks .remaining {
+  opacity: 0.75;
+}
+
+/* Queue list (D9): rows, the active marker, and the active row's progress */
+
+.queue-list {
+  flex: 1;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.queue-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  overflow: hidden;
+}
+
+.queue-row.striped {
+  background: var(--canvas-well);
+}
+
+.queue-row.active {
+  background: var(--canvas-accent);
+  color: var(--canvas-ink);
+}
+
+.row-ordinal {
+  width: 24px;
+  color: var(--canvas-ordinal);
+  font-size: 11px;
+}
+
+.queue-row.active .row-ordinal {
+  color: var(--canvas-ink);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.row-title {
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--canvas-heading);
+}
+
+.queue-row.active .row-title {
+  color: var(--canvas-ink);
+}
+
+.row-secondary {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--canvas-muted);
+}
+
+.queue-row.active .row-secondary {
+  color: var(--canvas-ink);
+}
+
+.row-duration {
+  font-size: 12px;
+  color: var(--canvas-muted);
+}
+
+.queue-row.active .row-duration {
+  color: var(--canvas-ink);
+}
+
+.row-heading {
+  padding: 8px 16px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--canvas-muted);
+}
+
+.row-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--canvas-track-current);
+}
+
+.row-progress-fill {
+  height: 3px;
+  background: var(--canvas-ink);
+}

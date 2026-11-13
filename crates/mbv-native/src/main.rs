@@ -54,5 +54,11 @@ fn root() -> Element {
             }
         }
     });
-    rsx! { div { "mbv" } }
+    rsx! {
+        style { {QUEUE_CSS} }
+        div { "mbv" }
+    }
 }
+
+/// The Queue panel's stylesheet, with its six `@font-face` rules (D11, D12).
+const QUEUE_CSS: &str = include_str!("../assets/queue.css");
