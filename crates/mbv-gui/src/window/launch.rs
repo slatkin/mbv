@@ -20,87 +20,17 @@ use dioxus_native::winit::platform::wayland::WindowAttributesWayland;
 use dioxus_native::winit::window::{WindowAttributes, WindowId};
 use dioxus_native::{
     DioxusDocument, DioxusNativeApplication, DioxusNativeWindowRenderer, DocumentConfig,
-    RendererOptions, use_window,
+    RendererOptions,
 };
-use futures_util::StreamExt;
 
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
-use crate::window::clock::{Clock, FiredTimers};
-use crate::window::components::art_image::{ArtEvents, ScaleFactor};
-use crate::window::layout::LayoutEpoch;
+use crate::window::clock::Clock;
 use crate::window::net::MbvNetProvider;
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
 const APP_ID: &str = "io.github.slatkin.mbv-gui";
-
-/// The generated stylesheet (D11): `make gui-css` builds it from
-/// `assets/app.css` over the Rust sources, and the output is committed. Task
-/// 4.1 moves the mount into `window/app.rs` with the cell-unit rule first.
-const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
-
-/// The window's temporary root (task 4.1 ports `App.svelte` over it): it
-/// renders an empty element, provides the layout epoch (D9), and drains the
-/// window channel (D4), answering [`WindowEvent::Quit`] with the shell's close
-/// (D4, D5).
-#[component]
-pub fn root() -> Element {
-    let proxy = use_hook(consume_context::<BlitzShellProxy>);
-    let window = use_window();
-    let window_id = window.id();
-    let slot = use_hook(consume_context::<EventSlot>);
-    let epoch = use_hook(LayoutEpoch::new);
-    provide_context(epoch);
-    let art_events = use_hook(ArtEvents::new);
-    provide_context(art_events);
-    let fired = use_hook(FiredTimers::new);
-    provide_context(fired);
-    let scale_window = std::sync::Arc::clone(&window);
-    let scale = use_hook(move || ScaleFactor(Signal::new(scale_window.scale_factor())));
-    provide_context(scale);
-    use_future(move || {
-        let proxy = proxy.clone();
-        let slot = slot.clone();
-        let drain_window = std::sync::Arc::clone(&window);
-        async move {
-            let mut epoch = epoch;
-            let mut art_events = art_events;
-            let mut fired = fired;
-            let mut scale = scale;
-            let scale_window = drain_window;
-            let Some(mut events) = slot.take() else {
-                return;
-            };
-            while let Some(event) = events.next().await {
-                match event {
-                    WindowEvent::Quit => {
-                        proxy.send_event(BlitzShellEvent::CloseWindow { window_id });
-                    }
-                    // A viewport change is a layout fact (D9): every
-                    // measurement effect re-measures, and the scale factor the
-                    // natural-size caps divide by rewrites (D7).
-                    WindowEvent::Viewport => {
-                        scale.0.set(scale_window.scale_factor());
-                        epoch.bump();
-                    }
-                    // An art answer reaches its `ArtImage` through the store
-                    // (D7).
-                    WindowEvent::Art(event) => art_events.push(event),
-                    // A passed timer reaches the surface that armed it (D10).
-                    WindowEvent::Timer(timer) => fired.push(timer),
-                    // Section batches reach their sections from task 3.1
-                    // on, and frames reach the playhead with it. Until then
-                    // the window needs no reaction (documented no-op).
-                    WindowEvent::Batch(_) | WindowEvent::Frame => {}
-                }
-            }
-        }
-    });
-    rsx! {
-        style { dangerous_inner_html: APP_GENERATED_CSS }
-    }
-}
 
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes

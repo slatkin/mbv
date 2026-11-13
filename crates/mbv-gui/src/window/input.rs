@@ -192,8 +192,10 @@ pub fn on_wheel(event: &WheelData, viewport_height: f64, link: &CoreLink) {
 /// job `App.svelte`'s `preventContextMenu` did. No pointer is forwarded:
 /// the right click's `pointerdown` already carried the press to the core,
 /// and a second forward would duplicate the neutral right press (input.ts
-/// has no contextmenu listener for the same reason).
-pub fn on_contextmenu(event: &PointerEvent) {
+/// has no contextmenu listener for the same reason). The handler takes any
+/// event type: Dioxus maps `contextmenu` to the mouse event, and only the
+/// default matters.
+pub fn on_contextmenu<T: 'static>(event: &Event<T>) {
     event.prevent_default();
 }
 

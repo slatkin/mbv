@@ -10,9 +10,10 @@ use std::thread::JoinHandle;
 
 use futures_channel::mpsc::unbounded;
 use mbv_gui::core_thread::{CoreInput, QuitSink, SectionSink};
+use mbv_gui::window::app::App;
 use mbv_gui::window::channel::WindowEvent;
 use mbv_gui::window::clock::{Clock, TimerClock};
-use mbv_gui::window::launch::{launch, root};
+use mbv_gui::window::launch::launch;
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -51,7 +52,7 @@ fn main() {
     // root's drain task routes a passed timer to the surface that asked for
     // it, and the playhead gates its frames.
     let clock: Arc<dyn Clock> = Arc::new(TimerClock::new(events.clone()));
-    launch(root, core.clone(), events, event_receiver, clock);
+    launch(App, core.clone(), events, event_receiver, clock);
     // The window has closed. Close the core thread, then hold the process
     // until its exit teardown completes (D4): the run's shared teardown
     // persists its state, and the join would otherwise let the process exit
