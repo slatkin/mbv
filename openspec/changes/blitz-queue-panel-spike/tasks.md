@@ -12,7 +12,7 @@ Each task names how to verify it. Verification uses commands, tests, or delivere
 
 - [ ] 2.1 Add `crates/mbv-native` (package and binary `mbv-native`) to the workspace `members`, not to `default-members`. Set `[lints] workspace = true`. Declare the direct dependencies in D4 with their exact versions and features, and the dev dependency `blitz-dom` (D4). Verify: `cargo check -p mbv-native` passes with no warnings.
 - [ ] 2.2 Add the `profiling` feature, which drops `#[global_allocator]` (D16). Verify: `cargo check -p mbv-native --features profiling` passes.
-- [ ] 2.3 Check the lock. Verify: `git diff -- Cargo.lock` shows no removed repository entry, and the replaced entries are exactly `futures-*` 0.3.32 to 0.3.34, `bytemuck` 1.25.0 to 1.25.2, and `smallvec` 1.16.1 to 1.16.5 (D4). If any other entry changes, stop and report it.
+- [ ] 2.3 Check the lock. Verify: `git diff -- Cargo.lock` shows no removed repository entry other than the nine replaced entries, and the replaced entries are exactly `bytemuck` 1.25.0 to 1.25.2, `smallvec` 1.16.1 to 1.16.5, and the seven `futures-*` crates (`futures-channel`, `futures-core`, `futures-io`, `futures-macro`, `futures-sink`, `futures-task`, `futures-util`) from 0.3.32 to 0.3.34 (D4). Dependency-edge changes inside the other existing entries are allowed (D4). If any other entry changes version, stop and report it.
 - [ ] 2.4 Write the dependency notes in `crates/mbv-native/Cargo.toml`: the tokio edge (D13) and the MPL-2.0 licence note (Risks). Verify: `rg -n 'tokio|MPL' crates/mbv-native/Cargo.toml` shows both notes.
 - [ ] 2.5 Add `crates/mbv-native` to the tokio edge list in `AGENTS.md` (the list of crates where tokio is allowed). Verify: `rg -n 'mbv-native' AGENTS.md` finds the entry.
 
