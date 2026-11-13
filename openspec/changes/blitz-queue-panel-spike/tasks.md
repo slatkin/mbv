@@ -38,14 +38,14 @@ Each task names how to verify it. Verification uses commands, tests, or delivere
 
 ## 6. First-build checks
 
-- [ ] 6.1 Run the headless contract 4 of D17 (a value sent from another thread updates the DOM after one `poll`) against the real `app.rs`. Verify: `cargo nextest run -p mbv-native` passes.
+- [x] 6.1 Run the headless contract 4 of D17 (a value sent from another thread updates the DOM after one `poll`) against the real `app.rs`. Verify: `cargo nextest run -p mbv-native` passes.
 - [ ] 6.2 Run the fixture window check, only after the user approves it (Open Question 3). The run uses no Owner, no Emby, and no network. A fixture thread sends one batch per second to the window with no input. Record in `measurements.md`: whether the Queue panel updates with no input (D7), whether the placeholder and a downscaled image show (D6), whether the scrubber fill moves (G-Playhead), whether the `@font-face` faces render (D12), and the state of G2, G10, G11, G12, G13, G14, and G15. For each, record `confirmed` or `absent` in the design's gap table. Verify: the design gap table has no `verify` left, and `measurements.md` records each result.
 
 ## 7. Records, checks, and drafts
 
-- [ ] 7.1 Add the term **Blitz Client** to `CONTEXT.md` (D19). The entry says what the Blitz Client is, that it is not the GUI Client, that it presents only the Queue panel, and that a full replacement folds it into the GUI Client. Verify: `rg -n 'Blitz Client' CONTEXT.md` finds the entry.
-- [ ] 7.2 Write `openspec/changes/blitz-queue-panel-spike/measurements.md`. It holds the D16 protocol as commands only, a blank table for the GUI thread-count baseline, the go and no-go table with the bounds in "Go / No-Go", and a blank results section. Do not run the protocol. Verify: the file names every command in D16.
-- [ ] 7.3 Draft upstream reports for G1, G8, and G9 in `openspec/changes/blitz-queue-panel-spike/upstream/`. Each draft has a minimal HTML and CSS repro where one applies, and it names the existing issues and WPT tests searched. Post nothing. Verify: three files exist, and each names what was searched.
+- [x] 7.1 Add the term **Blitz Client** to `CONTEXT.md` (D19). The entry says what the Blitz Client is, that it is not the GUI Client, that it presents only the Queue panel, and that a full replacement folds it into the GUI Client. Verify: `rg -n 'Blitz Client' CONTEXT.md` finds the entry.
+- [x] 7.2 Write `openspec/changes/blitz-queue-panel-spike/measurements.md`. It holds the D16 protocol as commands only, a blank table for the GUI thread-count baseline, the go and no-go table with the bounds in "Go / No-Go", and a blank results section. Do not run the protocol. Verify: the file names every command in D16.
+- [x] 7.3 Draft upstream reports for G1, G8, and G9 in `openspec/changes/blitz-queue-panel-spike/upstream/`. Each draft has a minimal HTML and CSS repro where one applies, and it names the existing issues and WPT tests searched. Post nothing. Verify: three files exist, and each names what was searched.
 - [ ] 7.4 Run `cargo fmt --all -- --check`, `cargo clippy -p mbv-native -p mbv-gui --all-targets -- -D warnings`, and `cargo nextest run -p mbv-native -p mbv-gui`. Fix each failure this change causes. Verify: all three commands pass.
 - [ ] 7.5 Before the push, run `make check-code-file-lines`. Verify: the command reports no file over 800 lines.
 
