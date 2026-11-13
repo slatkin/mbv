@@ -31,7 +31,9 @@ use crate::window::components::confirm_overlay::ConfirmOverlay;
 use crate::window::components::daemon_lost_overlay::DaemonLostOverlay;
 use crate::window::components::library_panel::LibraryPanel;
 use crate::window::components::panel::Panel;
-use crate::window::components::panel_divider::PanelDivider;
+use crate::window::components::panel_divider::{
+    DividerDrag, DividerName, DividerSide, PanelDivider,
+};
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::layout::{LayoutEpoch, track_container_size, use_layout_reporter};
 use crate::window::playhead::{Playhead, SystemTimes, Times};
@@ -192,6 +194,8 @@ pub fn App() -> Element {
         PanelWidthsStore::new(load_gui_panel_widths(), Arc::new(save_gui_panel_widths))
     });
     provide_context(widths_store.clone());
+    let divider_drag = use_hook(DividerDrag::new);
+    provide_context(divider_drag);
     let link = consume_context::<CoreLink>();
 
     // The window channel's drain (D4): every event from outside the tree
@@ -292,6 +296,18 @@ pub fn App() -> Element {
     let cancel_link = CoreLink::clone(&link);
     let leave_link = CoreLink::clone(&link);
     let blur_link = CoreLink::clone(&link);
+    // The divider drag's handlers hold their own copies (D4).
+    let mut drag_release = divider_drag;
+    let mut drag_cancel = divider_drag;
+    let drag_move = divider_drag;
+    // The drag's width callback (D14): every step clamps, saves, and bumps
+    // the layout epoch, as the Svelte `dragQueueWidth` and the ResizeObserver
+    // replacement did.
+    let mut drag_widths = widths_store.clone();
+    let mut drag_epoch = epoch;
+    let drag_container = container;
+    let mut reset_widths = widths_store.clone();
+    let mut reset_epoch = epoch;
 
     rsx! {
         style { dangerous_inner_html: ROOT_STYLE.as_str() }
@@ -312,9 +328,16 @@ pub fn App() -> Element {
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
             },
             onpointerup: move |event: PointerEvent| {
+                // A divider drag ends on the same release the core receives,
+                // as the webview's `window` listener did.
+                drag_release.end();
                 input::on_pointer(DomPointerKind::Release, &event.data, &release_link);
             },
             onpointermove: move |event: PointerEvent| {
+                // A divider drag's moves report through the drag's callback
+                // before the move forwards to the core, as the Svelte
+                // `window` listener and the root's forwarder both did.
+                drag_move.pointer_move(event.data.client_coordinates().x);
                 input::on_pointer(DomPointerKind::Move, &event.data, &move_link);
             },
             onwheel: move |event: WheelEvent| {
@@ -329,6 +352,8 @@ pub fn App() -> Element {
                 input::on_contextmenu(&event);
             },
             onpointercancel: move |event: PointerEvent| {
+                // The cancelled gesture drops the divider's drag too.
+                drag_cancel.end();
                 input::on_pointer_cancel(&event.data, &cancel_link);
             },
             onpointerleave: move |event: PointerEvent| {
@@ -365,7 +390,10 @@ pub fn App() -> Element {
                                 } else {
                                     String::new()
                                 },
-                                Panel {}
+                                Panel {
+                                    container: container.cloned(),
+                                    library_visible,
+                                }
                             }
                         }
                         if two_columns && !panel.collapsed {
@@ -373,7 +401,20 @@ pub fn App() -> Element {
                             // it resizes the Queue column and, with it, the
                             // Library column the arrangement measures; a
                             // double-click returns the canvas width.
-                            PanelDivider {}
+                            PanelDivider {
+                                side: DividerSide::Left,
+                                name: DividerName::Queue,
+                                width: widths.queue,
+                                on_drag: move |width| {
+                                    drag_widths
+                                        .drag_queue_width(width, drag_container.cloned().width);
+                                    drag_epoch.bump();
+                                },
+                                on_reset: move |()| {
+                                    reset_widths.reset_queue_width();
+                                    reset_epoch.bump();
+                                },
+                            }
                         }
                         if library_visible && library_list.is_some() {
                             LibraryPanel {}
