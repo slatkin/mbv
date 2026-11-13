@@ -1,3 +1,5 @@
+> **Status: rejected** (2026-11-13). The user tried the GPUI build and rejected it. The Blitz path replaces this plan: see `openspec/changes/blitz-queue-panel-spike/`. Do not implement this change. Its Prerequisite section is stale: `gui-change-driven-sections` was implemented in full, including the front end and the `mbv-art` scheme, not trimmed as this proposal assumes. The directory stays as the record of the rejected plan.
+
 # Proposal
 
 ## Why
