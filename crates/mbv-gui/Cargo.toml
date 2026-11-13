@@ -13,8 +13,17 @@ readme = "../../README.md"
 [features]
 default = ["tauri", "blitz"]
 tauri = ["dep:tauri"]
-# Filled with the D2 window dependencies in row 1.2.
-blitz = []
+# The D2 window dependencies (replace-tauri-with-blitz design D2).
+blitz = [
+  "dep:dioxus-native",
+  "dep:blitz-shell",
+  "dep:blitz-traits",
+  "dep:blitz-dom",
+  "dep:parley",
+  "dep:futures-channel",
+  "dep:futures-util",
+  "dep:image",
+]
 
 [[bin]]
 name = "mbv-gui"
@@ -50,6 +59,29 @@ mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tauri = { version = "=2.12.5", optional = true }
 tracing.workspace = true
+
+# The D2 window dependencies (replace-tauri-with-blitz design D2): exact pins
+# on the dioxus-native/Blitz stack, with the peer pins D2 records held so
+# Cargo unifies one copy of blitz-dom and parley.
+dioxus-native = { version = "=0.8.0-alpha.3", optional = true, default-features = false, features = [
+  "prelude",
+  "svg",
+  "system-fonts",
+  "woff",
+  "vello-hybrid",
+] }
+blitz-shell = { version = "=0.3.0-beta.4", optional = true, default-features = false }
+blitz-traits = { version = "=0.3.0-beta.4", optional = true, default-features = false }
+# `decode_font_bytes` for the ellipsis fonts (D12) and the `Document` trait in
+# the headless tests.
+blitz-dom = { version = "=0.3.0-beta.4", optional = true, default-features = false, features = ["woff"] }
+# The ellipsis measure (D12); the same version as Blitz, so Cargo unifies one copy.
+parley = { version = "=0.12.0", optional = true, default-features = false, features = ["std"] }
+# The window channel (D4).
+futures-channel = { version = "=0.3.34", optional = true }
+futures-util = { version = "=0.3.34", optional = true, default-features = false, features = ["std"] }
+# Art headers for the natural size (D7).
+image = { workspace = true, optional = true, features = ["png", "jpeg", "webp"] }
 
 [build-dependencies]
 tauri-build = "=2.7.4"
