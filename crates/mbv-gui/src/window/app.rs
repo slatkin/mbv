@@ -12,6 +12,7 @@ use std::sync::{Arc, LazyLock};
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy};
 use dioxus_native::prelude::*;
 use dioxus_native::use_window;
+use dioxus_native::winit::window::{Window, WindowId};
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
@@ -86,10 +87,76 @@ fn apply_batch(
     }
 }
 
+/// The drain task's state (D4): the contexts the event dispatch reads and
+/// writes. The root builds one and hands it to [`use_window_drain`].
+#[derive(Clone)]
+struct Drain {
+    proxy: BlitzShellProxy,
+    window_id: WindowId,
+    /// The window the drain reads the scale factor from (D7, D9).
+    scale_window: Arc<dyn Window>,
+    scale: ScaleFactor,
+    epoch: LayoutEpoch,
+    art_events: ArtEvents,
+    fired: FiredTimers,
+    sections: Sections,
+    playhead: Playhead,
+}
+
+impl Drain {
+    /// Dispatch one drained event (D4).
+    fn dispatch(&mut self, event: WindowEvent) {
+        match event {
+            WindowEvent::Quit => {
+                self.proxy.send_event(BlitzShellEvent::CloseWindow {
+                    window_id: self.window_id,
+                });
+            }
+            // A viewport change is a layout fact (D9): every measurement
+            // effect re-measures, and the scale factor the natural-size caps
+            // divide by rewrites (D7).
+            WindowEvent::Viewport => {
+                self.scale.0.set(self.scale_window.scale_factor());
+                self.epoch.bump();
+            }
+            // An art answer reaches its `ArtImage` through the store (D7).
+            WindowEvent::Art(event) => self.art_events.push(event),
+            // A passed timer reaches the surface that armed it (D10); the
+            // playhead's minute clock re-arms through the same route.
+            WindowEvent::Timer(timer) => {
+                self.playhead.on_timer(timer);
+                self.fired.push(timer);
+            }
+            // A presented frame advances the playhead's prediction (D10).
+            WindowEvent::Frame => self.playhead.on_frame(),
+            // A section batch writes the stores (D6).
+            WindowEvent::Batch(batch) => {
+                apply_batch(&mut self.sections, &mut self.playhead, self.epoch, &batch);
+            }
+        }
+    }
+}
+
+/// The window channel's drain (D4): the root's one long-lived future. The
+/// receiver is taken once; the drain lives for the window's life.
+fn use_window_drain(drain: Drain, slot: EventSlot) {
+    use_future(move || {
+        let mut drain = drain.clone();
+        let slot = slot.clone();
+        async move {
+            let Some(mut events) = slot.take() else {
+                return;
+            };
+            while let Some(event) = events.next().await {
+                drain.dispatch(event);
+            }
+        }
+    });
+}
+
 /// The window's root (D6).
 #[component]
 pub fn App() -> Element {
-    let proxy = use_hook(consume_context::<BlitzShellProxy>);
     let window = use_window();
     let window_id = window.id();
     let slot = use_hook(consume_context::<EventSlot>);
@@ -118,57 +185,20 @@ pub fn App() -> Element {
 
     // The window channel's drain (D4): every event from outside the tree
     // dispatches here.
-    let drain_sections = sections.clone();
-    let drain_playhead = playhead.clone();
-    let drain_window_handle = Arc::clone(&window);
-    use_future(move || {
-        let proxy = proxy.clone();
-        let slot = slot.clone();
-        let drain_window = Arc::clone(&drain_window_handle);
-        let mut sections = drain_sections.clone();
-        let mut playhead = drain_playhead.clone();
-        async move {
-            let mut epoch = epoch;
-            let mut art_events = art_events;
-            let mut fired = fired;
-            let mut scale = scale;
-            let scale_window = drain_window;
-            let Some(mut events) = slot.take() else {
-                return;
-            };
-            while let Some(event) = events.next().await {
-                match event {
-                    WindowEvent::Quit => {
-                        proxy.send_event(BlitzShellEvent::CloseWindow { window_id });
-                    }
-                    // A viewport change is a layout fact (D9): every
-                    // measurement effect re-measures, and the scale factor the
-                    // natural-size caps divide by rewrites (D7).
-                    WindowEvent::Viewport => {
-                        scale.0.set(scale_window.scale_factor());
-                        epoch.bump();
-                    }
-                    // An art answer reaches its `ArtImage` through the store
-                    // (D7).
-                    WindowEvent::Art(event) => art_events.push(event),
-                    // A passed timer reaches the surface that armed it (D10);
-                    // the playhead's minute clock re-arms through the same
-                    // route.
-                    WindowEvent::Timer(timer) => {
-                        playhead.on_timer(timer);
-                        fired.push(timer);
-                    }
-                    // A presented frame advances the playhead's prediction
-                    // (D10).
-                    WindowEvent::Frame => playhead.on_frame(),
-                    // A section batch writes the stores (D6).
-                    WindowEvent::Batch(batch) => {
-                        apply_batch(&mut sections, &mut playhead, epoch, &batch);
-                    }
-                }
-            }
-        }
-    });
+    use_window_drain(
+        Drain {
+            proxy: use_hook(consume_context::<BlitzShellProxy>),
+            window_id,
+            scale_window: Arc::clone(&window),
+            scale,
+            epoch,
+            art_events,
+            fired,
+            sections: sections.clone(),
+            playhead: playhead.clone(),
+        },
+        slot,
+    );
 
     // The sync on mount (D6): the window asks for the full snapshot once its
     // section listener is subscribed. The drain above is that listener; both
@@ -346,12 +376,29 @@ pub fn App() -> Element {
                         // fixes): Enter and Esc answer in the core's overlay
                         // key rules, and the buttons report their press
                         // regions.
-                        GuiOverlayFrame::Confirm { .. } => rsx! { ConfirmOverlay {} },
+                        GuiOverlayFrame::Confirm { message, buttons } => rsx! {
+                            ConfirmOverlay {
+                                message: message.clone(),
+                                buttons: buttons.clone(),
+                            }
+                        },
                         // The App's raised daemon-lost recovery dialog,
                         // window-modal over every panel: the dialog blocks
                         // every other input until one of its choices runs,
                         // and the buttons report their press regions.
-                        GuiOverlayFrame::DaemonLost { .. } => rsx! { DaemonLostOverlay {} },
+                        GuiOverlayFrame::DaemonLost {
+                            last_playing_title,
+                            daemon_log_path,
+                            restart_error,
+                            buttons,
+                        } => rsx! {
+                            DaemonLostOverlay {
+                                last_playing_title: last_playing_title.clone(),
+                                daemon_log_path: daemon_log_path.clone(),
+                                restart_error: restart_error.clone(),
+                                buttons: buttons.clone(),
+                            }
+                        },
                         // The row menu, track popover, and playback-target
                         // chooser paint inside their panels; the root mounts
                         // nothing for them, as `App.svelte` does.

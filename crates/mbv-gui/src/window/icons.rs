@@ -27,6 +27,10 @@ pub struct IconProps {
     /// The svg's rendered width and height, in CSS pixels.
     #[props(default = 24)]
     pub size: u16,
+    /// The svg's stroke colour, as a Svelte call site's `color={...}` value.
+    /// Lucide's default is `currentColor`.
+    #[props(default = "currentColor".to_owned())]
+    pub color: String,
 }
 
 impl std::fmt::Debug for IconProps {
@@ -34,6 +38,7 @@ impl std::fmt::Debug for IconProps {
         f.debug_struct("IconProps")
             .field("class", &self.class)
             .field("size", &self.size)
+            .field("color", &self.color)
             .finish()
     }
 }
@@ -55,6 +60,7 @@ fn icon_shell(
         class.push_str(&props.class);
     }
     let size = props.size;
+    let stroke = &props.color;
     rsx! {
         svg {
             xmlns: "http://www.w3.org/2000/svg",
@@ -62,7 +68,7 @@ fn icon_shell(
             height: "{size}",
             view_box: "0 0 24 24",
             fill: "none",
-            stroke: "currentColor",
+            stroke: "{stroke}",
             stroke_width: "2",
             stroke_linecap: "round",
             stroke_linejoin: "round",
