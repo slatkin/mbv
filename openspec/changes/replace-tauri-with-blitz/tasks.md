@@ -29,8 +29,8 @@ Design decisions are cited as `D<n>`. Every port task follows the port rules of 
 
 ## 4. Root, attach, and overlays
 
-- [ ] 4.1 Port `App.svelte` and `main.ts` to `window/app.rs` (D6): the stylesheet with the cell-unit rule of `window/cells.rs` first, the theme style, the `sync` on mount, and the composition of the attach screen, the overlays, the Settings screen, and the player and Library trees, with each not-yet-ported child as an empty component in its target module. Verify: `cargo check -p mbv-gui`.
-- [ ] 4.2 Port `AttachScreen.svelte`, `DaemonLostOverlay.svelte`, and `ConfirmOverlay.svelte`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
+- [x] 4.1 Port `App.svelte` and `main.ts` to `window/app.rs` (D6): the stylesheet with the cell-unit rule of `window/cells.rs` first, the theme style, the `sync` on mount, and the composition of the attach screen, the overlays, the Settings screen, and the player and Library trees, with each not-yet-ported child as an empty component in its target module. Verify: `cargo check -p mbv-gui`.
+- [x] 4.2 Port `AttachScreen.svelte`, `DaemonLostOverlay.svelte`, and `ConfirmOverlay.svelte`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
 
 ## 5. Player panel and Queue panel
 
