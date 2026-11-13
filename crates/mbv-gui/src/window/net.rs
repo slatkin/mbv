@@ -139,12 +139,32 @@ fn fetch_font(url: &Url, handler: Box<dyn NetHandler>) {
     }
 }
 
-/// The vendored WOFF2 bytes for `file` (D7, D11): the six Latin faces of
-/// `IBM Plex Sans` and `JetBrains Mono` land with task 2.1, so until then no
-/// file has bytes.
-fn font_bytes(_file: &str) -> Option<&'static [u8]> {
-    None
+/// The vendored WOFF2 bytes for `file` (D7, D11): the six Latin faces (weights
+/// 400, 500, 600) of `IBM Plex Sans` and `JetBrains Mono` 5.3.0.
+fn font_bytes(file: &str) -> Option<&'static [u8]> {
+    match file {
+        "ibm-plex-sans-latin-400-normal.woff2" => Some(FONT_IBM_PLEX_SANS_400),
+        "ibm-plex-sans-latin-500-normal.woff2" => Some(FONT_IBM_PLEX_SANS_500),
+        "ibm-plex-sans-latin-600-normal.woff2" => Some(FONT_IBM_PLEX_SANS_600),
+        "jetbrains-mono-latin-400-normal.woff2" => Some(FONT_JETBRAINS_MONO_400),
+        "jetbrains-mono-latin-500-normal.woff2" => Some(FONT_JETBRAINS_MONO_500),
+        "jetbrains-mono-latin-600-normal.woff2" => Some(FONT_JETBRAINS_MONO_600),
+        _ => None,
+    }
 }
+
+const FONT_IBM_PLEX_SANS_400: &[u8] =
+    include_bytes!("../../assets/fonts/ibm-plex-sans-latin-400-normal.woff2");
+const FONT_IBM_PLEX_SANS_500: &[u8] =
+    include_bytes!("../../assets/fonts/ibm-plex-sans-latin-500-normal.woff2");
+const FONT_IBM_PLEX_SANS_600: &[u8] =
+    include_bytes!("../../assets/fonts/ibm-plex-sans-latin-600-normal.woff2");
+const FONT_JETBRAINS_MONO_400: &[u8] =
+    include_bytes!("../../assets/fonts/jetbrains-mono-latin-400-normal.woff2");
+const FONT_JETBRAINS_MONO_500: &[u8] =
+    include_bytes!("../../assets/fonts/jetbrains-mono-latin-500-normal.woff2");
+const FONT_JETBRAINS_MONO_600: &[u8] =
+    include_bytes!("../../assets/fonts/jetbrains-mono-latin-600-normal.woff2");
 
 #[cfg(test)]
 mod tests;
