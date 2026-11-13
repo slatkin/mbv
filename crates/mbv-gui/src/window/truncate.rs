@@ -12,6 +12,7 @@ use dioxus_native::prelude::*;
 use parley::style::{FontFamily, FontWeight, StyleProperty};
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::window::layout::LayoutEpoch;
 use crate::window::net::font_bytes;
 
 /// The text style a call site measures (D12): the family, size, weight, and
@@ -208,29 +209,35 @@ impl std::fmt::Debug for TruncateProps {
 pub fn Truncate(props: TruncateProps) -> Element {
     let mut display = use_signal(|| props.text.clone());
     let mut mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    // A missing epoch provider never re-measures on a layout change: the
+    // full text still paints, and the box's `truncate` class still clips it.
+    let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
 
-    use_effect(move || {
-        let text = props.text.clone();
-        let style = props.style;
-        let event = mounted();
-        // Task 3.5: the effect reads `LayoutEpoch` here too, so a layout
-        // change (a resize, a divider drag, a panel state change) re-measures.
-        spawn(async move {
-            let Some(event) = event else {
-                return;
-            };
-            let Ok(rect) = event.get_client_rect().await else {
-                return;
-            };
-            // The client rect is already CSS pixels: it reads the taffy
-            // layout, whose viewport is the logical (physical / scale) size.
-            let cut = fit_text(&text, &style, rect.width());
-            // A peek, so the write below cannot re-trigger this effect.
-            if cut != display.peek().clone() {
-                display.set(cut);
-            }
-        });
-    });
+    use_effect(use_reactive(
+        (&props.text, &props.style),
+        move |(text, style)| {
+            let event = mounted();
+            // Reading the epoch subscribes the re-measure to every layout change
+            // (D12): a resize, a divider drag, or a panel state change re-measures
+            // the box.
+            let _epoch = epoch.as_ref().map(Signal::cloned);
+            spawn(async move {
+                let Some(event) = event else {
+                    return;
+                };
+                let Ok(rect) = event.get_client_rect().await else {
+                    return;
+                };
+                // The client rect is already CSS pixels: it reads the taffy
+                // layout, whose viewport is the logical (physical / scale) size.
+                let cut = fit_text(&text, &style, rect.width());
+                // A peek, so the write below cannot re-trigger this effect.
+                if cut != display.peek().clone() {
+                    display.set(cut);
+                }
+            });
+        },
+    ));
 
     let class = if props.class.is_empty() {
         "truncate".to_owned()

@@ -228,8 +228,9 @@ fn send_pointer(pointer: DomPointer, link: &CoreLink) {
 /// delta is `f64`; the wire `DomPointer` and the neutral `Position` are `f32`
 /// — the same rounding the webview's serde deserialization did. A coordinate
 /// or delta that is not finite, or that lies outside `f32`'s range, reads as
-/// the neutral 0.0.
-fn f32_from_f64(value: f64) -> f32 {
+/// the neutral 0.0. The measured rects (D9) and the natural-size caps (D7)
+/// narrow their `f64` reads through it too.
+pub(crate) fn f32_from_f64(value: f64) -> f32 {
     // The checked cast alone is not enough: num-traits' f64→f32 answer is
     // `Some(value as f32)` for every value, so a non-finite or out-of-range
     // value would round-trip NaN or infinity through. The range bound is the

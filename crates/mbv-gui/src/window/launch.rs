@@ -27,6 +27,7 @@ use futures_util::StreamExt;
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
+use crate::window::layout::LayoutEpoch;
 use crate::window::net::MbvNetProvider;
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
@@ -39,17 +40,21 @@ const APP_ID: &str = "io.github.slatkin.mbv-gui";
 const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
 
 /// The window's temporary root (task 4.1 ports `App.svelte` over it): it
-/// renders an empty element and drains the window channel (D4), answering
-/// [`WindowEvent::Quit`] with the shell's close (D4, D5).
+/// renders an empty element, provides the layout epoch (D9), and drains the
+/// window channel (D4), answering [`WindowEvent::Quit`] with the shell's close
+/// (D4, D5).
 #[component]
 pub fn root() -> Element {
     let proxy = use_hook(consume_context::<BlitzShellProxy>);
     let window_id = use_window().id();
     let slot = use_hook(consume_context::<EventSlot>);
+    let epoch = use_hook(LayoutEpoch::new);
+    provide_context(epoch);
     use_future(move || {
         let proxy = proxy.clone();
         let slot = slot.clone();
         async move {
+            let mut epoch = epoch;
             let Some(mut events) = slot.take() else {
                 return;
             };
@@ -58,18 +63,19 @@ pub fn root() -> Element {
                     WindowEvent::Quit => {
                         proxy.send_event(BlitzShellEvent::CloseWindow { window_id });
                     }
+                    // A viewport change is a layout fact (D9): every
+                    // measurement effect re-measures.
+                    WindowEvent::Viewport => epoch.bump(),
                     // Section batches reach their sections from task 3.1
                     // on, art answers reach `ArtImage` from task 3.6 on (D7),
                     // timers reach their surfaces as their retry and debounce
-                    // modules land, the layout epoch reads the viewport from
-                    // task 3.5 on (D9), and frames reach the playhead with it.
+                    // modules land, and frames reach the playhead with it.
                     // Until then the window needs no reaction (documented
                     // no-op).
                     WindowEvent::Batch(_)
                     | WindowEvent::Art(_)
                     | WindowEvent::Timer(_)
-                    | WindowEvent::Frame
-                    | WindowEvent::Viewport => {}
+                    | WindowEvent::Frame => {}
                 }
             }
         }
