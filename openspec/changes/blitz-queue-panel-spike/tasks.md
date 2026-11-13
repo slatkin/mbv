@@ -18,14 +18,14 @@ Each task names how to verify it. Verification uses commands, tests, or delivere
 
 ## 3. In-process artwork and fonts
 
-- [ ] 3.1 Implement `MbvNetProvider` in `crates/mbv-native/src/art_net.rs` (D6). It implements `blitz_traits::net::NetProvider`. An `mbv-art` request sends `CoreInput::Art(ArtRequest { path, reply })`. The reply answers `Found` with a PNG downscaled to a 512 px long edge, answers `Missing` with `QUEUE_CARD_PLACEHOLDER_BYTES`, and calls `handler.bytes(url, Bytes)` both times. Verify: `cargo check -p mbv-native` passes.
-- [ ] 3.2 Serve the vendored fonts from `mbv-asset://localhost/font/<file>` with `include_bytes!` (D12). Verify: `cargo check -p mbv-native` passes.
-- [ ] 3.3 Write the contract tests 1 to 3 of D17 in `src/art_net.rs`, headless: a `Found` answer yields a 512 px raster on the image node, a `Missing` answer yields the placeholder raster, and an inline `@font-face` source is requested through the provider. Verify: `cargo nextest run -p mbv-native` passes.
+- [x] 3.1 Implement `MbvNetProvider` in `crates/mbv-native/src/art_net.rs` (D6). It implements `blitz_traits::net::NetProvider`. An `mbv-art` request sends `CoreInput::Art(ArtRequest { path, reply })`. The reply answers `Found` with a PNG downscaled to a 512 px long edge, answers `Missing` with `QUEUE_CARD_PLACEHOLDER_BYTES`, and calls `handler.bytes(url, Bytes)` both times. Verify: `cargo check -p mbv-native` passes.
+- [x] 3.2 Serve the vendored fonts from `mbv-asset://localhost/font/<file>` with `include_bytes!` (D12). Verify: `cargo check -p mbv-native` passes.
+- [x] 3.3 Write the contract tests 1 to 3 of D17 in `src/art_net.rs`, headless: a `Found` answer yields a 512 px raster on the image node, a `Missing` answer yields the placeholder raster, and an inline `@font-face` source is requested through the provider. Verify: `cargo nextest run -p mbv-native` passes.
 
 ## 4. Launch and core wiring
 
-- [ ] 4.1 Add `crates/mbv-native/src/launch.rs`: a copy of the `launch_cfg_with_props` body from `dioxus-native` 0.8.0-alpha.3 (D6). It uses `MbvNetProvider`, `navigation_provider: None`, `font_ctx: None`, renderer options with `base_color`, `alpha_mode`, `features`, and `limits` set to `None`, and window attributes with title `mbv` and the Wayland app id from D14. It creates no tokio runtime. Verify: `cargo check -p mbv-native` passes, and `rg -n 'tokio::runtime' crates/mbv-native/src` finds nothing.
-- [ ] 4.2 In `src/main.rs`: install `MiMalloc` as the global allocator (behind `not(feature = "profiling")`), call `declare_gui_client()` first (D15), start `mbv_gui::core_thread::spawn` with a sink that calls `unbounded_send` on a `futures_channel` sender (D7), and pass the core's sender to `launch`. On window close, send `CoreInput::Close` and join the core handle. Verify: `cargo check -p mbv-native` passes, and `rg -n 'declare_gui_client' crates/mbv-native/src` finds one call.
+- [x] 4.1 Add `crates/mbv-native/src/launch.rs`: a copy of the `launch_cfg_with_props` body from `dioxus-native` 0.8.0-alpha.3 (D6). It uses `MbvNetProvider`, `navigation_provider: None`, `font_ctx: None`, renderer options with `base_color`, `alpha_mode`, `features`, and `limits` set to `None`, and window attributes with title `mbv` and the Wayland app id from D14. It creates no tokio runtime. Verify: `cargo check -p mbv-native` passes, and `rg -n 'tokio::runtime' crates/mbv-native/src` finds nothing.
+- [x] 4.2 In `src/main.rs`: install `MiMalloc` as the global allocator (behind `not(feature = "profiling")`), call `declare_gui_client()` first (D15), start `mbv_gui::core_thread::spawn` with a sink that calls `unbounded_send` on a `futures_channel` sender (D7), and pass the core's sender to `launch`. On window close, send `CoreInput::Close` and join the core handle. Verify: `cargo check -p mbv-native` passes, and `rg -n 'declare_gui_client' crates/mbv-native/src` finds one call.
 
 ## 5. The Queue panel
 
