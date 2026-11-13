@@ -63,6 +63,14 @@ tracing.workspace = true
 # The D2 window dependencies (replace-tauri-with-blitz design D2): exact pins
 # on the dioxus-native/Blitz stack, with the peer pins D2 records held so
 # Cargo unifies one copy of blitz-dom and parley.
+#
+# Tokio: `dioxus-native` enables `tokio` (rt) through `dioxus-asset-resolver`'s
+# `native` feature, with no switch; no mbv code uses a tokio API (the
+# AGENTS.md tokio edge list names this crate for that resolver).
+#
+# Licence: Stylo and the other Servo crates in the Blitz stack are MPL-2.0;
+# the packages ship the MPL notice and name the crates.io source as the
+# source offer (design D17).
 dioxus-native = { version = "=0.8.0-alpha.3", optional = true, default-features = false, features = [
   "prelude",
   "svg",
