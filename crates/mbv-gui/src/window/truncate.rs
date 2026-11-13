@@ -208,9 +208,6 @@ impl std::fmt::Debug for TruncateProps {
 pub fn Truncate(props: TruncateProps) -> Element {
     let mut display = use_signal(|| props.text.clone());
     let mut mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The client rect is physical pixels; the measure is CSS pixels.
-    let scale = try_consume_context::<std::sync::Arc<dyn dioxus_native::winit::window::Window>>()
-        .map_or(1.0, |window| window.scale_factor());
 
     use_effect(move || {
         let text = props.text.clone();
@@ -225,8 +222,9 @@ pub fn Truncate(props: TruncateProps) -> Element {
             let Ok(rect) = event.get_client_rect().await else {
                 return;
             };
-            let css_width = rect.width() / scale;
-            let cut = fit_text(&text, &style, css_width);
+            // The client rect is already CSS pixels: it reads the taffy
+            // layout, whose viewport is the logical (physical / scale) size.
+            let cut = fit_text(&text, &style, rect.width());
             // A peek, so the write below cannot re-trigger this effect.
             if cut != display.peek().clone() {
                 display.set(cut);
