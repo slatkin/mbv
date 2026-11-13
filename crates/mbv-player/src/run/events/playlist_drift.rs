@@ -51,66 +51,78 @@ impl PlaybackRun {
         // 2026-11-08T19:33:53, the GUI queue fix). The final layout is
         // `reassert_queue_layout`'s check, not this handler's.
         if self.queue_transition_in_flight() {
-            // The rebuild's settle: the first observed count equal to the
-            // copy's length says the load plan has landed, so the gate the
-            // arming command left up (its count observations arrive on later
-            // run loop iterations) disarms here. A count that does not match
-            // stays suppressed — the plan may still be mid-flight — and the
-            // start item's PlaybackRestart disarms the gate when playback
-            // resumes regardless.
-            if count == self.queue_len() {
-                self.pending_initial_playlist_layout = false;
-            }
-            tracing::debug!(name: "player.playlist_count.ignored", target: "player", count, "ignoring transient playlist count during queue transition");
-            return;
-        }
-        if count == self.queue_len() {
+            self.settle_transition_count(count);
             return;
         }
         let old_n = self.queue_len();
-        if count < old_n {
-            let removed = old_n - count;
-            tracing::warn!(name: "player.playlist_count.decreased", target: "player", previous_count = old_n, count, removed, "mpv playlist entries removed externally");
-            let removed_slot_ids: Vec<_> = self
-                .queue
-                .slots()
-                .iter()
-                .skip(count)
-                .map(|slot| slot.slot_id)
-                .collect();
-            for slot_id in removed_slot_ids {
-                if self.active_slot_id() == Some(slot_id) {
-                    self.queue.remove_active_slot_confirmed(slot_id);
-                } else {
-                    self.queue.remove_slot(slot_id);
-                }
-            }
-            // Re-derive this run's mpv-local ordinal from the still-active
-            // slot's identity after an external shrink (identity -> ordinal is
-            // permitted, design D2); the else-branch clamp below only covers a
-            // shrink past the end, not an earlier removal shifting the active
-            // slot down.
-            self.current_idx = self
-                .active_slot_id()
-                .and_then(|s| self.queue.slot_index(s))
-                .unwrap_or(self.current_idx);
-            self.sync_status_position();
-            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
-                "Queue desynced: {removed} item(s) removed externally"
-            )));
-        } else {
-            let added = count - old_n;
-            tracing::warn!(name: "player.playlist_count.increased", target: "player", previous_count = old_n, count, added, "mpv playlist entries added externally");
-            // We cannot reconstruct the added EmbyItems from mpv's playlist,
-            // so we keep the queue as-is. Clamp current_idx to the last
-            // known item in case the external tool also changed position.
-            if self.current_idx >= self.queue_len() && self.queue_len() > 0 {
-                self.current_idx = self.queue_len() - 1;
-            }
-            self.sync_status_position();
-            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
-                "Queue desynced: {added} item(s) added externally"
-            )));
+        if count == old_n {
+            return;
         }
+        if count < old_n {
+            self.apply_external_shrink(count, old_n);
+        } else {
+            self.apply_external_growth(count, old_n);
+        }
+    }
+
+    /// The rebuild's settle: the first observed count equal to the
+    /// copy's length says the load plan has landed, so the gate the
+    /// arming command left up (its count observations arrive on later
+    /// run loop iterations) disarms here. A count that does not match
+    /// stays suppressed — the plan may still be mid-flight — and the
+    /// start item's `PlaybackRestart` disarms the gate when playback
+    /// resumes regardless.
+    fn settle_transition_count(&mut self, count: usize) {
+        if count == self.queue_len() {
+            self.pending_initial_playlist_layout = false;
+        }
+        tracing::debug!(name: "player.playlist_count.ignored", target: "player", count, "ignoring transient playlist count during queue transition");
+    }
+
+    fn apply_external_shrink(&mut self, count: usize, old_n: usize) {
+        let removed = old_n - count;
+        tracing::warn!(name: "player.playlist_count.decreased", target: "player", previous_count = old_n, count, removed, "mpv playlist entries removed externally");
+        let removed_slot_ids: Vec<_> = self
+            .queue
+            .slots()
+            .iter()
+            .skip(count)
+            .map(|slot| slot.slot_id)
+            .collect();
+        for slot_id in removed_slot_ids {
+            if self.active_slot_id() == Some(slot_id) {
+                self.queue.remove_active_slot_confirmed(slot_id);
+            } else {
+                self.queue.remove_slot(slot_id);
+            }
+        }
+        // Re-derive this run's mpv-local ordinal from the still-active
+        // slot's identity after an external shrink (identity -> ordinal is
+        // permitted, design D2); the growth clamp below only covers a
+        // shrink past the end, not an earlier removal shifting the active
+        // slot down.
+        self.current_idx = self
+            .active_slot_id()
+            .and_then(|s| self.queue.slot_index(s))
+            .unwrap_or(self.current_idx);
+        self.sync_status_position();
+        let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
+            "Queue desynced: {removed} item(s) removed externally"
+        )));
+    }
+
+    fn apply_external_growth(&mut self, count: usize, old_n: usize) {
+        let added = count - old_n;
+        tracing::warn!(name: "player.playlist_count.increased", target: "player", previous_count = old_n, count, added, "mpv playlist entries added externally");
+        // We cannot reconstruct the added EmbyItems from mpv's playlist,
+        // so we keep the queue as-is. Clamp current_idx to the last
+        // known item in case the external tool also changed position.
+        if self.current_idx >= self.queue_len() && self.queue_len() > 0 {
+            self.current_idx = self.queue_len() - 1;
+        }
+        self.sync_status_position();
+        let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
+            "Queue desynced: {added} item(s) added externally"
+        )));
     }
 }

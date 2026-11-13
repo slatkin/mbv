@@ -153,25 +153,53 @@ impl App {
             );
             return None;
         }
-        // Writes the selected device route into config, or removes the
-        // override when the automatic (index 0) entry is chosen.
-        {
-            let mut c = self.config.lock().unwrap();
-            if let Some((_, Some(endpoint))) = device {
-                c.library_routes
-                    .insert(library_lower.to_string(), endpoint.clone());
-                tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
-            } else {
-                c.library_routes.remove(library_lower);
-                tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
-            }
+        if !self.persist_library_route(library_lower, device) {
+            return None;
         }
+        self.refresh_library_rows(library_lower)
+    }
+
+    /// Writes the selected device route into config, or removes the
+    /// override when the automatic (index 0) entry is chosen. A failed
+    /// config save flashes a toast and ends the route change with
+    /// `false`; the override itself stays written.
+    fn persist_library_route(
+        &mut self,
+        library_lower: &str,
+        device: Option<&DeviceRouteRow>,
+    ) -> bool {
+        self.write_library_route_override(library_lower, device);
         let cfg = self.config.lock().unwrap().clone();
         self.library_routes = cfg.library_routes.clone();
         tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.library_routes.len(), "runtime route table synchronized");
-        match crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes) {
+        self.save_library_routes(&cfg)
+    }
+
+    /// Writes the selected device route into config, or removes the
+    /// override when the automatic (index 0) entry is chosen.
+    fn write_library_route_override(
+        &mut self,
+        library_lower: &str,
+        device: Option<&DeviceRouteRow>,
+    ) {
+        let mut c = self.config.lock().unwrap();
+        if let Some((_, Some(endpoint))) = device {
+            c.library_routes
+                .insert(library_lower.to_string(), endpoint.clone());
+            tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
+        } else {
+            c.library_routes.remove(library_lower);
+            tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
+        }
+    }
+
+    /// A failed config save flashes a toast and ends the route change
+    /// with `false`; the override itself stays written.
+    fn save_library_routes(&mut self, cfg: &mbv_config::Config) -> bool {
+        match crate::config::save_config_section(cfg, mbv_config::ConfigSection::LibraryRoutes) {
             Ok(()) => {
                 tracing::info!(name: "library_route.config_save.succeeded", target: "library_route", "config save succeeded");
+                true
             }
             Err(e) => {
                 tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error = %e }, "config save failed");
@@ -179,9 +207,18 @@ impl App {
                     format!("⚠ Library route changed but config save failed ({e})"),
                     ToastSeverity::Error,
                 );
-                return None;
+                false
             }
         }
+    }
+
+    /// Re-reads the Emby views through the saved client and returns the
+    /// library rows with the cursor restored to `library_lower`. A
+    /// failed refresh flashes a toast and yields `None`.
+    fn refresh_library_rows(
+        &mut self,
+        library_lower: &str,
+    ) -> Option<(Vec<LibraryRouteRow>, usize)> {
         let client = self.emby_client()?;
         let refresh_result = { client.lock().unwrap().get_views() };
         let all = match refresh_result {
@@ -195,7 +232,7 @@ impl App {
                 return None;
             }
         };
-        let items = route_rows(&all, &cfg.library_routes);
+        let items = route_rows(&all, &self.library_routes);
         let restored_cursor = items
             .iter()
             .position(|(lower, _, _)| lower == library_lower)

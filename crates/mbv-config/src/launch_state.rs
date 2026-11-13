@@ -407,6 +407,29 @@ pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
     load_state_at(path, TUI_LAUNCH_STATE_VERSION)
 }
 
+/// Accept a snapshot whose `version` field is absent (the snapshot type's
+/// serde default fills the current version, so the file reads at the expected
+/// one), malformed (the structured re-read below reports it), or equal to
+/// `expected_version`; reject only a well-typed mismatch, with a warning.
+fn version_field_is_supported(value: &serde_json::Value, expected_version: u32) -> bool {
+    match value
+        .get("version")
+        .map(<u32 as serde::Deserialize>::deserialize)
+    {
+        None | Some(Err(_)) => true,
+        Some(Ok(found)) if found == expected_version => true,
+        Some(Ok(found)) => {
+            tracing::warn!(
+                name: "launch_state.restore.unsupported_version",
+                target: "launch_state",
+                version = found,
+                "launch state not restored"
+            );
+            false
+        }
+    }
+}
+
 /// Read one launch-location snapshot, accepting only a file whose `version`
 /// matches `expected_version`: a newer file never mis-resolves into stale
 /// identities, and a start without a location falls back to first-valid-choice
@@ -435,25 +458,8 @@ pub(super) fn load_state_at<T: serde::de::DeserializeOwned>(
             return None;
         }
     };
-    match value
-        .get("version")
-        .map(<u32 as serde::Deserialize>::deserialize)
-    {
-        // An absent field loses nothing — the snapshot type's serde default
-        // fills the current version — so the file is read at the expected
-        // one; a wrong-typed field is reported by the structured re-read
-        // below.
-        None | Some(Err(_)) => {}
-        Some(Ok(found)) if found == expected_version => {}
-        Some(Ok(found)) => {
-            tracing::warn!(
-                name: "launch_state.restore.unsupported_version",
-                target: "launch_state",
-                version = found,
-                "launch state not restored"
-            );
-            return None;
-        }
+    if !version_field_is_supported(&value, expected_version) {
+        return None;
     }
     match serde_json::from_value::<T>(value) {
         Ok(state) => Some(state),
