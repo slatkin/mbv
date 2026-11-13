@@ -38,9 +38,9 @@ Design decisions are cited as `D<n>`. Every port task follows the port rules of 
 - [x] 5.2 Port the artwork, title, and transport parts of `QueuePlaybackPanel.svelte` to `window/components/queue_playback_panel.rs` (split at 800 lines along the scrubber seam). Verify: `cargo check -p mbv-gui`.
 - [x] 5.3 Port the scrubber of `QueuePlaybackPanel.svelte`: the fill, the chapter ticks, the intro and credits marks, the clocks, the seek, and the hover preview with the trickplay tile. Port the contracts of `QueuePlaybackPanel.test.ts`. Verify: the tests pass.
 - [x] 5.4 Port `TrackChips.svelte` and its popovers. Port the contracts of `TrackChips.test.ts`. Verify: the tests pass.
-- [ ] 5.5 Port `QueuePanel.svelte` (rows, the active row's progress, the finish times, the drag reorder visuals) and `QueueRowMenu.svelte`. Port the contracts of `QueuePanel.test.ts`. Verify: the tests pass.
-- [ ] 5.6 Port `QueueHeader.svelte`, `QueueFooter.svelte`, and `TypedText.svelte`. Verify: `cargo check -p mbv-gui`.
-- [ ] 5.7 Port `FoldedQueue.svelte`, `CompactStrip.svelte`, and `CollapsedRail.svelte`, and wire the four panel states in `app.rs` (D9). Verify: `cargo check -p mbv-gui`.
+- [x] 5.5 Port `QueuePanel.svelte` (rows, the active row's progress, the finish times, the drag reorder visuals) and `QueueRowMenu.svelte`. Port the contracts of `QueuePanel.test.ts`. Verify: the tests pass.
+- [x] 5.6 Port `QueueHeader.svelte`, `QueueFooter.svelte`, and `TypedText.svelte`. Verify: `cargo check -p mbv-gui`.
+- [x] 5.7 Port `FoldedQueue.svelte`, `CompactStrip.svelte`, and `CollapsedRail.svelte`, and wire the four panel states in `app.rs` (D9). Verify: `cargo check -p mbv-gui`.
 
 ## 6. Library logic
 
