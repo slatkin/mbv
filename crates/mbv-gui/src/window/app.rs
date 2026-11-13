@@ -36,6 +36,8 @@ use crate::window::components::panel_divider::{
 };
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::layout::{LayoutEpoch, track_container_size, use_layout_reporter};
+use crate::window::library::reset::reset_library_interaction;
+use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, SystemTimes, Times};
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
@@ -197,6 +199,11 @@ pub fn App() -> Element {
     let divider_drag = use_hook(DividerDrag::new);
     provide_context(divider_drag);
     let link = consume_context::<CoreLink>();
+    // The Library panel's interaction store (D15): the port of `state.ts`'s
+    // and `scroll.ts`'s module stores as one context value, over the sections
+    // and the core link the commands go through.
+    let library = use_hook(|| LibraryState::new(sections.clone(), CoreLink::clone(&link)));
+    provide_context(library.clone());
 
     // The window channel's drain (D4): every event from outside the tree
     // dispatches here.
@@ -239,13 +246,17 @@ pub fn App() -> Element {
     // (add-gui-settings-screen design D1), and a new `uiResetEpoch` in the
     // `panel` section resets the window's presentation — the Library
     // interaction stores, the panel widths, and the Settings state. The
-    // widths reset here; the Library and Settings interaction stores reset
-    // with their ports (tasks 6.1 and 8.1, as `resetLibraryInteraction` and
-    // `resetSettingsUi` do).
+    // widths reset here, and the Library interaction stores with them (the
+    // port of `reset.ts`'s `resetLibraryInteraction`); the Settings state
+    // resets with its port (task 8.1, as `resetSettingsUi` does).
     let mut reset_store = widths_store.clone();
     let reset_sections = sections.clone();
+    let reset_library = library.clone();
     use_effect(move || {
-        let _reset = note_panel_ui_reset(&mut reset_store, &reset_sections);
+        let reset = note_panel_ui_reset(&mut reset_store, &reset_sections);
+        if reset {
+            reset_library_interaction(&reset_library);
+        }
     });
 
     // The panel container the layout report carries the size of (D9): the

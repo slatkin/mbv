@@ -13,6 +13,7 @@ pub mod icons;
 pub mod input;
 pub mod launch;
 pub mod layout;
+pub mod library;
 pub mod natural_size;
 pub mod net;
 pub mod panel;

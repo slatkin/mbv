@@ -1,0 +1,359 @@
+//! The Library Hero's facts and geometry (`add-gui-library-panel` design D5,
+//! D8, the port of `lib/library/hero.ts`): the picked album's lines as the
+//! canvas prints them, the artist's albums in the union that Shuffle artist
+//! plays, and the tracklist's cursor. The data is the core's, so this module
+//! only reads the carried Hero; keeping the lines and the cursor movement here
+//! lets the painters stay markup and the movement test without a layout.
+//!
+//! A line that joins values of several data types is built as typed segments
+//! (`add-gui-settings-screen` design D14): colour carries the type, so a count
+//! and a time on one line each carry their own kind, and the painter paints the
+//! kinds through `TypedText`.
+
+use crate::bridge::frame::library::{
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame, GuiMusicList, GuiMusicTrackFrame,
+};
+
+/// One meta row as the frames carry it: a line of typed segments.
+pub type MetaRow = Vec<GuiMetaSegmentFrame>;
+
+/// The tracklist rows of the Hero's album (design D5): the picked album's
+/// cached tracklist, empty until the album node's open loads it.
+#[must_use]
+pub fn hero_tracks(hero: Option<&GuiMusicHeroFrame>) -> Vec<GuiMusicTrackFrame> {
+    hero.map_or_else(Vec::new, |hero| {
+        hero.album.tracks.as_deref().unwrap_or_default().to_vec()
+    })
+}
+
+/// One line's typed runs, in display order (design D14).
+pub type Segments = MetaRow;
+
+/// A line with no typed part: it inherits the colour the painter gives it.
+#[must_use]
+pub fn plain_segments(text: &str) -> Segments {
+    if text.is_empty() {
+        Vec::new()
+    } else {
+        vec![GuiMetaSegmentFrame {
+            text: text.to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        }]
+    }
+}
+
+/// A section label's line, which paints the label token (design D14).
+#[must_use]
+pub fn label_segments(text: &str) -> Segments {
+    vec![GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind: GuiMetaKindFrame::Label,
+    }]
+}
+
+/// The segments of several meta rows on one line, joined by ` · ` as the
+/// frames order them.
+#[must_use]
+pub fn join_meta_rows(rows: &[MetaRow]) -> Segments {
+    let mut joined: Segments = Vec::new();
+    for (index, row) in rows.iter().filter(|row| !row.is_empty()).enumerate() {
+        if index > 0 {
+            joined.push(GuiMetaSegmentFrame {
+                text: " · ".to_owned(),
+                kind: GuiMetaKindFrame::Plain,
+            });
+        }
+        joined.extend(row.iter().cloned());
+    }
+    joined
+}
+
+/// The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
+/// the artist label with the selected collection names (design D5).
+#[must_use]
+pub fn hero_kicker(hero: &GuiMusicHeroFrame) -> Segments {
+    let line = if hero.collections.is_empty() {
+        "artist".to_owned()
+    } else {
+        format!("artist · {}", hero.collections.join(" + ").to_uppercase())
+    };
+    label_segments(&line)
+}
+
+/// `13 tracks · 44:25`: a track count with its total time, each in the
+/// singular when the count is one. The count and the time carry their own type
+/// (design D14).
+#[must_use]
+pub fn track_total_facts(
+    total: &crate::bridge::frame::library::GuiMusicTrackTotalFrame,
+) -> Segments {
+    vec![
+        GuiMetaSegmentFrame {
+            text: total.count.to_string(),
+            kind: GuiMetaKindFrame::Count,
+        },
+        GuiMetaSegmentFrame {
+            text: match total.count {
+                1 => " track · ",
+                _ => " tracks · ",
+            }
+            .to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        },
+        GuiMetaSegmentFrame {
+            text: total.duration.clone(),
+            kind: GuiMetaKindFrame::Time,
+        },
+    ]
+}
+
+/// The artist header's third line (design D5): the artist's album count in the
+/// union, and the track count and total time once every one of those albums
+/// holds a cached tracklist.
+#[must_use]
+pub fn artist_facts(hero: &GuiMusicHeroFrame) -> Segments {
+    let mut albums: Segments = vec![
+        GuiMetaSegmentFrame {
+            text: hero.album_count.to_string(),
+            kind: GuiMetaKindFrame::Count,
+        },
+        GuiMetaSegmentFrame {
+            text: match hero.album_count {
+                1 => " album",
+                _ => " albums",
+            }
+            .to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        },
+    ];
+    if let Some(tracks) = &hero.artist_tracks {
+        albums.push(GuiMetaSegmentFrame {
+            text: " · ".to_owned(),
+            kind: GuiMetaKindFrame::Plain,
+        });
+        albums.extend(track_total_facts(tracks));
+    }
+    albums
+}
+
+/// The album block's facts line, empty while the album's tracklist has not
+/// landed (design D5).
+#[must_use]
+pub fn album_facts(hero: &GuiMusicHeroFrame) -> Segments {
+    hero.album
+        .total
+        .as_ref()
+        .map_or_else(Vec::new, track_total_facts)
+}
+
+/// The artist's albums in the union, which Shuffle artist plays (design D8).
+/// The union artist is the one that owns the picked album, so a name the
+/// Service repeats cannot pick the wrong artist; the picked album alone is the
+/// fallback while the union holds no owner.
+#[must_use]
+pub fn artist_union_albums(music: &GuiMusicList, hero: &GuiMusicHeroFrame) -> Vec<String> {
+    let owner = music.artists.iter().find(|artist| {
+        artist
+            .albums
+            .iter()
+            .any(|album| album.album_id == hero.album.album_id)
+    });
+    owner.map_or_else(
+        || vec![hero.album.album_id.clone()],
+        |owner| {
+            owner
+                .albums
+                .iter()
+                .map(|album| album.album_id.clone())
+                .collect()
+        },
+    )
+}
+
+/// The tracklist's cursor resolved against the tracks that paint (design D3):
+/// the stored track while the tracklist holds it, and the first track while it
+/// does not — a tracklist whose cache lands after the Hero pane took focus still
+/// paints a cursor, and Enter acts on it without waiting for a movement key.
+#[must_use]
+pub fn resolve_track_cursor(tracks: &[GuiMusicTrackFrame], cursor: Option<&str>) -> Option<String> {
+    if cursor.is_some_and(|cursor| tracks.iter().any(|track| track.track_id == cursor)) {
+        return cursor.map(str::to_owned);
+    }
+    tracks.first().map(|track| track.track_id.clone())
+}
+
+/// The rows a Page Up or Page Down spans in the tracklist: the tracklist is a
+/// short list inside the Hero, so a fixed page keeps the cursor a screenful
+/// away without measuring the Hero.
+const TRACK_PAGE: usize = 10;
+
+/// The tracklist's cursor row after one movement (design D3): row by row for
+/// Up and Down, a page for Page Up and Page Down, and the tracklist's ends for
+/// Home and End, clamped to the tracklist. The caller resolves the cursor
+/// against the painted tracks first (`resolve_track_cursor`), so a cursor the
+/// tracklist does not hold starts the movement from the first row.
+#[must_use]
+pub fn move_track_cursor(
+    tracks: &[GuiMusicTrackFrame],
+    cursor: Option<&str>,
+    mv: super::list::ListMove,
+) -> Option<String> {
+    if tracks.is_empty() {
+        return None;
+    }
+    let last = tracks.len().saturating_sub(1);
+    let at = cursor
+        .and_then(|cursor| tracks.iter().position(|track| track.track_id == cursor))
+        .unwrap_or(0);
+    let to = match mv {
+        super::list::ListMove::Up => at.saturating_sub(1),
+        super::list::ListMove::Down => at + 1,
+        super::list::ListMove::PageUp => at.saturating_sub(TRACK_PAGE),
+        super::list::ListMove::PageDown => at + TRACK_PAGE,
+        super::list::ListMove::Home => 0,
+        super::list::ListMove::End => last,
+    };
+    tracks.get(to.min(last)).map(|track| track.track_id.clone())
+}
+
+/// One meta row of a single-row Hero, with the role the frame paints it in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeroMetaRow {
+    /// The row's typed segments.
+    pub segments: Segments,
+    /// The role the row paints in.
+    pub role: HeroMetaRole,
+}
+
+/// The role one Hero meta row paints in (design D15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeroMetaRole {
+    /// A plain facts row.
+    Meta,
+    /// The row the runtime marks.
+    Duration,
+    /// The row the progress marks.
+    Progress,
+}
+
+/// The meta rows of a Hero that shows one selected row (`add-gui-library-panel`
+/// design D15): each row's typed segments with its duration or progress role, as
+/// the core's `durationRow` and `progressRow` indices mark them.
+#[must_use]
+pub fn hero_meta_rows(
+    meta_rows: &[MetaRow],
+    duration_row: Option<usize>,
+    progress_row: Option<usize>,
+) -> Vec<HeroMetaRow> {
+    meta_rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| HeroMetaRow {
+            segments: row.clone(),
+            role: if Some(index) == duration_row {
+                HeroMetaRole::Duration
+            } else if Some(index) == progress_row {
+                HeroMetaRole::Progress
+            } else {
+                HeroMetaRole::Meta
+            },
+        })
+        .collect()
+}
+
+/// The attribute name of one part of a destination's Hero (`add-gui-library-panel`
+/// design D15): `data-library-hero-<name>` for Music (`attr` empty) and
+/// `data-library-<attr>-hero-<name>` for the rest. The one rule the frame, the
+/// artwork arm, and the action buttons share, so a destination's hooks stay
+/// stable.
+#[must_use]
+pub fn hero_attr(attr: &str, name: &str) -> String {
+    if attr.is_empty() {
+        format!("data-library-hero-{name}")
+    } else {
+        format!("data-library-{attr}-hero-{name}")
+    }
+}
+
+/// The facts every Hero carries, as the core's frames declare them.
+#[derive(Debug)]
+pub struct HeroLayoutFacts<'a> {
+    /// The item's title.
+    pub title: &'a str,
+    /// The largest unit's name (show, feed, series), when the item has one.
+    pub parent: Option<&'a str>,
+    /// The selected item's meta rows.
+    pub meta_rows: &'a [MetaRow],
+    /// The meta row the runtime marks.
+    pub duration_row: Option<usize>,
+    /// The meta row the progress marks.
+    pub progress_row: Option<usize>,
+    /// The item's overview.
+    pub overview: Option<&'a str>,
+}
+
+/// The Hero's painted header and block (`add-gui-library-panel` design D15).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeroLayout {
+    /// The header above the artwork.
+    pub header: HeroLayoutHeader,
+    /// The block beside the artwork.
+    pub block: HeroLayoutBlock,
+}
+
+/// The Hero header's lines (design D15).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeroLayoutHeader {
+    /// The section label's line.
+    pub kicker: Segments,
+    /// The big title: the largest unit.
+    pub title: String,
+    /// The plain facts on one line.
+    pub facts: Segments,
+}
+
+/// The Hero block's lines beside the artwork (design D15).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeroLayoutBlock {
+    /// The block's label: the item's title.
+    pub label: String,
+    /// The selected item's name, only when a parent took the header.
+    pub name: Option<String>,
+    /// The duration and progress rows.
+    pub meta: Vec<HeroMetaRow>,
+    /// The item's overview.
+    pub overview: Option<String>,
+}
+
+/// The frame's header and block for one Hero (`add-gui-library-panel` design D15,
+/// invariant 30): the header's big title is the largest unit — the parent when
+/// the item has one, else the item itself — over the plain facts on one line;
+/// the block beside the art holds the selected item's name (only when a parent
+/// took the header), its duration and progress rows, and its overview.
+#[must_use]
+pub fn hero_layout(facts: &HeroLayoutFacts<'_>, kicker: &str) -> HeroLayout {
+    let rows = hero_meta_rows(facts.meta_rows, facts.duration_row, facts.progress_row);
+    let parent = facts.parent.filter(|parent| !parent.is_empty());
+    HeroLayout {
+        header: HeroLayoutHeader {
+            kicker: label_segments(kicker),
+            title: parent.unwrap_or(facts.title).to_owned(),
+            facts: join_meta_rows(
+                &rows
+                    .iter()
+                    .filter(|row| row.role == HeroMetaRole::Meta)
+                    .map(|row| row.segments.clone())
+                    .collect::<Vec<_>>(),
+            ),
+        },
+        block: HeroLayoutBlock {
+            label: facts.title.to_owned(),
+            name: parent.map(|_| facts.title.to_owned()),
+            meta: rows
+                .into_iter()
+                .filter(|row| row.role != HeroMetaRole::Meta)
+                .collect(),
+            overview: facts.overview.map(str::to_owned),
+        },
+    }
+}
