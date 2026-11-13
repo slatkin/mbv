@@ -1,0 +1,42 @@
+[package]
+name = "mbv-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Blitz spike: a Dioxus-native window that paints the Queue panel from the GUI core."
+publish = false
+
+[lints]
+workspace = true
+
+# Blitz Client spike (openspec blitz-queue-panel-spike). Exact pins per its D1
+# and D4. Not in default-members: default builds and nextest runs skip it.
+#
+# tokio edge (D13): dioxus-native 0.8.0-alpha.3 enables tokio 1.54.1 through
+# dioxus-asset-resolver's `native` feature, and that edge is not optional. This
+# crate uses no tokio API and creates no tokio runtime (net is off). The
+# repository already locks tokio 1.54.1 through mbv-desktop.
+#
+# MPL-2.0 licence note (Risks): Stylo 0.22.0, pulled by dioxus-native and
+# blitz-dom, is MPL-2.0. The spike is not distributed. A full replacement
+# needs the MPL notices and a source offer for the Servo files (docs/licensing.md
+# in the Blitz repository).
+[features]
+# Drops the global allocator so heaptrack can read the heap (D16).
+profiling = []
+
+[dependencies]
+blitz-shell = { version = "=0.3.0-beta.4", default-features = false }
+blitz-traits = { version = "=0.3.0-beta.4", default-features = false }
+dioxus-native = { version = "=0.8.0-alpha.3", default-features = false, features = ["prelude", "svg", "system-fonts", "woff", "vello-hybrid"] }
+futures-channel = "=0.3.34"
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+mbv = { path = "../.." }
+mbv-gui = { path = "../mbv-gui", default-features = false }
+mbv-images = { path = "../mbv-images" }
+mimalloc.workspace = true
+
+[dev-dependencies]
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
