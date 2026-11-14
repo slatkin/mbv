@@ -279,10 +279,11 @@ provides both as a `Clock`.
   deadline sends `WindowEvent::Timer`, and the root routes it to the surface
   that asked. The search debounce (200 ms, `library/search.rs`), the artwork
   retry, and the minute clock use it. Tests inject a clock, and no test sleeps.
-- **Frames.** `Clock::want_frames` gates the launch copy's redraw hook, which
-  sends `WindowEvent::Frame` and asks for the next redraw. The playhead wants
-  frames while it plays. The frames follow the presented frames that the
-  renderer paces.
+- **Frames.** Every presented frame makes the launch copy's redraw hook send
+  `WindowEvent::Frame`; `Clock::want_frames` gates only the request for the
+  next redraw. The playhead wants frames while it plays. The frames follow the
+  presented frames that the renderer paces, so a paused window still answers a
+  pending re-measure (see below).
 - **Artwork retry.** A missed image keeps its loading fill and asks again for
   the same URL. The wait starts at 1 s, doubles, and stops at 30 s
   (`components/art_image.rs`). A new URL drops the failure and its timer.
