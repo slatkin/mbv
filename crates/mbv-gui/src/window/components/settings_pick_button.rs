@@ -11,10 +11,16 @@
 //! setting and that value, the same command the keyboard's Enter sends.
 //!
 //! The Svelte component closed the menu from a `window` `pointerdown`
-//! listener that skipped the button and the menu. Blitz exposes no window
-//! listener, so the press-outside close runs where the presses meet — the
-//! Settings screen's root pointerdown (task 8.3) — and the button and the
-//! menu stop the press's propagation, as the Svelte skip list did.
+//! listener that skipped the button and the menu (`buttonEl` and `menuEl`
+//! containment); the same window also ran the Settings screen's
+//! `hideSettingsCursor` on every pointerdown, presses on the pick controls
+//! included. Blitz exposes no window listener, so the press-outside close
+//! runs where the presses meet — the Settings screen's root pointerdown
+//! (task 8.3), which owns the press-outside-close contract — and the button
+//! and the menu stop the press's propagation, as the Svelte skip list did.
+//! Stopping alone would also swallow the root's cursor hide, so each
+//! handler hides the cursor first (`press_inside`): the Svelte behavior is
+//! "not an outside press", never "not a press at all".
 
 use dioxus_native::prelude::*;
 
@@ -71,6 +77,8 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
         })
         .unwrap_or_default();
     let select = settings.clone();
+    let button_press = settings.clone();
+    let menu_press = settings.clone();
     rsx! {
         div {
             class: "relative flex-none",
@@ -85,22 +93,31 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
                 disabled: props.disabled,
                 // A press on the button is the row's activation, not an
                 // outside press: the screen root's close (task 8.3) skips it
-                // the way the Svelte listener skipped `buttonEl`.
-                onpointerdown: move |event: PointerEvent| event.stop_propagation(),
+                // the way the Svelte listener skipped `buttonEl`. The cursor
+                // hide is not an outside-press fact, so the press hides it
+                // itself, as the Svelte window listener did.
+                onpointerdown: move |event: PointerEvent| {
+                    press_inside(&button_press);
+                    event.stop_propagation();
+                },
                 onclick: move |_| onpress.call(()),
                 Truncate {
                     text: pick_value_label(&props.value).to_owned(),
                     class: "min-w-0".to_owned(),
                     style: TextStyle::sans(13.0, 400.0),
                 }
-                ChevronDown { size: 12, stroke_width: 2.2 }
+                ChevronDown { size: 12, stroke_width: 2.2, aria_hidden: true }
             }
             if let Some(menu) = menu.as_ref() {
                 div {
                     // A press inside the menu selects its entry; it is not an
                     // outside press (the Svelte skip of `menuEl`), so it does
-                    // not reach the screen root's close.
-                    onpointerdown: move |event: PointerEvent| event.stop_propagation(),
+                    // not reach the screen root's close. The cursor hides, as
+                    // every Svelte pointerdown did.
+                    onpointerdown: move |event: PointerEvent| {
+                        press_inside(&menu_press);
+                        event.stop_propagation();
+                    },
                     QueueRowMenu {
                         label: format!("{} values", props.label),
                         cursor: Some(menu.cursor),
@@ -117,3 +134,14 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
         }
     }
 }
+
+/// A pointer press inside this row's pick controls (`hideSettingsCursor`):
+/// the cursor hide the Svelte window listener ran on every pointerdown,
+/// presses on the pick controls included. The caller stops the press from
+/// reaching the screen root's close afterwards.
+fn press_inside(settings: &SettingsState) {
+    settings.hide_settings_cursor();
+}
+
+#[cfg(test)]
+mod tests;

@@ -2,6 +2,12 @@
 //! task 8.2, the port of `SettingsField.svelte`; add-gui-settings-screen
 //! design D13, D15): the canvas's small muted label above a mono input. The
 //! Services setup forms and the Feeds form paint every field through it.
+//!
+//! The optional `onmounted` passthrough hands the input's mount event to the
+//! caller, so a form can attach `window/settings/focus.rs`'s
+//! `focus_on_mount` to its first field's input (task 8.4) — the Svelte
+//! `focusOnMount` action focused the first `input` descendant, and the
+//! passthrough is the port's stand-in for that descendant query.
 
 use dioxus_native::prelude::*;
 
@@ -24,12 +30,17 @@ pub struct SettingsFieldProps {
     pub secret: bool,
     /// The input's own event: the new value.
     pub oninput: Callback<String>,
+    /// The input's mount event, while the caller attaches one — the first
+    /// field of a form passes `focus_on_mount` (task 8.4).
+    #[props(default)]
+    pub onmounted: Option<Callback<Event<MountedData>>>,
 }
 
 /// One labelled text field (the Svelte markup, character for character).
 #[component]
 pub fn SettingsField(props: SettingsFieldProps) -> Element {
     let oninput = props.oninput;
+    let onmounted = props.onmounted;
     rsx! {
         label {
             class: "flex flex-col",
@@ -42,6 +53,11 @@ pub fn SettingsField(props: SettingsFieldProps) -> Element {
                 value: "{props.value}",
                 "data-settings-field": "{props.field}",
                 oninput: move |event: Event<FormData>| oninput.call(event.value()),
+                onmounted: move |event: Event<MountedData>| {
+                    if let Some(onmounted) = onmounted {
+                        onmounted.call(event);
+                    }
+                },
             }
         }
     }

@@ -305,7 +305,11 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                             Truncate {
                                                 text: title,
                                                 class: "min-w-0 flex-1".to_owned(),
-                                                css: "color: var(--canvas-text);".to_owned(),
+                                                // The Svelte row's 14 px title face:
+                                                // the measure cuts for 14 px, so
+                                                // the box must paint 14 px.
+                                                css: "font-size: 14px; color: var(--canvas-text);"
+                                                    .to_owned(),
                                                 style: TextStyle::sans(14.0, 400.0),
                                             }
                                             span {

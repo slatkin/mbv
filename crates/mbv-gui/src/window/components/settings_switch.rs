@@ -43,6 +43,7 @@ pub fn SettingsSwitch(props: SettingsSwitchProps) -> Element {
             "var(--canvas-text)"
         },
     );
+    let disabled = props.disabled;
     rsx! {
         button {
             "type": "button",
@@ -53,7 +54,7 @@ pub fn SettingsSwitch(props: SettingsSwitchProps) -> Element {
             style: "{track}",
             disabled: props.disabled,
             "data-settings-switch": "",
-            onclick: move |_| onpress.call(()),
+            onclick: move |_| press(disabled, onpress),
             span {
                 "aria-hidden": "true",
                 class: "absolute",
@@ -62,3 +63,17 @@ pub fn SettingsSwitch(props: SettingsSwitchProps) -> Element {
         }
     }
 }
+
+/// The switch's press (`onclick`): a disabled toggle takes no press —
+/// blitz-dom dispatches Click on disabled targets, so the handler returns
+/// before the activation — and an enabled one runs `onpress`, the same store
+/// function the keyboard's Space runs (design D11's pointer contract).
+fn press(disabled: bool, onpress: Callback<()>) {
+    if disabled {
+        return;
+    }
+    onpress.call(());
+}
+
+#[cfg(test)]
+mod tests;

@@ -138,6 +138,7 @@ pub fn SettingsButton(props: SettingsButtonProps) -> Element {
         style.push_str(" outline: 2px solid var(--canvas-accent); outline-offset: -2px;");
     }
     let onpress = props.onpress;
+    let disabled = props.disabled;
     rsx! {
         button {
             "type": "button",
@@ -148,12 +149,24 @@ pub fn SettingsButton(props: SettingsButtonProps) -> Element {
             "data-settings-cursor": props.cursor.then_some(""),
             "aria-label": props.label,
             disabled: props.disabled,
-            onclick: move |_| {
-                if let Some(onpress) = onpress {
-                    onpress.call(());
-                }
-            },
+            onclick: move |_| press(disabled, onpress),
             {props.children}
         }
     }
 }
+
+/// The button's press (`onclick`): a disabled button takes no press —
+/// blitz-dom dispatches Click on disabled targets, so the handler returns
+/// before the activation — and an enabled one runs `onpress`, the same
+/// command the keyboard's Enter runs (design D11's pointer contract).
+fn press(disabled: bool, onpress: Option<Callback<()>>) {
+    if disabled {
+        return;
+    }
+    if let Some(onpress) = onpress {
+        onpress.call(());
+    }
+}
+
+#[cfg(test)]
+mod tests;

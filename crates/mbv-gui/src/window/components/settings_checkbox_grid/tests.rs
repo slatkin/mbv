@@ -83,10 +83,11 @@ fn the_boxes_carry_role_checkbox_and_the_windows_aria_checked() {
     );
 }
 
-/// Contract (`SettingsCheckboxGrid.test.ts`): a press on a box reports its
-/// choice entry — the id the box paints.
+/// Contract (`SettingsCheckboxGrid.test.ts`): a box paints its choice entry
+/// id — the id a press on it reports, since the component's `onclick` calls
+/// `onpress` with the same id (a headless document cannot fire a DOM click).
 #[test]
-fn a_press_on_a_box_reports_its_choice_entry() {
+fn a_box_paints_its_choice_entry_id() {
     let doc = painted();
     assert_eq!(
         attr_of(&doc, "[data-settings-checkbox=\"french\"]", LocalName::from("data-settings-entry")),
@@ -94,10 +95,10 @@ fn a_press_on_a_box_reports_its_choice_entry() {
     );
 }
 
-/// Contract (`SettingsCheckboxGrid.test.ts`): a press on Apply reports the
-/// apply entry — the id the primary button paints.
+/// Contract (`SettingsCheckboxGrid.test.ts`): the Apply button paints the
+/// apply entry id — the id a press on it reports, same one-line wiring.
 #[test]
-fn a_press_on_apply_reports_the_apply_entry() {
+fn the_apply_button_paints_the_apply_entry_id() {
     let doc = painted();
     assert_eq!(
         attr_of(&doc, "[data-settings-button=\"primary\"]", LocalName::from("data-settings-entry")),

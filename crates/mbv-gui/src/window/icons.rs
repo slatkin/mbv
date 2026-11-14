@@ -39,6 +39,10 @@ pub struct IconProps {
     /// value. Lucide's default is 2.
     #[props(default = 2.0)]
     pub stroke_width: f32,
+    /// The svg's `aria-hidden="true"`, as a Svelte call site's
+    /// `aria-hidden={...}` value. Lucide's default leaves it unset.
+    #[props(default)]
+    pub aria_hidden: bool,
 }
 
 impl std::fmt::Debug for IconProps {
@@ -49,6 +53,7 @@ impl std::fmt::Debug for IconProps {
             .field("color", &self.color)
             .field("fill", &self.fill)
             .field("stroke_width", &self.stroke_width)
+            .field("aria_hidden", &self.aria_hidden)
             .finish()
     }
 }
@@ -73,6 +78,7 @@ fn icon_shell(
     let stroke = &props.color;
     let fill = &props.fill;
     let stroke_width = props.stroke_width;
+    let aria_hidden = props.aria_hidden;
     rsx! {
         svg {
             xmlns: "http://www.w3.org/2000/svg",
@@ -85,6 +91,7 @@ fn icon_shell(
             stroke_linecap: "round",
             stroke_linejoin: "round",
             class: "{class}",
+            "aria-hidden": aria_hidden.then_some("true"),
             {children}
         }
     }

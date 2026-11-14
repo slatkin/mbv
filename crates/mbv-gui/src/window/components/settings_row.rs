@@ -58,7 +58,10 @@ pub fn SettingsRow(props: SettingsRowProps) -> Element {
                 text: props.label,
                 class: "min-w-0 flex-1".to_owned(),
                 style: TextStyle::sans(14.0, 400.0),
-                css: "color: var(--canvas-heading);".to_owned(),
+                // The Svelte row's `style:font-size="14px"`: the measure cuts
+                // for 14 px, so the box must paint 14 px or the cut clips
+                // mid-glyph instead of ending in an ellipsis.
+                css: "font-size: 14px; color: var(--canvas-heading);".to_owned(),
             }
             span {
                 class: "flex flex-none items-center",
