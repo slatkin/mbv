@@ -50,8 +50,8 @@ Design decisions are cited as `D<n>`. Every port task follows the port rules of 
 - [x] 6.4 Port `lib/library/home.ts`, `home-list.ts`, `emby.ts`, `emby-list.ts`, and `emby-keys.ts`. Port the contracts of `home.test.ts`, `home-list.test.ts`, `emby-list.test.ts`, and `emby-keys.test.ts`. Verify: the tests pass.
 - [x] 6.5 Port `lib/library/shows.ts`, `shows-list.ts`, `shows-keys.ts`, and `shows-workspace.ts`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
 - [x] 6.6 Port `lib/library/audiobooks.ts`, `audiobooks-list.ts`, `audiobooks-keys.ts`, and `audiobooks-workspace.ts`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
-- [ ] 6.7 Port `lib/library/podcasts.ts`, `podcasts-list.ts`, `podcasts-keys.ts`, `feeds.ts`, `feeds-list.ts`, and `feeds-keys.ts`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
-- [ ] 6.8 Port `lib/library/search.ts` with the 200 ms debounce over `Clock` (D10). Port the contracts of `search.test.ts` and `search-keys.test.ts`. Verify: the tests pass.
+- [x] 6.7 Port `lib/library/podcasts.ts`, `podcasts-list.ts`, `podcasts-keys.ts`, `feeds.ts`, `feeds-list.ts`, and `feeds-keys.ts`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
+- [x] 6.8 Port `lib/library/search.ts` with the 200 ms debounce over `Clock` (D10). Port the contracts of `search.test.ts` and `search-keys.test.ts`. Verify: the tests pass.
 
 ## 7. Library components
 
