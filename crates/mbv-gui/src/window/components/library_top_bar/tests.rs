@@ -175,7 +175,7 @@ impl Fixture {
     }
 
     /// The attribute of every node the selector names, in paint order.
-    fn attrs_of(&self, selector: &str, attribute: blitz_dom::LocalName) -> Vec<Option<String>> {
+    fn attrs_of(&self, selector: &str, attribute: &blitz_dom::LocalName) -> Vec<Option<String>> {
         let dom = self.doc.inner();
         dom.query_selector_all(selector)
             .expect("the selector is valid")
@@ -305,7 +305,7 @@ fn paints_one_tab_per_presented_destination_and_marks_the_current_one() {
     let labels: Vec<String> = fixture
         .attrs_of(
             "[data-library-tab]",
-            blitz_dom::LocalName::from("data-library-tab"),
+            &blitz_dom::LocalName::from("data-library-tab"),
         )
         .into_iter()
         .map(|position| position.expect("the attribute paints"))
@@ -313,13 +313,13 @@ fn paints_one_tab_per_presented_destination_and_marks_the_current_one() {
     assert_eq!(labels, ["1", "2"]);
     assert_eq!(fixture.text_of("[data-library-tab]"), "Music");
     assert_eq!(
-        fixture.attrs_of("[data-library-tab]", local_name!("aria-current")),
+        fixture.attrs_of("[data-library-tab]", &local_name!("aria-current")),
         [None, Some("page".to_owned())]
     );
 }
 
 /// Contract (`LibraryTopBar.test.ts`): the bar paints the dim canvas fill,
-/// the TUI BgDim slot.
+/// the TUI `BgDim` slot.
 #[test]
 fn the_bar_paints_the_dim_canvas_fill() {
     let fixture = built(two_tabs(), Some(1), false);
@@ -372,11 +372,11 @@ fn the_home_icon_is_current_only_while_the_home_content_is_present() {
     let fixture = built(two_tabs(), None, true);
 
     assert_eq!(
-        fixture.attrs_of("[data-library-home]", local_name!("aria-current")),
+        fixture.attrs_of("[data-library-home]", &local_name!("aria-current")),
         [Some("page".to_owned())]
     );
     assert_eq!(
-        fixture.attrs_of("[data-library-tab]", local_name!("aria-current")),
+        fixture.attrs_of("[data-library-tab]", &local_name!("aria-current")),
         [None, None]
     );
 }
@@ -420,7 +420,7 @@ fn the_dropdown_paints_the_rows_with_the_first_row_highlighted() {
     assert_eq!(
         fixture.attrs_of(
             "[data-library-search-highlight]",
-            blitz_dom::LocalName::from("data-library-search-row")
+            &blitz_dom::LocalName::from("data-library-search-row")
         ),
         [Some("r1".to_owned())]
     );
@@ -443,7 +443,7 @@ fn the_highlight_survives_a_rerendered_results_frame_by_row_id() {
     assert_eq!(
         fixture.attrs_of(
             "[data-library-search-highlight]",
-            blitz_dom::LocalName::from("data-library-search-row")
+            &blitz_dom::LocalName::from("data-library-search-row")
         ),
         [Some("r2".to_owned())]
     );
@@ -512,7 +512,7 @@ fn a_press_on_the_settings_control_opens_the_screen() {
 
     assert_eq!(
         fixture
-            .attrs_of("[data-library-settings]", local_name!("aria-label"))
+            .attrs_of("[data-library-settings]", &local_name!("aria-label"))
             .first()
             .and_then(Clone::clone)
             .as_deref(),

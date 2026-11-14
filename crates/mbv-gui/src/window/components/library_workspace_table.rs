@@ -22,6 +22,7 @@ use crate::window::components::typed_text::TypedText;
 use crate::window::icons::{ListEnd, Play, Plus};
 use crate::window::input::f32_from_f64;
 use crate::window::theme::canvas_var;
+use crate::window::truncate::{TextStyle, Truncate};
 
 /// The row grid the header and every row paint (the Svelte
 /// `grid-template-columns`).
@@ -355,10 +356,11 @@ fn paint_name_button(
                         { play_glyph() }
                     }
                 }
-                span {
-                    class: "min-w-0 truncate",
-                    style: "font-size: 13.5px; color: {color};",
-                    "{row.name}"
+                Truncate {
+                    text: row.name.clone(),
+                    class: "min-w-0".to_owned(),
+                    css: format!("font-size: 13.5px; color: {color};"),
+                    style: TextStyle::sans(13.5, 400.0),
                 }
             }
         }

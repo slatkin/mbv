@@ -312,10 +312,16 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                                     .to_owned(),
                                                 style: TextStyle::sans(14.0, 400.0),
                                             }
-                                            span {
-                                                class: "font-mono",
-                                                style: "font-size: 12px; color: var(--canvas-muted); max-width: 45%; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
-                                                "{subtitle}"
+                                            // The subtitle's own ellipsis (D12): the
+                                            // Svelte box clipped its 12 px mono
+                                            // text with `text-overflow`, which
+                                            // Blitz does not paint.
+                                            Truncate {
+                                                text: subtitle,
+                                                class: "font-mono".to_owned(),
+                                                css: "font-size: 12px; color: var(--canvas-muted); max-width: 45%; flex: 0 1 auto;"
+                                                    .to_owned(),
+                                                style: TextStyle::mono(12.0, 400.0),
                                             }
                                         }
                                     }

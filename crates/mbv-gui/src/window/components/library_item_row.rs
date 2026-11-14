@@ -15,6 +15,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::components::library_attr::library_attr;
 use crate::window::input::f32_from_f64;
+use crate::window::truncate::{TextStyle, Truncate};
 
 /// The trailing text's hook part: the date gutter or the duration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +121,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     if let Some(background) = props.background.as_ref() {
         let _ = write!(row_style, " background: {background};");
     }
-    let title_weight = if props.selected { 600 } else { 400 };
+    let title_weight = if props.selected { 600.0 } else { 400.0 };
     let title_attrs = vec![Attribute::new(
         library_attr(props.attr, "title"),
         "",
@@ -170,18 +171,18 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             span {
                 class: "flex min-w-0 flex-1 flex-col",
                 style: "gap: 2px;",
-                span {
-                    class: "truncate",
-                    style: "color: {props.title_color}; font-weight: {title_weight};",
-                    ..title_attrs,
-                    "{props.title}"
+                Truncate {
+                    text: props.title.clone(),
+                    css: format!("color: {}; font-weight: {title_weight};", props.title_color),
+                    style: TextStyle::sans(14.0, title_weight),
+                    attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {
-                    span {
-                        class: "truncate",
-                        style: "font-size: 12px; color: var(--canvas-muted);",
-                        ..subtitle_attrs,
-                        "{subtitle}"
+                    Truncate {
+                        text: subtitle,
+                        css: "font-size: 12px; color: var(--canvas-muted);".to_owned(),
+                        style: TextStyle::sans(12.0, 400.0),
+                        attrs: subtitle_attrs,
                     }
                 }
             }

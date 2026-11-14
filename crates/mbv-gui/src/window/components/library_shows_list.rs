@@ -41,6 +41,7 @@ use crate::window::library::shows_list::{
 use crate::window::library::shows_workspace::{is_played_episode, reset_shows_episode_cursor};
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
+use crate::window::truncate::{TextStyle, Truncate};
 
 /// The stable Service id a row names, or `None` on a heading: the item the
 /// menu and the double-click act on.
@@ -186,9 +187,9 @@ fn paint_shows_node(
         let _ = write!(style, " background: {background};");
     }
     let weight = if matches!(row, ShowsListRow::Series(_)) || selected_row {
-        600
+        600.0
     } else {
-        400
+        400.0
     };
     let name_color = row_name_color(shows, row);
     let press_row = row.clone();
@@ -248,10 +249,11 @@ fn paint_shows_node(
                     style: "width: 18px; color: var(--canvas-muted);",
                 }
             }
-            span {
-                class: "min-w-0 flex-1 truncate",
-                style: "color: {name_color}; font-weight: {weight};",
-                "{title}"
+            Truncate {
+                text: title.clone(),
+                class: "min-w-0 flex-1".to_owned(),
+                css: format!("color: {name_color}; font-weight: {weight};"),
+                style: TextStyle::sans(14.5, weight),
             }
         }
     }
@@ -312,11 +314,12 @@ fn paint_shows_episode(
                 "data-library-shows-episode-number": "",
                 "{episode.number}"
             }
-            span {
-                class: "min-w-0 flex-1 truncate",
-                style: "color: {name_color};",
-                "data-library-shows-title": "",
-                "{episode.title}"
+            Truncate {
+                text: episode.title.clone(),
+                class: "min-w-0 flex-1".to_owned(),
+                css: format!("color: {name_color};"),
+                style: TextStyle::sans(14.0, 400.0),
+                attrs: vec![Attribute::new("data-library-shows-title", "", None, false)],
             }
             if !episode.duration.is_empty() {
                 span {

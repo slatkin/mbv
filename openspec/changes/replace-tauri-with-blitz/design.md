@@ -167,6 +167,8 @@ The class strings in `rsx!` are the Svelte class strings, character for characte
 - It keeps the box's `MountedData`. A `use_effect` that reads the `text` prop and `LayoutEpoch` reads the box's content width with `get_client_rect`, and, when the full text does not fit, writes a cut text that ends in `…` (U+2026) and fits.
 - The measure uses one process-wide `parley::FontContext` with the six bundled faces, registered once through `blitz_dom::decode_font_bytes`, and a `parley::LayoutContext`. The font family, size, weight, and letter spacing come from a `TextStyle` value that each call site passes. It names the same Tailwind values as the class string, for example `TextStyle::sans(13.0, 500)`. A binary search over grapheme boundaries finds the longest prefix whose width plus the ellipsis width fits.
 - The `truncate` class stays in the class string, so the box still clips (`overflow: hidden`, `white-space: nowrap`), and a measure that is one frame late shows a clipped text, not an overflow.
+- A box whose client rect is zero wide is one the layout has not measured: the cut leaves the whole text in place and the class clips it, so an unlaid document or a collapsed box never paints the ellipsis alone.
+- Every text box whose Svelte markup carried `truncate` or an inline `text-overflow` paints through `Truncate`, including the Library rows (the tree, track, Home item, Shows, Workspace chapter, and search-result subtitle boxes) and the settings lists.
 
 ### D13. Icons
 

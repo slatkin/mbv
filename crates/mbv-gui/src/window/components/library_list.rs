@@ -37,6 +37,7 @@ use crate::window::library::list::{
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
+use crate::window::truncate::{TextStyle, Truncate};
 
 /// Whether the row is the album the Hero shows.
 fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
@@ -127,10 +128,11 @@ fn paint_track_row(
                 style: "width: 18px; font-size: 12px; color: var(--canvas-ordinal);",
                 "{number}"
             }
-            span {
-                class: "min-w-0 flex-1 truncate",
-                style: "color: var(--canvas-muted);",
-                "{name}"
+            Truncate {
+                text: name.clone(),
+                class: "min-w-0 flex-1".to_owned(),
+                css: "color: var(--canvas-muted);".to_owned(),
+                style: TextStyle::sans(14.0, 400.0),
             }
             span {
                 class: "flex-none font-mono tabular-nums",
@@ -177,9 +179,9 @@ fn paint_library_row(
                 _ => canvas_var("text"),
             };
             let weight = if matches!(row, LibraryRow::Artist { .. }) {
-                600
+                600.0
             } else {
-                400
+                400.0
             };
             let year = match row {
                 LibraryRow::Album { year, .. } if !year.is_empty() => Some(year.clone()),
@@ -226,10 +228,11 @@ fn paint_library_row(
                             ChevronRight { size: 10, stroke_width: 3.0 }
                         }
                     }
-                    span {
-                        class: "min-w-0 flex-1 truncate",
-                        style: "color: {color}; font-weight: {weight};",
-                        "{name}"
+                    Truncate {
+                        text: name.clone(),
+                        class: "min-w-0 flex-1".to_owned(),
+                        css: format!("color: {color}; font-weight: {weight};"),
+                        style: TextStyle::sans(14.5, weight),
                     }
                     if let Some(year) = year {
                         // A year repeats down the tree, so it paints the date

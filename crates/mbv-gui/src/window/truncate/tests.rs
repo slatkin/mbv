@@ -36,3 +36,12 @@ fn text_that_does_not_fit_is_cut_to_the_box_width() {
         "the cut text measures {measured} CSS px"
     );
 }
+
+/// Contract 3 (D12): a box the layout has not measured — a zero-width client
+/// rect — keeps its whole text and lets the `truncate` class clip it, rather
+/// than painting the ellipsis alone.
+#[test]
+fn text_in_a_box_with_no_width_is_unchanged() {
+    let text = "Episode one";
+    assert_eq!(fit_text(text, &body_style(), 0.0), text);
+}

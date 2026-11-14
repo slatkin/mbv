@@ -29,6 +29,7 @@ use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
+use crate::window::truncate::{TextStyle, Truncate};
 
 /// The item id a row's right-click menu opens for (design D8, D15): the
 /// `Continue watching` row's Emby item id, which the core resolves for the
@@ -129,7 +130,7 @@ fn paint_home_item_row(
         _ => None,
     };
     let title_color = name_color(&item.state);
-    let title_weight = if selected_row { 600 } else { 400 };
+    let title_weight = if selected_row { 600.0 } else { 400.0 };
     let art = item.art.clone();
     let art_kind = art.as_ref().map(art_kind);
     let press_row = row.clone();
@@ -172,18 +173,23 @@ fn paint_home_item_row(
             span {
                 class: "flex min-w-0 flex-1 flex-col",
                 style: "gap: 2px;",
-                span {
-                    class: "truncate",
-                    style: "color: {title_color}; font-weight: {title_weight};",
-                    "data-library-home-title": "",
-                    "{item.title}"
+                Truncate {
+                    text: item.title.clone(),
+                    css: format!("color: {title_color}; font-weight: {title_weight};"),
+                    style: TextStyle::sans(14.0, title_weight),
+                    attrs: vec![Attribute::new("data-library-home-title", "", None, false)],
                 }
                 if let Some(subtitle) = item.subtitle.clone() {
-                    span {
-                        class: "truncate",
-                        style: "font-size: 12px; color: var(--canvas-muted);",
-                        "data-library-home-subtitle": "",
-                        "{subtitle}"
+                    Truncate {
+                        text: subtitle,
+                        css: "font-size: 12px; color: var(--canvas-muted);".to_owned(),
+                        style: TextStyle::sans(12.0, 400.0),
+                        attrs: vec![Attribute::new(
+                            "data-library-home-subtitle",
+                            "",
+                            None,
+                            false,
+                        )],
                     }
                 }
             }

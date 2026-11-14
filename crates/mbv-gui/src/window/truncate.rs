@@ -143,12 +143,20 @@ const FACE_FILES: &[&str] = &[
 /// `f64` — the client rect's unit — widened from the `f32` measures it
 /// compares against.
 ///
+/// A width of zero or less is a box the layout has not measured yet — a
+/// document that never resolved, or a box a layout pass collapsed. Such a box
+/// keeps its whole text, and its `truncate` class clips it: measuring against
+/// zero would paint the ellipsis alone.
+///
 /// # Panics
 /// Panics when the process measure is poisoned — only possible if a caller
 /// panicked while holding it.
 #[must_use]
 pub fn fit_text(text: &str, style: &TextStyle, width: f64) -> String {
     const ELLIPSIS: &str = "\u{2026}";
+    if width <= 0.0 {
+        return text.to_owned();
+    }
     let mut measure = MEASURE.lock().expect("the measure is not poisoned");
     if f64::from(measure.width(text, style)) <= width {
         return text.to_owned();
@@ -197,6 +205,11 @@ pub struct TruncateProps {
     /// measure).
     #[props(default)]
     pub css: String,
+    /// The further attributes the call site's box carries beside its classes
+    /// and style — the `data-*` paint hooks the Svelte markup set on the same
+    /// box.
+    #[props(default)]
+    pub attrs: Vec<Attribute>,
     /// The style the class string names, for the measure.
     pub style: TextStyle,
 }
@@ -207,6 +220,7 @@ impl std::fmt::Debug for TruncateProps {
             .field("text", &self.text)
             .field("class", &self.class)
             .field("css", &self.css)
+            .field("attrs", &self.attrs)
             .field("style", &self.style)
             .finish()
     }
@@ -256,6 +270,7 @@ pub fn Truncate(props: TruncateProps) -> Element {
             class: "{class}",
             style: "{props.css}",
             onmounted: move |event| mounted.set(Some(event)),
+            ..props.attrs,
             "{display}"
         }
     }

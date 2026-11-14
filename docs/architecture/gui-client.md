@@ -308,7 +308,10 @@ effect writes a cut text that ends in `…`. The measure uses one process-wide
 call site passes with the family, size, weight, and letter spacing of its class
 string. A binary search over grapheme boundaries finds the longest prefix that
 fits with the ellipsis. The `truncate` class stays, so the box still clips. A
-measure that runs one frame late shows a clipped text, not an overflow.
+measure that runs one frame late shows a clipped text, not an overflow. A box
+with no measured width — a client rect of zero, from a document whose layout
+has not resolved — keeps its whole text and clips it; it never paints the
+ellipsis alone.
 
 ## Theme mapping
 
