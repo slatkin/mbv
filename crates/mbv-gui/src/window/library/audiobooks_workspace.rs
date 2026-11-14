@@ -62,13 +62,13 @@ pub fn current_chapter_row(
     rows: &[GuiAudiobooksChapterRowFrame],
     position_ticks: f64,
 ) -> Option<&GuiAudiobooksChapterRowFrame> {
-    rows.iter().find(|row| {
-        // The comparison runs in the playhead's f64 ticks, as the TypeScript
-        // model's numbers do; a tick span never approaches f64's exact range.
-        let start = mbv_emby_model::i64_to_f64_saturating(row.start_ticks);
-        let end = mbv_emby_model::i64_to_f64_saturating(row.end_ticks);
-        start <= position_ticks && position_ticks < end
-    })
+    // The comparison runs in the spans' integer ticks: the predicted position
+    // truncates into the ticks the spans compare in, and a span's boundary is
+    // an integer tick, so the chapter a position names is the one the
+    // TypeScript model's f64 comparison names.
+    let position = mbv_emby_model::saturating_i64_from_f64(position_ticks);
+    rows.iter()
+        .find(|row| row.start_ticks <= position && position < row.end_ticks)
 }
 
 /// The selected book's Hero's marked chapter: the row whose span holds the
