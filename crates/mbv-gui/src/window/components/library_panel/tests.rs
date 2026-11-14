@@ -214,6 +214,17 @@ impl Fixture {
             .to_owned()
     }
 
+    /// The laid-out client rect of the first node the selector names.
+    fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_client_bounding_rect(id)
+            .expect("the node is laid out")
+    }
+
     /// The `data-library-region` value of every region, in paint order.
     fn regions(&self) -> Vec<String> {
         let dom = self.doc.inner();

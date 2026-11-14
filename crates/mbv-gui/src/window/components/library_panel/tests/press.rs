@@ -4,7 +4,7 @@
 //! the panel's handler functions, tested against the mock core link; a
 //! headless document cannot fire a DOM press.
 
-use super::{built, fixtures, press_outside_menu, press_takes_focus, seed_idle_status};
+use super::{Fixture, built, fixtures, press_outside_menu, press_takes_focus, seed_idle_status};
 use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::window::arrangement::GuiArrangement;
 use dioxus_native::prelude::*;
@@ -33,18 +33,44 @@ fn a_press_inside_the_panel_sends_the_take_focus_command() {
 #[test]
 fn the_item_menu_paints_on_a_destination_that_is_not_music() {
     let mut fixture = built(GuiArrangement::Wide);
-    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::All);
-    fixture.carry(list, detail);
-    seed_idle_status(&mut fixture);
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.open_library_row_menu("s1".to_owned(), 40.0, 60.0));
-    fixture.carry_row_menu("s1");
+    open_the_shows_item_menu(&mut fixture, 40.0, 60.0);
 
     assert!(fixture.presents("[data-row-menu]"), "the item menu paints");
     assert!(
         fixture.text_of("[data-menu-entry=\"0\"]").contains("Play"),
         "the menu entry paints"
     );
+}
+
+/// Contract (the Svelte `LibraryPanel.svelte` viewport anchor, design D8,
+/// D15): the right-click item menu opens at the pointer position in viewport
+/// pixels. The card is `absolute` inside a zero-size `fixed` div at the
+/// origin, so its `left`/`top` — the pointer coordinates the core sends — are
+/// viewport pixels, not offsets into the column that paints it. Blitz places
+/// a `fixed` box against the viewport, as the browser did, so the card lands
+/// on the pointer and not on the column's own origin.
+#[test]
+fn the_item_menu_opens_at_the_pointer_in_viewport_pixels() {
+    let mut fixture = built(GuiArrangement::Wide);
+    open_the_shows_item_menu(&mut fixture, 40.0, 60.0);
+
+    let menu = fixture.rect_of("[data-row-menu]");
+    assert_eq!((menu.x, menu.y), (40.0, 60.0));
+    // The column the card belongs to sits away from the origin, so an anchor
+    // that resolved against it would miss the pointer position.
+    let list = fixture.rect_of("[data-library-region=\"list\"]");
+    assert_ne!(list.x, 0.0, "the list column is offset from the origin");
+}
+
+/// Carry a Shows list and open its item menu at `x, y`, as the core's
+/// right-click frame does.
+fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {
+    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::All);
+    fixture.carry(list, detail);
+    seed_idle_status(fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.open_library_row_menu("s1".to_owned(), x, y));
+    fixture.carry_row_menu("s1");
 }
 
 /// Contract (`LibraryPanel.svelte`'s outside-press rule, design D8): a press
