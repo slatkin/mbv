@@ -23,6 +23,7 @@ use crate::bridge::keys::DomKey;
 use crate::bridge::settings::{GuiChoicesKind, GuiSettingsCommand};
 use crate::window::channel::CoreLink;
 use crate::window::library::list::{ListMove, move_index};
+use crate::window::sections::Sections;
 
 use super::entries::{SettingsEntry, settings_entries};
 use super::pick_menu::PickMenuState;
@@ -608,6 +609,17 @@ impl SettingsState {
             }
         }
     }
+}
+
+/// Submit the form that holds the keyboard against the frame the section
+/// store carries now (`state.ts`'s `submitSettingsForm(content)` at the
+/// press): a form's button reads the shown frame here instead of capturing a
+/// clone of it, so a repaint clones no content for a press.
+pub fn submit_settings_frame(settings: &SettingsState, sections: &Sections) {
+    let Some(frame) = sections.settings.peek().clone() else {
+        return;
+    };
+    settings.submit_settings_form(&frame.content);
 }
 
 /// The marks one choice-list row holds (`state.ts`'s `markedChoices` seed

@@ -17,8 +17,13 @@
 //! its `focusout` drops it (`blurSettingsField`) — moving between the form's
 //! own fields blurs one field and focuses the next, so the hold survives the
 //! move and a focus-out of the form ends it. The form's first field mounts
-//! with `focus_on_mount`, the port's stand-in for the Svelte `focusOnMount`
-//! action's first-input query.
+//! with `focus_on_mount`, which arms the hold and focuses the field: the
+//! port's stand-in for the Svelte `focusOnMount` action's first-input query,
+//! plus the arm Blitz's focus event does not deliver.
+//!
+//! A form's submit reads the shown frame from the section store at press
+//! time (`submit_settings_frame`), so no repaint clones the content for a
+//! press.
 
 use dioxus_native::prelude::*;
 
@@ -35,7 +40,7 @@ use crate::window::components::settings_state_pill::SettingsStatePill;
 use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::focus::focus_on_mount;
-use crate::window::settings::state::{SettingsForm, SettingsState};
+use crate::window::settings::state::{SettingsForm, SettingsState, submit_settings_frame};
 
 /// The one Services pane (the Svelte markup, character for character).
 #[component]
@@ -109,14 +114,14 @@ pub fn SettingsServices() -> Element {
                                     setup.as_ref().filter(|setup| setup.service == GuiSetupService::Emby),
                                     ui.emby_setup.as_ref(),
                                 ) {
-                                    { emby_form(&settings, &view.frame.content, setup, draft) }
+                                    { emby_form(&settings, &sections, setup, draft) }
                                 }
                             } else if service.entry == GuiServiceEntry::Audiobookshelf {
                                 if let (Some(setup), Some(draft)) = (
                                     setup.as_ref().filter(|setup| setup.service == GuiSetupService::Audiobookshelf),
                                     ui.audiobookshelf_setup.as_ref(),
                                 ) {
-                                    { audiobookshelf_form(&settings, &view.frame.content, setup, draft) }
+                                    { audiobookshelf_form(&settings, &sections, setup, draft) }
                                 }
                             }
                         }
@@ -145,7 +150,7 @@ fn action_variant(intent: GuiServiceActionIntent) -> SettingsButtonVariant {
 /// three fields over the draft, the error, and the form's actions.
 fn emby_form(
     settings: &SettingsState,
-    content: &GuiSettingsContent,
+    sections: &Sections,
     setup: &GuiSettingsSetup,
     draft: &crate::window::settings::state::EmbySetupDraft,
 ) -> Element {
@@ -154,9 +159,10 @@ fn emby_form(
     let url_settings = settings.clone();
     let username_settings = settings.clone();
     let password_settings = settings.clone();
+    let arm_settings = settings.clone();
     let submit_settings = settings.clone();
     let cancel_settings = settings.clone();
-    let submit_content = content.clone();
+    let submit_sections = sections.clone();
     let busy = setup.busy;
     let error = setup.error.clone();
     let server_url = draft.server_url.clone();
@@ -175,7 +181,9 @@ fn emby_form(
                 aria_label: "Emby server URL".to_owned(),
                 placeholder: Some("http://emby:8096".to_owned()),
                 value: server_url,
-                onmounted: Some(Callback::new(focus_on_mount)),
+                onmounted: Some(Callback::new(move |event: Event<MountedData>| {
+                    focus_on_mount(event, &arm_settings, SettingsForm::EmbySetup);
+                })),
                 oninput: Callback::new(move |server_url: String| {
                     url_settings.update_emby_setup(move |draft| draft.server_url = server_url);
                 }),
@@ -206,7 +214,7 @@ fn emby_form(
                     "{error}"
                 }
             }
-            { form_actions(&submit_settings, &cancel_settings, &submit_content, GuiSetupService::Emby, busy) }
+            { form_actions(&submit_settings, &cancel_settings, &submit_sections, GuiSetupService::Emby, busy) }
         }
     }
 }
@@ -216,7 +224,7 @@ fn emby_form(
 /// the form's actions.
 fn audiobookshelf_form(
     settings: &SettingsState,
-    content: &GuiSettingsContent,
+    sections: &Sections,
     setup: &GuiSettingsSetup,
     draft: &crate::window::settings::state::AudiobookshelfSetupDraft,
 ) -> Element {
@@ -224,9 +232,10 @@ fn audiobookshelf_form(
     let blur_settings = settings.clone();
     let url_settings = settings.clone();
     let key_settings = settings.clone();
+    let arm_settings = settings.clone();
     let submit_settings = settings.clone();
     let cancel_settings = settings.clone();
-    let submit_content = content.clone();
+    let submit_sections = sections.clone();
     let busy = setup.busy;
     let error = setup.error.clone();
     let server_url = draft.server_url.clone();
@@ -244,7 +253,9 @@ fn audiobookshelf_form(
                 aria_label: "Audiobookshelf server URL".to_owned(),
                 placeholder: Some("http://audiobookshelf:13378".to_owned()),
                 value: server_url,
-                onmounted: Some(Callback::new(focus_on_mount)),
+                onmounted: Some(Callback::new(move |event: Event<MountedData>| {
+                    focus_on_mount(event, &arm_settings, SettingsForm::AudiobookshelfSetup);
+                })),
                 oninput: Callback::new(move |server_url: String| {
                     url_settings.update_audiobookshelf_setup(move |draft| draft.server_url = server_url);
                 }),
@@ -266,7 +277,7 @@ fn audiobookshelf_form(
                     "{error}"
                 }
             }
-            { form_actions(&submit_settings, &cancel_settings, &submit_content, GuiSetupService::Audiobookshelf, busy) }
+            { form_actions(&submit_settings, &cancel_settings, &submit_sections, GuiSetupService::Audiobookshelf, busy) }
         }
     }
 }
@@ -277,13 +288,13 @@ fn audiobookshelf_form(
 fn form_actions(
     settings: &SettingsState,
     cancel: &SettingsState,
-    content: &GuiSettingsContent,
+    sections: &Sections,
     service: GuiSetupService,
     busy: bool,
 ) -> Element {
     let submit_settings = settings.clone();
     let cancel_settings = cancel.clone();
-    let submit_content = content.clone();
+    let submit_sections = sections.clone();
     rsx! {
         div {
             class: "flex justify-end",
@@ -297,7 +308,7 @@ fn form_actions(
                 variant: SettingsButtonVariant::Primary,
                 disabled: busy,
                 onpress: Some(Callback::new(move |()| {
-                    submit_settings.submit_settings_form(&submit_content);
+                    submit_settings_frame(&submit_settings, &submit_sections);
                 })),
                 if busy { "Checking…" } else { "Set up" }
             }

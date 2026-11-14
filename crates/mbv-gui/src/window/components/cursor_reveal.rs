@@ -21,6 +21,7 @@ use crate::window::layout::LayoutEpoch;
 /// `row.scrollIntoView({ block: 'nearest' })` did. A test host provides no
 /// [`LayoutEpoch`], and the reveal then follows the mount and the cursor
 /// alone.
+#[must_use]
 pub fn cursor_reveal(cursor: bool) -> Signal<Option<Event<MountedData>>> {
     let mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);

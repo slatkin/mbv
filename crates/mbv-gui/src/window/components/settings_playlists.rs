@@ -248,11 +248,13 @@ fn playlist_actions(onpress: Callback<String>, cursor_id: Option<&str>, id: &str
 }
 
 /// The rename field (the Svelte `renameField` snippet): the draft's input
-/// under its focus host, mounted with `focus_on_mount`.
+/// under its focus host, mounted with `focus_on_mount`, which arms the
+/// rename hold and focuses the input.
 fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
     let focus_settings = settings.clone();
     let blur_settings = settings.clone();
     let input_settings = settings.clone();
+    let arm_settings = settings.clone();
     rsx! {
         div {
             class: "flex",
@@ -266,7 +268,9 @@ fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
                 style: "flex: 1;",
                 value: name.unwrap_or_default(),
                 "data-settings-field": "rename",
-                onmounted: focus_on_mount,
+                onmounted: move |event: Event<MountedData>| {
+                    focus_on_mount(event, &arm_settings, SettingsForm::Rename);
+                },
                 oninput: move |event: Event<FormData>| {
                     let value = event.value();
                     input_settings.set_rename_draft(&value);

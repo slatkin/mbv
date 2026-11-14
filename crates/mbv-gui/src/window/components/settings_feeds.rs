@@ -17,8 +17,12 @@
 //!
 //! The form host owns the keyboard hold's focus facts (task 8.4's wiring
 //! requirement): its `focusin` re-arms the hold and its `focusout` drops it,
-//! and the form's first field mounts with `focus_on_mount` — the port's
-//! stand-in for the Svelte `focusOnMount` action's first-input query.
+//! and the form's first field mounts with `focus_on_mount`, which arms the
+//! hold and focuses the field — the port's stand-in for the Svelte
+//! `focusOnMount` action's first-input query, plus the arm Blitz's focus
+//! event does not deliver. The form's submit reads the shown frame from the
+//! section store at press time (`submit_settings_frame`), so no repaint
+//! clones the content for a press.
 
 use dioxus_native::prelude::*;
 use mbv_queue::FeedKind;
@@ -32,7 +36,7 @@ use crate::window::components::settings_screen::settings_section_view;
 use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::focus::focus_on_mount;
-use crate::window::settings::state::{SettingsForm, SettingsState};
+use crate::window::settings::state::{SettingsForm, SettingsState, submit_settings_frame};
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The one Feeds pane (the Svelte markup, character for character).
@@ -140,11 +144,11 @@ pub fn SettingsFeeds() -> Element {
             if let Some(form) = ui.feed_form.as_ref() {
                 {
                     let form_settings = settings.clone();
-                    let form_content = view.frame.content.clone();
+                    let form_sections = sections.clone();
                     rsx! {
                         SettingsCard {
                             title: Some(if form.identity.is_none() { "Add feed".to_owned() } else { "Edit feed".to_owned() }),
-                            { feed_form(&form_settings, &form_content, form) }
+                            { feed_form(&form_settings, &form_sections, &view.frame.content, form) }
                         }
                     }
                 }
@@ -158,6 +162,7 @@ pub fn SettingsFeeds() -> Element {
 /// actions.
 fn feed_form(
     settings: &SettingsState,
+    sections: &Sections,
     content: &GuiSettingsContent,
     form: &crate::window::settings::state::FeedFormDraft,
 ) -> Element {
@@ -166,9 +171,10 @@ fn feed_form(
     let name_settings = settings.clone();
     let url_settings = settings.clone();
     let kind_settings = settings.clone();
+    let arm_settings = settings.clone();
     let submit_settings = settings.clone();
     let cancel_settings = settings.clone();
-    let submit_content = content.clone();
+    let submit_sections = sections.clone();
     let adding = matches!(content, GuiSettingsContent::Feeds { adding: true, .. });
     let editing = form.identity.is_some();
     let identity = form.identity.clone();
@@ -184,7 +190,7 @@ fn feed_form(
                 Truncate {
                     text: identity.clone(),
                     class: "font-mono".to_owned(),
-                    style: TextStyle::sans(12.0, 400.0),
+                    style: TextStyle::mono(12.0, 400.0),
                     css: "font-size: 12px; color: var(--canvas-muted);".to_owned(),
                 }
             }
@@ -193,7 +199,9 @@ fn feed_form(
                 field: "name".to_owned(),
                 aria_label: "Feed name".to_owned(),
                 value: name,
-                onmounted: Some(Callback::new(focus_on_mount)),
+                onmounted: Some(Callback::new(move |event: Event<MountedData>| {
+                    focus_on_mount(event, &arm_settings, SettingsForm::Feed);
+                })),
                 oninput: Callback::new(move |name: String| {
                     name_settings.update_feed_form(move |form| form.name = name);
                 }),
@@ -223,8 +231,7 @@ fn feed_form(
                     variant: SettingsButtonVariant::Primary,
                     disabled: adding,
                     onpress: Some(Callback::new(move |()| {
-                        let content = submit_content.clone();
-                        submit_settings.submit_settings_form(&content);
+                        submit_settings_frame(&submit_settings, &submit_sections);
                     })),
                     if adding {
                         "Adding…"
