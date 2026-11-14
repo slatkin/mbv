@@ -440,10 +440,11 @@ sheet above the state branches, because a frame re-carries each only when it
 changed: a state that mounts on a later frame paints the value the expanded
 artboard already adopted.
 
-The window sets no minimum size. The Tauri build declared a 400×200 floor
-(`tauri.conf.json`), and the port does not carry it over, so a floating window
-can shrink below the 520 px strip threshold. A tiling manager may impose its
-own floor; that floor is the compositor's, not the window's.
+The window sets a 400×200 logical-pixel floor, the Tauri build's
+`minWidth`/`minHeight` (`tauri.conf.json`): `window/launch.rs` builds the
+window attributes with `with_min_surface_size`, so a floating window cannot be
+dragged below the size at which the compact strip lays out. A tiling manager
+may impose a larger floor; that floor is the compositor's, not the window's.
 
 ## The player panel and the queue
 

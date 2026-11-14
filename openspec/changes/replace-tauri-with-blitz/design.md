@@ -91,7 +91,7 @@ Both features are default, so `cargo clippy --workspace --all-targets` and `carg
 
 1. It installs `MbvNetProvider` (D7) as the document's net provider, and `navigation_provider: None`.
 2. It wraps the application's window event handler: on `Resized` and `ScaleFactorChanged` it sends `WindowEvent::Viewport` after the shell handles the event (D9), and on `RedrawRequested` it sends `WindowEvent::Frame` while a frame is wanted (D10).
-3. Window attributes: title `mbv`, the Wayland app id `io.github.slatkin.mbv-gui` (the GUI's current id, so the desktop entry still matches), set through `WindowAttributesWayland::with_name`.
+3. Window attributes: title `mbv`, the Wayland app id `io.github.slatkin.mbv-gui` (the GUI's current id, so the desktop entry still matches), set through `WindowAttributesWayland::with_name`, and the 400x200 logical minimum surface size the Tauri window set (`minWidth`/`minHeight` in `tauri.conf.json`), set through `WindowAttributes::with_min_surface_size`. A floating window therefore cannot shrink below the size at which the compact strip lays out. A pure `window_attributes()` function builds them, so one test pins the floor without a window.
 4. It provides the `BlitzShellProxy` it creates to the root as a context value, for the Quit close (D4).
 5. It creates no tokio runtime.
 

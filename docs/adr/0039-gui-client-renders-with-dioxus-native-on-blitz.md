@@ -33,6 +33,10 @@ core changes.
 - **The stylesheet is compiled ahead of the build.** Tailwind CSS v4 output is
   committed as `crates/mbv-gui/assets/app.generated.css`, and the build includes
   it. The standalone Tailwind CLI runs only when the developer regenerates it.
+- **The window keeps a minimum size.** The window attributes set a 400×200
+  logical-pixel floor, as the Tauri window did (`minWidth` 400, `minHeight`
+  200), so a floating window cannot shrink below the size at which the compact
+  strip lays out.
 - **The ellipsis is drawn by mbv.** Blitz does not paint `text-overflow`. The
   window measures text with the same bundled faces and cuts it with `…`.
 - **Exact pins.** The Blitz stack is pinned with exact version requirements, so

@@ -14,6 +14,7 @@ use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default
 use blitz_traits::net::NetProvider;
 use dioxus_native::prelude::*;
 use dioxus_native::winit::application::ApplicationHandler;
+use dioxus_native::winit::dpi::LogicalSize;
 use dioxus_native::winit::event::{StartCause, WindowEvent as WinitWindowEvent};
 use dioxus_native::winit::event_loop::ActiveEventLoop;
 use dioxus_native::winit::platform::wayland::WindowAttributesWayland;
@@ -31,6 +32,27 @@ use crate::window::net::MbvNetProvider;
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
 const APP_ID: &str = "io.github.slatkin.mbv-gui";
+
+/// The minimum surface width, in logical pixels (D5). The Tauri window set
+/// `minWidth` 400, so a floating window cannot shrink below the width where
+/// the compact strip lays out.
+const MIN_SURFACE_WIDTH: f64 = 400.0;
+
+/// The minimum surface height, in logical pixels (D5). The Tauri window set
+/// `minHeight` 200.
+const MIN_SURFACE_HEIGHT: f64 = 200.0;
+
+/// The layout of the window the launch copy opens (D5): the title, the
+/// minimum surface size the Tauri window carried, and the Wayland app id.
+/// Pure, so the attributes are checkable without a window.
+fn window_attributes() -> WindowAttributes {
+    WindowAttributes::default()
+        .with_title("mbv")
+        .with_min_surface_size(LogicalSize::new(MIN_SURFACE_WIDTH, MIN_SURFACE_HEIGHT))
+        .with_platform_attributes(Box::new(
+            WindowAttributesWayland::default().with_name(APP_ID, "mbv"),
+        ))
+}
 
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes
@@ -150,12 +172,7 @@ pub fn launch(
         features: None,
         limits: None,
     });
-    let attributes = WindowAttributes::default()
-        .with_title("mbv")
-        .with_platform_attributes(Box::new(
-            WindowAttributesWayland::default().with_name(APP_ID, "mbv"),
-        ));
-    let config = WindowConfig::with_attributes(Box::new(doc) as _, renderer, attributes);
+    let config = WindowConfig::with_attributes(Box::new(doc) as _, renderer, window_attributes());
     let application = DioxusNativeApplication::new(proxy.clone(), event_queue, config);
 
     let application = MbvApplication {
@@ -169,3 +186,6 @@ pub fn launch(
         .run_app(application)
         .expect("the window event loop runs");
 }
+
+#[cfg(test)]
+mod tests;
