@@ -166,15 +166,13 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let item_menu_open = library.ui.cloned().item_menu_open;
     let menu_open_library = library.clone();
     let menu_library = library.clone();
-    let carried_menu = menu.clone();
     // The menu's press names the picked album, cloned once for the callback —
-    // the three play closures each moved their own copy.
+    // the three play closures each moved their own copy. The index the menu
+    // reports is the entry's own shared-builder index, never a position in
+    // the filtered list, so the press sends it as it arrived.
     let album_id = hero.album.album_id.clone();
-    let on_select = Callback::new(move |index: usize| {
-        if let Some(entry) = carried_menu.get(index) {
-            run_menu_entry(&menu_library, &album_id, entry.index);
-        }
-    });
+    let on_select =
+        Callback::new(move |index: usize| run_menu_entry(&menu_library, &album_id, index));
     let actions = rsx! {
         LibraryHeroActions {
             attr: "",
@@ -230,7 +228,7 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
             art_shape: GuiArtShapeFrame::Square,
             art: props.detail.art.clone(),
             art_title: hero.album.name.clone(),
-            art_placeholder: None,
+            art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
             actions: Some(actions),
             children: Some(rsx! {
                 LibraryTracklist {
@@ -241,3 +239,6 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -64,25 +64,19 @@ const FIXTURE_CSS: &str = concat!(
     "[data-library-list] { height: 120px; }",
 );
 
-/// The harness's props: the carried Music content, the mock core sender, and
-/// the handle the test reads the store through.
+/// The harness's props: the mock core sender and the handle the test reads
+/// the store through. The carried content lands on the sections (the list
+/// reads the store itself, as the panel's mount does).
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    list: GuiMusicList,
-    detail: GuiMusicDetail,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The root: provides the Library store and the layout epoch, and paints the
-/// list with the carried content, as the panel composes it.
+/// list, as the panel composes it.
 fn list_app(props: FixtureProps) -> Element {
-    let FixtureProps {
-        sender,
-        list,
-        detail,
-        handle,
-    } = props;
+    let FixtureProps { sender, handle } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
@@ -100,10 +94,7 @@ fn list_app(props: FixtureProps) -> Element {
     provide_context(epoch);
     handle.borrow_mut().replace((state, epoch));
     rsx! {
-        LibraryList {
-            list,
-            detail,
-        }
+        LibraryList {}
     }
 }
 
@@ -234,8 +225,6 @@ fn built(list: GuiMusicList, detail: GuiMusicDetail) -> Fixture {
             list_app,
             FixtureProps {
                 sender,
-                list: list.clone(),
-                detail: detail.clone(),
                 handle: Rc::clone(&handle),
             },
         ),

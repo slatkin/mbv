@@ -423,6 +423,37 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_a_press_move
     );
 }
 
+/// Contract (`LibraryShowsList.svelte`): an expandable node paints its open
+/// state as `aria-expanded` — `false` while closed, `true` once opened.
+#[test]
+fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
+    let mut fixture = built(
+        shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
+        shows_detail(&[]),
+    );
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-shows-row-id=\"shows-series:s1\"]",
+            "aria-expanded",
+        ),
+        Some("false".to_owned()),
+        "the closed series paints aria-expanded false"
+    );
+
+    press_row(&mut fixture, "shows-series:s1");
+
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-shows-row-id=\"shows-series:s1\"]",
+            "aria-expanded",
+        ),
+        Some("true".to_owned()),
+        "the opened series paints aria-expanded true"
+    );
+}
+
 /// Contract (`LibraryShowsList.test.ts`): a press on a series node opens it
 /// — its seasons paint under it — and the press still selects the series for
 /// the Hero.

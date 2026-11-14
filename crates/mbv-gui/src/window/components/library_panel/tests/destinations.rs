@@ -21,14 +21,14 @@ fn the_panel_paints_the_top_bar_the_pill_row_and_the_hero_above_the_list_region(
     assert_eq!(regions[..3], ["topBar", "pills", "hero"]);
     assert!(regions.contains(&"list".to_owned()));
     // The pill row's painter mounts for real (row 7.4): the pills region is
-    // the pill row's group, not the placeholder marker.
+    // the pill row's group, and the Music list's painter mounts under it.
     assert!(
         fixture.presents("[data-library-region=\"pills\"][role=\"group\"]"),
         "the Music pill row's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-panel-child=\"LibraryPills\"]"),
-        "no placeholder marker paints over the pill row"
+        fixture.presents("[data-library-list-column]"),
+        "the Music list's painter mounts"
     );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 6.2): while

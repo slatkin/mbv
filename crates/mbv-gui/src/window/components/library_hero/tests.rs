@@ -36,10 +36,40 @@ use crate::bridge::frame::library::{
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::clock::FiredTimers;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::components::art_image::{ArtEvents, FiredTimers, ScaleFactor};
+use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
+
+/// The layout rules the fixture resolves with, in place of the app
+/// stylesheet a real window loads: the handful of utilities the Hero tree
+/// and its menu card size their boxes with (the same rules the panel's
+/// harness uses), so the menu's `Truncate` measures real widths.
+const FIXTURE_CSS: &str = concat!(
+    "[data-slot] { width: 100%; }",
+    ".flex { display: flex; }",
+    ".flex-col { flex-direction: column; }",
+    ".items-center { align-items: center; }",
+    ".items-start { align-items: start; }",
+    ".items-baseline { align-items: baseline; }",
+    ".justify-between { justify-content: space-between; }",
+    ".justify-center { justify-content: center; }",
+    ".text-left { text-align: left; }",
+    ".min-w-0 { min-width: 0; }",
+    ".flex-1 { flex: 1 1 0%; }",
+    ".flex-none { flex: none; }",
+    ".shrink-0 { flex-shrink: 0; }",
+    ".w-full { width: 100%; }",
+    ".h-full { height: 100%; }",
+    ".block { display: block; }",
+    ".relative { position: relative; }",
+    ".absolute { position: absolute; }",
+    ".fixed { position: fixed; }",
+    ".overflow-hidden { overflow: hidden; }",
+    ".truncate { width: 100%; }",
+);
 
 /// The harness's props: the carried Music content, the mock core sender, and
 /// the handle the test reads the store through.
@@ -48,7 +78,7 @@ struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     artists: Vec<GuiMusicArtistFrame>,
     detail: GuiMusicDetail,
-    handle: Rc<RefCell<Option<LibraryState>>>,
+    handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The root: provides the Library store and paints the Hero, as the panel
@@ -69,6 +99,7 @@ fn hero_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
+    let harness_clock = Arc::clone(&clock);
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
@@ -77,13 +108,16 @@ fn hero_app(props: FixtureProps) -> Element {
             Sections::new(),
             CoreLink::new(sender),
             playhead_position,
-            Arc::clone(&clock),
+            harness_clock,
         )
     });
-    provide_context(clock.clone());
+    provide_context(clock);
+    let epoch = use_hook(LayoutEpoch::new);
+    provide_context(epoch.clone());
     // The carried Music content, as the core's batch would: the union the
     // shuffle reads, under the Music destination's own list.
-    state.sections.library_list.set(Some(GuiLibraryList {
+    let mut sections = state.sections.clone();
+    sections.library_list.set(Some(GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Music(GuiMusicList {
@@ -96,7 +130,7 @@ fn hero_app(props: FixtureProps) -> Element {
         }),
     }));
     provide_context(state.clone());
-    handle.borrow_mut().replace(state);
+    handle.borrow_mut().replace((state, epoch));
     rsx! {
         LibraryHero { detail }
     }
@@ -189,9 +223,14 @@ fn detail(facts: GuiMusicHeroFrame, playing_track_id: Option<String>) -> GuiMusi
     }
 }
 
+/// The context handles the root hands the test: the Library store and the
+/// layout epoch the re-measures read.
+type FixtureHandles = (LibraryState, LayoutEpoch);
+
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
+    epoch: LayoutEpoch,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -211,6 +250,15 @@ impl Fixture {
     /// their subscribers, and let the re-renders land.
     fn in_runtime(&mut self, f: impl FnOnce() + 'static) {
         self.doc.vdom.in_runtime(f);
+        self.poll_until_idle();
+    }
+
+    /// Resolve the document's style and layout, as the renderer's frame
+    /// would, and let the re-measures the epoch bump drives land.
+    fn lay_out(&mut self) {
+        self.doc.inner.borrow_mut().resolve(0.0);
+        let mut epoch = self.epoch;
+        self.doc.vdom.in_runtime(move || epoch.bump());
         self.poll_until_idle();
     }
 
@@ -261,9 +309,7 @@ impl Fixture {
             .filter_map(|id| {
                 let node = dom.get_node(id).expect("the node is in the document");
                 let label = node.text_content().trim().to_owned();
-                let index = node
-                    .attr(LocalName::from("data-menu-entry"))?
-                    .to_owned();
+                let index = node.attr(LocalName::from("data-menu-entry"))?.to_owned();
                 Some((label, index))
             })
             .collect()
@@ -298,20 +344,26 @@ fn built(artists: Vec<GuiMusicArtistFrame>, detail: GuiMusicDetail) -> Fixture {
         ),
         DocumentConfig {
             viewport: Some(Viewport::new(1200, 900, 1.0, ColorScheme::Light)),
+            ua_stylesheets: vec![
+                blitz_dom::UserAgentStylesheet::default_sheet(),
+                blitz_dom::UserAgentStylesheet::parse(FIXTURE_CSS),
+            ],
             ..DocumentConfig::default()
         },
     );
     doc.initial_build();
-    let state = handle
+    let (state, epoch) = handle
         .borrow_mut()
         .take()
         .expect("the root handed the store over");
     let mut fixture = Fixture {
         doc,
         state,
+        epoch,
         receiver,
     };
     fixture.poll_until_idle();
+    fixture.lay_out();
     fixture
 }
 
@@ -416,6 +468,42 @@ fn a_menu_entry_sends_its_index_for_the_picked_item() {
     );
 }
 
+/// Contract (the review-of-7.7 finding P1): the press sends the entry's own
+/// shared-builder index as it arrived — past the filtered menu's end too, so
+/// an entry the dropped-duplicates rule re-numbered still runs. The old
+/// lookup indexed the filtered list and dropped the press (or ran the wrong
+/// entry); the index passes through instead.
+#[test]
+fn a_menu_press_sends_the_shared_builder_index_past_the_filtered_lists_end() {
+    let mut fixture = built_hero();
+
+    let item_id = "al1".to_owned();
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || run_menu_entry(&state, &item_id, 3));
+
+    assert_eq!(
+        fixture.library_commands(),
+        vec![mbv::GuiLibraryCommand::MenuEntry {
+            item_id: "al1".to_owned(),
+            index: 3,
+        }],
+        "the index passes through as received, past the filtered list's end"
+    );
+}
+
+/// Contract (`LibraryHero.svelte`): the artwork box's placeholder names the
+/// missing art while the frame carries none.
+#[test]
+fn the_artwork_box_names_its_placeholder_while_the_frame_carries_no_art() {
+    let fixture = built_hero();
+
+    assert_eq!(
+        fixture.text_of("[data-library-hero-art]"),
+        "[Album art · Emby Primary]",
+        "the artwork box names the missing art"
+    );
+}
+
 /// Contract (`LibraryHero.test.ts`): More actions paints the item menu's
 /// entries from the frame. The Hero's own buttons already send Play All and
 /// Add to Queue, so the dropped-duplicates rule leaves Shuffle the only
@@ -428,6 +516,9 @@ fn more_actions_paints_the_item_menu_s_entries_from_the_frame() {
 
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.open_library_item_menu());
+    // The menu card's laid-out widths: the entry's `Truncate` measures
+    // against them.
+    fixture.lay_out();
 
     assert_eq!(
         fixture.menu_entries(),
@@ -552,7 +643,8 @@ fn the_album_facts_line_types_its_count_and_its_time() {
         "style",
     );
     assert!(
-        time.is_some_and(|style| style.contains("var(--canvas-type-time)")),
+        time.as_deref()
+            .is_some_and(|style| style.contains("var(--canvas-type-time)")),
         "the time paints its own token, painted: {time:?}"
     );
 }
@@ -582,7 +674,10 @@ fn a_tracklist_duration_carries_the_repeated_time_token() {
     );
 
     // The first track carries the cursor, so its duration keeps its ink.
-    let current = fixture.attr_of("[data-library-track=\"t1\"] [data-library-track-duration]", "style");
+    let current = fixture.attr_of(
+        "[data-library-track=\"t1\"] [data-library-track-duration]",
+        "style",
+    );
     assert!(
         current
             .as_ref()
@@ -590,7 +685,9 @@ fn a_tracklist_duration_carries_the_repeated_time_token() {
         "the cursor row's duration keeps its own ink, painted: {current:?}"
     );
     assert!(
-        current.as_ref().is_some_and(|style| !style.contains("opacity")),
+        current
+            .as_ref()
+            .is_some_and(|style| !style.contains("opacity")),
         "the cursor row's duration paints no repeat opacity, painted: {current:?}"
     );
 }

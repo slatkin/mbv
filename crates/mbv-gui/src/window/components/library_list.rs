@@ -23,9 +23,7 @@ use std::rc::Rc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{
-    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicDetail, GuiMusicList,
-};
+use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_list_notice::LibraryListNotice;
@@ -36,18 +34,9 @@ use crate::window::input::f32_from_f64;
 use crate::window::library::list::{
     LETTER_ROW_HEIGHT, LibraryRow, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT, letter_rail,
 };
+use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
-
-/// The props of the Library list (the `LibraryList.svelte` props, in order).
-#[derive(Props, Debug, Clone, PartialEq)]
-pub struct LibraryListProps {
-    /// The carried Music content: the union the list paints and the pills
-    /// whose names the header line reads (design D2, D6).
-    pub list: GuiMusicList,
-    /// The carried Music detail: the picked album's Hero facts (design D5).
-    pub detail: GuiMusicDetail,
-}
 
 /// Whether the row is the album the Hero shows.
 fn is_picked(row: &LibraryRow, picked: Option<&str>) -> bool {
@@ -269,16 +258,22 @@ fn paint_library_row(
     }
 }
 
-/// The Library list (the Svelte markup, character for character).
+/// The Library list (the Svelte markup, character for character). It reads
+/// the carried Music frames from the section store itself, so a panel
+/// repaint never deep-clones the union's artists for it (the port review's
+/// whole-list finding).
 #[component]
-pub fn LibraryList(props: LibraryListProps) -> Element {
+pub fn LibraryList() -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The carried content the row model borrows (design D6, D15): the memo
+    // The carried content the row model borrows (design D6, D15): the
+    // clones subscribe the list to the frames that carry them, and the memo
     // borrows the union from the section store's own storage and keys on its
-    // revision, so this read subscribes the list to the frame that carries
-    // it.
-    let _carried = library.sections.library_list.cloned();
+    // revision.
+    let carried = library.sections.library_list.cloned();
+    let detail_section = library.sections.library_detail.cloned();
+    let frame = library_music_list(carried.as_ref());
+    let detail = library_music_detail(detail_section.as_ref());
 
     // The interaction state and the scroll store this list paints (design
     // D1, D9).
@@ -292,37 +287,42 @@ pub fn LibraryList(props: LibraryListProps) -> Element {
 
     // The album the Hero shows: the list paints its row in the canvas's
     // picked fill (design D7).
-    let picked = props
-        .detail
-        .hero
-        .as_ref()
+    let picked = detail
+        .and_then(|detail| detail.hero.as_ref())
         .map(|hero| hero.album.album_id.clone());
 
     // The album the list last revealed. A pick reveals once, so a later
     // frame carrying the same pick does not move the cursor again. The
-    // effect reads the carried frame's props and writes no signal it reads;
-    // the `Rc` shares the one reveal record across the effect's re-runs.
+    // effect reads the carried frames and writes no signal it reads — the
+    // reveal moves the interaction state and the scroll store; the `Rc`
+    // shares the one reveal record across the effect's re-runs.
     let revealed_album = use_hook(|| Rc::new(RefCell::new(None::<String>)));
     let reveal_library = library.clone();
-    use_effect(use_reactive(
-        &(props.list.clone(), props.detail.clone()),
-        move |(list, detail)| {
-            let album_id = detail.hero.as_ref().map(|hero| hero.album.album_id.clone());
-            let mut revealed = revealed_album.borrow_mut();
-            if album_id.is_none() || album_id == *revealed {
-                return;
-            }
-            *revealed = album_id;
-            drop(revealed);
-            reveal_library.reveal_picked_album(&list, &detail);
-        },
-    ));
+    use_effect(move || {
+        let list_section = reveal_library.sections.library_list.cloned();
+        let detail_section = reveal_library.sections.library_detail.cloned();
+        let (Some(list), Some(detail)) = (
+            library_music_list(list_section.as_ref()),
+            library_music_detail(detail_section.as_ref()),
+        ) else {
+            return;
+        };
+        let album_id = detail.hero.as_ref().map(|hero| hero.album.album_id.clone());
+        let mut revealed = revealed_album.borrow_mut();
+        if album_id.is_none() || album_id == *revealed {
+            return;
+        }
+        *revealed = album_id;
+        drop(revealed);
+        reveal_library.reveal_picked_album(list, detail);
+    });
 
     // The selected collection names in pill order (design D6): the core's
     // one derivation, carried on the Music frame so the list header and the
     // Status bar location cannot disagree. An empty selection is the whole
     // library: the header names it `All` instead of an empty label.
-    let selection_label = match props.list.collection_names.as_slice() {
+    let collection_names = frame.map_or(&[][..], |frame| frame.collection_names.as_slice());
+    let selection_label = match collection_names {
         [] => "All".to_owned(),
         [one] => format!("{one} · sort name"),
         names => names.join(" + "),
@@ -330,7 +330,7 @@ pub fn LibraryList(props: LibraryListProps) -> Element {
 
     // The filter field's placeholder, naming the selection as the canvas
     // does.
-    let filter_placeholder = match props.list.collection_names.as_slice() {
+    let filter_placeholder = match collection_names {
         [] => "Filter All".to_owned(),
         names => format!("Filter {}", names.join(" + ")),
     };
@@ -381,28 +381,30 @@ pub fn LibraryList(props: LibraryListProps) -> Element {
                     on_accept: move |()| accept_library.accept_library_filter(),
                 }
             }
-            if props.list.loading {
-                // A selected group's album list has not landed yet (design
-                // D5): one placeholder line holds the list's place.
-                LibraryListNotice {
-                    text: "Loading…".to_owned(),
-                    attr: "data-library-loading",
+            if let Some(frame) = frame {
+                if frame.loading {
+                    // A selected group's album list has not landed yet (design
+                    // D5): one placeholder line holds the list's place.
+                    LibraryListNotice {
+                        text: "Loading…".to_owned(),
+                        attr: "data-library-loading",
+                    }
                 }
-            }
-            if let Some(failure) = props.list.failure.clone() {
-                // The selected groups whose album list failed (design D5):
-                // the frame's failure line names them.
-                LibraryListNotice {
-                    text: failure,
-                    attr: "data-library-failure",
+                if let Some(failure) = frame.failure.clone() {
+                    // The selected groups whose album list failed (design D5):
+                    // the frame's failure line names them.
+                    LibraryListNotice {
+                        text: failure,
+                        attr: "data-library-failure",
+                    }
                 }
-            }
-            if !props.list.loading && props.list.artists.is_empty() {
-                // The selected collections hold no artist (the spec's empty
-                // text): the row area is empty, so one line says so.
-                LibraryListNotice {
-                    text: "No artists".to_owned(),
-                    attr: "data-library-empty",
+                if !frame.loading && frame.artists.is_empty() {
+                    // The selected collections hold no artist (the spec's
+                    // empty text): the row area is empty, so one line says so.
+                    LibraryListNotice {
+                        text: "No artists".to_owned(),
+                        attr: "data-library-empty",
+                    }
                 }
             }
             div {

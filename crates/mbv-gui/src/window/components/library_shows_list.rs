@@ -195,6 +195,32 @@ fn paint_shows_node(
     let press_library = library.clone();
     let menu_id = row_source_id(row).map(str::to_owned);
     let menu_library = library.clone();
+    // The expandable node's `aria-expanded` names the open state (the Svelte
+    // `undefined` painted none); the marks beyond it paint only while they
+    // hold.
+    let mut row_marks = Vec::new();
+    if cursor_row {
+        row_marks.push(Attribute::new("data-library-shows-cursor", "", None, false));
+    }
+    if selected_row {
+        row_marks.push(Attribute::new(
+            "data-library-shows-selected",
+            "",
+            None,
+            false,
+        ));
+    }
+    if open {
+        row_marks.push(Attribute::new("data-library-shows-open", "", None, false));
+    }
+    if expandable {
+        row_marks.push(Attribute::new(
+            "aria-expanded",
+            if open { "true" } else { "false" },
+            None,
+            false,
+        ));
+    }
     rsx! {
         button {
             "type": "button",
@@ -212,9 +238,7 @@ fn paint_shows_node(
                     f32_from_f64(coordinates.y),
                 );
             },
-            ..mark("data-library-shows-cursor", cursor_row),
-            ..mark("data-library-shows-selected", selected_row),
-            ..mark("data-library-shows-open", open),
+            ..row_marks,
             if expandable {
                 // The chevron's rotation: the open node's caret points down.
                 { paint_chevron(open) }

@@ -153,17 +153,13 @@ fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
 }
 
 /// The active destination's list painter (row 7.7): the list the Svelte
-/// panel mounts for the pair's destination. The Music list keeps its 7.2
-/// props (the canvas tree's own port); the other destinations' lists read
-/// their carried frames from the section store themselves, so a panel
-/// repaint never deep-clones their rows for them.
+/// panel mounts for the pair's destination. Every list reads its carried
+/// frames from the section store itself, so a panel repaint never
+/// deep-clones a list's rows for it.
 fn list_painter(pair: LibraryPair) -> Element {
     match pair {
-        LibraryPair::Music(list, detail) => rsx! {
-            LibraryList {
-                list: list.clone(),
-                detail: detail.clone(),
-            }
+        LibraryPair::Music(..) => rsx! {
+            LibraryList {}
         },
         LibraryPair::Home(..) => rsx! {
             LibraryHomeList {}
