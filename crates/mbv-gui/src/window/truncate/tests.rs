@@ -3,9 +3,7 @@
 //! and its measured width is at most the box width. The measure runs over
 //! the bundled faces, so no test opens a window or sleeps.
 
-use rstest::rstest;
-
-use super::{TextStyle, first_measure_needs_remeasure, fit_text};
+use super::{TextStyle, fit_text};
 
 /// A wide box at the body size the GUI text uses (D12's example).
 fn body_style() -> TextStyle {
@@ -36,25 +34,6 @@ fn text_that_does_not_fit_is_cut_to_the_box_width() {
     assert!(
         f64::from(measured) <= 120.0,
         "the cut text measures {measured} CSS px"
-    );
-}
-
-/// Contract 4 (D12): only a box's first measure after mount, and only when it
-/// read an unlaid (zero-wide) box, asks for one post-layout re-measure. Every
-/// later measure settles, so a collapsed box cannot ask again and the bump its
-/// request drives cannot cycle.
-#[rstest]
-#[case::first_measure_of_an_unlaid_box(true, 0.0, true)]
-#[case::first_measure_of_a_laid_out_box(true, 120.0, false)]
-#[case::remeasure_of_an_unlaid_box(false, 0.0, false)]
-fn only_a_first_measure_of_an_unlaid_box_requests_a_remeasure(
-    #[case] is_first_measure: bool,
-    #[case] client_width: f64,
-    #[case] expected: bool,
-) {
-    assert_eq!(
-        first_measure_needs_remeasure(is_first_measure, client_width),
-        expected
     );
 }
 

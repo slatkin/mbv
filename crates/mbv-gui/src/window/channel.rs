@@ -32,10 +32,17 @@ pub enum WindowEvent {
     /// asked for it.
     Timer(TimerId),
     /// One presented frame (D10), sent after each `RedrawRequested` the shell
-    /// resolved. While frames are wanted it also paces the frame loop; a
-    /// paused window still presents one for every redraw, which is what the
-    /// drain's mount-time re-measure requests (D12) read.
-    Frame,
+    /// resolved. `changed` is the launch copy's frame fact
+    /// ([`crate::window::layout::frame_carries_change`]): whether that
+    /// resolve applied a change no measurement has read, so the drain bumps
+    /// the layout epoch for exactly the frames that did. While frames are
+    /// wanted the report also paces the frame loop; a paused window still
+    /// presents one for every redraw it needs, which is what a change that no
+    /// frame has resolved yet waits for.
+    Frame {
+        /// Whether this frame's resolve applied a change.
+        changed: bool,
+    },
     /// The window moved, resized, or its scale factor changed (D5, D9). The
     /// layout epoch reads it from task 3.5 on; the root needs no reaction
     /// before then.

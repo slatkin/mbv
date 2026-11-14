@@ -5,6 +5,8 @@
 //! has no handler to call — `NetHandler` has no error callback (gap G8).
 
 use std::io::{self, Cursor};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{SendError, Sender};
 
 use blitz_traits::net::{Bytes, NetHandler, NetProvider, Request, Url};
@@ -58,6 +60,46 @@ pub enum ArtStatus {
     },
 }
 
+/// The font loads the document has to lay out again (D7, D12), the provider's
+/// one flag for the launch copy.
+///
+/// A font changes measured text without a tree change: Blitz registers the
+/// bytes inside a resolve (`BaseDocument::handle_message`) and re-shapes the
+/// text in that same resolve, so the change fact a frame reads before its
+/// resolve cannot see it. The provider sets this flag, the launch copy presents
+/// one frame for it ([`crate::window::launch`]), and that frame reports the
+/// change so the measure runs after the re-shaped layout. A plain atomic flag,
+/// not a signal: nothing in the tree subscribes to it.
+#[derive(Clone, Debug, Default)]
+pub struct FontLoads(Arc<AtomicBool>);
+
+impl FontLoads {
+    /// A flag with no font waiting.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// One font arrived for the document to lay out again (D7): the next
+    /// presented frame reports the change and measures the re-shaped text.
+    pub fn note(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Take the pending load, clearing it: the frame reports one change per
+    /// load, so the frame it drives reports nothing and asks for no other.
+    #[must_use]
+    pub fn take(&self) -> bool {
+        self.0.swap(false, Ordering::Relaxed)
+    }
+
+    /// Whether a load is waiting for the frame that reports it.
+    #[must_use]
+    pub fn pending(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
 /// The in-process net provider (D7). It holds the core thread's sender, so an
 /// art request reaches the core, and the window channel's sender, so the art
 /// answers report to the root.
@@ -65,14 +107,19 @@ pub enum ArtStatus {
 pub struct MbvNetProvider {
     core: Sender<CoreInput>,
     events: WindowEventSender,
+    fonts: FontLoads,
 }
 
 impl MbvNetProvider {
-    /// A provider that sends art requests to `core` and art answers to
-    /// `events`.
+    /// A provider that sends art requests to `core`, art answers to `events`,
+    /// and font loads to `fonts`.
     #[must_use]
-    pub fn new(core: Sender<CoreInput>, events: WindowEventSender) -> Self {
-        Self { core, events }
+    pub fn new(core: Sender<CoreInput>, events: WindowEventSender, fonts: FontLoads) -> Self {
+        Self {
+            core,
+            events,
+            fonts,
+        }
     }
 
     /// The `mbv-art` route (D7): the request goes to the core, and the reply
@@ -143,7 +190,7 @@ impl NetProvider for MbvNetProvider {
     fn fetch(&self, _doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
         match request.url.scheme() {
             "mbv-art" => self.fetch_art(&request.url, handler),
-            "mbv-asset" => fetch_font(&request.url, handler),
+            "mbv-asset" => fetch_font(&request.url, handler, &self.fonts),
             _ => {
                 tracing::debug!(
                     target: "gui_art",
@@ -156,10 +203,12 @@ impl NetProvider for MbvNetProvider {
 }
 
 /// The `mbv-asset` route (D7): a bundled font answers from the binary's
-/// bytes. A file with no vendored bytes drops its handler unanswered (gap
-/// G8).
-fn fetch_font(url: &Url, handler: Box<dyn NetHandler>) {
+/// bytes, and the load is noted so the window presents the frame that measures
+/// the re-shaped text (D12). A file with no vendored bytes drops its handler
+/// unanswered (gap G8).
+fn fetch_font(url: &Url, handler: Box<dyn NetHandler>, fonts: &FontLoads) {
     if let Some(bytes) = url.path().strip_prefix(FONT_PREFIX).and_then(font_bytes) {
+        fonts.note();
         handler.bytes(url.to_string(), Bytes::from_static(bytes));
     }
 }

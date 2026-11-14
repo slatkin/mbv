@@ -2,9 +2,9 @@
 //! `launch_cfg_with_props` from `dioxus-native` 0.8.0-alpha.3, with this
 //! crate's window attributes, the `BlitzShellProxy` as a root context, the
 //! window event handler wrapped for `WindowEvent::Viewport` (D9) and
-//! `WindowEvent::Frame` (D10), no tokio runtime, the re-measure request the
-//! drain answers after a frame (D12), and the resolve that keeps hit testing
-//! off a removed node (gap `G-Hit`). The pinned crate source is the authority
+//! `WindowEvent::Frame` (D10), the frame's change fact the drain's re-measure
+//! reads (D12), and the resolve that keeps hit testing off a removed node (gap
+//! `G-Hit`). The pinned crate source is the authority
 //! for the copy; the spike's `crates/mbv-native/src/launch.rs` at commit
 //! `2a0510d2a` is a reference.
 
@@ -32,8 +32,8 @@ use dioxus_native::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
-use crate::window::layout::RemeasureRequest;
-use crate::window::net::MbvNetProvider;
+use crate::window::layout::{carries_unresolved_change, frame_carries_change};
+use crate::window::net::{FontLoads, MbvNetProvider};
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
@@ -74,16 +74,6 @@ fn hit_tests(event: &WinitWindowEvent) -> bool {
     )
 }
 
-/// Whether the document holds a tree change no resolve has applied yet (gap
-/// `G-Hit`): every mutation inserts damage on the changed node's parent and
-/// flags the ancestors (`Node::mark_damaged`), and a resolve rebuilds the paint
-/// trees of the damaged subtrees and clears both, so the root's flags are the
-/// document's own record of an applied-but-unresolved change.
-fn carries_unresolved_change(document: &BaseDocument) -> bool {
-    let root = document.root_node();
-    root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
-}
-
 /// The animation clock the launch copy's pre-hit resolves pass (gap `G-Hit`).
 ///
 /// Blitz-shell starts its own clock when it creates the window's surfaces
@@ -121,13 +111,19 @@ impl AnimationClock {
 /// a hit test over them unwraps a missing node id and panics (blitz-dom
 /// `node.rs`, `Node::hit_inner`). The frame's own resolve follows within a
 /// frame; this one is gated on the document's damage so mouse movement over an
-/// unchanged tree costs one flag read.
-fn resolve_before_hit_testing(document: &Rc<RefCell<BaseDocument>>, animation: &AnimationClock) {
+/// unchanged tree costs one flag read. Returns whether it resolved, so the next
+/// frame carries the change this resolve applied and its measure re-runs
+/// (D12).
+fn resolve_before_hit_testing(
+    document: &Rc<RefCell<BaseDocument>>,
+    animation: &AnimationClock,
+) -> bool {
     let mut document = document.borrow_mut();
     if !carries_unresolved_change(&document) {
-        return;
+        return false;
     }
     document.resolve(animation.time());
+    true
 }
 
 /// The dioxus-native application with its window event handler wrapped (D5):
@@ -147,30 +143,38 @@ struct MbvApplication {
     doc_id: usize,
     events: WindowEventSender,
     clock: Arc<dyn Clock>,
-    /// The window's mount-time re-measure requests (D12): a `Truncate` that
-    /// mounted unlaid sets one, and the loop presents the frame the drain's
-    /// frame handler answers it with.
-    remeasure: RemeasureRequest,
-    /// Whether that frame was already asked for. One ask per pending request
-    /// keeps the loop from redrawing again and again while the drain has not
-    /// taken it yet.
-    remeasure_framed: bool,
+    /// Whether a viewport change has landed since the last presented frame
+    /// (D9): Blitz applies the new size in its own handler without touching the
+    /// tree, so the frame fact cannot read it from the document.
+    viewport_changed: bool,
+    /// Whether the pre-hit resolve applied a change since the last presented
+    /// frame (gap `G-Hit`, D12): that resolve is not a frame, so the next frame
+    /// reports the change and the measure re-runs.
+    resolved_early: bool,
+    /// The fonts the document has fetched since the last presented frame (D7,
+    /// D12): Blitz registers a font inside a resolve and lays the text out
+    /// again in the same pass, so a font changes measured text with no tree
+    /// change to read before the resolve. The provider sets this, the frame
+    /// takes it, and the loop presents the frame it needs.
+    fonts: FontLoads,
+    /// Whether that frame was already asked for. One ask per pending font keeps
+    /// the idle loop from redrawing again and again until the frame takes it.
+    font_framed: bool,
 }
 
 impl MbvApplication {
-    /// Present the frame a pending re-measure request needs (D12): the frame
-    /// resolves the layout that holds the mounted box, and its
-    /// `WindowEvent::Frame` lets the drain take the request and bump the layout
-    /// epoch. One request, one frame; the flag clears when the drain takes it.
-    fn present_remeasure_frame(&mut self) {
-        if !self.remeasure.pending() {
-            self.remeasure_framed = false;
+    /// Present the frame a font load needs (D12): the font arrives outside any
+    /// frame, and the frame that reports it resolves the re-shaped text and
+    /// bumps the layout epoch. One frame per load; the frame takes the flag.
+    fn present_font_frame(&mut self) {
+        if !self.fonts.pending() {
+            self.font_framed = false;
             return;
         }
-        if self.remeasure_framed {
+        if self.font_framed {
             return;
         }
-        self.remeasure_framed = true;
+        self.font_framed = true;
         self.proxy.send_event(BlitzShellEvent::RequestRedraw {
             doc_id: self.doc_id,
         });
@@ -207,9 +211,9 @@ impl ApplicationHandler for MbvApplication {
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.inner.about_to_wait(event_loop);
-        // The loop is idle: a re-measure request that landed since the last
-        // frame needs one more presented frame (D12).
-        self.present_remeasure_frame();
+        // The loop is idle: a font that landed since the last frame needs one
+        // more presented frame (D12).
+        self.present_font_frame();
     }
 
     fn window_event(
@@ -224,30 +228,50 @@ impl ApplicationHandler for MbvApplication {
             &event,
             WinitWindowEvent::SurfaceResized(_) | WinitWindowEvent::ScaleFactorChanged { .. }
         );
+        if viewport {
+            self.viewport_changed = true;
+        }
         let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
         // Gap `G-Hit`: the hit test runs inside the shell's handler, so the
         // resolve that makes `paint_children` current runs before it.
-        if hit_tests(&event) {
-            resolve_before_hit_testing(&self.document, &self.animation);
+        if hit_tests(&event) && resolve_before_hit_testing(&self.document, &self.animation) {
+            self.resolved_early = true;
         }
+        // The frame fact is read before the shell resolves (D12): a change
+        // resolved after it — a batch or a pointer event the drain applies in
+        // the same turn — must not be consumed by this frame, or its own frame
+        // would report nothing and no measure would follow the resolve.
+        let changed = if redraw {
+            let font_loaded = self.fonts.take();
+            frame_carries_change(
+                &self.document.borrow(),
+                self.viewport_changed,
+                self.resolved_early,
+            ) || font_loaded
+        } else {
+            false
+        };
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
             let _ = self.events.unbounded_send(WindowEvent::Viewport);
         }
-        // D10: every presented frame reports, and the next redraw is
-        // requested only while frames are wanted, which paces the loop at
-        // vsync. The report itself is never gated: the drain's frame handler
-        // also carries the mount-time re-measure requests (D12), which a
-        // paused window must answer too.
+        // D10: every presented frame reports its change fact, and the next
+        // redraw is requested only while frames are wanted, which paces the
+        // loop at vsync. The report itself is never gated: a change no frame
+        // has resolved yet is answered by a frame's bump (D12), which a paused
+        // window must report too. An idle window presents none: nothing here
+        // asks for one, and blitz-shell's poll asks for a redraw on its own
+        // when the tree or a net answer gives it work.
         if redraw {
-            let _ = self.events.unbounded_send(WindowEvent::Frame);
+            self.viewport_changed = false;
+            self.resolved_early = false;
+            let _ = self.events.unbounded_send(WindowEvent::Frame { changed });
             if self.clock.frames_wanted() {
                 self.proxy.send_event(BlitzShellEvent::RequestRedraw {
                     doc_id: self.doc_id,
                 });
             }
         }
-        self.present_remeasure_frame();
     }
 }
 
@@ -276,17 +300,19 @@ pub fn launch(
     // (D7), and the root's context copy lets the document's fetch paths find
     // it, as the original copy's provider context does.
     let vdom = VirtualDom::new(app);
-    let net_provider: Arc<dyn NetProvider> =
-        Arc::new(MbvNetProvider::new(core.clone(), events.clone()));
+    // The fonts the document fetches (D7, D12): the provider sets the flag and
+    // this loop presents the frame whose report resolves and measures them.
+    let fonts = FontLoads::new();
+    let net_provider: Arc<dyn NetProvider> = Arc::new(MbvNetProvider::new(
+        core.clone(),
+        events.clone(),
+        fonts.clone(),
+    ));
     vdom.provide_root_context(CoreLink::new(core));
     vdom.provide_root_context(Arc::clone(&net_provider));
     vdom.provide_root_context(Arc::clone(&clock));
     vdom.provide_root_context(EventSlot::new(event_receiver));
     vdom.provide_root_context(proxy.clone());
-    // The mount-time re-measure requests (D12): the root component reads it, and
-    // this loop presents the frame the drain answers it with.
-    let remeasure = RemeasureRequest::new();
-    vdom.provide_root_context(remeasure.clone());
 
     let doc = DioxusDocument::new(
         vdom,
@@ -316,8 +342,10 @@ pub fn launch(
         doc_id,
         events,
         clock,
-        remeasure,
-        remeasure_framed: false,
+        viewport_changed: false,
+        resolved_early: false,
+        fonts,
+        font_framed: false,
     };
     event_loop
         .run_app(application)

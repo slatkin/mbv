@@ -7,28 +7,26 @@
 //! a frame that moves only the cursor moves no region, so it reports nothing.
 //!
 //! `ResizeObserver` has no equivalent on Blitz, so the measurement reads the
-//! [`LayoutEpoch`]: a counter that bumps on every fact that can change a
-//! measured rect — a viewport change, a divider drag or reset, a panel state
-//! change, or a batch that changes a list's row count. A `Truncate` box that
-//! mounts asks for one more bump through [`RemeasureRequest`] (D12): its first
-//! measure can read the layout from before its insertion, so the presented
-//! frame after it bumps the epoch once and re-measures every box. Every bump
-//! that lands before the frame that resolves its change asks for that one more
-//! bump too ([`note_layout_change`]): Blitz applies a new viewport and our
-//! batch's DOM changes before the resolving frame, so the bump's own measure
-//! can read the old layout, and without the presented frame's second bump
-//! (after the resolve) the measured sizes and the arrangements derived from
-//! them stay one change stale. Each
-//! container's effect
-//! reads the epoch and measures its box through `MountedData`'s client rect,
-//! which is already CSS pixels (the taffy layout's viewport is the logical
-//! size) — the unit every threshold and report value names.
+//! [`LayoutEpoch`]: a counter that bumps when a presented frame resolved a
+//! change that can move a measured rect. The measure never runs on the fact
+//! itself, only after the resolve ([`note_presented_frame`]): Blitz applies a
+//! viewport in its own window-event handler and our DOM changes after the poll
+//! that runs the effects, so a measure taken on the fact reads the layout from
+//! before the frame that resolves it — the container keeps its old size, the
+//! write is the no-op the reporter's dedup expects, and nothing measures
+//! again. So the launch copy, which is the one place that knows a resolve
+//! happened, carries the fact on the frame ([`frame_carries_change`]): the
+//! drain bumps the epoch for exactly the frames that resolved a change, a
+//! viewport change, or a resolve a hit test needed early. A measure that finds
+//! nothing new writes nothing, so the next frame carries no change and the
+//! window settles. Each container's effect reads the epoch and measures its box
+//! through `MountedData`'s client rect, which is already CSS pixels (the taffy
+//! layout's viewport is the logical size) — the unit every threshold and report
+//! value names.
 
-use std::cell::Cell;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use blitz_dom::BaseDocument;
 use dioxus_native::prelude::*;
 
 use crate::bridge::layout::{
@@ -56,54 +54,49 @@ impl LayoutEpoch {
     }
 }
 
-/// The mount-time re-measure request (D12): the window's one flag for a box or
-/// container whose measure read a layout that no resolve had applied yet — a
-/// `Truncate` box's first measure after mount, or any measurement after a
-/// viewport change, which Blitz applies before it resolves the document.
+/// Whether the document holds a tree change no resolve has applied yet (D9,
+/// gap `G-Hit`): every mutation inserts damage on the changed node's parent and
+/// flags the ancestors (`Node::mark_damaged`), and a resolve rebuilds the paint
+/// trees of the damaged subtrees and clears both, so the root's flags are the
+/// document's own record of an applied-but-unresolved change.
+#[must_use]
+pub fn carries_unresolved_change(document: &BaseDocument) -> bool {
+    let root = document.root_node();
+    root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
+}
+
+/// Whether the frame that is about to resolve carries a change no measurement
+/// has read (D9, D12), the launch copy's frame fact.
 ///
-/// A `Truncate` measures in a `use_effect`, and blitz-shell's poll runs an
-/// effect before the render resolves the document, so a box mounted this turn
-/// can measure the layout from before its insertion — zero wide — and then
-/// keep its whole text, hard clipped, until a layout fact re-runs it. No
-/// effect can bump the epoch itself: the bump must land after a resolve that
-/// includes the box, and a bump written from an effect that reads the epoch
-/// re-runs that effect forever. So a box asks here instead, and the drain's
-/// presented-frame handler — an event handler, after the frame's resolve, never
-/// an effect or a render body — takes the flag and bumps the epoch once. The
-/// launch copy presents the frame the take needs (D5), because a paused window
-/// asks for no frames of its own.
-///
-/// A plain atomic flag, not a signal: nothing subscribes to it, so a request
-/// re-runs no effect, and reading it outside the runtime is safe.
-#[derive(Clone, Debug, Default)]
-pub struct RemeasureRequest(Arc<AtomicBool>);
+/// A frame must bump the [`LayoutEpoch`] exactly when its own resolve applies
+/// something a measure has not seen — never when it was merely presented, and
+/// never on a standing request, because a request armed after a frame's resolve
+/// would be taken by that frame and the change it stood for would never be
+/// measured. The three facts are the document's unresolved tree change (every
+/// mutation, from a section batch, a divider step, a width reset, a remount, or
+/// a net answer that reaches the tree), a viewport change ([`super::channel::
+/// WindowEvent::Viewport`], which Blitz applies without touching the tree), and
+/// a resolve the hit-test gap needed early (`G-Hit`), which applied a change no
+/// frame has reported yet.
+#[must_use]
+pub fn frame_carries_change(
+    document: &BaseDocument,
+    viewport_changed: bool,
+    resolved_early: bool,
+) -> bool {
+    viewport_changed || resolved_early || carries_unresolved_change(document)
+}
 
-impl RemeasureRequest {
-    /// A request with nothing pending.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// A box's first measure read an unlaid box (D12): the next presented
-    /// frame bumps the epoch. Repeating a request before it is taken is a
-    /// no-op — one bump serves every box that asked.
-    pub fn request(&self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-
-    /// Take the pending request, clearing it (D12). The drain calls this once
-    /// per presented frame; `true` means one epoch bump is due.
-    #[must_use]
-    pub fn take(&self) -> bool {
-        self.0.swap(false, Ordering::Relaxed)
-    }
-
-    /// Whether a request is waiting to be taken (D12). The launch copy asks so
-    /// it presents the frame that answers the request; it never clears it.
-    #[must_use]
-    pub fn pending(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
+/// One presented frame's layout facts (D10, D12): the launch copy reports
+/// whether the frame's resolve applied a change ([`frame_carries_change`]), and
+/// a frame that did bumps the epoch once, so every measurement effect re-reads
+/// its box against the layout this frame painted. A frame that resolved nothing
+/// new bumps nothing: a measure that finds no change writes nothing, so the
+/// next frame carries no change and an idle window's frames stop costing
+/// measures.
+pub fn note_presented_frame(mut epoch: LayoutEpoch, changed: bool) {
+    if changed {
+        epoch.bump();
     }
 }
 
@@ -239,14 +232,9 @@ impl LayoutReporter {
 /// rect is the laid-out one.
 ///
 /// The first measure runs before any resolve has placed the box, so it reads a
-/// zero rect: a container that mounted with the tree would otherwise keep the
-/// zero width it started with (the size signal's default, so the write is a
-/// no-op) until some later layout fact re-measured it, and the panel state and
-/// the column widths derived from it would differ per run with the frames it
-/// caught. So the first measure arms one post-resolve re-measure
-/// ([`RemeasureRequest`]) — the `Truncate` box's mount rule (D12) — and the
-/// window's first presented frame bumps the epoch and measures the laid-out
-/// box. Only the first measure arms, so the bump's re-measure arms nothing.
+/// zero rect and writes nothing (the size signal's default). The frame that
+/// resolves the mount's mutations carries the change, so its bump measures the
+/// laid-out box; no mount-time request is needed for it.
 pub fn track_container_size(
     mounted: Signal<Option<Event<MountedData>>>,
     mut size: Signal<LayoutSize>,
@@ -260,29 +248,15 @@ pub fn track_container_size(
     };
     let reporter = try_consume_context::<LayoutReporter>();
     let report_size = reporter.as_ref().map(|reporter| reporter.container_size);
-    let remeasure = try_consume_context::<RemeasureRequest>();
-    // Whether this container has measured yet, shared across the effect's runs.
-    // A `Cell`, not a signal: the effect reads and writes it without
-    // subscribing to it, so the mark never re-queues the effect that sets it.
-    let measured_before: Rc<Cell<bool>> = use_hook(|| Rc::new(Cell::new(false)));
     use_effect(move || {
         // Reading the epoch subscribes the re-measure to every layout change
         // (D9): a resize, a divider drag, or a panel state change re-measures.
         let _epoch = epoch.cloned();
         let mounted = mounted.cloned();
-        let measured_before = Rc::clone(&measured_before);
-        let request = remeasure.clone();
         spawn(async move {
             let Some(event) = mounted else {
                 return;
             };
-            // The first measure read a box no resolve had placed yet: ask for
-            // one bump after the frame that resolves it (D12).
-            if !measured_before.replace(true)
-                && let Some(request) = request.as_ref()
-            {
-                request.request();
-            }
             let Ok(rect) = event.get_client_rect().await else {
                 return;
             };
@@ -298,41 +272,6 @@ pub fn track_container_size(
             }
         });
     });
-}
-
-/// One layout fact that landed before the frame that resolves it (D9, D12):
-/// the drain's `WindowEvent::Viewport` work, a section batch that changed rows
-/// or a panel state, and a divider drag step or reset. Each moves measured
-/// rects, so the epoch bumps and every measurement effect re-measures.
-///
-/// The bump alone is not enough. The DOM change, or Blitz's own new viewport
-/// (`Viewport::with_viewport`), is applied before the frame that resolves the
-/// document — `redraw()` — and blitz-shell's poll runs the window channel's
-/// drain and then the measurement effects before that frame. So the measures
-/// this bump drives can read the layout from before the resolving frame,
-/// measure the size or rect the box already holds, and change nothing; the
-/// reporter's dedup then makes the write a no-op and no later fact measures
-/// again, which leaves the measured sizes and every arrangement derived from
-/// them one change stale. So the change also asks for one presented frame: the
-/// frame's resolve lays the document out with the change applied, and its
-/// `WindowEvent::Frame` bumps the epoch a second time
-/// ([`note_presented_frame`]), after the resolve. A request is taken once, and
-/// only a first measure makes an unrelated one, so the second bump cannot
-/// request another and the window holds no steady-state frame loop.
-pub fn note_layout_change(mut epoch: LayoutEpoch, remeasure: &RemeasureRequest) {
-    epoch.bump();
-    remeasure.request();
-}
-
-/// One presented frame's layout facts (D10, D12), the drain's
-/// `WindowEvent::Frame` work: the frame's layout is resolved, so a pending
-/// request — a box that mounted unlaid, or a viewport change whose first
-/// measure read the pre-resolve layout — takes one epoch bump, and every
-/// measurement effect re-reads its box against the layout that now holds it.
-pub fn note_presented_frame(mut epoch: LayoutEpoch, remeasure: &RemeasureRequest) {
-    if remeasure.take() {
-        epoch.bump();
-    }
 }
 
 /// One element's painted region (D9), `None` while the element is not
