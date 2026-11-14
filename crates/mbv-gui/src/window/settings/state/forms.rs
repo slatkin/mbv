@@ -64,12 +64,14 @@ impl SettingsState {
                     name: String::new(),
                     url: String::new(),
                     kind: mbv_queue::FeedKind::Audio,
+                    kind_menu: None,
                 },
                 Some(feed) => FeedFormDraft {
                     identity: Some(feed.url.clone()),
                     name: feed.name.clone(),
                     url: feed.url.clone(),
                     kind: feed.kind,
+                    kind_menu: None,
                 },
             });
         });
@@ -82,6 +84,64 @@ impl SettingsState {
         ui.with_mut(|ui| {
             if let Some(form) = &mut ui.feed_form {
                 update(form);
+            }
+        });
+    }
+
+    /// Open the feed form's kind menu on the kind the draft shows, or close
+    /// it when it is open (the port's stand-in for the Svelte `<select>`'s
+    /// drop-down, see `components/settings_feeds.rs`): the control's press
+    /// and the router's Enter on it both run this one toggle.
+    pub fn toggle_feed_kind_menu(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            let Some(form) = ui.feed_form.as_mut() else {
+                return;
+            };
+            form.kind_menu = match form.kind_menu {
+                Some(_) => None,
+                None => super::FEED_KINDS
+                    .iter()
+                    .position(|candidate| *candidate == form.kind),
+            };
+        });
+    }
+
+    /// Close the kind menu with no change (Esc, a press outside, a second
+    /// press on the field).
+    pub fn close_feed_kind_menu(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            if let Some(form) = &mut ui.feed_form {
+                form.kind_menu = None;
+            }
+        });
+    }
+
+    /// Move the kind menu's cursor one kind, inside the list's ends.
+    pub fn move_feed_kind_menu_cursor(&self, step: isize) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            if let Some(form) = &mut ui.feed_form
+                && let Some(cursor) = form.kind_menu
+            {
+                let last = super::FEED_KINDS.len().saturating_sub(1);
+                form.kind_menu = Some(cursor.saturating_add_signed(step).min(last));
+            }
+        });
+    }
+
+    /// Choose the kind at `index`: the draft takes it and the menu closes. An
+    /// index outside [`super::FEED_KINDS`] changes nothing.
+    pub fn choose_feed_kind(&self, index: usize) {
+        let Some(kind) = super::feed_kind_at(index) else {
+            return;
+        };
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            if let Some(form) = &mut ui.feed_form {
+                form.kind = kind;
+                form.kind_menu = None;
             }
         });
     }

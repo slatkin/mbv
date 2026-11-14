@@ -212,12 +212,22 @@ fn content_pane(frame: &GuiSettingsFrame) -> Element {
 
 /// A pointer press on the screen root (`SettingsScreen.svelte`'s
 /// `svelte:window` `pointerdown`, plus the pick menu's press-outside close):
-/// the open pick menu closes with no send, and the settings cursor hides.
-/// The pick controls stop their presses' propagation before here, so a press
-/// that arrives is outside them (the Svelte listener's containment skip).
+/// the open pick menu and the feed form's open kind menu close with no send,
+/// and the settings cursor hides. The pick controls and the kind field stop
+/// their presses' propagation before here, so a press that arrives is outside
+/// them (the Svelte listener's containment skip).
 fn screen_press(settings: &SettingsState) {
     if settings.pick_menu.peek().is_some() {
         settings.close_pick_menu();
+    }
+    if settings
+        .ui
+        .peek()
+        .feed_form
+        .as_ref()
+        .is_some_and(|form| form.kind_menu.is_some())
+    {
+        settings.close_feed_kind_menu();
     }
     settings.hide_settings_cursor();
 }

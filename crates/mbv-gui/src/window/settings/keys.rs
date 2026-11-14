@@ -4,13 +4,15 @@
 //! this module is the screen's one routing site — the components press
 //! through the store's functions, never a second router. The order is the
 //! design's: an active capture takes every key (Esc cancels, any other key
-//! is the candidate), a focused text field takes the key (Esc cancels, Enter
-//! submits, the rest types), an open pick menu takes its own keys (Up and
-//! Down walk it, Enter sets the value, Esc closes it), then the screen keys
-//! run — the movements in the focused pane, Tab and Shift+Tab between the
-//! panes, Enter opens or activates, Space activates a toggle or a choice
-//! mark, and Esc walks the ladder — and every other key goes to the core, so
-//! the playback chords keep working behind the screen.
+//! is the candidate), the feed form's open kind menu takes its own keys (Up
+//! and Down walk the two kinds, Enter sets the draft's, Esc closes it), a
+//! focused text field takes the key (Esc cancels, Enter submits, the rest
+//! types), an open pick menu takes its own keys (Up and Down walk it, Enter
+//! sets the value, Esc closes it), then the screen keys run — the movements
+//! in the focused pane, Tab and Shift+Tab between the panes, Enter opens or
+//! activates, Space activates a toggle or a choice mark, and Esc walks the
+//! ladder — and every other key goes to the core, so the playback chords
+//! keep working behind the screen.
 
 use dioxus_native::prelude::*;
 
@@ -21,7 +23,8 @@ use crate::window::library::keys_shared::{bare, cursor_move};
 use crate::window::library::list::ListMove;
 
 use super::state::{
-    SettingsPane, SettingsState, current_settings_entries, focused_settings_entry, space_activates,
+    SettingsPane, SettingsState, SettingsUiState, current_settings_entries, focused_settings_entry,
+    space_activates,
 };
 
 /// Route one keydown while the Settings screen shows (`keys.ts`'s
@@ -48,7 +51,15 @@ pub fn route_settings_key(
         }
         return KeyOutcome::Handled;
     }
-    // (3) A focused text field takes the key: Esc cancels the form, Enter
+    // (3) The feed form's open kind menu takes its own keys, ahead of the
+    // text-field hold: the form's first field focuses on mount, so the hold
+    // is armed while the menu is open. Up and Down walk the two kinds, Enter
+    // sets the draft's, and Esc closes the menu with no change. Any other
+    // key closes it and falls through, as the pick menu does.
+    if let Some(outcome) = kind_menu_key(key, &ui, state) {
+        return outcome;
+    }
+    // (4) A focused text field takes the key: Esc cancels the form, Enter
     // submits it, and every other key types into the field — the `text`
     // answer lets the input's own default run and sends nothing to the core.
     // Tab's default walks the form's fields and buttons.
@@ -66,7 +77,7 @@ pub fn route_settings_key(
     // A screen key shows the cursor; a pointer press hides it again (the
     // `keyboard` fact in `state.rs`).
     state.show_settings_cursor();
-    // (4) An open pick menu takes its own keys (design D13): Up and Down walk
+    // (5) An open pick menu takes its own keys (design D13): Up and Down walk
     // its values, Enter sends `setValue` for the cursor value, and Esc closes
     // it with no change. Any other key closes it and falls through, so the
     // screen's own keys keep acting and the menu never outlives them. The
@@ -93,7 +104,7 @@ pub fn route_settings_key(
         }
         state.close_pick_menu();
     }
-    // (5) The screen keys run.
+    // (6) The screen keys run.
     if key.key == "Escape" && bare(key) {
         state.settings_escape(settings);
         return KeyOutcome::Handled;
@@ -147,6 +158,34 @@ pub fn route_settings_key(
         }
         return KeyOutcome::Core;
     }
-    // (6) Every other key goes to the core's keyboard router.
+    // (7) Every other key goes to the core's keyboard router.
     KeyOutcome::Core
+}
+
+/// The feed form's open kind menu's step (the Svelte `<select>`'s arrow keys
+/// and Enter, design D11's menu rule applied to the form's own control): Esc
+/// closes the menu, Enter sets the draft's kind at the menu's cursor, Up and
+/// Down walk the two kinds, and any other key closes the menu and hands the
+/// key back to the rest of the router. `None` while no kind menu is open.
+fn kind_menu_key(key: &DomKey, ui: &SettingsUiState, state: &SettingsState) -> Option<KeyOutcome> {
+    let cursor = ui.feed_form.as_ref().and_then(|form| form.kind_menu)?;
+    if key.key == "Escape" && bare(key) {
+        state.close_feed_kind_menu();
+        return Some(KeyOutcome::Handled);
+    }
+    if key.key == "Enter" && bare(key) {
+        state.choose_feed_kind(cursor);
+        return Some(KeyOutcome::Handled);
+    }
+    let kind_move = cursor_move(&key.key);
+    if matches!(kind_move, Some(ListMove::Up | ListMove::Down)) && bare(key) {
+        state.move_feed_kind_menu_cursor(if kind_move == Some(ListMove::Up) {
+            -1
+        } else {
+            1
+        });
+        return Some(KeyOutcome::Handled);
+    }
+    state.close_feed_kind_menu();
+    None
 }

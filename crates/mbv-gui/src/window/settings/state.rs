@@ -78,6 +78,21 @@ pub struct FeedFormDraft {
     pub name: String,
     pub url: String,
     pub kind: mbv_queue::FeedKind,
+    /// The open kind menu's cursor, an index into [`FEED_KINDS`]; `None`
+    /// while the menu is closed. The Svelte `<select>` drew its own options,
+    /// so the port keeps the menu's one UI fact beside the draft it edits
+    /// and lets it die with the form.
+    pub kind_menu: Option<usize>,
+}
+
+/// The kinds the feed form offers, in the Svelte `<select>`'s option order.
+pub const FEED_KINDS: [mbv_queue::FeedKind; 2] =
+    [mbv_queue::FeedKind::Audio, mbv_queue::FeedKind::Video];
+
+/// The kind `index` names, while it is one of [`FEED_KINDS`].
+#[must_use]
+pub fn feed_kind_at(index: usize) -> Option<mbv_queue::FeedKind> {
+    FEED_KINDS.get(index).copied()
 }
 
 /// The playlist rename field's draft (`state.ts`'s `RenameDraft`, design D9).

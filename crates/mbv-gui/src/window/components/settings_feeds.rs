@@ -8,12 +8,17 @@
 //! identity. While a fetch runs the frame's `adding` flag shows the add in
 //! progress.
 //!
-//! The kind control is the port's one markup deviation: the Svelte `<select>`
-//! cannot work here — Blitz fires no `change` event (`DomEventData` has no
-//! Change variant) and renders no popup — so the two kinds paint as Audio
-//! and Video buttons, the chosen kind in the primary fill. The
-//! `data-settings-field="kind"` name and the `Feed kind` accessible names
-//! stay, and the draft's kind moves through the same `setFeedForm` update.
+//! The kind control is the port's one markup substitution: the Svelte
+//! `<select>` cannot work here — Blitz paints no options (its user-agent
+//! sheet sets `option { display: none }`), draws no popup, and fires no
+//! `change` event (`DomEventData` has no Change variant) — so the one field
+//! the select painted now shows the chosen kind and opens the two kinds in
+//! the pick button's menu chrome. The field keeps the `data-settings-field`
+//! look and the `Feed kind` accessible name, the menu lives in the draft
+//! (`FeedFormDraft.kind_menu`), and a choice moves the draft's kind through
+//! the same `setFeedForm` update. The router's kind-menu step keeps the
+//! select's arrow keys and Enter: Up and Down walk the two kinds, Enter sets
+//! the draft's, and Esc closes the menu.
 //!
 //! The form host owns the keyboard hold's focus facts (task 8.4's wiring
 //! requirement): its `focusin` re-arms the hold and its `focusout` drops it,
@@ -27,16 +32,21 @@
 use dioxus_native::prelude::*;
 use mbv_queue::FeedKind;
 
+use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::bridge::frame::settings::GuiSettingsContent;
+use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::components::settings_card::SettingsCard;
 use crate::window::components::settings_entry_row::SettingsEntryRow;
 use crate::window::components::settings_field::SettingsField;
 use crate::window::components::settings_screen::settings_section_view;
+use crate::window::icons::ChevronDown;
 use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::focus::focus_on_mount;
-use crate::window::settings::state::{SettingsForm, SettingsState, submit_settings_frame};
+use crate::window::settings::state::{
+    FEED_KINDS, SettingsForm, SettingsState, submit_settings_frame,
+};
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The one Feeds pane (the Svelte markup, character for character).
@@ -170,7 +180,6 @@ fn feed_form(
     let blur_settings = settings.clone();
     let name_settings = settings.clone();
     let url_settings = settings.clone();
-    let kind_settings = settings.clone();
     let arm_settings = settings.clone();
     let submit_settings = settings.clone();
     let cancel_settings = settings.clone();
@@ -218,7 +227,7 @@ fn feed_form(
                     }),
                 }
             }
-            { kind_control(&kind_settings, form.kind) }
+            FeedKindControl { kind: form.kind }
             div {
                 class: "flex justify-end",
                 style: "gap: 8px;",
@@ -247,40 +256,90 @@ fn feed_form(
 }
 
 /// The kind control (the port's stand-in for the Svelte `<select>`, see the
-/// module doc): the two kinds as buttons, the chosen kind in the primary
-/// fill, each moving the draft's kind through the same update.
-fn kind_control(settings: &SettingsState, kind: FeedKind) -> Element {
+/// module doc): one `data-settings-field` button showing the chosen kind and
+/// its chevron, opening the two kinds in the pick button's menu chrome. A
+/// menu row's press runs [`SettingsState::choose_feed_kind`], the same
+/// choice the router's Enter makes, so the pointer and the keyboard set one
+/// draft.
+#[component]
+fn FeedKindControl(kind: FeedKind) -> Element {
+    let settings = consume_context::<SettingsState>();
+    let menu = settings
+        .ui
+        .read()
+        .feed_form
+        .as_ref()
+        .and_then(|form| form.kind_menu);
+    let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
+    let toggle = settings.clone();
+    let press = settings.clone();
+    let menu_press = settings.clone();
+    let choose = settings.clone();
+    let entries: Vec<GuiRowMenuEntry> = FEED_KINDS
+        .iter()
+        .map(|candidate| GuiRowMenuEntry {
+            label: feed_kind_label(*candidate).to_owned(),
+            key_hint: None,
+            destructive: false,
+            index: None,
+        })
+        .collect();
     rsx! {
         label {
             class: "flex flex-col",
             style: "gap: 6px; font-size: 12px; color: var(--canvas-muted);",
             "Kind"
             div {
-                class: "flex",
-                style: "gap: 6px;",
-                "data-settings-field": "kind",
-                for (candidate, name) in [(FeedKind::Audio, "Audio"), (FeedKind::Video, "Video")] {
-                    {
-                        let kind_settings = settings.clone();
-                        rsx! {
-                            SettingsButton {
-                                key: "{candidate.as_str()}",
-                                variant: if kind == candidate {
-                                    SettingsButtonVariant::Primary
-                                } else {
-                                    SettingsButtonVariant::Secondary
-                                },
-                                label: Some(format!("Feed kind: {}", candidate.as_str())),
-                                onpress: Some(Callback::new(move |()| {
-                                    kind_settings.update_feed_form(move |form| form.kind = candidate);
-                                })),
-                                "{name}"
-                            }
+                class: "relative",
+                button {
+                    "type": "button",
+                    class: "flex items-center justify-between",
+                    style: "width: 100%; gap: 10px;",
+                    "data-settings-field": "kind",
+                    "aria-label": "Feed kind",
+                    "aria-haspopup": "menu",
+                    "aria-expanded": if menu.is_some() { "true" } else { "false" },
+                    // A press on the field is not an outside press: it hides
+                    // the cursor and stops before the screen root's close, as
+                    // the pick button's press does.
+                    onpointerdown: move |event: PointerEvent| {
+                        press.hide_settings_cursor();
+                        event.stop_propagation();
+                    },
+                    onclick: move |_| toggle.toggle_feed_kind_menu(),
+                    "{feed_kind_label(kind)}"
+                    ChevronDown { size: 12, stroke_width: 2.2, aria_hidden: true }
+                }
+                if let Some(cursor) = menu {
+                    div {
+                        onpointerdown: move |event: PointerEvent| {
+                            menu_press.hide_settings_cursor();
+                            event.stop_propagation();
+                        },
+                        QueueRowMenu {
+                            label: "Feed kind".to_owned(),
+                            cursor: Some(cursor),
+                            entries: entries.clone(),
+                            top: "calc(100% + 4px)".to_owned(),
+                            right: Some("0".to_owned()),
+                            on_select: Some(Callback::new(move |index: usize| {
+                                choose.choose_feed_kind(index);
+                            })),
+                            row_slot,
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/// The painted name of one kind (the Svelte `<option>` labels), against
+/// [`FeedKind::as_str`]'s config spelling.
+fn feed_kind_label(kind: FeedKind) -> &'static str {
+    match kind {
+        FeedKind::Audio => "Audio",
+        FeedKind::Video => "Video",
     }
 }
 

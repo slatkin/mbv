@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use blitz_dom::Document as _;
+use blitz_dom::{Document as _, LocalName};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_queue::FeedKind;
@@ -146,6 +146,75 @@ fn built(content: GuiSettingsContent) -> Fixture {
         content,
     });
     fixture
+}
+
+/// The painted text of the one kind field, after asserting that the control
+/// is one field and that the field itself is the button (not a box around a
+/// button per kind).
+fn kind_field_text(doc: &DioxusDocument) -> String {
+    let dom = doc.inner();
+    let ids = dom
+        .query_selector_all("[data-settings-field=\"kind\"]")
+        .expect("the selector is valid");
+    assert_eq!(ids.len(), 1, "the kind control is one field");
+    let node = dom.get_node(ids[0]).expect("the node is in the document");
+    assert!(
+        node.data
+            .is_element_with_tag_name(&LocalName::from("button")),
+        "the field itself takes the press"
+    );
+    node.text_content().trim().to_owned()
+}
+
+/// Contract (the Svelte `<select>`, the port's field): the kind control paints
+/// as one field showing the draft's kind, and the menu's other kind moves the
+/// draft, so the submit carries the same `feedAdd` command as a typed form.
+#[test]
+fn the_kind_field_shows_the_chosen_kind_and_the_menu_sets_the_other() {
+    let mut fixture = built(feeds_content());
+    let state = fixture.state.clone();
+    fixture
+        .doc
+        .vdom
+        .in_runtime(move || state.open_feed_form(None));
+    fixture.poll_until_idle();
+
+    assert_eq!(
+        kind_field_text(&fixture.doc),
+        "Audio",
+        "the field shows the draft's kind"
+    );
+
+    let state = fixture.state.clone();
+    fixture.doc.vdom.in_runtime(move || {
+        state.toggle_feed_kind_menu();
+        state.choose_feed_kind(1);
+    });
+    fixture.poll_until_idle();
+
+    assert_eq!(
+        kind_field_text(&fixture.doc),
+        "Video",
+        "the chosen kind replaced the draft's"
+    );
+
+    let content = feeds_content();
+    let state = fixture.state.clone();
+    fixture.doc.vdom.in_runtime(move || {
+        state.focus_settings_field(SettingsForm::Feed);
+        state.submit_settings_form(&content);
+    });
+    fixture.poll_until_idle();
+
+    assert_eq!(
+        fixture.settings_commands(),
+        vec![mbv::GuiSettingsCommand::FeedAdd {
+            name: String::new(),
+            url: String::new(),
+            kind: FeedKind::Video,
+        }],
+        "the submit carried the chosen kind"
+    );
 }
 
 /// Contract (`SettingsFeeds.test.ts`): a press on the add control or a
