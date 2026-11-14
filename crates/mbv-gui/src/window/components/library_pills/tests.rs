@@ -123,7 +123,7 @@ impl Fixture {
 
 /// Build the document over the carried content and let the first render and
 /// effects land.
-fn built(list: GuiMusicList) -> Fixture {
+fn built(list: &GuiMusicList) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -191,7 +191,7 @@ fn music() -> GuiMusicList {
 /// `aria-pressed`, the clear ones do not, and no pill paints a check glyph.
 #[test]
 fn marks_the_one_selected_pill_with_aria_pressed_and_no_check_glyph() {
-    let fixture = built(music());
+    let fixture = built(&music());
 
     assert_eq!(
         fixture
@@ -221,7 +221,7 @@ fn marks_the_one_selected_pill_with_aria_pressed_and_no_check_glyph() {
 /// clear control — the TUI's Grouped Music form has none.
 #[test]
 fn paints_no_selected_count_or_clear_control() {
-    let fixture = built(music());
+    let fixture = built(&music());
 
     assert!(
         !fixture.presents("[data-library-pill-clear]"),
@@ -234,7 +234,7 @@ fn paints_no_selected_count_or_clear_control() {
 /// group id.
 #[test]
 fn a_press_selects_the_pressed_pill() {
-    let mut fixture = built(music());
+    let mut fixture = built(&music());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.select_library_pill(2, "g3".to_owned()));
 
@@ -252,7 +252,7 @@ fn a_press_selects_the_pressed_pill() {
 /// command, and the consumed request sends nothing again.
 #[test]
 fn space_selects_the_focused_pill() {
-    let mut fixture = built(music());
+    let mut fixture = built(&music());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.request_library_pill_select("g2".to_owned()));
 
@@ -269,7 +269,7 @@ fn space_selects_the_focused_pill() {
 /// moves between pills, and a focus move sends no command.
 #[test]
 fn marks_the_pill_the_keys_focus_hold_and_sends_nothing_for_it() {
-    let mut fixture = built(music());
+    let mut fixture = built(&music());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.focus_library_pill(Some("g2".to_owned())));
 

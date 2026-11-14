@@ -121,7 +121,7 @@ impl Fixture {
 
 /// Build the document over the carried content and let the first render and
 /// effects land.
-fn built(list: GuiFeedsList) -> Fixture {
+fn built(list: &GuiFeedsList) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -181,7 +181,7 @@ fn frame() -> GuiFeedsList {
 /// the pill's paint key.
 #[test]
 fn the_pills_paint_the_cores_selection_and_never_none() {
-    let fixture = built(frame());
+    let fixture = built(&frame());
 
     assert_eq!(
         fixture.pressed(),
@@ -197,7 +197,7 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
 /// the frame carries it.
 #[test]
 fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
-    let mut fixture = built(frame());
+    let mut fixture = built(&frame());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.select_feeds_pill(GuiFeedPill::Latest));
 

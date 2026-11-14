@@ -74,7 +74,7 @@ fn run(
                 Arc::clone(&clock),
                 std::rc::Rc::new(
                     move |state: &LibraryState, clock: &RecordingClock, facts: &Facts| {
-                        scenario(state, clock, facts)
+                        scenario(state, clock, facts);
                     },
                 ),
             ),

@@ -82,9 +82,9 @@ struct FixtureProps {
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
-/// The context handles the root hands the test: the Library store, the Feeds
-/// rows, and the detail the presses read.
-type FixtureHandles = (LibraryState, Vec<GuiEntryRowFrame>, GuiFeedsDetail);
+/// The context handles the root hands the test: the Library store and the
+/// detail the presses read.
+type FixtureHandles = (LibraryState, GuiFeedsDetail);
 
 /// The root: provides the Library store and paints the Hero, as the panel
 /// composes it.
@@ -104,7 +104,7 @@ fn feeds_hero_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
-    provide_context(clock.clone());
+    provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
@@ -117,9 +117,7 @@ fn feeds_hero_app(props: FixtureProps) -> Element {
         )
     });
     provide_context(state.clone());
-    handle
-        .borrow_mut()
-        .replace((state, rows.clone(), detail.clone()));
+    handle.borrow_mut().replace((state, detail.clone()));
     rsx! {
         LibraryFeedsHero { rows, detail }
     }
@@ -128,7 +126,6 @@ fn feeds_hero_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    rows: Vec<GuiEntryRowFrame>,
     detail: GuiFeedsDetail,
     receiver: mpsc::Receiver<CoreInput>,
 }
@@ -266,14 +263,13 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
         },
     );
     doc.initial_build();
-    let (state, rows, detail) = handle
+    let (state, detail) = handle
         .borrow_mut()
         .take()
         .expect("the root handed the store over");
     let mut fixture = Fixture {
         doc,
         state,
-        rows,
         detail,
         receiver,
     };

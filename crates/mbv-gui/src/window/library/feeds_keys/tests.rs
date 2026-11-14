@@ -421,8 +421,7 @@ fn right_on_the_pill_row_focuses_the_first_pill_and_sends_no_key() {
     assert_eq!(facts[0], "right=Handled");
     assert!(
         facts[1].contains("focused_pill=Some(Latest)"),
-        "facts={:?}",
-        facts
+        "facts={facts:?}"
     );
     assert_eq!(commands(&rx), []);
 }
@@ -435,7 +434,7 @@ fn space_on_a_focused_subscription_pill_asks_for_its_selection() {
         carry_feeds(state, content.clone(), LibraryPane::Pills, None);
         let mut feeds_ui = state.feeds_ui;
         feeds_ui.with_mut(|ui| {
-            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()))
+            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()));
         });
 
         route(state, facts, "space", " ", false);
@@ -458,7 +457,7 @@ fn the_pill_walk_keeps_its_place_when_the_frame_re_carries_equal_pills() {
         carry_feeds(state, first.clone(), LibraryPane::Pills, None);
         let mut feeds_ui = state.feeds_ui;
         feeds_ui.with_mut(|ui| {
-            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()))
+            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()));
         });
 
         // A new frame: structurally equal pills, all fresh objects.
@@ -471,8 +470,7 @@ fn the_pill_walk_keeps_its_place_when_the_frame_re_carries_equal_pills() {
     assert_eq!(facts[0], "right=Handled");
     assert!(
         facts[1].contains("focused_pill=Some(Subscription(\"https://sub.two\"))"),
-        "facts={:?}",
-        facts
+        "facts={facts:?}"
     );
     assert_eq!(commands(&rx), []);
 }

@@ -1,8 +1,8 @@
 //! Headless tests of the plain Emby-library Hero (D16): the contracts of
 //! `LibraryEmbyHero.test.ts` — the artwork box reserves the arm the frame
 //! declares, the header paints the kind word's kicker and the movie's title,
-//! the credits table and the IMDb button paint as the TUI's hero shows them,
-//! a press on the IMDb button sends the open-url command with the url the
+//! the credits table and the `IMDb` button paint as the TUI's hero shows them,
+//! a press on the `IMDb` button sends the open-url command with the url the
 //! frame carries (the `IMDb` meta row mapped out of the header's facts), a
 //! Hero without facts paints nothing, no Workspace and no tracklist paint,
 //! and the actions send the Emby commands with the frame's selected row. The
@@ -101,7 +101,7 @@ fn emby_hero_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
-    provide_context(clock.clone());
+    provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.
@@ -329,7 +329,7 @@ fn the_hero_paints_its_credits_table() {
     );
 }
 
-/// Contract (`LibraryEmbyHero.test.ts`, design D17, Q7): the IMDb button
+/// Contract (`LibraryEmbyHero.test.ts`, design D17, Q7): the `IMDb` button
 /// paints under the url the frame carries, and a press sends the open-url
 /// command with it. The `IMDb` meta row rides as the header's trailing
 /// action, mapped out of the facts the layout joins (invariant 30: the piece

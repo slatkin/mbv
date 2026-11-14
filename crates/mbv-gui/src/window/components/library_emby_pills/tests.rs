@@ -123,7 +123,7 @@ impl Fixture {
 
 /// Build the document over the carried content and let the first render and
 /// effects land.
-fn built(list: GuiEmbyList) -> Fixture {
+fn built(list: &GuiEmbyList) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -188,7 +188,7 @@ fn emby_frame() -> GuiEmbyList {
 /// selected one is the core's.
 #[test]
 fn the_pills_paint_the_cores_selection_and_never_none() {
-    let fixture = built(emby_frame());
+    let fixture = built(&emby_frame());
 
     assert_eq!(
         fixture.pressed(),
@@ -203,7 +203,7 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
 /// command with the pill's group.
 #[test]
 fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
-    let mut fixture = built(emby_frame());
+    let mut fixture = built(&emby_frame());
     let state = fixture.state.clone();
     fixture.in_runtime(move || {
         state.select_emby_pill(3, GuiEmbyFeedGroupFrame::Folder("folder-1".to_owned()));
@@ -223,7 +223,7 @@ fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
 /// key sends one command.
 #[test]
 fn the_keys_pill_request_sends_the_set_feed_group_command() {
-    let mut fixture = built(emby_frame());
+    let mut fixture = built(&emby_frame());
     let state = fixture.state.clone();
     fixture.in_runtime(move || {
         let mut emby_ui = state.emby_ui;

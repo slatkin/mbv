@@ -97,11 +97,6 @@ impl Fixture {
             .attr(LocalName::from(attribute))
             .map(str::to_owned)
     }
-
-    /// The style attribute of the first node the selector names.
-    fn style_of(&self, selector: &str) -> String {
-        self.attr_of(selector, "style").unwrap_or_default()
-    }
 }
 
 /// Build the document over the box's art and shape and let the first render

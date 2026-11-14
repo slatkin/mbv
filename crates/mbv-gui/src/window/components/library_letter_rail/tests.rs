@@ -75,7 +75,9 @@ fn rail_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    receiver: mpsc::Receiver<CoreInput>,
+    /// Kept open for the fixture's life, so a command the rail sends reaches
+    /// a live channel; no test asserts one.
+    _receiver: mpsc::Receiver<CoreInput>,
 }
 
 impl Fixture {
@@ -114,18 +116,20 @@ impl Fixture {
     /// Carry the Music sections, as the core's batch would, so the store's
     /// row model reads the carried union at the batch's revision.
     fn carry(&mut self, list: GuiMusicList) {
-        let mut batch = crate::bridge::sections::GuiSectionBatch::default();
-        batch.library_list = Some(crate::bridge::sections::GuiSection {
-            revision: 1,
-            value: Some(GuiLibraryList {
-                tabs: vec![GuiLibraryTabFrame {
-                    position: 1,
-                    label: "Music".to_owned(),
-                }],
-                current_tab: Some(1),
-                destination: GuiDestinationList::Music(list),
+        let batch = crate::bridge::sections::GuiSectionBatch {
+            library_list: Some(crate::bridge::sections::GuiSection {
+                revision: 1,
+                value: Some(GuiLibraryList {
+                    tabs: vec![GuiLibraryTabFrame {
+                        position: 1,
+                        label: "Music".to_owned(),
+                    }],
+                    current_tab: Some(1),
+                    destination: GuiDestinationList::Music(list),
+                }),
             }),
-        });
+            ..crate::bridge::sections::GuiSectionBatch::default()
+        };
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || sections.apply_batch(&batch));
     }
@@ -169,7 +173,7 @@ fn built(letters: Vec<RailLetter>, marked: Option<char>) -> Fixture {
     let mut fixture = Fixture {
         doc,
         state,
-        receiver,
+        _receiver: receiver,
     };
     fixture.poll_until_idle();
     fixture

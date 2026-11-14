@@ -211,19 +211,21 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             destination: GuiDestinationList::Emby(GuiEmbyList {
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),
-                pills: feed_group
-                    .then(|| {
-                        vec![GuiEmbyPillFrame {
-                            group: GuiEmbyFeedGroupFrame::All,
-                            name: "All".to_owned(),
-                            selected: true,
-                            collection: false,
-                        }]
-                    })
-                    .unwrap_or_default(),
-                collection_names: feed_group
-                    .then(|| vec!["All".to_owned()])
-                    .unwrap_or_default(),
+                pills: if feed_group {
+                    vec![GuiEmbyPillFrame {
+                        group: GuiEmbyFeedGroupFrame::All,
+                        name: "All".to_owned(),
+                        selected: true,
+                        collection: false,
+                    }]
+                } else {
+                    Vec::new()
+                },
+                collection_names: if feed_group {
+                    vec!["All".to_owned()]
+                } else {
+                    Vec::new()
+                },
                 feed_group,
                 loading: false,
                 failed: false,

@@ -121,7 +121,7 @@ impl Fixture {
 
 /// Build the document over the carried content and let the first render and
 /// effects land.
-fn built(list: GuiShowsList) -> Fixture {
+fn built(list: &GuiShowsList) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -181,7 +181,7 @@ fn shows_frame() -> GuiShowsList {
 /// selected one is the core's active mode.
 #[test]
 fn the_pills_paint_the_cores_selection_and_never_none() {
-    let fixture = built(shows_frame());
+    let fixture = built(&shows_frame());
 
     assert_eq!(
         fixture.pressed(),
@@ -197,7 +197,7 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
 /// command with the pill's mode.
 #[test]
 fn a_press_sends_the_set_mode_command_with_the_pills_mode() {
-    let mut fixture = built(shows_frame());
+    let mut fixture = built(&shows_frame());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.select_shows_pill(0, GuiShowsModeFrame::Upcoming));
 
