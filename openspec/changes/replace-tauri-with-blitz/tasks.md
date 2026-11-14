@@ -44,8 +44,8 @@ Design decisions are cited as `D<n>`. Every port task follows the port rules of 
 
 ## 6. Library logic
 
-- [ ] 6.1 Port `lib/library/state.ts`, `reset.ts`, `row-memo.ts`, `scroll.ts`, and `parts.ts`. Port the contracts of `scroll.test.ts` and `reveal.test.ts`. Verify: the tests pass.
-- [ ] 6.2 Port `lib/library/keys-shared.ts` and `keys.ts`, and install the Library steps in the key router (D8). Port the contracts of `keys.test.ts`. Verify: the tests pass.
+- [x] 6.1 Port `lib/library/state.ts`, `reset.ts`, `row-memo.ts`, `scroll.ts`, and `parts.ts`. Port the contracts of `scroll.test.ts` and `reveal.test.ts`. Verify: the tests pass.
+- [x] 6.2 Port `lib/library/keys-shared.ts` and `keys.ts`, and install the Library steps in the key router (D8). Port the contracts of `keys.test.ts`. Verify: the tests pass.
 - [ ] 6.3 Port `lib/library/list.ts`, `pill-list.ts`, `hero.ts`, and `status.ts`. Port the contracts of `list.test.ts`, `hero.test.ts`, and `status.test.ts`. Verify: the tests pass.
 - [ ] 6.4 Port `lib/library/home.ts`, `home-list.ts`, `emby.ts`, `emby-list.ts`, and `emby-keys.ts`. Port the contracts of `home.test.ts`, `home-list.test.ts`, `emby-list.test.ts`, and `emby-keys.test.ts`. Verify: the tests pass.
 - [ ] 6.5 Port `lib/library/shows.ts`, `shows-list.ts`, `shows-keys.ts`, and `shows-workspace.ts`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
