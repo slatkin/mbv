@@ -12,7 +12,11 @@
 //! change, or a batch that changes a list's row count. A `Truncate` box that
 //! mounts asks for one more bump through [`RemeasureRequest`] (D12): its first
 //! measure can read the layout from before its insertion, so the presented
-//! frame after it bumps the epoch once and re-measures every box. Each
+//! frame after it bumps the epoch once and re-measures every box. A viewport
+//! change asks for one too, for the same reason: Blitz applies the new size
+//! before it resolves the document, so the bump's own measure can read the old
+//! layout, and without the presented frame's second bump (after the resolve)
+//! the container stays measured at the size the window no longer has. Each
 //! container's effect
 //! reads the epoch and measures its box through `MountedData`'s client rect,
 //! which is already CSS pixels (the taffy layout's viewport is the logical
@@ -48,9 +52,10 @@ impl LayoutEpoch {
     }
 }
 
-/// The mount-time re-measure request (D12): the window's one flag for a
-/// `Truncate` box whose first measure after mount read a box the layout has
-/// not placed yet.
+/// The mount-time re-measure request (D12): the window's one flag for a box or
+/// container whose measure read a layout that no resolve had applied yet — a
+/// `Truncate` box's first measure after mount, or any measurement after a
+/// viewport change, which Blitz applies before it resolves the document.
 ///
 /// A `Truncate` measures in a `use_effect`, and blitz-shell's poll runs an
 /// effect before the render resolves the document, so a box mounted this turn
@@ -265,6 +270,39 @@ pub fn track_container_size(
             }
         });
     });
+}
+
+/// One viewport change's layout facts (D9, D12), the drain's
+/// `WindowEvent::Viewport` work: a resize or a scale-factor change moves every
+/// measured rect, so the epoch bumps and every measurement effect re-measures.
+///
+/// The bump alone is not enough. Blitz applies the new viewport in its own
+/// window-event handler (`Viewport::with_viewport`) but resolves the document
+/// only in `redraw()`, and blitz-shell's poll runs the window channel's drain
+/// and then the measurement effects before that frame. So the measures this
+/// bump drives can read the layout from before the resolving frame, measure
+/// the size the container already holds, and change nothing — and no later
+/// fact would measure again, which leaves the container signal and every
+/// arrangement derived from it one resize stale. The change therefore also
+/// asks for one presented frame: the frame's resolve lays the document out at
+/// the new size, and its `WindowEvent::Frame` bumps the epoch a second time
+/// ([`note_presented_frame`]), after the resolve. A request is taken once, and
+/// only a box's first measure makes an unrelated one, so the second bump
+/// cannot request another and the window holds no steady-state frame loop.
+pub fn note_viewport_change(mut epoch: LayoutEpoch, remeasure: &RemeasureRequest) {
+    epoch.bump();
+    remeasure.request();
+}
+
+/// One presented frame's layout facts (D10, D12), the drain's
+/// `WindowEvent::Frame` work: the frame's layout is resolved, so a pending
+/// request — a box that mounted unlaid, or a viewport change whose first
+/// measure read the pre-resolve layout — takes one epoch bump, and every
+/// measurement effect re-reads its box against the layout that now holds it.
+pub fn note_presented_frame(mut epoch: LayoutEpoch, remeasure: &RemeasureRequest) {
+    if remeasure.take() {
+        epoch.bump();
+    }
 }
 
 /// One element's painted region (D9), `None` while the element is not

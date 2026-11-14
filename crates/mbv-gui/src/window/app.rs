@@ -38,7 +38,8 @@ use crate::window::components::panel_divider::{
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::input::KeyOutcome;
 use crate::window::layout::{
-    LayoutEpoch, RemeasureRequest, track_container_size, use_layout_reporter,
+    LayoutEpoch, RemeasureRequest, note_presented_frame, note_viewport_change,
+    track_container_size, use_layout_reporter,
 };
 use crate::window::library::keys::route_library_key;
 use crate::window::library::reset::reset_library_interaction;
@@ -132,10 +133,13 @@ impl Drain {
             }
             // A viewport change is a layout fact (D9): every measurement
             // effect re-measures, and the scale factor the natural-size caps
-            // divide by rewrites (D7).
+            // divide by rewrites (D7). One presented frame is asked for too
+            // (D12): the bump measures the layout from before the frame that
+            // resolves the new viewport, so the frame's `Frame` event bumps
+            // again after the resolve.
             WindowEvent::Viewport => {
                 self.scale.0.set(self.scale_window.scale_factor());
-                self.epoch.bump();
+                note_viewport_change(self.epoch, &self.remeasure);
             }
             // An art answer reaches its `ArtImage` through the store (D7).
             WindowEvent::Art(event) => self.art_events.push(event),
@@ -148,17 +152,16 @@ impl Drain {
                 self.fired.push(timer);
             }
             // A presented frame advances the playhead's prediction (D10), and
-            // carries the mount-time re-measure requests (D12): the layout of
-            // this frame is resolved, so the bump re-measures every `Truncate`
-            // box that mounted unlaid — before any effect or render body of
-            // the bump's own turn reads it. A request is taken once, and only
-            // a box's first measure makes one, so the bump it drives cannot
-            // request another.
+            // carries the re-measure requests (D12): the layout of this frame
+            // is resolved, so the bump re-measures every `Truncate` box that
+            // mounted unlaid and every container whose measure read the layout
+            // from before a resize's resolving frame — before any effect or
+            // render body of the bump's own turn reads it. A request is taken
+            // once, and only a box's first measure makes an unrelated one, so
+            // the bump it drives cannot request another.
             WindowEvent::Frame => {
                 self.playhead.on_frame();
-                if self.remeasure.take() {
-                    self.epoch.bump();
-                }
+                note_presented_frame(self.epoch, &self.remeasure);
             }
             // A section batch writes the stores (D6).
             WindowEvent::Batch(batch) => {
