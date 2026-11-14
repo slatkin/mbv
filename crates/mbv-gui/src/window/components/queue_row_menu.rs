@@ -69,6 +69,11 @@ pub struct QueueRowMenuProps {
     /// presses reach the core's hit map as every other pointer event does.
     #[props(default)]
     pub on_select: Option<Callback<usize>>,
+    /// The menu's accessible name; a front-end menu names its own list (the
+    /// Settings pick's values, the Svelte `label` prop that defaulted to
+    /// `Row actions`).
+    #[props(default = "Row actions".to_owned())]
+    pub label: String,
     /// The painted rows' mounted events, by their entry index — the handles
     /// the parent's menu-entry regions read.
     pub row_slot: Signal<Vec<Option<Event<MountedData>>>>,
@@ -106,7 +111,7 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
         div {
             class: "absolute z-20 flex flex-col",
             role: "menu",
-            "aria-label": "Row actions",
+            "aria-label": "{props.label}",
             style: "{position} width: 230px; padding: 6px; gap: 2px; background: var(--canvas-menu); border: 1px solid var(--canvas-menu-border); border-radius: 8px; box-shadow: var(--canvas-menu-shadow);",
             "data-row-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {
