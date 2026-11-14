@@ -3799,6 +3799,7 @@ dependencies = [
  "time",
  "tracing",
  "unicode-segmentation",
+ "usvg",
 ]
 
 [[package]]

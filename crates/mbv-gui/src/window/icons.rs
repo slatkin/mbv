@@ -13,6 +13,16 @@
 //! Call sites that pass more props (`color`, `fill`, `strokeWidth`) pass the
 //! same values here; the shared shell names them in the attributes it
 //! writes.
+//!
+//! The one attribute the ports cannot copy character for character is the
+//! colour: the Svelte call sites passed a `var(--mbv-…)` string into the
+//! `stroke` and `fill` attributes, which a browser resolves and usvg cannot.
+//! Blitz paints an inline `svg` by serialising the subtree and re-parsing it
+//! with usvg, and usvg has no `var()` support: it drops the stroke and paints
+//! the fill black. So the shell writes `stroke="currentColor"` and leaves the
+//! role colour to the svg's computed `color`, which the serialiser resolves
+//! into the attribute before usvg sees it — the same pattern the hand-written
+//! svgs in this window use.
 
 use dioxus_native::prelude::*;
 use std::fmt::Write as _;
@@ -27,12 +37,13 @@ pub struct IconProps {
     /// The svg's rendered width and height, in CSS pixels.
     #[props(default = 24)]
     pub size: u16,
-    /// The svg's stroke colour, as a Svelte call site's `color={...}` value.
-    /// Lucide's default is `currentColor`.
+    /// The colour the icon paints in, as a Svelte call site's `color={...}`
+    /// value: it lands on the svg's computed `color`, which the stroke and a
+    /// filled body read as `currentColor`. Lucide's default is `currentColor`.
     #[props(default = "currentColor".to_owned())]
     pub color: String,
     /// The svg's fill, as a Svelte call site's `fill={...}` value. Lucide's
-    /// default is `none`.
+    /// default is `none`; any other value paints the body in [`Self::color`].
     #[props(default = "none".to_owned())]
     pub fill: String,
     /// The svg's stroke width, as a Svelte call site's `strokeWidth={...}`
@@ -75,8 +86,15 @@ fn icon_shell(
         class.push_str(&props.class);
     }
     let size = props.size;
-    let stroke = &props.color;
-    let fill = &props.fill;
+    let color = &props.color;
+    // Lucide's `fill` prop paints the glyph's body, so a call site that sets
+    // it names the colour the stroke already has: both reach the paint as
+    // `currentColor`, and the svg's computed `color` carries the role.
+    let fill = if props.fill == "none" {
+        "none"
+    } else {
+        "currentColor"
+    };
     let stroke_width = props.stroke_width;
     let aria_hidden = props.aria_hidden;
     rsx! {
@@ -86,11 +104,12 @@ fn icon_shell(
             height: "{size}",
             view_box: "0 0 24 24",
             fill: "{fill}",
-            stroke: "{stroke}",
+            stroke: "currentColor",
             stroke_width: "{stroke_width}",
             stroke_linecap: "round",
             stroke_linejoin: "round",
             class: "{class}",
+            style: "color: {color};",
             "aria-hidden": aria_hidden.then_some("true"),
             {children}
         }
@@ -641,3 +660,6 @@ pub fn Zap(props: IconProps) -> Element {
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

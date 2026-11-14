@@ -63,6 +63,9 @@ const FIXTURE_CSS: &str = concat!(
     ".h-full { height: 100%; }",
     ".block { display: block; }",
     ".truncate { width: 100%; }",
+    // The two roles the rail's ring reads, at rgb values the ring's test names
+    // (the theme's `:root` rule in a live window).
+    ":root { --mbv-progressTrack: rgb(17, 34, 51); --mbv-accent: rgb(68, 85, 102); }",
 );
 
 /// The fixture's clocks: a frozen monotonic clock (the prediction stays at
@@ -602,4 +605,64 @@ fn the_rail_paints_the_remaining_time_the_expand_control_and_the_dim_fill() {
     );
     let rail = fixture.style_of("[data-panel-state=\"rail\"]");
     assert!(rail.contains("background: var(--canvas-dim)"), "{rail}");
+}
+
+/// Contract (live run of PR 1003, the live-run defect of
+/// `replace-tauri-with-blitz` §11): the ring strokes the played-fraction
+/// track and arc in their own roles. Blitz paints an inline `svg` through
+/// usvg, which cannot parse a `var()` in a `stroke` attribute — it drops the
+/// stroke, so both circles painted nothing. Each circle names its role in the
+/// computed `color` instead, and the serialiser writes it into the attribute.
+#[test]
+fn the_rail_ring_strokes_both_circles_in_their_theme_roles() {
+    let mut fixture = built(TALL);
+    fixture.seed(summary());
+    fixture.set_toggles(true, false);
+
+    assert_eq!(
+        svg_strokes(&fixture.doc, "[data-target=\"visualSlot\"] svg"),
+        vec![Some((17, 34, 51)), Some((68, 85, 102))]
+    );
+}
+
+/// The stroke colour of every path in the svg the selector names, in document
+/// order: the `usvg` tree Blitz parsed from the serialised subtree, which is
+/// what the painter paints. A stroke usvg could not parse reads as `None`.
+fn svg_strokes(doc: &DioxusDocument, selector: &str) -> Vec<Option<Rgb>> {
+    let dom = doc.inner();
+    let id = dom
+        .query_selector(selector)
+        .expect("the selector is valid")
+        .unwrap_or_else(|| panic!("{selector} paints"));
+    let tree = dom
+        .get_node(id)
+        .and_then(|node| node.element_data())
+        .and_then(|element| element.svg_data())
+        .unwrap_or_else(|| panic!("{selector} paints as an svg tree"));
+    let mut strokes = Vec::new();
+    collect_strokes(tree.root(), &mut strokes);
+    strokes
+}
+
+/// A paint's colour, as rgb bytes.
+type Rgb = (u8, u8, u8);
+
+/// Push the stroke of every path of `group` and its nested groups, in
+/// document order: usvg groups the view box transform's children.
+fn collect_strokes(group: &usvg::Group, strokes: &mut Vec<Option<Rgb>>) {
+    for child in group.children() {
+        match child {
+            usvg::Node::Path(path) => strokes.push(path.stroke().map(|stroke| rgb(stroke.paint()))),
+            usvg::Node::Group(nested) => collect_strokes(nested, strokes),
+            usvg::Node::Image(_) | usvg::Node::Text(_) => {}
+        }
+    }
+}
+
+/// A flat paint's colour.
+fn rgb(paint: &usvg::Paint) -> Rgb {
+    match paint {
+        usvg::Paint::Color(color) => (color.red, color.green, color.blue),
+        _ => panic!("the ring paints in a flat colour"),
+    }
 }

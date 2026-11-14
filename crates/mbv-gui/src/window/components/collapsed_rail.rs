@@ -133,7 +133,11 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
             "data-panel-state": "rail",
             // The artwork with the played fraction as a ring around it: the
             // track circle in the progress-track role, the arc in the
-            // accent.
+            // accent. Each circle names `currentColor` and carries its role in
+            // its own computed `color`: Blitz serialises the inline svg to usvg
+            // for painting, and usvg cannot parse a `var()` in a `stroke`
+            // attribute (it drops the stroke), while the serialiser resolves
+            // `currentColor` per element.
             div {
                 class: "relative flex shrink-0 items-center justify-center",
                 style: "width: {RING_SIZE_PX}px; height: {RING_SIZE_PX}px;",
@@ -150,7 +154,8 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                         cy: "{ring_centre}",
                         r: "{RING_RADIUS_PX}",
                         fill: "none",
-                        stroke: "var(--mbv-progressTrack)",
+                        stroke: "currentColor",
+                        style: "color: var(--mbv-progressTrack);",
                         "stroke-width": "{RING_STROKE_PX}",
                     }
                     circle {
@@ -158,7 +163,8 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                         cy: "{ring_centre}",
                         r: "{RING_RADIUS_PX}",
                         fill: "none",
-                        stroke: "var(--mbv-accent)",
+                        stroke: "currentColor",
+                        style: "color: var(--mbv-accent);",
                         "stroke-width": "{RING_STROKE_PX}",
                         "stroke-linecap": "round",
                         "stroke-dasharray": "{played_arc} {RING_CIRCUMFERENCE_PX}",
