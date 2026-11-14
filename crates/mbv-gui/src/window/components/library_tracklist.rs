@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiMusicHeroFrame;
+use crate::bridge::frame::library::GuiMusicTrackFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow,
@@ -23,13 +23,16 @@ use crate::window::components::library_workspace_table::{
 use crate::window::library::hero::resolve_track_cursor;
 use crate::window::library::state::LibraryState;
 
-/// The props of the tracklist (the `LibraryTracklist.svelte` props, in
-/// order).
+/// The props of the tracklist (the `LibraryTracklist.svelte` props, narrowed
+/// to what the tracklist reads): the album's cached tracks — the rows' own
+/// data, moved from the carried Hero, so a Hero repaint never clones the
+/// album's tracklist for the rows (the 7.3-7.4 review's whole-list finding)
+/// — and the id of the track playing at the playhead (design D8).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryTracklistProps {
-    /// The picked album's Hero facts: the tracklist is the album's cached
-    /// tracks (design D5).
-    pub hero: GuiMusicHeroFrame,
+    /// The picked album's cached tracks (design D5): the rows the table
+    /// paints.
+    pub tracks: Vec<GuiMusicTrackFrame>,
     /// The id of the track playing at the playhead, or `None` while idle:
     /// the frame's playing fact (design D8).
     pub playing_track_id: Option<String>,
@@ -42,9 +45,8 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
     let library = consume_context::<LibraryState>();
 
     // The picked album's cached tracks (design D5): the rows the table
-    // paints, borrowed from the carried Hero — the rows map per render, so
-    // the paint clones only the painted rows' cells.
-    let tracks = props.hero.album.tracks.as_deref().unwrap_or_default();
+    // paints, moved from the carried Hero.
+    let tracks = &props.tracks;
 
     // The cursor's track: the row the movement keys rest on (design D3). It
     // is derived from the tracks that paint, so a tracklist whose cache
@@ -52,7 +54,8 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
     let ui = library.ui.cloned();
     let cursor = resolve_track_cursor(tracks, ui.track_cursor.as_deref());
 
-    let rows: Vec<WorkspaceRow> = tracks
+    let rows: Vec<WorkspaceRow> = props
+        .tracks
         .iter()
         .map(|track| WorkspaceRow {
             id: track.track_id.clone(),

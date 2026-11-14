@@ -158,6 +158,8 @@ pub(super) fn entry(label: &str, key_hint: Option<&str>, destructive: bool) -> G
         label: label.to_owned(),
         key_hint: key_hint.map(str::to_owned),
         destructive,
+        // The queue's entries carry none, so the paint order stands.
+        index: None,
     }
 }
 

@@ -54,8 +54,8 @@ fn the_home_content_mounts_the_home_list_and_hero_and_no_pills() {
         "the Home list's painter mounts"
     );
     assert!(
-        fixture.presents("[data-library-region=\"hero\"] [data-panel-child=\"LibraryHomeHero\"]"),
-        "the Home Hero's painter mounts"
+        fixture.presents("[data-library-region=\"hero\"] [data-library-home-hero]"),
+        "the Home Hero mounts"
     );
     assert!(
         !fixture.presents("[data-panel-child=\"LibraryList\"]"),

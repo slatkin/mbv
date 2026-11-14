@@ -28,7 +28,9 @@ use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibrary
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::clock::FiredTimers;
 use crate::window::clock::{Clock, RecordingClock};
+use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
@@ -82,6 +84,15 @@ fn panel_app(props: FixtureProps) -> Element {
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+    // The art painter's contexts (the Heroes' art painter consumes them),
+    // over the clock the store holds. The stores hook once, as the art
+    // painter's own harness holds them.
+    let events = use_hook(ArtEvents::new);
+    let fired = use_hook(FiredTimers::new);
+    provide_context(events);
+    provide_context(fired);
+    provide_context(ScaleFactor(Signal::new(1.0)));
+    provide_context(clock.clone());
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.

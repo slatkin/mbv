@@ -5,14 +5,14 @@
 //! the list; in Narrow the Hero mounts as an overlay over the list once an
 //! item is picked. The active destination decides which painters mount
 //! (design D12): Music paints the pill row, the union list, and the album
-//! Hero; Home paints the flat list and its Hero, with no pill row, no letter
-//! rail, and no Workspace; Shows paints its mode pills, the series or flat
-//! list with the All series mode's rail, and the series Hero with its
-//! Workspace; a plain Emby library paints its feed-group pills, its list
-//! with the plain mode's rail, and its Hero with no Workspace; Audiobooks
-//! paints the book list with its letter rail and the book Hero with its
-//! chapters Workspace (row 9.1). The Status bar closes the column under
-//! both.
+//! Hero (the Home Hero mounts with row 7.5); Home paints the flat list and
+//! its Hero, with no pill row, no letter rail, and no Workspace; Shows
+//! paints its mode pills, the series or flat list with the All series mode's
+//! rail, and the series Hero with its Workspace; a plain Emby library paints
+//! its feed-group pills, its list with the plain mode's rail, and its Hero
+//! with no Workspace; Audiobooks paints the book list with its letter rail
+//! and the book Hero with its chapters Workspace (row 9.1). The Status bar
+//! closes the column under both.
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
@@ -40,6 +40,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_emby_pills::LibraryEmbyPills;
 use crate::window::components::library_feeds_pills::LibraryFeedsPills;
+use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_pills::LibraryPills;
 use crate::window::components::library_podcasts_pills::LibraryPodcastsPills;
 use crate::window::components::library_shows_pills::LibraryShowsPills;
@@ -159,38 +160,49 @@ fn list_placeholder(pair: LibraryPair) -> Element {
     })
 }
 
-/// The active destination's Hero placeholder: the same painter the Wide pane
-/// and the Narrow overlay mount, so the two cannot drift (design D4).
-fn hero_placeholder(pair: LibraryPair) -> Element {
-    placeholder(match pair {
-        LibraryPair::Music(..) => "LibraryHero",
-        LibraryPair::Home(..) => "LibraryHomeHero",
-        LibraryPair::Shows(..) => "LibraryShowsHero",
-        LibraryPair::Emby(..) => "LibraryEmbyHero",
-        LibraryPair::Audiobooks(..) => "LibraryAudiobooksHero",
-        LibraryPair::Podcasts(..) => "LibraryPodcastsHero",
-        LibraryPair::Feeds(..) => "LibraryFeedsHero",
-    })
+/// The active destination's Hero painter: the same painter the Wide pane and
+/// the Narrow overlay mount, so the two cannot drift (design D4). The Home
+/// Hero is row 7.5's port; the other destinations' Heroes land with rows
+/// 7.6–7.7, so their placeholders stand until then.
+fn hero_painter(pair: LibraryPair) -> Element {
+    match pair {
+        LibraryPair::Home(_, detail) => rsx! {
+            LibraryHomeHero { detail: detail.clone() }
+        },
+        other => placeholder(match other {
+            LibraryPair::Music(..) => "LibraryHero",
+            // Unreachable while the arm above matched Home, but the match
+            // reads the whole pair, so the arm keeps it exhaustive.
+            LibraryPair::Home(..) => "LibraryHomeHero",
+            LibraryPair::Shows(..) => "LibraryShowsHero",
+            LibraryPair::Emby(..) => "LibraryEmbyHero",
+            LibraryPair::Audiobooks(..) => "LibraryAudiobooksHero",
+            LibraryPair::Podcasts(..) => "LibraryPodcastsHero",
+            LibraryPair::Feeds(..) => "LibraryFeedsHero",
+        }),
+    }
 }
 
 /// The right-click menu's entries in the row menu's entry shape: the
 /// Library's entries carry no destructive flag, and the entry's own
 /// `index` — the core's shared-builder order — rides in the frame the
-/// conversion keeps.
-fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRowMenuEntry> {
+/// conversion keeps, so the menu paints and reports it and a press names the
+/// entry it painted.
+pub(crate) fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRowMenuEntry> {
     entries
         .iter()
         .map(|entry| GuiRowMenuEntry {
             label: entry.label.clone(),
             key_hint: entry.key_hint.clone(),
             destructive: false,
+            index: Some(entry.index),
         })
         .collect()
 }
 
-/// The Library panel (the Svelte markup, character for character, with the
-/// Hero and destination-list painters as placeholders until rows 7.5–7.7
-/// land).
+/// The Library panel (the Svelte markup, character for character): the Home
+/// Hero mounts (row 7.5); the other destinations' Heroes and the
+/// destination lists stay placeholders until rows 7.6–7.7 land.
 #[component]
 pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -302,7 +314,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                         style: "background: var(--canvas-library-column); overflow-y: auto;",
                         if pair_paints_hero {
                             if let Some(pair) = pair {
-                                { hero_placeholder(pair) }
+                                { hero_painter(pair) }
                             }
                         }
                     }
@@ -375,7 +387,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                             "data-library-hero-card": "",
                             if pair_paints_hero {
                                 if let Some(pair) = pair {
-                                    { hero_placeholder(pair) }
+                                    { hero_painter(pair) }
                                 }
                             }
                         }
@@ -394,12 +406,12 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             }
             if let Some((menu, row_menu)) = menu_open {
                 {
-                    let entries = menu.entries.clone();
                     let menu_library = library.clone();
+                    // The menu reports the entry's own index (the core's
+                    // shared-builder order), so the press names the entry it
+                    // painted.
                     let on_select = Callback::new(move |index: usize| {
-                        if let Some(entry) = entries.get(index) {
-                            menu_library.run_library_row_menu_entry(entry.index);
-                        }
+                        menu_library.run_library_row_menu_entry(index);
                     });
                     let top = format!("{}px", row_menu.y);
                     let left = format!("{}px", row_menu.x);

@@ -64,9 +64,7 @@ fn the_narrow_overlay_paints_the_home_hero_and_closes_on_its_backdrop_press() {
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture.presents(
-            "[data-library-region=\"heroOverlay\"] [data-panel-child=\"LibraryHomeHero\"]"
-        ),
+        fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-home-hero]"),
         "the overlay paints the Home Hero"
     );
 

@@ -164,6 +164,13 @@ pub struct GuiRowMenuEntry {
     /// a divider (design DR6); the flag derives from the entry's action in
     /// the library's projection.
     pub destructive: bool,
+    /// The entry's own index in the shared builder's order, when the frame
+    /// carries one (the Library's item menu): the menu paints and reports it
+    /// in place of the paint order, so a front end that paints only some
+    /// entries still names the entry it painted. The queue's entries carry
+    /// none, so the paint order stands.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<usize>,
 }
 
 impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
@@ -172,6 +179,7 @@ impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
             label: entry.label.clone(),
             key_hint: entry.key_hint.clone(),
             destructive: entry.destructive,
+            index: None,
         }
     }
 }

@@ -30,6 +30,8 @@
 //! parent's, so a child-held key would land first and the entries would lose
 //! to the rows beneath them.
 
+use std::fmt::Write as _;
+
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
@@ -57,6 +59,11 @@ pub struct QueueRowMenuProps {
     /// right-click item menu). When it is set, `right` stays unset.
     #[props(default)]
     pub left: Option<String>,
+    /// The menu's right edge from the containing block's right edge: the
+    /// queue anchors it to its value column, the Library's Hero menu to its
+    /// actions row's right edge.
+    #[props(default)]
+    pub right: Option<String>,
     /// The press on an entry, for a menu the front end owns: the Library's
     /// item menu sends its own command. The queue's menu passes none, so its
     /// presses reach the core's hit map as every other pointer event does.
@@ -81,13 +88,20 @@ fn paint_hint(hint: &str) -> &str {
 /// the canvas's destructive tone under a divider.
 #[component]
 pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
-    // The card's horizontal anchor: a front-end menu sits at the pointer's
-    // left edge and keeps no right edge; the queue's sits at its value
-    // column.
-    let position = match props.left.as_ref() {
-        Some(left) => format!("top: {}; left: {};", props.top, left),
-        None => format!("top: {}; right: var(--mbv-cell-col);", props.top),
-    };
+    // The card's horizontal anchor (the Svelte `style:left`/`style:right`):
+    // a front-end menu sits at the pointer's left edge; the queue's sits at
+    // its value column and the Hero's at its actions row's right edge. The
+    // Svelte paints `right` from its default whenever the parent passes no
+    // `left`, so the port paints the same three styles.
+    let mut position = format!("top: {};", props.top);
+    if let Some(left) = props.left.as_ref() {
+        let _ = write!(position, " left: {left};");
+    }
+    let _ = write!(
+        position,
+        " right: {};",
+        props.right.as_deref().unwrap_or("var(--mbv-cell-col)")
+    );
     rsx! {
         div {
             class: "absolute z-20 flex flex-col",
@@ -116,6 +130,7 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                     );
                     let label = entry.label.clone();
                     let hint = entry.key_hint.as_deref().map(paint_hint);
+                    let entry_index = entry.index.unwrap_or(index);
                     let mut row_slot = props.row_slot;
                     rsx! {
                         if entry.destructive {
@@ -130,14 +145,18 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                             class: "flex items-center justify-between text-left",
                             role: "menuitem",
                             style: "{row_style}",
-                            "data-menu-entry": "{index}",
+                            // The entry's own index in the shared builder's
+                            // order, when the frame carries one (the
+                            // Library's item menu), else the paint order: the
+                            // hook and the press name the same entry.
+                            "data-menu-entry": "{entry_index}",
                             onclick: move |_| {
                                 // A front-end menu's press sends the entry's
                                 // index through the callback; the queue's
                                 // menu has none, so the press reaches the
                                 // core's hit map as every other press does.
                                 if let Some(on_select) = on_select {
-                                    on_select.call(index);
+                                    on_select.call(entry_index);
                                 }
                             },
                             onmounted: move |event| {

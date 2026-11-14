@@ -11,7 +11,7 @@
 //! kinds through `TypedText`.
 
 use crate::bridge::frame::library::{
-    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame, GuiMusicList, GuiMusicTrackFrame,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame, GuiMusicTrackFrame,
 };
 
 /// One meta row as the frames carry it: a line of typed segments.
@@ -149,10 +149,15 @@ pub fn album_facts(hero: &GuiMusicHeroFrame) -> Segments {
 /// The artist's albums in the union, which Shuffle artist plays (design D8).
 /// The union artist is the one that owns the picked album, so a name the
 /// Service repeats cannot pick the wrong artist; the picked album alone is the
-/// fallback while the union holds no owner.
+/// fallback while the union holds no owner. The union's artists are the
+/// albums' own content, so the caller passes them alone — the Hero reads no
+/// other part of the carried list.
 #[must_use]
-pub fn artist_union_albums(music: &GuiMusicList, hero: &GuiMusicHeroFrame) -> Vec<String> {
-    let owner = music.artists.iter().find(|artist| {
+pub fn artist_union_albums(
+    artists: &[crate::bridge::frame::library::GuiMusicArtistFrame],
+    hero: &GuiMusicHeroFrame,
+) -> Vec<String> {
+    let owner = artists.iter().find(|artist| {
         artist
             .albums
             .iter()
@@ -234,6 +239,18 @@ pub enum HeroMetaRole {
     Duration,
     /// The row the progress marks.
     Progress,
+}
+
+impl HeroMetaRole {
+    /// The role's wire name, as the Svelte union spells it (design D15).
+    #[must_use]
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Meta => "meta",
+            Self::Duration => "duration",
+            Self::Progress => "progress",
+        }
+    }
 }
 
 /// The meta rows of a Hero that shows one selected row (`add-gui-library-panel`
