@@ -257,13 +257,15 @@ fn the_window_stylesheet_applies_preflight_utilities_and_the_font() {
 }
 
 /// Contract (task 11.1, look parity with the Svelte window): a `hover:`
-/// utility paints under the pointer. Blitz builds its Stylo device with empty
-/// pointer capabilities, so Tailwind v4's `@media (hover: hover)` gate never
-/// matched and the utility painted nothing at all; the sheet's own `hover`
-/// variant is the plain `:hover` state, so the same class now answers the
-/// pointer. The divider's hover fill is the window's one hover utility the
-/// tests can drive headlessly (the Table's glow button needs a library
-/// frame).
+/// utility paints under the pointer through the window's own stylesheet. The
+/// document carries the committed sheet in the root's style element, as the
+/// window does; the test resolves layout, hovers the divider's box, and reads
+/// the fill, so the class paints the canvas border only while the pointer is
+/// on it. It fails when the rule never reaches the document — the sheet drops
+/// the class, or a gate around it stops matching — which is the look a port
+/// of the Svelte hover state must not lose. The divider is the one hover
+/// utility the test can drive without a library frame (the Table's glow
+/// button needs one).
 #[test]
 fn a_hover_utility_paints_under_the_pointer() {
     let mut sheet = Stylesheet::built();

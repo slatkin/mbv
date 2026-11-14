@@ -11,12 +11,14 @@
 @source not "./vendor";
 
 /* The `hover:` utilities apply on the plain `:hover` state (task 11.1).
-   Tailwind v4 gates its `hover:` variant behind `@media (hover: hover)`, and
-   Blitz builds its Stylo device with empty pointer capabilities
-   (blitz-dom's `stylo_device.rs` passes `PointerCapabilities::default()`), so
-   that query never matches and every `hover:` class would paint nothing. The
-   window runs on a pointer device by definition; this variant makes each
-   `hover:` class emit an ungated `:hover` rule. */
+   Tailwind v4 emits each of them as `@media (hover: hover) { …:hover }`,
+   gated on the pointer capabilities the engine reports, and Blitz passes
+   Stylo's platform default there (`FINE | HOVER` on the desktop targets, so
+   the query does match in this window). The variant is set anyway: the
+   window is a pointer surface by definition, so its hover look must not
+   depend on the capability bits the engine happens to report — Stylo's
+   default is `COARSE` on the mobile targets — and an ungated `:hover` rule
+   is what the canvas draws. */
 @custom-variant hover (&:hover);
 
 /* The six Latin faces the binary bundles (D11), served in process through
