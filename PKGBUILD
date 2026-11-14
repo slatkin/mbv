@@ -9,7 +9,7 @@ license=('MIT')
 depends=('mpv' 'pipewire' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
 optdepends=('pinwin>=0.4.1: pinned panel support')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('e043cc4479e8142902a8b1a50e83996cb871a3d1e46fb62816640bd216b7e6ad')
 
 package() {
     cd "${pkgname}-${pkgver}"
