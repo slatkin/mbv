@@ -31,6 +31,7 @@ use crate::window::input::f32_from_f64;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
+mod art;
 mod paint;
 mod resize;
 
