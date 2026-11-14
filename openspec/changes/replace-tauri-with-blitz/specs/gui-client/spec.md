@@ -154,3 +154,42 @@ When the window content mounts, it SHALL ask the Client core for its sections. T
 
 - **WHEN** the window reports a layout that moves no list capacity and no region a section reads
 - **THEN** the window receives no update
+
+### Requirement: The window paints the stylesheet
+
+The window's author stylesheet SHALL apply to the document from the first frame. The author stylesheet is the generated Tailwind sheet (`app.generated.css`), the cell-unit rule, and the theme rule. A class in the window markup SHALL paint the declarations of its rule.
+
+#### Scenario: The window opens
+
+- **WHEN** the GUI Client window opens
+- **THEN** a Tailwind class in the markup resolves to the computed value of its rule
+
+### Requirement: The window content follows a resize
+
+When the surface size of the GUI Client window changes, the next presented frame SHALL lay out the window content at the new size. No later event SHALL be needed for the layout to change.
+
+#### Scenario: The user drags a window edge
+
+- **WHEN** the user drags a window edge
+- **THEN** each presented frame lays out the content at that frame's surface size
+
+### Requirement: Pointer input never stops the GUI Client
+
+A click, double-click, drag, or wheel step on any point of the window SHALL NOT end the GUI Client process. This holds when the input arrives after an earlier input changed the document.
+
+#### Scenario: The user double-clicks a queue row
+
+- **GIVEN** an earlier press rebuilt the queue rows
+- **WHEN** the user double-clicks a queue row
+- **THEN** the row plays
+- **AND** the window stays open and accepts the next input
+
+### Requirement: The window looks as the Svelte front end looked
+
+Each surface of the window SHALL paint the markup structure, class strings, and computed colours of its Svelte source at commit `38248e262^` (`crates/mbv-gui/ui/src/`). A difference from that source SHALL exist only where a Blitz gap named in `design.md` (D20) forces it.
+
+#### Scenario: The Queue panel paints at the queue column width
+
+- **WHEN** the Queue panel paints at the queue column width
+- **THEN** the panel fills that column
+- **AND** no band of a colour that the Svelte panel did not paint appears

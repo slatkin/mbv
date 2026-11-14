@@ -109,6 +109,8 @@ Renderer options: `base_color`, `alpha_mode`, `features`, and `limits` are `None
 
 The TypeScript type mirrors (`lib/bridge/types.ts`, `library-types*.ts`, `settings-types.ts`, `theme-types.ts`, `art.ts`) are not ported. The window reads the Rust types in `bridge/` directly.
 
+The style text enters each `style` element as its text child, never through `dangerous_inner_html`. The stylesheet (D11), the cell-unit rule, and the theme rule all follow this rule. `dangerous_inner_html` reaches blitz-dom's HTML parser provider, which is `DummyHtmlParserProvider`, a no-op. A sheet set that way never reaches the document, and the window paints with no author CSS. The text child reaches the document, and the window paints with it (commit `c84402adf`).
+
 ### D7. Art, fonts, and the net provider
 
 `window/net.rs` holds `MbvNetProvider` (`blitz_traits::net::NetProvider`). It holds the core's `Sender<CoreInput>` and the window channel's sender.
@@ -201,6 +203,7 @@ A ported test owns a contract that still holds; tests of Svelte, Vite, Tauri, or
 - A component contract (for example "the playing row carries the progress fill", "a pill press sends the select command") gets a headless test: `DioxusDocument::initial_build` and `Document::poll` over a fixture section batch, as the spike's harness did, with a recording `CoreLink`. One test per contract that the component's `.test.ts` owns.
 - No test opens a window, sleeps, or reaches an Owner or a network. Clocks are injected (D10).
 - The Rust core-thread tests (`crates/mbv-gui/tests/core_thread*`) do not change. `tests/capabilities.rs` (the Tauri capability check) and the serde wire tests of `tests/bridge/` go at the switch. The translation tests of `tests/bridge/keys.rs` and `tests/bridge/pointer.rs` stay: they own the chord and gesture mapping, which the Dioxus path reuses (D8).
+- A headless test that claims a visible result (a style, a size, a surviving input) asserts it on the resolved document (computed style or layout), not only on the element tree. Every unit review traces each path that a visible feature depends on (styles, input, resize, render). An untraced path is BLOCK.
 
 ### D17. Licences and packaging
 
@@ -231,10 +234,12 @@ The last phase deletes the Tauri path in one change set: `crates/mbv-gui/ui/`, `
 | G8 | No `NetHandler::error` | art misses | D7 |
 | G9 | No net provider injection in the launch | art and fonts | D5 |
 | G10 | Transform painting (#663) | the scrubber thumb's `translate` | Accepted as the spike showed it. |
-| G13 | Wayland resize slowness and surface timeout (#293) | every resize | Accepted. |
+| G13 | Wayland resize slowness and surface timeout (#293) | every resize | Not accepted. The content follows each resize in the next frame (task 11.2). |
 | G14 | No GPU: panic at surface creation (#1505) | hosts with no Vulkan or GL | Accepted. The packages depend on the Vulkan loader. |
 | G-Events | The event kinds that D8 lists panic | none | D8: no handler uses them. D9 replaces `ResizeObserver`. |
 | G-Reload | No window-content reload | dev reload | The spec deltas drop the reload scenarios. |
+| G-Style | `dangerous_inner_html` is a no-op: `DummyHtmlParserProvider` | every `style` element | D6: the sheet enters as text. |
+| G-Hit | Hit testing reads `paint_children`, which refresh only at resolve. A pointer event after a DOM change can index a removed node and panic (blitz-dom `node.rs:1483`) | every pointer handler that changes the DOM | Task 11.1: the launch copy resolves the document before it forwards a pointer event. |
 
 ## Risks / Trade-offs
 
