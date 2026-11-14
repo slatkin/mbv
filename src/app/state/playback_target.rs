@@ -58,16 +58,22 @@ impl App {
         }
     }
 
-    /// Whether the `QueueColumn`'s visual slot should be reserved and painted.
+    /// Whether the persisted visual-slot hide applies to this Client.
     ///
-    /// The GUI Client always shows it: the canvas still slot is part of its
-    /// layout and the window content has no `hide_visual_slot` control, so the
-    /// TUI's persisted hide would leave every now-playing surface (the still
-    /// slot, the compact strip, and the rail) painting none of the item's art
-    /// with no way to show it again. The TUI Client keeps the persisted toggle.
+    /// The TUI Client owns the hide: the `hide_visual_slot` chord and the
+    /// visual slot's context menu both write it, and it persists across
+    /// launches. The GUI Client's window content paints no control for it and
+    /// no menu entry reaches it, so a hide saved from a TUI run would leave
+    /// every now-playing surface (the still slot, the compact strip, and the
+    /// rail) painting none of the item's art with no way to show it again.
+    /// The GUI therefore neither acts on the hide nor writes it.
+    pub(in crate::app) fn visual_slot_hide_in_effect(&self) -> bool {
+        !self.gui_client && self.visual_slot_hidden
+    }
+
+    /// Whether the `QueueColumn`'s visual slot should be reserved and painted.
     pub(in crate::app) fn visual_slot_shown(&self) -> bool {
-        self.now_playing_status() != NowPlayingStatus::Idle
-            && (self.gui_client || !self.visual_slot_hidden)
+        self.now_playing_status() != NowPlayingStatus::Idle && !self.visual_slot_hide_in_effect()
     }
 
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {

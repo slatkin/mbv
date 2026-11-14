@@ -46,26 +46,42 @@ fn the_gui_setting_starts_with_the_launch_restore_done() {
     assert_eq!(app.launch_restore, LaunchRestore::Done);
 }
 
-/// The card key the stub's playing row resolves to: the landscape key a Movie
-/// item fetches under.
+/// The card key a playing Movie row resolves to: the landscape key the card
+/// fetch issues.
 const CARD_KEY: &str = "id:QB";
 
-/// The persisted visual-slot hide is a TUI setting, and only the TUI acts on
-/// it (live run of 2026-11-14: the GUI's window showed no now-playing art).
-/// The GUI Client always paints the canvas's still slot — it has no
-/// `hide_visual_slot` control to undo a hide — so a `prefs.json` that hid the
-/// slot for the TUI must not take the GUI's art away, while the TUI keeps the
-/// hide it saved.
+/// The `App` a Client's test drives with one playing Movie row: the stub queue
+/// view holds the item, the player plays its first slot, and card images are
+/// on. Built from the `cfg(test)` stubs alone — the plain `-p mbv` test target
+/// does not enable the `test` feature, so the exported stubs are not there.
+fn playing_movie_app() -> App {
+    let mut app = make_app_stub();
+    app.local_view
+        .adopt_items(vec![make_item("Item 0", "Movie")], 0);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = 1;
+    });
+    app.enable_card_images_for_test();
+    app
+}
+
+/// The persisted visual-slot hide is the TUI's (the `hide_visual_slot` chord
+/// and the slot's context menu write it, and it survives a relaunch). The GUI
+/// window content paints no control for it, so acting on it would leave every
+/// now-playing surface painting none of the item's art with no way back (live
+/// run of 2026-11-14: the GUI's window showed no now-playing art). The GUI
+/// therefore paints the art whatever the stored hide says, and the TUI keeps
+/// the hide it saved.
 #[test]
 fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
     let art = image::DynamicImage::new_rgb8(4, 4);
-    let mut gui = stub_app_with_playing_queue(1);
-    gui.enable_card_images_for_test();
+    let mut gui = playing_movie_app();
     gui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     gui.visual_slot_hidden = true;
     gui.enable_gui_client();
-    let mut tui = stub_app_with_playing_queue(1);
-    tui.enable_card_images_for_test();
+    let mut tui = playing_movie_app();
     tui.seed_card_image_for_test(CARD_KEY.to_owned(), art.clone());
     tui.visual_slot_hidden = true;
 
@@ -81,5 +97,35 @@ fn the_tui_visual_slot_hide_never_hides_the_gui_clients_art() {
         tui.queue_card_artwork(),
         QueueCardArtwork::Hidden,
         "the TUI keeps the hide it saved"
+    );
+}
+
+/// The GUI Client never changes or persists the TUI's visual-slot controls: its
+/// window content paints no `hide_visual_slot` control and no visualizer, so a
+/// routed chord (`h`, `v`) must leave the stored hide and the visualizer alone.
+/// The GUI reads prefs a TUI run wrote, so a write here would silently rewrite
+/// the TUI's setting; enabling the visualizer would blank the art with nothing
+/// painted in its place.
+#[test]
+fn the_gui_client_leaves_the_tuis_visual_slot_controls_alone() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut tui = playing_movie_app();
+    tui.set_visual_slot_hidden(true);
+    let mut gui = playing_movie_app();
+    gui.visual_slot_hidden = true;
+    gui.enable_gui_client();
+
+    gui.set_visual_slot_hidden(false);
+    gui.set_visualizer(true);
+
+    assert!(
+        gui.visual_slot_hidden,
+        "the GUI never changes the stored hide"
+    );
+    assert!(!gui.visualizer_enabled, "the GUI enables no visualizer");
+    assert_eq!(
+        App::load_prefs()["visual_slot_hidden"].as_bool(),
+        Some(true),
+        "the TUI's saved hide is still what the prefs say"
     );
 }
