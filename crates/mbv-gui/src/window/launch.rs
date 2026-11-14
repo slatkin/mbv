@@ -31,7 +31,7 @@ use dioxus_native::{
 
 use crate::core_thread::CoreInput;
 use crate::window::channel::{
-    CoreLink, EventSlot, ViewportPending, WindowEvent, WindowEventSender,
+    CoreLink, EventSlot, ViewportFrame, ViewportPending, WindowEvent, WindowEventSender,
 };
 use crate::window::clock::Clock;
 use crate::window::layout::{
@@ -130,21 +130,6 @@ fn resolve_before_hit_testing(
     true
 }
 
-/// What the launch copy knows about the resize it last saw (D9): the frame the
-/// resize asked for is held exactly once, while the drain has not read the new
-/// size into the tree.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum ViewportFrame {
-    /// No resize is waiting for a frame.
-    #[default]
-    Settled,
-    /// A resize landed and no frame has been held since: the next frame is held
-    /// until the drain applies its size.
-    Queued,
-    /// That frame was held: the next one presents.
-    Held,
-}
-
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes
 /// report after the shell has handled them (D9, D10).
@@ -170,10 +155,10 @@ struct MbvApplication {
     /// site, applied by the drain, and read before each frame, so the frame is
     /// held while the tree still holds the old size.
     viewport_pending: ViewportPending,
-    /// What this resize's next frame does (D9): hold it until the drain has
-    /// read the size, or present it. One hold per resize: a drain that somehow
-    /// did not clear the handoff must not spin the loop, so the frame after the
-    /// held one presents whatever the tree holds.
+    /// What the next frame does about the last resize (D9): hold it until the
+    /// drain has read the size, or present it. One hold per presented frame, so
+    /// a continuous drag presents every other frame at worst, and a drain that
+    /// never cleared the handoff cannot spin the loop either.
     viewport_frame: ViewportFrame,
     /// Whether the pre-hit resolve applied a change since the last presented
     /// frame (gap `G-Hit`, D12): that resolve is not a frame, so the next frame
@@ -261,7 +246,7 @@ impl ApplicationHandler for MbvApplication {
         if viewport {
             self.viewport_changed = true;
             self.viewport_pending.queue();
-            self.viewport_frame = ViewportFrame::Queued;
+            self.viewport_frame = self.viewport_frame.queued();
         }
         let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
         // D9: hold the frame the resize asked for until the drain has read the
@@ -271,9 +256,17 @@ impl ApplicationHandler for MbvApplication {
         // frame or two later — the live resize jerk. The poll below runs the
         // drain, which writes the size before this copy renders again, and the
         // redraw it asks for is the first frame at the new size.
+        //
+        // At most one frame is held between presented frames
+        // ([`ViewportFrame::queued`]): during a continuous drag the drain and a
+        // new size arrive in every iteration, and a hold re-armed by each of
+        // them would never let a frame through. The presented frame of such an
+        // iteration resolves at the newest size with the arrangement the drain
+        // applied for the previous one; the next iteration corrects it.
         if redraw
-            && self.viewport_frame == ViewportFrame::Queued
-            && self.viewport_pending.is_pending()
+            && self
+                .viewport_frame
+                .holds(self.viewport_pending.is_pending())
         {
             self.viewport_frame = ViewportFrame::Held;
             self.proxy.send_event(BlitzShellEvent::Poll { window_id });

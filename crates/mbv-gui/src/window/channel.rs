@@ -93,6 +93,47 @@ impl ViewportPending {
     }
 }
 
+/// The frame gate a resize opens (D9): the frame the resize asked for is held
+/// exactly once between presented frames, so the drain reads the new size before
+/// a frame resolves at it, and a continuous drag still presents.
+///
+/// One hold per presented frame, never one per resize: winit dispatches the
+/// proxy wake-up before the compositor's resize and that resize's redraw
+/// (`winit-wayland` `event_loop/mod.rs`), so every iteration of a drag has both
+/// a drain and a new size. A hold that a newer resize re-armed would hold every
+/// one of those frames and the window would paint nothing until the drag
+/// stopped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewportFrame {
+    /// No resize is waiting for a frame.
+    #[default]
+    Settled,
+    /// A resize landed and no frame has been held since the last presented one:
+    /// the next frame is held for the drain.
+    Queued,
+    /// A frame was held since the last presented one.
+    Held,
+}
+
+impl ViewportFrame {
+    /// A resize landed: the next frame is held for the drain, unless a frame was
+    /// already held since the last presented one.
+    #[must_use]
+    pub fn queued(self) -> Self {
+        match self {
+            Self::Held => Self::Held,
+            Self::Settled | Self::Queued => Self::Queued,
+        }
+    }
+
+    /// Whether the frame about to resolve is held back, given whether the drain
+    /// has read the queued size.
+    #[must_use]
+    pub fn holds(self, pending: bool) -> bool {
+        self == Self::Queued && pending
+    }
+}
+
 /// The window channel's sender, cloned by every producer (D4).
 pub type WindowEventSender = UnboundedSender<WindowEvent>;
 

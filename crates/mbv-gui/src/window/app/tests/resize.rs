@@ -29,12 +29,16 @@ use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::layout::LayoutSize;
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::{GuiArrangement, library_arrangement};
-use crate::window::channel::{CoreLink, EventSlot, ViewportPending, WindowEvent};
+use crate::window::channel::{CoreLink, EventSlot, ViewportFrame, ViewportPending, WindowEvent};
 use crate::window::layout::{
     LayoutEpoch, apply_viewport_size, frame_carries_change, note_presented_frame,
     track_container_size, use_layout_reporter, viewport_layout_size,
 };
 use crate::window::resize::{DraggedWidths, panel_widths};
+
+/// The window's height in the fixture: the Wide minimum height is 600, so every
+/// size below keeps the height out of the arrangement's decision.
+const HEIGHT: u32 = 900;
 
 /// The toggles the fixture's panel section holds: the expanded panel, its queue
 /// painted.
@@ -129,8 +133,9 @@ struct Window {
     sender: UnboundedSender<WindowEvent>,
     epoch: LayoutEpoch,
     arrangements: Rc<RefCell<Vec<String>>>,
-    /// Whether a resize's frame was already held, as the launch copy tracks it.
-    held: bool,
+    /// What the next frame does about the last resize, as the launch copy
+    /// tracks it.
+    frame: ViewportFrame,
     /// Whether a viewport change landed since the last presented frame.
     viewport_changed: bool,
     /// How many frames were presented.
@@ -166,7 +171,7 @@ impl Window {
             sender,
             epoch: epoch.borrow().expect("the root provided the layout epoch"),
             arrangements: Rc::new(RefCell::new(Vec::new())),
-            held: false,
+            frame: ViewportFrame::Settled,
             viewport_changed: false,
             presented: 0,
         };
@@ -183,22 +188,46 @@ impl Window {
     fn resize(&mut self, width: u32, height: u32) {
         self.doc.inner_mut().viewport_mut().window_size = (width, height);
         self.viewport_changed = true;
-        self.held = false;
+        self.frame = self.frame.queued();
         self.pending.queue();
         let size = viewport_layout_size(self.doc.inner().viewport());
         let _ = self.sender.unbounded_send(WindowEvent::Viewport { size });
     }
 
+    /// One event-loop iteration of a continuous drag, in winit-wayland's order
+    /// (`event_loop/mod.rs`: the proxy wake-up first, then the compositor's
+    /// resize, then the redraw that resize asked for).
+    fn drag_iteration(&mut self, width: u32) {
+        self.poll();
+        self.resize(width, HEIGHT);
+        self.redraw();
+    }
+
+    /// One iteration with no new size: the drain and the frame it asks for.
+    fn settle_iteration(&mut self) {
+        self.poll();
+        self.redraw();
+    }
+
+    /// Drag the window through `widths`, one event-loop iteration per size, and
+    /// let it settle: the loop is the drag itself.
+    fn drag_through(&mut self, widths: &[u32]) {
+        for width in widths {
+            self.drag_iteration(*width);
+        }
+        self.settle_iteration();
+    }
+
     /// One `RedrawRequested`, as the launch copy answers it (D9): a frame is
-    /// held while the drain has not read the queued size, and it presents
-    /// otherwise.
+    /// held while the drain has not read the queued size and no frame has been
+    /// held since the last present, and it presents otherwise.
     fn redraw(&mut self) {
-        if self.pending.is_pending() && !self.held {
-            self.held = true;
+        if self.frame.holds(self.pending.is_pending()) {
+            self.frame = ViewportFrame::Held;
             self.poll();
             return;
         }
-        self.held = false;
+        self.frame = ViewportFrame::Settled;
         self.present_frame();
     }
 
@@ -222,7 +251,7 @@ impl Window {
             frame_carries_change(&document, self.viewport_changed, false)
         };
         self.viewport_changed = false;
-        self.held = false;
+        self.frame = ViewportFrame::Settled;
         self.doc.inner.borrow_mut().resolve(0.0);
         self.arrangements.borrow_mut().push(self.arrangement());
         let epoch = self.epoch;
@@ -283,4 +312,29 @@ fn the_first_frame_at_a_new_size_paints_its_arrangement() {
     assert_eq!(window.arrangement(), "mini");
     assert!(!window.paints_the_queue_column());
     assert_eq!(window.presented_arrangements(), vec!["wide", "mini"]);
+}
+
+/// The sizes a continuous drag steps through, one event-loop iteration each:
+/// Wide down to Mini, so the arrangement changes while the pointer moves.
+const DRAG_WIDTHS: [u32; 8] = [1500, 1400, 1300, 1200, 1100, 1000, 900, 800];
+
+/// Contract (review of `fecfd22a1`, D9): a continuous drag keeps presenting
+/// frames, and it lands on the newest size's arrangement. winit dispatches the
+/// proxy wake-up before the compositor's resize and that resize's redraw, so
+/// every iteration of a drag has both a drain and a new size; a hold that a
+/// newer resize re-arms would hold every one of those frames, and the window
+/// would paint nothing until the drag stopped.
+#[test]
+fn a_continuous_drag_keeps_presenting_frames() {
+    let mut window = Window::built(1600, HEIGHT);
+
+    window.drag_through(&DRAG_WIDTHS);
+
+    assert!(
+        window.presented > DRAG_WIDTHS.len() / 2,
+        "a frame is presented at least every other iteration of the drag: {} presented over {} iterations and the settle",
+        window.presented,
+        DRAG_WIDTHS.len()
+    );
+    assert_eq!(window.arrangement(), "mini");
 }
