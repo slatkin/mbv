@@ -65,7 +65,7 @@ impl EventSlot {
 /// The core thread's channel as the window holds it (D4): every former Tauri
 /// command is a method, and each push is the command's whole body. A failed
 /// send means the core thread is gone — the window's close ended it — so the
-/// input logs its drop, as the Tauri `push` does today.
+/// input logs its drop, as the former Tauri `push` did.
 #[derive(Clone, Debug)]
 pub struct CoreLink {
     core: Sender<CoreInput>,
@@ -98,13 +98,13 @@ impl CoreLink {
     }
 
     /// The `library` command (D4): the window's semantic request converts to
-    /// the neutral command here, as the Tauri command did with `into`.
+    /// the neutral command here, as the former Tauri command did with `into`.
     pub fn library(&self, command: GuiLibraryCommand) {
         self.push(CoreInput::Library(command.into()), "library");
     }
 
     /// The `settings` command (D4): a request this build cannot address — a
-    /// setting name no key declares — logs and drops, as the Tauri command
+    /// setting name no key declares — logs and drops, as the former Tauri command
     /// does.
     pub fn settings(&self, command: GuiSettingsCommand) {
         if let Some(command) = crate::bridge::settings::neutral(command) {

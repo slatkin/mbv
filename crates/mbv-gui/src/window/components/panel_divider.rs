@@ -77,7 +77,7 @@ struct ActiveDrag {
 /// listeners. The root creates it once (`use_hook`), provides it as context,
 /// and drives it from its pointer handlers; the divider arms it. At most one
 /// drag runs at a time — a new `pointerdown` on the other divider replaces
-/// the first, as the webview's listeners did.
+/// the first, as the window's listeners did.
 #[derive(Clone, Copy)]
 pub struct DividerDrag {
     active: Signal<Option<ActiveDrag>>,

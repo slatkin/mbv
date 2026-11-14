@@ -113,7 +113,7 @@ impl App {
     }
 
     /// Execute the daemon-lost button at `index` — the press on the region
-    /// the front end reported. The press and the button's key hint answer the
+    /// the window reported. The press and the button's key hint answer the
     /// same choice (`apply_gui_daemon_lost_choice`), and Returns whether the
     /// Client's run should end.
     pub fn execute_gui_daemon_lost_button(&mut self, index: usize) -> bool {

@@ -1,7 +1,7 @@
 //! The GUI's dragged panel widths (`replace-tauri-with-blitz` design D14): the
 //! Queue panel's column width and the Wide arrangement's list column width
 //! that a GUI session dragged leave for the next start. One TOML file in the
-//! state directory, beside the GUI launch state. The webview's saved widths
+//! state directory, beside the GUI launch state. The window's saved widths
 //! are not migrated: a first start after the switch reads no file, and the
 //! defaults apply.
 

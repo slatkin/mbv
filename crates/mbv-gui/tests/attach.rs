@@ -291,7 +291,7 @@ fn close_input() -> CoreInput {
     CoreInput::Close
 }
 
-/// A layout report the front end measured with `regions` painted, as a
+/// A layout report the window measured with `regions` painted, as a
 /// report on the attach screens carries.
 fn layout_with(regions: Vec<LayoutRegion>) -> CoreInput {
     CoreInput::Layout(LayoutReport {

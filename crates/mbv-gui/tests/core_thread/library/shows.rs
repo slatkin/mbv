@@ -4,7 +4,7 @@
 //! root load, and the tick's library drain applies the fetch completion
 //! through the App arms — the same arms the presenting Client's shell drain
 //! joins. The Emby answers come from the in-memory mock transport, so no
-//! request leaves the process, and no live Owner, Service, or webview runs
+//! request leaves the process, and no live Owner, Service, or window runs
 //! (design D13).
 
 use mbv::ClientTickHost;

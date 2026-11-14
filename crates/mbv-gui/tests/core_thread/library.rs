@@ -2,7 +2,7 @@
 //! command family reaches the `App` effect it names, and the Library section's
 //! content revision and Hero artwork reach the frame from the image cache. The
 //! Emby answers come from the in-memory mock transport, so no request leaves
-//! the process, and no live Owner, Service, or webview runs (design D13).
+//! the process, and no live Owner, Service, or window runs (design D13).
 //!
 //! This module holds the panel's shared support (the stubs, the command
 //! sender, the Owner-command readers, and the frame readers) and declares one

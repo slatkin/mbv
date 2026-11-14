@@ -15,7 +15,7 @@ use crate::bridge::frame::settings::services::{GuiServiceActionIntent, GuiSetupS
 use crate::bridge::keys::{DomKey, neutral_key};
 
 /// One request from the Settings screen's window content (design D5). The
-/// variants and their field names are the wire vocabulary the front end sends;
+/// variants and their field names are the wire vocabulary the window sends;
 /// the translation into [`mbv::GuiSettingsCommand`] is the only place the two
 /// shapes meet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +73,7 @@ pub enum GuiSettingsCommand {
     /// Raise the remove confirmation for a subscription.
     FeedRemove { url: String },
     /// Capture a key press for a binding target: the target's stable name and
-    /// the raw DOM key the front end read.
+    /// the raw DOM key the window read.
     KeysCapture { target: String, key: DomKey },
     /// Reset one action's binding to its declared default.
     KeysReset { action: String },

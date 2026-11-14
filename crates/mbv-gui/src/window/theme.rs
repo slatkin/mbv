@@ -74,8 +74,8 @@ pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
 
 /// Writes the chrome fills into the rule. The destructure names every field,
 /// so a chrome addition breaks this until the fill's property is written —
-/// the same compiler check the wire type's serde names give the browser
-/// write today.
+/// the same compiler check that the role names of the DTO give the chrome
+/// writer.
 fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
     let GuiChrome {
         background,

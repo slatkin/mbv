@@ -5,7 +5,7 @@
 //! progress roles, and the episode description as the overview.
 //!
 //! A podcast Hero is episode information only: it carries no Workspace and no
-//! tracklist. There is no play-next either: `n` is consumed by the front end
+//! tracklist. There is no play-next either: `n` is consumed by the window
 //! and does nothing for podcast episodes (design D12, row 10.1), so only Play
 //! and Add to queue paint.
 //!

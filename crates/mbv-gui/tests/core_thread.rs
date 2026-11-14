@@ -1,9 +1,9 @@
 //! Public-API tests of the GUI core thread (`mbv_gui::core_thread`): the
 //! step unit the run loop drives, over a mocked channel and a mocked section
-//! sink (design D13 — no Tauri runtime, no webview, no live Owner).
+//! sink (design D13 — no live Owner).
 //!
 //! The sink receives the section batches a tick sent (design D1). The
-//! [`Held`] view merges them the way the front end's stores do, so a test
+//! [`Held`] view merges them the way the window's stores do, so a test
 //! reads what the window holds: a section a batch omits keeps its last value.
 //!
 //! The pointer half — the gestures a `CoreInput::Pointer` recognizes and
@@ -64,7 +64,7 @@ fn key_press() -> CoreInput {
     CoreInput::Key(KeyEvent::new(Key::Char('n'), KeyModifiers::NONE))
 }
 
-/// A layout report for a window the front end has not measured into regions
+/// A layout report for a window the window has not measured into regions
 /// yet, as the report on mount carries.
 fn layout_report() -> CoreInput {
     CoreInput::Layout(LayoutReport {
@@ -74,7 +74,7 @@ fn layout_report() -> CoreInput {
     })
 }
 
-/// A layout report the front end measured: `capacity` whole queue rows, one
+/// A layout report the window measured: `capacity` whole queue rows, one
 /// painted region, and the panel container's size, as a report carries for a
 /// measured window.
 pub(crate) fn measured_layout(capacity: usize, regions: Vec<LayoutRegion>) -> CoreInput {
@@ -154,7 +154,7 @@ fn optional_value<T>(section: Option<&GuiSection<Option<T>>>) -> Option<&T> {
 }
 
 /// What the window holds: every batch the core sent, merged the way the
-/// front end's stores merge them. A present section replaces the held one;
+/// window's stores merge them. A present section replaces the held one;
 /// an absent section keeps it (design D1).
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Held {

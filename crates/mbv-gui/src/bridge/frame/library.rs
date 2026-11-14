@@ -88,7 +88,7 @@ pub struct GuiLibraryRowMenuFrame {
 /// One entry of the picked item's menu, as the window paints it (design D8):
 /// the label, the key hint the row menu shows when the entry has one, and the
 /// entry's index in the shared builder's order — the index a chosen entry
-/// sends back, so a front end that paints only some entries still executes
+/// sends back, so a window that paints only some entries still executes
 /// the one it painted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicMenuEntryFrame {

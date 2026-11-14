@@ -1,5 +1,5 @@
 //! The `mbv-gui` library: the native window Client's core thread (design D3
-//! of `add-tauri-gui-client`) and the bridge between the window's front end
+//! of `add-tauri-gui-client`) and the bridge between the window
 //! and the Rust Client core (design D4).
 
 pub mod art;

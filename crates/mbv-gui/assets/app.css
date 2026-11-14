@@ -11,8 +11,8 @@
 @source not "./vendor";
 
 /* The six Latin faces the binary bundles (D11), served in process through
-   the net provider's `mbv-asset` font route (D7). The webview's package CSS
-   resolved these through `@fontsource` relative URLs; the Dioxus window
+   the net provider's `mbv-asset` font route (D7). The package CSS of the Tauri
+   build resolved these through `@fontsource` relative URLs; the Dioxus window
    names the route instead. Weight 400 covers 'normal', 500 and 600 carry
    the medium and semibold weights the Svelte class strings named. */
 @font-face {
@@ -163,7 +163,7 @@
 	/* The GUI's data types (add-gui-settings-screen design D14): weight and size
 	   carry hierarchy and colour carries the type. Each type names one token
 	   that aliases the hue the palette already carried, except the secondary
-	   title's purple, which the GUI adds. `TypedText.svelte` paints a meta
+	   title's purple, which the GUI adds. `typed_text.rs` paints a meta
 	   segment by its kind; a time or a date repeated down a list paints at the
 	   repeat opacity. */
 	--canvas-type-time: var(--canvas-accent); /* #a7c080: a time and a duration */
@@ -221,7 +221,7 @@
 /* The scrollbars are filled, not outlined: the thumb paints the canvas
    scrollbar colour #3D484D on a transparent track, with no border or
    rounding. The standard properties cover Chromium and Firefox; the WebKit
-   pseudo-elements cover the WebKitGTK window. */
+   pseudo-elements are kept from the earlier webview build. */
 * {
 	scrollbar-color: #3d484d transparent;
 	scrollbar-width: thin;

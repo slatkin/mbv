@@ -1,4 +1,4 @@
-//! The layout report that the front end sends after each paint that moved a
+//! The layout report that the window sends after each paint that moved a
 //! region (design D4). It carries the whole visible rows of each list and the
 //! painted regions, each with the semantic target a press on it resolves to.
 //!
@@ -8,24 +8,24 @@
 
 use mbv_surfaces::{HitMap, HitRegion};
 
-/// One layout report (design D4). The front end sends it after each paint that
+/// One layout report (design D4). The window sends it after each paint that
 /// moved a region.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayoutReport {
-    /// The whole visible rows of each list that the front end painted.
+    /// The whole visible rows of each list that the window painted.
     pub lists: Vec<ListRows>,
     /// The painted regions, each with the semantic target a press on it resolves to.
     pub regions: Vec<LayoutRegion>,
     /// The panel container's painted size in logical pixels (design D10):
-    /// the measured size the front end picks the panel state from.
+    /// the measured size the window picks the panel state from.
     /// The core stores it so the capacity and the hit map the same report
-    /// carries stay matched to the layout the front end painted; the
-    /// panel-state decision itself stays in the front end. A front end that
+    /// carries stay matched to the layout the window painted; the
+    /// panel-state decision itself stays in the window. A window that
     /// omits it reads as the zero size.
     pub container_size: LayoutSize,
 }
 
-/// A size in logical pixels, as the front end measures the panel container.
+/// A size in logical pixels, as the window measures the panel container.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LayoutSize {
     /// The painted width in logical pixels.

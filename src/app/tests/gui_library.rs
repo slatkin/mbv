@@ -714,7 +714,7 @@ fn record_open(url: &str) {
 
 /// The `openUrl` command's trust boundary: the core opens an http or https
 /// url through the shared opener, and any other scheme — the url comes from
-/// the webview — reaches no opener.
+/// the window — reaches no opener.
 #[test]
 fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
     let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();

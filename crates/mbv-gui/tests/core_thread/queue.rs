@@ -23,7 +23,7 @@ fn drag_to(x: f32, y: f32) -> CoreInput {
     ))
 }
 
-/// A cancelled gesture, as the front end sends it when the webview loses the
+/// A cancelled gesture, as the window sends it when the window loses the
 /// pointer (add-tauri-gui-client row 6.5, finding P1-2). The position is the
 /// neutral placeholder the bridge sends for a window blur.
 fn cancel_pointer() -> CoreInput {

@@ -2,14 +2,14 @@
 //! synchronous thread creates the `App`, attaches to the Owner, and runs
 //! `ClientCore::tick` in a loop behind the window.
 //!
-//! Tauri command handlers never touch the `App`. They push a [`CoreInput`]
+//! The window's handlers never touch the `App`. They push a [`CoreInput`]
 //! value into the thread's channel, and the thread waits on that channel with
 //! a timeout of `CLIENT_IDLE_CADENCE`, so an input, a `ClientWaker` wake, or
 //! the idle cadence each produce one tick. Each tick sends the batch of the
 //! sections it changed through the section sink, and sends nothing when no
-//! section changed (design D2). `main` wires that sink to `AppHandle::emit`,
-//! and the commands push into the channel; the tests mock both, so no Tauri
-//! runtime or tokio runs here (design D12).
+//! section changed (design D2). `main` wires that sink to the window channel,
+//! and the window pushes into the channel; the tests mock both, so no window
+//! or tokio runtime runs here (design D12).
 
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -50,7 +50,7 @@ mod tick_host;
 use self::launch_restore::GuiLaunchRestore;
 
 /// The viewport height before the first `report_layout` measures the window:
-/// the queue section carries every row the queue holds. The front end reports the
+/// the queue section carries every row the queue holds. The window reports the
 /// real capacity when it mounts (design D5), so the placeholder never
 /// survives the first report.
 const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
@@ -66,7 +66,7 @@ pub enum CoreInput {
     /// A pointer event, translated on the Rust side (design D4) and resolved
     /// against the slice hit map.
     Pointer(PointerEvent),
-    /// A layout report from the front end. The report applies to the Surface
+    /// A layout report from the window. The report applies to the Surface
     /// state's capacity and hit map; it marks no section and forces no batch
     /// (design D4).
     Layout(LayoutReport),
@@ -103,7 +103,7 @@ pub enum CoreInput {
 }
 
 /// The sink every sent batch goes through (design D1). Production wires
-/// `AppHandle::emit` as the `mbv://sections` event; the tests mock it with a
+/// the window channel's `WindowEvent::Batch`; the tests mock it with a
 /// channel.
 pub type SectionSink = Box<dyn Fn(GuiSectionBatch) + Send + 'static>;
 
@@ -114,9 +114,9 @@ pub type QuitSink = Box<dyn Fn() + Send + 'static>;
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the window. The
-/// thread ends when the window closes — the `main` window's `Destroyed`
-/// event delivers a [`CoreInput::Close`] through the returned sender, which
-/// the Tauri commands push through; they never touch the `App` (design D3).
+/// thread ends when the window closes: `main` sends a [`CoreInput::Close`]
+/// through the returned sender. The window's `CoreLink` pushes through the
+/// same sender and never touches the `App` (design D3).
 /// The App's waker keeps the channel connected for the thread's whole life,
 /// so a sender drop cannot carry the close.
 ///
@@ -209,7 +209,7 @@ pub struct CoreThread {
     /// `LayoutReport`; until then the queue section carries every row.
     viewport_rows: usize,
     /// The panel container's painted size from the last `LayoutReport`
-    /// (design D10). The front end picks the panel state from the panel
+    /// (design D10). The window picks the panel state from the panel
     /// container's measured size, the same measurement this report carries,
     /// so the core stores it without classifying it: the reported capacity
     /// and regions already measure the layout that size painted.
@@ -397,7 +397,7 @@ impl CoreThread {
     /// scroll's clamp — and the reported regions rebuild the combined slice
     /// hit map, the last painted regions a press resolves against. The
     /// reported container size is stored as painted (design D10): the
-    /// panel-state decision it feeds stays in the front end's container
+    /// panel-state decision it feeds stays in the window's container
     /// queries, and the capacity and regions the same report carries
     /// already measure the layout that size painted.
     fn apply_layout(&mut self, report: &LayoutReport) {
@@ -469,7 +469,7 @@ impl CoreThread {
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
         self.app.route_gui_input(GuiInput::Pointer(event), None);
-        // A cancelled gesture (the webview lost the pointer, the pointer left
+        // A cancelled gesture (the window lost the pointer, the pointer left
         // the window with a button held, or the window lost focus) drops the
         // drag state without a move (add-tauri-gui-client row 6.5, finding
         // P1-2): the release that would have ended the drag never arrives.

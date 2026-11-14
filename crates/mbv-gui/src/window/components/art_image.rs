@@ -1,12 +1,12 @@
 //! The window's one art painter (`replace-tauri-with-blitz` D7, the port of
 //! `ArtImage.svelte`): every `GuiArtRef` paints as an `img` whose `src` is the
 //! reference's URL. A `loading` reference paints no image, and a missed load
-//! paints the same loading fill — the webview's error event becomes
+//! paints the same loading fill; a failed load becomes
 //! [`ArtEvent::Failed`] for the painted URL, and the natural size
 //! (`capToNaturalSize`, `window/natural_size.rs`) comes from
 //! [`ArtEvent::Loaded`] divided by the window's scale factor. The fill then
 //! retries the same URL with capped backoff while mounted: the `mbv-art` miss
-//! is `no-store`, so a retry asks the core again (D7). A new URL starts a
+//! is a failed load, so a retry asks the core again (D7). A new URL starts a
 //! fresh load.
 
 use std::collections::HashMap;

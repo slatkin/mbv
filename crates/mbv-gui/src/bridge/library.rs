@@ -8,7 +8,7 @@
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
-/// variants and their field names are the wire vocabulary the front end
+/// variants and their field names are the wire vocabulary the window
 /// sends; the translation into [`mbv::GuiLibraryCommand`] is the only place
 /// the two shapes meet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,7 +62,7 @@ pub enum GuiLibraryCommand {
     /// D12).
     ShowsSelectSeason { lib_idx: usize, season_id: String },
     /// Play a Shows episode (design D12): Enter on the row, or the
-    /// double-click a front end sends with this same command.
+    /// double-click a window sends with this same command.
     ShowsPlay { lib_idx: usize, item_id: String },
     /// Play a Shows episode next (design D12).
     ShowsPlayNext { lib_idx: usize, item_id: String },
@@ -80,7 +80,7 @@ pub enum GuiLibraryCommand {
         group: GuiEmbyFeedGroup,
     },
     /// Play a plain Emby-library row (row 8.1): Enter on the row, or the
-    /// double-click a front end sends with this same command. A folder or a
+    /// double-click a window sends with this same command. A folder or a
     /// boxset plays through the TUI's folder-play rule, so no nested list
     /// opens.
     EmbyPlay { lib_idx: usize, item_id: String },
@@ -93,11 +93,11 @@ pub enum GuiLibraryCommand {
     /// carries changes nothing.
     AbsSelect { lib_idx: usize, row: String },
     /// Play an Audiobooks book (row 9.1): Enter on the book row, or the
-    /// double-click a front end sends with this same command. The queue is
+    /// double-click a window sends with this same command. The queue is
     /// replaced with the book at its saved position.
     AbsPlay { lib_idx: usize, item_id: String },
     /// Play or seek from an Audiobooks chapter (row 9.1): Enter on a
-    /// Workspace chapter row, or the double-click a front end sends with
+    /// Workspace chapter row, or the double-click a window sends with
     /// this same command.
     AbsPlayChapter {
         lib_idx: usize,
@@ -117,7 +117,7 @@ pub enum GuiLibraryCommand {
     /// window carried — the episode's opaque identity.
     PodcastsSelect { lib_idx: usize, row: String },
     /// Play a Podcasts episode (row 10.1): Enter on the row, or the
-    /// double-click a front end sends with this same command.
+    /// double-click a window sends with this same command.
     PodcastsPlay { lib_idx: usize, item_id: String },
     /// Add a Podcasts episode to the queue (row 10.1).
     PodcastsQueue { lib_idx: usize, item_id: String },
@@ -129,7 +129,7 @@ pub enum GuiLibraryCommand {
     /// carried — the entry's opaque identity.
     FeedsSelect { row: String },
     /// Play a Feeds entry (row 11.1): Enter on the row, or the double-click a
-    /// front end sends with this same command.
+    /// window sends with this same command.
     FeedsPlay { item_id: String },
     /// Add a Feeds entry to the queue (row 11.1).
     FeedsQueue { item_id: String },
@@ -144,7 +144,7 @@ pub enum GuiLibraryCommand {
     SearchClose,
     /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
     /// parity): the scheme gate runs in the core, because the url comes
-    /// from the webview — only an http or https URL reaches the opener, and
+    /// from the window — only an http or https URL reaches the opener, and
     /// any other scheme changes nothing.
     OpenUrl { url: String },
 }
@@ -373,7 +373,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
     }
 }
 
-/// One row id's core identity, resolving the wire type the front end sends.
+/// One row id's core identity, resolving the wire type the window sends.
 /// The window mirrors the same shape on the way out, so a command built from
 /// a carried row addresses exactly that row. The owned form is the ref
 /// form's delegate, so the variant names are hand-written once.

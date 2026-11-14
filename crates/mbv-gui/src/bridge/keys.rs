@@ -1,14 +1,14 @@
 //! Translates a DOM `KeyboardEvent` into the neutral `KeyEvent` (design D6).
 //!
-//! The front end prevents the default action of every key while the window has
+//! The window prevents the default action of every key while the window has
 //! focus, then sends the event as a [`DomKey`]. The mapping follows the TUI's
 //! crossterm edge (`mbv_components::root::neutral_key`), so both Clients report
 //! one chord for one physical press.
 
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
-/// The DOM `KeyboardEvent` fields that the front end sends with the `key`
-/// command (design D4). The field names follow the DOM and arrive in camelCase,
+/// The DOM `KeyboardEvent` fields that the window sends with the `key`
+/// command (design D4). The field names follow the DOM and are spelled as the DOM spells them,
 /// with the modifier flags flattened into the same object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomKey {

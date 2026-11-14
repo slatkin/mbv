@@ -8,7 +8,7 @@
 //! mbv has no playback-rate fact.
 //!
 //! Sync does not replay the anchor either: a replay would rewind the window's
-//! position by the anchor's age, because the front end stamps the anchor on
+//! position by the anchor's age, because the window stamps the anchor on
 //! receipt and has no other clock for it. `release_all` forgets the anchor,
 //! and the next collect takes the first-send path — a fresh anchor at a new
 //! revision.

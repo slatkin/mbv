@@ -7,7 +7,7 @@
 //! [`GuiRole::ALL`] lists the mirror in declaration order and is the one list
 //! that the compiler does not check: a new role must be added there too.
 //!
-//! [`GuiTheme::chrome`] carries the fill values the front end's chrome
+//! [`GuiTheme::chrome`] carries the fill values the window's chrome
 //! variables point at (the review correction of design D7: the frame once
 //! carried foreground roles only, so the chrome could not follow the palette).
 //! It needs no mirror of its own: `mbv-theme`'s [`Surface`] set and the
@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use mbv_theme::{Rgb, Role, Surface, surface_colors};
 
 /// The active theme: one colour for every role (design D7) and the chrome
-/// fills the front end's shadcn-svelte variables point at. The front end
+/// fills the window's shadcn-svelte variables point at. The window
 /// writes each entry into a CSS custom property on `:root`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTheme {
@@ -44,7 +44,7 @@ impl GuiTheme {
     }
 }
 
-/// The GUI chrome's fill values (design D7): the fills the front end's
+/// The GUI chrome's fill values (design D7): the fills the window's
 /// shadcn-svelte background, surface, border, and input variables point at.
 /// Each one resolves the [`Surface`] the TUI paints the same concept with,
 /// so the chrome tracks the palette with no second palette: a palette edit
@@ -52,9 +52,9 @@ impl GuiTheme {
 /// `focused` suffix are resting fills (`surface_colors(surface, false)`);
 /// the two `focused` fields resolve the same surface's focused fill, for
 /// the surface table's focus-reactive rows the queue column paints
-/// (`QueueColumn`, `QueuePanel`) — the front end picks between the pair on
+/// (`QueueColumn`, `QueuePanel`) — the window picks between the pair on
 /// the window's Panel-focus fact, the way the TUI's
-/// `panel_appearance_focus` picks. The fill tiers the front end aliases
+/// `panel_appearance_focus` picks. The fill tiers the window aliases
 /// are named in the field docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiChrome {
@@ -91,7 +91,7 @@ pub struct GuiChrome {
     pub queue_column: GuiRgb,
     /// The queue column's focused backdrop: `Surface::QueueColumn` resolved
     /// with the focused bit. The queue column is one of the surface table's
-    /// focus-reactive rows (resting `Bg1`, focused `Bg2`), so the front end
+    /// focus-reactive rows (resting `Bg1`, focused `Bg2`), so the window
     /// picks between this and `queue_column` on the window's Panel-focus fact
     /// the way the TUI's `panel_appearance_focus` picks.
     pub queue_column_focused: GuiRgb,
@@ -99,7 +99,7 @@ pub struct GuiChrome {
     /// the surface the TUI paints the queue list's box with.
     pub queue_panel: GuiRgb,
     /// The queue panel's focused box: `Surface::QueuePanel` resolved with the
-    /// focused bit (resting `Bg0`, focused `Bg3`). The front end picks between
+    /// focused bit (resting `Bg0`, focused `Bg3`). The window picks between
     /// this and `queue_panel` on the same Panel-focus fact.
     pub queue_panel_focused: GuiRgb,
     /// The queue column's playback band: `Surface::QueueOnlyPlaybackPanel`,
@@ -164,7 +164,7 @@ impl From<Rgb> for GuiRgb {
 }
 
 /// A semantic foreground colour role, mirroring `mbv_theme::Role` variant for
-/// variant. The front end names each CSS custom property after the role's
+/// variant. The window names each CSS custom property after the role's
 /// camelCase name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuiRole {
@@ -265,8 +265,8 @@ impl GuiRole {
     ];
 
     /// The role's camelCase name, spelled out for the window's CSS
-    /// custom-property writer (`window/theme.rs`): the same name the serde
-    /// `rename_all = "camelCase"` gives the wire shape, which stays the
+    /// custom-property writer (`window/theme.rs`): the same spelling as the
+    /// role's name in the DTO, which stays the
     /// authority this match must not drift from.
     #[must_use]
     pub fn name(self) -> &'static str {

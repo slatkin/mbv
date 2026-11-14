@@ -131,7 +131,7 @@ pub enum GuiLibraryCommand {
     /// Continue Watching membership decides.
     HomePlay { row: home::GuiHomeRowId },
     /// Enqueue a Home row (design D12): `n` on the row, carried as its own
-    /// command for the front end's Play next label, resolved through the
+    /// command for the window's Play next label, resolved through the
     /// same Home enqueue path as the add — the Owner owns the queue, and the
     /// Home rows have no library the play-next admission resolves against,
     /// so the row tail-appends like `a`.
@@ -156,7 +156,7 @@ pub enum GuiLibraryCommand {
     /// them.
     ShowsSelectSeason { lib_idx: usize, season_id: String },
     /// Play a Shows episode (design D12): Enter on the row, or the
-    /// double-click a front end sends with this same command. The shared
+    /// double-click a window sends with this same command. The shared
     /// library play path runs, so the Owner owns the queue.
     ShowsPlay { lib_idx: usize, item_id: String },
     /// Play a Shows episode next (design D12): the shared play-next
@@ -176,7 +176,7 @@ pub enum GuiLibraryCommand {
         group: emby_projection::GuiEmbyFeedGroup,
     },
     /// Play a plain Emby-library row (design D12, row 8.1): Enter on the
-    /// row, or the double-click a front end sends with this same command.
+    /// row, or the double-click a window sends with this same command.
     /// A folder or a boxset plays through the TUI's folder-play rule, so no
     /// nested list opens.
     EmbyPlay { lib_idx: usize, item_id: String },
@@ -192,12 +192,12 @@ pub enum GuiLibraryCommand {
     /// published catalog no longer carries changes nothing.
     AbsSelect { lib_idx: usize, row: String },
     /// Play an Audiobooks book (design D12, row 9.1): Enter on the book row,
-    /// or the double-click a front end sends with this same command. The
+    /// or the double-click a window sends with this same command. The
     /// queue is replaced with the book at its saved position, through the
     /// TUI's book play path and the Owner's Audiobookshelf admission.
     AbsPlay { lib_idx: usize, item_id: String },
     /// Play or seek from an Audiobooks chapter (design D12, row 9.1): Enter
-    /// on a Workspace chapter row, or the double-click a front end sends
+    /// on a Workspace chapter row, or the double-click a window sends
     /// with this same command. The TUI's chapter-activation rule runs: a seek
     /// on the active book, a replace-and-start at the chapter's offset on
     /// another one.
@@ -222,7 +222,7 @@ pub enum GuiLibraryCommand {
     /// a stale frame's row changes nothing.
     PodcastsSelect { lib_idx: usize, row: String },
     /// Play a Podcasts episode (design D12, row 10.1): Enter on the row, or the
-    /// double-click a front end sends with this same command. The queue is
+    /// double-click a window sends with this same command. The queue is
     /// replaced with the episode through the TUI's episode play path and the
     /// Owner's Audiobookshelf admission.
     PodcastsPlay { lib_idx: usize, item_id: String },
@@ -239,7 +239,7 @@ pub enum GuiLibraryCommand {
     /// frame's row changes nothing.
     FeedsSelect { row: String },
     /// Play a Feeds entry (design D12, row 11.1): Enter on the row, or the
-    /// double-click a front end sends with this same command. The queue is
+    /// double-click a window sends with this same command. The queue is
     /// replaced with the entry through the TUI's feed play path, whose
     /// no-playable-source guard flashes the TUI's toast.
     FeedsPlay { item_id: String },
@@ -258,7 +258,7 @@ pub enum GuiLibraryCommand {
     SearchClose,
     /// Open the URL in the user's browser (the Hero's `IMDb` link, TUI
     /// parity): the scheme gate runs in the core, because the url comes
-    /// from the webview — only an http or https URL reaches the opener, and
+    /// from the window — only an http or https URL reaches the opener, and
     /// any other scheme changes nothing.
     OpenUrl { url: String },
 }
@@ -530,7 +530,7 @@ impl App {
     }
 
     /// Open the URL `openUrl` carries (the Hero's `IMDb` link): the scheme
-    /// gate runs first — the url comes from the webview, so only an http or
+    /// gate runs first — the url comes from the window, so only an http or
     /// https URL reaches the opener, and any other scheme is logged and
     /// dropped. A failed spawn logs and changes nothing else.
     fn open_gui_library_url(url: &str) {

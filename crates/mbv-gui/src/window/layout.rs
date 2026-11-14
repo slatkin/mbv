@@ -124,7 +124,7 @@ pub fn use_layout_reporter() -> LayoutReporter {
 
 impl LayoutReporter {
     /// The panel container's last reported painted size (D9): the measured
-    /// size the front end picks the panel state from. Zero while no container
+    /// size the window picks the panel state from. Zero while no container
     /// has reported — the pre-attach states paint no panel.
     #[must_use]
     pub fn container_size(&self) -> LayoutSize {

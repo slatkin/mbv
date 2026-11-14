@@ -399,7 +399,7 @@ pub fn App() -> Element {
             },
             onpointerup: move |event: PointerEvent| {
                 // A divider drag ends on the same release the core receives,
-                // as the webview's `window` listener did.
+                // as the window's `window` listener did.
                 drag_release.end();
                 input::on_pointer(DomPointerKind::Release, &event.data, &release_link);
             },
@@ -416,7 +416,7 @@ pub fn App() -> Element {
                 input::on_wheel(&event.data, viewport_height, &wheel_link);
             },
             oncontextmenu: move |event: MouseEvent| {
-                // The webview's own context menu is turned off
+                // The window's own context menu is turned off
                 // (add-tauri-gui-client D11); blitz already emits the right
                 // press (D8), so the handler only prevents the default.
                 input::on_contextmenu(&event);

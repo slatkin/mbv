@@ -52,7 +52,7 @@ fn the_attached_core_continues_the_campaign_revisions() {
 
 /// After a batch, `sync` re-sends every present section at the revision it
 /// held (design D4) — except the playhead (design D5): its value is a
-/// position-at-send sample the front end stamps on receipt, so a replay would
+/// position-at-send sample the window stamps on receipt, so a replay would
 /// rewind the position. Sync forgets the anchor, and the next collect
 /// re-adopts a fresh one at a new revision, so the playhead rides the sync
 /// batch with a revision strictly past the first batch's.

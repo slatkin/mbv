@@ -3,7 +3,7 @@
 //! request of each payload shape — a unit variant, a key name, a nested
 //! target, and a `DomKey` — so the vocabulary's four kinds of field all reach
 //! their neutral form. The window builds these values as Rust; the wire form
-//! the webview sent went at the switch.
+//! the window sent went at the switch.
 
 use mbv_gui::bridge::frame::playback::GuiTargetKey;
 use mbv_gui::bridge::keys::{DomKey, DomModifiers};

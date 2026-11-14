@@ -49,7 +49,7 @@ pub fn forward_every_key(_key: &DomKey) -> KeyOutcome {
 }
 
 /// The DOM `KeyboardEvent` fields the key path carries (D8): the same fields
-/// the `key` command carried from the webview, now built from the Dioxus
+/// the `key` command carried from the window, now built from the Dioxus
 /// event data in process. [`DomKey`] is the existing struct in
 /// `bridge/keys.rs`, which stays the translation's input.
 #[must_use]
@@ -193,7 +193,7 @@ pub fn on_wheel(event: &WheelData, viewport_height: f64, link: &CoreLink) {
     send_pointer(dom_wheel(event, viewport_height), link);
 }
 
-/// The context-menu default (D8): the webview's own menu does not run — the
+/// The context-menu default (D8): the window's own menu does not run — the
 /// job `App.svelte`'s `preventContextMenu` did. No pointer is forwarded:
 /// the right click's `pointerdown` already carried the press to the core,
 /// and a second forward would duplicate the neutral right press (input.ts
@@ -233,7 +233,7 @@ fn send_pointer(pointer: DomPointer, link: &CoreLink) {
 
 /// The DOM's `clientX`/`clientY` are `f64` at the Dioxus layer, and the wheel
 /// delta is `f64`; the wire `DomPointer` and the neutral `Position` are `f32`
-/// — the same rounding the webview's serde deserialization did. A coordinate
+/// — the same rounding the former serde deserialization did. A coordinate
 /// or delta that is not finite, or that lies outside `f32`'s range, reads as
 /// the neutral 0.0. The measured rects (D9) and the natural-size caps (D7)
 /// narrow their `f64` reads through it too.

@@ -296,7 +296,8 @@ as `tailwindcss`, or passes `TAILWINDCSS=/path`. The generated file is
 committed, and `src/window/app.rs` includes it with `include_str!`. A normal
 build runs no CSS tool, and CI does not check the committed file against the
 sources. A class added to the Rust sources needs `make gui-css` before its
-commit.
+commit. A fresh worktree needs only the CLI on `PATH`; no Node package is
+installed.
 
 `Truncate` (`src/window/truncate.rs`) replaces the `truncate` text box. It keeps
 the box's `MountedData`. When the full text does not fit the content width, an
@@ -1511,6 +1512,16 @@ one handling:
 | No GPU: surface creation panics | hosts with no Vulkan or GL | Accepted. The packages depend on the Vulkan loader. |
 | Some DOM event kinds panic | none | No handler uses them (`src/window/input.rs`). |
 | No reload of the window content | dev reload | Reload scenarios no longer exist. |
+
+## Dependency notes
+
+- `calloop` 0.14.5 enables its `tracing` and `log` features for the whole
+  workspace, so tracing events also reach the `log` crate.
+- `unicode-segmentation` 1.13 is a dependency of `mbv-gui` for the grapheme cut
+  of the ellipsis (`src/window/truncate.rs`).
+- `time` and `num-traits` are direct `mbv-gui` dependencies. They were behind the
+  `blitz` feature while the port ran, and they are not in the
+  dependency list of the port's design.
 
 ### Library Hero and list shared pieces
 

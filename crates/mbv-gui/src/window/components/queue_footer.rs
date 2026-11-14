@@ -144,7 +144,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                 }
                 if !footer.playlist.text.is_empty() {
                     // The queue's source is a secondary title, so it paints
-                    // the secondary token (design D14); the front end paints
+                    // the secondary token (design D14); the window paints
                     // no role here.
                     span {
                         style: "color: var(--canvas-type-secondary);",

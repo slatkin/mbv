@@ -4,7 +4,7 @@
 //! whether the core ever sees a keydown. The order is the design's: an open
 //! core overlay or an armed prefix keeps the keyboard with the core, an open
 //! text field of the panel types, the window keys (Tab across the panes, `1`–`7`
-//! for the destination tabs) and the Library keys run in the front end while the
+//! for the destination tabs) and the Library keys run in the window while the
 //! Library panel shows, and every other key goes to the core.
 
 use crate::bridge::frame::focus::GuiPanel;
@@ -251,7 +251,7 @@ fn route_item_key(state: &LibraryState, key: &DomKey) {
     }
 }
 
-/// Close the front end's open menu or overlay with Esc (design D3): the right-click
+/// Close the window's open menu or overlay with Esc (design D3): the right-click
 /// item menu and the picked item's menu first, then the Narrow arrangement's Hero
 /// overlay, then the carried Search section. Whether one paints decides the
 /// answer, so an Esc with nothing open may not leave the core's Esc unclaimed.
@@ -442,7 +442,7 @@ fn route_music_panel_key(
     KeyOutcome::Core
 }
 
-/// Route one keydown (design D3): the front end does its part, and the answer is
+/// Route one keydown (design D3): the window does its part, and the answer is
 /// what the input forwarder must do with the key. The section facts the routing
 /// reads come from the window's own section stores (`gui-change-driven-sections`
 /// design D6), read through `peek` — a keydown copies none of their values.

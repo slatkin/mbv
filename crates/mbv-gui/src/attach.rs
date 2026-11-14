@@ -4,7 +4,7 @@
 //! attach immediately, it shows the window state that
 //! `startup::run_local_instance` gives the TUI Client. There is no `App`
 //! before the attach, so the campaign resolves the mismatch state's own keys
-//! and button presses itself; the front end interprets nothing. The campaign
+//! and button presses itself; the window interprets nothing. The campaign
 //! ends when the attach succeeds, the user quits the mismatch state, or the
 //! window closes — the close arrives as a [`CoreInput::Close`], because the
 //! App's waker keeps the channel connected for the core thread's whole life.

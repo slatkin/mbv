@@ -88,7 +88,7 @@ pub struct GuiScrubberHover {
     /// The pointer's fraction along the painted bar.
     pub fraction: f64,
     /// The time at the pointer's position, formatted by the TUI's shared
-    /// duration formatter. The front end paints the text verbatim.
+    /// duration formatter. The window paints the text verbatim.
     pub time_label: String,
     /// The chapter covering the pointer's position, when the active item's
     /// chapters cover it.
@@ -104,7 +104,7 @@ pub struct GuiScrubberHover {
 
 /// The hovered trickplay tile the preview paints (task 6.7): the thumbnail's
 /// place in its sheet, the thumbnail's pixel size, and the sheet's image
-/// reference (design D7). The webview loads the sheet from the core's cache
+/// reference (design D7). The window loads the sheet from the core's cache
 /// through the `mbv-art` scheme; it makes no other request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiScrubberTile {

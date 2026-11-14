@@ -42,7 +42,7 @@ pub fn capped_natural_size(
     if natural_width == 0 || natural_height == 0 {
         return None;
     }
-    // The webview fell back to 1 when `devicePixelRatio` read 0; a scale
+    // The window fell back to 1 when `devicePixelRatio` read 0; a scale
     // factor of 0 or below reads the same way.
     let ratio = if scale_factor > 0.0 {
         scale_factor

@@ -25,7 +25,7 @@ pub struct GuiQueue {
     /// viewport, so it is read from every row, not from `rows`.
     pub active: Option<u64>,
     /// The row the pointer rests on (the canvas row hover,
-    /// add-tauri-gui-client row 6.5): the front end paints that row's grip and
+    /// add-tauri-gui-client row 6.5): the window paints that row's grip and
     /// actions button. `None` while the pointer rests on no row.
     pub hover: Option<u64>,
     /// The row drag in progress, if any: the drag ghost and insertion line.
@@ -134,7 +134,7 @@ impl GuiQueue {
         // flipped per item row — headings and spacers keep the box's own
         // fill and do not flip. The parity rides the row so the stripe stays
         // stable while the viewport moves; under a filter it re-seeds over
-        // the kept rows, whose list the front end paints.
+        // the kept rows, whose list the window paints.
         let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));

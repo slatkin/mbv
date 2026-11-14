@@ -1,5 +1,5 @@
 //! The Queue footer and Status bar sections (design D4). Each type
-//! mirrors one library projection, so the front end paints what the Clients
+//! mirrors one library projection, so the window paints what the Clients
 //! paint from the same rules.
 
 use mbv::{FooterPill, QueueFooterProjection, StatusBarProjection};
@@ -38,7 +38,7 @@ impl From<&QueueFooterProjection> for GuiQueueFooter {
 }
 
 /// One footer pill: its glyph-free text (design D8 — no emoji or Nerd Font
-/// glyph reaches the front end, which maps each pill's slot to its Lucide
+/// glyph reaches the window, which maps each pill's slot to its Lucide
 /// icon), the foreground role it paints in, and whether the text is
 /// emphasised. Mirrors `FooterPill`.
 #[derive(Debug, Clone, PartialEq, Eq)]

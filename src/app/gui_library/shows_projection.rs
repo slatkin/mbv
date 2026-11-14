@@ -246,7 +246,7 @@ pub struct GuiShowsProjection {
     /// Whether the active mode's list has not landed yet.
     pub loading: bool,
     /// Whether the selected series' detail or the selected season's episodes
-    /// fetch has not landed yet (the All series mode only). The front end
+    /// fetch has not landed yet (the All series mode only). The window
     /// paints the Workspace's loading state with it.
     pub workspace_loading: bool,
     /// The All series mode's tree (design D14): the series nodes with their

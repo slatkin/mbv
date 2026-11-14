@@ -1,5 +1,5 @@
 //! The bridge theme's chrome section (design D7): each chrome value resolves
-//! the `Surface` the TUI paints the same concept with, so the front end's
+//! the `Surface` the TUI paints the same concept with, so the window's
 //! chrome variables track the mbv palette with no second palette.
 
 use mbv_gui::bridge::frame::theme::{GuiRgb, GuiTheme};

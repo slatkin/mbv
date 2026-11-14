@@ -227,7 +227,7 @@ impl App {
     }
 
     /// Play the Podcasts episode a row id names (design D12, row 10.1): Enter
-    /// on the row, or the double-click a front end sends with this same
+    /// on the row, or the double-click a window sends with this same
     /// command. The episode's identity is the frame's opaque row id; a string
     /// that is no encoding of it changes nothing.
     pub(in crate::app::gui_library) fn play_gui_podcast_row(

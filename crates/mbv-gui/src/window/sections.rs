@@ -50,7 +50,7 @@ pub struct Sections {
     /// The queue summary: the remaining count, the finish clock, the right
     /// column's mode, and the filter.
     pub summary: Signal<GuiQueueSummary>,
-    /// The panel toggles the front end picks the layout with, and the
+    /// The panel toggles the window picks the layout with, and the
     /// UI-reset counter that resets its interaction stores.
     pub panel: Signal<GuiPanelToggles>,
     /// The open menu or popover, `None` while none is open.

@@ -2,7 +2,7 @@
 //! and Blitz (D3, D4 of `replace-tauri-with-blitz`). The core thread attaches
 //! to the Owner and runs behind the window; the window channel (D4) carries
 //! its batches and the quit edge to the root, and `CoreLink` carries the
-//! window's commands back. The Tauri path is gone (D18), so this is the only
+//! window's commands back. The Tauri path is gone, so this is the only
 //! GUI program.
 
 use std::sync::Arc;
@@ -22,7 +22,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn main() {
     // The core thread logs its failures through the app subscriber: install
     // it before the thread spawns, into the GUI's own log file so it does not
-    // interleave with the TUI's (as the Tauri program installs it). A window
+    // interleave with the TUI's (as the Tauri build did). A window
     // has no terminal, so no stderr sink runs.
     mbv_core::applog::init(
         false,

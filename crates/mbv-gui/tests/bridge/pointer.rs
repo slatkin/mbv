@@ -1,7 +1,7 @@
 //! Public-API tests of the `pointer` bridge (`mbv_gui::bridge::pointer`): the
 //! command-to-core translation the window's pointer handlers run (design D4,
 //! `replace-tauri-with-blitz` D8). The event values are built as Rust; the
-//! wire form the webview sent went at the switch (D18).
+//! wire form the window sent went at the switch (D18).
 
 use mbv_gui::bridge::keys::DomModifiers;
 use mbv_gui::bridge::pointer::{DomPointer, DomPointerKind, neutral_pointer};

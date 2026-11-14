@@ -161,7 +161,7 @@ pub struct GuiRowMenuEntry {
     pub destructive: bool,
     /// The entry's own index in the shared builder's order, when the frame
     /// carries one (the Library's item menu): the menu paints and reports it
-    /// in place of the paint order, so a front end that paints only some
+    /// in place of the paint order, so a window that paints only some
     /// entries still names the entry it painted. The queue's entries carry
     /// none, so the paint order stands.
     pub index: Option<usize>,

@@ -1,5 +1,5 @@
 //! The Lucide icons (D13 of `replace-tauri-with-blitz`): the 36 icons the
-//! front end imports, as inline `svg` components over the child elements of
+//! former front end imported, as inline `svg` components over the child elements of
 //! `@lucide/svelte` 1.70.0. Lucide is ISC-licensed; the notice is
 //! `assets/vendor/lucide-ISC.txt`.
 //!

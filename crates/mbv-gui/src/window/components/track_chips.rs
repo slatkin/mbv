@@ -13,7 +13,7 @@
 //! highlighted. The dialog paints the Menus artboard's chrome (B.4). The
 //! window holds no open, cursor, or hover state; Esc and a press elsewhere
 //! close the popover through the core's key and pointer paths. The subtitle
-//! popover's Off row comes first in the frame's choice order; the front end
+//! popover's Off row comes first in the frame's choice order; the window
 //! paints the order it is given. There is no subtitle-offset control and no
 //! video popover (the D4a rulings).
 //!

@@ -50,7 +50,7 @@ pub struct GuiSectionBatch {
     /// The queue summary: the remaining count, the finish clock, the right
     /// column's mode, and the filter.
     pub summary: Option<GuiSection<GuiQueueSummary>>,
-    /// The panel toggles the front end picks the layout with, and the UI-reset
+    /// The panel toggles the window picks the layout with, and the UI-reset
     /// counter that resets its interaction stores.
     pub panel: Option<GuiSection<GuiPanelToggles>>,
     /// The open menu or popover, `null` while none is open.

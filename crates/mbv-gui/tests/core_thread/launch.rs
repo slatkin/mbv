@@ -3,7 +3,7 @@
 //! the saved collection sets, and Panel focus. The state directory is a
 //! `TestStateDirGuard` scratch path, and every Emby answer comes from the
 //! in-memory mock transport, so no request leaves the process and no live
-//! Owner, Service, or webview runs (design D13).
+//! Owner, Service, or window runs (design D13).
 
 use mbv::{ClientTickHost, stub_app_with_queue};
 use mbv_config::{

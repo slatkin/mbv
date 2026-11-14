@@ -125,7 +125,7 @@ impl App {
     }
 
     /// Play the entry a row id names (row 11.1): Enter on the row, or the
-    /// double-click a front end sends with this same command. The TUI's own
+    /// double-click a window sends with this same command. The TUI's own
     /// play path replaces the queue with the entry at its saved position, and
     /// its no-playable-source guard flashes the TUI's toast. A string that is
     /// no encoding of a row id, and an entry the App's data no longer holds,

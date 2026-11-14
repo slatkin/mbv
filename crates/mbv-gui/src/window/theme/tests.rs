@@ -93,7 +93,7 @@ fn fixture_theme() -> GuiTheme {
 }
 
 /// The theme rule is a `:root` rule, and the roles and chrome fills land on
-/// their `--mbv-` properties in the `rgb(r, g, b)` form the webview write
+/// their `--mbv-` properties in the `rgb(r, g, b)` form the window write
 /// used.
 #[test]
 fn the_theme_rule_writes_the_role_and_chrome_colours() {

@@ -44,7 +44,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueRowMenuProps {
     /// The menu cursor the core holds: the entry at this index paints the
-    /// selected fill. `None` for a menu the front end owns (the Library's
+    /// selected fill. `None` for a menu the window owns (the Library's
     /// item menu), whose entries the core holds no cursor over.
     #[props(default)]
     pub cursor: Option<usize>,
@@ -55,7 +55,7 @@ pub struct QueueRowMenuProps {
     /// edge, as the canvas draws it.
     pub top: String,
     /// The menu's left edge from the containing block's left edge, for a
-    /// menu the front end anchors at a pointer position (the Library's
+    /// menu the window anchors at a pointer position (the Library's
     /// right-click item menu). When it is set, `right` stays unset.
     #[props(default)]
     pub left: Option<String>,
@@ -64,7 +64,7 @@ pub struct QueueRowMenuProps {
     /// actions row's right edge.
     #[props(default)]
     pub right: Option<String>,
-    /// The press on an entry, for a menu the front end owns: the Library's
+    /// The press on an entry, for a menu the window owns: the Library's
     /// item menu sends its own command. The queue's menu passes none, so its
     /// presses reach the core's hit map as every other pointer event does.
     #[props(default)]
