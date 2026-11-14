@@ -1,0 +1,19 @@
+# Local test-run throttling. CI passes `--test-threads=4` explicitly (see
+# `.github/workflows/build.yml`, "Test release"), so it is unaffected by the
+# default below; a bare `cargo nextest run` locally would otherwise use every
+# core (28 on the dev machine).
+#
+# Why throttle at all: nextest runs one process per test, and the packages
+# below open socket pairs, spawn worker threads, and drive mpv IPC sessions per
+# test. At full parallelism the run blows the fd/thread budget and unrelated
+# assertions fail with misleading messages.
+[profile.default]
+test-threads = 8
+
+# Heavy tests cost two slots each, so at most four of them run at once while the
+# light unit-test binaries still use all eight slots. The filter names packages,
+# not `binary_id()`s: nextest refuses a config whose filter matches no binary in
+# the current selection, which would break every `cargo nextest run -p <crate>`.
+[[profile.default.overrides]]
+filter = 'package(mbv-player) | package(mbv-remote-player) | package(mbv-daemon)'
+threads-required = 2
