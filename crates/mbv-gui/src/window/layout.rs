@@ -27,12 +27,13 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use blitz_dom::BaseDocument;
+use blitz_traits::shell::Viewport;
 use dioxus_native::prelude::*;
 
 use crate::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListRows, RegionTarget,
 };
-use crate::window::channel::CoreLink;
+use crate::window::channel::{CoreLink, ViewportPending};
 use crate::window::input::f32_from_f64;
 
 /// The layout epoch (D9): a counter the root bumps on every fact that can
@@ -63,6 +64,34 @@ impl LayoutEpoch {
 pub fn carries_unresolved_change(document: &BaseDocument) -> bool {
     let root = document.root_node();
     root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
+}
+
+/// The layout size a document viewport lays out, in CSS pixels: the window's
+/// physical size over its scale factor, which is the size every threshold in
+/// [`crate::window::arrangement`] and [`crate::window::resize`] names (D9). The
+/// launch copy reads it once at the resize site, so the drain carries the same
+/// size the container measures — the panel container fills the viewport
+/// (`h-dvh`, no insets) — instead of a computed second guess.
+#[must_use]
+pub fn viewport_layout_size(viewport: &Viewport) -> LayoutSize {
+    let (width, height) = viewport.logical_size();
+    LayoutSize { width, height }
+}
+
+/// Apply a viewport change to the window's tree (D9): the layout size the next
+/// frame resolves against, written before that resolve so the first frame at
+/// the new size lays out the arrangement, panel state, and column widths the
+/// size picks, and the handoff cleared so the launch copy lets that frame
+/// through. The measured container keeps reporting the same size through
+/// [`track_container_size`]: it stays the ground truth for the merged report's
+/// container size, list capacities, and regions.
+pub fn apply_viewport_size(
+    mut size: Signal<LayoutSize>,
+    viewport: LayoutSize,
+    pending: &ViewportPending,
+) {
+    size.set(viewport);
+    pending.applied();
 }
 
 /// Whether the frame that is about to resolve carries a change no measurement
@@ -230,6 +259,14 @@ impl LayoutReporter {
 /// [`LayoutEpoch`], measures the box's client rect, and writes the size into
 /// the signal and the merged report. The effect runs after the render, so the
 /// rect is the laid-out one.
+///
+/// The size signal is also the one [`apply_viewport_size`] seeds at a resize
+/// (D9), so the window picks its arrangement from the new size on the first
+/// frame at that size and from this measurement from the frame after it. The
+/// two agree to the pixel on this window (the container is `h-dvh`, the
+/// viewport's own height, and the shell applies no insets on desktop), so the
+/// refinement changes nothing that paints; it keeps the reporter's size the
+/// measured one.
 ///
 /// The first measure runs before any resolve has placed the box, so it reads a
 /// zero rect and writes nothing (the size signal's default). The frame that

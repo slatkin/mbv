@@ -10,9 +10,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_config::GuiPanelWidths;
+use rstest::rstest;
 
 use super::{
     DIVIDER_WIDTH_PX, DraggedWidths, LIBRARY_LIST_DEFAULT_WIDTH_PX, LIBRARY_LIST_MIN_WIDTH_PX,
@@ -20,6 +22,7 @@ use super::{
 };
 use crate::bridge::frame::GuiPanelToggles;
 use crate::window::arrangement::{GuiArrangement, library_arrangement};
+use crate::window::layout::viewport_layout_size;
 
 /// The core's toggles: the expanded panel with its queue painted.
 fn expanded() -> GuiPanelToggles {
@@ -277,4 +280,44 @@ fn a_new_ui_reset_epoch_resets_both_widths() {
     store.drag_queue_width(500.0, 1600.0);
     assert!(!store.note_ui_reset_epoch(12));
     assert_eq!(store.dragged().queue, Some(500.0));
+}
+
+/// Contract 10 (the live resize jerk of `e978b31aa`, D9): the size the launch
+/// copy routes at a resize is the size the container measures — the physical
+/// surface over its scale factor — so the arrangement and the painted widths
+/// picked from it are the ones a measured container of that size gives. The
+/// cases cross each threshold: the Mini maximum, the Wide minimum width, and
+/// the Wide minimum height.
+#[rstest]
+#[case::mini(1600, 1200, 2.0, 800.0, 600.0, GuiArrangement::Mini)]
+#[case::narrow_at_the_mini_maximum(1760, 1200, 2.0, 880.0, 600.0, GuiArrangement::Narrow)]
+#[case::wide(2560, 1600, 2.0, 1280.0, 800.0, GuiArrangement::Wide)]
+#[case::wide_height_one_under(2560, 1198, 2.0, 1280.0, 599.0, GuiArrangement::Narrow)]
+#[case::wide_on_a_fractional_scale(2880, 1800, 1.5, 1920.0, 1200.0, GuiArrangement::Wide)]
+fn the_size_a_resize_routes_is_the_size_the_container_measures(
+    #[case] physical_width: u32,
+    #[case] physical_height: u32,
+    #[case] scale: f32,
+    #[case] measured_width: f32,
+    #[case] measured_height: f32,
+    #[case] expected: GuiArrangement,
+) {
+    let routed = viewport_layout_size(&Viewport::new(
+        physical_width,
+        physical_height,
+        scale,
+        ColorScheme::Light,
+    ));
+    let measured = container(measured_width, measured_height);
+    let toggles = expanded();
+
+    // The routed size is the container's, to the pixel.
+    assert_eq!(routed, measured);
+    // One derivation: either source paints and classifies the same columns.
+    assert_eq!(
+        panel_widths(routed, &toggles, &dragged(None, None)),
+        panel_widths(measured, &toggles, &dragged(None, None))
+    );
+    let widths = panel_widths(measured, &toggles, &dragged(None, None));
+    assert_eq!(library_arrangement(measured, widths.queue), expected);
 }

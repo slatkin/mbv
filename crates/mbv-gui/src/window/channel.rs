@@ -3,13 +3,15 @@
 //! outside it, and [`CoreLink`] holds the core's channel as the window's
 //! context value, with one method per former Tauri command.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use mbv_ui_msg::{KeyEvent, PointerEvent};
 
-use crate::bridge::layout::LayoutReport;
+use crate::bridge::layout::{LayoutReport, LayoutSize};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::bridge::settings::GuiSettingsCommand;
@@ -43,10 +45,52 @@ pub enum WindowEvent {
         /// Whether this frame's resolve applied a change.
         changed: bool,
     },
-    /// The window moved, resized, or its scale factor changed (D5, D9). The
-    /// layout epoch reads it from task 3.5 on; the root needs no reaction
-    /// before then.
-    Viewport,
+    /// The window resized or its scale factor changed (D5, D9): `size` is the
+    /// window's new layout size in CSS pixels, read from the document's
+    /// viewport after the shell applied it. The drain writes it as the size the
+    /// window picks its panels and arrangement from, before the frame that
+    /// resolves at that size, and clears the [`ViewportPending`] handoff that
+    /// held that frame.
+    Viewport {
+        /// The window's layout size, in CSS pixels.
+        size: LayoutSize,
+    },
+}
+
+/// The viewport handoff (D9): whether a viewport change is still waiting for
+/// the drain. Blitz applies a resize to the document's viewport inside its own
+/// window-event handler, without touching the tree, so a frame that resolved
+/// before the drain read the size lays out the old arrangement at the new size
+/// and the corrected one appears a frame or two later — the live resize jerk.
+/// The launch copy marks a change queued at the resize site and holds each
+/// `RedrawRequested` frame while one is queued; the drain marks it applied once
+/// the size has reached the tree.
+#[derive(Clone, Debug, Default)]
+pub struct ViewportPending(Rc<Cell<bool>>);
+
+impl ViewportPending {
+    /// A handoff with no change queued.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A viewport change is queued for the drain: the launch copy holds the
+    /// frame until it is applied.
+    pub fn queue(&self) {
+        self.0.set(true);
+    }
+
+    /// The drain applied the queued size to the tree.
+    pub fn applied(&self) {
+        self.0.set(false);
+    }
+
+    /// Whether a queued size has not reached the tree yet.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        self.0.get()
+    }
 }
 
 /// The window channel's sender, cloned by every producer (D4).

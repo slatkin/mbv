@@ -32,6 +32,7 @@ use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
 mod paint;
+mod resize;
 
 /// The pass bound for the idle assertion: a settling effect goes `Pending`
 /// within a few passes; a self-triggering one never does.

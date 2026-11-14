@@ -30,9 +30,13 @@ use dioxus_native::{
 };
 
 use crate::core_thread::CoreInput;
-use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
+use crate::window::channel::{
+    CoreLink, EventSlot, ViewportPending, WindowEvent, WindowEventSender,
+};
 use crate::window::clock::Clock;
-use crate::window::layout::{carries_unresolved_change, frame_carries_change};
+use crate::window::layout::{
+    carries_unresolved_change, frame_carries_change, viewport_layout_size,
+};
 use crate::window::net::{MbvNetProvider, NetLoads};
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
@@ -126,6 +130,21 @@ fn resolve_before_hit_testing(
     true
 }
 
+/// What the launch copy knows about the resize it last saw (D9): the frame the
+/// resize asked for is held exactly once, while the drain has not read the new
+/// size into the tree.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ViewportFrame {
+    /// No resize is waiting for a frame.
+    #[default]
+    Settled,
+    /// A resize landed and no frame has been held since: the next frame is held
+    /// until the drain applies its size.
+    Queued,
+    /// That frame was held: the next one presents.
+    Held,
+}
+
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes
 /// report after the shell has handled them (D9, D10).
@@ -147,6 +166,15 @@ struct MbvApplication {
     /// (D9): Blitz applies the new size in its own handler without touching the
     /// tree, so the frame fact cannot read it from the document.
     viewport_changed: bool,
+    /// The handoff a viewport change travels through (D9): queued at the resize
+    /// site, applied by the drain, and read before each frame, so the frame is
+    /// held while the tree still holds the old size.
+    viewport_pending: ViewportPending,
+    /// What this resize's next frame does (D9): hold it until the drain has
+    /// read the size, or present it. One hold per resize: a drain that somehow
+    /// did not clear the handoff must not spin the loop, so the frame after the
+    /// held one presents whatever the tree holds.
+    viewport_frame: ViewportFrame,
     /// Whether the pre-hit resolve applied a change since the last presented
     /// frame (gap `G-Hit`, D12): that resolve is not a frame, so the next frame
     /// reports the change and the measure re-runs.
@@ -232,8 +260,28 @@ impl ApplicationHandler for MbvApplication {
         );
         if viewport {
             self.viewport_changed = true;
+            self.viewport_pending.queue();
+            self.viewport_frame = ViewportFrame::Queued;
         }
         let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
+        // D9: hold the frame the resize asked for until the drain has read the
+        // new size into the tree. Blitz applies the size to the document's
+        // viewport without touching the tree, so a frame resolved now lays out
+        // the old arrangement at the new size and the correct one appears a
+        // frame or two later — the live resize jerk. The poll below runs the
+        // drain, which writes the size before this copy renders again, and the
+        // redraw it asks for is the first frame at the new size.
+        if redraw
+            && self.viewport_frame == ViewportFrame::Queued
+            && self.viewport_pending.is_pending()
+        {
+            self.viewport_frame = ViewportFrame::Held;
+            self.proxy.send_event(BlitzShellEvent::Poll { window_id });
+            self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+                doc_id: self.doc_id,
+            });
+            return;
+        }
         // Gap `G-Hit`: the hit test runs inside the shell's handler, so the
         // resolve that makes `paint_children` current runs before it.
         if hit_tests(&event) && resolve_before_hit_testing(&self.document, &self.animation) {
@@ -255,7 +303,11 @@ impl ApplicationHandler for MbvApplication {
         };
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
-            let _ = self.events.unbounded_send(WindowEvent::Viewport);
+            // The shell has applied the size to the document's viewport, so the
+            // logical size read here is the one the container lays out against
+            // (D9); the drain writes it through `layout::apply_viewport_size`.
+            let size = viewport_layout_size(self.document.borrow().viewport());
+            let _ = self.events.unbounded_send(WindowEvent::Viewport { size });
         }
         // D10: every presented frame reports its change fact, and the next
         // redraw is requested only while frames are wanted, which paces the
@@ -266,6 +318,7 @@ impl ApplicationHandler for MbvApplication {
         // when the tree or a net answer gives it work.
         if redraw {
             self.viewport_changed = false;
+            self.viewport_frame = ViewportFrame::Settled;
             self.resolved_early = false;
             let _ = self.events.unbounded_send(WindowEvent::Frame { changed });
             if self.clock.frames_wanted() {
@@ -315,6 +368,8 @@ pub fn launch(
     vdom.provide_root_context(Arc::clone(&net_provider));
     vdom.provide_root_context(Arc::clone(&clock));
     vdom.provide_root_context(EventSlot::new(event_receiver));
+    let viewport_pending = ViewportPending::new();
+    vdom.provide_root_context(viewport_pending.clone());
     vdom.provide_root_context(proxy.clone());
 
     let doc = DioxusDocument::new(
@@ -346,6 +401,8 @@ pub fn launch(
         events,
         clock,
         viewport_changed: false,
+        viewport_pending,
+        viewport_frame: ViewportFrame::Settled,
         resolved_early: false,
         loads,
         load_framed: false,
