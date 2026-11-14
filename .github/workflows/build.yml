@@ -31,8 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     # Pin a dated snapshot of the Arch base-devel builder image instead of the
     # floating `base-devel` tag. Arch is rolling, so bump this periodically
-    # (dated archlinux tags are retained ~18 months on Docker Hub) and keep the
-    # base-devel-... literal in the cargo cache key below in sync.
+    # (dated archlinux tags are retained ~18 months on Docker Hub). The image
+    # date, the Arch Linux Archive date in the setup step below, and the
+    # `-ala...` suffix in the cargo cache key must all move together: the image
+    # pin alone does not hold, because `pacman -Syu` otherwise upgrades past it
+    # to the live repos (that is how OpenSSL 4 reached the .deb).
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: write
@@ -46,6 +49,14 @@ jobs:
       # checkout performs a real git clone.
       - name: Update system and install makedeps
         run: |
+          # Pin the package snapshot to the builder image's date. `pacman -Syu`
+          # against the live mirrors upgraded past the image pin and pulled
+          # OpenSSL 4 (libssl.so.4, released 2026-10-24) into a .deb that then
+          # failed to load on Debian 13 (libssl.so.3 only; mbvd exit 127). The
+          # Arch Linux Archive keeps the dated snapshot, so the whole toolchain
+          # stays consistent at OpenSSL 3.6.3. Bump this date with the image.
+          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
+            > /etc/pacman.d/mirrorlist
           pacman_retry() {
             for attempt in 1 2 3; do
               "$@" && return 0
@@ -88,14 +99,16 @@ jobs:
           # for the rustc version and lets this restore run before the first
           # rustc invocation, keeping the toolchain warm. The base-devel-...
           # literal must match the `container:` image above and the
-          # feature-matrix job below; bump it with rust-toolchain.toml.
+          # feature-matrix job below; the `-ala...` suffix is the pinned Arch
+          # Linux Archive date and must match the setup step's mirrorlist pin.
+          # Bump them together with rust-toolchain.toml.
           # NOTE: this step must stay the first thing after checkout. Every
           # cargo/rustc use below (tool installs, fmt, clippy, build) hits the
           # warmed toolchain/registry/target instead of refetching. That is
           # what keeps fmt/clippy at seconds instead of minutes.
-          key: ${{ runner.os }}-cargo-base-devel-20260818.0.575430-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
@@ -314,6 +327,10 @@ jobs:
       # the matching step in `build`).
       - name: Update system and install makedeps
         run: |
+          # Same Arch Linux Archive pin as `build`; keep the date in sync with
+          # the image, the cache key, and the `build` job.
+          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
+            > /etc/pacman.d/mirrorlist
           pacman_retry() {
             for attempt in 1 2 3; do
               "$@" && return 0
@@ -345,10 +362,11 @@ jobs:
           # wins the shared key, and the release build could restore this
           # job's check-only target instead of its own release warmness. Same
           # hashFiles inputs as `build`; the base-devel literal must match the
-          # `container:` image above.
-          key: ${{ runner.os }}-hack-base-devel-20260818.0.575430-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          # `container:` image above, and the `-ala...` suffix the setup
+          # step's mirrorlist pin.
+          key: ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-hack-
+            ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-
 
       - name: Install cargo-hack
         uses: taiki-e/install-action@cargo-hack
@@ -388,6 +406,10 @@ jobs:
       # clone.
       - name: Update system and install makedeps
         run: |
+          # Same Arch Linux Archive pin as `build`; keep the date in sync with
+          # the image, the cache key, and the `build` job.
+          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
+            > /etc/pacman.d/mirrorlist
           pacman_retry() {
             for attempt in 1 2 3; do
               "$@" && return 0
@@ -418,12 +440,13 @@ jobs:
           # or feature-matrix's `hack-` restore-keys prefixes): whichever job
           # saves last would otherwise win a shared key and the wrong
           # warmness. Same hashFiles inputs as `build`; the base-devel
-          # literal must match the `container:` image above.
+          # literal must match the `container:` image above, and the `-ala...`
+          # suffix the setup step's mirrorlist pin.
           key: >-
-            ${{ runner.os }}-gui-base-devel-20260818.0.575430-${{ hashFiles(
+            ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-${{ hashFiles(
             'rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-gui-
+            ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
