@@ -82,6 +82,60 @@ fn a_digit_past_the_carried_tabs_opens_nothing() {
     assert_eq!(facts, ["digit=Handled"]);
 }
 
+/// The Shows content the destination-switch contracts read (design D12): a
+/// frame whose detail paints no Hero, so the walk loses the Hero pane.
+fn shows_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: vec![GuiLibraryTabFrame {
+            position: 1,
+            label: "Music".to_owned(),
+        }],
+        current_tab: None,
+        destination: GuiDestinationList::Shows(GuiShowsList {
+            lib_idx: 0,
+            pills: Vec::new(),
+            collection_names: Vec::new(),
+            loading: false,
+            series: Vec::new(),
+            upcoming_failed: false,
+            rows: Vec::new(),
+        }),
+    }
+}
+
+/// The Shows detail part with no Hero.
+fn shows_detail() -> GuiLibraryDetail {
+    GuiLibraryDetail::Shows(GuiShowsDetail {
+        workspace_loading: false,
+        selected: None,
+        hero: None,
+    })
+}
+
+// A pane the active destination does not paint is not a boundary crossing
+// (`keys.ts`'s `at`): after a destination switch leaves the last
+// destination's pane, Tab walks onto the new destination's list instead of
+// giving the Queue panel Panel focus.
+#[test]
+fn tab_from_a_pane_the_new_destination_does_not_paint_walks_its_list() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(Some(hero())));
+        // Two Tabs: the pill row takes the walk, then the Hero.
+        route(state, facts, "tab1", "Tab", false);
+        route(state, facts, "tab2", "Tab", false);
+        facts.lock().expect("facts").push(ui_facts(state));
+        switch_destination(state, shows_list(), shows_detail());
+        route(state, facts, "tab3", "Tab", false);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    // The Music walk reached the Hero, and the third Tab landed on the Shows
+    // walk's list, not the Queue panel's boundary.
+    assert!(facts[2].contains("pane=Some(Hero)"));
+    assert!(facts[4].contains("pane=Some(List)"));
+    assert_eq!(commands(&rx), []);
+}
+
 // The open filter takes a typed key without preventing its default: the
 // browser types the key, and the core gets none.
 #[test]

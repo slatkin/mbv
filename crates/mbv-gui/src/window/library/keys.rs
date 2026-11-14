@@ -52,19 +52,21 @@ fn take_pane_focus(state: &LibraryState, panel: GuiPanel, step: i32) {
     }
     let ui = state.ui.peek().clone();
     let back = step < 0;
-    let boundary = match (ui.pane, back) {
-        (Some(pane), true) => walk
-            .iter()
-            .position(|walked| *walked == pane)
-            .is_none_or(|at| at == 0),
-        (Some(pane), false) => walk
-            .iter()
-            .position(|walked| *walked == pane)
-            .is_none_or(|at| at == walk.len() - 1),
-        // A pane the walk does not paint: Tab lands the walk's near end, and
-        // Shift+Tab crosses the boundary.
-        (None, true) => true,
-        (None, false) => false,
+    // The pane's place in the walk (`keys.ts`'s `at`): a pane the walk does
+    // not paint has none, so Tab walks from one before the walk's first pane
+    // and Shift+Tab from one past its last — neither is a boundary crossing.
+    let at = match ui
+        .pane
+        .and_then(|pane| walk.iter().position(|walked| *walked == pane))
+    {
+        Some(at) => at,
+        None if back => walk.len(),
+        None => usize::MAX,
+    };
+    let boundary = if back {
+        at == 0
+    } else {
+        at == walk.len().saturating_sub(1)
     };
     if boundary {
         state.link.library(GuiLibraryCommand::TakeQueueFocus);
