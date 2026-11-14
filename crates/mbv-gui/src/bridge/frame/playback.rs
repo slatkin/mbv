@@ -12,13 +12,11 @@ use mbv_surfaces::queue::QueueSurface;
 use mbv_ui_model::media_list::{MediaListRow, MediaSemanticState};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::playback_target::NowPlayingStatus;
-use serde::{Deserialize, Serialize};
 
 use super::theme::GuiRole;
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 /// The Queue playback band's facts for one build.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GuiQueuePlayback {
     /// The now-playing status that the header row shows.
     pub status: GuiNowPlayingStatus,
@@ -85,8 +83,7 @@ pub struct GuiQueuePlayback {
 /// The scrubber's hover preview (design D4): the position a move over the
 /// painted bar carried, resolved to the time and chapter it names, and the
 /// trickplay tile the preview paints (task 6.7).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GuiScrubberHover {
     /// The pointer's fraction along the painted bar.
     pub fraction: f64,
@@ -109,8 +106,7 @@ pub struct GuiScrubberHover {
 /// place in its sheet, the thumbnail's pixel size, and the sheet's image
 /// reference (design D7). The webview loads the sheet from the core's cache
 /// through the `mbv-art` scheme; it makes no other request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiScrubberTile {
     /// The sheet's opaque identity (the item, the thumbnail width, and the
     /// sheet's ordinal).
@@ -132,8 +128,7 @@ pub struct GuiScrubberTile {
 /// One status indicator of the queue band's cluster, mirroring
 /// `mbv_render::indicators::StatusIndicator`: the uppercased label and the
 /// foreground role its text paints in.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiStatusIndicator {
     pub label: String,
     pub role: GuiRole,
@@ -203,8 +198,7 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
 }
 
 /// The track chips' facts, mirroring `TrackChips`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTrackChips {
     /// The video stream's resolved label. `None` for an audio-only item.
     pub video: Option<String>,
@@ -225,8 +219,7 @@ impl From<&TrackChips> for GuiTrackChips {
 }
 
 /// One chip's facts, mirroring `TrackChip`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTrackChip {
     /// The choices, in the player's track order.
     pub choices: Vec<GuiTrackChoice>,
@@ -245,8 +238,7 @@ impl From<&TrackChip> for GuiTrackChip {
 
 /// One chip choice, mirroring `TrackChoice`: the mpv track id a switch
 /// sends, the resolved label, and whether the subtitle track is forced.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTrackChoice {
     pub id: i64,
     pub label: String,
@@ -265,8 +257,7 @@ impl From<&TrackChoice> for GuiTrackChoice {
 
 /// One playback-target choice of the chooser, mirroring
 /// `PlaybackTargetChoice`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTargetChoice {
     /// The stable identity a selection sends.
     pub key: GuiTargetKey,
@@ -289,8 +280,7 @@ impl From<&PlaybackTargetChoice> for GuiTargetChoice {
 /// A playback target's stable identity, mirroring `ChooserTargetKey`: the local
 /// output, the Emby session id, or the cast receiver id. The local output is a
 /// unit kind (`{ "kind": "local" }`) with no id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiTargetKey {
     Local,
     Emby(String),
@@ -331,8 +321,7 @@ impl From<&SessionTargetKey> for GuiTargetKey {
 
 /// One chapter boundary of the active item, mirroring `PlaybackChapter`:
 /// the scrubber's boundary tick and the hover preview's chapter name.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiChapter {
     pub name: String,
     pub start_ticks: i64,
@@ -349,8 +338,7 @@ impl From<&PlaybackChapter> for GuiChapter {
 
 /// One intro or credits mark of the active item, mirroring `SegmentMark`:
 /// the tick bounds the scrubber paints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiSegmentMark {
     pub start_ticks: i64,
     pub end_ticks: i64,
@@ -367,8 +355,7 @@ impl From<SegmentMark> for GuiSegmentMark {
 
 /// One trickplay tile grid of the active item, mirroring `TrickplayGrid`:
 /// the source description the preview's tile fetch reads.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTrickplayGrid {
     /// The thumbnail pixel width this grid answers.
     pub width: u32,
@@ -401,8 +388,7 @@ impl From<&TrickplayGrid> for GuiTrickplayGrid {
 }
 
 /// The now-playing status, mirroring `NowPlayingStatus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiNowPlayingStatus {
     Playing,
     Paused,
@@ -424,8 +410,7 @@ impl From<NowPlayingStatus> for GuiNowPlayingStatus {
 /// the next anchor. The core sends one on a changed fact or a new sample that
 /// drifts past the tolerance; between anchors the window advances the
 /// position itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiPlayhead {
     /// Whether a transport is active, on any target.
     pub active: bool,
@@ -472,8 +457,7 @@ fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
 
 /// Which transport controls are actionable. The fields mirror the Queue
 /// playback projection's `TransportAvailability`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiTransportAvailability {
     pub stop: bool,
     pub next: bool,

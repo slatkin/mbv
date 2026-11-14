@@ -8,7 +8,6 @@
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_msg::MusicTreeAction;
-use serde::{Deserialize, Serialize};
 
 use crate::bridge::frame::playback::{GuiTargetKey, chooser_target_key};
 use crate::bridge::frame::settings::GuiSettingsSection;
@@ -19,12 +18,7 @@ use crate::bridge::keys::{DomKey, neutral_key};
 /// variants and their field names are the wire vocabulary the front end sends;
 /// the translation into [`mbv::GuiSettingsCommand`] is the only place the two
 /// shapes meet.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(
-    tag = "command",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiSettingsCommand {
     /// Open the screen at Services, as the `settings_open` action does, and
     /// change nothing while it is open (design D5's `open`, D11
@@ -115,8 +109,7 @@ pub enum GuiSettingsCommand {
 /// One choice-list kind the `applyChoices` command names (design D5): the
 /// three lists the Settings screen marks. Each projected choice-list row
 /// carries its kind (design D11 *Choice kind*), and the command sends it back.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiChoicesKind {
     HiddenLibraries,
     FeedViewLibraries,
@@ -144,8 +137,7 @@ impl From<GuiChoicesKind> for MultiSelectKind {
 }
 
 /// The playlist operation a playlist command carries (design D5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiPlaylistAction {
     Play,
     Shuffle,

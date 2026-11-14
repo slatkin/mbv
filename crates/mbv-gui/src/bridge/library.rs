@@ -6,18 +6,12 @@
 //! or nothing.
 
 use mbv_queue::QueueItemContentId;
-use serde::{Deserialize, Serialize};
 
 /// One request from the Library panel's window content (design D2). The
 /// variants and their field names are the wire vocabulary the front end
 /// sends; the translation into [`mbv::GuiLibraryCommand`] is the only place
 /// the two shapes meet.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(
-    tag = "command",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiLibraryCommand {
     /// Open the destination at `position`: the tab position the section's
     /// destination tabs carry, where 0 is Home.
@@ -158,8 +152,7 @@ pub enum GuiLibraryCommand {
 /// One Feeds pill (add-gui-library-panel design D12, row 11.1): the merged
 /// Latest view, or one subscription by its URL. The pill row is single-select
 /// and the state pills are dropped.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiFeedPill {
     Latest,
     Subscription(String),
@@ -183,8 +176,7 @@ impl From<&mbv::GuiFeedPill> for GuiFeedPill {
 /// one of the TUI's three state pills, or one show by its stable
 /// `library_item_id`. The pill row is single-select, as the TUI's one-valued
 /// `PillSelection` is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiPodcastPill {
     Latest,
     /// A state pill: the episode's play state the view filters on.
@@ -194,8 +186,7 @@ pub enum GuiPodcastPill {
 
 /// One state pill (design D12, row 10.1), mirroring the TUI's
 /// `AudiobookshelfEpisodeFilter` by name on the wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiPodcastState {
     All,
     Unplayed,
@@ -241,8 +232,7 @@ impl From<&mbv::GuiPodcastPill> for GuiPodcastPill {
 /// One Shows view mode (design D12): the three single-select pills the
 /// Shows pill row paints. The TUI's letter-range buckets are not pills
 /// here — the All series list's letter rail replaces them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiShowsMode {
     Latest,
     Upcoming,
@@ -262,8 +252,7 @@ impl From<GuiShowsMode> for mbv::GuiShowsMode {
 /// One feed-group pill of a feed-view Emby library (add-gui-library-panel
 /// design D12, row 8.1): `New` (the destination Latest view), `All`, or one
 /// root folder by its stable Service id.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiEmbyFeedGroup {
     Latest,
     All,
@@ -274,8 +263,7 @@ pub enum GuiEmbyFeedGroup {
 /// paths resolve, addressed by Service ids and never by a row position.
 /// `Recent` carries the queue item's content id, whose own serde form is
 /// itself (`provider` and `value`).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowId {
     /// A `Continue watching` row's Emby item id.
     Continue(String),

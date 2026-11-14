@@ -35,7 +35,6 @@ mbv-theme = { path = "../mbv-theme" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
-serde = { workspace = true, features = ["derive"] }
 tracing.workspace = true
 
 # The window dependencies (replace-tauri-with-blitz design D2): exact pins on
@@ -91,7 +90,6 @@ mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-emby = { path = "../mbv-emby" }
 mbv-net = { path = "../mbv-net", features = ["test"] }
 rstest.workspace = true
-serde_json.workspace = true
 # The `sections` bench times one core step per fixture (design D12 of
 # `gui-change-driven-sections`); it runs only on a manual `cargo bench`.
 criterion = { workspace = true }

@@ -9,7 +9,6 @@
 //! frame struct are the destination's own.
 
 use mbv::{GuiFeedsHero, GuiFeedsProjection};
-use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
@@ -19,8 +18,7 @@ use crate::bridge::library::GuiFeedPill;
 /// The Feeds destination's list part (add-gui-library-panel design D12, row
 /// 11.1; `gui-change-driven-sections` design D8): the pill row and the active
 /// pill's entry rows, with the load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsList {
     /// The pill row in paint order: Latest, then each configured subscription
     /// by its name.
@@ -39,8 +37,7 @@ pub struct GuiFeedsList {
 
 /// The Feeds destination's detail part (`gui-change-driven-sections` design
 /// D8): the core's selected entry and its Hero.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsDetail {
     /// The core's selected entry (design D2, D12), as the frame painted it: a
     /// select, play, or enqueue command sends it back. The first row is the
@@ -54,8 +51,7 @@ pub struct GuiFeedsDetail {
 /// `hero_content_feed` producer's title and duration behind the subscription
 /// name, and the placeholder artwork's shape. A feed entry has no artwork
 /// source and no overview, so neither rides here.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsHeroFrame {
     /// The hero's title: the entry title.
     pub title: String,

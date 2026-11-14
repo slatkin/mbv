@@ -3,16 +3,17 @@
 //!
 //! Each fixture builds one `CoreThread` over an `mbv` `test`-feature stub,
 //! seeds the stores the fixture names outside the timed loop, and times one
-//! `CoreThread::step` after one input. The batch the step sent is measured
-//! once, outside the timed loop, as its `serde_json` size and reported as
-//! `Throughput::Bytes`. Benches are manual runs, never part of nextest.
+//! `CoreThread::step` after one input. The batch the step sends now crosses the
+//! window channel as a Rust value, so there is no serialized payload size to
+//! report (`replace-tauri-with-blitz` D18). Benches are manual runs, never part
+//! of nextest.
 
 use std::hint::black_box;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
 use criterion::measurement::WallTime;
-use criterion::{BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use mbv::ClientTickHost;
 use mbv::{
     App, stub_app_with_completed_emby_startup_and_contents, stub_app_with_playing_queue,
@@ -112,20 +113,6 @@ impl Harness {
     fn input_then_step(&mut self) -> GuiSectionBatch {
         self.send(CoreInput::Key(KeyEvent::new(TIMED_KEY, KeyModifiers::NONE)));
         self.step()
-    }
-
-    /// The emitted payload's serialized size in bytes at steady state,
-    /// measured outside the timed loop. A library section rides a frame only
-    /// when its content changed, so the step after the seeding carries the
-    /// whole section; the step after that, the one the timed loop repeats,
-    /// carries none of it. The bytes describe the timed unit.
-    fn payload_bytes(&mut self) -> u64 {
-        let _settled = self.input_then_step();
-        let batch = self.input_then_step();
-        let len = serde_json::to_vec(&batch)
-            .expect("the frame serializes")
-            .len();
-        u64::try_from(len).expect("a payload length fits in u64")
     }
 }
 
@@ -320,11 +307,8 @@ fn settings_f2() -> Harness {
     harness
 }
 
-/// Time one fixture: measure its payload once, then time the input-and-step
-/// unit with the payload size as the group's throughput.
+/// Time one fixture's input-and-step unit.
 fn bench_fixture(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, mut harness: Harness) {
-    let bytes = harness.payload_bytes();
-    group.throughput(Throughput::Bytes(bytes));
     group.bench_function(name, |b| {
         b.iter(|| {
             let frame = harness.input_then_step();

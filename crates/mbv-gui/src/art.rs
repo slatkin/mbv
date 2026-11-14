@@ -12,7 +12,6 @@
 use std::fmt;
 use std::fmt::Write as _;
 
-use serde::Serialize;
 
 /// The scheme host the window loads images through (design D7). On Linux,
 /// `WebKitGTK` serves the scheme as `mbv-art://localhost/<path>`.
@@ -24,8 +23,7 @@ pub const PLACEHOLDER_PATH: &str = "placeholder";
 /// The image reference a section DTO carries (design D7): the window paints
 /// `src` as the image's URL, and a `loading` reference paints the loading
 /// fill. `src` is built only by [`art_url`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiArtRef {
     /// The cached image the URL names.
     Image { src: String },

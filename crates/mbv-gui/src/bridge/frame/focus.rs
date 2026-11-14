@@ -5,11 +5,9 @@
 use mbv_surfaces::FocusStack;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, ModalId, OverlayId, PopupId};
-use serde::Serialize;
 
 /// The focused surface and the Panel that holds focus.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFocus {
     /// The surface that holds focus, or `None` when no surface does.
     pub surface: Option<GuiSurface>,
@@ -27,8 +25,7 @@ impl From<&FocusStack> for GuiFocus {
 }
 
 /// A surface that can hold focus, mirroring `ComponentId`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiSurface {
     UiRoot,
     TabPanel,
@@ -62,8 +59,7 @@ impl From<ComponentId> for GuiSurface {
 }
 
 /// A top-level overlay, mirroring `OverlayId`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiOverlay {
     Search,
     Settings,
@@ -87,8 +83,7 @@ impl From<OverlayId> for GuiOverlay {
 }
 
 /// A modal, mirroring `ModalId`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiModal {
     Confirm,
     DaemonLost,
@@ -108,8 +103,7 @@ impl From<ModalId> for GuiModal {
 }
 
 /// A popup, mirroring `PopupId`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiPopup {
     Multiselect,
     LibraryRoutes,
@@ -127,8 +121,7 @@ impl From<PopupId> for GuiPopup {
 }
 
 /// The Panel that holds focus, mirroring `PanelFocus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiPanel {
     Queue,
     Library,

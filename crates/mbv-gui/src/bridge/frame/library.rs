@@ -11,7 +11,6 @@
 //! bumps that section's revision.
 
 use mbv::{GuiArtShape, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab};
-use serde::Serialize;
 
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 
@@ -58,8 +57,7 @@ pub use self::shows::{
 };
 
 /// One destination tab of the top bar (design D2).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiLibraryTabFrame {
     /// The tab position the open-destination command takes, where 0 is Home.
     pub position: usize,
@@ -79,8 +77,7 @@ impl From<GuiLibraryTab> for GuiLibraryTabFrame {
 /// The Library's right-click item menu (the row-menu command): the item the
 /// entries are about, and the TUI menu builder's entries in the builder's
 /// order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiLibraryRowMenuFrame {
     /// The item's stable Service id the command named.
     pub item_id: String,
@@ -93,8 +90,7 @@ pub struct GuiLibraryRowMenuFrame {
 /// entry's index in the shared builder's order — the index a chosen entry
 /// sends back, so a front end that paints only some entries still executes
 /// the one it painted.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicMenuEntryFrame {
     pub label: String,
     pub key_hint: Option<String>,
@@ -140,8 +136,7 @@ impl From<&GuiLibraryArtwork> for GuiArtRef {
 
 /// The Hero artwork's box shape, mirroring `mbv::GuiArtShape` (the artwork
 /// policy's arms).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiArtShapeFrame {
     Landscape,
     Square,

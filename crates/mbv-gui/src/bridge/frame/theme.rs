@@ -17,12 +17,11 @@
 use std::collections::BTreeMap;
 
 use mbv_theme::{Rgb, Role, Surface, surface_colors};
-use serde::Serialize;
 
 /// The active theme: one colour for every role (design D7) and the chrome
 /// fills the front end's shadcn-svelte variables point at. The front end
 /// writes each entry into a CSS custom property on `:root`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTheme {
     /// The colour of each role, keyed by the role's camelCase name.
     pub roles: BTreeMap<GuiRole, GuiRgb>,
@@ -57,7 +56,7 @@ impl GuiTheme {
 /// the window's Panel-focus fact, the way the TUI's
 /// `panel_appearance_focus` picks. The fill tiers the front end aliases
 /// are named in the field docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiChrome {
     /// The app backdrop: `Surface::PlaybackPanel`, which the surface table
     /// fixes at the backdrop in both focus states.
@@ -147,7 +146,7 @@ fn focused_chrome_fill(surface: Surface) -> GuiRgb {
 }
 
 /// An 8-bit RGB colour, mirroring `mbv_theme::Rgb`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiRgb {
     pub r: u8,
     pub g: u8,
@@ -167,8 +166,7 @@ impl From<Rgb> for GuiRgb {
 /// A semantic foreground colour role, mirroring `mbv_theme::Role` variant for
 /// variant. The front end names each CSS custom property after the role's
 /// camelCase name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuiRole {
     TextPrimary,
     TextSecondary,

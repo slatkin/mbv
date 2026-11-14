@@ -4,13 +4,11 @@
 
 use mbv::{FooterPill, QueueFooterProjection, StatusBarProjection};
 use mbv_ui_model::toast::{StatusToast, ToastSeverity};
-use serde::Serialize;
 
 use super::theme::GuiRole;
 
 /// The Queue footer's status pills, mirroring `QueueFooterProjection`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueFooter {
     /// The owner indicator, always present.
     pub owner: GuiFooterPill,
@@ -43,8 +41,7 @@ impl From<&QueueFooterProjection> for GuiQueueFooter {
 /// glyph reaches the front end, which maps each pill's slot to its Lucide
 /// icon), the foreground role it paints in, and whether the text is
 /// emphasised. Mirrors `FooterPill`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFooterPill {
     pub text: String,
     pub role: GuiRole,
@@ -62,8 +59,7 @@ impl From<&FooterPill> for GuiFooterPill {
 }
 
 /// The Status bar's facts for one section value, mirroring `StatusBarProjection`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiStatusBar {
     /// Whether prefix mode is armed. The armed indicator paints only while armed.
     pub prefix_armed: bool,
@@ -81,8 +77,7 @@ impl From<&StatusBarProjection> for GuiStatusBar {
 }
 
 /// A live toast: its text and severity. Mirrors `StatusToast`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiToast {
     pub text: String,
     pub severity: GuiToastSeverity,
@@ -98,8 +93,7 @@ impl From<&StatusToast> for GuiToast {
 }
 
 /// The severity class of a toast, mirroring `ToastSeverity`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiToastSeverity {
     Neutral,
     Success,

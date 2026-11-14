@@ -7,12 +7,10 @@
 //! `QueuePlaybackHitTarget`, and `StatusBarTargetId` names `StatusBarHitTarget`.
 
 use mbv_surfaces::{HitMap, HitRegion};
-use serde::Deserialize;
 
 /// One layout report (design D4). The front end sends it after each paint that
 /// moved a region.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LayoutReport {
     /// The whole visible rows of each list that the front end painted.
     pub lists: Vec<ListRows>,
@@ -24,13 +22,11 @@ pub struct LayoutReport {
     /// carries stay matched to the layout the front end painted; the
     /// panel-state decision itself stays in the front end. A front end that
     /// omits it reads as the zero size.
-    #[serde(default)]
     pub container_size: LayoutSize,
 }
 
 /// A size in logical pixels, as the front end measures the panel container.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LayoutSize {
     /// The painted width in logical pixels.
     pub width: f32,
@@ -39,8 +35,7 @@ pub struct LayoutSize {
 }
 
 /// The whole visible rows of one list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ListRows {
     /// The list that the row count applies to.
     pub list: ListId,
@@ -50,15 +45,13 @@ pub struct ListRows {
 
 /// The lists that report whole visible rows. Only the Queue reports a count
 /// today (`QueueFrameReport::capacity`); a list that reports one adds a variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListId {
     Queue,
 }
 
 /// One painted region and the semantic target a press on it resolves to.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutRegion {
     /// The region's rectangle in logical pixels, relative to the window.
     pub rect: LayoutRect,
@@ -67,8 +60,7 @@ pub struct LayoutRegion {
 
 /// A rectangle in logical pixels. It mirrors `HitRegion`, the rectangle the
 /// `mbv-surfaces` hit map uses.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutRect {
     pub x: f32,
     pub y: f32,
@@ -79,8 +71,7 @@ pub struct LayoutRect {
 /// The semantic target of one painted region: the surface that owns the region
 /// and the target id a press there resolves to. On the wire it is
 /// `{ "surface": ..., "id": ... }`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(tag = "surface", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionTarget {
     /// A Queue region.
     Queue(QueueTargetId),
@@ -129,24 +120,21 @@ impl RegionTarget {
 
 /// The confirm overlay's button targets: one per painted button, by its
 /// index in the overlay's `buttons`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmTargetId {
     Button(usize),
 }
 
 /// The daemon-lost dialog's button targets: one per painted recovery choice,
 /// by its index in the overlay's `buttons`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonLostTargetId {
     Button(usize),
 }
 
 /// The pre-attach screen's button targets (design D9), as the mismatch
 /// state's window paints them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttachTargetId {
     /// The Restart button: the same choice key R makes.
     Restart,
@@ -178,8 +166,7 @@ pub(crate) fn hit_map(regions: &[LayoutRegion]) -> HitMap<RegionTarget> {
 /// The Queue target ids, mirroring `QueueHitTarget` variant for variant, plus
 /// the canvas queue's own row chrome (add-tauri-gui-client row 6.5), which the
 /// TUI paints no counterpart of.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueueTargetId {
     /// A queue row for one stable slot. The number is `QueueSlotId::raw`.
     Slot(u64),
@@ -203,8 +190,7 @@ pub enum QueueTargetId {
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueuePlaybackTargetId {
     /// The play/pause glyph.
     PlayPause,
@@ -243,8 +229,7 @@ pub enum QueuePlaybackTargetId {
 }
 
 /// The Status bar target ids, mirroring `StatusBarHitTarget`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusBarTargetId {
     /// The volume pill.
     VolumePill,

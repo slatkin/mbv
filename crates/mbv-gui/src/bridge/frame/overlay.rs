@@ -8,14 +8,12 @@
 
 use mbv::{GuiOverlayProjection, RowMenuEntryProjection, TrackPopoverChoice};
 use mbv_ui_msg::TrackChipKind;
-use serde::Serialize;
 
 use super::playback::GuiTargetChoice;
 
 /// The open menu or popover the window paints. `None` in the section while no
 /// overlay is open.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiOverlayFrame {
     /// The queue row's menu: the anchor row, the menu cursor, and the
     /// entries, each with the key hint that selects it directly (the
@@ -67,8 +65,7 @@ pub enum GuiOverlayFrame {
 
 /// One button of the carried confirmation modal: the label, the key hint
 /// the pill paints (`"Enter"`, `"Esc"`), and how the canvas paints it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiConfirmButton {
     pub label: String,
     pub keys: String,
@@ -77,8 +74,7 @@ pub struct GuiConfirmButton {
 
 /// How a confirm button paints, mirroring `ConfirmButtonTone` variant for
 /// variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiConfirmButtonTone {
     Affirmative,
     Cancel,
@@ -155,8 +151,7 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
 /// One row-menu entry as the section carries it: the label, the key chord that
 /// selects the entry directly when it has one, and whether it is
 /// destructive.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiRowMenuEntry {
     pub label: String,
     pub key_hint: Option<String>,
@@ -169,7 +164,6 @@ pub struct GuiRowMenuEntry {
     /// in place of the paint order, so a front end that paints only some
     /// entries still names the entry it painted. The queue's entries carry
     /// none, so the paint order stands.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<usize>,
 }
 
@@ -186,8 +180,7 @@ impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
 
 /// Which track chip a popover belongs to, mirroring `TrackChipKind` variant
 /// for variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiTrackChipKind {
     Audio,
     Subtitles,
@@ -205,8 +198,7 @@ impl From<TrackChipKind> for GuiTrackChipKind {
 /// One choice of an open track popover, mirroring `TrackPopoverChoice`: the
 /// mpv track id a choice sends, its label, whether a subtitle track is
 /// forced, and whether it is the track playing now.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTrackPopoverChoice {
     pub id: i64,
     pub label: String,

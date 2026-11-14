@@ -6,13 +6,11 @@
 //! one chord for one physical press.
 
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
-use serde::Deserialize;
 
 /// The DOM `KeyboardEvent` fields that the front end sends with the `key`
 /// command (design D4). The field names follow the DOM and arrive in camelCase,
 /// with the modifier flags flattened into the same object.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomKey {
     /// The logical key value, such as `n`, ` `, `ArrowLeft`, or `F5`.
     pub key: String,
@@ -22,15 +20,13 @@ pub struct DomKey {
     pub meta_key: bool,
     /// Auto-repeat. The neutral vocabulary has no repeat flag, so it is not read.
     pub repeat: bool,
-    #[serde(flatten)]
     pub modifiers: DomModifiers,
 }
 
 /// The neutral modifiers the DOM modifier flags carry: SHIFT, CONTROL, and
 /// ALT. Meta is not here because the neutral set has no bit for it; see
 /// [`DomKey::meta_key`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DomModifiers {
     pub shift_key: bool,
     pub ctrl_key: bool,

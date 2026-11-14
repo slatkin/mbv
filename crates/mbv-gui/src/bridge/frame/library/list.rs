@@ -3,7 +3,6 @@
 //! (its pills, rows or tree, and load facts). The detail part rides
 //! `libraryDetail` (see `detail.rs`).
 
-use serde::Serialize;
 
 use super::{
     GuiAudiobooksList, GuiEmbyList, GuiFeedsList, GuiHomeList, GuiLibraryTabFrame, GuiMusicList,
@@ -12,8 +11,7 @@ use super::{
 
 /// The Library list section (design D8): the destination tabs, the tab the top
 /// bar marks current, and the active destination's list part.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiLibraryList {
     /// The presented destination tabs in catalog order (design D2).
     pub tabs: Vec<GuiLibraryTabFrame>,
@@ -27,8 +25,7 @@ pub struct GuiLibraryList {
 
 /// The active destination's list part (design D8), tagged with the destination
 /// so the window reads one shape per destination.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiDestinationList {
     Music(GuiMusicList),
     Home(GuiHomeList),

@@ -9,7 +9,6 @@ use mbv::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
     GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
-use serde::Serialize;
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame};
@@ -18,8 +17,7 @@ use crate::art::GuiArtRef;
 /// The Shows destination's list part (add-gui-library-panel design D12, the
 /// USER-APPROVED GUI Shows design; `gui-change-driven-sections` design D8): the
 /// view-mode pills, the active mode's rows, and the load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
@@ -46,8 +44,7 @@ pub struct GuiShowsList {
 
 /// The Shows destination's detail part (`gui-change-driven-sections` design
 /// D8): the core's selected row, its Hero, and the Workspace's load fact.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsDetail {
     /// Whether the selected series' detail or the selected season's episodes
     /// fetch has not landed yet (the All series mode only).
@@ -63,8 +60,7 @@ pub struct GuiShowsDetail {
 /// One view mode of the Shows destination's pill row (design D12). The
 /// TUI's letter-range buckets are not pills here — the All series list's
 /// letter rail replaces them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiShowsModeFrame {
     Latest,
     Upcoming,
@@ -83,8 +79,7 @@ impl From<GuiShowsMode> for GuiShowsModeFrame {
 
 /// One view-mode pill of the Shows destination (design D12): single-select,
 /// the selected one the core's active mode.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsPillFrame {
     /// The mode the pill selects: the set-mode command carries it back.
     pub mode: GuiShowsModeFrame,
@@ -99,8 +94,7 @@ pub struct GuiShowsPillFrame {
 
 /// One series node of the All series tree (design D14), the Music artist
 /// node's counterpart: the series row, its rail letter, and its seasons.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsSeriesFrame {
     /// The series' stable Service id: the select command names it, and the
     /// row's each-block key reads it.
@@ -121,8 +115,7 @@ pub struct GuiShowsSeriesFrame {
 /// counterpart: the season row and its episodes, or `null` while that
 /// season's episode load has not landed — an open season then asks the core to
 /// load them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsSeasonFrame {
     /// The season's stable Service id: the select-season command names it.
     pub id: String,
@@ -135,8 +128,7 @@ pub struct GuiShowsSeasonFrame {
 
 /// One row of the Shows list (design D12): a series row in the All series
 /// mode, or a flat episode or premiere row in the Latest and Upcoming modes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsRowFrame {
     /// The row's stable identity (design D2, D12): a command names it, the
     /// frame's `selected` carries it, never a row position.
@@ -154,8 +146,7 @@ pub struct GuiShowsRowFrame {
 
 /// The Hero's facts for the selected row (design D12), with the series
 /// Hero's Workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsHeroFrame {
     /// The hero's title.
     pub title: String,
@@ -183,8 +174,7 @@ pub struct GuiShowsHeroFrame {
 
 /// A series Hero's Workspace (design D12): the season pills and the selected
 /// season's episodes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsWorkspaceFrame {
     /// The season pills in the detail's order.
     pub seasons: Vec<GuiShowsSeasonPillFrame>,
@@ -197,8 +187,7 @@ pub struct GuiShowsWorkspaceFrame {
 }
 
 /// One season pill of a series' Hero (design D12).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsSeasonPillFrame {
     /// The season's stable Service id: the select-season command carries it.
     pub season_id: String,
@@ -209,8 +198,7 @@ pub struct GuiShowsSeasonPillFrame {
 }
 
 /// One episode row of the Hero's Workspace (design D12).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsEpisodeRowFrame {
     /// The episode's stable Service id.
     pub episode_id: String,

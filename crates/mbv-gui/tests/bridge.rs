@@ -6,7 +6,6 @@
 mod bridge {
     mod frame;
     mod keys;
-    mod layout;
     mod pointer;
     mod settings;
     mod theme;

@@ -7,15 +7,13 @@
 //! index), the Hero, and the docs.
 
 use mbv::{GuiEntryRow, GuiPillOption};
-use serde::Serialize;
 
 use super::GuiHomeRowStateFrame;
 
 /// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1): the
 /// shared wire pill frame over the destination's pill DTO `P`. The pill row
 /// is single-select, as the TUI's one-valued `PillSelection` is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPillFrame<P> {
     /// The pill's selection: the set-pill command carries it back.
     pub pill: P,
@@ -49,8 +47,7 @@ where
 /// One row of a pill-scoped destination's entry list (rows 10.1, 11.1). The
 /// identity is the entry's stable Service identity, as one opaque string a
 /// select, play, or enqueue command sends, never a row position.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEntryRowFrame {
     /// The entry's stable identity, as the destination's id encoding writes
     /// it.

@@ -15,7 +15,6 @@ pub mod settings;
 pub mod theme;
 
 use mbv::{PlaybackChapter, QueuePlaybackProjection};
-use serde::Serialize;
 
 use self::playback::{GuiScrubberHover, GuiScrubberTile};
 
@@ -23,8 +22,7 @@ use self::playback::{GuiScrubberHover, GuiScrubberTile};
 /// outcome, with the text `startup::run_local_instance` gives the TUI Client.
 /// The mismatch state's window paints Restart and Quit buttons and answers
 /// key R and key Q; every other state answers nothing.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiAttachState {
     /// The Owner holds the lock but does not accept connections
     /// (`OwnerState::Refuse`).
@@ -94,8 +92,7 @@ fn covering_chapter(
 /// `PanelTogglesProjection`, with the UI-reset counter the window resets its
 /// interaction stores and panel widths on (docs/architecture/gui-client.md).
 /// The counter rides this section so a reset moves the section's revision.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiPanelToggles {
     /// The `z` toggle: the panel collapsed to the rail.
     pub collapsed: bool,
