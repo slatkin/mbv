@@ -2,15 +2,19 @@
 //! `launch_cfg_with_props` from `dioxus-native` 0.8.0-alpha.3, with this
 //! crate's window attributes, the `BlitzShellProxy` as a root context, the
 //! window event handler wrapped for `WindowEvent::Viewport` (D9) and
-//! `WindowEvent::Frame` (D10), no tokio runtime, and the re-measure request the
-//! drain answers after a frame (D12). The pinned crate source is the authority
+//! `WindowEvent::Frame` (D10), no tokio runtime, the re-measure request the
+//! drain answers after a frame (D12), and the resolve that keeps hit testing
+//! off a removed node (gap `G-Hit`). The pinned crate source is the authority
 //! for the copy; the spike's `crates/mbv-native/src/launch.rs` at commit
 //! `2a0510d2a` is a reference.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::time::Instant;
 
-use blitz_dom::Document as _;
+use blitz_dom::{BaseDocument, Document as _};
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
 use blitz_traits::net::NetProvider;
 use dioxus_native::prelude::*;
@@ -56,12 +60,58 @@ fn window_attributes() -> WindowAttributes {
         ))
 }
 
+/// Whether Blitz answers `event` by hit testing (gap `G-Hit`):
+/// `blitz_shell::View::handle_winit_event` resolves each of these through
+/// `BaseDocument::hit`, which walks `Node::paint_children` down to the node
+/// under the point. Every other window event reaches no hit test.
+fn hit_tests(event: &WinitWindowEvent) -> bool {
+    matches!(
+        event,
+        WinitWindowEvent::PointerMoved { .. }
+            | WinitWindowEvent::PointerButton { .. }
+            | WinitWindowEvent::PointerLeft { .. }
+            | WinitWindowEvent::MouseWheel { .. }
+    )
+}
+
+/// Whether the document holds a tree change no resolve has applied yet (gap
+/// `G-Hit`): every mutation inserts damage on the changed node's parent and
+/// flags the ancestors (`Node::mark_damaged`), and a resolve rebuilds the paint
+/// trees of the damaged subtrees and clears both, so the root's flags are the
+/// document's own record of an applied-but-unresolved change.
+fn carries_unresolved_change(document: &BaseDocument) -> bool {
+    let root = document.root_node();
+    root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
+}
+
+/// Resolve the document before an input event reaches hit testing (gap
+/// `G-Hit`): `paint_children` refreshes only at resolve, so between a DOM
+/// change and the next frame it still names the nodes the change removed, and
+/// a hit test over them unwraps a missing node id and panics (blitz-dom
+/// `node.rs`, `Node::hit_inner`). The frame's own resolve follows within a
+/// frame; this one is gated on the document's damage so mouse movement over an
+/// unchanged tree costs one flag read.
+fn resolve_before_hit_testing(document: &Rc<RefCell<BaseDocument>>, animation_start: Instant) {
+    let mut document = document.borrow_mut();
+    if !carries_unresolved_change(&document) {
+        return;
+    }
+    document.resolve(animation_start.elapsed().as_secs_f64());
+}
+
 /// The dioxus-native application with its window event handler wrapped (D5):
 /// every event delegates, and the window events the window half consumes
 /// report after the shell has handled them (D9, D10).
 struct MbvApplication {
     inner: DioxusNativeApplication,
     proxy: BlitzShellProxy,
+    /// The document, shared with the shell's copy (gap `G-Hit`): the launch
+    /// copy resolves it before a hit-testing event.
+    document: Rc<RefCell<BaseDocument>>,
+    /// The animation clock those resolves pass. Blitz-shell times its own
+    /// resolves from the window's first frame; an earlier start only ever puts
+    /// this resolve slightly ahead of the frame that follows it.
+    animation_start: Instant,
     /// The document's id, so the frame hook requests the next redraw (D10).
     doc_id: usize,
     events: WindowEventSender,
@@ -141,6 +191,11 @@ impl ApplicationHandler for MbvApplication {
             WinitWindowEvent::SurfaceResized(_) | WinitWindowEvent::ScaleFactorChanged { .. }
         );
         let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
+        // Gap `G-Hit`: the hit test runs inside the shell's handler, so the
+        // resolve that makes `paint_children` current runs before it.
+        if hit_tests(&event) {
+            resolve_before_hit_testing(&self.document, self.animation_start);
+        }
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
             let _ = self.events.unbounded_send(WindowEvent::Viewport);
@@ -209,6 +264,8 @@ pub fn launch(
         },
     );
     let doc_id = doc.id();
+    let animation_start = Instant::now();
+    let document = Rc::clone(&doc.inner);
     let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
         base_color: None,
         alpha_mode: None,
@@ -221,6 +278,8 @@ pub fn launch(
     let application = MbvApplication {
         inner: application,
         proxy,
+        document,
+        animation_start,
         doc_id,
         events,
         clock,
