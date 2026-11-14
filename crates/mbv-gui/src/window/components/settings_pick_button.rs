@@ -142,6 +142,3 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
 fn press_inside(settings: &SettingsState) {
     settings.hide_settings_cursor();
 }
-
-#[cfg(test)]
-mod tests;

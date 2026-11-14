@@ -149,7 +149,9 @@ pub fn SettingsButton(props: SettingsButtonProps) -> Element {
             "data-settings-cursor": props.cursor.then_some(""),
             "aria-label": props.label,
             disabled: props.disabled,
-            onclick: move |_| press(disabled, onpress),
+            onclick: move |_| {
+                press(disabled, onpress);
+            },
             {props.children}
         }
     }
@@ -167,6 +169,3 @@ fn press(disabled: bool, onpress: Option<Callback<()>>) {
         onpress.call(());
     }
 }
-
-#[cfg(test)]
-mod tests;

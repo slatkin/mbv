@@ -54,7 +54,9 @@ pub fn SettingsSwitch(props: SettingsSwitchProps) -> Element {
             style: "{track}",
             disabled: props.disabled,
             "data-settings-switch": "",
-            onclick: move |_| press(disabled, onpress),
+            onclick: move |_| {
+                press(disabled, onpress);
+            },
             span {
                 "aria-hidden": "true",
                 class: "absolute",
