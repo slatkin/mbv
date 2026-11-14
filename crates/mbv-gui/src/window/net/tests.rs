@@ -16,7 +16,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use futures_channel::mpsc::unbounded;
 
-use super::{ArtEvent, FontLoads, MbvNetProvider};
+use super::{ArtEvent, MbvNetProvider, NetLoads};
 use crate::art::{ArtRequest, ArtResponse};
 use crate::core_thread::CoreInput;
 use crate::window::channel::WindowEvent;
@@ -65,11 +65,7 @@ fn built_document(
     let mut doc = DioxusDocument::new(
         VirtualDom::new(app),
         DocumentConfig {
-            net_provider: Some(Arc::new(MbvNetProvider::new(
-                core,
-                events,
-                FontLoads::new(),
-            ))),
+            net_provider: Some(Arc::new(MbvNetProvider::new(core, events, NetLoads::new()))),
             ..Default::default()
         },
     );
@@ -180,7 +176,7 @@ fn inline_font_face_is_requested_through_the_provider() {
     let (events, _event_receiver) = unbounded();
     let requested = Arc::new(Mutex::new(Vec::new()));
     let provider = Recording {
-        inner: MbvNetProvider::new(core, events, FontLoads::new()),
+        inner: MbvNetProvider::new(core, events, NetLoads::new()),
         requested: Arc::clone(&requested),
     };
     let mut doc = DioxusDocument::new(
@@ -237,7 +233,7 @@ fn built_retry_document() -> RetryFixture {
     let (events, event_receiver) = unbounded();
     let requested = Arc::new(Mutex::new(Vec::new()));
     let provider = Recording {
-        inner: MbvNetProvider::new(core, events, FontLoads::new()),
+        inner: MbvNetProvider::new(core, events, NetLoads::new()),
         requested: Arc::clone(&requested),
     };
     let handle = Rc::new(RefCell::new(None));

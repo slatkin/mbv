@@ -13,6 +13,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc;
 
 use blitz_dom::Document as _;
@@ -25,12 +26,14 @@ use super::{
     element_region, frame_carries_change, note_presented_frame, track_container_size,
     use_layout_reporter,
 };
+use crate::art::ArtResponse;
 use crate::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, QueuePlaybackTargetId, QueueTargetId,
     RegionTarget,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::net::{MbvNetProvider, NetLoads};
 
 /// One region's contribution under a distinct target, so the assertions can
 /// tell the keys apart.
@@ -463,4 +466,160 @@ fn a_settled_window_carries_no_change_and_measures_no_further() {
         }
     );
     assert!(!window.carries_a_change());
+}
+
+/// The art URL the image host's `img` requests.
+const ART_URL: &str = "mbv-art://localhost/card/abc";
+
+/// A PNG `width` by `height`, the bytes an art answer carries.
+fn source_png(width: u32, height: u32) -> Vec<u8> {
+    let image = image::RgbaImage::from_pixel(width, height, image::Rgba([10, 20, 30, 255]));
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(&mut out, image::ImageFormat::Png)
+        .expect("the test source encodes");
+    out.into_inner()
+}
+
+/// The image host's handoff: the epoch the drain bumps and the container signal
+/// the effect writes.
+#[derive(Default)]
+struct ImageHandoff {
+    epoch: Option<LayoutEpoch>,
+    container: Option<Signal<LayoutSize>>,
+}
+
+#[derive(Clone)]
+struct ImageProps {
+    handoff: Rc<RefCell<ImageHandoff>>,
+}
+
+/// The image host: the window's container effect over the window's epoch, and a
+/// box whose height is the `img`'s intrinsic height — the `w-fit` slot's shape
+/// (D7). The image arrives after the mount, so the box starts unmeasured.
+fn image_app(props: ImageProps) -> Element {
+    let ImageProps { handoff } = props;
+    let epoch = use_hook(LayoutEpoch::new);
+    provide_context(epoch);
+    let container: Signal<LayoutSize> = use_signal(LayoutSize::default);
+    let mut mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    track_container_size(mounted, container);
+    let mut handoff = handoff.borrow_mut();
+    handoff.epoch.replace(epoch);
+    handoff.container.replace(container);
+    rsx! {
+        main { style: "width: 100vw; height: 100vh;",
+            div {
+                style: "width: 100%;",
+                onmounted: move |event| mounted.set(Some(event)),
+                img { style: "display: block; width: auto; height: auto;", src: ART_URL }
+            }
+        }
+    }
+}
+
+/// The image host's window: the document, the epoch its drain bumps, the net
+/// answer flag the launch takes, the core channel the art request arrives on,
+/// and the container signal its effect writes.
+struct ImageWindow {
+    doc: DioxusDocument,
+    epoch: LayoutEpoch,
+    loads: NetLoads,
+    core: mpsc::Receiver<CoreInput>,
+    container: Signal<LayoutSize>,
+}
+
+impl ImageWindow {
+    /// The window built and its first frame presented: the frame's resolve
+    /// fetches the image, and the measure that follows reads the box without
+    /// one.
+    fn built() -> Self {
+        let handoff = Rc::new(RefCell::new(ImageHandoff::default()));
+        let (core, core_receiver) = mpsc::channel();
+        let (events, _event_receiver) = futures_channel::mpsc::unbounded();
+        let loads = NetLoads::new();
+        let mut doc = DioxusDocument::new(
+            VirtualDom::new_with_props(
+                image_app,
+                ImageProps {
+                    handoff: Rc::clone(&handoff),
+                },
+            ),
+            DocumentConfig {
+                viewport: Some(Viewport::new(1200, 900, 1.0, ColorScheme::Light)),
+                net_provider: Some(Arc::new(MbvNetProvider::new(core, events, loads.clone()))),
+                ..DocumentConfig::default()
+            },
+        );
+        doc.initial_build();
+        let taken = handoff.borrow_mut();
+        Self {
+            epoch: taken.epoch.expect("the root provided the epoch"),
+            container: taken
+                .container
+                .expect("the root handed the container signal over"),
+            loads,
+            core: core_receiver,
+            doc,
+        }
+    }
+
+    /// One presented frame, as the launch copy runs it: the change fact — the
+    /// document's unresolved change or a net answer — is read before the
+    /// resolve, the resolve applies it, and the frame reports the fact.
+    fn present_frame(&mut self) {
+        let changed = {
+            let document = self.doc.inner.borrow();
+            frame_carries_change(&document, false, false) || self.loads.take()
+        };
+        self.doc.inner.borrow_mut().resolve(0.0);
+        let epoch = self.epoch;
+        self.doc
+            .vdom
+            .in_runtime(move || note_presented_frame(epoch, changed));
+        poll_until_idle(&mut self.doc);
+    }
+
+    /// Answer the one art request with `bytes`, as the core thread's responder
+    /// does: the document's message channel holds the answer and the provider
+    /// notes the arrival.
+    fn answer_art_with(&self, bytes: Vec<u8>) {
+        match self.core.try_recv() {
+            Ok(CoreInput::Art(request)) => (request.reply)(ArtResponse::Found {
+                mime: "image/png",
+                bytes,
+            }),
+            other => panic!("the image load reached the core as an art request: {other:?}"),
+        }
+    }
+
+    /// The container's measured size, read in the runtime.
+    fn measured(&mut self) -> LayoutSize {
+        let container = self.container;
+        self.doc.vdom.in_runtime(move || container.cloned())
+    }
+}
+
+/// Contract (D7, D12): an image that arrives after the mount leaves the box it
+/// sizes measured at the size the image gives it. Blitz applies the image inside
+/// a resolve — it clears the node's layout cache and inserts `ALL_DAMAGE`, then
+/// the same resolve lays out again — so the change fact a frame reads before
+/// that resolve sees nothing; the net answer's own note is what makes the frame
+/// report the change and measure the new layout. Without it the `w-fit` slot
+/// keeps its pre-image rect, and its hit regions with it.
+#[test]
+fn an_image_arrival_leaves_the_box_it_sizes_measured_at_its_size() {
+    let mut window = ImageWindow::built();
+    assert_eq!(window.measured().height, 0.0, "the box holds no image yet");
+
+    window.answer_art_with(source_png(300, 200));
+    window.present_frame();
+
+    assert_eq!(
+        window.measured(),
+        LayoutSize {
+            width: 1200.0,
+            height: 200.0
+        }
+    );
 }

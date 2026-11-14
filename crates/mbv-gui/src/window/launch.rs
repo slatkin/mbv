@@ -33,7 +33,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
 use crate::window::layout::{carries_unresolved_change, frame_carries_change};
-use crate::window::net::{FontLoads, MbvNetProvider};
+use crate::window::net::{MbvNetProvider, NetLoads};
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
@@ -151,30 +151,32 @@ struct MbvApplication {
     /// frame (gap `G-Hit`, D12): that resolve is not a frame, so the next frame
     /// reports the change and the measure re-runs.
     resolved_early: bool,
-    /// The fonts the document has fetched since the last presented frame (D7,
-    /// D12): Blitz registers a font inside a resolve and lays the text out
-    /// again in the same pass, so a font changes measured text with no tree
-    /// change to read before the resolve. The provider sets this, the frame
-    /// takes it, and the loop presents the frame it needs.
-    fonts: FontLoads,
-    /// Whether that frame was already asked for. One ask per pending font keeps
-    /// the idle loop from redrawing again and again until the frame takes it.
-    font_framed: bool,
+    /// The net answers the document has fetched since the last presented frame
+    /// (D7, D12): Blitz applies a font or an image inside a resolve and lays out
+    /// again in the same pass, so both change measured rects with no tree change
+    /// to read before the resolve. The provider sets this, the frame takes it,
+    /// and the loop presents the frame it needs.
+    loads: NetLoads,
+    /// Whether that frame was already asked for. One ask per pending answer
+    /// keeps the idle loop from redrawing again and again until the frame takes
+    /// it.
+    load_framed: bool,
 }
 
 impl MbvApplication {
-    /// Present the frame a font load needs (D12): the font arrives outside any
-    /// frame, and the frame that reports it resolves the re-shaped text and
-    /// bumps the layout epoch. One frame per load; the frame takes the flag.
-    fn present_font_frame(&mut self) {
-        if !self.fonts.pending() {
-            self.font_framed = false;
+    /// Present the frame a net answer needs (D12): the answer arrives outside
+    /// any frame, and the frame that reports it resolves the layout it changed
+    /// and bumps the layout epoch. One frame per answer; the frame takes the
+    /// flag.
+    fn present_load_frame(&mut self) {
+        if !self.loads.pending() {
+            self.load_framed = false;
             return;
         }
-        if self.font_framed {
+        if self.load_framed {
             return;
         }
-        self.font_framed = true;
+        self.load_framed = true;
         self.proxy.send_event(BlitzShellEvent::RequestRedraw {
             doc_id: self.doc_id,
         });
@@ -211,9 +213,9 @@ impl ApplicationHandler for MbvApplication {
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.inner.about_to_wait(event_loop);
-        // The loop is idle: a font that landed since the last frame needs one
-        // more presented frame (D12).
-        self.present_font_frame();
+        // The loop is idle: a net answer that landed since the last frame needs
+        // one more presented frame (D12).
+        self.present_load_frame();
     }
 
     fn window_event(
@@ -242,12 +244,12 @@ impl ApplicationHandler for MbvApplication {
         // the same turn — must not be consumed by this frame, or its own frame
         // would report nothing and no measure would follow the resolve.
         let changed = if redraw {
-            let font_loaded = self.fonts.take();
+            let loads_landed = self.loads.take();
             frame_carries_change(
                 &self.document.borrow(),
                 self.viewport_changed,
                 self.resolved_early,
-            ) || font_loaded
+            ) || loads_landed
         } else {
             false
         };
@@ -300,13 +302,14 @@ pub fn launch(
     // (D7), and the root's context copy lets the document's fetch paths find
     // it, as the original copy's provider context does.
     let vdom = VirtualDom::new(app);
-    // The fonts the document fetches (D7, D12): the provider sets the flag and
-    // this loop presents the frame whose report resolves and measures them.
-    let fonts = FontLoads::new();
+    // The net answers the document fetches (D7, D12): the provider sets the
+    // flag and this loop presents the frame whose report resolves and measures
+    // them.
+    let loads = NetLoads::new();
     let net_provider: Arc<dyn NetProvider> = Arc::new(MbvNetProvider::new(
         core.clone(),
         events.clone(),
-        fonts.clone(),
+        loads.clone(),
     ));
     vdom.provide_root_context(CoreLink::new(core));
     vdom.provide_root_context(Arc::clone(&net_provider));
@@ -344,8 +347,8 @@ pub fn launch(
         clock,
         viewport_changed: false,
         resolved_early: false,
-        fonts,
-        font_framed: false,
+        loads,
+        load_framed: false,
     };
     event_loop
         .run_app(application)
