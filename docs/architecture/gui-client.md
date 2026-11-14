@@ -32,8 +32,10 @@ exits.
 configuration, declares the GUI Client (`declare_gui_client`), runs the Owner
 attach campaign (`src/attach.rs`), and then runs `ClientCore::tick` in a
 loop. The thread waits on a `std::sync::mpsc` channel of `CoreInput` values
-(`Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Wake`, `Sync`, `Close`)
-with a timeout of `CLIENT_IDLE_CADENCE`. The installed `ClientWaker` sends
+(`Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Sync`, `Art`, `Wake`,
+`Close`) with a timeout of `CLIENT_IDLE_CADENCE`. `Art` carries one image load
+that the `mbv-art` scheme raised: an `ArtRequest` with the request path and a
+reply callback that answers it once. The installed `ClientWaker` sends
 `Wake` into the same channel, so Owner events and timers wake the core as
 they wake the TUI. `CoreThread` implements `ClientTickHost` over the slice's
 Surface state; the drains for surfaces the first slice does not present are
@@ -456,7 +458,7 @@ The `align-gui-with-design-canvas` change aligned the queue's paint with the
 canvas and nothing else: a paint-only restyle of the queue's four bands
 with no new command, derivation, key, or contract. The artboards (`Main.dc.html`, `Menus.dc.html`)
 and the change's gap audits, copied into that change's directory under
-`openspec/changes/align-gui-with-design-canvas/`, are the reference for
+`openspec/changes/archive/2026-11-07-align-gui-with-design-canvas/`, are the reference for
 the exact values; this file records what the paint changed, not every
 canvas value.
 
@@ -468,8 +470,8 @@ controls) and the right-aligned status word. A press on the target opens the
 output marked; Esc or a press elsewhere closes it in the core. The artwork
 follows the header with the season-and-episode badge, and the title and
 parent line sit below it: where the TUI composites the title into the
-artwork's top text row with a scrolling marquee, the GUI truncates it with
-CSS ellipsis. The art has no fixed pixel box: the slot sizes at most 24 row
+artwork's top text row with a scrolling marquee, the GUI measures and cuts it with
+`Truncate`. The art has no fixed pixel box: the slot sizes at most 24 row
 units of the cell grid.
 
 The scrubber paints the played fraction, the chapter boundaries, the intro
@@ -482,28 +484,28 @@ The window predicts the playhead between the `playhead` section's anchors
 `GuiPlayhead`: the active fact, the active slot, the position and runtime in
 ticks, and the paused fact — only on a changed fact or a new sample that
 drifted past the one-second tolerance, and it carries no timestamp, because
-the core and the window share no clock. The window stamps each anchor with
-its own `performance.now()` at receipt (`src/window/playhead.rs`, the
-one module the sections' `applyBatch` stamps it through) and derives from it,
-until the next anchor: the predicted position (the anchor's position advanced
-by the elapsed monotonic time while playing, held while paused, clamped into
+the core and the window share no clock. The window stamps each anchor
+with its own monotonic clock at receipt: `apply_batch` (`src/window/app.rs`)
+calls `Playhead::stamp_if_new` (`src/window/playhead.rs`), which reads the clock
+through the `Times` seam. The window derives from that stamp until the next
+anchor: the predicted position (the anchor's position advanced by the elapsed monotonic time while playing, held while paused, clamped into
 the runtime), the played fraction, the elapsed and remaining clocks
-(`formatDurationShort`, the port of the TUI's shared duration formatter), and
-the active item's finish epoch. A `requestAnimationFrame` loop drives the
-prediction only while the anchor is active and not paused, and a `minute`
-store — one `setTimeout` re-armed at each wall-clock minute — moves the
-finish times while playback is paused, with no update from the core. The
-panels read the derived stores: the scrubber's fill and clocks, the
-transport's finish clock (`formatWallClock`, the zero-padded `HH:MM` in the
+(`format_duration_short`, the port of the TUI's shared duration formatter),
+and the active item's finish epoch. The frame clock advances the prediction
+only while the anchor is active and not paused (see *Clocks* above). The
+`minute` counter (`Playhead::minute`) moves the finish times while playback is
+paused, with no update from the core: one timer re-arms at each wall-clock
+minute. The panels read the derived signals: the scrubber's fill and clocks, the
+transport's finish clock (`format_wall_clock`, the zero-padded `HH:MM` in the
 window's local zone), the rail's ring and remaining time, the compact
 strip's progress line, the queue header's and the folded line's finish
-clock — the wall clock at the summary's `tailSecs` past the active item's
+clock — the wall clock at the summary's `tail_secs` past the active item's
 end, with the ` +1d` suffix when the finish lands past the local day, the
 rule `queue_finish_clock` runs in Rust for the TUI — each row's "Ends at"
-clock (the same wall clock at the row's `endsAfterSecs` offset), the active
+clock (the same wall clock at the row's `ends_after_secs` offset), the active
 queue row's progress, and the Audiobooks Workspace's current chapter: the
 chapter row whose `startTicks <= position < endTicks` span holds the
-predicted position while the Hero's book is the frame's `playingBookId`;
+predicted position while the Hero's book is the frame's `playing_book_id`;
 the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
 — never holds one.
 
@@ -696,10 +698,10 @@ The `library` mark (design D3) names the pass. The pass makes one projection
 call per destination, so the three slots share one build, and each slot keeps
 its own compare. A build that matches the slot's last built value sends nothing.
 
-The window keeps one store per section: `libraryList`, `libraryDetail`, and
-`rowMenu` in `src/window/sections.rs`. `applyBatch` writes a store only
+The window keeps one signal per section: `libraryList`, `libraryDetail`, and
+`rowMenu` in `src/window/sections.rs`. `Sections::apply_batch` writes a signal only
 when the batch carries a revision the window does not hold. `src/window/components/library_panel.rs`
-narrows the list and the detail through `libraryPair`
+narrows the list and the detail through `library_pair`
 (`src/window/library/parts.rs`). The pair narrows only when both `kind` tags
 match, so a mismatched pair paints nothing.
 
@@ -1504,7 +1506,7 @@ one handling:
 
 | Gap | Where | Handling |
 | --- | --- | --- |
-| No `text-overflow: ellipsis` | every `truncate` | `src/window/truncate.rs` measures the text and cuts it with `…` |
+| No `text-overflow: ellipsis` | boxes that need an ellipsis | `Truncate` (`src/window/truncate.rs`) measures the text and cuts it with `…` |
 | An animation repaints the whole window | `animate-spin`, `transition` classes | Accepted. They run only while shown. |
 | No `NetHandler` error callback | artwork misses | The net provider sends `ArtEvent::Failed` (`src/window/net.rs`) |
 | Transform painting | the scrubber thumb's `translate` | Accepted. |
@@ -1515,8 +1517,8 @@ one handling:
 
 ## Dependency notes
 
-- `calloop` 0.14.5 enables its `tracing` and `log` features for the whole
-  workspace, so tracing events also reach the `log` crate.
+- `calloop` 0.14.5 depends on `tracing` with `tracing`'s `log` feature, so its
+  tracing events also reach `log` for the whole workspace.
 - `unicode-segmentation` 1.13 is a dependency of `mbv-gui` for the grapheme cut
   of the ellipsis (`src/window/truncate.rs`).
 - `time` and `num-traits` are direct `mbv-gui` dependencies. They were behind the
