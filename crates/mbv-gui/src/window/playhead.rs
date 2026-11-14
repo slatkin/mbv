@@ -259,8 +259,9 @@ impl Playhead {
 
     /// One presented frame (D10): the prediction's monotonic clock moves.
     /// The launch copy sends [`crate::window::channel::WindowEvent::Frame`]
-    /// only while frames are wanted, so this advances only while the anchor
-    /// plays.
+    /// for every presented frame; while paused the prediction still reads the
+    /// anchor's own position, so the extra stamps change nothing it paints,
+    /// and while frames are wanted this advances the prediction.
     pub fn on_frame(&mut self) {
         self.now.set(self.times.now_ms());
     }

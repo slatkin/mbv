@@ -27,6 +27,7 @@ use dioxus_native::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
+use crate::window::layout::RemeasureRequest;
 use crate::window::net::MbvNetProvider;
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
@@ -64,6 +65,34 @@ struct MbvApplication {
     doc_id: usize,
     events: WindowEventSender,
     clock: Arc<dyn Clock>,
+    /// The window's mount-time re-measure requests (D12): a `Truncate` that
+    /// mounted unlaid sets one, and the loop presents the frame the drain's
+    /// frame handler answers it with.
+    remeasure: RemeasureRequest,
+    /// Whether that frame was already asked for. One ask per pending request
+    /// keeps the loop from redrawing again and again while the drain has not
+    /// taken it yet.
+    remeasure_framed: bool,
+}
+
+impl MbvApplication {
+    /// Present the frame a pending re-measure request needs (D12): the frame
+    /// resolves the layout that holds the mounted box, and its
+    /// `WindowEvent::Frame` lets the drain take the request and bump the layout
+    /// epoch. One request, one frame; the flag clears when the drain takes it.
+    fn present_remeasure_frame(&mut self) {
+        if !self.remeasure.pending() {
+            self.remeasure_framed = false;
+            return;
+        }
+        if self.remeasure_framed {
+            return;
+        }
+        self.remeasure_framed = true;
+        self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+            doc_id: self.doc_id,
+        });
+    }
 }
 
 impl ApplicationHandler for MbvApplication {
@@ -93,6 +122,9 @@ impl ApplicationHandler for MbvApplication {
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.inner.about_to_wait(event_loop);
+        // The loop is idle: a re-measure request that landed since the last
+        // frame needs one more presented frame (D12).
+        self.present_remeasure_frame();
     }
 
     fn window_event(
@@ -112,14 +144,20 @@ impl ApplicationHandler for MbvApplication {
         if viewport {
             let _ = self.events.unbounded_send(WindowEvent::Viewport);
         }
-        // D10: while frames are wanted, every presented frame reports and
-        // requests the next redraw, which paces the loop at vsync.
-        if redraw && self.clock.frames_wanted() {
+        // D10: every presented frame reports, and the next redraw is
+        // requested only while frames are wanted, which paces the loop at
+        // vsync. The report itself is never gated: the drain's frame handler
+        // also carries the mount-time re-measure requests (D12), which a
+        // paused window must answer too.
+        if redraw {
             let _ = self.events.unbounded_send(WindowEvent::Frame);
-            self.proxy.send_event(BlitzShellEvent::RequestRedraw {
-                doc_id: self.doc_id,
-            });
+            if self.clock.frames_wanted() {
+                self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+                    doc_id: self.doc_id,
+                });
+            }
         }
+        self.present_remeasure_frame();
     }
 }
 
@@ -155,6 +193,10 @@ pub fn launch(
     vdom.provide_root_context(Arc::clone(&clock));
     vdom.provide_root_context(EventSlot::new(event_receiver));
     vdom.provide_root_context(proxy.clone());
+    // The mount-time re-measure requests (D12): the root component reads it, and
+    // this loop presents the frame the drain answers it with.
+    let remeasure = RemeasureRequest::new();
+    vdom.provide_root_context(remeasure.clone());
 
     let doc = DioxusDocument::new(
         vdom,
@@ -181,6 +223,8 @@ pub fn launch(
         doc_id,
         events,
         clock,
+        remeasure,
+        remeasure_framed: false,
     };
     event_loop
         .run_app(application)

@@ -9,14 +9,17 @@
 //! `ResizeObserver` has no equivalent on Blitz, so the measurement reads the
 //! [`LayoutEpoch`]: a counter that bumps on every fact that can change a
 //! measured rect — a viewport change, a divider drag or reset, a panel state
-//! change, a batch that changes a list's row count, and a batch that repaints
-//! the Library list, detail, or Search rows (whose `Truncate` boxes mount
-//! unmeasured). Each container's effect
+//! change, or a batch that changes a list's row count. A `Truncate` box that
+//! mounts asks for one more bump through [`RemeasureRequest`] (D12): its first
+//! measure can read the layout from before its insertion, so the presented
+//! frame after it bumps the epoch once and re-measures every box. Each
+//! container's effect
 //! reads the epoch and measures its box through `MountedData`'s client rect,
 //! which is already CSS pixels (the taffy layout's viewport is the logical
 //! size) — the unit every threshold and report value names.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use dioxus_native::prelude::*;
 
@@ -42,6 +45,55 @@ impl LayoutEpoch {
     /// One layout fact landed (D9): every measurement effect re-measures.
     pub fn bump(&mut self) {
         *self.0.write() += 1;
+    }
+}
+
+/// The mount-time re-measure request (D12): the window's one flag for a
+/// `Truncate` box whose first measure after mount read a box the layout has
+/// not placed yet.
+///
+/// A `Truncate` measures in a `use_effect`, and blitz-shell's poll runs an
+/// effect before the render resolves the document, so a box mounted this turn
+/// can measure the layout from before its insertion — zero wide — and then
+/// keep its whole text, hard clipped, until a layout fact re-runs it. No
+/// effect can bump the epoch itself: the bump must land after a resolve that
+/// includes the box, and a bump written from an effect that reads the epoch
+/// re-runs that effect forever. So a box asks here instead, and the drain's
+/// presented-frame handler — an event handler, after the frame's resolve, never
+/// an effect or a render body — takes the flag and bumps the epoch once. The
+/// launch copy presents the frame the take needs (D5), because a paused window
+/// asks for no frames of its own.
+///
+/// A plain atomic flag, not a signal: nothing subscribes to it, so a request
+/// re-runs no effect, and reading it outside the runtime is safe.
+#[derive(Clone, Debug, Default)]
+pub struct RemeasureRequest(Arc<AtomicBool>);
+
+impl RemeasureRequest {
+    /// A request with nothing pending.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A box's first measure read an unlaid box (D12): the next presented
+    /// frame bumps the epoch. Repeating a request before it is taken is a
+    /// no-op — one bump serves every box that asked.
+    pub fn request(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Take the pending request, clearing it (D12). The drain calls this once
+    /// per presented frame; `true` means one epoch bump is due.
+    pub fn take(&self) -> bool {
+        self.0.swap(false, Ordering::Relaxed)
+    }
+
+    /// Whether a request is waiting to be taken (D12). The launch copy asks so
+    /// it presents the frame that answers the request; it never clears it.
+    #[must_use]
+    pub fn pending(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
     }
 }
 

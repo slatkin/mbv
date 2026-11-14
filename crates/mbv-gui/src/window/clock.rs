@@ -32,8 +32,8 @@ pub trait Clock: Send + Sync + 'static {
     fn cancel(&self, timer: TimerId);
 
     /// Gate the frame loop (D10): while frames are wanted, the launch copy's
-    /// `RedrawRequested` hook sends [`WindowEvent::Frame`] and requests the
-    /// next redraw.
+    /// `RedrawRequested` hook requests the next redraw, which paces the loop
+    /// at vsync.
     fn want_frames(&self, wanted: bool);
 
     /// Whether frames are currently wanted.

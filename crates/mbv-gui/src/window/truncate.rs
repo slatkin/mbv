@@ -3,8 +3,17 @@
 //! `text-overflow: ellipsis` (gap G1), so mbv measures the text itself over
 //! one process-wide parley context holding the six bundled faces, and writes
 //! a cut text that ends in `…` when the full text does not fit.
+//!
+//! A box mounts unmeasured: its first measure can read the layout from before
+//! its insertion, a zero width, and then keeps its whole text. So that first
+//! measure asks the window for one post-layout re-measure through
+//! [`RemeasureRequest`], and the drain's presented-frame handler bumps the
+//! [`LayoutEpoch`] once — after the frame resolved the box — which re-runs this
+//! box's measure against the layout that holds it.
 
 use std::borrow::Cow;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::{LazyLock, Mutex};
 
 use blitz_dom::decode_font_bytes;
@@ -12,7 +21,7 @@ use dioxus_native::prelude::*;
 use parley::style::{FontFamily, FontWeight, StyleProperty};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::window::layout::LayoutEpoch;
+use crate::window::layout::{LayoutEpoch, RemeasureRequest};
 use crate::window::net::font_bytes;
 
 /// The text style a call site measures (D12): the family, size, weight, and
@@ -187,6 +196,17 @@ pub fn fit_text(text: &str, style: &TextStyle, width: f64) -> String {
     }
 }
 
+/// Whether a `Truncate`'s measure asks for one post-layout re-measure (D12):
+/// only the box's first measure after mount, and only when it read an unlaid
+/// box — a client width of zero or less. Every later measure is the answer the
+/// re-measure gave, so it asks for nothing, and a box the layout genuinely
+/// collapses (a hidden pane) asks once and then settles: one request, one
+/// bump, one re-measure, no request.
+#[must_use]
+pub fn first_measure_needs_remeasure(is_first_measure: bool, client_width: f64) -> bool {
+    is_first_measure && client_width <= 0.0
+}
+
 /// The `Truncate` component (D12): the port of a text box whose Svelte markup
 /// carries the `truncate` class. It renders the box with the call site's
 /// classes plus `truncate` — so a measure that is one frame late still clips
@@ -233,6 +253,14 @@ pub fn Truncate(props: TruncateProps) -> Element {
     // A missing epoch provider never re-measures on a layout change: the
     // full text still paints, and the box's `truncate` class still clips it.
     let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
+    // The mount-time re-measure request (D12): a missing provider means a box
+    // that mounts unlaid keeps its whole text until another layout fact moves,
+    // as a missing epoch does.
+    let remeasure = try_consume_context::<RemeasureRequest>();
+    // Whether this box has measured yet, shared across the effect's runs. A
+    // `Cell`, not a signal: the effect reads and clears it without subscribing
+    // to it, so the mark never re-queues the effect that writes it.
+    let measured: Rc<Cell<bool>> = use_hook(|| Rc::new(Cell::new(false)));
 
     use_effect(use_reactive(
         (&props.text, &props.style),
@@ -242,6 +270,8 @@ pub fn Truncate(props: TruncateProps) -> Element {
             // (D12): a resize, a divider drag, or a panel state change re-measures
             // the box.
             let _epoch = epoch.as_ref().map(Signal::cloned);
+            let measured = Rc::clone(&measured);
+            let request = remeasure.clone();
             spawn(async move {
                 let Some(event) = event else {
                     return;
@@ -251,7 +281,19 @@ pub fn Truncate(props: TruncateProps) -> Element {
                 };
                 // The client rect is already CSS pixels: it reads the taffy
                 // layout, whose viewport is the logical (physical / scale) size.
-                let cut = fit_text(&text, &style, rect.width());
+                let width = rect.width();
+                // A first measure that read an unlaid box asks the drain's
+                // presented-frame handler for one epoch bump (D12), so this box
+                // re-measures the layout that holds it. Only a first measure
+                // asks, so the bump's own re-measure asks for nothing and a
+                // collapsed box cannot cycle.
+                let is_first_measure = !measured.replace(true);
+                if first_measure_needs_remeasure(is_first_measure, width) {
+                    if let Some(request) = request.as_ref() {
+                        request.request();
+                    }
+                }
+                let cut = fit_text(&text, &style, width);
                 // A peek, so the write below cannot re-trigger this effect.
                 if cut != display.peek().clone() {
                     display.set(cut);
