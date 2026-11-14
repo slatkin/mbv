@@ -2,10 +2,9 @@ BINARY     := mbv
 INSTALL_DIR := $(HOME)/.local/bin
 DATA_DIR    := $(HOME)/.local/share/mbv
 CONFIG_DIR  := $(HOME)/.config/mbv
-UI_DIR      := crates/mbv-gui/ui
 TAILWINDCSS ?= tailwindcss
 
-.PHONY: all build uninstall clean gui-css check-code-file-lines test-check-code-file-lines ui-install ui-build ui-check ui-lint ui-test dev dev-release
+.PHONY: all build uninstall clean gui-css check-code-file-lines test-check-code-file-lines dev dev-release
 
 all: build
 
@@ -19,31 +18,16 @@ uninstall:
 clean:
 	cargo clean
 
-ui-install:
-	pnpm -C $(UI_DIR) install --frozen-lockfile
-
-ui-build: ui-install
-	pnpm -C $(UI_DIR) build
-
-ui-check: ui-install
-	pnpm -C $(UI_DIR) check
-
-ui-lint: ui-install
-	pnpm -C $(UI_DIR) lint
-
-ui-test: ui-install
-	pnpm -C $(UI_DIR) test
-
 # The GUI starts its Owner from the sibling `mbv` binary, and the handshake
 # refuses an Owner whose build id differs. `cargo run -p mbv-gui` alone leaves
 # `mbv` stale after a commit, so build both before the window starts.
-dev: ui-build
+dev:
 	cargo build -p mbv -p mbv-gui
 	cargo run -p mbv-gui
 
 # The same as `dev`, with the release profile: an optimized build that maps
 # far less code than the debug binary, for memory and speed checks.
-dev-release: ui-build
+dev-release:
 	cargo build --release -p mbv -p mbv-gui
 	cargo run --release -p mbv-gui
 
