@@ -97,7 +97,8 @@ impl LibraryState {
     /// the state's filter text. No carried Shows content paints no rows. The
     /// rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
-    pub(super) fn shows_rows(&self) -> Arc<[ShowsListRow]> {
+    #[must_use]
+    pub fn shows_rows(&self) -> Arc<[ShowsListRow]> {
         let list = self.sections.library_list.peek();
         let Some(shows) = library_shows_list(list.as_ref()) else {
             return Arc::from([]);

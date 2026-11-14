@@ -45,7 +45,8 @@ impl HomeUiState {
 impl LibraryState {
     /// The painted rows of the carried Home content (design D12), narrowed by
     /// `filter`'s text. No carried Home content paints no rows.
-    pub(super) fn home_rows(&self, filter: &str) -> Arc<[HomeListRow]> {
+    #[must_use]
+    pub fn home_rows(&self, filter: &str) -> Arc<[HomeListRow]> {
         let list = self.sections.library_list.peek();
         let Some(home) = library_home_list(list.as_ref()) else {
             return Arc::from([]);

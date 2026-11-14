@@ -59,7 +59,8 @@ impl LibraryState {
     /// `filter`'s text. No carried book content paints no rows. The rows
     /// borrow the section's carried frame through the memo's revision key —
     /// a keydown copies none of it.
-    pub(super) fn audiobooks_rows(&self, filter: &str) -> Arc<[AudiobooksListRow]> {
+    #[must_use]
+    pub fn audiobooks_rows(&self, filter: &str) -> Arc<[AudiobooksListRow]> {
         let list = self.sections.library_list.peek();
         let Some(audiobooks) = library_audiobooks_list(list.as_ref()) else {
             return Arc::from([]);

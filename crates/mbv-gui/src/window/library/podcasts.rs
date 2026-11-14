@@ -76,7 +76,8 @@ impl LibraryState {
     /// by the state's filter text. No carried Podcasts content paints no rows.
     /// The rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
-    pub(super) fn podcasts_rows(&self) -> Arc<[PodcastsItemRow]> {
+    #[must_use]
+    pub fn podcasts_rows(&self) -> Arc<[PodcastsItemRow]> {
         let list = self.sections.library_list.peek();
         let Some(podcasts) = library_podcasts_list(list.as_ref()) else {
             return Arc::from([]);

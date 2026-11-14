@@ -56,7 +56,8 @@ impl LibraryState {
     /// the state's filter text. No carried Feeds content paints no rows. The
     /// rows borrow the section's carried frame through the memo's revision
     /// key — a keydown copies none of it.
-    pub(super) fn feeds_rows(&self) -> Arc<[FeedsItemRow]> {
+    #[must_use]
+    pub fn feeds_rows(&self) -> Arc<[FeedsItemRow]> {
         let list = self.sections.library_list.peek();
         let Some(feeds) = library_feeds_list(list.as_ref()) else {
             return Arc::from([]);

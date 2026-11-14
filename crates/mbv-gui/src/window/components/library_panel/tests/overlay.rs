@@ -20,8 +20,7 @@ fn the_narrow_overlay_paints_the_hero_and_closes_on_its_backdrop_press() {
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture
-            .presents("[data-library-region=\"heroOverlay\"] [data-panel-child=\"LibraryHero\"]"),
+        fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-hero]"),
         "the overlay paints the Hero"
     );
 
@@ -44,7 +43,7 @@ fn the_wide_hero_pane_paints_the_hero_beside_the_list() {
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture.presents("[data-library-region=\"hero\"] [data-panel-child=\"LibraryHero\"]"),
+        fixture.presents("[data-library-region=\"hero\"] [data-library-hero]"),
         "the Wide pane paints the Hero"
     );
     assert!(

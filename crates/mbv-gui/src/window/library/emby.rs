@@ -58,7 +58,8 @@ impl LibraryState {
     /// mode's rows under their letter headings, or the feed-group mode's flat
     /// rows, narrowed by the state's filter text. No carried Emby content
     /// paints no rows.
-    pub(super) fn emby_rows(&self) -> Arc<[EmbyListRow]> {
+    #[must_use]
+    pub fn emby_rows(&self) -> Arc<[EmbyListRow]> {
         let list = self.sections.library_list.peek();
         let Some(frame) = library_emby_list(list.as_ref()) else {
             return Arc::from([]);

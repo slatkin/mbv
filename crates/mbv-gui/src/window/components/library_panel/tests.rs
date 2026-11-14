@@ -1,12 +1,11 @@
 //! Headless tests of the Library panel (D16): the contracts of
-//! `LibraryPanel.test.ts`. The destination painters themselves (the pill
-//! rows, the lists, the Heroes) land with rows 7.2–7.7, so the mount
-//! contracts assert the placeholder child markers the panel paints in their
-//! places — `data-panel-child` named for the Svelte component that replaces
-//! it — and the rails' own region contracts ride those rows' tests. The
-//! presses are not fireable headlessly: the take-focus and outside-press
-//! rules are the panel's handler functions, tested against the mock core
-//! link, and the backdrop's close is the interaction state's own contract
+//! `LibraryPanel.test.ts`. The destination painters mount for real (the pill
+//! rows since 7.2–7.4, the Heroes since 7.5–7.6, the destination lists since
+//! 7.7), so the mount contracts assert each painter's own root hook, and the
+//! rails' own region contracts ride those rows' tests. The presses are not
+//! fireable headlessly: the take-focus and outside-press rules are the
+//! panel's handler functions, tested against the mock core link, and the
+//! backdrop's close is the interaction state's own contract
 //! (`window/library/state/tests.rs`) driven through the painted overlay's
 //! reaction. The core channel is a mock pair; no test opens a window,
 //! sleeps, or reaches the core.
