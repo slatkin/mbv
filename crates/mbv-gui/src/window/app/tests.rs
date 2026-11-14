@@ -27,6 +27,7 @@ use mbv_config::GuiPanelWidths;
 
 use super::note_panel_ui_reset;
 use crate::bridge::frame::GuiPanelToggles;
+use crate::window::input::f32_from_f64;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
@@ -142,7 +143,8 @@ fn the_ui_reset_effect_settles() {
 /// The root's own markup, in the shape the window paints it: the `style`
 /// element the root renders ([`super::root_style_element`], the cell-unit
 /// rule then the generated stylesheet), then the root `main`, the Queue
-/// row's button with its own class string, and a text line.
+/// row's button with its own class string, a text line, and the divider's
+/// `hover:` fill.
 ///
 /// Ids are the test's own: the window's class strings carry none.
 fn stylesheet_probe() -> Element {
@@ -157,6 +159,10 @@ fn stylesheet_probe() -> Element {
                     class: "flex w-full items-center overflow-hidden text-left whitespace-nowrap",
                     "Ctrl K"
                 }
+            }
+            div { id: "probe-hover",
+                class: "hover:bg-[var(--canvas-border)]",
+                style: "width: 120px; height: 40px;",
             }
         }
     }
@@ -194,6 +200,25 @@ impl Stylesheet {
             .unwrap_or_else(|| panic!("{selector} paints"));
         dom.resolved_style_value(id, property)
     }
+
+    /// Put the pointer over the middle of the element `selector` names and
+    /// restyle, as the window does on a pointer move; returns the element's
+    /// resolved value of `property` under the pointer.
+    fn hovered(&mut self, selector: &str, property: &str) -> String {
+        let mut dom = self.doc.inner.borrow_mut();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        let rect = dom
+            .get_client_bounding_rect(id)
+            .expect("the probe is laid out");
+        let x = f32_from_f64(rect.x + rect.width / 2.0);
+        let y = f32_from_f64(rect.y + rect.height / 2.0);
+        assert!(dom.set_hover_to(x, y), "{selector} takes the hover");
+        dom.resolve(0.0);
+        dom.resolved_style_value(id, property)
+    }
 }
 
 /// Contract (live run of PR 1003): the window's real stylesheet applies. The
@@ -228,5 +253,28 @@ fn the_window_stylesheet_applies_preflight_utilities_and_the_font() {
     assert!(
         font.contains("IBM Plex Sans"),
         "the root font is the bundled sans face: {font}"
+    );
+}
+
+/// Contract (task 11.1, look parity with the Svelte window): a `hover:`
+/// utility paints under the pointer. Blitz builds its Stylo device with empty
+/// pointer capabilities, so Tailwind v4's `@media (hover: hover)` gate never
+/// matched and the utility painted nothing at all; the sheet's own `hover`
+/// variant is the plain `:hover` state, so the same class now answers the
+/// pointer. The divider's hover fill is the window's one hover utility the
+/// tests can drive headlessly (the Table's glow button needs a library
+/// frame).
+#[test]
+fn a_hover_utility_paints_under_the_pointer() {
+    let mut sheet = Stylesheet::built();
+    assert_eq!(
+        sheet.resolved("#probe-hover", "background-color"),
+        "rgba(0, 0, 0, 0)",
+        "the hover fill waits for the pointer"
+    );
+    assert_eq!(
+        sheet.hovered("#probe-hover", "background-color"),
+        "rgb(61, 72, 77)",
+        "the hovered element paints the canvas border"
     );
 }

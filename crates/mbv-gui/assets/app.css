@@ -10,6 +10,15 @@
 @source "../src/window";
 @source not "./vendor";
 
+/* The `hover:` utilities apply on the plain `:hover` state (task 11.1).
+   Tailwind v4 gates its `hover:` variant behind `@media (hover: hover)`, and
+   Blitz builds its Stylo device with empty pointer capabilities
+   (blitz-dom's `stylo_device.rs` passes `PointerCapabilities::default()`), so
+   that query never matches and every `hover:` class would paint nothing. The
+   window runs on a pointer device by definition; this variant makes each
+   `hover:` class emit an ungated `:hover` rule. */
+@custom-variant hover (&:hover);
+
 /* The six Latin faces the binary bundles (D11), served in process through
    the net provider's `mbv-asset` font route (D7). The package CSS of the Tauri
    build resolved these through `@fontsource` relative URLs; the Dioxus window
