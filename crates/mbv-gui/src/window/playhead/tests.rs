@@ -212,6 +212,31 @@ fn while_paused_the_finish_times_move_with_the_injected_wall_clock() {
     assert_eq!(after.finish_secs, before.finish_secs + 120);
 }
 
+/// Regression (8dd4badf0's sibling): a position and runtime above `u32::MAX`
+/// ticks — a 2-hour book — predict unclamped. The u32-bound
+/// `i64_to_f64_saturating` conversion read any item past ~7.15 minutes as
+/// its 7.15-minute tail, so the scrubber's fraction saturated at 1.
+#[test]
+fn a_two_hour_book_predicts_its_real_position_and_fraction() {
+    let Fixture {
+        doc: _doc,
+        playhead,
+        times: _times,
+        clock: _clock,
+    } = built_playhead();
+    let mut playhead = playhead;
+    playhead.stamp(GuiPlayhead {
+        active: true,
+        active_slot: Some(1),
+        position_ticks: 90 * 60 * SECOND,
+        runtime_ticks: 2 * 3600 * SECOND,
+        paused: false,
+    });
+
+    assert_eq!(playhead.position.cloned(), 90.0 * 60.0 * SECOND_F);
+    assert_eq!(playhead.fraction.cloned(), 0.75);
+}
+
 /// A re-sent `playhead` section whose revision the window holds — a `sync`
 /// snapshot's copy — re-stamps nothing, and `reset` drops the anchor (the
 /// port of the sections test's playhead contract).

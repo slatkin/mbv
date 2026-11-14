@@ -400,6 +400,50 @@ fn the_hover_preview_paints_the_trickplay_tile_the_frame_carries() {
     assert!(sprite.contains("height: 72px"), "{sprite}");
 }
 
+/// Regression (8dd4badf0's sibling): a 2-hour book's chapter tick and
+/// credits mark paint at their real bar fractions. The u32-bound
+/// `i64_to_f64_saturating` conversion clamped both the chapter's start and
+/// the runtime to ~7.15 minutes, so every boundary past it painted at 100 %.
+#[test]
+fn a_two_hour_book_paints_its_chapter_and_credits_at_their_real_fractions() {
+    let mut fixture = built();
+    let mut long_book = playing();
+    long_book.chapters = vec![
+        GuiChapter {
+            name: "Opening".to_owned(),
+            start_ticks: 0,
+        },
+        GuiChapter {
+            name: "Half".to_owned(),
+            start_ticks: 90 * 60 * SECOND,
+        },
+    ];
+    long_book.credits_mark = Some(GuiSegmentMark {
+        start_ticks: 60 * 60 * SECOND,
+        end_ticks: 110 * 60 * SECOND,
+    });
+    fixture.set_playback(long_book);
+    fixture.stamp(GuiPlayhead {
+        active: true,
+        active_slot: Some(1),
+        position_ticks: 60 * SECOND,
+        runtime_ticks: 2 * 3600 * SECOND,
+        paused: false,
+    });
+
+    let styles = fixture.styles();
+    let chapter = styles
+        .iter()
+        .find(|style| style.contains("height: 14px"))
+        .expect("the chapter tick paints");
+    assert!(chapter.contains("left: 75%"), "{chapter}");
+    let credits = styles
+        .iter()
+        .find(|style| style.contains("width: 4px"))
+        .expect("the credits mark paints");
+    assert!(credits.contains("left: 50%"), "{credits}");
+}
+
 /// Contract (`QueuePlaybackPanel.test.ts`): a sheet still loading paints the
 /// canvas's in-flight box, not a sprite — the placeholder paints only while
 /// the frame carries the tile fact.

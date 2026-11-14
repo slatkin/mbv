@@ -17,7 +17,7 @@ use dioxus_native::prelude::*;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::playback::{GuiChapter, GuiScrubberHover, GuiSegmentMark};
 use crate::bridge::frame::theme::GuiRole;
-use crate::window::playhead::Playhead;
+use crate::window::playhead::{Playhead, ticks_f64};
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
 use crate::window::time::{clamp_ratio, format_wall_clock, minus};
@@ -52,12 +52,7 @@ fn visible_chapters(chapters: &[GuiChapter], runtime: i64) -> Vec<f64> {
     chapters
         .iter()
         .filter(|chapter| chapter.start_ticks > 0 && chapter.start_ticks < runtime)
-        .map(|chapter| {
-            clamp_ratio(
-                mbv_emby_model::i64_to_f64_saturating(chapter.start_ticks),
-                mbv_emby_model::i64_to_f64_saturating(runtime),
-            )
-        })
+        .map(|chapter| clamp_ratio(ticks_f64(chapter.start_ticks), ticks_f64(runtime)))
         .collect()
 }
 
@@ -68,10 +63,7 @@ fn mark_left(mark: Option<&GuiSegmentMark>, runtime: i64) -> Option<f64> {
     if runtime <= 0 {
         return None;
     }
-    Some(clamp_ratio(
-        mbv_emby_model::i64_to_f64_saturating(mark.start_ticks),
-        mbv_emby_model::i64_to_f64_saturating(runtime),
-    ))
+    Some(clamp_ratio(ticks_f64(mark.start_ticks), ticks_f64(runtime)))
 }
 
 /// The hover preview's tile crop (task 6.7): the thumbnail's place in its

@@ -37,6 +37,18 @@ const TICKS_PER_MS: f64 = TICKS_PER_SECOND / 1000.0;
 /// One wall-clock minute, in milliseconds.
 const MINUTE_MS: i64 = 60_000;
 
+/// One tick count as f64, so the fractions and clocks divide without
+/// repeated casts. The i64→f64 cast is exact for |ticks| < 2^53 (about 28.5
+/// years of media at 100 ns per tick), so the tick facts never lose
+/// precision; the u32-bound `mbv_emby_model::i64_to_f64_saturating` clamped
+/// them to ~7.15 minutes (the sibling of 8dd4badf0's chapter-span bug: any
+/// item longer than ~7.15 minutes read as its 7.15-minute tail). The
+/// num-traits i64→f64 cast is always `Some`, so the fallback is unreachable.
+#[must_use]
+pub(crate) fn ticks_f64(ticks: i64) -> f64 {
+    num_traits::cast(ticks).unwrap_or(0.0)
+}
+
 /// The time sources the playhead reads (D10): the monotonic clock the
 /// prediction advances over and the wall clock the finish times read. The
 /// window's instance is [`SystemTimes`]; tests install recorders.
@@ -168,28 +180,18 @@ impl Playhead {
             } else {
                 (now.cloned() - stamp_ms.cloned()).max(0.0)
             };
-            let predicted = mbv_emby_model::i64_to_f64_saturating(value.position_ticks)
-                + elapsed * TICKS_PER_MS;
-            predicted.clamp(
-                0.0,
-                mbv_emby_model::i64_to_f64_saturating(value.runtime_ticks.max(0)),
-            )
+            let predicted = ticks_f64(value.position_ticks) + elapsed * TICKS_PER_MS;
+            predicted.clamp(0.0, ticks_f64(value.runtime_ticks.max(0)))
         });
-        let fraction = Memo::new(move || {
-            clamp_ratio(
-                position.cloned(),
-                mbv_emby_model::i64_to_f64_saturating(runtime.cloned()),
-            )
-        });
+        let fraction =
+            Memo::new(move || clamp_ratio(position.cloned(), ticks_f64(runtime.cloned())));
         let elapsed = Memo::new(move || {
             format_duration_short(mbv_emby_model::saturating_i64_from_f64(
                 (position.cloned() / TICKS_PER_SECOND).floor(),
             ))
         });
         let remaining = Memo::new(move || {
-            let left = (mbv_emby_model::i64_to_f64_saturating(runtime.cloned())
-                - position.cloned())
-            .max(0.0);
+            let left = (ticks_f64(runtime.cloned()) - position.cloned()).max(0.0);
             format_duration_short(mbv_emby_model::saturating_i64_from_f64(
                 (left / TICKS_PER_SECOND).floor(),
             ))
@@ -204,9 +206,7 @@ impl Playhead {
                 return None;
             }
             let remaining_secs = mbv_emby_model::saturating_i64_from_f64(
-                ((mbv_emby_model::i64_to_f64_saturating(value.runtime_ticks) - position.cloned())
-                    / TICKS_PER_SECOND)
-                    .floor(),
+                ((ticks_f64(value.runtime_ticks) - position.cloned()) / TICKS_PER_SECOND).floor(),
             );
             let now_secs = wall.wall_now_ms().div_euclid(1000);
             Some(PlayheadFinish {
