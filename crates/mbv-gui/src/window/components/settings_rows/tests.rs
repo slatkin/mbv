@@ -30,6 +30,7 @@ use crate::window::settings::state::{SettingsPane, SettingsState};
 /// What the root hands the test: the section stores and the Settings store.
 type FixtureHandles = (Sections, SettingsState);
 
+#[derive(Clone)]
 struct FixtureProps {
     sender: Sender<CoreInput>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
@@ -353,9 +354,7 @@ fn the_cursor_paints_on_the_box_it_rests_on() {
     fixture.cursor_at(index);
 
     assert!(
-        fixture.presents(&format!(
-            "[data-settings-checkbox=\"music\"][data-settings-cursor]"
-        )),
+        fixture.presents("[data-settings-checkbox=\"music\"][data-settings-cursor]"),
         "the box under the cursor paints the cursor"
     );
 }
@@ -386,7 +385,7 @@ fn a_press_on_the_toggle_row_sends_activate_and_moves_the_cursor() {
         }],
         "the press sent the row's activate"
     );
-    let ui = fixture.state.ui.peek();
+    let ui = fixture.state.ui.peek().clone();
     assert_eq!(
         ui.pane,
         SettingsPane::Content,

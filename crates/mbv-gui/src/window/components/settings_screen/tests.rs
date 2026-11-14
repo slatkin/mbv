@@ -28,6 +28,7 @@ use crate::window::settings::state::{SettingsPane, SettingsState};
 /// What the root hands the test: the section stores and the Settings store.
 type FixtureHandles = (Sections, SettingsState);
 
+#[derive(Clone)]
 struct FixtureProps {
     sender: Sender<CoreInput>,
     arrangement: GuiArrangement,
@@ -223,7 +224,7 @@ fn a_press_outside_the_menu_closes_it_and_sends_nothing() {
         state.open_pick_menu(
             "subtitleLanguage",
             "English",
-            &["".to_owned(), "English".to_owned()],
+            &[String::new(), "English".to_owned()],
         );
     });
     fixture.poll_until_idle();

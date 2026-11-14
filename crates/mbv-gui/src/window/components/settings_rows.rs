@@ -87,9 +87,9 @@ pub fn SettingsRows() -> Element {
                         {
                             let id = entry_id::setting(&row.key);
                             let row_cursor = cursor_id.as_deref() == Some(id.as_str());
-                            let switch_press = onpress.clone();
-                            let pick_press = onpress.clone();
-                            let cycle_press = onpress.clone();
+                            let switch_press = onpress;
+                            let pick_press = onpress;
+                            let cycle_press = onpress;
                             let switch_id = id.clone();
                             let pick_id = id.clone();
                             let cycle_id = id.clone();
@@ -137,7 +137,7 @@ pub fn SettingsRows() -> Element {
                         style: "gap: 8px;",
                         for row in &action_rows {
                             {
-                                let action_press = onpress.clone();
+                                let action_press = onpress;
                                 let action_id = entry_id::setting(&row.key);
                                 rsx! {
                                     SettingsButton {
@@ -170,7 +170,7 @@ pub fn SettingsRows() -> Element {
                             options,
                             selected,
                             cursor_id: cursor_id.clone(),
-                            onpress: onpress.clone(),
+                            onpress: onpress,
                         }
                     }
                 }
@@ -183,8 +183,7 @@ pub fn SettingsRows() -> Element {
 /// a rows content's own rows, or the Library section's choice rows.
 fn content_rows(content: &GuiSettingsContent) -> &[GuiSettingRow] {
     match content {
-        GuiSettingsContent::Rows { rows } => rows,
-        GuiSettingsContent::Library { rows, .. } => rows,
+        GuiSettingsContent::Rows { rows } | GuiSettingsContent::Library { rows, .. } => rows,
         _ => &[],
     }
 }

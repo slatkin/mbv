@@ -20,7 +20,6 @@ use rstest::rstest;
 
 use super::{SettingsSidebar, back, press_section};
 use crate::bridge::frame::settings::{GuiSettingsContent, GuiSettingsFrame, GuiSettingsSection};
-use crate::bridge::settings::GuiSettingsCommand;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::components::settings_screen::section_wire;
@@ -30,6 +29,7 @@ use crate::window::settings::state::{SettingsPane, SettingsState};
 /// What the root hands the test: the section stores and the Settings store.
 type FixtureHandles = (Sections, SettingsState);
 
+#[derive(Clone)]
 struct FixtureProps {
     sender: Sender<CoreInput>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
@@ -200,7 +200,9 @@ fn a_press_on_a_section_entry_selects_it(
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![GuiSettingsCommand::SelectSection { section }],
+        vec![mbv::GuiSettingsCommand::SelectSection {
+            section: mbv::GuiSettingsSection::from(section),
+        }],
         "the press sent the section's open command"
     );
     let ui = fixture.state.ui.peek();
@@ -267,7 +269,7 @@ fn a_press_on_back_closes_the_screen() {
 
     assert_eq!(
         fixture.settings_commands(),
-        vec![GuiSettingsCommand::Close],
+        vec![mbv::GuiSettingsCommand::Close],
         "the back press closed the screen"
     );
 }

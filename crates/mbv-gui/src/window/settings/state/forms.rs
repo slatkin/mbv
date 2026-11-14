@@ -40,6 +40,18 @@ impl SettingsState {
         });
     }
 
+    /// The feed form's Cancel (`state.ts`'s inline update on the form's
+    /// Cancel button): the form closes and the text-field hold drops with it,
+    /// so a movement key reaches the screen router again — removing the
+    /// focused field fires no usable `focusout` (the U6 review fix).
+    pub fn cancel_feed_form(&self) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.feed_form = None;
+            ui.text_field = None;
+        });
+    }
+
     /// Open the feed form (`state.ts`'s `openFeedForm`): an add (`None`)
     /// starts empty, an edit seeds the subscription's name, URL, and kind
     /// with its URL as the identity.
