@@ -311,3 +311,20 @@ button:disabled {
 		@apply font-sans;
 	}
 }
+
+/* A border with no width paints nothing, and Blitz must not build one either.
+   blitz-paint draws a `border-radius`ed border as one path per edge and splits
+   each corner arc by the border width (`kurbo_css::css_box::start_angle`,
+   `width / border-width`); Tailwind's preflight leaves `border: 0 solid` and
+   the `--border` colour on every element, so a rounded box with no border
+   width asks that split for `0 / 0` and every corner arc comes out NaN. Vello
+   then drops the path, one `A path contains NaN, ignoring it.` line per edge
+   per frame (`vello_common::flatten`), for every rounded element in the
+   window. The width says no border paints; every element here that gives a
+   border a width also names its colour inline, so the preflight colour is the
+   one painting that nothing. Keeping it transparent ends the NaN paths and
+   changes no painted border. This rule sits outside `@layer base` so it wins
+   over the preflight copy inside the layer. */
+* {
+	border-color: transparent;
+}
