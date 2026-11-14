@@ -89,6 +89,7 @@ tracing.workspace = true
 mimalloc.workspace = true
 nix = { workspace = true, features = ["term"] }
 serde_json.workspace = true
+openssl.workspace = true
 
 [dev-dependencies]
 mbv-config = { path = "../mbv-config", features = ["test"] }
@@ -98,7 +99,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["../../LICENSE", "0"]
 extended-description = "Daemon process for mbv media playback. Syncs position with Emby and supports remote control over Emby's websocket API."
-depends = "mpv, libc6, libssl3 | libssl1.1"
+depends = "mpv, libc6"
 section = "video"
 priority = "optional"
 assets = [
