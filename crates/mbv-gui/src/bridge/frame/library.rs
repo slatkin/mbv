@@ -53,7 +53,8 @@ pub use self::podcasts::{GuiPodcastsDetail, GuiPodcastsHeroFrame, GuiPodcastsLis
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
     GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsModeFrame,
-    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeasonPillFrame,
+    GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
 };
 
 /// One destination tab of the top bar (design D2).

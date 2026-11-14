@@ -37,7 +37,12 @@ type Scenario = std::rc::Rc<dyn Fn(&LibraryState, &Facts)>;
 
 /// The root: creates the store once and runs the scenario in one effect.
 fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) -> Element {
-    let state = use_hook(|| LibraryState::new(Sections::new(), CoreLink::new(tx)));
+    let state = use_hook(|| {
+        // The playhead position the Audiobooks Workspace reads: the tests
+        // hold it at 0, which marks no chapter but feeds the resolution.
+        let playhead_position = Memo::new(|| 0.0);
+        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position)
+    });
     use_effect(move || {
         scenario(&state, &facts);
     });

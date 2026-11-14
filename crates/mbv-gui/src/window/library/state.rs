@@ -192,10 +192,30 @@ pub struct LibraryState {
     pub home_ui: Signal<super::home::HomeUiState>,
     /// The Emby list's interaction state (`emby.ts`'s `embyUi`).
     pub emby_ui: Signal<super::emby::EmbyUiState>,
+    /// The Shows list's interaction state (`shows.ts`'s `showsUi`).
+    pub shows_ui: Signal<super::shows::ShowsUiState>,
+    /// The Shows Hero's Workspace cursor (`shows-workspace.ts`'s
+    /// `showsWorkspace`).
+    pub shows_workspace: Signal<super::shows_workspace::ShowsWorkspaceState>,
+    /// The Audiobooks list's interaction state (`audiobooks.ts`'s
+    /// `audiobooksUi`).
+    pub audiobooks_ui: Signal<super::audiobooks::AudiobooksUiState>,
+    /// The Audiobooks Hero's Workspace cursor (`audiobooks-workspace.ts`'s
+    /// `audiobooksWorkspace`).
+    pub audiobooks_workspace: Signal<super::audiobooks_workspace::AudiobooksWorkspaceState>,
     /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
     pub home_rows_memo: super::home_list::HomeRowsMemo,
     /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
     pub emby_rows_memo: super::emby_list::EmbyRowsMemo,
+    /// The Shows list's row memo (`shows-list.ts`'s `showsRowsOf`).
+    pub shows_rows_memo: super::shows_list::ShowsRowsMemo,
+    /// The Audiobooks list's row memo (`audiobooks-list.ts`'s
+    /// `audiobooksRowsOf`).
+    pub audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo,
+    /// The playhead's predicted position, in ticks (design D5): the
+    /// Audiobooks chapter Workspace reads it to mark the playing chapter row.
+    /// The playhead's own memo, shared — never a second prediction.
+    pub playhead_position: Memo<f64>,
     /// The section reads the interaction state resolves against
     /// (`parts.ts`'s readers over the `libraryList` and `libraryDetail`
     /// stores).
@@ -222,17 +242,28 @@ impl std::fmt::Debug for LibraryState {
 
 impl LibraryState {
     /// The store a window start builds: the freshly mounted interaction
-    /// state over the current sections and core link.
+    /// state over the current sections, core link, and the playhead's
+    /// predicted position (the Audiobooks chapter Workspace's marked row reads
+    /// it).
     #[must_use]
-    pub fn new(sections: Sections, link: CoreLink) -> Self {
+    pub fn new(sections: Sections, link: CoreLink, playhead_position: Memo<f64>) -> Self {
         Self {
             ui: Signal::new(LibraryUiState::initial()),
             music_scroll: Signal::new(initial_list_scroll()),
             scrolls: super::scroll::LibraryScrolls::new(),
             home_ui: Signal::new(super::home::HomeUiState::initial()),
             emby_ui: Signal::new(super::emby::initial_emby_ui()),
+            shows_ui: Signal::new(super::shows::ShowsUiState::initial()),
+            shows_workspace: Signal::new(super::shows_workspace::ShowsWorkspaceState::initial()),
+            audiobooks_ui: Signal::new(super::audiobooks::AudiobooksUiState::initial()),
+            audiobooks_workspace: Signal::new(
+                super::audiobooks_workspace::AudiobooksWorkspaceState::initial(),
+            ),
             home_rows_memo: super::home_list::HomeRowsMemo::default(),
             emby_rows_memo: super::emby_list::EmbyRowsMemo::default(),
+            shows_rows_memo: super::shows_list::ShowsRowsMemo::default(),
+            audiobooks_rows_memo: super::audiobooks_list::AudiobooksRowsMemo::default(),
+            playhead_position,
             sections,
             link,
             pending_reveal_row: Signal::new(None),

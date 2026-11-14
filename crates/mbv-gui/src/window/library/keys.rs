@@ -83,26 +83,30 @@ fn pills(music: &GuiMusicList) -> &[GuiMusicPillFrame] {
 /// Close the active destination's filter with Esc (design D3, step 2): the
 /// open field is the one list's own, so its close and accept run the
 /// destination's own resolve, in the same order `routePanelKey` hands keys
-/// over. The Shows, Audiobooks, Podcasts, and Feeds resolves arrive with
-/// their ports (rows 6.5 to 6.7); until then their close is the Music one.
+/// over. The Podcasts and Feeds resolves arrive with their ports (rows 6.6
+/// and 6.7); until then their close is the Music one.
 fn close_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
         Some(GuiDestinationList::Emby(_)) => state.close_emby_filter(),
+        Some(GuiDestinationList::Shows(_)) => state.close_shows_filter(),
+        Some(GuiDestinationList::Audiobooks(_)) => state.close_audiobooks_filter(),
         _ => state.close_library_filter(),
     }
 }
 
 /// Accept the active destination's filter with Enter (design D3, step 2):
-/// the field closes and the list keeps its text. The Shows, Audiobooks,
-/// Podcasts, and Feeds resolves arrive with their ports (rows 6.5 to 6.7);
-/// until then their accept is the Music one.
+/// the field closes and the list keeps its text. The Podcasts and Feeds
+/// resolves arrive with their ports (rows 6.6 and 6.7); until then their
+/// accept is the Music one.
 fn accept_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.accept_home_filter(),
         Some(GuiDestinationList::Emby(_)) => state.accept_emby_filter(),
+        Some(GuiDestinationList::Shows(_)) => state.accept_shows_filter(),
+        Some(GuiDestinationList::Audiobooks(_)) => state.accept_audiobooks_filter(),
         _ => state.accept_library_filter(),
     }
 }
@@ -301,10 +305,16 @@ fn route_panel_key(
         Some(GuiDestinationList::Emby(_)) => {
             return super::emby_keys::route_emby_panel_key(state, key);
         }
+        Some(GuiDestinationList::Shows(_)) => {
+            return super::shows_keys::route_shows_panel_key(state, key);
+        }
+        Some(GuiDestinationList::Audiobooks(_)) => {
+            return super::audiobooks_keys::route_audiobooks_panel_key(state, key);
+        }
         Some(GuiDestinationList::Music(_)) => {}
-        // The Shows, Audiobooks, Podcasts, and Feeds keys route with their
-        // ports (rows 6.5 to 6.7); until they land, a key under such a
-        // destination goes to the core's router.
+        // The Podcasts and Feeds keys route with their ports (rows 6.7);
+        // until they land, a key under such a destination goes to the core's
+        // router.
         _ => return KeyOutcome::Core,
     }
     let Some(music) = super::parts::library_music_list(list.as_ref()) else {

@@ -227,7 +227,8 @@ pub fn App() -> Element {
     // The Library panel's interaction store (D15): the port of `state.ts`'s
     // and `scroll.ts`'s module stores as one context value, over the sections
     // and the core link the commands go through.
-    let library = use_hook(|| LibraryState::new(sections.clone(), CoreLink::clone(&link)));
+    let library =
+        use_hook(|| LibraryState::new(sections.clone(), CoreLink::clone(&link), playhead.position));
     provide_context(library.clone());
 
     // The window channel's drain (D4): every event from outside the tree
