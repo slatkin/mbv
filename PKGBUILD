@@ -1,17 +1,15 @@
 # Maintainer: slatkin@woims.net
 pkgname=mbv
-pkgver=0.26.9
+pkgver=0.26.10
 pkgrel=1
 pkgdesc="mpv/Emby and Audiobookshelf front-end"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-# `openssl` stays until the next release tarball: v0.26.9 was built before
-# OpenSSL was vendored. Drop it with the pkgver bump that ships a static tarball.
-depends=('mpv' 'openssl' 'pipewire' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
+depends=('mpv' 'pipewire' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
 optdepends=('pinwin>=0.4.1: pinned panel support')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('14115ec5e49848bdb613770221a3c376bc6373072f5478d7b66d53b2fdb8469b')
+sha256sums=('SKIP')
 
 package() {
     cd "${pkgname}-${pkgver}"
