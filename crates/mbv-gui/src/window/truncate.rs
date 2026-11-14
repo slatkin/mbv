@@ -288,10 +288,10 @@ pub fn Truncate(props: TruncateProps) -> Element {
                 // asks, so the bump's own re-measure asks for nothing and a
                 // collapsed box cannot cycle.
                 let is_first_measure = !measured.replace(true);
-                if first_measure_needs_remeasure(is_first_measure, width) {
-                    if let Some(request) = request.as_ref() {
-                        request.request();
-                    }
+                if first_measure_needs_remeasure(is_first_measure, width)
+                    && let Some(request) = request.as_ref()
+                {
+                    request.request();
                 }
                 let cut = fit_text(&text, &style, width);
                 // A peek, so the write below cannot re-trigger this effect.

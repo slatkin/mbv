@@ -85,6 +85,7 @@ impl RemeasureRequest {
 
     /// Take the pending request, clearing it (D12). The drain calls this once
     /// per presented frame; `true` means one epoch bump is due.
+    #[must_use]
     pub fn take(&self) -> bool {
         self.0.swap(false, Ordering::Relaxed)
     }
