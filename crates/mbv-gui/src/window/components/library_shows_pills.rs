@@ -1,0 +1,88 @@
+//! The Shows destination's mode pills (`replace-tauri-with-blitz` task 7.4,
+//! the port of `LibraryShowsPills.svelte`; add-gui-library-panel design D12,
+//! row 7.1): the view modes New, Upcoming, and All series, single-select —
+//! the core's active mode is always one of them, so a press selects its mode
+//! and the list loads it. The pills paint the core's carried choice, so the
+//! row and the list cannot disagree; a press sends the set-mode command
+//! (design D1). The keys' Space and Enter intent (design D3) becomes the
+//! same command.
+//!
+//! The row itself is the shared `LibraryPillRow` (design D15), so the
+//! canvas's pill form has one owner.
+
+use dioxus_native::prelude::*;
+
+use crate::bridge::frame::library::GuiShowsList;
+use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
+use crate::window::library::shows::shows_mode_key;
+use crate::window::library::state::LibraryState;
+
+/// The props of the Shows pills (the `LibraryShowsPills.svelte` props).
+#[derive(Props, Debug, Clone, PartialEq)]
+pub struct LibraryShowsPillsProps {
+    /// The carried Shows content: the pills and the library index the
+    /// set-mode command names (design D12).
+    pub list: GuiShowsList,
+}
+
+/// The Shows destination's mode pills: the carried mode pills over the
+/// shared pill row, with the keys' pill request turned into the set-mode
+/// command.
+#[component]
+pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
+    let library = consume_context::<LibraryState>();
+
+    // The pills the row paints, keyed by the mode the command names.
+    let pills: Vec<LibraryPill> = props
+        .list
+        .pills
+        .iter()
+        .map(|pill| LibraryPill {
+            key: shows_mode_key(pill.mode).to_owned(),
+            name: pill.name.clone(),
+            selected: pill.selected,
+        })
+        .collect();
+
+    // The pill the keys' focus holds; it paints the accent outline, and only
+    // while the pill row has the pane focus (design D6).
+    let focused = library.shows_ui.cloned().focused_pill;
+
+    // Press a pill: select its mode (design D12).
+    let press_library = library.clone();
+    let carried_pills = props.list.pills.clone();
+    let lib_idx = props.list.lib_idx;
+    let on_press = move |key: String| {
+        if let Some(pill) = carried_pills
+            .iter()
+            .find(|candidate| shows_mode_key(candidate.mode) == key)
+        {
+            press_library.select_shows_pill(lib_idx, pill.mode);
+        }
+    };
+
+    // The keys' pill request becomes the command a press sends (design D12):
+    // the effect reads the intent through the memo, so the consume-write of
+    // the state never re-runs an effect that subscribes to it — the memo
+    // settles at `None`, and the re-run finds nothing to send.
+    let watch_ui = library.shows_ui;
+    let intent = use_memo(move || watch_ui.cloned().pill_select);
+    let apply_library = library.clone();
+    use_effect(move || {
+        if intent.cloned().is_some() {
+            apply_library.apply_shows_pill_select(lib_idx);
+        }
+    });
+
+    rsx! {
+        LibraryPillRow {
+            aria_label: "Shows modes",
+            pills,
+            focused: focused.map(|mode| shows_mode_key(mode).to_owned()),
+            onpress: on_press,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

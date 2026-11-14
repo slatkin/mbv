@@ -16,9 +16,10 @@
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
-//! state of its own. The destination painters themselves (the pill rows, the
-//! lists, the Heroes) land with rows 7.2–7.7: until then each place paints
+//! state of its own. The destination painters themselves (the lists, the
+//! Heroes) land with rows 7.5–7.7: until then each of those places paints
 //! the placeholder child marker task 5.1's `data-panel-child` shape names.
+//! The pill rows mount for real (rows 7.2–7.4).
 //!
 //! A press inside the panel sends the take-focus command (design D4): the
 //! core sets the focus stack and Panel focus together, and the press that
@@ -37,6 +38,11 @@ use crate::bridge::frame::library::GuiMusicMenuEntryFrame;
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
+use crate::window::components::library_emby_pills::LibraryEmbyPills;
+use crate::window::components::library_feeds_pills::LibraryFeedsPills;
+use crate::window::components::library_pills::LibraryPills;
+use crate::window::components::library_podcasts_pills::LibraryPodcastsPills;
+use crate::window::components::library_shows_pills::LibraryShowsPills;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::library_top_bar::LibraryTopBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
@@ -101,24 +107,28 @@ fn placeholder(child: &'static str) -> Element {
     }
 }
 
-/// The active destination's pill row placeholder, with the pills region the
-/// arrangement paints it in. Home and a plain Emby library paint no pill row
-/// at all — the rail replaces it — so their pair names none.
-fn pills_placeholder(pair: Option<LibraryPair>) -> Option<Element> {
-    let child = match pair {
-        Some(LibraryPair::Music(..)) => "LibraryPills",
-        Some(LibraryPair::Shows(..)) => "LibraryShowsPills",
-        Some(LibraryPair::Emby(list, _)) if list.feed_group => "LibraryEmbyPills",
-        Some(LibraryPair::Podcasts(..)) => "LibraryPodcastsPills",
-        Some(LibraryPair::Feeds(..)) => "LibraryFeedsPills",
-        _ => return None,
-    };
-    Some(rsx! {
-        div {
-            "data-library-region": "pills",
-            "data-panel-child": "{child}",
-        }
-    })
+/// The active destination's pill row (design D6, D12), with the pills region
+/// the arrangement paints it in. Home and a plain Emby library paint no pill
+/// row at all — the rail replaces it — so their pair names none.
+fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
+    match pair {
+        Some(LibraryPair::Music(list, _)) => Some(rsx! {
+            LibraryPills { list: list.clone() }
+        }),
+        Some(LibraryPair::Shows(list, _)) => Some(rsx! {
+            LibraryShowsPills { list: list.clone() }
+        }),
+        Some(LibraryPair::Emby(list, _)) if list.feed_group => Some(rsx! {
+            LibraryEmbyPills { list: list.clone() }
+        }),
+        Some(LibraryPair::Podcasts(list, _)) => Some(rsx! {
+            LibraryPodcastsPills { list: list.clone() }
+        }),
+        Some(LibraryPair::Feeds(list, _)) => Some(rsx! {
+            LibraryFeedsPills { list: list.clone() }
+        }),
+        _ => None,
+    }
 }
 
 /// The active destination's list placeholder.
@@ -164,7 +174,8 @@ fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRowMenuEntry> 
 }
 
 /// The Library panel (the Svelte markup, character for character, with the
-/// destination painters as placeholders until rows 7.2–7.7 land).
+/// Hero and destination-list painters as placeholders until rows 7.5–7.7
+/// land).
 #[component]
 pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -261,7 +272,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             // none, so the row is absent on it, not collapsed; a plain Emby
             // library paints none either — its letter rail replaces the
             // TUI's letter-range pill row.
-            if let Some(pills) = pills_placeholder(pair) {
+            if let Some(pills) = pills_painter(pair) {
                 { pills }
             }
             div {

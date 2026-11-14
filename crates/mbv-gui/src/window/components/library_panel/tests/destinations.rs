@@ -1,7 +1,7 @@
 //! The destination-mount contracts (`LibraryPanel.test.ts`): the panel
-//! mounts the active destination's painters in place of the others', with
-//! the pill row, list, and Hero places as placeholder child markers until
-//! rows 7.2-7.7 replace them.
+//! mounts the active destination's painters in place of the others' — the
+//! pill row mounts for real since row 7.4, and the list and Hero places
+//! stay placeholder child markers until rows 7.5-7.7 replace them.
 
 use super::{built, fixtures, seed_idle_status};
 use crate::bridge::frame::library::GuiShowsModeFrame;
@@ -19,11 +19,15 @@ fn the_panel_paints_the_top_bar_the_pill_row_and_the_hero_above_the_list_region(
     let regions = fixture.regions();
     assert_eq!(regions[..3], ["topBar", "pills", "hero"]);
     assert!(regions.contains(&"list".to_owned()));
-    // The pills region and the placeholder marker name one box until row 7.4
-    // replaces the marker with the pill row's painter.
+    // The pill row's painter mounts for real (row 7.4): the pills region is
+    // the pill row's group, not the placeholder marker.
     assert!(
-        fixture.presents("[data-panel-child=\"LibraryPills\"]"),
+        fixture.presents("[data-library-region=\"pills\"][role=\"group\"]"),
         "the Music pill row's painter mounts"
+    );
+    assert!(
+        !fixture.presents("[data-panel-child=\"LibraryPills\"]"),
+        "no placeholder marker paints over the pill row"
     );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 6.2): while
