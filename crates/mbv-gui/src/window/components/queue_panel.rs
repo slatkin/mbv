@@ -83,6 +83,16 @@ const ROW_HEIGHT: f32 = 30.0;
 /// The same row height as a whole-row count unit (the spec's 30 px rows).
 const ROW_HEIGHT_PX: usize = 30;
 
+/// The hovered row's six-dot grip: the icon's size in logical pixels, and the
+/// row offset that centres it in the 30 px row. The centring is a layout
+/// offset, not a `-translate-y-1/2` (task 11.1): Blitz lays out without the
+/// `translate` property and applies it at paint only, so a translated grip
+/// would paint centred while the `rowGrip` region its parent reports — the
+/// region the core's hit map holds — stayed half a grip low. The layout box
+/// is the box the grip paints, so the region is the control.
+const GRIP_SIZE_PX: u16 = 14;
+const GRIP_TOP_PX: f32 = (ROW_HEIGHT - GRIP_SIZE_PX as f32) / 2.0;
+
 /// The empty-queue text, as the TUI's local queue shows it. The frame
 /// carries no queue link, so the remote-queue text cannot be selected; the
 /// first slice attaches only to a local Owner (design D9). The canvas draws
@@ -505,11 +515,11 @@ pub fn QueuePanel() -> Element {
                                                 // stay siblings of the row's button, so no
                                                 // control nests in it.
                                                 span {
-                                                    class: "absolute top-1/2 flex -translate-y-1/2 items-center",
-                                                    style: "left: 4px; width: 14px;",
+                                                    class: "absolute flex items-center",
+                                                    style: "left: 4px; width: {GRIP_SIZE_PX}px; top: {GRIP_TOP_PX}px;",
                                                     "data-grip": "{slot}",
                                                     onmounted: move |event| grip_slot.set(Some((slot, event))),
-                                                    GripVertical { size: 14, color: canvas_var("muted") }
+                                                    GripVertical { size: GRIP_SIZE_PX, color: canvas_var("muted") }
                                                 }
                                                 button {
                                                     "type": "button",

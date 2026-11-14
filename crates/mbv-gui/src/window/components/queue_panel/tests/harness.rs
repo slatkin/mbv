@@ -412,6 +412,17 @@ impl Fixture {
             .collect()
     }
 
+    /// The laid-out client rect of the first node the selector names.
+    pub(super) fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_client_bounding_rect(id)
+            .expect("the node is laid out")
+    }
+
     /// Poll the document until the effects have run and their re-renders
     /// landed (a fixed poll count with a tripwire: never an unbounded wait).
     pub(super) fn poll_until_idle(&mut self) {
@@ -493,11 +504,15 @@ impl Fixture {
 
 /// The layout rules the fixture resolves with, in place of the app
 /// stylesheet a real window loads: the handful of utilities the queue tree
-/// sizes its cells with, so a title that fits its box paints whole. The
-/// styles the row assertions read are the component's inline styles, which
-/// the document applies regardless.
+/// sizes its cells with, and the positioning pair the hovered row's chrome is
+/// placed by, so a title that fits its box paints whole and the chrome's
+/// laid-out box is the box it paints. The styles the row assertions read are
+/// the component's inline styles, which the document applies regardless.
 pub(super) const FIXTURE_CSS: &str = concat!(
     "[data-slot] { width: 100%; }",
+    "button { padding-block: 0; border: 0; }",
+    ".relative { position: relative; }",
+    ".absolute { position: absolute; }",
     ".flex { display: flex; }",
     ".flex-col { flex-direction: column; }",
     ".items-center { align-items: center; }",
