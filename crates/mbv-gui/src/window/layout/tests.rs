@@ -553,7 +553,7 @@ impl ImageWindow {
         );
         doc.initial_build();
         let taken = handoff.borrow_mut();
-        Self {
+        let mut window = Self {
             epoch: taken.epoch.expect("the root provided the epoch"),
             container: taken
                 .container
@@ -561,7 +561,11 @@ impl ImageWindow {
             loads,
             core: core_receiver,
             doc,
-        }
+        };
+        // The first frame: the mount's change is resolved, and that resolve is
+        // the one that asks the provider for the image.
+        window.present_frame();
+        window
     }
 
     /// One presented frame, as the launch copy runs it: the change fact — the
