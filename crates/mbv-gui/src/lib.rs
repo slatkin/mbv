@@ -10,8 +10,7 @@ mod leaves;
 mod painted_choices;
 pub mod sections;
 
-/// The Blitz window half (D3 of `replace-tauri-with-blitz`): the Dioxus tree,
-/// the launch copy, and the window channel. Gated on the `blitz` feature for
-/// the port; the switch (D18) drops the gate.
-#[cfg(feature = "blitz")]
+/// The window half (D3 of `replace-tauri-with-blitz`): the Dioxus tree, the
+/// launch copy, and the window channel. The `blitz` feature and its gate went
+/// at the switch (D18).
 pub mod window;

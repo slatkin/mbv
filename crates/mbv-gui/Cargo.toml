@@ -7,36 +7,12 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Native window Client for mbv, built with Tauri 2."
+description = "Native window Client for mbv, built with Dioxus Native on Blitz."
 readme = "../../README.md"
-
-[features]
-default = ["tauri", "blitz"]
-tauri = ["dep:tauri"]
-# The D2 window dependencies (replace-tauri-with-blitz design D2).
-blitz = [
-  "dep:dioxus-native",
-  "dep:blitz-shell",
-  "dep:blitz-traits",
-  "dep:blitz-dom",
-  "dep:parley",
-  "dep:futures-channel",
-  "dep:futures-util",
-  "dep:image",
-  "dep:unicode-segmentation",
-  "dep:time",
-  "dep:num-traits",
-]
 
 [[bin]]
 name = "mbv-gui"
 path = "src/main.rs"
-required-features = ["tauri"]
-
-[[bin]]
-name = "mbv-gui-blitz"
-path = "src/bin/mbv_gui_blitz.rs"
-required-features = ["blitz"]
 
 [lints]
 workspace = true
@@ -60,12 +36,12 @@ mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
-tauri = { version = "=2.12.5", optional = true }
 tracing.workspace = true
 
-# The D2 window dependencies (replace-tauri-with-blitz design D2): exact pins
-# on the dioxus-native/Blitz stack, with the peer pins D2 records held so
-# Cargo unifies one copy of blitz-dom and parley.
+# The window dependencies (replace-tauri-with-blitz design D2): exact pins on
+# the dioxus-native/Blitz stack, with the peer pins D2 records held so Cargo
+# unifies one copy of blitz-dom and parley. The `blitz` feature is gone at the
+# switch (D18): these are the only window stack.
 #
 # Tokio: `dioxus-native` enables `tokio` (rt) through `dioxus-asset-resolver`'s
 # `native` feature, with no switch; no mbv code uses a tokio API (the
@@ -74,38 +50,35 @@ tracing.workspace = true
 # Licence: Stylo and the other Servo crates in the Blitz stack are MPL-2.0;
 # the packages ship the MPL notice and name the crates.io source as the
 # source offer (design D17).
-dioxus-native = { version = "=0.8.0-alpha.3", optional = true, default-features = false, features = [
+dioxus-native = { version = "=0.8.0-alpha.3", default-features = false, features = [
   "prelude",
   "svg",
   "system-fonts",
   "woff",
   "vello-hybrid",
 ] }
-blitz-shell = { version = "=0.3.0-beta.4", optional = true, default-features = false }
-blitz-traits = { version = "=0.3.0-beta.4", optional = true, default-features = false }
+blitz-shell = { version = "=0.3.0-beta.4", default-features = false }
+blitz-traits = { version = "=0.3.0-beta.4", default-features = false }
 # `decode_font_bytes` for the ellipsis fonts (D12) and the `Document` trait in
 # the headless tests.
-blitz-dom = { version = "=0.3.0-beta.4", optional = true, default-features = false, features = ["woff"] }
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false, features = ["woff"] }
 # The ellipsis measure (D12); the same version as Blitz, so Cargo unifies one copy.
-parley = { version = "=0.12.0", optional = true, default-features = false, features = ["std"] }
+parley = { version = "=0.12.0", default-features = false, features = ["std"] }
 # The window channel (D4).
-futures-channel = { version = "=0.3.34", optional = true }
-futures-util = { version = "=0.3.34", optional = true, default-features = false, features = ["std"] }
+futures-channel = { version = "=0.3.34" }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
 # Art headers for the natural size (D7).
-image = { workspace = true, optional = true, features = ["png", "jpeg", "webp"] }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
 # Grapheme boundaries for the ellipsis cut (D12).
-unicode-segmentation = { version = "1.13", optional = true }
+unicode-segmentation = { version = "1.13" }
 # The Dioxus event data's f64 coordinates and wheel deltas narrow to the wire
 # `DomPointer`'s f32 through num-traits' checked cast (D8), which the blitz
 # tree already carries.
-num-traits = { version = "0.2", optional = true, default-features = false }
+num-traits = { version = "0.2", default-features = false }
 # The playhead's wall clocks and the local zone they paint in (D10): the
 # workspace `time` crate the TUI's projections share, with `local-offset` for
 # the window's own zone.
-time = { workspace = true, optional = true, features = ["local-offset"] }
-
-[build-dependencies]
-tauri-build = "=2.7.4"
+time = { workspace = true, features = ["local-offset"] }
 
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
@@ -117,8 +90,6 @@ mbv-ctrl = { path = "../mbv-ctrl" }
 # process.
 mbv-emby = { path = "../mbv-emby" }
 mbv-net = { path = "../mbv-net", features = ["test"] }
-# The core-thread test seeds the card image cache with a decoded image.
-image = { workspace = true, features = ["png"] }
 rstest.workspace = true
 serde_json.workspace = true
 # The `sections` bench times one core step per fixture (design D12 of
