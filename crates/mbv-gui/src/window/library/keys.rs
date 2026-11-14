@@ -83,8 +83,7 @@ fn pills(music: &GuiMusicList) -> &[GuiMusicPillFrame] {
 /// Close the active destination's filter with Esc (design D3, step 2): the
 /// open field is the one list's own, so its close and accept run the
 /// destination's own resolve, in the same order `routePanelKey` hands keys
-/// over. The Podcasts and Feeds resolves arrive with their ports (rows 6.6
-/// and 6.7); until then their close is the Music one.
+/// over.
 fn close_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
@@ -92,14 +91,14 @@ fn close_active_filter(state: &LibraryState) {
         Some(GuiDestinationList::Emby(_)) => state.close_emby_filter(),
         Some(GuiDestinationList::Shows(_)) => state.close_shows_filter(),
         Some(GuiDestinationList::Audiobooks(_)) => state.close_audiobooks_filter(),
+        Some(GuiDestinationList::Podcasts(_)) => state.close_podcasts_filter(),
+        Some(GuiDestinationList::Feeds(_)) => state.close_feeds_filter(),
         _ => state.close_library_filter(),
     }
 }
 
 /// Accept the active destination's filter with Enter (design D3, step 2):
-/// the field closes and the list keeps its text. The Podcasts and Feeds
-/// resolves arrive with their ports (rows 6.6 and 6.7); until then their
-/// accept is the Music one.
+/// the field closes and the list keeps its text.
 fn accept_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
@@ -107,6 +106,8 @@ fn accept_active_filter(state: &LibraryState) {
         Some(GuiDestinationList::Emby(_)) => state.accept_emby_filter(),
         Some(GuiDestinationList::Shows(_)) => state.accept_shows_filter(),
         Some(GuiDestinationList::Audiobooks(_)) => state.accept_audiobooks_filter(),
+        Some(GuiDestinationList::Podcasts(_)) => state.accept_podcasts_filter(),
+        Some(GuiDestinationList::Feeds(_)) => state.accept_feeds_filter(),
         _ => state.accept_library_filter(),
     }
 }
@@ -287,9 +288,10 @@ fn move_pill_focus(state: &LibraryState, pills: &[GuiMusicPillFrame], step: i32)
 /// Route a key to the active destination's keys (design D3, step 4), with the
 /// pane the window content focused deciding which control the key acts on. On
 /// Home the Home keys route (design D12), on a plain Emby library the Emby
-/// keys (row 8.1). The Shows, Audiobooks, Podcasts, and Feeds routers arrive
-/// with their ports (rows 6.5 to 6.7); until they land, a key under such a
-/// destination goes to the core's router.
+/// keys (row 8.1), and the Shows, Audiobooks, Podcasts, and Feeds keys route
+/// with their ports (rows 6.5 to 6.7). The Search and Settings placeholders
+/// remain (rows 6.8 and 8.1); a key under those destinations goes to the
+/// core's router.
 fn route_panel_key(
     state: &LibraryState,
     key: &DomKey,
@@ -311,11 +313,16 @@ fn route_panel_key(
         Some(GuiDestinationList::Audiobooks(_)) => {
             return super::audiobooks_keys::route_audiobooks_panel_key(state, key);
         }
+        Some(GuiDestinationList::Podcasts(_)) => {
+            return super::podcasts_keys::route_podcasts_panel_key(state, key);
+        }
+        Some(GuiDestinationList::Feeds(_)) => {
+            return super::feeds_keys::route_feeds_panel_key(state, key);
+        }
         Some(GuiDestinationList::Music(_)) => {}
-        // The Podcasts and Feeds keys route with their ports (rows 6.7);
-        // until they land, a key under such a destination goes to the core's
-        // router.
-        _ => return KeyOutcome::Core,
+        // No carried Library list paints no Library keys: the core takes
+        // every one of them (design D2, D10).
+        None => return KeyOutcome::Core,
     }
     let Some(music) = super::parts::library_music_list(list.as_ref()) else {
         return KeyOutcome::Core;

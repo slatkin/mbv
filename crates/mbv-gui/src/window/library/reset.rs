@@ -10,18 +10,20 @@ use dioxus_native::prelude::*;
 
 use super::audiobooks::AudiobooksUiState;
 use super::emby::EmbyUiState;
+use super::feeds::FeedsUiState;
 use super::home::HomeUiState;
+use super::podcasts::PodcastsUiState;
 use super::scroll::initial_list_scroll;
 use super::shows::ShowsUiState;
 use super::state::{LibraryState, LibraryUiState};
 
 /// Reset every Library interaction store to its mounted value, the list scroll
-/// stores included (`reset.ts`'s `resetLibraryInteraction`). The Search,
-/// Podcasts, and Feeds stores reset with their ports (rows 6.7 and 6.8); the
-/// stores this build holds are the Music, Home, Emby, Shows, and Audiobooks
-/// interaction states and their lists' scroll stores. The two Workspaces'
-/// cursors reset with the Hero components' selection changes, as
-/// `resetShowsEpisodeCursor` and `resetAbsChapterCursor` do.
+/// stores included (`reset.ts`'s `resetLibraryInteraction`). The Search store
+/// resets with its port (row 6.8); the stores this build holds are the Music,
+/// Home, Emby, Shows, Audiobooks, Podcasts, and Feeds interaction states and
+/// their lists' scroll stores. The two Workspaces' cursors reset with the Hero
+/// components' selection changes, as `resetShowsEpisodeCursor` and
+/// `resetAbsChapterCursor` do.
 pub fn reset_library_interaction(state: &LibraryState) {
     let mut ui = state.ui;
     ui.set(LibraryUiState::initial());
@@ -35,6 +37,10 @@ pub fn reset_library_interaction(state: &LibraryState) {
     shows_ui.set(ShowsUiState::initial());
     let mut audiobooks_ui = state.audiobooks_ui;
     audiobooks_ui.set(AudiobooksUiState::initial());
+    let mut podcasts_ui = state.podcasts_ui;
+    podcasts_ui.set(PodcastsUiState::initial());
+    let mut feeds_ui = state.feeds_ui;
+    feeds_ui.set(FeedsUiState::initial());
     let mut home_scroll = state.scrolls.home;
     home_scroll.set(initial_list_scroll());
     let mut emby_scroll = state.scrolls.emby;
@@ -43,4 +49,8 @@ pub fn reset_library_interaction(state: &LibraryState) {
     shows_scroll.set(initial_list_scroll());
     let mut audiobooks_scroll = state.scrolls.audiobooks;
     audiobooks_scroll.set(initial_list_scroll());
+    let mut podcasts_scroll = state.scrolls.podcasts;
+    podcasts_scroll.set(initial_list_scroll());
+    let mut feeds_scroll = state.scrolls.feeds;
+    feeds_scroll.set(initial_list_scroll());
 }
