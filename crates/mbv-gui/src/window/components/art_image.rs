@@ -1,7 +1,7 @@
 //! The window's one art painter (`replace-tauri-with-blitz` D7, the port of
 //! `ArtImage.svelte`): every `GuiArtRef` paints as an `img` whose `src` is the
 //! reference's URL. A `loading` reference paints no image, and a missed load
-//! paints the same loading fill — the webview's `onerror` becomes
+//! paints the same loading fill — the webview's error event becomes
 //! [`ArtEvent::Failed`] for the painted URL, and the natural size
 //! (`capToNaturalSize`, `window/natural_size.rs`) comes from
 //! [`ArtEvent::Loaded`] divided by the window's scale factor. The fill then
@@ -270,7 +270,7 @@ fn capped_style(style: &str, cap: Option<NaturalCap>, bounded: bool) -> String {
     style
 }
 
-/// The art painter (D7). The `img` element carries no `onerror` or `onload`
+/// The art painter (D7). The `img` element carries no error or load element
 /// handler (D8): a failure arrives only as [`ArtEvent::Failed`], and a load
 /// only as [`ArtEvent::Loaded`]. The retry keeps the Svelte rules: the fill
 /// paints, the wait starts at 1 s and doubles to the 30 s cap, and when it

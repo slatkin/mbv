@@ -16,8 +16,8 @@ use crate::window::channel::{WindowEvent, WindowEventSender};
 /// The path prefix of a vendored font under `mbv-asset://localhost` (D7).
 const FONT_PREFIX: &str = "/font/";
 
-/// The art route's answer for the window (D7). The webview's `onerror` and
-/// `onload` handlers have no equivalent here (D8): the natural size arrives
+/// The art route's answer for the window (D7). The webview's error and load
+/// element handlers have no equivalent here (D8): the natural size arrives
 /// only as `Loaded`, and a failure only as `Failed`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtEvent {
