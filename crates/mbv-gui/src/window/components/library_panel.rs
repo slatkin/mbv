@@ -16,8 +16,8 @@
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
-//! state of its own. The destination painters themselves (the lists, the
-//! Heroes) land with rows 7.5–7.7: until then each of those places paints
+//! state of its own. The Heroes mount for real (rows 7.5–7.6); the
+//! destination lists land with row 7.7, and until then that one place paints
 //! the placeholder child marker task 5.1's `data-panel-child` shape names.
 //! The pill rows mount for real (rows 7.2–7.4).
 //!
@@ -38,11 +38,16 @@ use crate::bridge::frame::library::GuiMusicMenuEntryFrame;
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
+use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
+use crate::window::components::library_emby_hero::LibraryEmbyHero;
 use crate::window::components::library_emby_pills::LibraryEmbyPills;
+use crate::window::components::library_feeds_hero::LibraryFeedsHero;
 use crate::window::components::library_feeds_pills::LibraryFeedsPills;
 use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_pills::LibraryPills;
+use crate::window::components::library_podcasts_hero::LibraryPodcastsHero;
 use crate::window::components::library_podcasts_pills::LibraryPodcastsPills;
+use crate::window::components::library_shows_hero::LibraryShowsHero;
 use crate::window::components::library_shows_pills::LibraryShowsPills;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::library_top_bar::LibraryTopBar;
@@ -161,25 +166,49 @@ fn list_placeholder(pair: LibraryPair) -> Element {
 }
 
 /// The active destination's Hero painter: the same painter the Wide pane and
-/// the Narrow overlay mount, so the two cannot drift (design D4). The Home
-/// Hero is row 7.5's port; the other destinations' Heroes land with rows
-/// 7.6–7.7, so their placeholders stand until then.
+/// the Narrow overlay mount, so the two cannot drift (design D4). The Home,
+/// Shows, plain Emby, Audiobooks, Podcasts, and Feeds Heroes are rows 7.5
+/// and 7.6's ports; the props carry what each Hero reads — the Emby, Shows,
+/// Audiobooks, and Podcasts commands name the library index, and the Feeds
+/// Hero reads the active pill's rows for its list band.
 fn hero_painter(pair: LibraryPair) -> Element {
     match pair {
         LibraryPair::Home(_, detail) => rsx! {
             LibraryHomeHero { detail: detail.clone() }
         },
-        other => placeholder(match other {
-            LibraryPair::Music(..) => "LibraryHero",
-            // Unreachable while the arm above matched Home, but the match
-            // reads the whole pair, so the arm keeps it exhaustive.
-            LibraryPair::Home(..) => "LibraryHomeHero",
-            LibraryPair::Shows(..) => "LibraryShowsHero",
-            LibraryPair::Emby(..) => "LibraryEmbyHero",
-            LibraryPair::Audiobooks(..) => "LibraryAudiobooksHero",
-            LibraryPair::Podcasts(..) => "LibraryPodcastsHero",
-            LibraryPair::Feeds(..) => "LibraryFeedsHero",
-        }),
+        LibraryPair::Shows(list, detail) => rsx! {
+            LibraryShowsHero {
+                lib_idx: list.lib_idx,
+                detail: detail.clone(),
+            }
+        },
+        LibraryPair::Emby(list, detail) => rsx! {
+            LibraryEmbyHero {
+                lib_idx: list.lib_idx,
+                detail: detail.clone(),
+            }
+        },
+        LibraryPair::Audiobooks(list, detail) => rsx! {
+            LibraryAudiobooksHero {
+                lib_idx: list.lib_idx,
+                detail: detail.clone(),
+            }
+        },
+        LibraryPair::Podcasts(list, detail) => rsx! {
+            LibraryPodcastsHero {
+                lib_idx: list.lib_idx,
+                detail: detail.clone(),
+            }
+        },
+        LibraryPair::Feeds(list, detail) => rsx! {
+            LibraryFeedsHero {
+                rows: list.rows.clone(),
+                detail: detail.clone(),
+            }
+        },
+        // The Music Hero's painter mounts with its own row; its placeholder
+        // stands until then.
+        LibraryPair::Music(..) => placeholder("LibraryHero"),
     }
 }
 
@@ -201,8 +230,8 @@ pub(crate) fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRow
 }
 
 /// The Library panel (the Svelte markup, character for character): the Home
-/// Hero mounts (row 7.5); the other destinations' Heroes and the
-/// destination lists stay placeholders until rows 7.6–7.7 land.
+/// Hero mounts (row 7.5) and the other destinations' Heroes mount (row 7.6);
+/// the destination lists stay placeholders until row 7.7 lands.
 #[component]
 pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let library = consume_context::<LibraryState>();

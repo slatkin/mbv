@@ -1,7 +1,8 @@
 //! The destination-mount contracts (`LibraryPanel.test.ts`): the panel
 //! mounts the active destination's painters in place of the others' — the
-//! pill row mounts for real since row 7.4, and the list and Hero places
-//! stay placeholder child markers until rows 7.5-7.7 replace them.
+//! pill row mounts for real since row 7.4, the Heroes mount since rows
+//! 7.5-7.6, and the list places stay placeholder child markers until row 7.7
+//! replaces them.
 
 use super::{built, fixtures, seed_idle_status};
 use crate::bridge::frame::library::GuiShowsModeFrame;
@@ -82,7 +83,7 @@ fn the_shows_content_mounts_the_mode_pills_the_shows_list_and_the_series_hero() 
         "the Shows list's painter mounts"
     );
     assert!(
-        fixture.presents("[data-library-region=\"hero\"] [data-panel-child=\"LibraryShowsHero\"]"),
+        fixture.presents("[data-library-region=\"hero\"] [data-library-shows-hero]"),
         "the series Hero's painter mounts"
     );
     assert!(
@@ -106,7 +107,7 @@ fn the_upcoming_shows_content_paints_no_hero() {
         "the Shows list's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-panel-child=\"LibraryShowsHero\"]"),
+        !fixture.presents("[data-library-shows-hero]"),
         "no Hero paints"
     );
     assert!(
@@ -130,7 +131,7 @@ fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_de
         "the Emby list's painter mounts"
     );
     assert!(
-        fixture.presents("[data-library-region=\"hero\"] [data-panel-child=\"LibraryEmbyHero\"]"),
+        fixture.presents("[data-library-region=\"hero\"] [data-library-emby-hero]"),
         "the Emby Hero's painter mounts"
     );
     assert!(
@@ -179,9 +180,7 @@ fn the_audiobooks_content_mounts_the_book_list_and_hero_and_none_of_the_other_de
         "the book list's painter mounts"
     );
     assert!(
-        fixture.presents(
-            "[data-library-region=\"hero\"] [data-panel-child=\"LibraryAudiobooksHero\"]"
-        ),
+        fixture.presents("[data-library-region=\"hero\"] [data-library-abs-hero]"),
         "the book Hero's painter mounts"
     );
     assert!(
@@ -211,7 +210,7 @@ fn the_hero_less_audiobooks_content_paints_its_list_and_no_hero() {
         "the book list's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-panel-child=\"LibraryAudiobooksHero\"]"),
+        !fixture.presents("[data-library-abs-hero]"),
         "no Hero paints"
     );
     assert!(
@@ -239,7 +238,7 @@ fn the_feeds_content_mounts_the_feeds_pills_list_and_hero_and_none_of_the_other_
         "the Feeds list's painter mounts"
     );
     assert!(
-        fixture.presents("[data-library-region=\"hero\"] [data-panel-child=\"LibraryFeedsHero\"]"),
+        fixture.presents("[data-library-region=\"hero\"] [data-library-feeds-hero]"),
         "the entry Hero's painter mounts"
     );
     assert!(
@@ -265,7 +264,7 @@ fn the_hero_less_feeds_content_paints_its_list_and_no_hero() {
         "the Feeds list's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-panel-child=\"LibraryFeedsHero\"]"),
+        !fixture.presents("[data-library-feeds-hero]"),
         "no Hero paints"
     );
     assert!(

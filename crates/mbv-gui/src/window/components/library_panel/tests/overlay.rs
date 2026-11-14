@@ -98,9 +98,7 @@ fn the_narrow_overlay_paints_the_audiobooks_hero_and_closes_on_its_backdrop_pres
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture.presents(
-            "[data-library-region=\"heroOverlay\"] [data-panel-child=\"LibraryAudiobooksHero\"]"
-        ),
+        fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-abs-hero]"),
         "the overlay paints the book Hero"
     );
 

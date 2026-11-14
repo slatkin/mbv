@@ -1,0 +1,191 @@
+//! The Feeds Hero (`replace-tauri-with-blitz` task 7.6, the port of
+//! `LibraryFeedsHero.svelte`; add-gui-library-panel design D12, row 11.1):
+//! the selected entry's detail pane in the Emby Hero look — the artwork box
+//! the `artShape` arm names, the title, and the meta rows with their duration
+//! role.
+//!
+//! A feed entry has no artwork source and no overview, so the box paints the
+//! window's placeholder for the shape and no overview paragraph paints. There
+//! is no Workspace and no tracklist. Play next is not a Feeds command
+//! (row 11.1), so only Play and Add to queue paint.
+//!
+//! Play and Add to queue send the Feeds commands with the frame's selected
+//! entry — the core owns the selection, so the actions name the row the frame
+//! painted and never a position. A Client holds one feed tab, so no library
+//! index rides the commands.
+
+use dioxus_native::prelude::*;
+
+use crate::bridge::frame::library::{GuiEntryRowFrame, GuiFeedsDetail, GuiHomeRowStateFrame};
+use crate::bridge::library::GuiLibraryCommand;
+use crate::window::components::library_hero_actions::LibraryHeroActions;
+use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_workspace_table::{
+    LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
+};
+use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
+use crate::window::library::state::LibraryState;
+
+/// The props of the Feeds Hero (the `LibraryFeedsHero.svelte` props, narrowed
+/// to what the Hero reads): the carried Feeds rows — the active pill's rows,
+/// which the list band filters to the Hero's feed — and the selected entry's
+/// Hero facts.
+#[derive(Props, Debug, Clone, PartialEq)]
+pub struct LibraryFeedsHeroProps {
+    /// The active pill's entry rows (design D12, row 11.1): the list band
+    /// paints the ones that belong to the Hero's feed.
+    pub rows: Vec<GuiEntryRowFrame>,
+    /// The selected entry's Hero facts and the selection the actions name.
+    pub detail: GuiFeedsDetail,
+}
+
+/// The Feeds action a button sends (the Svelte `command` union).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FeedsAction {
+    /// Play the selected entry.
+    Play,
+    /// Add the selected entry to the queue.
+    Queue,
+}
+
+/// Send a Feeds command for the frame's selected entry (design D12, row
+/// 11.1): the row the frame painted, never a position. The command sends only
+/// while the frame holds both the selection and a Hero.
+fn act(library: &LibraryState, action: FeedsAction, detail: &GuiFeedsDetail) {
+    let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
+        return;
+    };
+    let item_id = item_id.clone();
+    let command = match action {
+        FeedsAction::Play => GuiLibraryCommand::FeedsPlay { item_id },
+        FeedsAction::Queue => GuiLibraryCommand::FeedsQueue { item_id },
+    };
+    library.link.library(command);
+}
+
+/// The row's played state (the Svelte `state` ternary): played, active with a
+/// resume percent, or ordinary.
+fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
+    if is_played_episode(state) {
+        return WorkspaceRowState::Played;
+    }
+    if episode_progress(state).is_none() {
+        return WorkspaceRowState::Ordinary;
+    }
+    WorkspaceRowState::Active
+}
+
+/// The Feeds Hero (the Svelte markup, character for character): the frame
+/// over the selected entry, with the feed's entries as the list band.
+#[component]
+pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
+    let library = consume_context::<LibraryState>();
+
+    // The Hero's facts, present exactly while the pane paints.
+    let Some(ref hero) = props.detail.hero else {
+        return rsx! {};
+    };
+
+    // The frame's header and block for the Hero (invariant 30): the feed is
+    // the largest unit and titles the header, and the entry is the block's
+    // name.
+    let facts = HeroLayoutFacts {
+        title: &hero.title,
+        parent: hero.parent.as_deref(),
+        meta_rows: &hero.meta_rows,
+        duration_row: hero.duration_row,
+        progress_row: hero.progress_row,
+        overview: None,
+    };
+    let layout = hero_layout(&facts, "feed");
+
+    // The feed's entries, newest first, as the Workspace table paints them:
+    // the active pill's rows that belong to the Hero's feed, the selected
+    // entry marked by the table's cursor. A date takes the time cell.
+    let entry_rows: Vec<WorkspaceRow> = match hero.parent.as_deref() {
+        None => Vec::new(),
+        Some(parent) => props
+            .rows
+            .iter()
+            .filter(|row| row.subtitle.as_deref() == Some(parent))
+            .enumerate()
+            .map(|(index, row)| WorkspaceRow {
+                id: row.id.clone(),
+                number: (index + 1).to_string(),
+                name: row.title.clone(),
+                duration: row.date.clone().unwrap_or_default(),
+                playing: false,
+                state: Some(row_state(&row.state)),
+                progress: episode_progress(&row.state).map(f32::from),
+            })
+            .collect(),
+    };
+
+    // The actions' sends (design D12, row 11.1): the picked entry's own
+    // stable id. There is no play-next command for Feeds.
+    let play_library = library.clone();
+    let play_detail = props.detail.clone();
+    let on_play = Callback::new(move |()| act(&play_library, FeedsAction::Play, &play_detail));
+    let queue_library = library.clone();
+    let queue_detail = props.detail.clone();
+    let on_queue = Callback::new(move |()| act(&queue_library, FeedsAction::Queue, &queue_detail));
+    let actions = rsx! {
+        LibraryHeroActions {
+            attr: "feeds",
+            on_play: Some(on_play),
+            on_queue: Some(on_queue),
+        }
+    };
+
+    // The list band's press and play (design D12): a press selects the entry
+    // the Hero shows, and the row's play gestures send that entry.
+    let press_library = library.clone();
+    let on_press = Callback::new(move |row_id: String| {
+        press_library.select_feeds_row_id(&row_id);
+    });
+    let play_library = library.clone();
+    let on_play = Callback::new(move |item_id: String| {
+        play_library.play_feeds_row(&item_id);
+    });
+
+    // The row's hover action: add the entry to the queue.
+    let action_library = library.clone();
+    let row_actions = vec![WorkspaceAction {
+        key: "queue".to_owned(),
+        label: "Add to queue".to_owned(),
+        icon: WorkspaceActionIcon::ListEnd,
+        run: Callback::new(move |item_id: String| {
+            action_library.queue_feeds_row(&item_id);
+        }),
+    }];
+
+    rsx! {
+        LibraryHeroFrame {
+            attr: "feeds",
+            root: "data-library-feeds-hero",
+            header: HeroHeader::from(layout.header),
+            block: HeroBlock::from(layout.block),
+            art_shape: hero.art_shape,
+            art: None,
+            art_title: hero.title.clone(),
+            actions: Some(actions),
+            children: Some(rsx! {
+                LibraryWorkspaceTable {
+                    root: "data-library-feeds-entries",
+                    label: "Entries",
+                    hook: "feeds-entry",
+                    noun: "Entry",
+                    rows: entry_rows,
+                    cursor: props.detail.selected.clone(),
+                    actions: row_actions,
+                    on_press,
+                    on_play,
+                }
+            }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

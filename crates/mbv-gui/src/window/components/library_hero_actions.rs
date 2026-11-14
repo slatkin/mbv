@@ -7,7 +7,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_attr::library_attr;
+use crate::window::components::library_hero_frame::own;
 use crate::window::icons::Play;
 
 /// The props of the action buttons (the `LibraryHeroActions.svelte` props, in
@@ -48,24 +48,14 @@ const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background:
 /// their muted mono key hints.
 #[component]
 pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
-    let play_attrs = vec![Attribute::new(
-        library_attr(props.attr, "play"),
-        "",
-        None,
-        false,
-    )];
+    let play_attrs = vec![Attribute::new(own(props.attr, "play"), "", None, false)];
     let next_attrs = vec![Attribute::new(
-        library_attr(props.attr, "play-next"),
+        own(props.attr, "play-next"),
         "",
         None,
         false,
     )];
-    let add_attrs = vec![Attribute::new(
-        library_attr(props.attr, "add"),
-        "",
-        None,
-        false,
-    )];
+    let add_attrs = vec![Attribute::new(own(props.attr, "add"), "", None, false)];
     let on_play = props.on_play;
     let on_play_next = props.on_play_next;
     let on_queue = props.on_queue;

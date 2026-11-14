@@ -151,8 +151,15 @@ impl LibraryState {
     /// overlay and closes an open menu, because the facts they paint belong to
     /// the previous entry, as a Music pick's do.
     pub fn select_feeds_row(&self, row: &FeedsItemRow) {
+        self.select_feeds_row_id(&row.row.id);
+    }
+
+    /// Select the row the id names (design D12): the same select by the row
+    /// id alone, which the Hero Workspace table's press carries — its rows
+    /// name the stable identity, never a `FeedsItemRow`.
+    pub fn select_feeds_row_id(&self, row_id: &str) {
         self.link.library(GuiLibraryCommand::FeedsSelect {
-            row: row.row.id.clone(),
+            row: row_id.to_owned(),
         });
         let mut ui = self.ui;
         ui.with_mut(|ui| {

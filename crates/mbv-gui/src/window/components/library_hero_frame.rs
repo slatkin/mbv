@@ -113,15 +113,16 @@ pub struct HeroBlock {
     pub overview: Option<String>,
 }
 
-/// Whether a line has anything to paint.
+/// Whether a line has anything to paint (the Svelte `painted`): the line
+/// carries at least one segment.
 fn painted(segments: Option<&Segments>) -> bool {
-    segments.is_some_and(Segments::is_empty)
+    segments.is_some_and(|segments| !segments.is_empty())
 }
 
 /// Whether a line has a name to paint: the selected item's name, only when a
-/// parent took the header.
+/// parent took the header (the Svelte `(block.name ?? '') !== ''`).
 fn named(name: Option<&str>) -> bool {
-    name.is_some_and(str::is_empty)
+    name.is_some_and(|name| !name.is_empty())
 }
 
 /// The attribute name of one part of the destination's Hero (the Svelte
@@ -139,10 +140,43 @@ pub(super) fn own(attr: &'static str, part: &str) -> &'static str {
     library_attr(&prefix, part)
 }
 
-/// The facts line's own attribute, painted at both sites that carry it (the
-/// header's and the block's), so the two cannot drift.
+/// The header facts line's own attribute (the Svelte frame's `facts`).
 fn facts_attrs(attr: &'static str) -> Vec<Attribute> {
     vec![Attribute::new(own(attr, "facts"), "", None, false)]
+}
+
+/// The block facts line's own attribute (the Svelte frame's `block-facts`).
+fn block_facts_attrs(attr: &'static str) -> Vec<Attribute> {
+    vec![Attribute::new(own(attr, "block-facts"), "", None, false)]
+}
+
+/// The frame's header from the one `hero_layout` built, so a destination that
+/// maps its facts through [`hero_layout`](crate::window::library::hero::hero_layout)
+/// hands the frame the layout's own lines.
+impl From<crate::window::library::hero::HeroLayoutHeader> for HeroHeader {
+    fn from(header: crate::window::library::hero::HeroLayoutHeader) -> Self {
+        Self {
+            kicker: header.kicker,
+            title: header.title,
+            facts: header.facts,
+        }
+    }
+}
+
+/// The frame's block from the one `hero_layout` built: the layout's block
+/// carries no eyebrow and no plain facts line, which only the destinations
+/// that build their block by hand supply.
+impl From<crate::window::library::hero::HeroLayoutBlock> for HeroBlock {
+    fn from(block: crate::window::library::hero::HeroLayoutBlock) -> Self {
+        Self {
+            label: block.label,
+            eyebrow: None,
+            name: block.name,
+            facts: None,
+            meta: block.meta,
+            overview: block.overview,
+        }
+    }
 }
 
 /// One meta row's painted role: the class and colour the role paints, as the
@@ -266,7 +300,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                                 span {
                                     class: "font-mono",
                                     style: "font-size: 13px; color: var(--canvas-muted);",
-                                    ..facts_attrs(attr),
+                                    ..block_facts_attrs(attr),
                                     TypedText { segments: facts.clone() }
                                 }
                             }
