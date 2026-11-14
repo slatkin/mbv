@@ -210,7 +210,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // no signal, so it never re-runs on its own write.
     let report_library = library.clone();
     use_effect(use_reactive((&props.arrangement,), move |(arrangement,)| {
-        report_library.report_library_arrangement(arrangement)
+        report_library.report_library_arrangement(arrangement);
     }));
 
     // The right-click item menu's press surface (design D8, D15): the

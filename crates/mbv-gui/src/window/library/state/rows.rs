@@ -34,7 +34,8 @@ impl LibraryState {
     /// section store's own storage — a cursor or scroll step copies none of it
     /// — and the memo keys it on the section's revision, so its hit test never
     /// compares the union (design D6).
-    pub(super) fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
+    #[must_use]
+    pub fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
         let list = self.sections.library_list.peek();
         let artists =
             library_music_list(list.as_ref()).map_or(&[][..], |music| music.artists.as_slice());
@@ -116,7 +117,7 @@ impl LibraryState {
     /// Service item, an album's own id, and a track's id, so the play-next and
     /// add-to-queue keys act on what the cursor rests on.
     #[must_use]
-    pub(super) fn action_item_id(row: &LibraryRow) -> Option<String> {
+    pub fn action_item_id(row: &LibraryRow) -> Option<String> {
         match row {
             LibraryRow::Letter(_) => None,
             LibraryRow::Artist { item_id, .. } => item_id.clone(),

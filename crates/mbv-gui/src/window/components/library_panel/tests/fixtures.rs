@@ -3,12 +3,12 @@
 //! Hero facts each mount contract needs.
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList,
-    GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiEmbyDetail,
-    GuiEmbyFeedGroupFrame, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame,
-    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
-    GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
-    GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList, GuiAudiobooksRowFrame,
+    GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyFeedGroupFrame,
+    GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeDetail,
+    GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
+    GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
     GuiMusicHeroFrame, GuiMusicList, GuiPillFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList,
     GuiShowsModeFrame, GuiShowsPillFrame, GuiShowsRowFrame,
