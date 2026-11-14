@@ -109,23 +109,38 @@ fn placeholder(child: &'static str) -> Element {
 
 /// The active destination's pill row (design D6, D12), with the pills region
 /// the arrangement paints it in. Home and a plain Emby library paint no pill
-/// row at all — the rail replaces it — so their pair names none.
+/// row at all — the rail replaces it — so their pair names none. The
+/// painters take the pills and the library index alone (the port review's
+/// repaint-clone finding): the pills read nothing else, so a panel repaint
+/// never clones the carried list's rows for them.
 fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
     match pair {
         Some(LibraryPair::Music(list, _)) => Some(rsx! {
-            LibraryPills { list: list.clone() }
+            LibraryPills {
+                pills: list.pills.clone(),
+                lib_idx: list.lib_idx,
+            }
         }),
         Some(LibraryPair::Shows(list, _)) => Some(rsx! {
-            LibraryShowsPills { list: list.clone() }
+            LibraryShowsPills {
+                pills: list.pills.clone(),
+                lib_idx: list.lib_idx,
+            }
         }),
         Some(LibraryPair::Emby(list, _)) if list.feed_group => Some(rsx! {
-            LibraryEmbyPills { list: list.clone() }
+            LibraryEmbyPills {
+                pills: list.pills.clone(),
+                lib_idx: list.lib_idx,
+            }
         }),
         Some(LibraryPair::Podcasts(list, _)) => Some(rsx! {
-            LibraryPodcastsPills { list: list.clone() }
+            LibraryPodcastsPills {
+                pills: list.pills.clone(),
+                lib_idx: list.lib_idx,
+            }
         }),
         Some(LibraryPair::Feeds(list, _)) => Some(rsx! {
-            LibraryFeedsPills { list: list.clone() }
+            LibraryFeedsPills { pills: list.pills.clone() }
         }),
         _ => None,
     }

@@ -33,7 +33,8 @@ use crate::window::sections::Sections;
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    list: GuiMusicList,
+    pills: Vec<GuiMusicPillFrame>,
+    lib_idx: usize,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -42,7 +43,8 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        list,
+        pills,
+        lib_idx,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -60,7 +62,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryPills { list }
+        LibraryPills { pills, lib_idx }
     }
 }
 
@@ -129,7 +131,8 @@ fn built(list: GuiMusicList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                list: list.clone(),
+                pills: list.pills.clone(),
+                lib_idx: list.lib_idx,
                 handle: Rc::clone(&handle),
             },
         ),

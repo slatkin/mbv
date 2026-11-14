@@ -12,16 +12,20 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiFeedsList;
+use crate::bridge::frame::library::GuiPillFrame;
+use crate::bridge::library::GuiFeedPill;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::feeds::feed_pill_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Feeds pills (the `LibraryFeedsPills.svelte` props).
+/// The props of the Feeds pills (the `LibraryFeedsPills.svelte` props,
+/// narrowed to what the pills read): the carried pills of the one feed tab
+/// (row 11.1). The panel passes these alone, so a panel repaint never clones
+/// the list's rows for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryFeedsPillsProps {
-    /// The carried Feeds content: the pills of the one feed tab (row 11.1).
-    pub list: GuiFeedsList,
+    /// The carried view pills in painted order (row 11.1).
+    pub pills: Vec<GuiPillFrame<GuiFeedPill>>,
 }
 
 /// The Feeds destination's view pills: the carried pills over the shared
@@ -32,7 +36,6 @@ pub fn LibraryFeedsPills(props: LibraryFeedsPillsProps) -> Element {
 
     // The pills the row paints, keyed by the pill's paint key.
     let pills: Vec<LibraryPill> = props
-        .list
         .pills
         .iter()
         .map(|pill| LibraryPill {
@@ -52,7 +55,7 @@ pub fn LibraryFeedsPills(props: LibraryFeedsPillsProps) -> Element {
 
     // Press a pill: select its view (row 11.1).
     let press_library = library.clone();
-    let carried_pills = props.list.pills.clone();
+    let carried_pills = props.pills.clone();
     let on_press = move |key: String| {
         if let Some(pill) = carried_pills
             .iter()

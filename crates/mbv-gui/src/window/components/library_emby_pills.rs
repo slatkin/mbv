@@ -13,17 +13,21 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiEmbyList;
+use crate::bridge::frame::library::GuiEmbyPillFrame;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::emby_list::emby_group_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Emby pills (the `LibraryEmbyPills.svelte` props).
+/// The props of the Emby pills (the `LibraryEmbyPills.svelte` props,
+/// narrowed to what the pills read): the carried pills and the library index
+/// the set-feed-group command names (row 8.1). The panel passes these alone,
+/// so a panel repaint never clones the list's rows for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryEmbyPillsProps {
-    /// The carried plain Emby-library content: the pills and the library
-    /// index the set-feed-group command names (row 8.1).
-    pub list: GuiEmbyList,
+    /// The carried group pills in painted order (row 8.1).
+    pub pills: Vec<GuiEmbyPillFrame>,
+    /// The plain Emby-library index the set-feed-group command names.
+    pub lib_idx: usize,
 }
 
 /// The feed-group Emby library's pills: the carried group pills over the
@@ -36,7 +40,6 @@ pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
     // The pills the row paints, keyed by the group key the command's pill
     // resolves.
     let pills: Vec<LibraryPill> = props
-        .list
         .pills
         .iter()
         .map(|pill| LibraryPill {
@@ -52,8 +55,8 @@ pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
 
     // Press a pill: select its group (row 8.1).
     let press_library = library.clone();
-    let carried_pills = props.list.pills.clone();
-    let lib_idx = props.list.lib_idx;
+    let carried_pills = props.pills.clone();
+    let lib_idx = props.lib_idx;
     let on_press = move |key: String| {
         if let Some(pill) = carried_pills
             .iter()

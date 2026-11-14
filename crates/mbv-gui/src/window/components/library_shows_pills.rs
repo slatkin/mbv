@@ -12,17 +12,21 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiShowsList;
+use crate::bridge::frame::library::GuiShowsPillFrame;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::shows::shows_mode_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Shows pills (the `LibraryShowsPills.svelte` props).
+/// The props of the Shows pills (the `LibraryShowsPills.svelte` props,
+/// narrowed to what the pills read): the carried pills and the library index
+/// the set-mode command names (design D12). The panel passes these alone, so
+/// a panel repaint never clones the list's rows for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryShowsPillsProps {
-    /// The carried Shows content: the pills and the library index the
-    /// set-mode command names (design D12).
-    pub list: GuiShowsList,
+    /// The carried mode pills in painted order (design D12).
+    pub pills: Vec<GuiShowsPillFrame>,
+    /// The Shows library index the set-mode command names.
+    pub lib_idx: usize,
 }
 
 /// The Shows destination's mode pills: the carried mode pills over the
@@ -34,7 +38,6 @@ pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
 
     // The pills the row paints, keyed by the mode the command names.
     let pills: Vec<LibraryPill> = props
-        .list
         .pills
         .iter()
         .map(|pill| LibraryPill {
@@ -50,8 +53,8 @@ pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
 
     // Press a pill: select its mode (design D12).
     let press_library = library.clone();
-    let carried_pills = props.list.pills.clone();
-    let lib_idx = props.list.lib_idx;
+    let carried_pills = props.pills.clone();
+    let lib_idx = props.lib_idx;
     let on_press = move |key: String| {
         if let Some(pill) = carried_pills
             .iter()

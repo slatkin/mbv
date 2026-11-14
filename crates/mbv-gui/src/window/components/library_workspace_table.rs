@@ -262,6 +262,19 @@ fn row_attrs(row: &WorkspaceRow, hook: &str, cursor_row: bool) -> Vec<Attribute>
     attrs
 }
 
+/// The hover swap's display styles (the Svelte ternaries), as (number span,
+/// play control): the two trade places while the pointer is over the row.
+/// The control is `display: none` off-hover — a missing style would leave it
+/// painted beside the number instead of swapping for it (the port review's
+/// hidden-control finding, which the hover-swap regression test guards).
+fn hover_styles(is_hovered: bool) -> (&'static str, &'static str) {
+    if is_hovered {
+        ("display: none;", "display: flex;")
+    } else {
+        ("", "display: none;")
+    }
+}
+
 /// The number cell (the Svelte number span): the ordinal that swaps for the
 /// play control while the pointer is over the row.
 fn paint_number_cell(
@@ -270,8 +283,7 @@ fn paint_number_cell(
     is_hovered: bool,
     on_play: Callback<String>,
 ) -> Element {
-    let number_style = if is_hovered { "display: none;" } else { "" };
-    let hover_display = if is_hovered { "display: flex;" } else { "" };
+    let (number_style, hover_display) = hover_styles(is_hovered);
     let number_attrs = vec![Attribute::new(
         library_attr(hook, "number"),
         "",
@@ -553,3 +565,6 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

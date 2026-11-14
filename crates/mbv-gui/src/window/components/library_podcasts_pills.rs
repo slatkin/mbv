@@ -13,18 +13,23 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiPodcastsList;
+use crate::bridge::frame::library::GuiPillFrame;
+use crate::bridge::library::GuiPodcastPill;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::podcasts::podcast_pill_key;
 use crate::window::library::state::LibraryState;
 
 /// The props of the Podcasts pills (the `LibraryPodcastsPills.svelte`
-/// props).
+/// props, narrowed to what the pills read): the carried pills and the
+/// library index the set-pill command names (design D12, row 10.1). The
+/// panel passes these alone, so a panel repaint never clones the list's rows
+/// for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryPodcastsPillsProps {
-    /// The carried Podcasts content: the pills and the library index the
-    /// set-pill command names (design D12, row 10.1).
-    pub list: GuiPodcastsList,
+    /// The carried episode pills in painted order (design D12, row 10.1).
+    pub pills: Vec<GuiPillFrame<GuiPodcastPill>>,
+    /// The Podcasts library index the set-pill command names.
+    pub lib_idx: usize,
 }
 
 /// The Podcasts destination's episode pills: the carried pills over the
@@ -36,7 +41,6 @@ pub fn LibraryPodcastsPills(props: LibraryPodcastsPillsProps) -> Element {
 
     // The pills the row paints, keyed by the pill's paint key.
     let pills: Vec<LibraryPill> = props
-        .list
         .pills
         .iter()
         .map(|pill| LibraryPill {
@@ -56,8 +60,8 @@ pub fn LibraryPodcastsPills(props: LibraryPodcastsPillsProps) -> Element {
 
     // Press a pill: select its view (row 10.1).
     let press_library = library.clone();
-    let carried_pills = props.list.pills.clone();
-    let lib_idx = props.list.lib_idx;
+    let carried_pills = props.pills.clone();
+    let lib_idx = props.lib_idx;
     let on_press = move |key: String| {
         if let Some(pill) = carried_pills
             .iter()

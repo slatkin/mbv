@@ -12,16 +12,20 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiMusicList;
+use crate::bridge::frame::library::GuiMusicPillFrame;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Music pills (the `LibraryPills.svelte` props).
+/// The props of the Music pills (the `LibraryPills.svelte` props, narrowed
+/// to what the pills read): the carried pills and the library index the
+/// select-collection command names (design D2, D6). The panel passes these
+/// alone, so a panel repaint never clones the list's rows for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryPillsProps {
-    /// The carried Music content: the pills and the library index the
-    /// select-collection command names (design D2, D6).
-    pub list: GuiMusicList,
+    /// The carried group pills in painted order (design D6).
+    pub pills: Vec<GuiMusicPillFrame>,
+    /// The Grouped Music library index the select-collection command names.
+    pub lib_idx: usize,
 }
 
 /// The Music destination's pills: the carried group pills over the shared
@@ -33,7 +37,6 @@ pub fn LibraryPills(props: LibraryPillsProps) -> Element {
 
     // The pills the row paints, keyed by the group id the command names.
     let pills: Vec<LibraryPill> = props
-        .list
         .pills
         .iter()
         .map(|pill| LibraryPill {
@@ -46,12 +49,12 @@ pub fn LibraryPills(props: LibraryPillsProps) -> Element {
     // The pill the keys' focus holds, or `None` while no pill has it.
     let ui = library.ui.cloned();
     let focused = library
-        .focused_library_pill(&props.list.pills, &ui)
+        .focused_library_pill(&props.pills, &ui)
         .map(|pill| pill.group_id.clone());
 
     // Press a pill: select it (design D6).
     let press_library = library.clone();
-    let lib_idx = props.list.lib_idx;
+    let lib_idx = props.lib_idx;
     let on_press = move |key: String| press_library.select_library_pill(lib_idx, key);
 
     // The keys' pill request becomes the command a press sends (design D6):

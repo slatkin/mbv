@@ -27,12 +27,12 @@ use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Feeds content, the mock core sender, and
+/// The harness's props: the carried Feeds pills, the mock core sender, and
 /// the handle the test reads the store through.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    list: GuiFeedsList,
+    pills: Vec<GuiPillFrame<GuiFeedPill>>,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -41,7 +41,7 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        list,
+        pills,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -59,7 +59,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryFeedsPills { list }
+        LibraryFeedsPills { pills }
     }
 }
 
@@ -129,7 +129,7 @@ fn built(list: GuiFeedsList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                list: list.clone(),
+                pills: list.pills.clone(),
                 handle: Rc::clone(&handle),
             },
         ),
