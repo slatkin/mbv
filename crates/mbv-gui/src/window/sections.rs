@@ -158,6 +158,16 @@ impl Sections {
         }
     }
 
+    /// The revision of the `libraryList` section the window holds (D6),
+    /// `None` before the first batch carries one. The row memo keys the
+    /// carried artists on it: a section's value at one revision is immutable,
+    /// so equal revisions carry equal content and the memo's hit test stays
+    /// cheap in the content's size.
+    #[must_use]
+    pub fn library_list_revision(&self) -> Option<u64> {
+        self.held.peek().library_list
+    }
+
     /// Write a batch into the section signals (D6): each present section
     /// whose revision the window does not hold replaces its signal's value.
     /// Sections the batch leaves out leave their signals as they are. Every

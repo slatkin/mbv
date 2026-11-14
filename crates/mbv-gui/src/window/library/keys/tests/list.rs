@@ -8,8 +8,7 @@ fn a_cursor_move_below_the_rows_in_view_scrolls_its_row_into_view() {
         carry_list(state, &[]);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.cursor = Some("artist:service:a1".to_owned()));
-        let frame = carried_frame(state);
-        route(state, facts, "down", "ArrowDown", false, &frame);
+        route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(ui_facts(state));
         let scroll = *state.music_scroll.peek();
         facts
@@ -30,8 +29,7 @@ fn right_opens_the_cursor_album_and_asks_for_its_tracks() {
         carry_list(state, &["artist:service:a1"]);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.cursor = Some("album:al2".to_owned()));
-        let frame = carried_frame(state);
-        route(state, facts, "right", "ArrowRight", false, &frame);
+        route(state, facts, "right", "ArrowRight", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -53,8 +51,7 @@ fn enter_in_the_list_plays_the_item_under_the_cursor() {
         carry_list(state, &["artist:service:a1"]);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.cursor = Some("album:al2".to_owned()));
-        let frame = carried_frame(state);
-        route(state, facts, "enter", "Enter", false, &frame);
+        route(state, facts, "enter", "Enter", false);
     });
     assert_eq!(
         commands(&rx),
@@ -73,8 +70,7 @@ fn enter_in_the_list_plays_the_track_under_the_cursor() {
         carry_list(state, &["artist:service:a1", "album:al1"]);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.cursor = Some("track:t1".to_owned()));
-        let frame = carried_frame(state);
-        route(state, facts, "enter", "Enter", false, &frame);
+        route(state, facts, "enter", "Enter", false);
     });
     assert_eq!(
         commands(&rx),
@@ -95,15 +91,14 @@ fn esc_that_clears_the_filter_moves_a_stranded_cursor_to_a_painted_row() {
     let (facts, _rx) = run(|state, facts| {
         carry_list(state, &[]);
         state.set_library_filter("rhymin".to_owned());
-        let frame = carried_frame(state);
-        route(state, facts, "down", "ArrowDown", false, &frame);
-        route(state, facts, "down2", "ArrowDown", false, &frame);
+        route(state, facts, "down", "ArrowDown", false);
+        route(state, facts, "down2", "ArrowDown", false);
         facts
             .lock()
             .expect("facts")
             .push(format!("mid_cursor={:?}", state.ui.peek().cursor));
         state.open_library_filter();
-        route(state, facts, "escape", "Escape", false, &frame);
+        route(state, facts, "escape", "Escape", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     // The settle over the narrowed rows carries the cursor to the first
@@ -124,8 +119,7 @@ fn n_with_the_list_cursor_on_an_album_sends_play_next_for_that_album() {
         carry_list(state, &["artist:service:a1"]);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.cursor = Some("album:al1".to_owned()));
-        let frame = carried_frame(state);
-        route(state, facts, "n", "n", false, &frame);
+        route(state, facts, "n", "n", false);
     });
     assert_eq!(
         commands(&rx),
@@ -148,8 +142,7 @@ fn a_with_the_hero_pane_focused_sends_add_to_queue_for_the_tracklist_cursor_trac
             ui.pane = Some(LibraryPane::Hero);
             ui.track_cursor = Some("t1".to_owned());
         });
-        let frame = carried_frame(state);
-        route(state, facts, "a", "a", false, &frame);
+        route(state, facts, "a", "a", false);
     });
     assert_eq!(
         commands(&rx),
@@ -172,8 +165,7 @@ fn down_with_the_hero_pane_focused_moves_the_tracklist_cursor() {
             ui.pane = Some(LibraryPane::Hero);
             ui.track_cursor = Some("t1".to_owned());
         });
-        let frame = carried_frame(state);
-        route(state, facts, "down", "ArrowDown", false, &frame);
+        route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -202,8 +194,7 @@ fn enter_in_the_hero_pane_plays_the_track_the_painted_tracklist_shows() {
             ui.pane = Some(LibraryPane::Hero);
             ui.track_cursor = None;
         });
-        let frame = carried_frame(state);
-        route(state, facts, "enter", "Enter", false, &frame);
+        route(state, facts, "enter", "Enter", false);
     });
     assert_eq!(
         commands(&rx),
@@ -223,8 +214,7 @@ fn esc_closes_the_open_item_menu() {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.item_menu_open = true);
-        let frame = carried_frame(state);
-        route(state, facts, "escape", "Escape", false, &frame);
+        route(state, facts, "escape", "Escape", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "escape=Handled");

@@ -12,13 +12,12 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{LibraryKeyFrame, route_library_key};
-use crate::bridge::frame::chrome::GuiStatusBar;
-use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
+use super::route_library_key;
+use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
     GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame,
-    GuiMusicTrackFrame,
+    GuiMusicTrackFrame, GuiShowsDetail, GuiShowsList,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -110,40 +109,57 @@ fn key(value: &str, shift: bool) -> DomKey {
     }
 }
 
-/// A slice frame's routing facts (design D3) with the Library panel shown
-/// under Library Panel focus.
-fn frame(library_list: Option<&GuiLibraryList>) -> LibraryKeyFrame {
-    LibraryKeyFrame {
-        focus: GuiFocus {
-            surface: None,
-            panel: GuiPanel::Library,
-        },
-        overlay: None,
-        status: GuiStatusBar {
-            prefix_armed: false,
-            toast: None,
-        },
-        filter_active: false,
-        settings: None,
-        library_list: library_list.cloned(),
-        search: None,
-    }
+/// Library Panel focus, as the routed keys read it: the Section's focus store
+/// starts on the Queue panel, so the harness carries it first. A test that
+/// needs the Queue panel's focus writes it back over this.
+fn carry_panel_focus(sections: &Sections) {
+    let mut focus = sections.focus;
+    focus.write().panel = GuiPanel::Library;
 }
 
-/// Route one keydown and paint the outcome.
-fn route(
+/// The Library Panel focus the tests route under, written back to the Queue
+/// panel (design D3, step 3).
+fn queue_panel_focus(state: &LibraryState) {
+    let mut focus = state.sections.focus;
+    focus.write().panel = GuiPanel::Queue;
+}
+
+/// Arm the Status bar's prefix (design D3, step 1).
+fn arm_prefix(state: &LibraryState) {
+    let mut status = state.sections.status;
+    status.write().prefix_armed = true;
+}
+
+/// Open a core overlay (design D3, step 1).
+fn open_core_overlay(state: &LibraryState) {
+    let mut overlay = state.sections.overlay;
+    overlay.write().replace(GuiOverlayFrame::RowMenu {
+        anchor_slot: 0,
+        cursor: 0,
+        entries: Vec::new(),
+    });
+}
+
+/// Route one keydown against the given section stores and paint the outcome.
+fn route_on(
     state: &LibraryState,
     facts: &Facts,
     name: &str,
     value: &str,
     shift: bool,
-    frame: &LibraryKeyFrame,
+    sections: &Sections,
 ) {
-    let outcome = route_library_key(&key(value, shift), Some(frame), state);
+    let outcome = route_library_key(&key(value, shift), Some(sections), state);
     facts
         .lock()
         .expect("facts")
         .push(format!("{name}={outcome:?}"));
+}
+
+/// Route one keydown against the window's own section stores and paint the
+/// outcome.
+fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
+    route_on(state, facts, name, value, shift, &state.sections);
 }
 
 /// The two group pills the Music fixture carries: one selected, one not.
@@ -283,7 +299,8 @@ fn home_list() -> GuiLibraryList {
     }
 }
 
-/// Carry the given content into the store's sections.
+/// Carry the given content into the store's sections, under the Library
+/// Panel focus the routed keys read.
 fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
     let batch = GuiSectionBatch {
         library_list: Some(crate::bridge::sections::GuiSection {
@@ -292,6 +309,25 @@ fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
         }),
         library_detail: Some(crate::bridge::sections::GuiSection {
             revision: 1,
+            value: Some(detail),
+        }),
+        ..GuiSectionBatch::default()
+    };
+    let mut sections = state.sections.clone();
+    sections.apply_batch(&batch);
+    carry_panel_focus(&sections);
+}
+
+/// Switch the active destination after a carry: a second batch whose Library
+/// sections carry the next revision, so the window holds them.
+fn switch_destination(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
+    let batch = GuiSectionBatch {
+        library_list: Some(crate::bridge::sections::GuiSection {
+            revision: 2,
+            value: Some(list),
+        }),
+        library_detail: Some(crate::bridge::sections::GuiSection {
+            revision: 2,
             value: Some(detail),
         }),
         ..GuiSectionBatch::default()
@@ -331,13 +367,6 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
         ui.open_nodes = open.iter().map(|id| (*id).to_owned()).collect();
     });
     state.measure_library_list(40.0);
-}
-
-/// The frame with the carried Library content, read back from the sections.
-fn carried_frame(state: &LibraryState) -> LibraryKeyFrame {
-    frame(Some(
-        &state.sections.library_list.peek().clone().expect("list"),
-    ))
 }
 
 // A cursor move below the rows in view scrolls its row into view.

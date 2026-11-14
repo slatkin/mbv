@@ -7,11 +7,8 @@ fn tab_with_queue_panel_focus_takes_library_focus() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let mut held = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        held.focus.panel = GuiPanel::Queue;
-        route(state, facts, "tab", "Tab", false, &held);
+        queue_panel_focus(state);
+        route(state, facts, "tab", "Tab", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(commands(&rx), vec![GuiLibraryCommand::TakeFocus.into()]);
@@ -27,10 +24,7 @@ fn tab_past_the_last_library_pane_takes_queue_panel_focus() {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "tab", "Tab", false, &frame);
+        route(state, facts, "tab", "Tab", false);
     });
     assert_eq!(
         commands(&rx),
@@ -43,10 +37,7 @@ fn shift_tab_before_the_first_library_pane_takes_queue_panel_focus() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "shift_tab", "Tab", true, &frame);
+        route(state, facts, "shift_tab", "Tab", true);
     });
     assert_eq!(
         commands(&rx),
@@ -72,10 +63,7 @@ fn a_digit_opens_the_carried_tab_at_its_place() {
     ];
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "digit", "2", false, &frame);
+        route(state, facts, "digit", "2", false);
     });
     assert_eq!(
         commands(&rx),
@@ -88,10 +76,7 @@ fn a_digit_past_the_carried_tabs_opens_nothing() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "digit", "2", false, &frame);
+        route(state, facts, "digit", "2", false);
     });
     assert_eq!(commands(&rx), []);
     assert_eq!(facts, ["digit=Handled"]);
@@ -112,8 +97,7 @@ fn tab_onto_the_hero_in_narrow_paints_its_overlay_again() {
             ui.pane = Some(LibraryPane::List);
             ui.hero_dismissed = true;
         });
-        let frame = carried_frame(state);
-        route(state, facts, "tab", "Tab", false, &frame);
+        route(state, facts, "tab", "Tab", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert!(facts[1].contains("pane=Some(Hero)"));
@@ -133,8 +117,7 @@ fn esc_with_the_hero_pane_focused_returns_the_pane_focus_to_the_list() {
         state.report_library_arrangement(GuiArrangement::Narrow);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
-        let frame = carried_frame(state);
-        route(state, facts, "escape", "Escape", false, &frame);
+        route(state, facts, "escape", "Escape", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -159,8 +142,7 @@ fn esc_closes_the_narrow_hero_overlay() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
         state.report_library_arrangement(GuiArrangement::Narrow);
-        let frame = carried_frame(state);
-        route(state, facts, "escape", "Escape", false, &frame);
+        route(state, facts, "escape", "Escape", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -183,8 +165,7 @@ fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
         state.report_library_arrangement(GuiArrangement::Wide);
-        let frame = carried_frame(state);
-        route(state, facts, "escape", "Escape", false, &frame);
+        route(state, facts, "escape", "Escape", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -215,9 +196,8 @@ fn tab_from_the_queue_panel_focuses_the_list_pane_on_home() {
                 hero: None,
             }),
         );
-        let mut held = carried_frame(state);
-        held.focus.panel = GuiPanel::Queue;
-        route(state, facts, "tab", "Tab", false, &held);
+        queue_panel_focus(state);
+        route(state, facts, "tab", "Tab", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(commands(&rx), vec![GuiLibraryCommand::TakeFocus.into()]);
@@ -237,8 +217,7 @@ fn tab_past_the_hero_on_home_takes_queue_panel_focus() {
         );
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
-        let frame = carried_frame(state);
-        route(state, facts, "tab", "Tab", false, &frame);
+        route(state, facts, "tab", "Tab", false);
     });
     assert_eq!(
         commands(&rx),

@@ -11,27 +11,20 @@ use dioxus_native::prelude::*;
 
 use super::list::LibraryRow;
 
-/// The memo's arguments for the canvas tree (`state.ts`'s `musicRowsOf`):
-/// the carried artists, the open nodes, the filter's closed overrides, and
-/// the filter text. The TypeScript memo compared the arguments by identity;
-/// borrowed Rust slices have no stable identity across a signal read, so the
-/// memo compares them by value — a miss rebuilds, a hit returns the rows it
-/// built last, and the rows keep their identity either way.
-#[derive(Debug, Clone, PartialEq)]
-struct TreeArgs {
-    artists: Vec<crate::bridge::frame::library::GuiMusicArtistFrame>,
+/// The rows the memo handed back last, with the cheap key and the interaction
+/// facts they were built from. The rows sit behind an `Arc` because the Svelte
+/// semantics the memo preserves are shared state: one scroll step reads the
+/// same rows the last one built, and the list repaints only its visible
+/// window.
+#[derive(Debug, Clone)]
+struct MemoEntry {
+    /// The `libraryList` section revision the artists came from (design D6):
+    /// a section's value at one revision is immutable, so equal revisions
+    /// carry equal artists and the hit test never compares the union.
+    artists_revision: Option<u64>,
     open: Vec<String>,
     closed: Vec<String>,
     filter: String,
-}
-
-/// The rows the memo handed back last, with the arguments they were built
-/// from. The rows sit behind an `Arc` because the Svelte semantics the memo
-/// preserves are shared state: one scroll step reads the same rows the last
-/// one built, and the list repaints only its visible window.
-#[derive(Debug, Clone)]
-struct MemoEntry {
-    args: TreeArgs,
     rows: Arc<[LibraryRow]>,
 }
 
@@ -51,10 +44,16 @@ impl std::fmt::Debug for RowsMemo {
 
 impl RowsMemo {
     /// The rows `build` leaves over `tree`: the ones it built last while the
-    /// arguments are the same, and a fresh build otherwise.
+    /// arguments are the same, and a fresh build otherwise. The artists come
+    /// keyed on the `libraryList` section revision they borrowed from (design
+    /// D6) — a section's value at one revision is immutable, so the memo's hit
+    /// test is cheap in the union's size. The caller must pass the slice the
+    /// section's current value carries; any other slice shares the revision's
+    /// key and would hit the rows of the carried content.
     #[must_use]
     pub fn rows(
         &self,
+        artists_revision: Option<u64>,
         artists: &[crate::bridge::frame::library::GuiMusicArtistFrame],
         open: &[String],
         closed: &[String],
@@ -64,10 +63,10 @@ impl RowsMemo {
         // memo (a settle that moves the cursor) would re-queue itself on the
         // write below otherwise.
         if let Some(entry) = self.last.peek().as_ref() {
-            let same = entry.args.artists == artists
-                && entry.args.open == open
-                && entry.args.closed == closed
-                && entry.args.filter == filter;
+            let same = entry.artists_revision == artists_revision
+                && entry.open == open
+                && entry.closed == closed
+                && entry.filter == filter;
             if same {
                 return Arc::clone(&entry.rows);
             }
@@ -81,12 +80,10 @@ impl RowsMemo {
         .into();
         let mut last = self.last;
         last.set(Some(MemoEntry {
-            args: TreeArgs {
-                artists: artists.to_vec(),
-                open: open.to_vec(),
-                closed: closed.to_vec(),
-                filter: filter.to_owned(),
-            },
+            artists_revision,
+            open: open.to_vec(),
+            closed: closed.to_vec(),
+            filter: filter.to_owned(),
             rows: Arc::clone(&rows),
         }));
         rows

@@ -11,8 +11,8 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{
-    LibraryRow, LibraryTree, ListMove, album_row_id, artist_row_id, clamp_scroll_top,
-    jump_to_letter, letter_rail, list_window, move_list_cursor, scroll_top_to_show_cursor,
+    LibraryRow, ListMove, album_row_id, artist_row_id, clamp_scroll_top, jump_to_letter,
+    letter_rail, list_window, move_list_cursor, scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::library_music_list;
 use crate::window::library::scroll::ListScroll;
@@ -29,33 +29,22 @@ fn with_id(ids: &mut Vec<String>, id: &str, present: bool) {
 }
 
 impl LibraryState {
-    /// The canvas tree's painted rows (design D9): the memoized row model over
-    /// the carried union, the open nodes, the filter text, and the filter's
-    /// closed overrides. The same rows come back while the content, the open
-    /// nodes, the filter text, and the closed nodes keep their values, so a
-    /// scroll step never rebuilds the rows it clamps against.
-    #[must_use]
-    pub fn library_rows_of(&self, tree: &LibraryTree<'_>) -> Arc<[LibraryRow]> {
-        self.rows_memo
-            .rows(tree.artists, tree.open, tree.closed, tree.filter)
-    }
-
-    /// The row model under one interaction state (design D7): the carried union,
-    /// the open nodes, and the filter text.
-    #[must_use]
+    /// The row model under one interaction state (design D7): the carried
+    /// union, the open nodes, and the filter text. The union borrows from the
+    /// section store's own storage — a cursor or scroll step copies none of it
+    /// — and the memo keys it on the section's revision, so its hit test never
+    /// compares the union (design D6).
     pub(super) fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
-        let artists = self.music_artists();
-        self.rows_memo
-            .rows(&artists, &ui.open_nodes, &ui.filter_closed, &ui.filter)
-    }
-
-    /// The carried Music union, empty while another destination is active.
-    #[must_use]
-    fn music_artists(&self) -> Vec<crate::bridge::frame::library::GuiMusicArtistFrame> {
         let list = self.sections.library_list.peek();
-        library_music_list(list.as_ref())
-            .map(|music| music.artists.clone())
-            .unwrap_or_default()
+        let artists =
+            library_music_list(list.as_ref()).map_or(&[][..], |music| music.artists.as_slice());
+        self.rows_memo.rows(
+            self.sections.library_list_revision(),
+            artists,
+            &ui.open_nodes,
+            &ui.filter_closed,
+            &ui.filter,
+        )
     }
 
     /// Settle the cursor and the scroll once the painted rows may have changed

@@ -20,7 +20,6 @@ use crate::bridge::frame::library::{
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
-use crate::window::library::list::LibraryTree;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
@@ -207,21 +206,10 @@ fn a_scroll_step_moves_the_scroll_store_and_keeps_the_derived_rows() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, Some(list.clone()), Some(music_detail(None)));
         state.measure_library_list(40.0);
-        let rows = state.library_rows_of(&LibraryTree {
-            artists: &artists,
-            open: &[],
-            closed: &[],
-            filter: "",
-        });
-        let before = Arc::as_ptr(&rows);
+        let ui = state.ui.peek().clone();
+        let before = Arc::as_ptr(&state.rows_of(&ui));
         state.scroll_library_list(20.0);
-        let rows = state.library_rows_of(&LibraryTree {
-            artists: &artists,
-            open: &[],
-            closed: &[],
-            filter: "",
-        });
-        let after = Arc::as_ptr(&rows);
+        let after = Arc::as_ptr(&state.rows_of(&ui));
         facts.lock().expect("facts").push(format!(
             "same_rows={} scroll={}",
             std::ptr::addr_eq(before, after),

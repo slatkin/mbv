@@ -9,10 +9,7 @@ fn space_on_a_focused_pill_asks_for_its_toggle() {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.focused_pill = Some("g2".to_owned()));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "space", " ", false, &frame);
+        route(state, facts, "space", " ", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "space=Handled");
@@ -26,10 +23,7 @@ fn space_with_no_focused_pill_is_sent_to_the_core() {
     let list = music_list(Vec::new());
     let (facts, _rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "space", " ", false, &frame);
+        route(state, facts, "space", " ", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "space=Core");
@@ -42,10 +36,7 @@ fn right_with_no_focused_pill_focuses_the_first_pill() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "right", "ArrowRight", false, &frame);
+        route(state, facts, "right", "ArrowRight", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "right=Handled");
@@ -61,10 +52,7 @@ fn enter_on_a_focused_pill_asks_for_its_toggle() {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.focused_pill = Some("g2".to_owned()));
-        let frame = frame(Some(
-            &state.sections.library_list.peek().clone().expect("list"),
-        ));
-        route(state, facts, "enter", "Enter", false, &frame);
+        route(state, facts, "enter", "Enter", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "enter=Handled");
