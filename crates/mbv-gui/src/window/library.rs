@@ -27,6 +27,7 @@ pub mod podcasts_list;
 pub mod reset;
 pub mod row_memo;
 pub mod scroll;
+pub mod search;
 pub mod shows;
 pub mod shows_keys;
 pub mod shows_list;

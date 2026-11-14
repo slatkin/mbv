@@ -16,7 +16,10 @@ use crate::bridge::frame::library::{
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::clock::Clock;
 use crate::window::sections::Sections;
+
+use std::sync::Arc;
 
 use super::hero::{hero_tracks, move_track_cursor, resolve_track_cursor};
 use super::list::ListMove;
@@ -205,6 +208,10 @@ pub struct LibraryState {
     pub podcasts_ui: Signal<super::podcasts::PodcastsUiState>,
     /// The Feeds list's interaction state (`feeds.ts`'s `feedsUi`).
     pub feeds_ui: Signal<super::feeds::FeedsUiState>,
+    /// The Search field's state (`search.ts`'s `librarySearch`).
+    pub search: Signal<super::search::LibrarySearchState>,
+    /// The pending query send's timer (D10), or `None` while none is armed.
+    pub search_send: Signal<Option<crate::window::clock::TimerId>>,
     /// The Audiobooks Hero's Workspace cursor (`audiobooks-workspace.ts`'s
     /// `audiobooksWorkspace`).
     pub audiobooks_workspace: Signal<super::audiobooks_workspace::AudiobooksWorkspaceState>,
@@ -233,6 +240,8 @@ pub struct LibraryState {
     /// The core link the Library commands go through
     /// (`lib/bridge/library.ts`'s `sendLibraryCommand`).
     pub link: CoreLink,
+    /// The clock the Search query's debounce arms (D10).
+    pub clock: Arc<dyn Clock>,
     /// The album row a reveal waits to scroll into view, until the list is
     /// measured (`state.ts`'s module-level `pendingRevealRow`).
     pub pending_reveal_row: Signal<Option<String>>,
@@ -256,7 +265,12 @@ impl LibraryState {
     /// predicted position (the Audiobooks chapter Workspace's marked row reads
     /// it).
     #[must_use]
-    pub fn new(sections: Sections, link: CoreLink, playhead_position: Memo<f64>) -> Self {
+    pub fn new(
+        sections: Sections,
+        link: CoreLink,
+        playhead_position: Memo<f64>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self {
             ui: Signal::new(LibraryUiState::initial()),
             music_scroll: Signal::new(initial_list_scroll()),
@@ -271,6 +285,8 @@ impl LibraryState {
             ),
             podcasts_ui: Signal::new(super::podcasts::initial_podcasts_ui()),
             feeds_ui: Signal::new(super::feeds::initial_feeds_ui()),
+            search: Signal::new(super::search::initial_library_search()),
+            search_send: Signal::new(None),
             home_rows_memo: super::home_list::HomeRowsMemo::default(),
             emby_rows_memo: super::emby_list::EmbyRowsMemo::default(),
             shows_rows_memo: super::shows_list::ShowsRowsMemo::default(),
@@ -280,6 +296,7 @@ impl LibraryState {
             playhead_position,
             sections,
             link,
+            clock,
             pending_reveal_row: Signal::new(None),
             rows_memo: RowsMemo::default(),
         }

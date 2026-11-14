@@ -22,6 +22,7 @@ use crate::bridge::frame::library::{
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::clock::{Clock, RecordingClock};
 use crate::window::sections::Sections;
 
 use crate::window::library::list::ListMove;
@@ -46,7 +47,8 @@ fn harness(
     let state = use_hook(move || {
         // The playhead's predicted position, held at the scenario's value.
         let playhead_position = Memo::new(move || position);
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position)
+        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
     });
     use_effect(move || {
         scenario(&state, &facts);

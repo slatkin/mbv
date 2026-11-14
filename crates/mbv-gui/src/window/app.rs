@@ -108,6 +108,7 @@ struct Drain {
     fired: FiredTimers,
     sections: Sections,
     playhead: Playhead,
+    library: LibraryState,
 }
 
 impl Drain {
@@ -129,9 +130,11 @@ impl Drain {
             // An art answer reaches its `ArtImage` through the store (D7).
             WindowEvent::Art(event) => self.art_events.push(event),
             // A passed timer reaches the surface that armed it (D10); the
-            // playhead's minute clock re-arms through the same route.
+            // playhead's minute clock re-arms through the same route, and the
+            // Search query's debounce sends its settled query over its own.
             WindowEvent::Timer(timer) => {
                 self.playhead.on_timer(timer);
+                self.library.on_search_timer(timer);
                 self.fired.push(timer);
             }
             // A presented frame advances the playhead's prediction (D10).
@@ -212,8 +215,12 @@ pub fn App() -> Element {
     let sections = use_hook(Sections::new);
     provide_context(sections.clone());
     let clock = consume_context::<Arc<dyn Clock>>();
+    // The playhead's clock and the Search debounce's clock (D10) are one
+    // context value: the clone the playhead's hook moves keeps the original
+    // for the Library store's debounce to arm.
+    let playhead_clock = Arc::clone(&clock);
     let times: Arc<dyn Times> = Arc::new(SystemTimes::new());
-    let playhead = use_hook(move || Playhead::new(Arc::clone(&clock), times));
+    let playhead = use_hook(move || Playhead::new(Arc::clone(&playhead_clock), times));
     provide_context(playhead.clone());
     let reporter = use_layout_reporter();
     provide_context(reporter);
@@ -227,8 +234,14 @@ pub fn App() -> Element {
     // The Library panel's interaction store (D15): the port of `state.ts`'s
     // and `scroll.ts`'s module stores as one context value, over the sections
     // and the core link the commands go through.
-    let library =
-        use_hook(|| LibraryState::new(sections.clone(), CoreLink::clone(&link), playhead.position));
+    let library = use_hook(|| {
+        LibraryState::new(
+            sections.clone(),
+            CoreLink::clone(&link),
+            playhead.position,
+            Arc::clone(&clock),
+        )
+    });
     provide_context(library.clone());
 
     // The window channel's drain (D4): every event from outside the tree
@@ -244,6 +257,7 @@ pub fn App() -> Element {
             fired,
             sections: sections.clone(),
             playhead: playhead.clone(),
+            library: library.clone(),
         },
         slot,
     );

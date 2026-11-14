@@ -8,7 +8,9 @@
 //! Library panel shows, and every other key goes to the core.
 
 use crate::bridge::frame::focus::GuiPanel;
-use crate::bridge::frame::library::{GuiDestinationList, GuiMusicList, GuiMusicPillFrame};
+use crate::bridge::frame::library::{
+    GuiDestinationList, GuiMusicList, GuiMusicPillFrame, GuiSearchFrame,
+};
 use crate::bridge::keys::DomKey;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
@@ -251,9 +253,13 @@ fn route_item_key(state: &LibraryState, key: &DomKey) {
 /// item menu and the picked item's menu first, then the Narrow arrangement's Hero
 /// overlay, then the carried Search section. Whether one paints decides the
 /// answer, so an Esc with nothing open may not leave the core's Esc unclaimed.
-/// The Search close arrives with `search.ts` (row 6.8); until then a carried
-/// Search section answers nothing here.
-fn route_escape_key(state: &LibraryState, ui: &super::state::LibraryUiState) -> KeyOutcome {
+/// The carried Search section's close is the one close the open results have
+/// (`search.ts`, row 6.8).
+fn route_escape_key(
+    state: &LibraryState,
+    ui: &super::state::LibraryUiState,
+    search: Option<&GuiSearchFrame>,
+) -> KeyOutcome {
     if ui.row_menu.is_some() {
         state.close_library_row_menu();
         return KeyOutcome::Handled;
@@ -266,7 +272,49 @@ fn route_escape_key(state: &LibraryState, ui: &super::state::LibraryUiState) -> 
         state.close_library_hero();
         return KeyOutcome::Handled;
     }
+    // The carried Search section (design D12, row 12.1): the dropdown paints
+    // while the frame carries it, so Esc closes it even after a press took
+    // the keyboard elsewhere — it is the only close the open results have.
+    if search.is_some() {
+        state.close_library_search();
+        return KeyOutcome::Handled;
+    }
     KeyOutcome::Core
+}
+
+/// Route a key while the Search field holds the keyboard (design D3, step 2,
+/// row 12.1): Esc closes the field and the results, the arrows move the
+/// highlighted result, Enter activates it, and every other key is the field's
+/// typing — the `Text` answer lets the focused input take the key and sends
+/// nothing to the core. With no results held, the arrows and Enter still
+/// never reach the core: they would move the caret and submit nothing, and
+/// the core gets none.
+fn route_search_key(
+    state: &LibraryState,
+    key: &DomKey,
+    search: Option<&GuiSearchFrame>,
+) -> KeyOutcome {
+    match key.key.as_str() {
+        "Escape" => {
+            state.close_library_search();
+            KeyOutcome::Handled
+        }
+        "ArrowDown" => {
+            state.move_search_highlight(1, search);
+            KeyOutcome::Handled
+        }
+        "ArrowUp" => {
+            state.move_search_highlight(-1, search);
+            KeyOutcome::Handled
+        }
+        "Enter" => {
+            state.activate_search_highlight(search);
+            KeyOutcome::Handled
+        }
+        // The field takes the rest: the browser types the key, and the core
+        // gets none.
+        _ => KeyOutcome::Text,
+    }
 }
 
 /// Move the focused pill one pill along the row (design D3, step 4): Right and
@@ -289,17 +337,17 @@ fn move_pill_focus(state: &LibraryState, pills: &[GuiMusicPillFrame], step: i32)
 /// pane the window content focused deciding which control the key acts on. On
 /// Home the Home keys route (design D12), on a plain Emby library the Emby
 /// keys (row 8.1), and the Shows, Audiobooks, Podcasts, and Feeds keys route
-/// with their ports (rows 6.5 to 6.7). The Search and Settings placeholders
-/// remain (rows 6.8 and 8.1); a key under those destinations goes to the
-/// core's router.
+/// with their ports (rows 6.5 to 6.7). The Settings placeholder remains
+/// (row 8.1); a key under that destination goes to the core's router.
 fn route_panel_key(
     state: &LibraryState,
     key: &DomKey,
     ui: &super::state::LibraryUiState,
     sections: &Sections,
+    search: Option<&GuiSearchFrame>,
 ) -> KeyOutcome {
     if key.key == "Escape" && bare(key) {
-        return route_escape_key(state, ui);
+        return route_escape_key(state, ui, search);
     }
     let list = sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
@@ -435,6 +483,32 @@ pub fn route_library_key(
     if !LibraryState::library_shown(sections.library_list.peek().as_ref()) {
         return KeyOutcome::Core;
     }
+    // The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
+    // the keyboard wherever the Library panel shows, before the open-field
+    // checks — even while the filter holds it, where the DOM focus move closes
+    // the filter the way any other focus move does. The chord arms the field
+    // only while a top bar mounts it: in Mini with Queue focus the panel paints
+    // no top bar, and arming a field that holds no element leaves the keyboard
+    // dead on its fact, so the chord keeps its core effect there instead.
+    if key.modifiers.ctrl_key
+        && !key.meta_key
+        && !key.modifiers.alt_key
+        && !key.modifiers.shift_key
+        && matches!(key.key.as_str(), "k" | "K")
+        && state.search_field_mounted()
+    {
+        state.focus_search_field();
+        return KeyOutcome::Handled;
+    }
+    // (2) An open text field of the panel takes the keys. The Search field
+    // routes first: its hold on the keyboard is DOM focus, which no panel key
+    // runs while it types (the key-leak rule), and the field's typing is the
+    // `Text` answer the forwarder lets through (design D3, step 2, row 12.1).
+    // Both facts must hold: a stale armed fact an unmounted bar retracted must
+    // never route a key under it (the same key-leak gate).
+    if state.search_field_mounted() && state.search_field_focused() {
+        return route_search_key(state, key, sections.search.peek().as_ref());
+    }
     let ui = state.ui.peek().clone();
     if ui.filter_open {
         return route_filter_key(state, key);
@@ -464,7 +538,7 @@ pub fn route_library_key(
     // (4) The Library keys run while the Library panel has Panel focus. The
     // carried Search section rides with them: its Esc close needs it.
     if sections.focus.peek().panel == GuiPanel::Library {
-        return route_panel_key(state, key, &ui, sections);
+        return route_panel_key(state, key, &ui, sections, sections.search.peek().as_ref());
     }
     // (5) Every other key goes to the core's keyboard router.
     KeyOutcome::Core

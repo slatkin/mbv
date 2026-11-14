@@ -19,6 +19,7 @@ use crate::bridge::frame::library::{
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::list::ListMove;
 use crate::window::sections::Sections;
 
@@ -39,7 +40,8 @@ fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) ->
         // The playhead position the Audiobooks Workspace reads; the Shows
         // Workspace reads none of it. The tests hold it at 0.
         let playhead_position = Memo::new(|| 0.0);
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position)
+        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
     });
     use_effect(move || {
         scenario(&state, &facts);

@@ -26,6 +26,7 @@ use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::{LibraryPane, LibraryState};
 use crate::window::sections::Sections;
 
@@ -41,7 +42,8 @@ fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) ->
         // The playhead position the Audiobooks Workspace reads: the tests
         // hold it at 0, which marks no chapter but feeds the resolution.
         let playhead_position = Memo::new(|| 0.0);
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position)
+        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
     });
     use_effect(move || {
         scenario(&state, &facts);
@@ -381,3 +383,4 @@ mod home;
 mod list;
 mod panes;
 mod pills;
+mod search_keys;

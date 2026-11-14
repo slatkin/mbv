@@ -27,6 +27,7 @@ use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::{LibraryPane, LibraryState};
 use crate::window::sections::Sections;
 
@@ -40,7 +41,8 @@ type Scenario = std::rc::Rc<dyn Fn(&LibraryState, &Facts)>;
 fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) -> Element {
     let state = use_hook(|| {
         let playhead_position = Memo::new(|| 0.0);
-        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position)
+        let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+        LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
     });
     use_effect(move || {
         scenario(&state, &facts);

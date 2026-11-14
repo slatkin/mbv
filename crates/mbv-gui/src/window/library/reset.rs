@@ -53,4 +53,6 @@ pub fn reset_library_interaction(state: &LibraryState) {
     podcasts_scroll.set(initial_list_scroll());
     let mut feeds_scroll = state.scrolls.feeds;
     feeds_scroll.set(initial_list_scroll());
+    let mut search = state.search;
+    search.set(super::search::initial_library_search());
 }
