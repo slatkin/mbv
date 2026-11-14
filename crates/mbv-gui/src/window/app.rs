@@ -184,13 +184,16 @@ fn note_panel_ui_reset(store: &mut PanelWidthsStore, sections: &Sections) -> boo
 /// The router owns its section stores and interaction stores, so the
 /// handler's `move` closure can hand the trait object up; the routing steps
 /// read the sections through `peek`, so a keydown copies none of their
-/// values.
+/// values. The arrangement is the frame's own value — the one the Library
+/// panel paints (design D4) — so the keys close the Narrow Hero overlay on
+/// the fact the panel shows.
 fn window_key_router(
     library: LibraryState,
     settings: SettingsState,
     sections: Sections,
+    arrangement: GuiArrangement,
 ) -> impl Fn(&DomKey) -> KeyOutcome + 'static {
-    move |key| route_library_key(key, Some(&sections), &library, Some(&settings))
+    move |key| route_library_key(key, Some(&sections), &library, Some(&settings), arrangement)
 }
 /// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
 /// port of `reset.ts`): a changed value resets the panel widths, the Library
@@ -406,8 +409,12 @@ pub fn App() -> Element {
                 // the rest (add-gui-library-panel design D3). The Settings
                 // steps run ahead of the Library ones (row 8.1); both read
                 // the window's section stores and the interaction stores.
-                let router =
-                    window_key_router(library.clone(), settings_state.clone(), sections.clone());
+                let router = window_key_router(
+                    library.clone(),
+                    settings_state.clone(),
+                    sections.clone(),
+                    arrangement,
+                );
                 input::on_keydown(&event, &router, &key_link);
             },
             onpointerdown: move |event: PointerEvent| {

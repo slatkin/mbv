@@ -83,7 +83,15 @@ fn sections_without_the_library_list_leave_every_library_key_to_the_core() {
         // A fresh store carries no Library list, even though the window's own
         // sections still do.
         let empty = Sections::new();
-        route_on(state, facts, "slash", "/", false, &empty);
+        route_on(
+            state,
+            facts,
+            "slash",
+            "/",
+            false,
+            &empty,
+            GuiArrangement::Wide,
+        );
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(

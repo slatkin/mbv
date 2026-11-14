@@ -20,6 +20,7 @@ use dioxus_native::prelude::*;
 use super::keys_shared::{bare, cursor_move, is_list_and_hero_key};
 use super::list::step_pill_focus;
 use super::state::{LibraryPane, LibraryState};
+use crate::window::arrangement::GuiArrangement;
 use crate::window::settings::keys::route_settings_key;
 use crate::window::settings::state::SettingsState;
 
@@ -261,6 +262,7 @@ fn route_escape_key(
     state: &LibraryState,
     ui: &super::state::LibraryUiState,
     search: Option<&GuiSearchFrame>,
+    arrangement: GuiArrangement,
 ) -> KeyOutcome {
     if ui.row_menu.is_some() {
         state.close_library_row_menu();
@@ -270,7 +272,7 @@ fn route_escape_key(
         state.close_library_item_menu();
         return KeyOutcome::Handled;
     }
-    if state.hero_overlay_open(ui) {
+    if state.hero_overlay_open(ui, arrangement) {
         state.close_library_hero();
         return KeyOutcome::Handled;
     }
@@ -347,9 +349,10 @@ fn route_panel_key(
     ui: &super::state::LibraryUiState,
     sections: &Sections,
     search: Option<&GuiSearchFrame>,
+    arrangement: GuiArrangement,
 ) -> KeyOutcome {
     if key.key == "Escape" && bare(key) {
-        return route_escape_key(state, ui, search);
+        return route_escape_key(state, ui, search, arrangement);
     }
     let list = sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
@@ -445,13 +448,17 @@ fn route_music_panel_key(
 /// Route one keydown (design D3): the window does its part, and the answer is
 /// what the input forwarder must do with the key. The section facts the routing
 /// reads come from the window's own section stores (`gui-change-driven-sections`
-/// design D6), read through `peek` — a keydown copies none of their values.
+/// design D6), read through `peek` — a keydown copies none of their values. The
+/// `arrangement` is the window's own value, the same one the Library panel
+/// paints (design D4): the keys close the Narrow Hero overlay on the fact the
+/// panel paints, never on a report that may not have landed yet.
 #[must_use]
 pub fn route_library_key(
     key: &DomKey,
     sections: Option<&Sections>,
     state: &LibraryState,
     settings: Option<&SettingsState>,
+    arrangement: GuiArrangement,
 ) -> KeyOutcome {
     let Some(sections) = sections else {
         return KeyOutcome::Core;
@@ -544,7 +551,14 @@ pub fn route_library_key(
     // (4) The Library keys run while the Library panel has Panel focus. The
     // carried Search section rides with them: its Esc close needs it.
     if sections.focus.peek().panel == GuiPanel::Library {
-        return route_panel_key(state, key, &ui, sections, sections.search.peek().as_ref());
+        return route_panel_key(
+            state,
+            key,
+            &ui,
+            sections,
+            sections.search.peek().as_ref(),
+            arrangement,
+        );
     }
     // (5) Every other key goes to the core's keyboard router.
     KeyOutcome::Core

@@ -149,10 +149,6 @@ pub struct LibraryUiState {
     /// The right-click item menu (the row-menu command), `None` while no
     /// right-click menu is up.
     pub row_menu: Option<RowMenu>,
-    /// The arrangement the panel paints, reported by the panel (design D4): the
-    /// keys close the Narrow Hero overlay only where one paints, so Esc in Wide
-    /// stays the core's. `None` until the panel reports.
-    pub arrangement: Option<GuiArrangement>,
 }
 
 impl LibraryUiState {
@@ -173,7 +169,6 @@ impl LibraryUiState {
             hero_dismissed: false,
             item_menu_open: false,
             row_menu: None,
-            arrangement: None,
         }
     }
 }
@@ -550,26 +545,17 @@ impl LibraryState {
         None
     }
 
-    /// Report the arrangement the panel paints (design D4): the panel measures it
-    /// from the Library column, and the keys read it to close the Narrow Hero
-    /// overlay only where one paints.
-    pub fn report_library_arrangement(&self, arrangement: GuiArrangement) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| {
-            if ui.arrangement != Some(arrangement) {
-                ui.arrangement = Some(arrangement);
-            }
-        });
-    }
-
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
     /// a picked item, an arrangement that overlays rather than splits, and no
     /// dismissal since that pick. The Hero is the Music Hero, the Home Hero, the
     /// Shows Hero, or a plain Emby library's Hero (design D12), whichever
-    /// destination is active. Esc and a press on the backdrop close it.
+    /// destination is active. Esc and a press on the backdrop close it. The
+    /// `arrangement` is the one value the window hands both this predicate's
+    /// caller and the panel's paint (design D4): the keys never read a report
+    /// that may not have landed yet.
     #[must_use]
-    pub fn hero_overlay_open(&self, ui: &LibraryUiState) -> bool {
-        ui.arrangement == Some(GuiArrangement::Narrow)
+    pub fn hero_overlay_open(&self, ui: &LibraryUiState, arrangement: GuiArrangement) -> bool {
+        arrangement == GuiArrangement::Narrow
             && !ui.hero_dismissed
             && self.library_detail_has_hero()
     }

@@ -60,7 +60,13 @@ fn route_key(
             alt_key: false,
         },
     };
-    let outcome = route_library_key(&dom, Some(&state.sections), state, None);
+    let outcome = route_library_key(
+        &dom,
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+    );
     let search = state.search.peek();
     facts.lock().expect("facts").push(format!(
         "{name}={outcome:?} focused={} mounted={} highlight={:?}",

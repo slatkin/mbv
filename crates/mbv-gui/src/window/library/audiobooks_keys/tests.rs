@@ -27,6 +27,7 @@ use crate::bridge::frame::library::{
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
+use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::{LibraryPane, LibraryState};
@@ -125,8 +126,13 @@ fn route_on(
     shift: bool,
     sections: &Sections,
 ) {
-    let outcome =
-        super::super::keys::route_library_key(&key(value, shift), Some(sections), state, None);
+    let outcome = super::super::keys::route_library_key(
+        &key(value, shift),
+        Some(sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+    );
     facts
         .lock()
         .expect("facts")

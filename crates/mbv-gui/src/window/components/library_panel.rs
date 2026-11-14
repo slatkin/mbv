@@ -280,20 +280,11 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let wide = arrangement == GuiArrangement::Wide;
     // The Narrow Hero overlay's facts: the active destination's pair while
     // its detail paints a Hero (design D4, D12), and no dismissal since that
-    // pick.
+    // pick. The arrangement is the window's own value, the same one the keys
+    // read (design D4), so the paint and Esc cannot disagree.
     let overlay_open = arrangement == GuiArrangement::Narrow
         && pair.as_ref().is_some_and(pair_has_hero)
         && !ui.hero_dismissed;
-
-    // Report the arrangement the panel paints (design D4): the key router
-    // closes the Narrow Hero overlay with Esc only while one paints. The
-    // effect re-runs on an arrangement change while the panel stays mounted,
-    // and writes the interaction state's own arrangement field — it reads
-    // no signal, so it never re-runs on its own write.
-    let report_library = library.clone();
-    use_effect(use_reactive((&props.arrangement,), move |(arrangement,)| {
-        report_library.report_library_arrangement(arrangement);
-    }));
 
     // The right-click item menu's press surface (design D8, D15): the
     // viewport-anchored card at the pointer position, painted while the

@@ -155,8 +155,9 @@ fn route_on(
     value: &str,
     shift: bool,
     sections: &Sections,
+    arrangement: GuiArrangement,
 ) {
-    let outcome = route_library_key(&key(value, shift), Some(sections), state, None);
+    let outcome = route_library_key(&key(value, shift), Some(sections), state, None, arrangement);
     facts
         .lock()
         .expect("facts")
@@ -164,9 +165,40 @@ fn route_on(
 }
 
 /// Route one keydown against the window's own section stores and paint the
-/// outcome.
+/// outcome, in the arrangement a Wide Library column paints: no Hero overlay is
+/// up unless a scenario routes in it.
 fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    route_on(state, facts, name, value, shift, &state.sections);
+    route_on(
+        state,
+        facts,
+        name,
+        value,
+        shift,
+        &state.sections,
+        GuiArrangement::Wide,
+    );
+}
+
+/// Route one keydown in the given arrangement, against the window's own section
+/// stores (design D4): the keys close the Narrow Hero overlay only while the
+/// panel paints one.
+fn route_in(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    shift: bool,
+    arrangement: GuiArrangement,
+) {
+    route_on(
+        state,
+        facts,
+        name,
+        value,
+        shift,
+        &state.sections,
+        arrangement,
+    );
 }
 
 /// The two group pills the Music fixture carries: one selected, one not.

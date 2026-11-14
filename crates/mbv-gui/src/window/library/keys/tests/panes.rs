@@ -145,13 +145,12 @@ fn tab_onto_the_hero_in_narrow_paints_its_overlay_again() {
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
-        state.report_library_arrangement(GuiArrangement::Narrow);
         let mut ui = state.ui;
         ui.with_mut(|ui| {
             ui.pane = Some(LibraryPane::List);
             ui.hero_dismissed = true;
         });
-        route(state, facts, "tab", "Tab", false);
+        route_in(state, facts, "tab", "Tab", false, GuiArrangement::Narrow);
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert!(facts[1].contains("pane=Some(Hero)"));
@@ -168,10 +167,16 @@ fn esc_with_the_hero_pane_focused_returns_the_pane_focus_to_the_list() {
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
-        state.report_library_arrangement(GuiArrangement::Narrow);
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
-        route(state, facts, "escape", "Escape", false);
+        route_in(
+            state,
+            facts,
+            "escape",
+            "Escape",
+            false,
+            GuiArrangement::Narrow,
+        );
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -184,6 +189,11 @@ fn esc_with_the_hero_pane_focused_returns_the_pane_focus_to_the_list() {
     assert_eq!(commands(&rx), []);
 }
 
+// Esc closes the Narrow Hero overlay on the arrangement the panel paints
+// (design D4): the window hands the router the one value the panel is handed,
+// so the first Narrow frame after a Wide one closes on its own Esc. Before the
+// port read a report that landed after the paint, this Esc fell through to the
+// core and left the overlay up (the Wide-to-Narrow stuck-overlay report).
 // Review of row 4.7, finding P2-b: the cursor was seeded only when a pane
 // took the focus, so a tracklist whose cache landed afterwards painted no
 // cursor and Enter did nothing. The cursor now derives from the tracks that
@@ -195,8 +205,14 @@ fn esc_closes_the_narrow_hero_overlay() {
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
-        state.report_library_arrangement(GuiArrangement::Narrow);
-        route(state, facts, "escape", "Escape", false);
+        route_in(
+            state,
+            facts,
+            "escape",
+            "Escape",
+            false,
+            GuiArrangement::Narrow,
+        );
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
@@ -218,8 +234,14 @@ fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
-        state.report_library_arrangement(GuiArrangement::Wide);
-        route(state, facts, "escape", "Escape", false);
+        route_in(
+            state,
+            facts,
+            "escape",
+            "Escape",
+            false,
+            GuiArrangement::Wide,
+        );
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(

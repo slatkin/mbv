@@ -2,11 +2,22 @@
 //! review-of-row-4.5 finding P1): the overlay paints the same Hero painter
 //! the Wide pane mounts, over the list, and closes on a press on its
 //! backdrop (design D3, D4) — the backdrop's close is the interaction
-//! state's own close, driven here through the painted overlay's reaction.
+//! state's own close, driven here through the painted overlay's reaction,
+//! and through a real pointer press on the backdrop's painted box.
+
+use std::sync::Arc;
+
+use blitz_dom::Document as _;
+use blitz_traits::events::{
+    BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point, PointerCoords,
+    PointerDetails, UiEvent,
+};
+use dioxus_native::prelude::*;
 
 use super::{built, fixtures, seed_idle_status};
 use crate::bridge::frame::library::{GuiAudiobooksChapterRowFrame, GuiAudiobooksWorkspaceFrame};
 use crate::window::arrangement::GuiArrangement;
+use crate::window::input::f32_from_f64;
 
 /// Contract (`LibraryPanel.test.ts`, the review-of-row-4.5 finding P1): the
 /// Narrow overlay paints the Hero over the list and closes on a press on its
@@ -30,6 +41,71 @@ fn the_narrow_overlay_paints_the_hero_and_closes_on_its_backdrop_press() {
     assert!(
         !fixture.presents("[data-library-region=\"heroOverlay\"]"),
         "the overlay closed"
+    );
+}
+
+/// One pointer press or release at `x`/`y` in the document's client
+/// coordinates, as the shell builds them from a winit pointer button.
+fn pointer(down: bool, x: f32, y: f32) -> UiEvent {
+    let coords = PointerCoords {
+        page_x: x,
+        page_y: y,
+        screen_x: x,
+        screen_y: y,
+        client_x: x,
+        client_y: y,
+    };
+    let event = BlitzPointerEvent {
+        id: BlitzPointerId::Mouse,
+        is_primary: true,
+        coords,
+        button: MouseEventButton::Main,
+        buttons: MouseEventButtons::Primary,
+        mods: Modifiers::default(),
+        details: PointerDetails::default(),
+        element: Point::default(),
+        active_pointers: Arc::default(),
+    };
+    if down {
+        UiEvent::PointerDown(event)
+    } else {
+        UiEvent::PointerUp(event)
+    }
+}
+
+/// A press and its release at `x`/`y`: the release dispatches the DOM
+/// `click`, so the backdrop's own handler runs.
+fn click(fixture: &mut super::Fixture, x: f32, y: f32) {
+    fixture.doc.handle_ui_event(pointer(true, x, y));
+    fixture.doc.handle_ui_event(pointer(false, x, y));
+    fixture.poll_until_idle();
+}
+
+/// Contract (`LibraryPanel.svelte`'s backdrop button, design D3, D4): a
+/// click on the overlay's dim backdrop reaches the painted button's handler,
+/// so the overlay closes and the list under it paints again. The card covers
+/// the overlay's middle, so the click lands on the frame beside it.
+#[test]
+fn a_click_on_the_narrow_overlays_backdrop_closes_it_and_the_list_paints() {
+    let mut fixture = built(GuiArrangement::Narrow);
+    let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+
+    let backdrop = fixture.rect_of("[data-library-hero-backdrop]");
+    let (x, y) = (
+        f32_from_f64(backdrop.x) + 2.0,
+        f32_from_f64(backdrop.y) + 2.0,
+    );
+    click(&mut fixture, x, y);
+
+    assert!(
+        !fixture.presents("[data-library-region=\"heroOverlay\"]"),
+        "the click closed the overlay"
+    );
+    assert!(
+        fixture.presents("[data-library-region=\"list\"]"),
+        "the list paints again"
     );
 }
 
