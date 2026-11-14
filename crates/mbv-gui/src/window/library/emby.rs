@@ -59,7 +59,8 @@ impl LibraryState {
     /// rows, narrowed by the state's filter text. No carried Emby content
     /// paints no rows.
     pub(super) fn emby_rows(&self) -> Arc<[EmbyListRow]> {
-        let Some(frame) = self.emby_frame() else {
+        let list = self.sections.library_list.peek();
+        let Some(frame) = library_emby_list(list.as_ref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
