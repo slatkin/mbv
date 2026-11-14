@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use rstest::rstest;
 
-use super::{glyph_color, theme_style_rule};
+use super::{glyph_color, role_property, theme_style_rule};
 use crate::bridge::frame::theme::{GuiChrome, GuiRgb, GuiRole, GuiTheme};
 
 /// A theme with two roles and a full chrome fixture.
@@ -104,10 +104,51 @@ fn the_theme_rule_writes_the_role_and_chrome_colours() {
     assert!(rule.contains("--mbv-accent: rgb(4, 5, 6)"), "{rule}");
     assert!(rule.contains("--mbv-background: rgb(10, 11, 12)"), "{rule}");
     assert!(rule.contains("--mbv-border: rgb(70, 71, 72)"), "{rule}");
-    assert!(
-        rule.contains("--mbv-queueColumn: rgb(90, 91, 92)"),
-        "{rule}"
+    assert!(rule.contains("--mbv-input: rgb(80, 81, 82)"), "{rule}");
+}
+
+/// The `--mbv-` property names the rule declares, in declaration order.
+fn declared_properties(rule: &str) -> Vec<String> {
+    rule.split(';')
+        .filter_map(|declaration| {
+            let declaration = declaration.rsplit('{').next()?;
+            let (name, _) = declaration.split_once(':')?;
+            let name = name.trim();
+            name.starts_with("--mbv-").then(|| name.to_owned())
+        })
+        .collect()
+}
+
+/// The rule's `--mbv-` property set is exactly the one the reference Tauri
+/// build defined: every role, plus the eight chrome fills whose concept has a
+/// one-word name. Its chrome DTO had no `rename_all`, so the six two-word
+/// fills reached the webview as `--mbv-queue_column` and the like while every
+/// consumer read the camelCase name — those six properties were never
+/// defined, and the fills they name stayed transparent (see `write_chrome`).
+#[test]
+fn the_theme_rule_declares_the_reference_property_set() {
+    let rule = theme_style_rule(Some(&GuiTheme::current()));
+    let mut expected: Vec<String> = GuiRole::ALL
+        .iter()
+        .map(|&role| role_property(role))
+        .collect();
+    expected.extend(
+        [
+            "background",
+            "card",
+            "popover",
+            "muted",
+            "secondary",
+            "sidebar",
+            "border",
+            "input",
+        ]
+        .map(|name| format!("--mbv-{name}")),
     );
+    expected.sort();
+    let mut declared = declared_properties(&rule);
+    declared.sort();
+    assert_eq!(declared, expected, "{rule}");
 }
 
 /// An absent theme writes nothing, so `app.css`'s fallbacks stay and the

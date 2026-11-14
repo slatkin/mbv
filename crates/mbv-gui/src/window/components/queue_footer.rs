@@ -33,8 +33,11 @@
 //! does not show, this line paints them as the TUI's status row does.
 //!
 //! The band paints the canvas's type and border (mono 12 px, a 1 px top
-//! border in the queue-local `--canvas-border` token) on the frame's
-//! `queueFooterBand` fill, with the secondary-title token
+//! border in the queue-local `--canvas-border` token) over the queue column's
+//! backdrop: the `queueFooterBand` name it carries is not part of the
+//! window's `--mbv-*` token set, so the band paints no fill of its own
+//! (`window/theme.rs::write_chrome` holds the rule and the reason), as the
+//! reference build painted it. The text keeps the secondary-title token
 //! (`--canvas-type-secondary`, the queue source is a secondary title) and
 //! owner-marker sand (`--canvas-owner`) in place of the pills' theme roles.
 //! The slice's `GuiStatusBar` carries no volume, mute, or visual-mode

@@ -20,3 +20,4 @@ mod header;
 mod menu_drag;
 mod regions;
 mod rows;
+mod theme;

@@ -51,6 +51,10 @@ pub fn glyph_color(available: bool, role: GuiRole) -> String {
 /// the theme omits keeps its last value, so a theme application is a
 /// replace, not a reset. An absent theme writes nothing, so `app.css`'s
 /// fallbacks stay and the chrome paints before the first theme.
+///
+/// The rule's `--mbv-*` set is the reference build's set: the roles and the
+/// eight single-word chrome fills ([`write_chrome`] says why the other six
+/// are absent).
 #[must_use]
 pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
     let Some(theme) = theme else {
@@ -73,9 +77,25 @@ pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
 }
 
 /// Writes the chrome fills into the rule. The destructure names every field,
-/// so a chrome addition breaks this until the fill's property is written —
+/// so a chrome addition breaks this until the writer answers for the fill —
 /// the same compiler check that the role names of the DTO give the chrome
 /// writer.
+///
+/// The writer sets the eight fills whose concept has a one-word name and
+/// leaves the six two-word fills unwritten, because that is the property set
+/// the reference Tauri front end defined. Its `GuiChrome` derived
+/// `Serialize` with no `rename_all`, so `applyTheme` wrote
+/// `--mbv-queue_column`, `--mbv-queue_panel`, and the rest, while every
+/// consumer read `var(--mbv-queueColumn)`, `var(--mbv-queuePanel)`, and the
+/// rest. Those six properties were therefore never defined in the webview:
+/// each consumer's `var()` was invalid at computed-value time, which left a
+/// `background` transparent (the queue column's backdrop showed through the
+/// recessed box, the zebra stripes, the footer band, and the compact strip)
+/// and the scrubber thumb's `box-shadow` ring unpainted. Writing the
+/// camelCase names here would paint four fills the reference build never
+/// painted, so the port reproduces its token set instead. The six fields
+/// stay on the DTO — they still name the surface mapping — and stay bound so
+/// the destructure keeps its exhaustiveness check.
 fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
     let GuiChrome {
         background,
@@ -86,12 +106,12 @@ fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
         sidebar,
         border,
         input,
-        queue_column,
-        queue_column_focused,
-        queue_panel,
-        queue_panel_focused,
-        queue_playback_band,
-        queue_footer_band,
+        queue_column: _queue_column,
+        queue_column_focused: _queue_column_focused,
+        queue_panel: _queue_panel,
+        queue_panel_focused: _queue_panel_focused,
+        queue_playback_band: _queue_playback_band,
+        queue_footer_band: _queue_footer_band,
     } = chrome;
     let _ = writeln!(
         rule,
@@ -128,36 +148,6 @@ fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
         rule,
         "--mbv-input: rgb({}, {}, {});",
         input.r, input.g, input.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queueColumn: rgb({}, {}, {});",
-        queue_column.r, queue_column.g, queue_column.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queueColumnFocused: rgb({}, {}, {});",
-        queue_column_focused.r, queue_column_focused.g, queue_column_focused.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queuePanel: rgb({}, {}, {});",
-        queue_panel.r, queue_panel.g, queue_panel.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queuePanelFocused: rgb({}, {}, {});",
-        queue_panel_focused.r, queue_panel_focused.g, queue_panel_focused.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queuePlaybackBand: rgb({}, {}, {});",
-        queue_playback_band.r, queue_playback_band.g, queue_playback_band.b
-    );
-    let _ = writeln!(
-        rule,
-        "--mbv-queueFooterBand: rgb({}, {}, {});",
-        queue_footer_band.r, queue_footer_band.g, queue_footer_band.b
     );
 }
 

@@ -45,11 +45,15 @@
 //!
 //! The row paint is the canvas's (U4.2): its hexes come through the
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
-//! moves (U13). Two fills still alias role values because the frame carries
+//! moves (U13). Two fills still name role values because the frame carries
 //! roles and the chrome fills, not surface fills (design D7): the recessed
-//! box paints the chrome's `queuePanel` pair — `Surface::QueuePanel`,
+//! box names the chrome's `queuePanel` pair — `Surface::QueuePanel`,
 //! focus-reactive like the TUI's `queue_row_background(focused)` — and the
-//! zebra stripe paints the `queueColumn` pair.
+//! zebra stripe the `queueColumn` pair. Their names are not part of the
+//! window's `--mbv-*` token set, so each `var()` is invalid at
+//! computed-value time and the fill stays transparent, as it painted in the
+//! reference build (`window/theme.rs::write_chrome` holds the rule and the
+//! reason); the queue column's own backdrop shows through.
 
 use std::fmt::Write as _;
 
@@ -260,7 +264,9 @@ pub fn QueuePanel() -> Element {
         _ => String::new(),
     });
     // The recessed box's fill: the chrome's `queuePanel` pair,
-    // focus-reactive like the TUI's `queue_row_background(focused)`.
+    // focus-reactive like the TUI's `queue_row_background(focused)`. The
+    // property is undefined on purpose (`window/theme.rs::write_chrome`), so
+    // the box paints no fill of its own and the backdrops behind it show.
     let box_background = if panel_focused {
         "var(--mbv-queuePanelFocused)"
     } else {
@@ -410,6 +416,7 @@ pub fn QueuePanel() -> Element {
             div {
                 class: "relative flex min-h-0 flex-1 flex-col",
                 style: "margin-inline: calc(var(--mbv-cell-col) * 2); background: {box_background};",
+                "data-queue-box": "",
                 QueueHeader {
                     summary: summary.clone(),
                     right_column: right_column_handles,

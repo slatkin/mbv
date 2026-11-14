@@ -28,6 +28,7 @@ use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueInsertion, GuiQueueRow, GuiQueueSummary,
     GuiRightColumn, GuiSemanticState, GuiTrailing,
 };
+use crate::bridge::frame::theme::GuiTheme;
 use crate::bridge::layout::{LayoutReport, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -38,6 +39,7 @@ use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::playhead::{Playhead, Times};
 use crate::window::sections::Sections;
+use crate::window::theme::theme_style_rule;
 use crate::window::time::format_wall_clock;
 
 pub(super) const SECOND: i64 = 10_000_000;
@@ -278,6 +280,18 @@ pub(super) fn queue_panel_app(props: FixtureProps) -> Element {
     }
 }
 
+/// The root of the theme-token contracts: the window's `:root` theme rule, as
+/// the `ThemeStyle` element writes it, beside the Queue panel.
+pub(super) fn themed_queue_panel_app(props: FixtureProps) -> Element {
+    let FixtureProps { sender, handle } = props;
+    provide_fixture_contexts(sender, &handle);
+    let rule = theme_style_rule(Some(&GuiTheme::current()));
+    rsx! {
+        style { "{rule}" }
+        QueuePanel {}
+    }
+}
+
 /// The playing transport band's facts the chooser test paints (the
 /// TypeScript `playing()` fixture, trimmed to what the top block reads).
 pub(super) fn playing() -> GuiQueuePlayback {
@@ -421,6 +435,22 @@ impl Fixture {
             .unwrap_or_else(|| panic!("{selector} paints"));
         dom.get_client_bounding_rect(id)
             .expect("the node is laid out")
+    }
+
+    /// Repaint the queue column with `panel` as the appearance-focused panel
+    /// (the sections' `focus` fact the fills pick from).
+    pub(super) fn focus_panel(&mut self, panel: GuiPanel) {
+        let mut sections = self.sections.clone();
+        let anchor = anchor();
+        let mut playhead = self.playhead.clone();
+        self.doc.vdom.in_runtime(move || {
+            sections.focus.set(GuiFocus {
+                surface: Some(GuiSurface::Queue),
+                panel,
+            });
+            playhead.stamp(anchor);
+        });
+        self.poll_until_idle();
     }
 
     /// Poll the document until the effects have run and their re-renders
