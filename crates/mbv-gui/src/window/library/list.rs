@@ -637,7 +637,9 @@ pub fn scroll_top_to_show_cursor<Row: GeometryRow>(
 ) -> f32 {
     let row = cursor.and_then(|cursor| rows.iter().find(|row| row.id() == cursor));
     let top = scroll_top.max(0.0);
-    let Some(row) = row else {
+    // An unmeasured viewport scrolls nothing: the first measurement takes the
+    // cursor's row (design D9).
+    let Some(row) = row.filter(|_| viewport_height > 0.0) else {
         return clamp_scroll_top(rows, top, viewport_height);
     };
     if row.top() < top {
@@ -728,7 +730,7 @@ pub fn jump_to_letter(
 pub fn step_pill_focus<Pill: Clone>(
     pills: &[Pill],
     focused: Option<&str>,
-    key_of: impl Fn(&Pill) -> &str,
+    key_of: impl Fn(&Pill) -> String,
     step: i32,
 ) -> Option<Pill> {
     if pills.is_empty() {
@@ -753,3 +755,6 @@ pub fn step_pill_focus<Pill: Clone>(
         };
     pills.get(next).cloned()
 }
+
+#[cfg(test)]
+mod tests;

@@ -209,7 +209,7 @@ fn move_pill_focus(state: &LibraryState, pills: &[GuiMusicPillFrame], step: i32)
     let moved = step_pill_focus(
         pills,
         focused.as_deref(),
-        |pill| pill.group_id.as_str(),
+        |pill| pill.group_id.clone(),
         step,
     );
     if let Some(pill) = moved {

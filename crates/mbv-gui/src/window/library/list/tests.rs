@@ -1,0 +1,199 @@
+//! Headless tests of the Library list's row model (D16): the contracts of
+//! `list.test.ts` — the canvas tree of artists, albums, and tracks under its
+//! 24 px letter headings at the canvas's row heights, the filter that narrows
+//! the rows without case, the rows in view, the cursor's movement over them,
+//! and the A–Z rail that disables a letter no painted row carries. The model
+//! is plain data over fixed row heights, so the geometry is asserted without
+//! a layout.
+
+use super::*;
+use crate::bridge::frame::library::GuiArtistKey;
+
+/// The track Brand Nubian's album holds.
+fn all_for_one() -> GuiMusicTrackFrame {
+    GuiMusicTrackFrame {
+        track_id: "t3".to_owned(),
+        name: "All For One".to_owned(),
+        number: 1,
+        duration: "4:00".to_owned(),
+    }
+}
+
+/// The A Tribe Called Quest artist the fixture carries: closed, with one
+/// album whose tracks the content does not hold.
+fn tribe() -> GuiMusicArtistFrame {
+    GuiMusicArtistFrame {
+        artist_key: GuiArtistKey::Service("a3".to_owned()),
+        name: "A Tribe Called Quest".to_owned(),
+        sort_letter: 'A',
+        albums: vec![GuiMusicAlbumFrame {
+            album_id: "al4".to_owned(),
+            name: "The Low End Theory".to_owned(),
+            year: "1991".to_owned(),
+            tracks: None,
+            total: None,
+        }],
+    }
+}
+
+/// The Beastie Boys artist the fixture carries: two albums, the first with a
+/// cached tracklist.
+fn beastie() -> GuiMusicArtistFrame {
+    GuiMusicArtistFrame {
+        artist_key: GuiArtistKey::Service("a1".to_owned()),
+        name: "Beastie Boys".to_owned(),
+        sort_letter: 'B',
+        albums: vec![
+            GuiMusicAlbumFrame {
+                album_id: "al1".to_owned(),
+                name: "Licensed To Ill".to_owned(),
+                year: "1986".to_owned(),
+                tracks: Some(vec![
+                    GuiMusicTrackFrame {
+                        track_id: "t1".to_owned(),
+                        name: "Rhymin & Stealin".to_owned(),
+                        number: 1,
+                        duration: "3:27".to_owned(),
+                    },
+                    GuiMusicTrackFrame {
+                        track_id: "t2".to_owned(),
+                        name: "Paul Revere".to_owned(),
+                        number: 9,
+                        duration: "3:40".to_owned(),
+                    },
+                ]),
+                total: None,
+            },
+            GuiMusicAlbumFrame {
+                album_id: "al2".to_owned(),
+                name: "Paul's Boutique".to_owned(),
+                year: "1989".to_owned(),
+                tracks: None,
+                total: None,
+            },
+        ],
+    }
+}
+
+/// The Brand Nubian artist the fixture carries: one album whose tracklist the
+/// content holds.
+fn brand() -> GuiMusicArtistFrame {
+    GuiMusicArtistFrame {
+        artist_key: GuiArtistKey::Service("a2".to_owned()),
+        name: "Brand Nubian".to_owned(),
+        sort_letter: 'B',
+        albums: vec![GuiMusicAlbumFrame {
+            album_id: "al3".to_owned(),
+            name: "One For All".to_owned(),
+            year: "1990".to_owned(),
+            tracks: Some(vec![all_for_one()]),
+            total: None,
+        }],
+    }
+}
+
+/// The carried union the fixture builds: the artists in sort-name order, with
+/// Beastie Boys and its first album open.
+fn rows() -> Vec<LibraryRow> {
+    build_library_rows(LibraryTree {
+        artists: &[tribe(), beastie(), brand()],
+        open: &["artist:service:a1".to_owned(), "album:al1".to_owned()],
+        closed: &[],
+        filter: "",
+    })
+}
+
+// The canvas tree paints letter headings and the canvas row heights.
+#[test]
+fn the_canvas_tree_paints_letter_headings_and_the_canvas_row_heights() {
+    let painted = rows();
+    let kinds: Vec<&str> = painted
+        .iter()
+        .map(|row| match row {
+            LibraryRow::Letter(_) => "letter",
+            LibraryRow::Artist { .. } => "artist",
+            LibraryRow::Album { .. } => "album",
+            LibraryRow::Track { .. } => "track",
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "letter", "artist", "letter", "artist", "album", "track", "track", "album", "artist"
+        ]
+    );
+    let heights: Vec<f32> = painted.iter().map(|row| row.base().height).collect();
+    assert_eq!(
+        heights,
+        [24.0, 30.0, 24.0, 30.0, 30.0, 28.0, 28.0, 30.0, 30.0]
+    );
+    let tops: Vec<f32> = painted.iter().map(|row| row.base().top).collect();
+    assert_eq!(
+        tops,
+        [0.0, 24.0, 54.0, 78.0, 108.0, 138.0, 166.0, 194.0, 224.0]
+    );
+}
+
+// The filter narrows the rows to the names that contain its text.
+#[test]
+fn the_filter_narrows_the_rows_to_the_names_that_contain_its_text() {
+    let painted = build_library_rows(LibraryTree {
+        artists: &[tribe(), beastie(), brand()],
+        open: &[],
+        closed: &[],
+        filter: "ALL FOR",
+    });
+    let ids: Vec<&str> = painted.iter().map(LibraryRow::id).collect();
+    assert_eq!(
+        ids,
+        ["letter:B", "artist:service:a2", "album:al3", "track:t3"]
+    );
+}
+
+// The rail disables the letters no painted row carries.
+#[test]
+fn the_rail_disables_the_letters_no_painted_row_carries() {
+    let rail = letter_rail(&rows());
+    assert_eq!(rail.len(), 26);
+    let letter = |letter: char| {
+        rail.iter()
+            .find(|entry| entry.letter == letter)
+            .and_then(|entry| entry.row_id.clone())
+    };
+    assert_eq!(letter('A'), Some("artist:service:a3".to_owned()));
+    assert_eq!(letter('B'), Some("artist:service:a1".to_owned()));
+    assert_eq!(letter('C'), None);
+}
+
+// The window paints only the rows in view.
+#[test]
+fn the_window_paints_only_the_rows_in_view() {
+    assert_eq!(
+        list_window(&rows(), 54.0, 60.0),
+        ListWindow { start: 2, end: 5 }
+    );
+}
+
+// The scroll offset that shows a cursor below the viewport puts its bottom
+// edge there.
+#[test]
+fn the_scroll_offset_that_shows_a_cursor_below_the_viewport_puts_its_bottom_edge_there() {
+    assert_eq!(
+        scroll_top_to_show_cursor(&rows(), Some("artist:service:a2"), 0.0, 60.0),
+        194.0
+    );
+}
+
+// Movement steps over the letter headings.
+#[test]
+fn movement_steps_over_the_letter_headings() {
+    let painted = rows();
+    assert_eq!(
+        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::Down, 1),
+        Some("artist:service:a1".to_owned())
+    );
+    assert_eq!(
+        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::End, 1),
+        Some("artist:service:a2".to_owned())
+    );
+}

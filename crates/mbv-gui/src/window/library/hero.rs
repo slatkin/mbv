@@ -357,3 +357,6 @@ pub fn hero_layout(facts: &HeroLayoutFacts<'_>, kicker: &str) -> HeroLayout {
         },
     }
 }
+
+#[cfg(test)]
+mod tests;
