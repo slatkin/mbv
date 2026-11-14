@@ -7,11 +7,14 @@
 //! `onpress` prop, which the parent's state method owns; it lands with the
 //! sections that mount the switch (task 8.3).
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use blitz_dom::{Document as _, LocalName};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::SettingsSwitch;
+use super::{SettingsSwitch, press};
 
 /// The switch over a no-op press, mounted once per case.
 fn painted(checked: bool) -> DioxusDocument {
@@ -75,4 +78,31 @@ fn an_off_switch_carries_aria_checked_false() {
         attr_of(&doc, "[data-settings-switch]", LocalName::from("aria-checked")),
         Some("false".to_owned()),
     );
+}
+
+/// A press counter over the callback the handler runs.
+fn counted() -> (Rc<Cell<usize>>, Callback<()>) {
+    let calls = Rc::new(Cell::new(0));
+    let counter = Rc::clone(&calls);
+    let onpress = Callback::new(move |()| counter.set(counter.get() + 1));
+    (calls, onpress)
+}
+
+/// Contract (design D11's pointer contract): an enabled switch's press runs
+/// `onpress`, the store function the keyboard's Space runs.
+#[test]
+fn an_enabled_switch_press_runs_onpress() {
+    let (calls, onpress) = counted();
+    press(false, onpress);
+    assert_eq!(calls.get(), 1);
+}
+
+/// Contract (design D11's pointer contract): a disabled switch's press takes
+/// no activation — blitz-dom dispatches Click on disabled targets, so the
+/// handler itself returns early.
+#[test]
+fn a_disabled_switch_press_takes_no_activation() {
+    let (calls, onpress) = counted();
+    press(true, onpress);
+    assert_eq!(calls.get(), 0);
 }

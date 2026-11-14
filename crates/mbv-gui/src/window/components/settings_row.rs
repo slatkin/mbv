@@ -70,3 +70,6 @@ pub fn SettingsRow(props: SettingsRowProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

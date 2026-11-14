@@ -62,3 +62,6 @@ pub fn SettingsField(props: SettingsFieldProps) -> Element {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
