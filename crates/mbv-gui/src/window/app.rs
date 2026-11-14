@@ -438,8 +438,9 @@ pub fn App() -> Element {
                         // design D11): no player panel, queue, or Library
                         // panel mounts, and playback continues. The screen's
                         // own Mini check measures the window minus its fixed
-                        // 260 px sidebar.
-                        SettingsScreen {}
+                        // 260 px sidebar; the arrangement the root measured
+                        // picks the paint.
+                        SettingsScreen { arrangement }
                     } else {
                         if queue_visible {
                             div {
