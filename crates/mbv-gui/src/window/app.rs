@@ -17,6 +17,7 @@ use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
 use crate::bridge::frame::focus::GuiPanel;
+use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiSearchFrame};
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::layout::LayoutSize;
@@ -60,7 +61,8 @@ static ROOT_STYLE: LazyLock<String> =
 /// Apply one batch the drain task received (D6): the sections write in one
 /// pass, the playhead stamps the batch's anchor, and the layout epoch bumps
 /// when the batch changes a measured fact (D9) — a panel state change, the
-/// Settings screen's open or close, or a list's row count.
+/// Settings screen's open or close, a list's row count, or the rows the
+/// Library list, detail, and Search frames paint.
 fn apply_batch(
     sections: &mut Sections,
     playhead: &mut Playhead,
@@ -70,6 +72,12 @@ fn apply_batch(
     let rows_before = sections.queue.peek().rows.len();
     let panel_before = *sections.panel.peek();
     let settings_before = sections.settings.peek().is_some();
+    // The Library rows this batch repaints, read before the write (D12): a new
+    // row mounts a `Truncate` box, and its first measure reads the layout from
+    // before the box's insertion, so it keeps its whole text, hard clipped,
+    // until a layout fact bumps the epoch. Read from the held sections and the
+    // batch together, so nothing is copied; the reads drop before the write.
+    let library_rows_changed = library_rows_change(sections, batch);
     sections.apply_batch(batch);
     if let Some(anchor) = &batch.playhead {
         playhead.stamp_if_new(anchor);
@@ -79,8 +87,110 @@ fn apply_batch(
     let settings_after = sections.settings.peek().is_some();
     let panel_state_changed = panel_before.collapsed != panel_after.collapsed
         || panel_before.queue_folded != panel_after.queue_folded;
-    if rows_before != rows_after || panel_state_changed || settings_before != settings_after {
+    if rows_before != rows_after
+        || panel_state_changed
+        || settings_before != settings_after
+        || library_rows_changed
+    {
         epoch.bump();
+    }
+}
+
+/// The Library frames a batch paints (D12): the list, detail, and Search
+/// content, whose rows, Heroes, and results mount the window's `Truncate`
+/// boxes.
+#[derive(Clone, Copy, Default)]
+struct LibraryPaint<'a> {
+    list: Option<&'a GuiLibraryList>,
+    detail: Option<&'a GuiLibraryDetail>,
+    search: Option<&'a GuiSearchFrame>,
+}
+
+/// Whether this batch repaints a Library list, detail, or Search frame (D12):
+/// the frames it carries, compared with the ones the window holds. A batch
+/// that carries none of them repaints no Library row.
+fn library_rows_change(sections: &Sections, batch: &GuiSectionBatch) -> bool {
+    if batch.library_list.is_none() && batch.library_detail.is_none() && batch.search.is_none() {
+        return false;
+    }
+    let list = sections.library_list.peek();
+    let detail = sections.library_detail.peek();
+    let search = sections.search.peek();
+    let before = LibraryPaint {
+        list: (*list).as_ref(),
+        detail: (*detail).as_ref(),
+        search: (*search).as_ref(),
+    };
+    // A section the batch leaves out is unchanged, so it paints what it
+    // painted before.
+    let after = LibraryPaint {
+        list: batch
+            .library_list
+            .as_ref()
+            .map_or(before.list, |section| section.value.as_ref()),
+        detail: batch
+            .library_detail
+            .as_ref()
+            .map_or(before.detail, |section| section.value.as_ref()),
+        search: batch
+            .search
+            .as_ref()
+            .map_or(before.search, |section| section.value.as_ref()),
+    };
+    batch_changes_painted_rows(before, after)
+}
+
+/// Whether a batch repaints the rows of a Library list, detail, or Search
+/// frame (D12 of `replace-tauri-with-blitz`). The frames are the window's only
+/// late-mounted `Truncate` boxes: blitz-shell's `poll` runs an effect before
+/// `render` resolves the document, so a box mounted by this batch measures the
+/// layout from before its insertion — a zero width — and keeps its whole text
+/// until a layout fact re-measures it. So a batch that changes these rows
+/// bumps the epoch once, and the re-measure that bump drives reads the box
+/// where the layout put it.
+///
+/// The comparison is of painted rows, never of cursor facts: the detail frame's
+/// selection and playing marks name the cursor, and the Hero they paint is
+/// compared instead, so moving the cursor over a row whose Hero it does not
+/// change bumps nothing.
+fn batch_changes_painted_rows(before: LibraryPaint<'_>, after: LibraryPaint<'_>) -> bool {
+    before.list != after.list
+        || before.search != after.search
+        || !detail_paints_same_rows(before.detail, after.detail)
+}
+
+/// Whether two Library detail frames paint the same rows (D12): the Hero and
+/// the Workspace's load fact, which are the text boxes the detail mounts. The
+/// selection and the playing marks are cursor facts, never rows.
+fn detail_paints_same_rows(
+    before: Option<&GuiLibraryDetail>,
+    after: Option<&GuiLibraryDetail>,
+) -> bool {
+    match (before, after) {
+        (None, None) => true,
+        (Some(GuiLibraryDetail::Music(before)), Some(GuiLibraryDetail::Music(after))) => {
+            before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Home(before)), Some(GuiLibraryDetail::Home(after))) => {
+            before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Shows(before)), Some(GuiLibraryDetail::Shows(after))) => {
+            before.workspace_loading == after.workspace_loading && before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Emby(before)), Some(GuiLibraryDetail::Emby(after))) => {
+            before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Audiobooks(before)), Some(GuiLibraryDetail::Audiobooks(after))) => {
+            before.workspace_loading == after.workspace_loading && before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Podcasts(before)), Some(GuiLibraryDetail::Podcasts(after))) => {
+            before.hero == after.hero
+        }
+        (Some(GuiLibraryDetail::Feeds(before)), Some(GuiLibraryDetail::Feeds(after))) => {
+            before.hero == after.hero
+        }
+        // A destination change repaints the detail wholesale.
+        _ => false,
     }
 }
 

@@ -20,8 +20,12 @@ use dioxus_native::prelude::*;
 use futures_util::FutureExt;
 use mbv_config::GuiPanelWidths;
 
-use super::note_panel_ui_reset;
+use super::{LibraryPaint, batch_changes_painted_rows, note_panel_ui_reset};
 use crate::bridge::frame::GuiPanelToggles;
+use crate::bridge::frame::library::{
+    GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
+    GuiLibraryDetail, GuiLibraryList,
+};
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
@@ -132,4 +136,82 @@ fn the_ui_reset_effect_settles() {
         ui_reset_epoch: 1,
     });
     assert!(fixture.settles(), "the effect did not settle after a reset");
+}
+
+/// One entry row titled `title`, as the Feeds list paints it.
+fn entry_row(title: &str) -> GuiEntryRowFrame {
+    GuiEntryRowFrame {
+        id: title.to_owned(),
+        title: title.to_owned(),
+        subtitle: None,
+        date: None,
+        state: GuiHomeRowStateFrame::Ordinary,
+    }
+}
+
+/// The Feeds list frame painting one row per title, in order.
+fn feeds_list(titles: &[&str]) -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: GuiDestinationList::Feeds(GuiFeedsList {
+            pills: Vec::new(),
+            loading: false,
+            failed: false,
+            rows: titles.iter().map(|title| entry_row(title)).collect(),
+        }),
+    }
+}
+
+/// The Feeds detail frame selecting `selected`, with no Hero.
+fn feeds_detail(selected: &str) -> GuiLibraryDetail {
+    GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        selected: Some(selected.to_owned()),
+        hero: None,
+    })
+}
+
+/// Contract (D12 of `replace-tauri-with-blitz`): a batch that repaints a
+/// Library row bumps the layout epoch, so the `Truncate` box the row mounts
+/// re-measures the layout that holds it.
+#[test]
+fn a_batch_that_repaints_a_library_row_bumps_the_epoch() {
+    let before_list = feeds_list(&["one"]);
+    let after_list = feeds_list(&["one", "two"]);
+    let detail = feeds_detail("one");
+
+    assert!(batch_changes_painted_rows(
+        LibraryPaint {
+            list: Some(&before_list),
+            detail: Some(&detail),
+            search: None,
+        },
+        LibraryPaint {
+            list: Some(&after_list),
+            detail: Some(&detail),
+            search: None,
+        },
+    ));
+}
+
+/// Contract (D12 of `replace-tauri-with-blitz`): a cursor move over rows
+/// whose Hero it does not change repaints no row, so it bumps nothing.
+#[test]
+fn a_cursor_move_over_the_painted_rows_bumps_nothing() {
+    let list = feeds_list(&["one", "two"]);
+    let before_detail = feeds_detail("one");
+    let after_detail = feeds_detail("two");
+
+    assert!(!batch_changes_painted_rows(
+        LibraryPaint {
+            list: Some(&list),
+            detail: Some(&before_detail),
+            search: None,
+        },
+        LibraryPaint {
+            list: Some(&list),
+            detail: Some(&after_detail),
+            search: None,
+        },
+    ));
 }

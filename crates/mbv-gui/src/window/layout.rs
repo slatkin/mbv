@@ -9,7 +9,9 @@
 //! `ResizeObserver` has no equivalent on Blitz, so the measurement reads the
 //! [`LayoutEpoch`]: a counter that bumps on every fact that can change a
 //! measured rect — a viewport change, a divider drag or reset, a panel state
-//! change, a batch that changes a list's row count. Each container's effect
+//! change, a batch that changes a list's row count, and a batch that repaints
+//! the Library list, detail, or Search rows (whose `Truncate` boxes mount
+//! unmeasured). Each container's effect
 //! reads the epoch and measures its box through `MountedData`'s client rect,
 //! which is already CSS pixels (the taffy layout's viewport is the logical
 //! size) — the unit every threshold and report value names.
