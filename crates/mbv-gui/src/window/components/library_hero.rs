@@ -91,6 +91,15 @@ fn run_menu_entry(library: &LibraryState, album_id: &str, index: usize) {
     library.close_library_item_menu();
 }
 
+/// Run the menu entry a press on the painted menu named (design D8): the
+/// index the menu reports is the entry's own shared-builder index, and the
+/// handler forwards it verbatim — never a position in the filtered list the
+/// Hero paints, so an entry the dropped-duplicates rule re-numbered still
+/// runs.
+fn press_menu_entry(library: &LibraryState, album_id: &str, index: usize) {
+    run_menu_entry(library, album_id, index);
+}
+
 /// The Music pair the shuffle reads at press time: the union's artists and
 /// the picked album's Hero facts, cloned once per press — the closure reads
 /// the current frame, so a Hero repaint never clones the union's albums or
@@ -167,12 +176,10 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let menu_open_library = library.clone();
     let menu_library = library.clone();
     // The menu's press names the picked album, cloned once for the callback —
-    // the three play closures each moved their own copy. The index the menu
-    // reports is the entry's own shared-builder index, never a position in
-    // the filtered list, so the press sends it as it arrived.
+    // the three play closures each moved their own copy.
     let album_id = hero.album.album_id.clone();
     let on_select =
-        Callback::new(move |index: usize| run_menu_entry(&menu_library, &album_id, index));
+        Callback::new(move |index: usize| press_menu_entry(&menu_library, &album_id, index));
     let actions = rsx! {
         LibraryHeroActions {
             attr: "",

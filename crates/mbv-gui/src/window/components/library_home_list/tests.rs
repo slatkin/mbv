@@ -84,7 +84,7 @@ fn home_list_app(props: FixtureProps) -> Element {
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
-    provide_context(clock.clone());
+    provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.

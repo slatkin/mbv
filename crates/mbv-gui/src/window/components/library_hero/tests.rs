@@ -28,7 +28,10 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryHero;
-use super::{add_album_to_queue, play_album, play_next_album, run_menu_entry, shuffle_artist};
+use super::{
+    add_album_to_queue, play_album, play_next_album, press_menu_entry, run_menu_entry,
+    shuffle_artist,
+};
 use crate::bridge::frame::library::{
     GuiArtistKey, GuiDestinationList, GuiLibraryList, GuiMusicAlbumFrame, GuiMusicArtistFrame,
     GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicMenuEntryFrame, GuiMusicTrackFrame,
@@ -113,7 +116,7 @@ fn hero_app(props: FixtureProps) -> Element {
     });
     provide_context(clock);
     let epoch = use_hook(LayoutEpoch::new);
-    provide_context(epoch.clone());
+    provide_context(epoch);
     // The carried Music content, as the core's batch would: the union the
     // shuffle reads, under the Music destination's own list.
     let mut sections = state.sections.clone();
@@ -468,18 +471,19 @@ fn a_menu_entry_sends_its_index_for_the_picked_item() {
     );
 }
 
-/// Contract (the review-of-7.7 finding P1): the press sends the entry's own
-/// shared-builder index as it arrived — past the filtered menu's end too, so
-/// an entry the dropped-duplicates rule re-numbered still runs. The old
-/// lookup indexed the filtered list and dropped the press (or ran the wrong
-/// entry); the index passes through instead.
+/// Contract (the review-of-7.7 finding P1): the press handler the `on_select`
+/// closure calls one line each forwards the received index verbatim — past
+/// the filtered menu's end too, so an entry the dropped-duplicates rule
+/// re-numbered still runs. The removed lookup indexed the filtered list and
+/// dropped the press (or ran the wrong entry); the handler pins the
+/// pass-through at the seam a headless document can reach.
 #[test]
 fn a_menu_press_sends_the_shared_builder_index_past_the_filtered_lists_end() {
     let mut fixture = built_hero();
 
     let item_id = "al1".to_owned();
     let state = fixture.state.clone();
-    fixture.in_runtime(move || run_menu_entry(&state, &item_id, 3));
+    fixture.in_runtime(move || press_menu_entry(&state, &item_id, 3));
 
     assert_eq!(
         fixture.library_commands(),

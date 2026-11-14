@@ -91,7 +91,7 @@ fn panel_app(props: FixtureProps) -> Element {
     provide_context(events);
     provide_context(fired);
     provide_context(ScaleFactor(Signal::new(1.0)));
-    provide_context(clock.clone());
+    provide_context(Arc::clone(&clock));
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
         // tests hold it at 0.

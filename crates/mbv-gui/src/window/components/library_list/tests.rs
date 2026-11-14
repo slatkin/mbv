@@ -150,22 +150,24 @@ impl Fixture {
     /// Carry the Music sections, as the core's batch would, so the row model
     /// reads the carried union at the batch's revision.
     fn carry(&mut self, list: &GuiMusicList, detail: &GuiMusicDetail) {
-        let mut batch = GuiSectionBatch::default();
-        batch.library_list = Some(GuiSection {
-            revision: 1,
-            value: Some(GuiLibraryList {
-                tabs: vec![GuiLibraryTabFrame {
-                    position: 1,
-                    label: "Music".to_owned(),
-                }],
-                current_tab: Some(1),
-                destination: GuiDestinationList::Music(list.clone()),
+        let batch = GuiSectionBatch {
+            library_list: Some(GuiSection {
+                revision: 1,
+                value: Some(GuiLibraryList {
+                    tabs: vec![GuiLibraryTabFrame {
+                        position: 1,
+                        label: "Music".to_owned(),
+                    }],
+                    current_tab: Some(1),
+                    destination: GuiDestinationList::Music(list.clone()),
+                }),
             }),
-        });
-        batch.library_detail = Some(GuiSection {
-            revision: 1,
-            value: Some(GuiLibraryDetail::Music(detail.clone())),
-        });
+            library_detail: Some(GuiSection {
+                revision: 1,
+                value: Some(GuiLibraryDetail::Music(detail.clone())),
+            }),
+            ..GuiSectionBatch::default()
+        };
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || sections.apply_batch(&batch));
         self.lay_out();
@@ -217,7 +219,7 @@ impl Fixture {
 
 /// Build the document over the carried content, carry the sections, and let
 /// the list's first measurement land.
-fn built(list: GuiMusicList, detail: GuiMusicDetail) -> Fixture {
+fn built(list: &GuiMusicList, detail: &GuiMusicDetail) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -249,7 +251,7 @@ fn built(list: GuiMusicList, detail: GuiMusicDetail) -> Fixture {
         receiver,
     };
     fixture.poll_until_idle();
-    fixture.carry(&list, &detail);
+    fixture.carry(list, detail);
     fixture
 }
 
@@ -383,7 +385,7 @@ fn press_row(fixture: &mut Fixture, id: &str) {
 /// tracklist opens it and asks for the tracks.
 #[test]
 fn a_press_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     measure(&mut fixture, 240.0);
 
@@ -414,7 +416,7 @@ fn a_press_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() 
 /// selection, not a derivation from the pills.
 #[test]
 fn the_header_names_the_carried_selection_not_a_derivation_from_the_pills() {
-    let fixture = built(music(&["Hip-Hop", "Soul"]), no_hero());
+    let fixture = built(&music(&["Hip-Hop", "Soul"]), &no_hero());
 
     assert_eq!(
         fixture.text_of("[data-library-selection-label]"),
@@ -426,7 +428,7 @@ fn the_header_names_the_carried_selection_not_a_derivation_from_the_pills() {
 /// All — the Library's empty-selection label.
 #[test]
 fn an_empty_selection_names_the_header_all() {
-    let fixture = built(music(&[]), no_hero());
+    let fixture = built(&music(&[]), &no_hero());
 
     assert_eq!(fixture.text_of("[data-library-selection-label]"), "All");
 }
@@ -436,7 +438,7 @@ fn an_empty_selection_names_the_header_all() {
 /// track's id.
 #[test]
 fn a_right_press_on_a_row_requests_the_items_menu_for_its_id() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     open_licensed_to_ill(&mut fixture);
     measure(&mut fixture, 240.0);
@@ -457,7 +459,7 @@ fn a_right_press_on_a_row_requests_the_items_menu_for_its_id() {
 /// Contract (`LibraryList.test.ts`): the list paints only the rows in view.
 #[test]
 fn the_list_paints_only_the_rows_in_view() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 40.0);
 
     assert!(
@@ -474,7 +476,7 @@ fn the_list_paints_only_the_rows_in_view() {
 /// viewport height, so the rows in view follow the layout (design D9).
 #[test]
 fn the_mounted_list_reports_its_measured_viewport() {
-    let fixture = built(music(&["Hip-Hop"]), no_hero());
+    let fixture = built(&music(&["Hip-Hop"]), &no_hero());
 
     assert_eq!(fixture.state.music_scroll.peek().viewport_height, 120.0);
 }
@@ -483,7 +485,7 @@ fn the_mounted_list_reports_its_measured_viewport() {
 /// the names that contain its text.
 #[test]
 fn the_filter_narrows_the_painted_rows_to_the_names_that_contain_its_text() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 240.0);
 
     let state = fixture.state.clone();
@@ -505,7 +507,7 @@ fn the_filter_narrows_the_painted_rows_to_the_names_that_contain_its_text() {
 /// or closes it".
 #[test]
 fn a_press_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     measure(&mut fixture, 240.0);
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.set_library_filter("rhymin".to_owned()));
@@ -535,7 +537,7 @@ fn a_press_closes_and_reopens_a_node_while_the_filter_narrows_the_rows() {
 /// use.
 #[test]
 fn a_double_click_on_a_track_row_sends_that_track_play() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     open_licensed_to_ill(&mut fixture);
     measure(&mut fixture, 240.0);
@@ -555,7 +557,7 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
 /// cursor onto the row, as the Queue panel's click moves the queue cursor.
 #[test]
 fn a_press_on_a_track_row_moves_the_cursor_onto_it() {
-    let mut fixture = built(music(&["Hip-Hop"]), no_hero());
+    let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     open_licensed_to_ill(&mut fixture);
     measure(&mut fixture, 240.0);

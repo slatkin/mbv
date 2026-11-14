@@ -454,6 +454,33 @@ fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
     );
 }
 
+/// Contract (`LibraryShowsList.svelte`): a node that does not open paints no
+/// `aria-expanded` attribute at all (the Svelte `undefined` painted none).
+#[test]
+fn a_node_that_does_not_open_paints_no_aria_expanded() {
+    let series = GuiShowsSeriesFrame {
+        id: "s9".to_owned(),
+        title: "Fixed".to_owned(),
+        sort_letter: 'A',
+        expandable: false,
+        seasons: Vec::new(),
+    };
+    let mut fixture = built(
+        shows_frame(GuiShowsModeFrame::All, Vec::new(), vec![series]),
+        shows_detail(&[]),
+    );
+    fixture.measure(300.0);
+
+    assert_eq!(
+        fixture.attr_of(
+            "[data-library-shows-row-id=\"shows-series:s9\"]",
+            "aria-expanded",
+        ),
+        None,
+        "the non-expandable node paints no aria-expanded"
+    );
+}
+
 /// Contract (`LibraryShowsList.test.ts`): a press on a series node opens it
 /// — its seasons paint under it — and the press still selects the series for
 /// the Hero.
