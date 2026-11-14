@@ -24,13 +24,11 @@ pub fn initial_list_scroll() -> ListScroll {
     ListScroll::default()
 }
 
-/// The seven lists' scroll stores (`scroll.ts`'s module-level stores): one
+/// The six lists' scroll stores (`scroll.ts`'s module-level stores): one
 /// signal per destination's list. The root builds them with the interaction
 /// state ([`super::state::LibraryState`]) and provides them as context.
 #[derive(Clone)]
 pub struct LibraryScrolls {
-    /// The Music list's scroll store (the `LibraryList` canvas tree).
-    pub music: Signal<ListScroll>,
     /// The Shows list's scroll store.
     pub shows: Signal<ListScroll>,
     /// The Audiobooks list's scroll store.
@@ -56,7 +54,6 @@ impl LibraryScrolls {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            music: Signal::new(initial_list_scroll()),
             shows: Signal::new(initial_list_scroll()),
             audiobooks: Signal::new(initial_list_scroll()),
             home: Signal::new(initial_list_scroll()),
@@ -70,7 +67,7 @@ impl LibraryScrolls {
 impl std::fmt::Debug for LibraryScrolls {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LibraryScrolls")
-            .field("music", &self.music.peek().clone())
+            .field("shows", &self.shows.peek().clone())
             .finish_non_exhaustive()
     }
 }
