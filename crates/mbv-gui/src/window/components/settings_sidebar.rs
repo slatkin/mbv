@@ -9,13 +9,15 @@
 //! above the title closes the screen (design D11 *Mouse-centric*), so a user
 //! can leave without a key, as Esc from the sidebar does.
 //!
-//! The Svelte sidebar's `scrollIntoView` effect has no port, as the screen
-//! root's module doc records.
+//! The Svelte sidebar's `scrollIntoView` effect ports as the cursor row's own
+//! reveal ([`cursor_reveal`]): Blitz exposes no descendant query, so the row
+//! that paints `data-settings-cursor` keeps itself in view (D15).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::settings::GuiSettingsSection;
 use crate::bridge::settings::GuiSettingsCommand;
+use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::components::settings_screen::{
     section_label, section_wire, settings_section_view,
 };
@@ -106,35 +108,60 @@ pub fn SettingsSidebar() -> Element {
                         let cursor = index == ui.sidebar_cursor
                             && ui.pane == SettingsPane::Sidebar
                             && ui.keyboard;
-                        let label = section_label(*section);
-                        let icon = section_icon(*section);
                         let row_settings = press_settings.clone();
                         let pressed_section = *section;
                         rsx! {
-                            button {
+                            SidebarRow {
                                 key: "{section_wire(pressed_section)}",
-                                "type": "button",
-                                class: "flex w-full items-center text-left",
-                                style: "height: 38px; padding: 0 12px; gap: 12px; border: 0; border-radius: 8px; font-size: 14px; background: {background(current, cursor)}; color: {ink_or_text(current)}; font-weight: {weight(current)};",
-                                "aria-current": current.then_some("page"),
-                                "data-settings-section": section_wire(pressed_section),
-                                "data-settings-cursor": cursor.then_some(""),
-                                onclick: move |_| press_section(&row_settings, index, pressed_section),
-                                span {
-                                    class: "flex flex-none items-center",
-                                    style: "color: {ink_or_muted(current)};",
-                                    "aria-hidden": "true",
-                                    { icon(IconProps {
-                                        size: 16,
-                                        ..sidebar_icon_defaults()
-                                    }) }
-                                }
-                                "{label}"
+                                section: pressed_section,
+                                current,
+                                cursor,
+                                onpress: Callback::new(move |()| press_section(&row_settings, index, pressed_section)),
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/// One sidebar row (the Svelte each-block's markup, character for character).
+/// The listing renders one component per row, so the cursor reveal's hooks
+/// stay per row: a hook in the loop itself would change the listing
+/// component's hook count with the section count.
+#[component]
+fn SidebarRow(
+    section: GuiSettingsSection,
+    current: bool,
+    cursor: bool,
+    onpress: Callback<()>,
+) -> Element {
+    let label = section_label(section);
+    let icon = section_icon(section);
+    // The row that paints the cursor reveals itself: the Svelte sidebar's
+    // `scrollIntoView` on its `[data-settings-cursor]` row (D15).
+    let mut reveal = cursor_reveal(cursor);
+    rsx! {
+        button {
+            "type": "button",
+            class: "flex w-full items-center text-left",
+            style: "height: 38px; padding: 0 12px; gap: 12px; border: 0; border-radius: 8px; font-size: 14px; background: {background(current, cursor)}; color: {ink_or_text(current)}; font-weight: {weight(current)};",
+            "aria-current": current.then_some("page"),
+            "data-settings-section": section_wire(section),
+            "data-settings-cursor": cursor.then_some(""),
+            onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
+            onclick: move |_| onpress.call(()),
+            span {
+                class: "flex flex-none items-center",
+                style: "color: {ink_or_muted(current)};",
+                "aria-hidden": "true",
+                { icon(IconProps {
+                    size: 16,
+                    ..sidebar_icon_defaults()
+                }) }
+            }
+            "{label}"
         }
     }
 }

@@ -6,6 +6,7 @@ pub mod attach_screen;
 pub mod collapsed_rail;
 pub mod compact_strip;
 pub mod confirm_overlay;
+pub mod cursor_reveal;
 pub mod daemon_lost_overlay;
 pub mod folded_queue;
 pub mod library_attr;

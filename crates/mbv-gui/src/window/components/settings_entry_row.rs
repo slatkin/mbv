@@ -14,6 +14,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::icons::Check;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -55,6 +56,9 @@ pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
     let press_id = props.id.clone();
     let label = props.label;
     let trailing = props.trailing;
+    // The row that paints the cursor reveals itself: the Svelte screen's
+    // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
+    let mut reveal = cursor_reveal(cursor);
     rsx! {
         button {
             "type": "button",
@@ -63,6 +67,7 @@ pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
             disabled: props.disabled,
             "data-settings-entry": "{props.id}",
             "data-settings-cursor": cursor.then_some(""),
+            onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
             onclick: move |_| onpress.call(press_id.clone()),
             if let Some(marked) = marked {
                 span {

@@ -11,6 +11,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::icons::Check;
 use crate::window::settings::entries::entry_id;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -79,51 +80,20 @@ pub fn SettingsCheckboxGrid(props: SettingsCheckboxGridProps) -> Element {
                 for option in &props.options {
                     {
                         let id = entry_id::choice(&row_key, &option.id);
+                        let press_id = id.clone();
+                        let press = onpress;
                         let on = selected.contains(&option.id);
                         let cursor = cursor_id.as_deref() == Some(id.as_str());
-                        let box_style = format!(
-                            "height: 36px; padding: 0 10px; gap: 10px; border-radius: 6px; border: 1px solid {}; background: {}; color: {}; font-size: 13px;{}",
-                            if on { "var(--canvas-success-border)" } else { "transparent" },
-                            if on { "var(--canvas-success-fill)" } else { "none" },
-                            if on { "var(--canvas-heading)" } else { "var(--canvas-text)" },
-                            if cursor {
-                                " outline: 2px solid var(--canvas-accent); outline-offset: -2px;"
-                            } else {
-                                ""
-                            },
-                        );
-                        let mark_style = format!(
-                            "width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid {}; background: {};",
-                            if on { "var(--canvas-accent)" } else { "var(--canvas-ordinal)" },
-                            if on { "var(--canvas-accent)" } else { "transparent" },
-                        );
-                        let press_id = id.clone();
                         let label = option.label.clone();
                         rsx! {
-                            button {
+                            ChoiceBox {
                                 key: "{option.id}",
-                                "type": "button",
-                                role: "checkbox",
-                                "aria-checked": "{on}",
-                                class: "flex items-center justify-start text-left",
-                                style: "{box_style}",
-                                "data-settings-checkbox": "{option.id}",
-                                "data-settings-entry": "{id}",
-                                "data-settings-cursor": cursor.then_some(""),
-                                onclick: move |_| onpress.call(press_id.clone()),
-                                span {
-                                    class: "flex flex-none items-center justify-center",
-                                    style: "{mark_style}",
-                                    "aria-hidden": "true",
-                                    if on {
-                                        Check { size: 11, stroke_width: 3.5, color: "var(--canvas-ink)" }
-                                    }
-                                }
-                                Truncate {
-                                    text: label,
-                                    class: "min-w-0".to_owned(),
-                                    style: TextStyle::sans(13.0, 400.0),
-                                }
+                                option_id: option.id.clone(),
+                                entry: id,
+                                on,
+                                cursor,
+                                label,
+                                onpress: Callback::new(move |()| press.call(press_id.clone())),
                             }
                         }
                     }
@@ -138,6 +108,87 @@ pub fn SettingsCheckboxGrid(props: SettingsCheckboxGridProps) -> Element {
                     onpress: Some(Callback::new(move |()| onpress.call(apply_id.clone()))),
                     "Apply"
                 }
+            }
+        }
+    }
+}
+
+/// One box of the grid (the Svelte each-block's markup, character for
+/// character). The grid renders one component per box, so the cursor
+/// reveal's hooks stay per box: a hook in the loop itself would change the
+/// grid's hook count with the option count.
+#[component]
+fn ChoiceBox(
+    option_id: String,
+    entry: String,
+    on: bool,
+    cursor: bool,
+    label: String,
+    onpress: Callback<()>,
+) -> Element {
+    let box_style = format!(
+        "height: 36px; padding: 0 10px; gap: 10px; border-radius: 6px; border: 1px solid {}; background: {}; color: {}; font-size: 13px;{}",
+        if on {
+            "var(--canvas-success-border)"
+        } else {
+            "transparent"
+        },
+        if on {
+            "var(--canvas-success-fill)"
+        } else {
+            "none"
+        },
+        if on {
+            "var(--canvas-heading)"
+        } else {
+            "var(--canvas-text)"
+        },
+        if cursor {
+            " outline: 2px solid var(--canvas-accent); outline-offset: -2px;"
+        } else {
+            ""
+        },
+    );
+    let mark_style = format!(
+        "width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid {}; background: {};",
+        if on {
+            "var(--canvas-accent)"
+        } else {
+            "var(--canvas-ordinal)"
+        },
+        if on {
+            "var(--canvas-accent)"
+        } else {
+            "transparent"
+        },
+    );
+    // The box that paints the cursor reveals itself: the Svelte screen's
+    // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
+    let mut reveal = cursor_reveal(cursor);
+    rsx! {
+        button {
+            "type": "button",
+            role: "checkbox",
+            "aria-checked": "{on}",
+            class: "flex items-center justify-start text-left",
+            style: "{box_style}",
+            "data-settings-checkbox": "{option_id}",
+            "data-settings-entry": "{entry}",
+            "data-settings-cursor": cursor.then_some(""),
+            onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
+            onclick: move |_| onpress.call(()),
+            span {
+                class: "flex flex-none items-center justify-center",
+                style: "{mark_style}",
+                "aria-hidden": "true",
+                if on {
+                    Check { size: 11, stroke_width: 3.5, color: "var(--canvas-ink)" }
+                }
+            }
+            Truncate {
+                text: label,
+                class: "min-w-0".to_owned(),
+                style: TextStyle::sans(13.0, 400.0),
             }
         }
     }

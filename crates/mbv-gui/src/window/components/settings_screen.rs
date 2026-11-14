@@ -20,9 +20,10 @@
 //! `press_inside`), because stopping alone would swallow the cursor hide.
 //!
 //! The Svelte screen's two `scrollIntoView` effects (keep the walked cursor
-//! row in view) have no port: Blitz exposes no descendant query from an
-//! effect, and no other ported surface keeps one (D15's scroll rules name
-//! `MountedData`, which is per element). The gap is a known deviation.
+//! row in view) port as the cursor row's own reveal (D15's scroll rule):
+//! Blitz exposes no descendant query from an effect, so every row that paints
+//! `data-settings-cursor` keeps a mounted handle and scrolls itself to the
+//! same block and inline positions (`components/cursor_reveal.rs`).
 
 use dioxus_native::prelude::*;
 

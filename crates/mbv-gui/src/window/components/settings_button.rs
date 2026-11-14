@@ -12,6 +12,8 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::cursor_reveal::cursor_reveal;
+
 /// The button's kind (`SettingsButton.svelte`'s `Variant`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsButtonVariant {
@@ -139,6 +141,9 @@ pub fn SettingsButton(props: SettingsButtonProps) -> Element {
     }
     let onpress = props.onpress;
     let disabled = props.disabled;
+    // The button that paints the cursor reveals itself, as the entry row
+    // does (D15's scroll rule).
+    let mut reveal = cursor_reveal(props.cursor);
     rsx! {
         button {
             "type": "button",
@@ -149,6 +154,7 @@ pub fn SettingsButton(props: SettingsButtonProps) -> Element {
             "data-settings-cursor": props.cursor.then_some(""),
             "aria-label": props.label,
             disabled: props.disabled,
+            onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
             onclick: move |_| {
                 press(disabled, onpress);
             },

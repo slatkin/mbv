@@ -9,6 +9,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The props of the row (the `SettingsRow.svelte` props, in order).
@@ -48,12 +49,16 @@ pub fn SettingsRow(props: SettingsRowProps) -> Element {
     } else {
         String::new()
     };
+    // The row that paints the cursor reveals itself: the Svelte screen's
+    // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
+    let mut reveal = cursor_reveal(props.cursor);
     rsx! {
         div {
             class: "flex items-center justify-between",
             style: "height: 60px; gap: 16px; margin: 0 -12px; padding: 0 12px; border-radius: 6px; background: {background}; {border_bottom}",
             "data-settings-setting-row": "",
             "data-settings-cursor": props.cursor.then_some(""),
+            onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
             Truncate {
                 text: props.label,
                 class: "min-w-0 flex-1".to_owned(),
