@@ -135,6 +135,71 @@ unused_lifetimes = "warn"
 # full debug builds on manual bench runs (#896).
 debug = 1
 
+# The GUI's render stack at the debug profile's opt-level 0 makes every resize
+# frame pay unoptimized restyle, layout, text shaping, scene building, and
+# raster encoding on the event-loop thread, which is what stretches the stale
+# buffer during a window drag. These packages are the hot path of one frame;
+# they keep full debuginfo and unoptimized *crates* stay as they are.
+#
+# opt-level 2, not 3: the loops are already vectorizable and the extra
+# inlining of 3 mainly costs compile time on this dependency graph.
+[profile.dev.package.stylo]
+opt-level = 2
+
+[profile.dev.package.stylo_taffy]
+opt-level = 2
+
+[profile.dev.package.taffy]
+opt-level = 2
+
+[profile.dev.package.blitz-dom]
+opt-level = 2
+
+[profile.dev.package.blitz-paint]
+opt-level = 2
+
+[profile.dev.package.kurbo]
+opt-level = 2
+
+[profile.dev.package.peniko]
+opt-level = 2
+
+[profile.dev.package.parley]
+opt-level = 2
+
+[profile.dev.package.parley_engine]
+opt-level = 2
+
+[profile.dev.package.fontique]
+opt-level = 2
+
+[profile.dev.package.read-fonts]
+opt-level = 2
+
+[profile.dev.package.skrifa]
+opt-level = 2
+
+[profile.dev.package.vello_common]
+opt-level = 2
+
+[profile.dev.package.vello_gpu]
+opt-level = 2
+
+[profile.dev.package.anyrender]
+opt-level = 2
+
+[profile.dev.package.anyrender_vello_hybrid]
+opt-level = 2
+
+[profile.dev.package.wgpu]
+opt-level = 2
+
+[profile.dev.package.wgpu-core]
+opt-level = 2
+
+[profile.dev.package.wgpu-hal]
+opt-level = 2
+
 [package]
 name = "mbv"
 version.workspace = true
