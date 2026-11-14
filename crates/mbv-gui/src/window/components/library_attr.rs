@@ -15,11 +15,14 @@ static INTERNED: LazyLock<Mutex<HashMap<Box<str>, &'static str>>> =
 
 /// The `data-library-*` attribute named by the destination's `prefix` and
 /// the part name: an empty prefix (the Music list) drops the prefix segment,
-/// as the Svelte `attr === ''` branch did.
+/// and an empty part (the Workspace table's row hook) drops the part segment,
+/// as the Svelte spreads built them.
 #[must_use]
 pub fn library_attr(prefix: &str, part: &str) -> &'static str {
     let name = if prefix.is_empty() {
         format!("data-library-{part}")
+    } else if part.is_empty() {
+        format!("data-library-{prefix}")
     } else {
         format!("data-library-{prefix}-{part}")
     };
