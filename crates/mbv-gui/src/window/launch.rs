@@ -1,10 +1,11 @@
 //! The launch copy (D5 of `replace-tauri-with-blitz`): the body of
 //! `launch_cfg_with_props` from `dioxus-native` 0.8.0-alpha.3, with this
 //! crate's window attributes, the `BlitzShellProxy` as a root context, the
-//! window event handler wrapped for `WindowEvent::Viewport` (D9), and no
-//! tokio runtime. The pinned crate source is the authority for the copy; the
-//! spike's `crates/mbv-native/src/launch.rs` at commit `2a0510d2a` is a
-//! reference.
+//! window event handler wrapped for `WindowEvent::Viewport` (D9) and
+//! `WindowEvent::Frame` (D10), no tokio runtime, and the re-measure request the
+//! drain answers after a frame (D12). The pinned crate source is the authority
+//! for the copy; the spike's `crates/mbv-native/src/launch.rs` at commit
+//! `2a0510d2a` is a reference.
 
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
