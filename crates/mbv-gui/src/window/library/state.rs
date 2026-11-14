@@ -184,11 +184,18 @@ impl LibraryUiState {
 pub struct LibraryState {
     /// The panel's interaction state (`state.ts`'s `libraryUi`).
     pub ui: Signal<LibraryUiState>,
-    /// The Music list's scroll store (`scroll.ts`'s `musicScroll`). The other
-    /// destinations' scroll stores live on [`super::scroll::LibraryScrolls`]
-    /// and their interaction states arrive with their ports (rows 6.4 to
-    /// 6.8).
+    /// The Music list's scroll store (`scroll.ts`'s `musicScroll`).
     pub music_scroll: Signal<ListScroll>,
+    /// The other destinations' scroll stores (`scroll.ts`'s module stores).
+    pub scrolls: super::scroll::LibraryScrolls,
+    /// The Home list's interaction state (`home.ts`'s `homeUi`).
+    pub home_ui: Signal<super::home::HomeUiState>,
+    /// The Emby list's interaction state (`emby.ts`'s `embyUi`).
+    pub emby_ui: Signal<super::emby::EmbyUiState>,
+    /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
+    pub home_rows_memo: super::home_list::HomeRowsMemo,
+    /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
+    pub emby_rows_memo: super::emby_list::EmbyRowsMemo,
     /// The section reads the interaction state resolves against
     /// (`parts.ts`'s readers over the `libraryList` and `libraryDetail`
     /// stores).
@@ -221,6 +228,11 @@ impl LibraryState {
         Self {
             ui: Signal::new(LibraryUiState::initial()),
             music_scroll: Signal::new(initial_list_scroll()),
+            scrolls: super::scroll::LibraryScrolls::new(),
+            home_ui: Signal::new(super::home::HomeUiState::initial()),
+            emby_ui: Signal::new(super::emby::initial_emby_ui()),
+            home_rows_memo: super::home_list::HomeRowsMemo::default(),
+            emby_rows_memo: super::emby_list::EmbyRowsMemo::default(),
             sections,
             link,
             pending_reveal_row: Signal::new(None),

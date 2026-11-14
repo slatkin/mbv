@@ -3,7 +3,12 @@
 //! state, the scroll stores, and the key routing. One Rust module per
 //! TypeScript module (D15).
 
+pub mod emby;
+pub mod emby_keys;
+pub mod emby_list;
 pub mod hero;
+pub mod home;
+pub mod home_list;
 pub mod keys;
 pub mod keys_shared;
 pub mod list;

@@ -8,7 +8,7 @@
 //! Library panel shows, and every other key goes to the core.
 
 use crate::bridge::frame::focus::GuiPanel;
-use crate::bridge::frame::library::{GuiMusicList, GuiMusicPillFrame};
+use crate::bridge::frame::library::{GuiDestinationList, GuiMusicList, GuiMusicPillFrame};
 use crate::bridge::keys::DomKey;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
@@ -83,17 +83,80 @@ fn pills(music: &GuiMusicList) -> &[GuiMusicPillFrame] {
 /// Close the active destination's filter with Esc (design D3, step 2): the
 /// open field is the one list's own, so its close and accept run the
 /// destination's own resolve, in the same order `routePanelKey` hands keys
-/// over. Each destination's own resolve arrives with its port (rows 6.4 to
-/// 6.8); until then every destination's close is the Music one.
+/// over. The Shows, Audiobooks, Podcasts, and Feeds resolves arrive with
+/// their ports (rows 6.5 to 6.7); until then their close is the Music one.
 fn close_active_filter(state: &LibraryState) {
-    state.close_library_filter();
+    let list = state.sections.library_list.peek();
+    match list.as_ref().map(|list| &list.destination) {
+        Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
+        Some(GuiDestinationList::Emby(_)) => state.close_emby_filter(),
+        _ => state.close_library_filter(),
+    }
 }
 
 /// Accept the active destination's filter with Enter (design D3, step 2):
-/// the field closes and the list keeps its text. Each destination's own
-/// resolve arrives with its port (rows 6.4 to 6.8).
+/// the field closes and the list keeps its text. The Shows, Audiobooks,
+/// Podcasts, and Feeds resolves arrive with their ports (rows 6.5 to 6.7);
+/// until then their accept is the Music one.
 fn accept_active_filter(state: &LibraryState) {
-    state.accept_library_filter();
+    let list = state.sections.library_list.peek();
+    match list.as_ref().map(|list| &list.destination) {
+        Some(GuiDestinationList::Home(_)) => state.accept_home_filter(),
+        Some(GuiDestinationList::Emby(_)) => state.accept_emby_filter(),
+        _ => state.accept_library_filter(),
+    }
+}
+
+/// Route a key to the Home keys (design D12): the Home cursor owns the
+/// movement keys wherever the pane focus sits, Enter plays the row it rests
+/// on, and `n` and `a` enqueue from it. There is no filter and no pill row on
+/// Home, so `/` and Space are not taken: they pass to the core's router. The
+/// tree's Right and Left have no node to open, so they change nothing but
+/// still never reach the core.
+fn route_home_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
+    if key.key == "/" && bare(key) {
+        state.open_library_filter();
+        return KeyOutcome::Handled;
+    }
+    if key.key == " " {
+        // No pill row on Home (row 6.2): Space keeps its core effect, as it
+        // does under Queue focus.
+        return KeyOutcome::Core;
+    }
+    if !bare(key) {
+        return KeyOutcome::Core;
+    }
+    if let Some(mv) = cursor_move(&key.key) {
+        state.move_home_list_cursor(mv);
+        return KeyOutcome::Handled;
+    }
+    match key.key.as_str() {
+        "Enter" => {
+            if let Some(row) = state.home_cursor_row_id() {
+                state.play_home_row(row);
+            }
+            KeyOutcome::Handled
+        }
+        "n" => {
+            if let Some(row) = state.home_cursor_row_id() {
+                state.play_home_row_next(row);
+            }
+            KeyOutcome::Handled
+        }
+        "a" => {
+            if let Some(row) = state.home_cursor_row_id() {
+                state.queue_home_row(row);
+            }
+            KeyOutcome::Handled
+        }
+        _ if is_list_and_hero_key(&key.key) => {
+            // Right and Left have no tree node to open on Home; the other
+            // keys are answered above. They still never reach the core
+            // (design D3, step 4).
+            KeyOutcome::Handled
+        }
+        _ => KeyOutcome::Core,
+    }
 }
 
 /// Route a key while the filter field holds the keyboard (design D3, step 2).
@@ -217,10 +280,12 @@ fn move_pill_focus(state: &LibraryState, pills: &[GuiMusicPillFrame], step: i32)
     }
 }
 
-/// Route a key to the Music keys (design D3, step 4), with the pane the window
-/// content focused deciding which control the key acts on. The other
-/// destinations' routers arrive with their ports (rows 6.4 to 6.8); until they
-/// land, an active non-Music destination answers the core here.
+/// Route a key to the active destination's keys (design D3, step 4), with the
+/// pane the window content focused deciding which control the key acts on. On
+/// Home the Home keys route (design D12), on a plain Emby library the Emby
+/// keys (row 8.1). The Shows, Audiobooks, Podcasts, and Feeds routers arrive
+/// with their ports (rows 6.5 to 6.7); until they land, a key under such a
+/// destination goes to the core's router.
 fn route_panel_key(
     state: &LibraryState,
     key: &DomKey,
@@ -231,10 +296,18 @@ fn route_panel_key(
         return route_escape_key(state, ui);
     }
     let list = sections.library_list.peek();
+    match list.as_ref().map(|list| &list.destination) {
+        Some(GuiDestinationList::Home(_)) => return route_home_panel_key(state, key),
+        Some(GuiDestinationList::Emby(_)) => {
+            return super::emby_keys::route_emby_panel_key(state, key);
+        }
+        Some(GuiDestinationList::Music(_)) => {}
+        // The Shows, Audiobooks, Podcasts, and Feeds keys route with their
+        // ports (rows 6.5 to 6.7); until they land, a key under such a
+        // destination goes to the core's router.
+        _ => return KeyOutcome::Core,
+    }
     let Some(music) = super::parts::library_music_list(list.as_ref()) else {
-        // The Home, Shows, Emby, Audiobooks, Podcasts, and Feeds keys route
-        // with their ports (rows 6.4 to 6.8); until they land, a key under
-        // such a destination goes to the core's router.
         return KeyOutcome::Core;
     };
     route_music_panel_key(state, key, ui, music)

@@ -372,6 +372,7 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
 // A cursor move below the rows in view scrolls its row into view.
 
 mod gating;
+mod home;
 mod list;
 mod panes;
 mod pills;

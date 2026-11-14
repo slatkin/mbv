@@ -260,3 +260,22 @@ impl From<&GuiEmbyHeroCredit> for GuiEmbyHeroCreditFrame {
         }
     }
 }
+
+/// The wire feed group a carried pill's group sends (row 8.1): the same
+/// shape on the way out, so a command built from a carried pill addresses
+/// exactly that group.
+impl From<&GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
+    fn from(group: &GuiEmbyFeedGroupFrame) -> Self {
+        match group {
+            GuiEmbyFeedGroupFrame::Latest => Self::Latest,
+            GuiEmbyFeedGroupFrame::All => Self::All,
+            GuiEmbyFeedGroupFrame::Folder(folder_id) => Self::Folder(folder_id.clone()),
+        }
+    }
+}
+
+impl From<GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
+    fn from(group: GuiEmbyFeedGroupFrame) -> Self {
+        Self::from(&group)
+    }
+}

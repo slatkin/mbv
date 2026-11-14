@@ -200,6 +200,25 @@ impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
     }
 }
 
+/// The wire row id a carried row's identity sends (design D12): the same
+/// shape on the way out, so a command built from a carried row addresses
+/// exactly that row. The owned form is the ref form's delegate, so the
+/// variant names are hand-written once.
+impl From<&GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
+    fn from(id: &GuiHomeRowIdFrame) -> Self {
+        match id {
+            GuiHomeRowIdFrame::Continue(item_id) => Self::Continue(item_id.clone()),
+            GuiHomeRowIdFrame::Recent(content_id) => Self::Recent(content_id.clone()),
+        }
+    }
+}
+
+impl From<GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
+    fn from(id: GuiHomeRowIdFrame) -> Self {
+        Self::from(&id)
+    }
+}
+
 impl From<&GuiHomeRowState> for GuiHomeRowStateFrame {
     fn from(state: &GuiHomeRowState) -> Self {
         match state {
