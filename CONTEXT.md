@@ -128,7 +128,7 @@ The Client kind that presents the full terminal UI. It is the `mbv` program. It 
 _Avoid_: terminal client, thin client, viewer
 
 GUI Client:
-The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters and translates its raw input into neutral events.
+The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters, which are Dioxus Native components rendered by Blitz in the same process as the core (ADR 0039), and translates its raw input into neutral events.
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
 Client core:

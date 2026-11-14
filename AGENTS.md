@@ -24,7 +24,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-surfaces/`: Surface state (cursor, selection, marks, viewport), the core `FocusStack`, `HitMap`, and per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit.
 * `crates/mbv-components/`: TuiRealm Interactive Components. A component over a shared surface (Queue, Queue playback, Status bar) is an adapter over its Surface state: it forwards neutral events, paints from that state, and reports geometry. Other components still own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/`: `screens/` prepare content, `arrangements/` place it, `components/` paint it, and `layout.rs` composes layouts.
-* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Never add another. The GUI Library panel takes its own keys in the GUI front end, before they reach this router (ADR 0036).
+* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Never add another. The GUI Library panel takes its own keys in the GUI window (`crates/mbv-gui/src/window/`), before they reach this router (ADR 0036).
 * `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the shared `mbv` library and the thin `mbv` binary over it.
 * `crates/mbv-audiobookshelf/`: Audiobookshelf provider client.
 * `crates/mbv-cast/`: Google Cast client, discovery, per-provider dispatch.
@@ -50,7 +50,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-images/`: image cache, loading and processing, terminal image protocol support.
 * `crates/mbv-ui-model/`: plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/`: typed messages crossing the interactive-component boundary.
-* `crates/mbv-gui/`: the GUI Client, a Tauri 2 binary that links the `mbv` library. Its synchronous core thread owns the `App` and the Client core tick (`src/core_thread.rs`, `src/attach.rs`); `src/bridge/` holds the wire DTOs and the DOM-input translation; `ui/` holds the Svelte front end. A workspace member outside `default-members`. `docs/architecture/gui-client.md` describes it.
+* `crates/mbv-gui/`: the GUI Client, a Dioxus Native binary (`mbv-gui`) that renders with Blitz and links the `mbv` library (ADR 0039). Its synchronous core thread owns the `App` and the Client core tick (`src/core_thread.rs`, `src/attach.rs`); `src/window/` is the Dioxus component tree, in the same process, with one module for each former front-end file; `src/bridge/` holds the DOM-input translation; `assets/` holds the embedded CSS and fonts. A workspace member outside `default-members`. `docs/architecture/gui-client.md` describes it.
 * `pinwin`: the external Rust program (Wayland layer-shell panel, separate repo `slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only caller: it builds every `pinwin` argv and runs the program. mbv links no pinwin library. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
