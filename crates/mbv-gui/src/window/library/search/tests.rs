@@ -280,7 +280,7 @@ fn an_arrow_with_no_results_moves_nothing_and_holds_no_id() {
 /// Activating a row sends its id and item type, never the close command.
 #[test]
 fn activating_a_row_sends_its_id_and_item_type_never_the_close_command() {
-    let (facts, rx, _clock) = run(|state, _clock, _facts| {
+    let (_facts, rx, _clock) = run(|state, _clock, _facts| {
         state.activate_search_row(&row("r7"));
     });
     assert_eq!(

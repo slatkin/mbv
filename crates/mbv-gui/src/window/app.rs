@@ -56,17 +56,6 @@ const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
 static ROOT_STYLE: LazyLock<String> =
     LazyLock::new(|| format!("{}\n{}", cell_unit_rule(), APP_GENERATED_CSS));
 
-/// The `data-arrangement` value the container div paints, as the Svelte
-/// attribute names the states: `mini`, `narrow`, `wide`.
-#[must_use]
-fn arrangement_name(arrangement: GuiArrangement) -> &'static str {
-    match arrangement {
-        GuiArrangement::Mini => "mini",
-        GuiArrangement::Narrow => "narrow",
-        GuiArrangement::Wide => "wide",
-    }
-}
-
 /// Apply one batch the drain task received (D6): the sections write in one
 /// pass, the playhead stamps the batch's anchor, and the layout epoch bumps
 /// when the batch changes a measured fact (D9) — a panel state change, the
@@ -414,7 +403,7 @@ pub fn App() -> Element {
             if connected && attach.is_none() {
                 div {
                     class: "relative flex h-full min-h-0 w-full min-w-0 overflow-hidden",
-                    "data-arrangement": "{arrangement_name(arrangement)}",
+                    "data-arrangement": arrangement.name(),
                     style: "background: {queue_canvas};",
                     onmounted: move |event| container_mounted.set(Some(event)),
                     if settings.is_some() {
@@ -466,7 +455,11 @@ pub fn App() -> Element {
                             }
                         }
                         if library_visible && library_list.is_some() {
-                            LibraryPanel {}
+                            LibraryPanel {
+                                arrangement,
+                                list_width: widths.list,
+                                library_column: widths.library_column,
+                            }
                         }
                     }
                 }

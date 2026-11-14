@@ -1,10 +1,410 @@
-//! Placeholder (task 4.1): the Library panel's port (`LibraryPanel.svelte`)
-//! lands with task 7.1.
+//! The Library panel (`replace-tauri-with-blitz` task 7.1, the port of
+//! `LibraryPanel.svelte`; add-gui-library-panel design D4, D12): the column
+//! beside the Queue panel. It paints the shell and the arrangement's
+//! regions — the top bar above the list, and, in Wide, the Hero pane beside
+//! the list; in Narrow the Hero mounts as an overlay over the list once an
+//! item is picked. The active destination decides which painters mount
+//! (design D12): Music paints the pill row, the union list, and the album
+//! Hero; Home paints the flat list and its Hero, with no pill row, no letter
+//! rail, and no Workspace; Shows paints its mode pills, the series or flat
+//! list with the All series mode's rail, and the series Hero with its
+//! Workspace; a plain Emby library paints its feed-group pills, its list
+//! with the plain mode's rail, and its Hero with no Workspace; Audiobooks
+//! paints the book list with its letter rail and the book Hero with its
+//! chapters Workspace (row 9.1). The Status bar closes the column under
+//! both.
+//!
+//! The panel's interaction state lives in [`crate::window::library::state`]
+//! and its keys in [`crate::window::library::keys`], so this shell holds no
+//! state of its own. The destination painters themselves (the pill rows, the
+//! lists, the Heroes) land with rows 7.2–7.7: until then each place paints
+//! the placeholder child marker task 5.1's `data-panel-child` shape names.
+//!
+//! A press inside the panel sends the take-focus command (design D4): the
+//! core sets the focus stack and Panel focus together, and the press that
+//! follows acts on the row. The press that lands while the right-click item
+//! menu is up closes the menu too — the outside-press rule — unless it landed
+//! on the menu itself, whose handler stops this one.
+//!
+//! The Narrow Hero overlay covers the list, so it must be dismissible: its
+//! backdrop press closes it, and Esc closes it in the key router (design
+//! D3). The panel also reports the arrangement it paints, so the router
+//! closes an overlay only where one actually paints.
 
 use dioxus_native::prelude::*;
 
-/// The Library panel, painted until it is ported.
-#[component]
-pub fn LibraryPanel() -> Element {
-    rsx! {}
+use crate::bridge::frame::library::GuiMusicMenuEntryFrame;
+use crate::bridge::frame::overlay::GuiRowMenuEntry;
+use crate::bridge::library::GuiLibraryCommand;
+use crate::window::arrangement::GuiArrangement;
+use crate::window::components::library_status_bar::LibraryStatusBar;
+use crate::window::components::library_top_bar::LibraryTopBar;
+use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
+use crate::window::components::queue_row_menu::QueueRowMenu;
+use crate::window::layout::LayoutEpoch;
+use crate::window::library::parts::{LibraryPair, library_pair};
+use crate::window::library::state::LibraryState;
+use crate::window::resize::PanelWidthsStore;
+
+/// The props of the Library panel (the `LibraryPanel.svelte` props, in
+/// order).
+#[derive(Props, Debug, Clone, PartialEq)]
+pub struct LibraryPanelProps {
+    /// The arrangement picked from the Library column width (design D4).
+    pub arrangement: GuiArrangement,
+    /// The list column's painted width (design D4): the session's dragged
+    /// width, or its default.
+    pub list_width: f32,
+    /// The Library column the list column sits in: the drag's clamp.
+    pub library_column: f32,
 }
+
+/// The press that gives the panel Panel focus (design D4): the core sets the
+/// focus stack and Panel focus together, and the press that follows acts on
+/// the row.
+fn press_takes_focus(library: &LibraryState) {
+    library.link.library(GuiLibraryCommand::TakeFocus);
+}
+
+/// A press inside the panel while the right-click item menu is up (design
+/// D8, D15): the press takes focus and closes the menu — the outside-press
+/// rule. The menu's own press handler stops this one from running, so a
+/// press on the menu's entries runs the entry instead of closing, including
+/// the right-press that opens the menu over another row.
+fn press_outside_menu(library: &LibraryState) {
+    press_takes_focus(library);
+    if library.ui.peek().row_menu.is_some() {
+        library.close_library_row_menu();
+    }
+}
+
+/// Whether the pair's detail part paints a Hero (design D4, D12): every
+/// destination's detail carries a `hero`, `None` while none is picked.
+fn pair_has_hero(pair: &LibraryPair) -> bool {
+    match pair {
+        LibraryPair::Music(_, detail) => detail.hero.is_some(),
+        LibraryPair::Home(_, detail) => detail.hero.is_some(),
+        LibraryPair::Shows(_, detail) => detail.hero.is_some(),
+        LibraryPair::Emby(_, detail) => detail.hero.is_some(),
+        LibraryPair::Audiobooks(_, detail) => detail.hero.is_some(),
+        LibraryPair::Podcasts(_, detail) => detail.hero.is_some(),
+        LibraryPair::Feeds(_, detail) => detail.hero.is_some(),
+    }
+}
+
+/// A part another row ports (7.2–7.7): the placeholder child marker the
+/// panel paints in its place, named for the Svelte component that replaces
+/// it (task 5.1's `data-panel-child` shape).
+fn placeholder(child: &'static str) -> Element {
+    rsx! {
+        div { "data-panel-child": "{child}" }
+    }
+}
+
+/// The active destination's pill row placeholder, with the pills region the
+/// arrangement paints it in. Home and a plain Emby library paint no pill row
+/// at all — the rail replaces it — so their pair names none.
+fn pills_placeholder(pair: Option<LibraryPair>) -> Option<Element> {
+    let child = match pair {
+        Some(LibraryPair::Music(..)) => "LibraryPills",
+        Some(LibraryPair::Shows(..)) => "LibraryShowsPills",
+        Some(LibraryPair::Emby(list, _)) if list.feed_group => "LibraryEmbyPills",
+        Some(LibraryPair::Podcasts(..)) => "LibraryPodcastsPills",
+        Some(LibraryPair::Feeds(..)) => "LibraryFeedsPills",
+        _ => return None,
+    };
+    Some(rsx! {
+        div {
+            "data-library-region": "pills",
+            "data-panel-child": "{child}",
+        }
+    })
+}
+
+/// The active destination's list placeholder.
+fn list_placeholder(pair: LibraryPair) -> Element {
+    placeholder(match pair {
+        LibraryPair::Music(..) => "LibraryList",
+        LibraryPair::Home(..) => "LibraryHomeList",
+        LibraryPair::Shows(..) => "LibraryShowsList",
+        LibraryPair::Emby(..) => "LibraryEmbyList",
+        LibraryPair::Audiobooks(..) => "LibraryAudiobooksList",
+        LibraryPair::Podcasts(..) => "LibraryPodcastsList",
+        LibraryPair::Feeds(..) => "LibraryFeedsList",
+    })
+}
+
+/// The active destination's Hero placeholder: the same painter the Wide pane
+/// and the Narrow overlay mount, so the two cannot drift (design D4).
+fn hero_placeholder(pair: LibraryPair) -> Element {
+    placeholder(match pair {
+        LibraryPair::Music(..) => "LibraryHero",
+        LibraryPair::Home(..) => "LibraryHomeHero",
+        LibraryPair::Shows(..) => "LibraryShowsHero",
+        LibraryPair::Emby(..) => "LibraryEmbyHero",
+        LibraryPair::Audiobooks(..) => "LibraryAudiobooksHero",
+        LibraryPair::Podcasts(..) => "LibraryPodcastsHero",
+        LibraryPair::Feeds(..) => "LibraryFeedsHero",
+    })
+}
+
+/// The right-click menu's entries in the row menu's entry shape: the
+/// Library's entries carry no destructive flag, and the entry's own
+/// `index` — the core's shared-builder order — rides in the frame the
+/// conversion keeps.
+fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRowMenuEntry> {
+    entries
+        .iter()
+        .map(|entry| GuiRowMenuEntry {
+            label: entry.label.clone(),
+            key_hint: entry.key_hint.clone(),
+            destructive: false,
+        })
+        .collect()
+}
+
+/// The Library panel (the Svelte markup, character for character, with the
+/// destination painters as placeholders until rows 7.2–7.7 land).
+#[component]
+pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
+    let library = consume_context::<LibraryState>();
+    let widths_store = consume_context::<PanelWidthsStore>();
+
+    // The sections the panel reads (design D8): the destination tabs and the
+    // active destination's list and detail parts, narrowed together by
+    // `library_pair`; the Search section's results; the Status bar's facts;
+    // and the right-click item menu the window last opened.
+    let list_section = library.sections.library_list.cloned();
+    let detail = library.sections.library_detail.cloned();
+    let search = library.sections.search.cloned();
+    let status = library.sections.status.cloned();
+    let menu = library.sections.row_menu.cloned();
+    let ui = library.ui.cloned();
+
+    // The presented destination tabs and the active one (design D2): the
+    // top bar paints them.
+    let tabs = list_section
+        .as_ref()
+        .map(|list| list.tabs.clone())
+        .unwrap_or_default();
+    let current_tab = list_section.as_ref().and_then(|list| list.current_tab);
+    // The active destination's list and detail parts, narrowed together on
+    // the destination's kind (design D8); `None` while no Library panel
+    // shows.
+    let pair = library_pair(list_section.as_ref(), detail.as_ref());
+
+    // Whether the Hero sits beside the list rather than over it.
+    let arrangement = props.arrangement;
+    let wide = arrangement == GuiArrangement::Wide;
+    // The Narrow Hero overlay's facts: the active destination's pair while
+    // its detail paints a Hero (design D4, D12), and no dismissal since that
+    // pick.
+    let overlay_open = arrangement == GuiArrangement::Narrow
+        && pair.as_ref().is_some_and(pair_has_hero)
+        && !ui.hero_dismissed;
+
+    // Report the arrangement the panel paints (design D4): the key router
+    // closes the Narrow Hero overlay with Esc only while one paints. The
+    // effect re-runs on an arrangement change while the panel stays mounted,
+    // and writes the interaction state's own arrangement field — it reads
+    // no signal, so it never re-runs on its own write.
+    let report_library = library.clone();
+    use_effect(use_reactive((&props.arrangement,), move |(arrangement,)| {
+        report_library.report_library_arrangement(arrangement)
+    }));
+
+    // The right-click item menu's press surface (design D8, D15): the
+    // viewport-anchored card at the pointer position, painted while the
+    // content carries the named item's entries. It belongs to the Library,
+    // not to one destination, so a row of any destination opens it. A press
+    // runs the entry the core built, resolved by that item's stable id.
+    let menu_open = match (menu.as_ref(), ui.row_menu.as_ref()) {
+        (Some(menu), Some(row_menu))
+            if menu.item_id == row_menu.item_id && !menu.entries.is_empty() =>
+        {
+            Some((menu, row_menu))
+        }
+        _ => None,
+    };
+    let menu_row_slots: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
+    // The Wide Hero pane's and the Narrow overlay's Hero fact, resolved once
+    // per render.
+    let pair_paints_hero = pair.as_ref().is_some_and(pair_has_hero);
+
+    // The per-press handlers' own state handles (D4): every handler holds
+    // its own clone.
+    let press_library = library.clone();
+    let backdrop_library = library.clone();
+    let menu_press_library = library.clone();
+    // The list column's divider drag (design D4, D14): the store the drag's
+    // width clamps and saves through, and the layout epoch the drag's
+    // re-measure bumps.
+    let mut drag_widths = widths_store.clone();
+    let mut drag_epoch = consume_context::<LayoutEpoch>();
+    let mut reset_widths = widths_store.clone();
+    let mut reset_epoch = drag_epoch;
+
+    rsx! {
+        div {
+            class: "relative flex h-full min-h-0 min-w-0 flex-1 flex-col",
+            style: "background: var(--canvas-library-column);",
+            "data-library-panel": "",
+            "data-library-arrangement": arrangement.name(),
+            onpointerdown: move |_| press_outside_menu(&press_library),
+            LibraryTopBar {
+                tabs: tabs.clone(),
+                current_tab,
+                search: search.clone(),
+                home_active: pair.is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
+            }
+            // The active destination's pills (design D6, D12): Home paints
+            // none, so the row is absent on it, not collapsed; a plain Emby
+            // library paints none either — its letter rail replaces the
+            // TUI's letter-range pill row.
+            if let Some(pills) = pills_placeholder(pair) {
+                { pills }
+            }
+            div {
+                class: "relative flex min-h-0 flex-1",
+                if wide {
+                    // The Wide arrangement's Hero pane, to the left of the
+                    // list as the canvas orders it, with the active
+                    // destination's Hero inside.
+                    div {
+                        "data-library-region": "hero",
+                        class: "flex min-h-0 min-w-0 flex-1 flex-col",
+                        style: "background: var(--canvas-library-column); overflow-y: auto;",
+                        if pair_paints_hero {
+                            if let Some(pair) = pair {
+                                { hero_placeholder(pair) }
+                            }
+                        }
+                    }
+                }
+                if wide {
+                    // The Wide list column's divider (design D4): dragging it
+                    // resizes the list column, a double-click returns the
+                    // canvas width.
+                    PanelDivider {
+                        side: DividerSide::Right,
+                        name: DividerName::List,
+                        width: props.list_width,
+                        on_drag: move |width| {
+                            drag_widths.drag_list_width(width, props.library_column);
+                            drag_epoch.bump();
+                        },
+                        on_reset: move |()| {
+                            reset_widths.reset_list_width();
+                            reset_epoch.bump();
+                        },
+                    }
+                }
+                // The list column: the canvas's index in Wide, the whole
+                // Library column in Mini and Narrow. Rows 7.2 and 7.7 paint
+                // the destination lists here. Wide paints the session's width
+                // (design D4), and its divider sits between the list and the
+                // Hero pane.
+                div {
+                    "data-library-region": "list",
+                    class: if wide {
+                        "flex min-h-0 flex-col flex-none border-l"
+                    } else {
+                        "flex min-h-0 flex-col min-w-0 flex-1"
+                    },
+                    style: if wide {
+                        format!(
+                            "width: {}px; background: var(--canvas-library-panel); border-color: var(--canvas-border);",
+                            props.list_width
+                        )
+                    } else {
+                        "background: var(--canvas-library-panel); border-color: var(--canvas-border);".to_owned()
+                    },
+                    if let Some(pair) = pair {
+                        { list_placeholder(pair) }
+                    }
+                }
+                if overlay_open {
+                    // The Narrow Hero overlay (design D4): picking an item
+                    // paints the Hero over the list, through the same painter
+                    // the Wide pane uses, so the two cannot drift. The
+                    // backdrop press and Esc close it (design D3), so a picked
+                    // item never leaves an overlay no input dismisses; the
+                    // card scrolls its own content and swallows the presses
+                    // that land on it.
+                    div {
+                        "data-library-region": "heroOverlay",
+                        class: "absolute inset-0 z-10 flex",
+                        style: "background: rgba(0, 0, 0, 0.45);",
+                        button {
+                            "type": "button",
+                            class: "absolute inset-0",
+                            style: "background: none; border: 0;",
+                            "aria-label": "Close the Hero",
+                            "data-library-hero-backdrop": "",
+                            onclick: move |_| backdrop_library.close_library_hero(),
+                        }
+                        div {
+                            class: "relative m-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto",
+                            style: "background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 8px;",
+                            "data-library-hero-card": "",
+                            if pair_paints_hero {
+                                if let Some(pair) = pair {
+                                    { hero_placeholder(pair) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // The Library Status bar (design D10): under the list region,
+            // closing the column with the canvas's fixed key hints and the
+            // location while the panel paints.
+            LibraryStatusBar {
+                tabs,
+                current_tab,
+                list: list_section,
+                detail,
+                status,
+            }
+            if let Some((menu, row_menu)) = menu_open {
+                {
+                    let entries = menu.entries.clone();
+                    let menu_library = library.clone();
+                    let on_select = Callback::new(move |index: usize| {
+                        if let Some(entry) = entries.get(index) {
+                            menu_library.run_library_row_menu_entry(entry.index);
+                        }
+                    });
+                    let top = format!("{}px", row_menu.y);
+                    let left = format!("{}px", row_menu.x);
+                    rsx! {
+                        div {
+                            class: "fixed",
+                            style: "left: 0; top: 0; width: 0; height: 0;",
+                            onpointerdown: move |event: PointerEvent| {
+                                // A press on the menu takes focus — the
+                                // panel's listener would have — but does not
+                                // close it: the outside-press rule skips the
+                                // menu, and the stop keeps the panel's close
+                                // from running.
+                                press_takes_focus(&menu_press_library);
+                                event.stop_propagation();
+                            },
+                            QueueRowMenu {
+                                cursor: None,
+                                entries: row_menu_entries(&menu.entries),
+                                top,
+                                left: Some(left),
+                                on_select: Some(on_select),
+                                row_slot: menu_row_slots,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

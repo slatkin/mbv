@@ -584,7 +584,7 @@ pub fn QueuePanel() -> Element {
                     // report their own regions under the component's key, last
                     // over the rows beneath (the module comment names why).
                     QueueRowMenu {
-                        cursor,
+                        cursor: Some(cursor),
                         entries,
                         top: menu_top.unwrap_or_default(),
                         row_slot: menu_rows,

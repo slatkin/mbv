@@ -45,6 +45,19 @@ pub enum GuiArrangement {
     Wide,
 }
 
+impl GuiArrangement {
+    /// The `data-arrangement` and `data-library-arrangement` value the
+    /// markup paints: the wire name the Svelte attribute carried.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Mini => "mini",
+            Self::Narrow => "narrow",
+            Self::Wide => "wide",
+        }
+    }
+}
+
 /// The Queue panel's painted column width: the 72 px rail while the collapse
 /// toggle holds, the given expanded width otherwise — the 400 px canvas
 /// artboard until the session's divider moves it (D9).
