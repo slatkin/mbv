@@ -156,7 +156,7 @@ fn route_on(
     shift: bool,
     sections: &Sections,
 ) {
-    let outcome = route_library_key(&key(value, shift), Some(sections), state);
+    let outcome = route_library_key(&key(value, shift), Some(sections), state, None);
     facts
         .lock()
         .expect("facts")

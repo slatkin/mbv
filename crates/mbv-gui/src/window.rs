@@ -20,6 +20,7 @@ pub mod panel;
 pub mod playhead;
 pub mod resize;
 pub mod sections;
+pub mod settings;
 pub mod status;
 pub mod theme;
 pub mod time;

@@ -20,6 +20,8 @@ use dioxus_native::prelude::*;
 use super::keys_shared::{bare, cursor_move, is_list_and_hero_key};
 use super::list::step_pill_focus;
 use super::state::{LibraryPane, LibraryState};
+use crate::window::settings::keys::route_settings_key;
+use crate::window::settings::state::SettingsState;
 
 /// The place of the destination tab a digit opens (design D3, step 3): `1`
 /// opens the first tab after Home, so the digit is the tab's place in the
@@ -449,6 +451,7 @@ pub fn route_library_key(
     key: &DomKey,
     sections: Option<&Sections>,
     state: &LibraryState,
+    settings: Option<&SettingsState>,
 ) -> KeyOutcome {
     let Some(sections) = sections else {
         return KeyOutcome::Core;
@@ -467,10 +470,13 @@ pub fn route_library_key(
     // The Settings screen takes every key the overlay step leaves while its
     // frame section is present (add-gui-settings-screen design D11): the
     // window paints the screen in place of the two panels then, so no Library
-    // step runs. The Settings keys route with their port (row 8.1); until
-    // they land, a key while the screen is open answers the core.
-    if sections.settings.peek().is_some() {
-        return KeyOutcome::Core;
+    // step runs. The Settings steps route ahead of the Library ones (row
+    // 8.1); a harness that carries no Settings store answers the core.
+    if let Some(frame) = sections.settings.peek().as_ref() {
+        return match settings {
+            Some(settings) => route_settings_key(key, frame, settings),
+            None => KeyOutcome::Core,
+        };
     }
     // The attach states carry no slice, and no Library panel means no Library
     // keys: the core takes every one of them. The panel's presence is the

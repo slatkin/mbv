@@ -44,6 +44,7 @@ use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, SystemTimes, Times};
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
+use crate::window::settings::state::SettingsState;
 use crate::window::theme::{ThemeStyle, canvas_var};
 use crate::window::{input, resize};
 
@@ -164,25 +165,34 @@ fn note_panel_ui_reset(store: &mut PanelWidthsStore, sections: &Sections) -> boo
     store.note_ui_reset_epoch(panel.ui_reset_epoch)
 }
 
-/// The window content's key router (D8, task 6.2): the Library steps answer a
-/// keydown before the forwarder sends the key to the core. The router owns its
-/// section stores and interaction store, so the handler's `move` closure can
-/// hand the trait object up; the routing steps read the sections through
-/// `peek`, so a keydown copies none of their values.
-fn library_key_router(
+/// The window content's key router (D8, tasks 6.2 and 8.1): the Settings
+/// steps and the Library steps answer a keydown before the forwarder sends
+/// the key to the core, in that order — the Settings screen paints in place
+/// of the panels while its frame section is present, so its steps run first.
+/// The router owns its section stores and interaction stores, so the
+/// handler's `move` closure can hand the trait object up; the routing steps
+/// read the sections through `peek`, so a keydown copies none of their
+/// values.
+fn window_key_router(
     library: LibraryState,
+    settings: SettingsState,
     sections: Sections,
 ) -> impl Fn(&DomKey) -> KeyOutcome + 'static {
-    move |key| route_library_key(key, Some(&sections), &library)
+    move |key| route_library_key(key, Some(&sections), &library, Some(&settings))
 }
 /// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
-/// port of `reset.ts`): a changed value resets the panel widths and the
-/// Library interaction stores on the same fact. The Settings state resets
-/// with its port (task 8.1).
-fn note_ui_reset(store: &mut PanelWidthsStore, sections: &Sections, library: &LibraryState) {
+/// port of `reset.ts`): a changed value resets the panel widths, the Library
+/// interaction stores, and the Settings interaction state on the same fact.
+fn note_ui_reset(
+    store: &mut PanelWidthsStore,
+    sections: &Sections,
+    library: &LibraryState,
+    settings: &SettingsState,
+) {
     let reset = note_panel_ui_reset(store, sections);
     if reset {
         reset_library_interaction(library);
+        settings.reset_settings_ui();
     }
 }
 
@@ -232,6 +242,11 @@ pub fn App() -> Element {
         )
     });
     provide_context(library.clone());
+    // The Settings screen's interaction store (D15, row 8.1): the port of
+    // `lib/settings/state.ts`'s and `pick-menu.ts`'s module stores as one
+    // context value, over the core link the commands go through.
+    let settings_state = use_hook(|| SettingsState::new(CoreLink::clone(&link)));
+    provide_context(settings_state.clone());
 
     // The window channel's drain (D4): every event from outside the tree
     // dispatches here.
@@ -275,14 +290,24 @@ pub fn App() -> Element {
     // (add-gui-settings-screen design D1), and a new `uiResetEpoch` in the
     // `panel` section resets the window's presentation — the Library
     // interaction stores, the panel widths, and the Settings state. The
-    // widths reset here, and the Library interaction stores with them (the
-    // port of `reset.ts`'s `resetLibraryInteraction`); the Settings state
-    // resets with its port (task 8.1, as `resetSettingsUi` does).
+    // widths reset here, the Library interaction stores with them (the port
+    // of `reset.ts`'s `resetLibraryInteraction`), and the Settings state with
+    // its port (row 8.1, `resetSettingsUi`); the `settings` section then
+    // folds in (`syncSettingsFrame`). The effect reads the section stores and
+    // writes the interaction stores — never one it read.
     let mut reset_store = widths_store.clone();
     let reset_sections = sections.clone();
     let reset_library = library.clone();
+    let reset_settings = settings_state.clone();
     use_effect(move || {
-        note_ui_reset(&mut reset_store, &reset_sections, &reset_library);
+        note_ui_reset(
+            &mut reset_store,
+            &reset_sections,
+            &reset_library,
+            &reset_settings,
+        );
+        let frame = reset_sections.settings.cloned();
+        reset_settings.sync_settings_frame(frame.as_ref());
     });
 
     // The panel container the layout report carries the size of (D9): the
@@ -356,10 +381,11 @@ pub fn App() -> Element {
             onkeydown: move |event: KeyboardEvent| {
                 // Every keydown meets the window content's router first,
                 // which takes the keys it handles and lets the forwarder send
-                // the rest (add-gui-library-panel design D3). The Library
-                // steps read the window's section stores and the interaction
-                // store (task 6.2).
-                let router = library_key_router(library.clone(), sections.clone());
+                // the rest (add-gui-library-panel design D3). The Settings
+                // steps run ahead of the Library ones (row 8.1); both read
+                // the window's section stores and the interaction stores.
+                let router =
+                    window_key_router(library.clone(), settings_state.clone(), sections.clone());
                 input::on_keydown(&event, &router, &key_link);
             },
             onpointerdown: move |event: PointerEvent| {
