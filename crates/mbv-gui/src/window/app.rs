@@ -22,7 +22,7 @@ use crate::bridge::keys::DomKey;
 use crate::bridge::layout::LayoutSize;
 use crate::bridge::pointer::DomPointerKind;
 use crate::bridge::sections::GuiSectionBatch;
-use crate::window::arrangement::{GuiArrangement, library_arrangement};
+use crate::window::arrangement::{GuiArrangement, library_arrangement, settings_arrangement};
 use crate::window::cells::cell_unit_rule;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers};
@@ -333,6 +333,12 @@ pub fn App() -> Element {
     let container_size = container.cloned();
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
     let arrangement = library_arrangement(container_size, widths.queue);
+    // The Settings screen's own measure: its sidebar is the canvas's fixed
+    // 260 px in the Queue column's place, so the screen's Mini threshold is
+    // the window width minus that width, never the dragged Queue column's
+    // (design D11; `App.svelte`'s
+    // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
+    let settings_screen_arrangement = settings_arrangement(container_size);
     let queue_focused = focus.panel == GuiPanel::Queue;
     // The Library panel's one presence fact (design D2, D10, D12): the
     // window holds the active destination's content, whose painters the
@@ -437,10 +443,10 @@ pub fn App() -> Element {
                         // its section is present (add-gui-settings-screen
                         // design D11): no player panel, queue, or Library
                         // panel mounts, and playback continues. The screen's
-                        // own Mini check measures the window minus its fixed
-                        // 260 px sidebar; the arrangement the root measured
-                        // picks the paint.
-                        SettingsScreen { arrangement }
+                        // Mini check measures the window minus its fixed
+                        // 260 px sidebar, which the root measures separately
+                        // from the Library panel's own arrangement.
+                        SettingsScreen { arrangement: settings_screen_arrangement }
                     } else {
                         if queue_visible {
                             div {
