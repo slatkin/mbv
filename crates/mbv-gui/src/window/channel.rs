@@ -1,17 +1,18 @@
 //! The window channel and the core link (D4 of `replace-tauri-with-blitz`):
 //! one channel carries everything that reaches the window's Dioxus tree from
 //! outside it, and [`CoreLink`] holds the core's channel as the window's
-//! context value, with one method per former Tauri command.
+//! context value, with one method per former Tauri command. The one fact that
+//! does not travel it is a resize's layout size, which the launch copy writes
+//! into the tree directly so that it lands before the frame that resolves at
+//! the new size (`window::layout::ViewportSize`, D9).
 
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use mbv_ui_msg::{KeyEvent, PointerEvent};
 
-use crate::bridge::layout::{LayoutReport, LayoutSize};
+use crate::bridge::layout::LayoutReport;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::bridge::settings::GuiSettingsCommand;
@@ -45,93 +46,12 @@ pub enum WindowEvent {
         /// Whether this frame's resolve applied a change.
         changed: bool,
     },
-    /// The window resized or its scale factor changed (D5, D9): `size` is the
-    /// window's new layout size in CSS pixels, read from the document's
-    /// viewport after the shell applied it. The drain writes it as the size the
-    /// window picks its panels and arrangement from, before the frame that
-    /// resolves at that size, and clears the [`ViewportPending`] handoff that
-    /// held that frame.
-    Viewport {
-        /// The window's layout size, in CSS pixels.
-        size: LayoutSize,
-    },
-}
-
-/// The viewport handoff (D9): whether a viewport change is still waiting for
-/// the drain. Blitz applies a resize to the document's viewport inside its own
-/// window-event handler, without touching the tree, so a frame that resolved
-/// before the drain read the size lays out the old arrangement at the new size
-/// and the corrected one appears a frame or two later — the live resize jerk.
-/// The launch copy marks a change queued at the resize site and holds each
-/// `RedrawRequested` frame while one is queued; the drain marks it applied once
-/// the size has reached the tree.
-#[derive(Clone, Debug, Default)]
-pub struct ViewportPending(Rc<Cell<bool>>);
-
-impl ViewportPending {
-    /// A handoff with no change queued.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// A viewport change is queued for the drain: the launch copy holds the
-    /// frame until it is applied.
-    pub fn queue(&self) {
-        self.0.set(true);
-    }
-
-    /// The drain applied the queued size to the tree.
-    pub fn applied(&self) {
-        self.0.set(false);
-    }
-
-    /// Whether a queued size has not reached the tree yet.
-    #[must_use]
-    pub fn is_pending(&self) -> bool {
-        self.0.get()
-    }
-}
-
-/// The frame gate a resize opens (D9): the frame the resize asked for is held
-/// exactly once between presented frames, so the drain reads the new size before
-/// a frame resolves at it, and a continuous drag still presents.
-///
-/// One hold per presented frame, never one per resize: winit dispatches the
-/// proxy wake-up before the compositor's resize and that resize's redraw
-/// (`winit-wayland` `event_loop/mod.rs`), so every iteration of a drag has both
-/// a drain and a new size. A hold that a newer resize re-armed would hold every
-/// one of those frames and the window would paint nothing until the drag
-/// stopped.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ViewportFrame {
-    /// No resize is waiting for a frame.
-    #[default]
-    Settled,
-    /// A resize landed and no frame has been held since the last presented one:
-    /// the next frame is held for the drain.
-    Queued,
-    /// A frame was held since the last presented one.
-    Held,
-}
-
-impl ViewportFrame {
-    /// A resize landed: the next frame is held for the drain, unless a frame was
-    /// already held since the last presented one.
-    #[must_use]
-    pub fn queued(self) -> Self {
-        match self {
-            Self::Held => Self::Held,
-            Self::Settled | Self::Queued => Self::Queued,
-        }
-    }
-
-    /// Whether the frame about to resolve is held back, given whether the drain
-    /// has read the queued size.
-    #[must_use]
-    pub fn holds(self, pending: bool) -> bool {
-        self == Self::Queued && pending
-    }
+    /// The window resized or its scale factor changed (D5, D9): the scale
+    /// factor the art caps divide by (D7) is the drain's. The layout size does
+    /// not travel here — the launch copy writes it into the tree before the
+    /// frame that resolves at the new size (D9), because a channel hop lands a
+    /// turn after that resolve.
+    Viewport,
 }
 
 /// The window channel's sender, cloned by every producer (D4).

@@ -24,16 +24,21 @@
 //! layout's viewport is the logical size) — the unit every threshold and report
 //! value names.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use blitz_dom::BaseDocument;
+use blitz_dom::{BaseDocument, Document as _};
 use blitz_traits::shell::Viewport;
+use dioxus_native::DioxusDocument;
 use dioxus_native::prelude::*;
+use dioxus_native::winit::window::Window;
 
 use crate::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListRows, RegionTarget,
 };
-use crate::window::channel::{CoreLink, ViewportPending};
+use crate::window::channel::CoreLink;
 use crate::window::input::f32_from_f64;
 
 /// The layout epoch (D9): a counter the root bumps on every fact that can
@@ -66,32 +71,107 @@ pub fn carries_unresolved_change(document: &BaseDocument) -> bool {
     root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
 }
 
-/// The layout size a document viewport lays out, in CSS pixels: the window's
-/// physical size over its scale factor, which is the size every threshold in
-/// [`crate::window::arrangement`] and [`crate::window::resize`] names (D9). The
-/// launch copy reads it once at the resize site, so the drain carries the same
-/// size the container measures — the panel container fills the viewport
-/// (`h-dvh`, no insets) — instead of a computed second guess.
+/// The layout size a window shows at `surface` physical pixels and `scale`, in
+/// CSS pixels: the size every threshold in [`crate::window::arrangement`] and
+/// [`crate::window::resize`] names (D9). The launch copy reads it from the
+/// document viewport after each resize and the root reads it from the window it
+/// opens, so both name one size.
 #[must_use]
-pub fn viewport_layout_size(viewport: &Viewport) -> LayoutSize {
-    let (width, height) = viewport.logical_size();
-    LayoutSize { width, height }
+pub fn window_layout_size(surface: (u32, u32), scale: f64) -> LayoutSize {
+    LayoutSize {
+        width: f32_from_f64(f64::from(surface.0) / scale),
+        height: f32_from_f64(f64::from(surface.1) / scale),
+    }
 }
 
-/// Apply a viewport change to the window's tree (D9): the layout size the next
-/// frame resolves against, written before that resolve so the first frame at
-/// the new size lays out the arrangement, panel state, and column widths the
-/// size picks, and the handoff cleared so the launch copy lets that frame
-/// through. The measured container keeps reporting the same size through
-/// [`track_container_size`]: it stays the ground truth for the merged report's
-/// container size, list capacities, and regions.
-pub fn apply_viewport_size(
-    mut size: Signal<LayoutSize>,
-    viewport: LayoutSize,
-    pending: &ViewportPending,
-) {
-    size.set(viewport);
-    pending.applied();
+/// The layout size a document viewport lays out, in CSS pixels (D9): the same
+/// size [`window_layout_size`] gives for the window it was created from.
+#[must_use]
+pub fn viewport_layout_size(viewport: &Viewport) -> LayoutSize {
+    window_layout_size(viewport.window_size, f64::from(viewport.scale()))
+}
+
+/// The layout size `window` shows now, in CSS pixels (D9): its surface over its
+/// scale factor. The root seeds its first render from it, so the first frame is
+/// right even when the shell's first resize landed before the tree built.
+#[must_use]
+pub fn current_layout_size(window: &dyn Window) -> LayoutSize {
+    let surface = window.surface_size();
+    window_layout_size((surface.width, surface.height), window.scale_factor())
+}
+
+/// The root's layout-size signal as the launch copy holds it (D9).
+///
+/// The launch copy is the one place that sees a resize, and Blitz applies the
+/// new size to the document's viewport in its own handler without touching the
+/// tree. So the launch copy writes the size: [`apply_viewport_size`] renders it
+/// into the tree before the frame that resolves at the new size, which is what
+/// makes the first frame at a new size lay out that size and a continuous drag
+/// present every frame. A channel hop cannot do that — it lands a turn after
+/// the resolve, which is the resize jerk (`e978b31aa`).
+///
+/// The root hands its signal over while its tree builds. A resize that arrives
+/// before that writes nothing; the root seeds its own first render from the
+/// window it opened, so the first frame is right either way.
+#[derive(Clone, Default)]
+pub struct ViewportSize(Rc<RefCell<Option<Signal<LayoutSize>>>>);
+
+impl std::fmt::Debug for ViewportSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ViewportSize")
+            .field("provided", &self.0.borrow().is_some())
+            .finish()
+    }
+}
+
+impl ViewportSize {
+    /// A handle no root has provided its signal through yet.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The root handed its signal over (D9): called once, while its tree builds.
+    pub fn provide(&self, size: Signal<LayoutSize>) {
+        *self.0.borrow_mut() = Some(size);
+    }
+
+    /// Write `size` into the root's signal, if the root has built.
+    pub fn set(&self, size: LayoutSize) {
+        if let Some(mut signal) = *self.0.borrow() {
+            signal.set(size);
+        }
+    }
+}
+
+/// The root's layout-size signal (D9): the one value the window picks its panel
+/// states, its arrangement, and its column widths from. The launch copy writes a
+/// resize into it through [`ViewportSize`] ([`apply_viewport_size`]), and
+/// [`track_container_size`] writes the box it measures. The first render seeds it
+/// from the window the root opened, because the shell's first resize can land
+/// before the tree builds.
+#[must_use]
+pub fn use_container_size(viewport: ViewportSize, window: &Arc<dyn Window>) -> Signal<LayoutSize> {
+    let size: Signal<LayoutSize> = use_signal(|| current_layout_size(window.as_ref()));
+    use_hook(move || viewport.provide(size));
+    size
+}
+
+/// Apply a resize to the window's tree (D9): the shell has already put the new
+/// size on the document's viewport, so the size signal is written from the
+/// vdom's runtime and the tree is rendered — all before the frame that resolves
+/// at the new size. That frame therefore lays out the arrangement, panel state,
+/// and column widths the size picks.
+///
+/// The measure tasks left pending by the previous frame read the layout from
+/// before this resolve, so they run first, and the size is written after them;
+/// the frame that carries the change then measures the resolved layout, and the
+/// measured container keeps reporting the same size through
+/// [`track_container_size`].
+pub fn apply_viewport_size(document: &mut DioxusDocument, size: ViewportSize, layout: LayoutSize) {
+    document.poll(None);
+    document.vdom.in_runtime(move || size.set(layout));
+    document.poll(None);
 }
 
 /// Whether the frame that is about to resolve carries a change no measurement
@@ -260,12 +340,12 @@ impl LayoutReporter {
 /// the signal and the merged report. The effect runs after the render, so the
 /// rect is the laid-out one.
 ///
-/// The size signal is also the one [`apply_viewport_size`] seeds at a resize
+/// The size signal is also the one [`apply_viewport_size`] writes at a resize
 /// (D9), so the window picks its arrangement from the new size on the first
 /// frame at that size and from this measurement from the frame after it. The
 /// two agree to the pixel on this window (the container is `h-dvh`, the
-/// viewport's own height, and the shell applies no insets on desktop), so the
-/// refinement changes nothing that paints; it keeps the reporter's size the
+/// viewport's own height, and winit reports no safe-area insets off mobile), so
+/// the refinement changes nothing that paints; it keeps the reporter's size the
 /// measured one.
 ///
 /// The first measure runs before any resolve has placed the box, so it reads a

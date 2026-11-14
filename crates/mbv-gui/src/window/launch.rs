@@ -7,15 +7,26 @@
 //! `G-Hit`). The pinned crate source is the authority
 //! for the copy; the spike's `crates/mbv-native/src/launch.rs` at commit
 //! `2a0510d2a` is a reference.
+//!
+//! [`MbvApplication`] is the copy of `dioxus_application::DioxusNativeApplication`
+//! from the same crate, owned here instead of borrowed: the window half has to
+//! reach the `DioxusDocument` it drives, because a resize's size must be written
+//! into the tree and rendered *before* the frame that resolves at the new size
+//! (D9). `DioxusNativeApplication` keeps its `BlitzApplication` private, and a
+//! `DioxusDocument` moved into a view cannot be reached from outside. The
+//! differences from the pinned source are marked `This crate:` at each site.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Instant;
 
 use blitz_dom::{BaseDocument, Document as _};
-use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
+use blitz_shell::{
+    BlitzApplication, BlitzShellEvent, BlitzShellProxy, View, WindowConfig,
+    create_default_event_loop,
+};
 use blitz_traits::net::NetProvider;
 use dioxus_native::prelude::*;
 use dioxus_native::winit::application::ApplicationHandler;
@@ -25,17 +36,15 @@ use dioxus_native::winit::event_loop::ActiveEventLoop;
 use dioxus_native::winit::platform::wayland::WindowAttributesWayland;
 use dioxus_native::winit::window::{WindowAttributes, WindowId};
 use dioxus_native::{
-    DioxusDocument, DioxusNativeApplication, DioxusNativeWindowRenderer, DocumentConfig,
-    RendererOptions,
+    DioxusDocument, DioxusNativeEvent, DioxusNativeWindowRenderer, DocumentConfig, RendererOptions,
 };
 
 use crate::core_thread::CoreInput;
-use crate::window::channel::{
-    CoreLink, EventSlot, ViewportFrame, ViewportPending, WindowEvent, WindowEventSender,
-};
+use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
 use crate::window::layout::{
-    carries_unresolved_change, frame_carries_change, viewport_layout_size,
+    ViewportSize, apply_viewport_size, carries_unresolved_change, frame_carries_change,
+    viewport_layout_size,
 };
 use crate::window::net::{MbvNetProvider, NetLoads};
 
@@ -130,12 +139,27 @@ fn resolve_before_hit_testing(
     true
 }
 
-/// The dioxus-native application with its window event handler wrapped (D5):
-/// every event delegates, and the window events the window half consumes
-/// report after the shell has handled them (D9, D10).
+/// The dioxus-native application, owned by this crate (D5): the copy of
+/// `DioxusNativeApplication` (`dioxus-native` 0.8.0-alpha.3
+/// `src/dioxus_application.rs`), so the window's views are reachable and a
+/// resize can be rendered into the tree before the frame that resolves at it.
+///
+/// Every field and method below is the pinned source's unless the comment says
+/// `This crate:`. Those are: the `event_handlers` field (its type,
+/// `event_handlers::WindowEventHandlers`, is `pub(crate)` in the pinned crate,
+/// and this window registers no winit event handler — nothing here calls
+/// `use_window_event` or `use_back_button`), `add_window` (this window opens
+/// exactly one, which `new` carries as the pending window), and the hooks the
+/// window half adds (D9 size application, gap `G-Hit` resolve, D10 frames).
+/// The window events the window half consumes report after the shell has
+/// handled them (D9, D10).
 struct MbvApplication {
-    inner: DioxusNativeApplication,
-    proxy: BlitzShellProxy,
+    /// The source's `pending_window`.
+    pending_window: Option<WindowConfig<DioxusNativeWindowRenderer>>,
+    /// The source's `inner`: the Blitz window set, its proxy, and its event
+    /// queue. `This crate:` the source keeps it private, and the viewport
+    /// handling below reads `inner.windows` directly.
+    inner: BlitzApplication<DioxusNativeWindowRenderer>,
     /// The document, shared with the shell's copy (gap `G-Hit`): the launch
     /// copy resolves it before a hit-testing event.
     document: Rc<RefCell<BaseDocument>>,
@@ -147,19 +171,13 @@ struct MbvApplication {
     doc_id: usize,
     events: WindowEventSender,
     clock: Arc<dyn Clock>,
+    /// `This crate:` the root's layout-size signal, written at every resize
+    /// before the frame that resolves at it (D9).
+    viewport_size: ViewportSize,
     /// Whether a viewport change has landed since the last presented frame
-    /// (D9): Blitz applies the new size in its own handler without touching the
-    /// tree, so the frame fact cannot read it from the document.
+    /// (D9): the frame fact reports it so the measure follows the frame that
+    /// resolves at the new size, even when the resize changed no markup.
     viewport_changed: bool,
-    /// The handoff a viewport change travels through (D9): queued at the resize
-    /// site, applied by the drain, and read before each frame, so the frame is
-    /// held while the tree still holds the old size.
-    viewport_pending: ViewportPending,
-    /// What the next frame does about the last resize (D9): hold it until the
-    /// drain has read the size, or present it. One hold per presented frame, so
-    /// a continuous drag presents every other frame at worst, and a drain that
-    /// never cleared the handoff cannot spin the loop either.
-    viewport_frame: ViewportFrame,
     /// Whether the pre-hit resolve applied a change since the last presented
     /// frame (gap `G-Hit`, D12): that resolve is not a frame, so the next frame
     /// reports the change and the measure re-runs.
@@ -177,6 +195,35 @@ struct MbvApplication {
 }
 
 impl MbvApplication {
+    /// `This crate:` the source's `new`, over the document the window half also
+    /// holds.
+    fn new(
+        proxy: BlitzShellProxy,
+        event_queue: Receiver<BlitzShellEvent>,
+        config: WindowConfig<DioxusNativeWindowRenderer>,
+        document: Rc<RefCell<BaseDocument>>,
+        doc_id: usize,
+        events: WindowEventSender,
+        clock: Arc<dyn Clock>,
+        viewport_size: ViewportSize,
+        loads: NetLoads,
+    ) -> Self {
+        Self {
+            pending_window: Some(config),
+            inner: BlitzApplication::new(proxy, event_queue),
+            document,
+            animation: AnimationClock::default(),
+            doc_id,
+            events,
+            clock,
+            viewport_size,
+            viewport_changed: false,
+            resolved_early: false,
+            loads,
+            load_framed: false,
+        }
+    }
+
     /// Present the frame a net answer needs (D12): the answer arrives outside
     /// any frame, and the frame that reports it resolves the layout it changed
     /// and bumps the layout epoch. One frame per answer; the frame takes the
@@ -190,15 +237,42 @@ impl MbvApplication {
             return;
         }
         self.load_framed = true;
-        self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+        self.inner.proxy.send_event(BlitzShellEvent::RequestRedraw {
             doc_id: self.doc_id,
         });
+    }
+
+    /// The source's `handle_dioxus_native_event`, with one arm: `This crate:`
+    /// the source's devtools arm is `#[cfg(feature = "hot-reload")]`, and this
+    /// crate enables neither that feature nor devtools, so only the head
+    /// element route remains.
+    fn handle_dioxus_native_event(
+        &mut self,
+        _event_loop: &dyn ActiveEventLoop,
+        event: &DioxusNativeEvent,
+    ) {
+        match event {
+            DioxusNativeEvent::CreateHeadElement {
+                name,
+                attributes,
+                contents,
+                window,
+            } => {
+                if let Some(window) = self.inner.windows.get_mut(window) {
+                    let doc = window.downcast_doc_mut::<DioxusDocument>();
+                    doc.create_head_element(name, attributes, contents);
+                    window.poll();
+                }
+            }
+        }
     }
 }
 
 impl ApplicationHandler for MbvApplication {
-    fn new_events(&mut self, event_loop: &dyn ActiveEventLoop, cause: StartCause) {
-        self.inner.new_events(event_loop, cause);
+    /// The source's `macos_handler`: the shell's own.
+    #[cfg(target_os = "macos")]
+    fn macos_handler(&mut self) -> Option<&mut dyn ApplicationHandlerExtMacOS> {
+        self.inner.macos_handler()
     }
 
     fn resumed(&mut self, event_loop: &dyn ActiveEventLoop) {
@@ -213,22 +287,65 @@ impl ApplicationHandler for MbvApplication {
         self.inner.destroy_surfaces(event_loop);
     }
 
-    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.inner.can_create_surfaces(event_loop);
-        // The shell created the window and resolved it for the first time, so
-        // its animation clock has started: anchor ours after it (gap `G-Hit`).
-        self.animation.shell_started();
-    }
-
-    fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.inner.proxy_wake_up(event_loop);
+    fn new_events(&mut self, event_loop: &dyn ActiveEventLoop, cause: StartCause) {
+        self.inner.new_events(event_loop, cause);
     }
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.inner.about_to_wait(event_loop);
-        // The loop is idle: a net answer that landed since the last frame needs
-        // one more presented frame (D12).
+        // `This crate:` the loop is idle, so a net answer that landed since the
+        // last frame needs one more presented frame (D12).
         self.present_load_frame();
+    }
+
+    /// The source's `can_create_surfaces`, over this crate's root contexts.
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
+        if let Some(config) = self.pending_window.take() {
+            let mut window = View::init(config, event_loop, &self.inner.proxy);
+            let winit_window = Arc::clone(&window.window);
+            let renderer = window.renderer.clone();
+            let window_id = window.window_id();
+            let doc = window.downcast_doc_mut::<DioxusDocument>();
+
+            // `This crate:` the source provides the `dioxus_document::Document`
+            // context and its winit event handlers here. Both types are
+            // `pub(crate)` in the pinned crate (`contexts::DioxusNativeDocument::new`
+            // and `event_handlers::WindowEventHandlers`), so this copy cannot
+            // build them; the window consumes neither (it asks no document for a
+            // head element and registers no winit event handler). The source's
+            // history context is absent too: nothing in this window routes, and
+            // `dioxus-history` is not a dependency here. The source's `tracing`
+            // debug line above this block is omitted with them.
+
+            // Add shell provider
+            let shell_provider = Arc::<dyn blitz_traits::shell::ShellProvider>::clone(
+                &doc.inner.borrow().shell_provider,
+            );
+            doc.vdom
+                .in_scope(ScopeId::ROOT, move || provide_context(shell_provider));
+
+            // Add renderer
+            doc.vdom
+                .in_scope(ScopeId::ROOT, move || provide_context(renderer));
+
+            // Add winit window
+            doc.vdom
+                .in_scope(ScopeId::ROOT, move || provide_context(winit_window));
+
+            // Queue rebuild
+            doc.initial_build();
+
+            // And then request redraw
+            window.request_redraw();
+
+            self.inner.windows.insert(window_id, window);
+        }
+
+        self.inner.can_create_surfaces(event_loop);
+        // `This crate:` the shell created the window and resolved it for the
+        // first time, so its animation clock has started: anchor ours after it
+        // (gap `G-Hit`).
+        self.animation.shell_started();
     }
 
     fn window_event(
@@ -245,36 +362,8 @@ impl ApplicationHandler for MbvApplication {
         );
         if viewport {
             self.viewport_changed = true;
-            self.viewport_pending.queue();
-            self.viewport_frame = self.viewport_frame.queued();
         }
         let redraw = matches!(event, WinitWindowEvent::RedrawRequested);
-        // D9: hold the frame the resize asked for until the drain has read the
-        // new size into the tree. Blitz applies the size to the document's
-        // viewport without touching the tree, so a frame resolved now lays out
-        // the old arrangement at the new size and the correct one appears a
-        // frame or two later — the live resize jerk. The poll below runs the
-        // drain, which writes the size before this copy renders again, and the
-        // redraw it asks for is the first frame at the new size.
-        //
-        // At most one frame is held between presented frames
-        // ([`ViewportFrame::queued`]): during a continuous drag the drain and a
-        // new size arrive in every iteration, and a hold re-armed by each of
-        // them would never let a frame through. The presented frame of such an
-        // iteration resolves at the newest size with the arrangement the drain
-        // applied for the previous one; the next iteration corrects it.
-        if redraw
-            && self
-                .viewport_frame
-                .holds(self.viewport_pending.is_pending())
-        {
-            self.viewport_frame = ViewportFrame::Held;
-            self.proxy.send_event(BlitzShellEvent::Poll { window_id });
-            self.proxy.send_event(BlitzShellEvent::RequestRedraw {
-                doc_id: self.doc_id,
-            });
-            return;
-        }
         // Gap `G-Hit`: the hit test runs inside the shell's handler, so the
         // resolve that makes `paint_children` current runs before it.
         if hit_tests(&event) && resolve_before_hit_testing(&self.document, &self.animation) {
@@ -294,32 +383,68 @@ impl ApplicationHandler for MbvApplication {
         } else {
             false
         };
+        // The source's `event_handlers.apply_event` would run here; this copy
+        // holds no handlers (see the struct's note).
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
-            // The shell has applied the size to the document's viewport, so the
-            // logical size read here is the one the container lays out against
-            // (D9); the drain writes it through `layout::apply_viewport_size`.
-            let size = viewport_layout_size(self.document.borrow().viewport());
-            let _ = self.events.unbounded_send(WindowEvent::Viewport { size });
+            self.apply_viewport(window_id);
         }
-        // D10: every presented frame reports its change fact, and the next
-        // redraw is requested only while frames are wanted, which paces the
-        // loop at vsync. The report itself is never gated: a change no frame
+        // `This crate:` D10. Every presented frame reports its change fact, and
+        // the next redraw is requested only while frames are wanted, which paces
+        // the loop at vsync. The report itself is never gated: a change no frame
         // has resolved yet is answered by a frame's bump (D12), which a paused
         // window must report too. An idle window presents none: nothing here
         // asks for one, and blitz-shell's poll asks for a redraw on its own
         // when the tree or a net answer gives it work.
         if redraw {
             self.viewport_changed = false;
-            self.viewport_frame = ViewportFrame::Settled;
             self.resolved_early = false;
             let _ = self.events.unbounded_send(WindowEvent::Frame { changed });
             if self.clock.frames_wanted() {
-                self.proxy.send_event(BlitzShellEvent::RequestRedraw {
+                self.inner.proxy.send_event(BlitzShellEvent::RequestRedraw {
                     doc_id: self.doc_id,
                 });
             }
         }
+    }
+
+    /// The source's `proxy_wake_up`, over the shell's own events (`This crate:`
+    /// the embedder route is the source's).
+    fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
+        while let Ok(event) = self.inner.event_queue.try_recv() {
+            match event {
+                BlitzShellEvent::Embedder(event) => {
+                    if let Some(event) = event.downcast_ref::<DioxusNativeEvent>() {
+                        self.handle_dioxus_native_event(event_loop, event);
+                    }
+                }
+                event => self.inner.handle_blitz_shell_event(event_loop, event),
+            }
+        }
+    }
+}
+
+impl MbvApplication {
+    /// `This crate:` apply a resize to the window's tree (D9).
+    ///
+    /// The shell has already put the new size on the document's viewport
+    /// (`blitz_shell::View::handle_winit_event`), without touching the tree, so
+    /// the size has to reach the tree here: the size signal is written from the
+    /// vdom's runtime and the tree is rendered, all before the redraw the
+    /// resize asked for resolves. That frame then lays out the arrangement,
+    /// panel state, and column widths the new size picks, and a continuous drag
+    /// presents every frame instead of holding them for a channel hop that lands
+    /// a turn late.
+    fn apply_viewport(&mut self, window_id: WindowId) {
+        let size = viewport_layout_size(self.document.borrow().viewport());
+        if let Some(view) = self.inner.windows.get_mut(&window_id) {
+            let doc = view.downcast_doc_mut::<DioxusDocument>();
+            apply_viewport_size(doc, self.viewport_size.clone(), size);
+        }
+        // The art caps divide by the scale factor (D7), which the drain writes
+        // from the window on this event. The layout size does not travel here;
+        // it reached the tree above.
+        let _ = self.events.unbounded_send(WindowEvent::Viewport);
     }
 }
 
@@ -361,8 +486,10 @@ pub fn launch(
     vdom.provide_root_context(Arc::clone(&net_provider));
     vdom.provide_root_context(Arc::clone(&clock));
     vdom.provide_root_context(EventSlot::new(event_receiver));
-    let viewport_pending = ViewportPending::new();
-    vdom.provide_root_context(viewport_pending.clone());
+    // The root hands its layout-size signal back through this handle; a resize
+    // writes the new size into it before the frame that resolves at it (D9).
+    let viewport_size = ViewportSize::new();
+    vdom.provide_root_context(viewport_size.clone());
     vdom.provide_root_context(proxy.clone());
 
     let doc = DioxusDocument::new(
@@ -383,23 +510,18 @@ pub fn launch(
         limits: None,
     });
     let config = WindowConfig::with_attributes(Box::new(doc) as _, renderer, window_attributes());
-    let application = DioxusNativeApplication::new(proxy.clone(), event_queue, config);
 
-    let application = MbvApplication {
-        inner: application,
+    let application = MbvApplication::new(
         proxy,
+        event_queue,
+        config,
         document,
-        animation: AnimationClock::default(),
         doc_id,
         events,
         clock,
-        viewport_changed: false,
-        viewport_pending,
-        viewport_frame: ViewportFrame::Settled,
-        resolved_early: false,
+        viewport_size,
         loads,
-        load_framed: false,
-    };
+    );
     event_loop
         .run_app(application)
         .expect("the window event loop runs");

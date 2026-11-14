@@ -19,12 +19,11 @@ use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
-use crate::bridge::layout::LayoutSize;
 use crate::bridge::pointer::DomPointerKind;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::window::arrangement::{GuiArrangement, library_arrangement, settings_arrangement};
 use crate::window::cells::cell_unit_rule;
-use crate::window::channel::{CoreLink, EventSlot, ViewportPending, WindowEvent};
+use crate::window::channel::{CoreLink, EventSlot, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::components::attach_screen::AttachScreen;
@@ -38,7 +37,7 @@ use crate::window::components::panel_divider::{
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::input::KeyOutcome;
 use crate::window::layout::{
-    LayoutEpoch, apply_viewport_size, note_presented_frame, track_container_size,
+    LayoutEpoch, ViewportSize, note_presented_frame, track_container_size, use_container_size,
     use_layout_reporter,
 };
 use crate::window::library::keys::route_library_key;
@@ -103,12 +102,6 @@ struct Drain {
     sections: Sections,
     playhead: Playhead,
     library: LibraryState,
-    /// The size the window picks its panels and arrangement from (D9): the
-    /// viewport's at a resize, the container's from its own measurement.
-    container: Signal<LayoutSize>,
-    /// The handoff a viewport change travels through (D9): cleared once the
-    /// size below is written, which lets the launch copy present the frame.
-    viewport_pending: ViewportPending,
 }
 
 impl Drain {
@@ -121,16 +114,11 @@ impl Drain {
                 });
             }
             // A viewport change rewrites the scale factor the natural-size
-            // caps divide by (D7), and the layout size the window picks its
-            // panels and arrangement from (D9). The size is written here, before
-            // the frame that resolves at it, so that frame already lays out the
-            // arrangement the new size picks; the launch copy held every frame
-            // until the handoff cleared, so no frame resolved at the new size
-            // with the old arrangement. The measurement that follows the frame
-            // keeps the merged report's container size the measured one.
-            WindowEvent::Viewport { size } => {
+            // caps divide by (D7). The layout size does not arrive here: the
+            // launch copy writes it into the tree before the frame that resolves
+            // at the new size (D9), so this event would be a turn late for it.
+            WindowEvent::Viewport => {
                 self.scale.0.set(self.scale_window.scale_factor());
-                apply_viewport_size(self.container, size, &self.viewport_pending);
             }
             // An art answer reaches its `ArtImage` through the store (D7).
             WindowEvent::Art(event) => self.art_events.push(event),
@@ -317,13 +305,14 @@ pub fn App() -> Element {
     });
 
     // The panel container the layout report carries the size of (D9): the
-    // box the panel states are picked from. The drain writes the viewport's own
-    // size into it at a resize, before the frame that resolves at that size, and
-    // the effect below writes the measured one after each frame a change
-    // resolved; the measurement reports to the core and hands to `Panel`, so
-    // the state the window paints and the capacity and hit map the core applies
-    // come from one size.
-    let container: Signal<LayoutSize> = use_signal(LayoutSize::default);
+    // box the panel states are picked from. The launch copy writes a resize's
+    // size into it before the frame that resolves at that size, and the effect
+    // writes the measured one after each frame a change resolved; the
+    // measurement reports to the core and hands to `Panel`, so the state the
+    // window paints and the capacity and hit map the core applies come from one
+    // size.
+    let viewport_size = use_hook(consume_context::<ViewportSize>);
+    let container = use_container_size(viewport_size, &window);
 
     // The window channel's drain (D4): every event from outside the tree
     // dispatches here.
@@ -339,8 +328,6 @@ pub fn App() -> Element {
             sections: sections.clone(),
             playhead: playhead.clone(),
             library: library.clone(),
-            container,
-            viewport_pending: use_hook(consume_context::<ViewportPending>),
         },
         slot,
     );

@@ -22,17 +22,16 @@ use blitz_dom::{Document as _, LocalName};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use futures_util::StreamExt;
 
 use super::super::ROOT_STYLE;
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::layout::LayoutSize;
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::{GuiArrangement, library_arrangement};
-use crate::window::channel::{CoreLink, EventSlot, ViewportFrame, ViewportPending, WindowEvent};
+use crate::window::channel::CoreLink;
 use crate::window::layout::{
-    LayoutEpoch, apply_viewport_size, frame_carries_change, note_presented_frame,
-    track_container_size, use_layout_reporter, viewport_layout_size,
+    LayoutEpoch, ViewportSize, apply_viewport_size, frame_carries_change, note_presented_frame,
+    track_container_size, use_layout_reporter, viewport_layout_size, window_layout_size,
 };
 use crate::window::resize::{DraggedWidths, panel_widths};
 
@@ -50,12 +49,11 @@ fn expanded() -> GuiPanelToggles {
     }
 }
 
-/// What the root takes: the drain's event slot, the viewport handoff, and the
-/// cell the root hands its layout epoch back through.
+/// What the root takes: the viewport handle the launch copy writes a resize
+/// through, and the cell the root hands its layout epoch back through.
 #[derive(Clone)]
 struct Props {
-    slot: EventSlot,
-    pending: ViewportPending,
+    viewport: ViewportSize,
     epoch: Rc<RefCell<Option<LayoutEpoch>>>,
 }
 
@@ -64,37 +62,17 @@ struct Props {
 /// widths derived from it the way `App` derives them. The Library panel is the
 /// active destination and holds focus, so Mini shows it alone.
 fn resize_app(props: Props) -> Element {
-    let Props {
-        slot,
-        pending,
-        epoch,
-    } = props;
+    let Props { viewport, epoch } = props;
     let (core, _inputs) = channel::<CoreInput>();
     provide_context(CoreLink::new(core));
     provide_context(use_layout_reporter());
     let layout_epoch = use_hook(LayoutEpoch::new);
     provide_context(layout_epoch);
     epoch.borrow_mut().replace(layout_epoch);
-    let container: Signal<LayoutSize> = use_signal(LayoutSize::default);
+    let container: Signal<LayoutSize> = use_signal(|| window_layout_size((0, 0), 1.0));
     let mut container_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     track_container_size(container_mounted, container);
-
-    // The drain's viewport arm (D9): the size reaches the tree before the frame
-    // that resolves at it, and the handoff clears so the launch copy presents.
-    use_future(move || {
-        let slot = slot.clone();
-        let pending = pending.clone();
-        async move {
-            let Some(mut events) = slot.take() else {
-                return;
-            };
-            while let Some(event) = events.next().await {
-                if let WindowEvent::Viewport { size } = event {
-                    apply_viewport_size(container, size, &pending);
-                }
-            }
-        }
-    });
+    viewport.provide(container);
 
     let size = container.cloned();
     let widths = panel_widths(size, &expanded(), &DraggedWidths::default());
@@ -125,17 +103,14 @@ fn resize_app(props: Props) -> Element {
     }
 }
 
-/// The window under test: the document, the drain's sender, the viewport
-/// handoff, and the arrangements of the frames presented so far.
+/// The window under test: the document, the drain's sender, the viewport handle
+/// the launch copy writes a resize through, and the arrangements of the frames
+/// presented so far.
 struct Window {
     doc: DioxusDocument,
-    pending: ViewportPending,
-    sender: UnboundedSender<WindowEvent>,
+    viewport: ViewportSize,
     epoch: LayoutEpoch,
     arrangements: Rc<RefCell<Vec<String>>>,
-    /// What the next frame does about the last resize, as the launch copy
-    /// tracks it.
-    frame: ViewportFrame,
     /// Whether a viewport change landed since the last presented frame.
     viewport_changed: bool,
     /// How many frames were presented.
@@ -144,18 +119,16 @@ struct Window {
 
 impl Window {
     /// A window opened at `width` x `height`, the way the launch copy opens one:
-    /// the shell's first `SurfaceResized` queues the size, its frame is held, and
-    /// the frame the poll asks for presents the first arrangement.
+    /// the shell's first `SurfaceResized` applies the size and the copy writes it
+    /// into the tree, and the frame that resize asked for presents it.
     fn built(width: u32, height: u32) -> Self {
-        let (sender, receiver) = futures_channel::mpsc::unbounded();
-        let pending = ViewportPending::new();
+        let viewport = ViewportSize::new();
         let epoch = Rc::new(RefCell::new(None));
         let mut doc = DioxusDocument::new(
             VirtualDom::new_with_props(
                 resize_app,
                 Props {
-                    slot: EventSlot::new(receiver),
-                    pending: pending.clone(),
+                    viewport: viewport.clone(),
                     epoch: Rc::clone(&epoch),
                 },
             ),
@@ -167,31 +140,25 @@ impl Window {
         doc.initial_build();
         let mut window = Self {
             doc,
-            pending,
-            sender,
+            viewport,
             epoch: epoch.borrow().expect("the root provided the layout epoch"),
             arrangements: Rc::new(RefCell::new(Vec::new())),
-            frame: ViewportFrame::Settled,
             viewport_changed: false,
             presented: 0,
         };
-        window.poll();
         window.resize(width, height);
-        window.redraw();
         window.redraw();
         window
     }
 
     /// One `SurfaceResized`, as the launch copy handles it (D9): the shell
     /// applies the physical size to the document's viewport, then the copy
-    /// queues the event the drain reads.
+    /// writes that size into the tree and renders it, before any frame resolves.
     fn resize(&mut self, width: u32, height: u32) {
         self.doc.inner_mut().viewport_mut().window_size = (width, height);
         self.viewport_changed = true;
-        self.frame = self.frame.queued();
-        self.pending.queue();
         let size = viewport_layout_size(self.doc.inner().viewport());
-        let _ = self.sender.unbounded_send(WindowEvent::Viewport { size });
+        apply_viewport_size(&mut self.doc, self.viewport.clone(), size);
     }
 
     /// One event-loop iteration of a continuous drag, in winit-wayland's order
@@ -203,36 +170,26 @@ impl Window {
         self.redraw();
     }
 
-    /// One iteration with no new size: the drain and the frame it asks for.
-    fn settle_iteration(&mut self) {
-        self.poll();
-        self.redraw();
-    }
-
     /// Drag the window through `widths`, one event-loop iteration per size, and
-    /// let it settle: the loop is the drag itself.
-    fn drag_through(&mut self, widths: &[u32]) {
+    /// return the arrangement each iteration's *frame* painted: the loop is the
+    /// drag itself, and the frame's arrangement is the tree as its resolve saw
+    /// it, before any later poll renders the next size.
+    fn drag_through(&mut self, widths: &[u32]) -> Vec<String> {
+        let first = self.presented;
         for width in widths {
             self.drag_iteration(*width);
         }
-        self.settle_iteration();
+        self.arrangements_since(first)
     }
 
-    /// One `RedrawRequested`, as the launch copy answers it (D9): a frame is
-    /// held while the drain has not read the queued size and no frame has been
-    /// held since the last present, and it presents otherwise.
+    /// One `RedrawRequested`, as the launch copy answers it (D9): every redraw
+    /// presents, because the size a resize carries reached the tree before it.
     fn redraw(&mut self) {
-        if self.frame.holds(self.pending.is_pending()) {
-            self.frame = ViewportFrame::Held;
-            self.poll();
-            return;
-        }
-        self.frame = ViewportFrame::Settled;
         self.present_frame();
     }
 
-    /// The poll a held frame queues: the shell drains the window channel, applies
-    /// the render's mutations, and asks for the redraw that follows.
+    /// The proxy wake-up: the shell drains the window channel and applies the
+    /// render's mutations.
     fn poll(&mut self) {
         for _ in 0..8 {
             if !self.doc.poll(None) {
@@ -251,7 +208,6 @@ impl Window {
             frame_carries_change(&document, self.viewport_changed, false)
         };
         self.viewport_changed = false;
-        self.frame = ViewportFrame::Settled;
         self.doc.inner.borrow_mut().resolve(0.0);
         self.arrangements.borrow_mut().push(self.arrangement());
         let epoch = self.epoch;
@@ -288,13 +244,18 @@ impl Window {
     fn presented_arrangements(&self) -> Vec<String> {
         self.arrangements.borrow().clone()
     }
+
+    /// The arrangements painted by the frames presented from `first` on.
+    fn arrangements_since(&self, first: usize) -> Vec<String> {
+        self.arrangements.borrow()[first..].to_vec()
+    }
 }
 
 /// Contract (the live resize jerk of `e978b31aa`, D9): the first frame at the new
 /// size already lays out the arrangement that size picks. A resize from the Wide
 /// arrangement to Mini crosses the Library column's threshold and drops the Queue
-/// column; the frame the resize asked for is held until the size reaches the
-/// tree, so no frame resolves at the new size with the old arrangement.
+/// column, and the frame the resize asked for presents that arrangement — no
+/// frame resolves at the new size with the old one.
 #[test]
 fn the_first_frame_at_a_new_size_paints_its_arrangement() {
     let mut window = Window::built(1600, 900);
@@ -303,12 +264,7 @@ fn the_first_frame_at_a_new_size_paints_its_arrangement() {
 
     window.resize(800, 900);
     window.redraw();
-    assert_eq!(
-        window.presented, 1,
-        "the frame the resize asked for is held until the size reaches the tree"
-    );
 
-    window.redraw();
     assert_eq!(window.arrangement(), "mini");
     assert!(!window.paints_the_queue_column());
     assert_eq!(window.presented_arrangements(), vec!["wide", "mini"]);
@@ -318,23 +274,32 @@ fn the_first_frame_at_a_new_size_paints_its_arrangement() {
 /// Wide down to Mini, so the arrangement changes while the pointer moves.
 const DRAG_WIDTHS: [u32; 8] = [1500, 1400, 1300, 1200, 1100, 1000, 900, 800];
 
-/// Contract (review of `fecfd22a1`, D9): a continuous drag keeps presenting
-/// frames, and it lands on the newest size's arrangement. winit dispatches the
-/// proxy wake-up before the compositor's resize and that resize's redraw, so
-/// every iteration of a drag has both a drain and a new size; a hold that a
-/// newer resize re-arms would hold every one of those frames, and the window
-/// would paint nothing until the drag stopped.
+/// The arrangement the window picks at `width` x `HEIGHT`, read through the same
+/// thresholds the window reads.
+fn arrangement_at(width: u32) -> String {
+    let size = window_layout_size((width, HEIGHT), 1.0);
+    let widths = panel_widths(size, &expanded(), &DraggedWidths::default());
+    library_arrangement(size, widths.queue).name().to_owned()
+}
+
+/// Contract (review of `fecfd22a1` and `90fc94733`, D9): a continuous drag
+/// presents a frame at every event-loop iteration, and each frame lays out that
+/// iteration's size. winit dispatches the proxy wake-up before the compositor's
+/// resize and that resize's redraw, so a size that reaches the tree by a channel
+/// hop — or a frame held for one — leaves the drag painting a stale arrangement
+/// or nothing at all.
 #[test]
-fn a_continuous_drag_keeps_presenting_frames() {
+fn a_continuous_drag_presents_each_iterations_arrangement() {
     let mut window = Window::built(1600, HEIGHT);
 
-    window.drag_through(&DRAG_WIDTHS);
+    let painted = window.drag_through(&DRAG_WIDTHS);
 
-    assert!(
-        window.presented > DRAG_WIDTHS.len() / 2,
-        "a frame is presented at least every other iteration of the drag: {} presented over {} iterations and the settle",
-        window.presented,
-        DRAG_WIDTHS.len()
+    assert_eq!(window.presented, 1 + DRAG_WIDTHS.len());
+    assert_eq!(
+        painted,
+        DRAG_WIDTHS
+            .iter()
+            .map(|width| arrangement_at(*width))
+            .collect::<Vec<_>>()
     );
-    assert_eq!(window.arrangement(), "mini");
 }
