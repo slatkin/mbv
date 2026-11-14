@@ -57,8 +57,8 @@ Design decisions are cited as `D<n>`. Every port task follows the port rules of 
 
 - [x] 7.1 Port `LibraryPanel.svelte`, `LibraryTopBar.svelte`, `LibraryStatusBar.svelte`, and `LibraryFilterField.svelte`. Port the contracts of `LibraryPanel.test.ts`, `LibraryTopBar.test.ts`, and `LibraryStatusBar.test.ts`. Verify: the tests pass.
 - [x] 7.2 Port `LibraryVirtualList.svelte` (scroll offset and row window through D15 scroll and D9 sizes), `LibraryList.svelte`, `LibraryItemRow.svelte`, `LibraryListHeader.svelte`, `LibraryListNotice.svelte`, `LibraryLetterRail.svelte`, and `LibraryLetterHeading.svelte`. Port the contracts of `LibraryList.test.ts` and `LibraryLetterRail.test.ts`. Verify: the tests pass.
-- [ ] 7.3 Port `LibraryWorkspaceTable.svelte` and `LibraryTracklist.svelte`. Verify: `cargo check -p mbv-gui`.
-- [ ] 7.4 Port `LibraryPillButton.svelte`, `LibraryPillRow.svelte`, `LibraryPills.svelte`, and the four destination pill components. Port the contracts of their `.test.ts` files. Verify: the tests pass.
+- [x] 7.3 Port `LibraryWorkspaceTable.svelte` and `LibraryTracklist.svelte`. Verify: `cargo check -p mbv-gui`.
+- [x] 7.4 Port `LibraryPillButton.svelte`, `LibraryPillRow.svelte`, `LibraryPills.svelte`, and the four destination pill components. Port the contracts of their `.test.ts` files. Verify: the tests pass.
 - [ ] 7.5 Port `LibraryHero.svelte`, `LibraryHeroFrame.svelte`, `LibraryHeroArt.svelte`, `LibraryHeroSummary.svelte`, `LibraryHeroActions.svelte`, and `LibraryHomeHero.svelte`. Port the contracts of `LibraryHero.test.ts`, `LibraryHeroArt.test.ts`, and `LibraryHomeHero.test.ts`. Verify: the tests pass.
 - [ ] 7.6 Port `LibraryEmbyHero.svelte` (with the `openUrl` command), `LibraryShowsHero.svelte`, `LibraryAudiobooksHero.svelte`, `LibraryPodcastsHero.svelte`, and `LibraryFeedsHero.svelte`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
 - [ ] 7.7 Port `LibraryHomeList.svelte`, `LibraryEmbyList.svelte`, `LibraryShowsList.svelte`, `LibraryAudiobooksList.svelte`, `LibraryPodcastsList.svelte`, and `LibraryFeedsList.svelte`. Port the contracts of their `.test.ts` files. Verify: the tests pass.
