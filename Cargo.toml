@@ -5,7 +5,7 @@ members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/m
 default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-surfaces", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 
 [workspace.package]
-version = "0.26.9"
+version = "0.26.10"
 edition = "2024"
 # MSRV policy (M-MSRV): a few minors behind the rust-toolchain.toml pin. Bump
 # alongside a pin bump, never independently, and verify with an installed
@@ -20,6 +20,11 @@ categories = ["command-line-utilities", "multimedia::audio", "multimedia::video"
 [workspace.dependencies]
 ureq = { version = "3", default-features = false }
 native-tls = "0.2"
+# Force the vendored (statically built) OpenSSL for every binary in the
+# workspace. The .deb must not depend on the host's libssl soname: OpenSSL 4
+# (libssl.so.4) broke Debian 13, which ships libssl.so.3. The feature unifies
+# across the graph, so `native-tls`'s openssl-sys links the vendored build too.
+openssl = { version = "0.10", features = ["vendored"] }
 percent-encoding = "2"
 serde = { version = "1", default-features = false, features = ["std"] }
 serde_json = "1"
@@ -244,6 +249,7 @@ ratatui.workspace = true
 crossterm.workspace = true
 tuirealm.workspace = true
 ureq = { workspace = true, features = ["json"] }
+openssl.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 rand.workspace = true
@@ -282,7 +288,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "mpv/Emby and Audiobookshelf front-end. Runs mpv in a child process for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "mpv, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libx11-6, libfontconfig1, libvulkan1"
+depends = "mpv, libc6, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libx11-6, libfontconfig1, libvulkan1"
 section = "video"
 priority = "optional"
 assets = [
