@@ -3768,7 +3768,9 @@ dependencies = [
 name = "mbv-gui"
 version = "0.26.10"
 dependencies = [
+ "anyrender",
  "blitz-dom",
+ "blitz-paint",
  "blitz-shell",
  "blitz-traits",
  "criterion",
@@ -3776,6 +3778,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "image",
+ "kurbo",
  "mbv",
  "mbv-config",
  "mbv-core",

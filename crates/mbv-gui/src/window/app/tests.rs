@@ -31,6 +31,8 @@ use crate::window::input::f32_from_f64;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
+mod paint;
+
 /// The pass bound for the idle assertion: a settling effect goes `Pending`
 /// within a few passes; a self-triggering one never does.
 const PASS_BOUND: usize = 16;

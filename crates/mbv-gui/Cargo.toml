@@ -94,6 +94,14 @@ mbv-ctrl = { path = "../mbv-ctrl" }
 # process.
 mbv-emby = { path = "../mbv-emby" }
 mbv-net = { path = "../mbv-net", features = ["test"] }
+# The paint recorder the headless frame test reads: the window paints a frame
+# by pushing `anyrender` drawing commands out of `blitz_paint::paint_scene`,
+# so a test records one frame as those commands and reads its geometry. The
+# versions are the window stack's own (`Cargo.lock`), and `blitz-paint`'s
+# `svg` feature is the one the window builds with.
+blitz-paint = { version = "=0.3.0-beta.4" }
+anyrender = { version = "=0.14.0" }
+kurbo = { version = "=0.13.1" }
 rstest.workspace = true
 # The `sections` bench times one core step per fixture (design D12 of
 # `gui-change-driven-sections`); it runs only on a manual `cargo bench`.
