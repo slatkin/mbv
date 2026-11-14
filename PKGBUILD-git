@@ -6,7 +6,7 @@ pkgdesc="mpv/Emby and Audiobookshelf front-end (git)"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-depends=('mpv' 'openssl' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
+depends=('mpv' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
 optdepends=('pinwin>=0.4.1: pinned panel support')
 makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1' 'nodejs' 'pnpm')
 provides=('mbv')
