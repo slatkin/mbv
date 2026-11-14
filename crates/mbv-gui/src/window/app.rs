@@ -59,6 +59,21 @@ const APP_GENERATED_CSS: &str = include_str!("../../assets/app.generated.css");
 static ROOT_STYLE: LazyLock<String> =
     LazyLock::new(|| format!("{}\n{}", cell_unit_rule(), APP_GENERATED_CSS));
 
+/// The root's `style` element (D6). The CSS reaches the document as the
+/// element's own text child, never through `dangerous_inner_html`: the
+/// `DocumentConfig` the launch copy builds leaves Blitz's HTML parser
+/// provider at its default, and that default is a no-op (`blitz-dom`
+/// 0.3.0-beta.4 `html.rs`, `DummyHtmlParserProvider`), so an inner-HTML
+/// parse writes no text — `process_style_element` then reads an empty
+/// string and the window carries no stylesheet at all. A text child needs
+/// no parser, and the element's own flush reads it.
+fn root_style_element() -> Element {
+    let stylesheet = ROOT_STYLE.as_str();
+    rsx! {
+        style { "{stylesheet}" }
+    }
+}
+
 /// Apply one batch the drain task received (D6): the sections write in one
 /// pass, the playhead stamps the batch's anchor, and the layout epoch bumps
 /// when the batch changes a measured fact (D9) — a panel state change, the
@@ -405,7 +420,7 @@ pub fn App() -> Element {
     let mut reset_epoch = epoch;
 
     rsx! {
-        style { dangerous_inner_html: ROOT_STYLE.as_str() }
+        {root_style_element()}
         ThemeStyle {}
         main {
             class: "h-dvh w-full overflow-hidden bg-background text-foreground",
