@@ -3,7 +3,6 @@
 //! sleeps, or reaches the core.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use blitz_dom::Document as _;
 use blitz_traits::events::{
@@ -15,7 +14,11 @@ use dioxus_native::prelude::*;
 use dioxus_native::winit::dpi::{LogicalSize, Size};
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::{carries_unresolved_change, resolve_before_hit_testing, window_attributes};
+use crate::window::input::f32_from_f64;
+
+use super::{
+    AnimationClock, carries_unresolved_change, resolve_before_hit_testing, window_attributes,
+};
 
 /// Contract: the window keeps the Tauri window's 400x200 logical floor, so a
 /// floating window cannot be dragged below the size at which the compact
@@ -81,6 +84,14 @@ fn pointer_down(x: f32, y: f32) -> UiEvent {
     })
 }
 
+/// The clock a resolve passes in a window whose surfaces exist: the anchor
+/// `can_create_surfaces` takes after the shell created them.
+fn resolved_clock() -> AnimationClock {
+    let mut animation = AnimationClock::default();
+    animation.shell_started();
+    animation
+}
+
 /// Whether the selector names a node in the document.
 fn presents(doc: &DioxusDocument, selector: &str) -> bool {
     matches!(doc.inner().query_selector(selector), Ok(Some(_)))
@@ -101,7 +112,7 @@ fn rows_document() -> DioxusDocument {
         },
     );
     doc.initial_build();
-    resolve_before_hit_testing(&doc.inner, Instant::now());
+    resolve_before_hit_testing(&doc.inner, &resolved_clock());
     doc
 }
 
@@ -134,6 +145,118 @@ fn a_pointer_event_after_a_dom_change_does_not_panic() {
         !presents(&doc, "[data-row]"),
         "the press rebuilt the rows away"
     );
-    resolve_before_hit_testing(&doc.inner, Instant::now());
+    resolve_before_hit_testing(&doc.inner, &resolved_clock());
     doc.handle_ui_event(pointer_down(10.0, 10.0));
+}
+
+/// The layout and transition the clock tests resolve with, in place of the app
+/// stylesheet: a box that widens from `BAR_WIDTH` to `BAR_WIDE` over 120 ms, so
+/// a resolve's animation time is readable as the box's width.
+const TRANSITION_CSS: &str =
+    "[data-bar] { height: 10px; width: 20px; transition: width 120ms linear; }";
+
+/// The bar's width before the press, in CSS pixels.
+const BAR_WIDTH: f64 = 20.0;
+
+/// The bar's width after the press, in CSS pixels.
+const BAR_WIDE: f64 = 200.0;
+
+/// The animation time of the frame resolve that follows the pre-hit resolve,
+/// in seconds: well past the 120 ms transition, so a transition that started
+/// before it has surely progressed.
+const FRAME_TIME: f64 = 0.2;
+
+/// The root: the bar, and a press that widens it — a style change whose
+/// transition a resolve has to start.
+fn bar_app() -> Element {
+    let mut wide = use_signal(|| false);
+    rsx! {
+        div {
+            "data-bar": "",
+            style: if wide() { "width: 200px" } else { "width: 20px" },
+            onpointerdown: move |_| wide.set(true),
+        }
+    }
+}
+
+/// The bar's client rect, in CSS pixels.
+fn bar_rect(doc: &DioxusDocument, bar: blitz_dom::NodeId) -> blitz_dom::BoundingRect {
+    doc.inner()
+        .get_client_bounding_rect(bar)
+        .expect("the bar is laid out")
+}
+
+/// The bar's laid-out width, in CSS pixels: the transition's progress.
+fn bar_width(doc: &DioxusDocument, bar: blitz_dom::NodeId) -> f64 {
+    bar_rect(doc, bar).width
+}
+
+/// The transition fixture: the bar, resolved at t=0 as the shell's first frame
+/// would leave it, with the bar's node id.
+fn bar_document() -> (DioxusDocument, blitz_dom::NodeId) {
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(bar_app),
+        DocumentConfig {
+            viewport: Some(Viewport::new(400, 300, 1.0, ColorScheme::Light)),
+            ua_stylesheets: vec![
+                blitz_dom::UserAgentStylesheet::default_sheet(),
+                blitz_dom::UserAgentStylesheet::parse(TRANSITION_CSS),
+            ],
+            ..DocumentConfig::default()
+        },
+    );
+    doc.initial_build();
+    doc.inner.borrow_mut().resolve(0.0);
+    let bar = doc
+        .inner()
+        .query_selector("[data-bar]")
+        .expect("the selector is valid")
+        .expect("the bar paints");
+    (doc, bar)
+}
+
+/// Press the bar's centre, which widens it, and let the change land.
+fn press_bar(doc: &mut DioxusDocument, bar: blitz_dom::NodeId) {
+    let rect = bar_rect(doc, bar);
+    let x = f32_from_f64(rect.x + rect.width / 2.0);
+    let y = f32_from_f64(rect.y + rect.height / 2.0);
+    doc.handle_ui_event(pointer_down(x, y));
+    doc.poll(None);
+}
+
+/// Contract (gap `G-Hit`, the pre-hit resolve's animation clock): a transition
+/// the pre-hit resolve starts follows its own time, so the frame that comes
+/// after it is not frozen. Stylo dates a new transition from the resolve time
+/// it is handed and clamps the progress to zero while a later resolve's time is
+/// before that date, so the pre-hit clock must trail the shell's — which it
+/// does, anchored after `View::resume` and not in `launch`.
+#[test]
+fn a_transition_the_pre_hit_resolve_starts_is_not_frozen() {
+    let (mut doc, bar) = bar_document();
+    press_bar(&mut doc, bar);
+
+    resolve_before_hit_testing(&doc.inner, &resolved_clock());
+    doc.inner.borrow_mut().resolve(FRAME_TIME);
+
+    assert_eq!(
+        bar_width(&doc, bar),
+        BAR_WIDE,
+        "the transition the pre-hit resolve started ran to its end by the frame"
+    );
+}
+
+/// Contract (gap `G-Hit`): a pre-hit clock that runs *ahead* of the shell's
+/// freezes the transition it starts until the frame's time passes that start,
+/// which is the defect the anchor removes. The two times below are in the order
+/// the launch copy would pass them if it anchored its clock before the
+/// window's own, with the drift exaggerated so the frozen progress is exact.
+#[test]
+fn a_pre_hit_clock_ahead_of_the_frame_freezes_its_transition() {
+    let (mut doc, bar) = bar_document();
+    press_bar(&mut doc, bar);
+
+    doc.inner.borrow_mut().resolve(FRAME_TIME + 1.0);
+    doc.inner.borrow_mut().resolve(FRAME_TIME);
+
+    assert_eq!(bar_width(&doc, bar), BAR_WIDTH);
 }

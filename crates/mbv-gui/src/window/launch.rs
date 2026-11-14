@@ -84,6 +84,37 @@ fn carries_unresolved_change(document: &BaseDocument) -> bool {
     root.has_damaged_descendants() || root.damage().is_some_and(|damage| !damage.is_empty())
 }
 
+/// The animation clock the launch copy's pre-hit resolves pass (gap `G-Hit`).
+///
+/// Blitz-shell starts its own clock when it creates the window's surfaces
+/// (`View::resume`), and stylo dates a transition it starts from the resolve
+/// time it is given and clamps the transition's progress to zero while the
+/// resolve time is before that date (`style`'s `Transition::calculate_value`).
+/// A clock that ran ahead of the shell's would therefore freeze every
+/// transition the pre-hit resolve started until a frame's resolve caught up
+/// with it, so this one is anchored after `View::resume` and only ever trails
+/// the shell's. It reports 0.0 until then, as the shell's own clock does.
+#[derive(Default)]
+struct AnimationClock {
+    started: Option<Instant>,
+}
+
+impl AnimationClock {
+    /// The shell created the window's surfaces, which started its clock: this
+    /// one starts after that point, so the two agree to within the window's
+    /// setup time.
+    fn shell_started(&mut self) {
+        self.started = Some(Instant::now());
+    }
+
+    /// The time a resolve passes, in seconds since the shell created the
+    /// window's surfaces.
+    fn time(&self) -> f64 {
+        self.started
+            .map_or(0.0, |started| started.elapsed().as_secs_f64())
+    }
+}
+
 /// Resolve the document before an input event reaches hit testing (gap
 /// `G-Hit`): `paint_children` refreshes only at resolve, so between a DOM
 /// change and the next frame it still names the nodes the change removed, and
@@ -91,12 +122,12 @@ fn carries_unresolved_change(document: &BaseDocument) -> bool {
 /// `node.rs`, `Node::hit_inner`). The frame's own resolve follows within a
 /// frame; this one is gated on the document's damage so mouse movement over an
 /// unchanged tree costs one flag read.
-fn resolve_before_hit_testing(document: &Rc<RefCell<BaseDocument>>, animation_start: Instant) {
+fn resolve_before_hit_testing(document: &Rc<RefCell<BaseDocument>>, animation: &AnimationClock) {
     let mut document = document.borrow_mut();
     if !carries_unresolved_change(&document) {
         return;
     }
-    document.resolve(animation_start.elapsed().as_secs_f64());
+    document.resolve(animation.time());
 }
 
 /// The dioxus-native application with its window event handler wrapped (D5):
@@ -108,10 +139,10 @@ struct MbvApplication {
     /// The document, shared with the shell's copy (gap `G-Hit`): the launch
     /// copy resolves it before a hit-testing event.
     document: Rc<RefCell<BaseDocument>>,
-    /// The animation clock those resolves pass. Blitz-shell times its own
-    /// resolves from the window's first frame; an earlier start only ever puts
-    /// this resolve slightly ahead of the frame that follows it.
-    animation_start: Instant,
+    /// The animation clock those resolves pass (gap `G-Hit`): anchored when
+    /// the shell created its surfaces, so it never runs ahead of the clock the
+    /// shell dates its own resolves with.
+    animation: AnimationClock,
     /// The document's id, so the frame hook requests the next redraw (D10).
     doc_id: usize,
     events: WindowEventSender,
@@ -165,6 +196,9 @@ impl ApplicationHandler for MbvApplication {
 
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.inner.can_create_surfaces(event_loop);
+        // The shell created the window and resolved it for the first time, so
+        // its animation clock has started: anchor ours after it (gap `G-Hit`).
+        self.animation.shell_started();
     }
 
     fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
@@ -194,7 +228,7 @@ impl ApplicationHandler for MbvApplication {
         // Gap `G-Hit`: the hit test runs inside the shell's handler, so the
         // resolve that makes `paint_children` current runs before it.
         if hit_tests(&event) {
-            resolve_before_hit_testing(&self.document, self.animation_start);
+            resolve_before_hit_testing(&self.document, &self.animation);
         }
         self.inner.window_event(event_loop, window_id, event);
         if viewport {
@@ -264,7 +298,6 @@ pub fn launch(
         },
     );
     let doc_id = doc.id();
-    let animation_start = Instant::now();
     let document = Rc::clone(&doc.inner);
     let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
         base_color: None,
@@ -279,7 +312,7 @@ pub fn launch(
         inner: application,
         proxy,
         document,
-        animation_start,
+        animation: AnimationClock::default(),
         doc_id,
         events,
         clock,
