@@ -62,7 +62,7 @@ use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::library_top_bar::LibraryTopBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
-use crate::window::layout::LayoutEpoch;
+use crate::window::layout::{LayoutEpoch, RemeasureRequest, note_layout_change};
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
@@ -321,11 +321,16 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let menu_press_library = library.clone();
     // The list column's divider drag (design D4, D14): the store the drag's
     // width clamps and saves through, and the layout epoch the drag's
-    // re-measure bumps.
+    // re-measure bumps. The drag's new width reaches the document after this
+    // poll's render, so the bump arms one post-resolve re-measure (D12).
     let mut drag_widths = widths_store.clone();
-    let mut drag_epoch = consume_context::<LayoutEpoch>();
-    let mut reset_widths = widths_store.clone();
-    let mut reset_epoch = drag_epoch;
+    let mut reset_widths = widths_store;
+    let drag_epoch = consume_context::<LayoutEpoch>();
+    let reset_epoch = drag_epoch;
+    // A tree built without the window's re-measure request — a component test
+    // that drives the epoch itself — keeps a flag nothing presents a frame for.
+    let drag_remeasure = try_consume_context::<RemeasureRequest>().unwrap_or_default();
+    let reset_remeasure = drag_remeasure.clone();
 
     rsx! {
         div {
@@ -374,11 +379,11 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                         width: props.list_width,
                         on_drag: move |width| {
                             drag_widths.drag_list_width(width, props.library_column);
-                            drag_epoch.bump();
+                            note_layout_change(drag_epoch, &drag_remeasure);
                         },
                         on_reset: move |()| {
                             reset_widths.reset_list_width();
-                            reset_epoch.bump();
+                            note_layout_change(reset_epoch, &reset_remeasure);
                         },
                     }
                 }

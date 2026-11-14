@@ -21,7 +21,9 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiConfirmButton, GuiConfirmButtonTone};
 use crate::bridge::layout::{DaemonLostTargetId, RegionTarget};
-use crate::window::layout::{LayoutContribution, LayoutKey, LayoutReporter, element_region};
+use crate::window::layout::{
+    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
+};
 
 /// The dialog's props: the diagnostics and the recovery choices the
 /// `daemonLost` overlay carries.
@@ -77,8 +79,11 @@ pub fn DaemonLostOverlay(props: DaemonLostOverlayProps) -> Element {
     let mut drop_reporter = reporter.clone();
     use_drop(move || drop_reporter.retract_layout(key));
 
-    // Each paint that moved a region reports (design D4): the frame's fields
-    // and the buttons' mounts re-measure.
+    // Each paint that moved a region reports (design D4): the frame's fields,
+    // the buttons' mounts, and every layout fact (the epoch) re-measure. A
+    // resize moves the dialog's buttons, so the epoch subscription keeps their
+    // regions matched to the layout that painted them.
+    let epoch = try_consume_context::<LayoutEpoch>();
     use_effect(use_reactive(
         (
             &props.last_playing_title.clone(),
@@ -88,6 +93,7 @@ pub fn DaemonLostOverlay(props: DaemonLostOverlayProps) -> Element {
         move |(_last_playing_title, _restart_error, buttons)| {
             let mut mounted_buttons = mounted_buttons;
             let mut effect_reporter = reporter.clone();
+            let _epoch = epoch.as_ref().map(|epoch| epoch.0.cloned());
             spawn(async move {
                 // A choice the current frame does not paint owns no region.
                 let count = buttons.len();

@@ -38,8 +38,8 @@ use crate::window::components::panel_divider::{
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::input::KeyOutcome;
 use crate::window::layout::{
-    LayoutEpoch, RemeasureRequest, note_presented_frame, note_viewport_change,
-    track_container_size, use_layout_reporter,
+    LayoutEpoch, RemeasureRequest, note_layout_change, note_presented_frame, track_container_size,
+    use_layout_reporter,
 };
 use crate::window::library::keys::route_library_key;
 use crate::window::library::reset::reset_library_interaction;
@@ -78,13 +78,17 @@ fn root_style_element() -> Element {
 /// Apply one batch the drain task received (D6): the sections write in one
 /// pass, the playhead stamps the batch's anchor, and the layout epoch bumps
 /// when the batch changes a measured fact (D9) — a panel state change, the
-/// Settings screen's open or close, or a list's row count. A row a batch
-/// mounts re-measures through [`RemeasureRequest`] instead (D12): its own
-/// first measure asks for the bump, after the layout has placed it.
+/// Settings screen's open or close, or a list's row count. The batch's rows and
+/// panel states reach the document only after this poll's render, so the bump
+/// also arms one post-resolve re-measure ([`note_layout_change`]): the frame
+/// that lays the change out bumps again, and every measurement reads the
+/// layout that holds the batch. A mounted row measures through its own first
+/// measure then (D12).
 fn apply_batch(
     sections: &mut Sections,
     playhead: &mut Playhead,
-    mut epoch: LayoutEpoch,
+    epoch: LayoutEpoch,
+    remeasure: &RemeasureRequest,
     batch: &GuiSectionBatch,
 ) {
     let rows_before = sections.queue.peek().rows.len();
@@ -100,7 +104,7 @@ fn apply_batch(
     let panel_state_changed = panel_before.collapsed != panel_after.collapsed
         || panel_before.queue_folded != panel_after.queue_folded;
     if rows_before != rows_after || panel_state_changed || settings_before != settings_after {
-        epoch.bump();
+        note_layout_change(epoch, remeasure);
     }
 }
 
@@ -134,12 +138,11 @@ impl Drain {
             // A viewport change is a layout fact (D9): every measurement
             // effect re-measures, and the scale factor the natural-size caps
             // divide by rewrites (D7). One presented frame is asked for too
-            // (D12): the bump measures the layout from before the frame that
-            // resolves the new viewport, so the frame's `Frame` event bumps
-            // again after the resolve.
+            // (D12): Blitz applies the new viewport before its own resolving
+            // frame, so the bump's measure reads the old layout.
             WindowEvent::Viewport => {
                 self.scale.0.set(self.scale_window.scale_factor());
-                note_viewport_change(self.epoch, &self.remeasure);
+                note_layout_change(self.epoch, &self.remeasure);
             }
             // An art answer reaches its `ArtImage` through the store (D7).
             WindowEvent::Art(event) => self.art_events.push(event),
@@ -165,7 +168,13 @@ impl Drain {
             }
             // A section batch writes the stores (D6).
             WindowEvent::Batch(batch) => {
-                apply_batch(&mut self.sections, &mut self.playhead, self.epoch, &batch);
+                apply_batch(
+                    &mut self.sections,
+                    &mut self.playhead,
+                    self.epoch,
+                    &self.remeasure,
+                    &batch,
+                );
             }
         }
     }
@@ -301,7 +310,9 @@ pub fn App() -> Element {
             scale_window: Arc::clone(&window),
             scale,
             epoch,
-            remeasure,
+            // The drain keeps its own handle: the root's divider callbacks arm
+            // the same request, so the clone stays behind for them.
+            remeasure: remeasure.clone(),
             art_events,
             fired,
             sections: sections.clone(),
@@ -415,12 +426,15 @@ pub fn App() -> Element {
     let drag_move = divider_drag;
     // The drag's width callback (D14): every step clamps, saves, and bumps
     // the layout epoch, as the Svelte `dragQueueWidth` and the ResizeObserver
-    // replacement did.
+    // replacement did. The step's new width reaches the document after this
+    // poll's render, so the bump arms one post-resolve re-measure (D12).
     let mut drag_widths = widths_store.clone();
-    let mut drag_epoch = epoch;
-    let drag_container = container;
     let mut reset_widths = widths_store.clone();
-    let mut reset_epoch = epoch;
+    let drag_epoch = epoch;
+    let reset_epoch = epoch;
+    let drag_remeasure = remeasure.clone();
+    let reset_remeasure = remeasure;
+    let drag_container = container;
 
     rsx! {
         {root_style_element()}
@@ -524,11 +538,11 @@ pub fn App() -> Element {
                                 on_drag: move |width| {
                                     drag_widths
                                         .drag_queue_width(width, drag_container.cloned().width);
-                                    drag_epoch.bump();
+                                    note_layout_change(drag_epoch, &drag_remeasure);
                                 },
                                 on_reset: move |()| {
                                     reset_widths.reset_queue_width();
-                                    reset_epoch.bump();
+                                    note_layout_change(reset_epoch, &reset_remeasure);
                                 },
                             }
                         }

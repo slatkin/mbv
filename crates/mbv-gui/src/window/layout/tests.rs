@@ -4,10 +4,11 @@
 //! earlier key's regions in the core's hit map (the hit map's last push
 //! wins) — and the re-set semantics: re-reporting an existing key updates it
 //! in place instead of moving it last. Headless documents whose root built
-//! the reporter over a recorded channel; no window, no sleep. The last test
-//! covers the resize re-measure (D9, D12): the window's own viewport,
-//! resolve, and presented-frame sequence, run headless, must leave the
-//! container's measured size at the size the window now has.
+//! the reporter over a recorded channel; no window, no sleep. The last two
+//! tests cover the re-measure (D9, D12): the window's own viewport and section
+//! batch, its poll, resolve, and presented-frame sequence, run headless, must
+//! leave the measured size and the measured region at the values the window
+//! lays out — at the mount, after a resize, and after a batch.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,8 +20,8 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::{
-    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, RemeasureRequest,
-    note_presented_frame, note_viewport_change, track_container_size, use_layout_reporter,
+    LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, RemeasureRequest, element_region,
+    note_layout_change, note_presented_frame, track_container_size, use_layout_reporter,
 };
 use crate::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, QueuePlaybackTargetId, QueueTargetId,
@@ -176,65 +177,98 @@ fn the_merged_report_keeps_key_insertion_order_across_a_reset() {
 }
 
 /// What the measuring root hands the test: the two layout-fact contexts the
-/// window's drain drives, and the container size signal the effect writes.
+/// window's drain drives, the container size signal the effect writes, and the
+/// signal a section batch's write stands in for.
 #[derive(Default)]
 struct MeasureHandoff {
     epoch: Option<LayoutEpoch>,
     remeasure: Option<RemeasureRequest>,
     container: Option<Signal<LayoutSize>>,
+    half: Option<Signal<bool>>,
 }
 
 #[derive(Clone)]
 struct MeasureProps {
     handoff: Rc<RefCell<MeasureHandoff>>,
+    regions: Rc<RefCell<Option<LayoutRegion>>>,
 }
 
 /// The measuring root: the window's own container effect over the window's
-/// own epoch and re-measure request. The box fills the viewport, so the size
-/// the effect measures is the size the document now lays out.
+/// own epoch and re-measure request, and a region effect shaped like every
+/// component's. The box fills the viewport; `half` is the fact a batch writes
+/// (a panel state or a row set), and it resizes both the box and its child.
 fn measuring_app(props: MeasureProps) -> Element {
-    let MeasureProps { handoff } = props;
+    let MeasureProps { handoff, regions } = props;
     let epoch = use_hook(LayoutEpoch::new);
     provide_context(epoch);
     let remeasure = use_hook(RemeasureRequest::new);
     provide_context(remeasure.clone());
     let container: Signal<LayoutSize> = use_signal(LayoutSize::default);
-    let mut mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    track_container_size(mounted, container);
+    let mut container_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    track_container_size(container_mounted, container);
+    let half = use_signal(|| false);
+    let mut child_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let epoch_signal = epoch.0;
+    use_effect(move || {
+        let _epoch = epoch_signal.cloned();
+        let mounted = child_mounted.cloned();
+        let regions = Rc::clone(&regions);
+        spawn(async move {
+            let Some(mounted) = mounted else {
+                return;
+            };
+            let region =
+                element_region(&mounted, RegionTarget::Queue(QueueTargetId::RightColumn)).await;
+            *regions.borrow_mut() = region;
+        });
+    });
     let mut handoff = handoff.borrow_mut();
     handoff.epoch.replace(epoch);
     handoff.remeasure.replace(remeasure);
     handoff.container.replace(container);
+    handoff.half.replace(half);
     rsx! {
         main { style: "width: 100vw; height: 100vh;",
             div {
-                style: "width: 100%; height: 100%;",
-                onmounted: move |event| mounted.set(Some(event)),
+                style: if half() {
+                    "width: 100%; height: 50%;"
+                } else {
+                    "width: 100%; height: 100%;"
+                },
+                onmounted: move |event| container_mounted.set(Some(event)),
+                div {
+                    style: "width: 50%; height: 100%;",
+                    onmounted: move |event| child_mounted.set(Some(event)),
+                }
             }
         }
     }
 }
 
-/// The measuring window: the document, the contexts its drain would drive,
-/// and the container signal its effect writes.
+/// The measuring window: the document, the contexts its drain would drive, the
+/// container signal its effect writes, and the child's measured region.
 struct MeasuringWindow {
     doc: DioxusDocument,
     epoch: LayoutEpoch,
     remeasure: RemeasureRequest,
     container: Signal<LayoutSize>,
+    half: Signal<bool>,
+    regions: Rc<RefCell<Option<LayoutRegion>>>,
 }
 
 impl MeasuringWindow {
-    /// A window `width` by `height`, measured once against its first layout:
-    /// the mount, the first frame's resolve, and the measure effect the
-    /// resolve lets read the laid-out box.
+    /// A window `width` by `height`, opened the way the window opens: the
+    /// mount's measure arms one re-measure, the first frame resolves the tree,
+    /// and the presented frame's bump measures it.
     fn built(width: u32, height: u32) -> Self {
         let handoff = Rc::new(RefCell::new(MeasureHandoff::default()));
+        let regions = Rc::new(RefCell::new(None));
         let mut doc = DioxusDocument::new(
             VirtualDom::new_with_props(
                 measuring_app,
                 MeasureProps {
                     handoff: Rc::clone(&handoff),
+                    regions: Rc::clone(&regions),
                 },
             ),
             DocumentConfig {
@@ -243,69 +277,108 @@ impl MeasuringWindow {
             },
         );
         doc.initial_build();
-        // The window's first frame: the resolve lays the tree out, and the
-        // mount's measure reads it.
-        doc.inner.borrow_mut().resolve(0.0);
-        poll_until_idle(&mut doc);
-        let mut taken = handoff.borrow_mut();
-        Self {
-            epoch: taken.epoch.take().expect("the root provided the epoch"),
+        let taken = handoff.borrow_mut();
+        let mut window = Self {
+            epoch: taken.epoch.expect("the root provided the epoch"),
             remeasure: taken
                 .remeasure
-                .take()
+                .clone()
                 .expect("the root provided the re-measure request"),
             container: taken
                 .container
-                .take()
                 .expect("the root handed the container signal over"),
+            half: taken.half.expect("the root handed the toggle over"),
+            regions,
             doc,
-        }
+        };
+        // The window's first frame: the mount's measure ran against the
+        // unresolved tree and armed a re-measure, this resolve lays the tree
+        // out, and the presented frame's bump measures the laid-out box.
+        window.settle();
+        window.resolve();
+        window.present_frame();
+        window
     }
 
-    /// Resize the document the way blitz-shell's `SurfaceResized` handler
-    /// does: the new viewport lands before any resolve.
-    fn set_viewport(&mut self, width: u32, height: u32) {
+    /// Poll until the effects and the tasks they spawn have run, as
+    /// blitz-shell's poll does.
+    fn settle(&mut self) {
+        poll_until_idle(&mut self.doc);
+    }
+
+    /// Resolve the document, as blitz-shell's `redraw` does before it reports
+    /// the frame.
+    fn resolve(&mut self) {
+        self.doc.inner.borrow_mut().resolve(0.0);
+    }
+
+    /// The window's `WindowEvent::Viewport` work and the frame it asks for.
+    fn present_resize(&mut self, width: u32, height: u32) {
         self.doc.inner_mut().viewport_mut().window_size = (width, height);
+        self.arm();
+        self.settle();
+        self.resolve();
+        self.present_frame();
     }
 
-    /// One drained viewport change and the frame it asks for, in the order the
-    /// window presents them: the drain's bump and request, the poll whose
-    /// effects measure the layout from before the resolving frame, the
-    /// `redraw` resolve, and the presented frame the drain takes the request
-    /// on.
-    fn present_resize(&mut self) {
+    /// A section batch that changed a measured fact: the drain's bump, then the
+    /// poll before the frame, the resolve, and the presented frame.
+    fn present_batch(&mut self) {
+        self.arm();
+        self.settle();
+        self.resolve();
+        self.present_frame();
+    }
+
+    /// The drain's layout fact: the epoch bump and the one presented-frame
+    /// re-measure it arms.
+    fn arm(&mut self) {
         let epoch = self.epoch;
         let remeasure = self.remeasure.clone();
         self.doc
             .vdom
-            .in_runtime(move || note_viewport_change(epoch, &remeasure));
-        poll_until_idle(&mut self.doc);
-        self.doc.inner.borrow_mut().resolve(0.0);
+            .in_runtime(move || note_layout_change(epoch, &remeasure));
+    }
+
+    /// The drain's `WindowEvent::Frame` work: take a pending request, bump once,
+    /// and let the effects measure the resolved layout.
+    fn present_frame(&mut self) {
         let epoch = self.epoch;
         let remeasure = self.remeasure.clone();
         self.doc
             .vdom
             .in_runtime(move || note_presented_frame(epoch, &remeasure));
-        poll_until_idle(&mut self.doc);
+        self.settle();
     }
 
-    /// The container's measured size, read in the runtime as the window's
-    /// own root would.
+    /// The container's measured size, read in the runtime as the window's own
+    /// root would.
     fn measured(&mut self) -> LayoutSize {
         let container = self.container;
         self.doc.vdom.in_runtime(move || container.cloned())
     }
+
+    /// The child box's measured region.
+    fn region(&self) -> LayoutRegion {
+        (*self.regions.borrow()).expect("the region effect measured the child")
+    }
+
+    /// Whether a re-measure is still waiting for a frame.
+    fn pending(&self) -> bool {
+        self.remeasure.pending()
+    }
 }
 
 /// Contract (live run of the resize defect, D9/D12): after a resize the
-/// container's measured size is the size the window now has. Blitz applies the
-/// new viewport before it resolves the document, so the measure the viewport
-/// bump drives reads the old layout; without the presented-frame re-measure the
-/// size signal never changes, and every arrangement derived from it — the
-/// panel state, the Queue panel's rows, the Library column — stays one resize
-/// stale, which paints differently on every run.
+/// container's measured size and its child's region are the values the window
+/// now lays out. Blitz applies the new viewport before it resolves the
+/// document, so the measure the viewport bump drives reads the old layout;
+/// without the presented-frame re-measure the size signal never changes, and
+/// every arrangement derived from it — the panel state, the Queue panel's
+/// rows, the Library column — stays one resize stale, which paints differently
+/// on every run.
 #[test]
-fn a_resize_leaves_the_container_measured_at_the_new_size() {
+fn a_resize_leaves_the_measurements_at_the_resolved_size() {
     let mut window = MeasuringWindow::built(1200, 900);
     assert_eq!(
         window.measured(),
@@ -315,8 +388,7 @@ fn a_resize_leaves_the_container_measured_at_the_new_size() {
         }
     );
 
-    window.set_viewport(820, 610);
-    window.present_resize();
+    window.present_resize(820, 610);
 
     assert_eq!(
         window.measured(),
@@ -325,4 +397,33 @@ fn a_resize_leaves_the_container_measured_at_the_new_size() {
             height: 610.0
         }
     );
+    let region = window.region();
+    assert_eq!((region.rect.width, region.rect.height), (410.0, 610.0));
+    assert!(!window.pending(), "one re-measure per resize");
+}
+
+/// Contract (D9): a section batch that changes a measured fact — a panel state,
+/// a row count — leaves the container's measured size and the child's region
+/// at the values the batch's own frame lays out. The batch's DOM changes are
+/// applied after the poll that runs its effects, so the bump's measure reads
+/// the layout from before the change; without the armed re-measure the window
+/// keeps the pre-batch geometry until some later fact bumps.
+#[test]
+fn a_batch_leaves_the_measurements_at_the_resolved_size() {
+    let mut window = MeasuringWindow::built(1200, 900);
+    let mut half = window.half;
+    window.doc.vdom.in_runtime(move || half.set(true));
+
+    window.present_batch();
+
+    assert_eq!(
+        window.measured(),
+        LayoutSize {
+            width: 1200.0,
+            height: 450.0
+        }
+    );
+    let region = window.region();
+    assert_eq!((region.rect.width, region.rect.height), (600.0, 450.0));
+    assert!(!window.pending(), "one re-measure per batch");
 }
