@@ -5,6 +5,7 @@
 //! their neutral form. The window builds these values as Rust; the wire form
 //! the webview sent went at the switch.
 
+use mbv_gui::bridge::frame::playback::GuiTargetKey;
 use mbv_gui::bridge::keys::{DomKey, DomModifiers};
 use mbv_gui::bridge::settings::{GuiSettingsCommand, neutral};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
@@ -52,7 +53,7 @@ fn an_unknown_setting_name_resolves_to_no_command() {
 #[test]
 fn the_select_target_command_carries_the_nested_target_key() {
     let command = GuiSettingsCommand::SelectTarget {
-        target: ChooserTargetKey::Target(SessionTargetKey::Emby("session-2".to_string())),
+        target: GuiTargetKey::Emby("session-2".to_string()),
     };
     assert_eq!(
         neutral(command),
@@ -62,7 +63,7 @@ fn the_select_target_command_carries_the_nested_target_key() {
     );
 
     let command = GuiSettingsCommand::SelectTarget {
-        target: ChooserTargetKey::Local,
+        target: GuiTargetKey::Local,
     };
     assert_eq!(
         neutral(command),

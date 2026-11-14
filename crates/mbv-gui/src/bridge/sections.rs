@@ -8,7 +8,6 @@
 //! The Library list, detail, and row menu ride the batch as three gated
 //! sections, built in one Library pass (design D8).
 
-
 use super::frame::GuiAttachState;
 use super::frame::GuiPanelToggles;
 use super::frame::chrome::{GuiQueueFooter, GuiStatusBar};

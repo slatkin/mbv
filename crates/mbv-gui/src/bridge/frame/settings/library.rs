@@ -4,7 +4,6 @@
 //! inline in this section, so the `LibraryRoutes` F2 row is absent from the
 //! rows (design D9).
 
-
 /// One routable library (design D9): `library` is the lowercased name the
 /// saved route table is keyed by — the `routeDevices` and `assignRoute`
 /// commands' identity — and `endpoint` the assigned device route, `null` while

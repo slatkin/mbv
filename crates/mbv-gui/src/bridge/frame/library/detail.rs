@@ -2,7 +2,6 @@
 //! active destination's detail part, the selection, the Hero, the Workspace,
 //! and the playing marks. The list part rides `libraryList` (see `list.rs`).
 
-
 use super::{
     GuiAudiobooksDetail, GuiEmbyDetail, GuiFeedsDetail, GuiHomeDetail, GuiMusicDetail,
     GuiPodcastsDetail, GuiShowsDetail,

@@ -3,7 +3,6 @@
 //! (its pills, rows or tree, and load facts). The detail part rides
 //! `libraryDetail` (see `detail.rs`).
 
-
 use super::{
     GuiAudiobooksList, GuiEmbyList, GuiFeedsList, GuiHomeList, GuiLibraryTabFrame, GuiMusicList,
     GuiPodcastsList, GuiShowsList,

@@ -12,7 +12,6 @@
 use std::fmt;
 use std::fmt::Write as _;
 
-
 /// The scheme host the window loads images through (design D7). On Linux,
 /// `WebKitGTK` serves the scheme as `mbv-art://localhost/<path>`.
 const SCHEME_HOST: &str = "mbv-art://localhost";

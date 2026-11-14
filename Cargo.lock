@@ -3795,8 +3795,6 @@ dependencies = [
  "num-traits",
  "parley",
  "rstest",
- "serde",
- "serde_json",
  "time",
  "tracing",
  "unicode-segmentation",
