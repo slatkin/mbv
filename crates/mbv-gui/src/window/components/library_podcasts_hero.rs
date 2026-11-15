@@ -19,7 +19,7 @@ use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::library_podcasts_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -62,7 +62,7 @@ fn act(
     let Some(detail) = library_podcasts_detail(Some(detail)) else {
         return;
     };
-    let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
+    let Some(item_id) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
         return;
     };
     let item_id = item_id.clone();

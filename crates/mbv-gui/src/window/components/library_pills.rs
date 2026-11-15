@@ -13,7 +13,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiMusicPillFrame;
-use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
+use crate::window::components::library_pill_row::{LibraryPill, library_pills_bound};
 use crate::window::library::state::LibraryState;
 
 /// The props of the Music pills (the `LibraryPills` props, narrowed
@@ -55,29 +55,23 @@ pub fn LibraryPills(props: LibraryPillsProps) -> Element {
     // Press a pill: select it (design D6).
     let press_library = library.clone();
     let lib_idx = props.lib_idx;
-    let on_press = move |key: String| press_library.select_library_pill(lib_idx, key);
+    let on_press =
+        Callback::new(move |key: String| press_library.select_library_pill(lib_idx, key));
 
-    // The keys' pill request becomes the command a press sends (design D6):
-    // the effect reads the intent through the memo, so the consume-write of
-    // the ui state never re-runs an effect that subscribes to it — the memo
-    // settles at `None`, and the re-run finds nothing to send.
+    // The keys' pill request applies the same command (design D6).
     let watch_ui = library.ui;
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
-    use_effect(move || {
-        if intent.cloned().is_some() {
-            apply_library.apply_library_pill_select(lib_idx);
-        }
-    });
 
-    rsx! {
-        LibraryPillRow {
-            aria_label: "Collections",
-            pills,
-            focused,
-            onpress: on_press,
-        }
-    }
+    library_pills_bound(
+        pills,
+        focused,
+        "Collections",
+        None,
+        on_press,
+        intent,
+        move || apply_library.apply_library_pill_select(lib_idx),
+    )
 }
 
 #[cfg(test)]

@@ -25,7 +25,7 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
 };
-use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
@@ -64,7 +64,7 @@ fn act(library: &LibraryState, action: FeedsAction, detail: &SectionRef<GuiLibra
     let Some(detail) = library_feeds_detail(Some(detail)) else {
         return;
     };
-    let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
+    let Some(item_id) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
         return;
     };
     let item_id = item_id.clone();

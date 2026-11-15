@@ -23,8 +23,8 @@ use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
 use crate::window::components::art_image::ArtImage;
 use crate::window::components::library_item_row::{mark, name_color};
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::input::f32_from_f64;
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
@@ -271,22 +271,15 @@ pub fn LibraryHomeList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The Home content has not landed yet (design D12): one
-                    // placeholder line holds the list's place, as the TUI's
-                    // loading slot does.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-home-loading",
-                    }
-                }
-                if !frame.loading && frame.rows.is_empty() {
-                    // Home holds nothing to play: one line says so, as the
-                    // Music list's empty line does.
-                    LibraryListNotice {
-                        text: "Nothing to play".to_owned(),
-                        attr: "data-library-home-empty",
-                    }
+                // The Home content has not landed yet (design D12), or it holds
+                // nothing to play: one line per state.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-home-loading")
+                    }),
+                    empty: (!frame.loading && frame.rows.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-home-empty", "Nothing to play")
+                    }),
                 }
             }
             {virtual_list}

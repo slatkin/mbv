@@ -31,8 +31,8 @@ use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPa
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::input::f32_from_f64;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::shows_list::{
@@ -523,20 +523,20 @@ pub fn LibraryShowsList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The active mode's list has not landed yet: one
-                    // placeholder line holds the list's place.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-shows-loading",
-                    }
-                } else if frame.upcoming_failed {
-                    // The Upcoming mode's eager fetch failed (design D14): the
-                    // TUI's line, and the pill is the retry.
-                    LibraryListNotice {
-                        text: "Upcoming fetch failed — select the pill to retry".to_owned(),
-                        attr: "data-library-shows-failed",
-                    }
+                // The active mode's list has not landed yet, or the Upcoming
+                // mode's eager fetch failed (design D14): one line per state,
+                // and the failure line only over a landed list — the pill is
+                // the retry.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-shows-loading")
+                    }),
+                    failed: (!frame.loading && frame.upcoming_failed).then(|| {
+                        ListFrameNoticeLine::new(
+                            "data-library-shows-failed",
+                            "Upcoming fetch failed — select the pill to retry",
+                        )
+                    }),
                 }
             }
             div {

@@ -14,15 +14,12 @@
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryTrailPart, name_color, row_background,
-};
+use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
-use crate::window::library::shows_workspace::episode_progress;
 use crate::window::library::state::LibraryState;
 
 /// One painted row of the flat list: the entry row.
@@ -33,32 +30,24 @@ fn paint_feeds_row(
     cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
-    let cursor_row = Some(row.id.as_str()) == cursor;
-    let selected_row = Some(row.id.as_str()) == selected;
-    let background = row_background(cursor_row, selected_row);
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
-    rsx! {
-        LibraryItemRow {
+    paint_item_row(
+        ItemRowPaint {
             attr: "feeds",
-            kind: "entry".to_owned(),
-            id: row.id.clone(),
+            kind: "entry",
             height: FEEDS_ROW_HEIGHT,
-            title: row.row.title.clone(),
-            subtitle: row.row.subtitle.clone(),
-            trail: row.row.date.clone(),
-            trail_part: LibraryTrailPart::Date,
-            title_color: name_color(&row.row.state),
-            background,
-            cursor: cursor_row,
-            selected: selected_row,
-            progress: episode_progress(&row.row.state).map(f32::from),
-            on_press: Callback::new(move |()| press_library.press_feeds_row(&press_row)),
-            on_play: Callback::new(move |()| play_library.play_feeds_row(&play_id)),
-        }
-    }
+            id: &row.id,
+            entry: &row.row,
+            cursor: Some(row.id.as_str()) == cursor,
+            selected: Some(row.id.as_str()) == selected,
+        },
+        Callback::new(move |()| press_library.press_feeds_row(&press_row)),
+        Callback::new(move |()| play_library.play_feeds_row(&play_id)),
+        None,
+    )
 }
 
 /// The Feeds list: the header,
@@ -146,30 +135,22 @@ pub fn LibraryFeedsList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The tab's fetch results have not landed yet (row 11.1):
-                    // one placeholder line holds the list's place, as every
-                    // Library list's does.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-feeds-loading",
-                    }
-                }
-                if frame.failed {
-                    // A fetch failed (row 11.1): the failure line, and no row
-                    // until the destination opens again.
-                    LibraryListNotice {
-                        text: "Couldn’t load this destination.".to_owned(),
-                        attr: "data-library-feeds-failed",
-                    }
-                }
-                if !frame.loading && !frame.failed && frame.rows.is_empty() {
-                    // The active view holds no entry (row 11.1): the TUI's
-                    // empty slot.
-                    LibraryListNotice {
-                        text: "No entries".to_owned(),
-                        attr: "data-library-feeds-empty",
-                    }
+                // The tab's fetch results have not landed yet (row 11.1), a fetch
+                // failed, or the active view holds no entry: one line per state,
+                // and the empty line only over a landed row set.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-feeds-loading")
+                    }),
+                    failed: frame.failed.then(|| {
+                        ListFrameNoticeLine::new(
+                            "data-library-feeds-failed",
+                            "Couldn’t load this destination.",
+                        )
+                    }),
+                    empty: (!frame.loading && !frame.failed && frame.rows.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-feeds-empty", "No entries")
+                    }),
                 }
             }
             {virtual_list}

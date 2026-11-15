@@ -292,6 +292,15 @@ pub fn hero_attr(attr: &str, name: &str) -> String {
     }
 }
 
+/// The id a Hero's action names (`add-gui-library-panel` design D12): the
+/// frame's selection, only while the frame also carries a Hero. A button whose
+/// Hero is gone sends nothing, and the guard reads the same in every
+/// destination's Hero.
+#[must_use]
+pub fn selected_with_hero<T>(selected: Option<&T>, hero_present: bool) -> Option<&T> {
+    if hero_present { selected } else { None }
+}
+
 /// The facts every Hero carries, as the core's frames declare them.
 #[derive(Debug)]
 pub struct HeroLayoutFacts<'a> {

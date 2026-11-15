@@ -11,6 +11,10 @@
 //! `pill_attr` names the destination's own attribute (`'shows'` paints
 //! `data-library-shows-pill`), so a destination's tests keep a per-tab hook
 //! beside the shared `data-library-pill`.
+//!
+//! [`library_pills_bound`] is the shared body of the five destination pill
+//! components: it paints this row and turns the keys' pill request into the
+//! destination's own command.
 
 use dioxus_native::prelude::*;
 
@@ -92,6 +96,48 @@ fn pill_attrs(
         ));
     }
     attrs
+}
+
+/// One destination's pill row, bound to that destination's commands (design D6, D12): the pills it
+/// paints, the key its keys' focus holds, the row's accessible name and its own attribute, the press
+/// its command answers, and the keys' pill request its apply step consumes. A destination's
+/// component narrows its own carried pills and names its own command; this function owns the row and
+/// the request's effect, so the five pill rows cannot drift.
+///
+/// The effect attaches to the calling destination's scope, as
+/// [`library_virtual_list`](crate::window::components::library_virtual_list::library_virtual_list)'s
+/// effects do, so a destination calls this exactly once per render.
+pub fn library_pills_bound<T, A>(
+    pills: Vec<LibraryPill>,
+    focused: Option<String>,
+    aria_label: &'static str,
+    pill_attr: Option<&'static str>,
+    onpress: Callback<String>,
+    intent: Memo<Option<T>>,
+    apply: A,
+) -> Element
+where
+    T: Clone + PartialEq + 'static,
+    A: Fn() + 'static,
+{
+    // The keys' pill request becomes the command a press sends (design D6): the effect reads the
+    // intent through the memo, so the consume-write of the state never re-runs an effect that
+    // subscribes to it — the memo settles at `None`, and the re-run finds nothing to send.
+    use_effect(move || {
+        if intent.cloned().is_some() {
+            apply();
+        }
+    });
+
+    rsx! {
+        LibraryPillRow {
+            aria_label,
+            pills,
+            focused,
+            pill_attr,
+            onpress,
+        }
+    }
 }
 
 /// The Library pill row: the

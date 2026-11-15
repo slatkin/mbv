@@ -29,8 +29,8 @@ use crate::window::components::library_item_row::{
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::audiobooks_list::{
     AudiobooksListRow, audiobooks_letter_rail, audiobooks_row_letter,
 };
@@ -201,30 +201,22 @@ pub fn LibraryAudiobooksList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The book catalog has not landed yet (row 9.1): one
-                    // placeholder line holds the list's place.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-abs-loading",
-                    }
-                }
-                if frame.failed {
-                    // The catalog fetch failed (row 9.1): the failure line
-                    // naming what failed, and no row until the destination
-                    // opens again.
-                    LibraryListNotice {
-                        text: "Couldn’t load this catalog.".to_owned(),
-                        attr: "data-library-abs-failed",
-                    }
-                }
-                if !frame.loading && !frame.failed && frame.rows.is_empty() {
-                    // The catalog landed and holds no book (row 9.1): the
-                    // TUI's empty slot.
-                    LibraryListNotice {
-                        text: "No audiobooks".to_owned(),
-                        attr: "data-library-abs-empty",
-                    }
+                // The catalog has not landed yet (row 9.1), its fetch failed, or
+                // it holds no book: one line per state, and the empty line only
+                // over a landed row set.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-abs-loading")
+                    }),
+                    failed: frame.failed.then(|| {
+                        ListFrameNoticeLine::new(
+                            "data-library-abs-failed",
+                            "Couldn’t load this catalog.",
+                        )
+                    }),
+                    empty: (!frame.loading && !frame.failed && frame.rows.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-abs-empty", "No audiobooks")
+                    }),
                 }
             }
             div {

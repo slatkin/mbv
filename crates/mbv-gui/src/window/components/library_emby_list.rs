@@ -22,8 +22,8 @@ use crate::window::components::library_item_row::{
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail, emby_row_letter};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
@@ -204,30 +204,22 @@ pub fn LibraryEmbyList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The active list has not landed yet (row 8.1): one
-                    // placeholder line holds the list's place.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-emby-loading",
-                    }
-                }
-                if frame.failed {
-                    // The plain mode's root-list fetch failed (row 8.1): the
-                    // failure line naming what failed, and no row until the
-                    // library opens again.
-                    LibraryListNotice {
-                        text: "Couldn’t load this library.".to_owned(),
-                        attr: "data-library-emby-failed",
-                    }
-                }
-                if !frame.loading && !frame.failed && frame.rows.is_empty() {
-                    // The library landed and holds no item (row 8.1): one
-                    // line says so, as the Music list's empty line does.
-                    LibraryListNotice {
-                        text: "No items".to_owned(),
-                        attr: "data-library-emby-empty",
-                    }
+                // The active list has not landed yet (row 8.1), the plain mode's
+                // root-list fetch failed, or the library holds no item: one line
+                // per state, and the empty line only over a landed row set.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-emby-loading")
+                    }),
+                    failed: frame.failed.then(|| {
+                        ListFrameNoticeLine::new(
+                            "data-library-emby-failed",
+                            "Couldn’t load this library.",
+                        )
+                    }),
+                    empty: (!frame.loading && !frame.failed && frame.rows.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-emby-empty", "No items")
+                    }),
                 }
             }
             div {

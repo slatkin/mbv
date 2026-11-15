@@ -15,7 +15,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiPillFrame;
 use crate::bridge::library::GuiPodcastPill;
-use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
+use crate::window::components::library_pill_row::{LibraryPill, library_pills_bound};
 use crate::window::library::podcasts::podcast_pill_key;
 use crate::window::library::state::LibraryState;
 
@@ -62,37 +62,29 @@ pub fn LibraryPodcastsPills(props: LibraryPodcastsPillsProps) -> Element {
     let press_library = library.clone();
     let carried_pills = props.pills.clone();
     let lib_idx = props.lib_idx;
-    let on_press = move |key: String| {
+    let on_press = Callback::new(move |key: String| {
         if let Some(pill) = carried_pills
             .iter()
             .find(|candidate| podcast_pill_key(&candidate.pill) == key)
         {
             press_library.select_podcasts_pill(lib_idx, pill.pill.clone());
         }
-    };
+    });
 
-    // The keys' pill request becomes the command a press sends (row 10.1):
-    // the effect reads the intent through the memo, so the consume-write of
-    // the state never re-runs an effect that subscribes to it — the memo
-    // settles at `None`, and the re-run finds nothing to send.
+    // The keys' pill request applies the same command (row 10.1).
     let watch_ui = library.podcasts_ui;
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
-    use_effect(move || {
-        if intent.cloned().is_some() {
-            apply_library.apply_podcasts_pill_select(lib_idx);
-        }
-    });
 
-    rsx! {
-        LibraryPillRow {
-            aria_label: "Podcasts views",
-            pills,
-            focused,
-            pill_attr: "podcasts",
-            onpress: on_press,
-        }
-    }
+    library_pills_bound(
+        pills,
+        focused,
+        "Podcasts views",
+        Some("podcasts"),
+        on_press,
+        intent,
+        move || apply_library.apply_podcasts_pill_select(lib_idx),
+    )
 }
 
 #[cfg(test)]

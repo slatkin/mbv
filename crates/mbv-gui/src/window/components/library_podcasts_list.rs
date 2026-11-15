@@ -15,57 +15,45 @@
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryTrailPart, name_color, row_background,
-};
+use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
-use crate::window::library::shows_workspace::episode_progress;
 use crate::window::library::state::LibraryState;
 
-/// One painted row of the flat list: the episode
-/// row.
+/// One painted row of the flat list: the episode row. The row's press selects
+/// the episode the Hero shows, a double-click plays it, and a right-press
+/// opens the row menu.
 fn paint_podcasts_row(
     row: &PodcastsItemRow,
     library: &LibraryState,
     cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
-    let cursor_row = Some(row.id.as_str()) == cursor;
-    let selected_row = Some(row.id.as_str()) == selected;
-    let background = row_background(cursor_row, selected_row);
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
     let play_library = library.clone();
     let menu_id = row.row.id.clone();
     let menu_library = library.clone();
-    rsx! {
-        LibraryItemRow {
+    paint_item_row(
+        ItemRowPaint {
             attr: "podcasts",
-            kind: "episode".to_owned(),
-            id: row.id.clone(),
+            kind: "episode",
             height: PODCASTS_ROW_HEIGHT,
-            title: row.row.title.clone(),
-            subtitle: row.row.subtitle.clone(),
-            trail: row.row.date.clone(),
-            trail_part: LibraryTrailPart::Date,
-            title_color: name_color(&row.row.state),
-            background,
-            cursor: cursor_row,
-            selected: selected_row,
-            progress: episode_progress(&row.row.state).map(f32::from),
-            on_press: Callback::new(move |()| press_library.press_podcasts_row(&press_row)),
-            on_play: Callback::new(move |()| play_library.play_podcasts_row(&play_id)),
-            on_context: Some(Callback::new(
-                move |(x, y): (f32, f32)| menu_library
-                    .open_row_menu_at(Some(menu_id.clone()), x, y),
-            )),
-        }
-    }
+            id: &row.id,
+            entry: &row.row,
+            cursor: Some(row.id.as_str()) == cursor,
+            selected: Some(row.id.as_str()) == selected,
+        },
+        Callback::new(move |()| press_library.press_podcasts_row(&press_row)),
+        Callback::new(move |()| play_library.play_podcasts_row(&play_id)),
+        Some(Callback::new(move |(x, y): (f32, f32)| {
+            menu_library.open_row_menu_at(Some(menu_id.clone()), x, y);
+        })),
+    )
 }
 
 /// The Podcasts list: the
@@ -154,29 +142,23 @@ pub fn LibraryPodcastsList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // The active view's episodes have not landed yet (row
-                    // 10.1): one placeholder line holds the list's place.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-podcasts-loading",
-                    }
-                }
-                if frame.failed {
-                    // The show catalog's fetch failed (row 10.1): the failure
-                    // line, and no row until the library opens again.
-                    LibraryListNotice {
-                        text: "Couldn’t load this library.".to_owned(),
-                        attr: "data-library-podcasts-failed",
-                    }
-                }
-                if !frame.loading && !frame.failed && frame.rows.is_empty() {
-                    // The active view holds no episode (row 10.1): the TUI's
-                    // empty slot.
-                    LibraryListNotice {
-                        text: "No episodes".to_owned(),
-                        attr: "data-library-podcasts-empty",
-                    }
+                // The active view's episodes have not landed yet (row 10.1), the
+                // show catalog's fetch failed, or the view holds no episode:
+                // one line per state, and the empty line only over a landed row
+                // set.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-podcasts-loading")
+                    }),
+                    failed: frame.failed.then(|| {
+                        ListFrameNoticeLine::new(
+                            "data-library-podcasts-failed",
+                            "Couldn’t load this library.",
+                        )
+                    }),
+                    empty: (!frame.loading && !frame.failed && frame.rows.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-podcasts-empty", "No episodes")
+                    }),
                 }
             }
             {virtual_list}

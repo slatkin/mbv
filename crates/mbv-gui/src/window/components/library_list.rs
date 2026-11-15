@@ -26,8 +26,8 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
-use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
+use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::ChevronRight;
 use crate::window::input::f32_from_f64;
@@ -385,29 +385,20 @@ pub fn LibraryList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                if frame.loading {
-                    // A selected group's album list has not landed yet (design
-                    // D5): one placeholder line holds the list's place.
-                    LibraryListNotice {
-                        text: "Loading…".to_owned(),
-                        attr: "data-library-loading",
-                    }
-                }
-                if let Some(failure) = frame.failure.clone() {
-                    // The selected groups whose album list failed (design D5):
-                    // the frame's failure line names them.
-                    LibraryListNotice {
-                        text: failure,
-                        attr: "data-library-failure",
-                    }
-                }
-                if !frame.loading && frame.artists.is_empty() {
-                    // The selected collections hold no artist (the spec's
-                    // empty text): the row area is empty, so one line says so.
-                    LibraryListNotice {
-                        text: "No artists".to_owned(),
-                        attr: "data-library-empty",
-                    }
+                // A selected group's album list has not landed yet (design D5),
+                // the selected groups' album lists failed, or the collections
+                // hold no artist: one line per state, the failure line naming
+                // the groups the frame names.
+                ListFrameNotices {
+                    loading: frame.loading.then(|| {
+                        ListFrameNoticeLine::loading("data-library-loading")
+                    }),
+                    failed: frame.failure.clone().map(|failure| {
+                        ListFrameNoticeLine::new("data-library-failure", failure)
+                    }),
+                    empty: (!frame.loading && frame.artists.is_empty()).then(|| {
+                        ListFrameNoticeLine::new("data-library-empty", "No artists")
+                    }),
                 }
             }
             div {

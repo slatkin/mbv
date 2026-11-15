@@ -15,6 +15,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_summary::LibraryHeroSummary;
+use crate::window::library::hero::selected_with_hero;
 use crate::window::library::parts::library_home_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -48,10 +49,10 @@ fn act(library: &LibraryState, action: HomeAction, detail: &SectionRef<GuiLibrar
     let Some(detail) = library_home_detail(Some(detail)) else {
         return;
     };
-    let (Some(selected), Some(_)) = (&detail.selected, &detail.hero) else {
+    let Some(row) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
         return;
     };
-    let row = selected.clone();
+    let row = row.clone();
     let command = match action {
         HomeAction::Play => GuiLibraryCommand::HomePlay { row: row.into() },
         HomeAction::PlayNext => GuiLibraryCommand::HomePlayNext { row: row.into() },

@@ -13,7 +13,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiShowsPillFrame;
-use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
+use crate::window::components::library_pill_row::{LibraryPill, library_pills_bound};
 use crate::window::library::shows::shows_mode_key;
 use crate::window::library::state::LibraryState;
 
@@ -55,36 +55,29 @@ pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
     let press_library = library.clone();
     let carried_pills = props.pills.clone();
     let lib_idx = props.lib_idx;
-    let on_press = move |key: String| {
+    let on_press = Callback::new(move |key: String| {
         if let Some(pill) = carried_pills
             .iter()
             .find(|candidate| shows_mode_key(candidate.mode) == key)
         {
             press_library.select_shows_pill(lib_idx, pill.mode);
         }
-    };
+    });
 
-    // The keys' pill request becomes the command a press sends (design D12):
-    // the effect reads the intent through the memo, so the consume-write of
-    // the state never re-runs an effect that subscribes to it — the memo
-    // settles at `None`, and the re-run finds nothing to send.
+    // The keys' pill request applies the same command (design D12).
     let watch_ui = library.shows_ui;
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
-    use_effect(move || {
-        if intent.cloned().is_some() {
-            apply_library.apply_shows_pill_select(lib_idx);
-        }
-    });
 
-    rsx! {
-        LibraryPillRow {
-            aria_label: "Shows modes",
-            pills,
-            focused: focused.map(|mode| shows_mode_key(mode).to_owned()),
-            onpress: on_press,
-        }
-    }
+    library_pills_bound(
+        pills,
+        focused.map(|mode| shows_mode_key(mode).to_owned()),
+        "Shows modes",
+        None,
+        on_press,
+        intent,
+        move || apply_library.apply_shows_pill_select(lib_idx),
+    )
 }
 
 #[cfg(test)]

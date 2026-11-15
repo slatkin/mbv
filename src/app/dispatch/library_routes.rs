@@ -169,7 +169,7 @@ impl App {
         device: Option<&DeviceRouteRow>,
     ) -> bool {
         self.write_library_route_override(library_lower, device);
-        let config = self.config.clone();
+        let config = std::sync::Arc::clone(&self.config);
         let cfg = config.lock().unwrap();
         self.library_routes = cfg.library_routes.clone();
         tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.library_routes.len(), "runtime route table synchronized");

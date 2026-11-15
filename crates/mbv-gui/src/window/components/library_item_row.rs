@@ -8,14 +8,18 @@
 //! A destination supplies its own hook prefix (`attr`), the row's text, and
 //! the press, double-click, and context handlers; it never restates the
 //! look. Every part paints `data-library-<attr>-<part>`.
+//!
+//! [`paint_item_row`] paints one row of a flat entry list — Podcasts and Feeds
+//! — from its carried entry, so the two lists keep one row painter.
 
 use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiHomeRowStateFrame;
+use crate::bridge::frame::library::{GuiEntryRowFrame, GuiHomeRowStateFrame};
 use crate::window::components::library_attr::library_attr;
 use crate::window::input::f32_from_f64;
+use crate::window::library::shows_workspace::episode_progress;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -205,6 +209,60 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                     ..progress_attrs,
                 }
             }
+        }
+    }
+}
+
+/// One flat entry row's painted facts: the destination's hook prefix and kind,
+/// the row's height, the carried entry, and whether the cursor and the
+/// selection mark the row.
+#[derive(Debug, Clone, Copy)]
+pub struct ItemRowPaint<'a> {
+    /// The destination's hook prefix, as in `podcasts` or `feeds`.
+    pub attr: &'static str,
+    /// The row's own kind value, as in `episode` or `entry`.
+    pub kind: &'static str,
+    /// The row's painted height, in pixels.
+    pub height: f32,
+    /// The row's stable id.
+    pub id: &'a str,
+    /// The carried entry the row paints.
+    pub entry: &'a GuiEntryRowFrame,
+    /// Whether the cursor rests on the row.
+    pub cursor: bool,
+    /// Whether the selection marks the row.
+    pub selected: bool,
+}
+
+/// Paint one flat entry row (Podcasts, Feeds): the entry's text at the row's
+/// height with the cursor and selection fills, and the destination's press,
+/// play, and context handlers. A destination that names no right-press menu
+/// passes no context handler.
+pub fn paint_item_row(
+    paint: ItemRowPaint<'_>,
+    on_press: Callback<()>,
+    on_play: Callback<()>,
+    on_context: Option<Callback<(f32, f32)>>,
+) -> Element {
+    let background = row_background(paint.cursor, paint.selected);
+    rsx! {
+        LibraryItemRow {
+            attr: paint.attr,
+            kind: paint.kind.to_owned(),
+            id: paint.id.to_owned(),
+            height: paint.height,
+            title: paint.entry.title.clone(),
+            subtitle: paint.entry.subtitle.clone(),
+            trail: paint.entry.date.clone(),
+            trail_part: LibraryTrailPart::Date,
+            title_color: name_color(&paint.entry.state),
+            background,
+            cursor: paint.cursor,
+            selected: paint.selected,
+            progress: episode_progress(&paint.entry.state).map(f32::from),
+            on_press,
+            on_play,
+            on_context,
         }
     }
 }

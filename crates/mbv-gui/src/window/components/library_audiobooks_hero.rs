@@ -31,7 +31,7 @@ use crate::window::components::library_workspace_table::{
 use crate::window::library::audiobooks_workspace::{
     marked_chapter_of, press_abs_chapter, resolve_abs_chapter_cursor, workspace_of,
 };
-use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -62,9 +62,6 @@ enum AbsAction {
 
 /// Send the book command for the frame's selected book (design D12, row
 /// 9.1): the book the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero.
-/// Send the book command for the frame's selected book (design D12, row
-/// 9.1): the book the frame painted, never a position. The command sends
 /// only while the frame holds both the selection and a Hero. The handle is
 /// narrowed here, so the press reads the carried detail without the Hero
 /// cloning it per render (`share-gui-sections-by-rc` design D3).
@@ -77,7 +74,7 @@ fn act_book(
     let Some(detail) = library_audiobooks_detail(Some(detail)) else {
         return;
     };
-    let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
+    let Some(item_id) = selected_with_hero(detail.selected.as_ref(), detail.hero.is_some()) else {
         return;
     };
     let item_id = item_id.clone();
