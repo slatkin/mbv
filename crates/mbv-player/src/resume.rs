@@ -67,6 +67,16 @@ fn resume_seconds(position_ticks: i64, runtime_ticks: i64) -> f64 {
     }
 }
 
+/// The start position an Audiobookshelf playback session yields, in seconds.
+/// The server returns zero for a finished item but does not apply mbv's
+/// one-percent rule, so the session position is gated here too.
+pub(crate) fn session_start_seconds(position_seconds: f64, duration_seconds: f64) -> f64 {
+    resume_seconds(
+        seconds_to_ticks(position_seconds),
+        seconds_to_ticks(duration_seconds),
+    )
+}
+
 /// The start position `source` yields for `item`, in seconds. A `Handoff`
 /// override returns its carried seconds ungated; every other arm applies the
 /// one-percent gate through its per-medium source.

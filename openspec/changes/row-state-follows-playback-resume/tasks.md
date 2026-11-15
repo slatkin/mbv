@@ -39,6 +39,12 @@
 - [x] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three exit with status 0.
 - [x] 7.2 Run `openspec validate row-state-follows-playback-resume --strict`. Verify: it reports the change as valid.
 
+## 8. Audiobookshelf session start uses the gate
+
+- [x] 8.1 In `crates/mbv-player/src/resume.rs`, add `session_start_seconds(position_seconds, duration_seconds)` to apply `should_resume` to the position an opened Audiobookshelf session returns. In `crates/mbv-player/src/sources.rs`, use it for both `PreparedSource::start_seconds` and the lifecycle's initial position for episodes and books. Verify: `cargo check -p mbv-player`.
+- [x] 8.2 Add one named `#[case]` table for the contract "an unfinished Audiobookshelf session position below the gate starts at zero" (spec `playback-resume`, cite #1005). Cover below the gate, exactly at the gate, and unknown duration. Verify: `cargo nextest run -p mbv-player audiobookshelf_session_start_uses_resume_gate`.
+- [x] 8.3 Update the proposal, design, CONTEXT.md, and invariant 33 so they no longer claim the Player's resume decision is unchanged and so the Audiobookshelf Session source names the session-position gate.
+
 ## Workflow follow-up
 
 - Run `make check-code-file-lines` just before the push.

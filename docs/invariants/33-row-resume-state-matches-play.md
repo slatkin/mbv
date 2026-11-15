@@ -5,8 +5,9 @@
 `from_emby`, `from_feed_entry`, `from_audiobookshelf`, and `from_queue_item`
 in `crates/mbv-ui-model/src/media_list.rs`), the shared gate
 (`mbv_emby_model::should_resume` in `crates/mbv-emby-model`), the Player's
-start-position decision (`resume_source` and `source_start_seconds` in
-`crates/mbv-player/src/resume.rs`), the feed store that keeps feed rows in
+start-position decision (`resume_source`, `source_start_seconds`, and
+`session_start_seconds` in `crates/mbv-player/src/resume.rs`), the feed store
+that keeps feed rows in
 shape (`crates/mbv-feed/src/entry_state.rs`), and every list site that
 derives row state from an item (TUI Podcasts and Feeds content, the GUI
 Library projections, and the Queue). Landed by the
@@ -55,9 +56,10 @@ said "played" for items Play would resume.
   dispatches per kind and adds nothing of its own.
 - The Player side never reads `played` either: `source_start_seconds`
   derives the start position from `resume_source` per kind and gates the
-  stored position with the same `mbv_emby_model::should_resume`. Emby
-  audio always starts from the beginning, matching `from_emby`'s
-  `Ordinary` rule.
+  stored position with the same `mbv_emby_model::should_resume`. For an
+  Audiobookshelf episode or book, `session_start_seconds` applies the same
+  gate to the position and duration the opened session returns. Emby audio
+  always starts from the beginning, matching `from_emby`'s `Ordinary` rule.
 - The feed store is the one writer of feed row state. Playback completion
   and a Mark Played write position zero with the played flag, so a played
   feed entry cannot carry a resumable position that would fight the body;
@@ -78,7 +80,9 @@ said "played" for items Play would resume.
   not a contract with it. If the server's
   `PlaybackSessionManager.startSession` ever resumes a finished item from
   its stored position, rows keep painting Played (restart) while Play
-  resumes, until the rule here changes.
+  resumes, until the rule here changes. An Audiobookshelf session path that
+  bypasses `session_start_seconds` has the same failure in the other
+  direction: rows show Ordinary below the gate while Play resumes.
 - Queue slots of feed entries take a Feeds mark through the
   `QueueOp::ApplyProgress` path, and Home `Recently added` rows of feed
   entries update only on the next fetch. A row can lag its store state

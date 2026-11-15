@@ -39,6 +39,7 @@ None.
 - `src/app/gui_library`: the Podcasts, Feeds, Home, Shows, and Emby projections call the shared constructors and the date helper. `GuiHomeRowState` goes from `src/app.rs` and `src/lib.rs` exports.
 - `crates/mbv-gui/src/bridge/frame/library`: `GuiHomeRowStateFrame` maps from `MediaSemanticState`.
 - `crates/mbv-feed`: `FeedEntryStore` keeps played rows at position zero (on `put` and on `load`).
+- `crates/mbv-player`: the Audiobookshelf Session source gates the position the opened session returns, so an unfinished position below the gate starts from zero for episodes and books.
 - `src/app/dispatch/context_menu/actions.rs` and `src/app/dispatch/feeds/`: the Feeds mark applies the stored state to the loaded `feed_tab` entries.
 - `docs/adr/0036-gui-library-panel-owns-its-interaction-state.md`, `docs/invariants/` (a new invariant), `CONTEXT.md` (*Playback resume*).
-- No dependency changes. No ctrl protocol change. No change to the Player's resume decision.
+- No dependency changes. No ctrl protocol change.

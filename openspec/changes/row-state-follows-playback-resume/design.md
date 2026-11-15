@@ -11,7 +11,7 @@ See `proposal.md` for the motivation. The facts below shape the approach.
   - GUI Podcasts: `src/app/gui_library/podcasts_projection.rs` (`episode_row_state`), through `GuiHomeRowState::from_progress`.
   - GUI Feeds: `src/app/gui_library/feeds_projection.rs` (`feed_row_state`), through `GuiHomeRowState::from_progress`.
 - `GuiHomeRowState` (`src/app/gui_library/home.rs`) is a second enum with the shape of `MediaSemanticState` minus `NowPlaying`. `media_row_state` converts one into the other. The bridge then converts `GuiHomeRowState` into the wire DTO `GuiHomeRowStateFrame` (`crates/mbv-gui/src/bridge/frame/library/home.rs`). The Queue DTO `GuiSemanticState` converts directly from `MediaSemanticState`.
-- The Player's start position comes from `resume_source` and `source_start_seconds` (`crates/mbv-player/src/resume.rs`). They never read `played`. They gate a position with `mbv_emby_model::should_resume`, the one-percent rule. For Audiobookshelf the position comes from the opened session. The Audiobookshelf server starts a finished item from zero (`PlaybackSessionManager.startSession`: `if (userProgress.isFinished)` keeps `userStartTime` at 0).
+- The Player's start position comes from `resume_source` and `source_start_seconds` (`crates/mbv-player/src/resume.rs`). They never read `played`. They gate a position with `mbv_emby_model::should_resume`, the one-percent rule. For Audiobookshelf the position comes from the opened session. The server starts a finished item from zero (`PlaybackSessionManager.startSession`: `if (userProgress.isFinished)` keeps `userStartTime` at 0), but returns the raw `currentTime` for an unfinished item without mbv's gate. `session_start_seconds` applies the same gate to the session position and duration before mpv loads an episode or book.
 - The date gutter repeats `provider_timestamp_secs(item).map(fmt_publish_date_short)` (or `published_at` for Audiobookshelf episodes) at about ten sites. Some sites filter the empty string that `fmt_publish_date_short` returns for an invalid timestamp, and some do not.
 - `FeedEntryStore` (`crates/mbv-feed/src/entry_state.rs`) is the only writer of feed state. Playback completion writes played with position zero (`feed-queue-item` spec). `set_played` keeps the position. The loaded Feeds rows (`feed_tab.entries`, `feed_tab.all_entries`) read the store only when a fetch lands (`hydrate_feed_entries_for_subscription`).
 
@@ -22,11 +22,12 @@ See `proposal.md` for the motivation. The facts below shape the approach.
 - One function body decides Active, Played, or Ordinary from (played, position, runtime) with the `should_resume` gate. Per-provider constructors feed it and own the provider exceptions (music, finished Audiobookshelf).
 - Every list in both Clients calls a per-provider constructor. No list matches on played or position itself.
 - One row-date helper.
+- The Audiobookshelf Session source applies the one-percent gate to the position and duration its opened session returns.
 - No change to any GUI wire DTO or to the Svelte front end.
 
 **Non-Goals:**
 
-- The Player's resume decision does not change. The row rule mirrors it. The two do not share code, because `resume_source` is `mbv-player`-internal and depends on the opened session.
+- No change to the Handoff start-position override. It stays the one ungated start position.
 - Queue slots of feed entries do not take a Feeds mark at once. They are Owner-held, and an update needs the `QueueOp::ApplyProgress` path that Audiobookshelf uses. That is separate work.
 - Home `Recently added` rows of feed entries do not take a Feeds mark at once. They update on the next Home fetch, as today.
 - The Music tree's album node (`crates/mbv-components/src/music_content/tree_target.rs`) keeps its own call to `from_progress(false, ..)`. Only the new gate applies to it.
@@ -89,6 +90,7 @@ After `set_feed_entries_played` writes the store, it applies each entry's stored
 ## Risks / Trade-offs
 
 - [The Audiobookshelf finished rule predicts server behavior] -> The invariant names the server source it depends on. If the server changes, the row and Play disagree until the rule changes.
+- [The Audiobookshelf server does not gate unfinished progress] -> `session_start_seconds` applies mbv's gate to the session's returned position and duration. If a future session path bypasses it, rows can show `Ordinary` while Play resumes.
 - [Emby keeps a position after Mark Played] -> The row follows what Emby reports after its refetch. If Emby keeps a position, the row shows Active and Play resumes, which is accurate.
 - [Tests pin the old precedence] -> Tests in `podcast_content`, `feeds_content`, `mbv-ui-model` `media_list`, and `src/app/tests/gui_library_{home,podcasts,feeds,shows}.rs` change with the rule. Each changed assertion moves to the new expected state; no test is deleted only because it fails.
 - [`load` writes a file] -> It writes only when it changed a row, and at most once for each load.
