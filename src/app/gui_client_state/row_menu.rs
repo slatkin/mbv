@@ -74,6 +74,20 @@ impl App {
                 key_hint: Some("g"),
             });
         }
+        // The Queue list Shuffle entry (queue-content-shuffle): the same
+        // entry the TUI's Queue row menu offers, gated on the owner's
+        // `queue-shuffle` ctrl capability. It reorders the existing queue
+        // once and keeps the playing slot first; the shared action executor
+        // sends the ctrl command and the next queue snapshot reports the
+        // new order. It lists before the removals so the menu's destructive
+        // tone still opens at the remove entry.
+        if self.player.supports_queue_shuffle() {
+            entries.push(ContextMenuEntry {
+                label: "Shuffle",
+                action: Some(ContextAction::ShuffleQueue),
+                key_hint: None,
+            });
+        }
         entries.push(ContextMenuEntry {
             label: "Remove from queue",
             action: Some(ContextAction::RemoveFromQueue(index)),

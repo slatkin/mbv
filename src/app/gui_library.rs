@@ -49,7 +49,7 @@ pub use self::feeds_projection::{
 };
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
-    GuiHomeRowKind, GuiHomeRowState,
+    GuiHomeRowKind,
 };
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;

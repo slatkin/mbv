@@ -1,6 +1,6 @@
 use crate::library::LibraryKey;
-use mbv_emby_model::EmbyItem;
-use mbv_queue::QueueItem;
+use mbv_emby_model::{EmbyItem, should_resume};
+use mbv_queue::{FeedEntry, QueueItem};
 
 /// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +16,23 @@ impl ActiveProgress {
     #[must_use]
     pub fn percent(self) -> u8 {
         self.0
+    }
+
+    /// The bounded percentage of a position within a duration, both in ticks:
+    /// `None` when either is not positive — a position of 0 is not painted as
+    /// "0%", and an unknown duration names no percentage — otherwise
+    /// `floor(position * 100 / duration)` bounded at 100, overflow-safe for
+    /// every `i64` pair.
+    #[must_use]
+    pub fn of_ticks(position_ticks: i64, duration_ticks: i64) -> Option<Self> {
+        if position_ticks <= 0 || duration_ticks <= 0 {
+            return None;
+        }
+        let percent = u128::try_from(position_ticks)
+            .unwrap_or(u128::MAX)
+            .saturating_mul(100)
+            / u128::try_from(duration_ticks).unwrap_or(u128::MAX);
+        Some(Self::new(u16::try_from(percent).unwrap_or(u16::MAX)))
     }
 }
 
@@ -41,30 +58,22 @@ pub enum MediaSemanticState {
 }
 
 impl MediaSemanticState {
-    /// Constructs active state, clamping prepared progress to the permitted range.
-    pub fn active(progress: Option<u16>) -> Self {
-        Self::Active {
-            progress: progress.map(ActiveProgress::new),
-        }
-    }
-
-    /// The canonical state/colour policy, so no destination decides a row
-    /// colour: a positive resume position yields `Active` with the bounded
-    /// percentage (no percentage when the runtime is unknown); `played`
-    /// without a position yields `Played`; otherwise the row is `Ordinary`.
-    /// Lists derive from an item through [`Self::from_emby`] /
-    /// [`Self::from_queue_item`], which add the music rule on top of this.
+    /// The one resume-state body, so no destination decides a row colour: a
+    /// position that Play would resume from — the `should_resume` one-percent
+    /// gate and a known or unknown runtime — yields `Active` with the bounded
+    /// percentage (no percentage when the runtime is unknown); otherwise
+    /// `played` yields `Played`; otherwise the row is `Ordinary`. A position
+    /// below the gate is not a resume state, so it never wins over `played`.
+    /// Lists derive from an item through a per-provider constructor
+    /// ([`Self::from_emby`], [`Self::from_feed_entry`],
+    /// [`Self::from_audiobookshelf`], [`Self::from_queue_item`]), which own the
+    /// provider exceptions on top of this body.
     #[must_use]
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
-        if position_ticks > 0 {
-            let progress = (runtime_ticks > 0).then(|| {
-                (u128::try_from(position_ticks)
-                    .unwrap_or(u128::MAX)
-                    .saturating_mul(100)
-                    / u128::try_from(runtime_ticks).unwrap_or(u128::MAX))
-                .min(100) as u16
-            });
-            Self::active(progress)
+        if should_resume(position_ticks, runtime_ticks) {
+            Self::Active {
+                progress: ActiveProgress::of_ticks(position_ticks, runtime_ticks),
+            }
         } else if played {
             Self::Played
         } else {
@@ -79,36 +88,61 @@ impl MediaSemanticState {
     /// `NowPlaying` itself.
     #[must_use]
     pub fn from_emby(item: &EmbyItem) -> Self {
-        Self::music_or_progress(
-            item.is_music(),
-            item.played,
-            item.playback_position_ticks,
-            item.runtime_ticks,
-        )
-    }
-
-    /// [`Self::from_emby`] for a queue item: the same rule over the item's
-    /// own stored facts.
-    #[must_use]
-    pub fn from_queue_item(item: &QueueItem) -> Self {
-        Self::music_or_progress(
-            item.is_music(),
-            item.played(),
-            item.playback_position_ticks(),
-            item.runtime_ticks(),
-        )
-    }
-
-    fn music_or_progress(
-        is_music: bool,
-        played: bool,
-        position_ticks: i64,
-        runtime_ticks: i64,
-    ) -> Self {
-        if is_music {
+        if item.is_music() {
             Self::Ordinary
         } else {
-            Self::from_progress(played, position_ticks, runtime_ticks)
+            Self::from_progress(
+                item.played,
+                item.playback_position_ticks,
+                item.runtime_ticks,
+            )
+        }
+    }
+
+    /// The one derivation for a feed entry row: the entry carries its own
+    /// played flag and a locally recorded position, and playback resumes from
+    /// that position when the gate passes — so a played entry that keeps a
+    /// resumable position shows `Active`. An absent duration is an unknown
+    /// runtime, which the body keeps as `Active` without a percentage.
+    #[must_use]
+    pub fn from_feed_entry(entry: &FeedEntry) -> Self {
+        Self::from_progress(
+            entry.played,
+            entry.position_ticks,
+            entry
+                .duration_ticks
+                .map_or(0, |duration| i64::try_from(duration).unwrap_or(i64::MAX)),
+        )
+    }
+
+    /// The one derivation for an Audiobookshelf row: the server starts a
+    /// finished item from the beginning, so `finished` yields `Played`
+    /// whatever position is stored; an unfinished item takes the body with no
+    /// played fact of its own.
+    #[must_use]
+    pub fn from_audiobookshelf(finished: bool, position_ticks: i64, duration_ticks: i64) -> Self {
+        if finished {
+            Self::Played
+        } else {
+            Self::from_progress(false, position_ticks, duration_ticks)
+        }
+    }
+
+    /// The queue row's derivation, per provider: Emby keeps the music rule,
+    /// a feed entry keeps its local progress, Audiobookshelf keeps the
+    /// finished rule, and a Twitch stream carries no resume fact, so its row
+    /// is `Ordinary`.
+    #[must_use]
+    pub fn from_queue_item(item: &QueueItem) -> Self {
+        match item {
+            QueueItem::Emby(item) => Self::from_emby(item),
+            QueueItem::Feed(entry) => Self::from_feed_entry(entry),
+            QueueItem::Audiobookshelf(item) => Self::from_audiobookshelf(
+                item.played(),
+                item.playback_position_ticks(),
+                item.runtime_ticks(),
+            ),
+            QueueItem::Twitch(_) => Self::Ordinary,
         }
     }
 }

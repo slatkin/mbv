@@ -251,3 +251,26 @@ fn a_press_at_a_retracted_queue_row_runs_no_queue_action() {
 }
 
 mod commands;
+
+/// The shared confirmation reaches the window through the drain, not through
+/// the App's raise (#996): the rebound clear chord raises the confirm
+/// request, and the same tick's drain presents it as the canvas overlay.
+#[test]
+fn the_drain_presents_a_raised_confirm_as_the_canvas_overlay() {
+    let mut app = stub_app_with_queue(2);
+    app.rebind_chord_for_test("clear_queue_prompt_c", "Shift+C");
+    let mut test = test_core_with(app);
+
+    test.tx
+        .send(press(Key::Char('C'), KeyModifiers::SHIFT))
+        .unwrap();
+    assert!(test.core.step());
+
+    assert!(
+        matches!(
+            test.held().overlay(),
+            Some(mbv_gui::bridge::frame::overlay::GuiOverlayFrame::Confirm { .. })
+        ),
+        "the drain presented the confirm"
+    );
+}

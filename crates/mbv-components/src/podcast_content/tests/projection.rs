@@ -1,4 +1,5 @@
 use super::*;
+use mbv_render::components::media_list::ActiveProgress;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 fn latest_catalog(episode_id: &str) -> AudiobookshelfEpisodeCatalog {
@@ -246,7 +247,9 @@ fn episode_rows_are_split_rows_with_played_and_resume_status() {
         .expect("in-progress episode row");
     assert_eq!(
         in_progress,
-        MediaSemanticState::active(Some(16)),
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(16)),
+        },
         "in-progress progress renders the shared in-progress badge"
     );
 }

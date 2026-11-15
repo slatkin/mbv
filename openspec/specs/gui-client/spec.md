@@ -118,7 +118,9 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 #### Scenario: The artwork has a still slot
 
 - **WHEN** the expanded panel paints the artwork of the active item
-- **THEN** the artwork paints in the canvas's fixed still slot with a caption that names the image source, and the season and episode badge sits at the bottom left as the canvas places it
+- **THEN** a loaded image fills the panel's width and takes its height from the artwork's aspect, as the TUI's visual slot paints at full column width
+- **AND** the placeholder paints in the canvas's fixed 225 px box and hugs its image
+- **AND** the still slot paints a caption that names the image source while no image lands, and the season and episode badge sits at the bottom left as the canvas places it
 
 #### Scenario: The footer paints the queue's source text
 

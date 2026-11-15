@@ -381,13 +381,10 @@ pub fn App() -> Element {
     let queue_visible = !panel_shows || arrangement != GuiArrangement::Mini || queue_focused;
     let library_visible = panel_shows && (arrangement != GuiArrangement::Mini || !queue_focused);
     let two_columns = queue_visible && library_visible;
-    // The container's backdrop fill stays focus-reactive like the TUI's
-    // `panel_appearance_focus` picks it.
-    let queue_canvas = canvas_var(if queue_focused {
-        "queue-column-focused"
-    } else {
-        "queue-column"
-    });
+    // The container's backdrop holds one fill at every focus state (user
+    // decision 2026-11-15), unlike the TUI's focus-reactive
+    // `panel_appearance_focus` pick.
+    let queue_canvas = canvas_var("queue-column");
     // Every handler holds its own link to the core (D4).
     let key_link = CoreLink::clone(&link);
     let press_link = CoreLink::clone(&link);

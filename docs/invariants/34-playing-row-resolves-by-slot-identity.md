@@ -1,4 +1,4 @@
-# Invariant 26 — The client resolves the playing row by slot identity, never by a status ordinal
+# Invariant 34 — The client resolves the playing row by slot identity, never by a status ordinal
 
 **Scope:** `App::effective_playback_state` and `App::displayed_playback_state`
 (`src/app/state/playback_target.rs`), the queue projection's

@@ -1,4 +1,4 @@
-# Invariant 29 — A playlist drift observation resubmits the canonical queue
+# Invariant 35 — A playlist drift observation resubmits the canonical queue
 
 **Scope:** `on_playlist_count_changed` (`crates/mbv-player/src/run/events/playlist_drift.rs`), `cmd_submit_queue` (`crates/mbv-player/src/run/commands/load.rs`), and `handle_queue_desynced` (`crates/mbv-daemon/src/event_loop/player_events.rs`).
 

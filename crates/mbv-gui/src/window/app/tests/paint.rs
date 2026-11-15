@@ -314,13 +314,7 @@ fn screen_element(screen: Screen) -> Element {
 /// The queue column's backdrop, as the root paints it under the panel.
 #[component]
 fn QueueColumn(children: Element) -> Element {
-    let sections = consume_context::<Sections>();
-    let focused = sections.focus.cloned().panel == GuiPanel::Queue;
-    let canvas = if focused {
-        "var(--canvas-queue-column-focused)"
-    } else {
-        "var(--canvas-queue-column)"
-    };
+    let canvas = "var(--canvas-queue-column)";
     rsx! {
         div {
             class: "flex h-full min-h-0 flex-col flex-1",

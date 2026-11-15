@@ -161,6 +161,9 @@ impl ClientTickHost for CoreThread {
                 // snapshot can change the gated sources, so it marks them.
                 *input_received = true;
                 self.mark_hook(DrainHook::DrainPlayerEvents);
+                // A daemon loss raises its dialog request here, and a restart
+                // ends the tick before the input phase drains requests.
+                self.apply_pending_overlay_request(input_received);
                 restart
             }
         }
@@ -404,6 +407,10 @@ impl ClientTickHost for CoreThread {
                     break;
                 }
             }
+            // A request this input raised applies before the next input runs:
+            // the App holds one pending request, so a later input's request
+            // would replace it.
+            self.apply_pending_overlay_request(&mut outcome.input_received);
         }
         // The sidebar requests' drain (`add-gui-settings-screen` design D2):
         // once per tick, after input routing — a request the routing raised

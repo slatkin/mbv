@@ -15,13 +15,14 @@
 use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::home_latest::provider_timestamp_secs;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::media_list::MediaSemanticState;
+use mbv_ui_model::ui_util::row_date;
 
 use super::GuiFeedPill;
 use super::entry_list::{
     GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
 };
-use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
+use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
 
@@ -203,10 +204,10 @@ impl App {
             subtitle: self
                 .gui_feeds_subscription_name(entry.feed_id.as_deref())
                 .map(str::to_string),
-            date: provider_timestamp_secs(&mbv_queue::QueueItem::Feed(entry.clone()))
-                .map(fmt_publish_date_short)
-                .filter(|date| !date.is_empty()),
-            state: feed_row_state(entry),
+            date: row_date(provider_timestamp_secs(&mbv_queue::QueueItem::Feed(
+                entry.clone(),
+            ))),
+            state: MediaSemanticState::from_feed_entry(entry),
         }
     }
 
@@ -264,27 +265,4 @@ pub(in crate::app::gui_library) fn feed_entry_matches(
     id: &GuiFeedEntryId,
 ) -> bool {
     entry.feed_id.as_deref().unwrap_or_default() == id.feed_id() && entry.guid == id.guid()
-}
-
-/// One row's played state (row 11.1): the TUI feed row's rule through the
-/// shared `from_progress` arm — a finished entry is `Played`, an unfinished
-/// one with a resume position is `Active` with the percent of its duration
-/// (no percent when the duration is unknown, but still `Active`), and every
-/// other entry is `Ordinary`.
-fn feed_row_state(entry: &FeedEntry) -> GuiHomeRowState {
-    GuiHomeRowState::from_progress(
-        entry.played,
-        entry.position_ticks > 0,
-        resume_percent(entry.position_ticks, entry.duration_ticks),
-    )
-}
-
-/// The bounded resume percent of a partly played entry, the TUI row's
-/// computation: the played fraction of the duration, clamped to `0..=100`, and
-/// `None` when the duration is unknown or not positive.
-fn resume_percent(position_ticks: i64, duration_ticks: Option<u64>) -> Option<u8> {
-    let duration = duration_ticks.filter(|duration| *duration > 0)?;
-    let position = u64::try_from(position_ticks.max(0)).unwrap_or(u64::MAX);
-    let percent = (position.saturating_mul(100) / duration).min(100);
-    u8::try_from(percent).ok()
 }

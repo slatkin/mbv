@@ -17,17 +17,18 @@ use mbv_audiobookshelf::{
 };
 use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_abs_episode;
-use mbv_emby_model::saturating_i64_from_f64;
+use mbv_emby_model::seconds_to_ticks;
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::media_list::MediaSemanticState;
+use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
 use super::entry_list::{
     GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
 };
-use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
+use super::home::{GuiArtShape, artwork_shape};
 use super::podcasts::GuiPodcastPill;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
@@ -400,10 +401,7 @@ fn podcast_row(
             .encode(),
         title: episode.title.clone(),
         subtitle: show.map(|show| show.title.clone()),
-        date: episode
-            .published_at
-            .map(fmt_publish_date_short)
-            .filter(|date| !date.is_empty()),
+        date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
     }
 }
@@ -420,29 +418,22 @@ fn show_of<'a>(
 }
 
 /// One row's played state (row 10.1): the TUI podcast row's rule through the
-/// shared `from_progress` arm — a finished episode is `Played`, an unfinished
-/// one with a resume position is `Active` with the percent of its duration
-/// (no percent when the duration is unknown, but still `Active`), and every
-/// other episode is `Ordinary`.
+/// shared Audiobookshelf constructor — a finished episode is `Played`
+/// whatever its position, because the server restarts it; an unfinished one
+/// is `Active` exactly when Play would resume from its position, with the
+/// progress percentage of its duration (no percentage when the duration is
+/// unknown, but still `Active`); and an episode with no progress entry has
+/// neither fact, so its row is `Ordinary`.
 fn episode_row_state(
     progress: Option<&AudiobookshelfProgress>,
     duration_seconds: Option<f64>,
-) -> GuiHomeRowState {
+) -> MediaSemanticState {
     match progress {
-        Some(progress) => GuiHomeRowState::from_progress(
+        Some(progress) => MediaSemanticState::from_audiobookshelf(
             progress.is_finished,
-            progress.current_time_seconds > 0.0,
-            resume_percent(progress.current_time_seconds, duration_seconds),
+            seconds_to_ticks(progress.current_time_seconds),
+            duration_seconds.map_or(0, seconds_to_ticks),
         ),
-        None => GuiHomeRowState::Ordinary,
+        None => MediaSemanticState::Ordinary,
     }
-}
-
-/// The bounded resume percent of a partially played episode, the TUI row's
-/// computation: the played fraction of the duration, clamped to `0..=100`, and
-/// `None` when the duration is unknown or not positive.
-fn resume_percent(current_time_seconds: f64, duration_seconds: Option<f64>) -> Option<u8> {
-    let duration = duration_seconds.filter(|duration| *duration > 0.0)?;
-    let percent = (current_time_seconds * 100.0 / duration).clamp(0.0, 100.0);
-    u8::try_from(saturating_i64_from_f64(percent).clamp(0, 100)).ok()
 }

@@ -5,9 +5,24 @@
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use super::overlay::GuiOverlay;
-use crate::app::App;
+use crate::app::{App, ConfirmModal};
 
 impl App {
+    /// Present the shared confirmation as the GUI canvas's own blocking
+    /// overlay: the GUI drain's answer to `OverlayRequest::Confirm`, which the
+    /// GUI mounts no TUI modal component for.
+    pub fn present_gui_confirm(&mut self, modal: ConfirmModal) {
+        self.gui_overlay = Some(GuiOverlay::Confirm(modal));
+    }
+
+    /// Clear the held confirmation: the GUI drain's answer to
+    /// `OverlayRequest::DismissConfirm`. Another open overlay stays.
+    pub fn dismiss_gui_confirm(&mut self) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+            self.gui_overlay = None;
+        }
+    }
+
     /// Execute the confirm overlay's button at `index` (the press on the
     /// region the window reported): the same execution the button's key
     /// hint applies (`execute_gui_overlay_entry`'s confirm arm). Gated on

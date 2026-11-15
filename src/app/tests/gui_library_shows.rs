@@ -10,6 +10,7 @@
 use super::*;
 use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
+use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
 /// A series row of the All series root level, with its sort name.
 fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
@@ -203,7 +204,7 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     );
     assert_eq!(workspace.seasons.len(), 2);
     assert!(workspace.seasons[0].selected);
-    let states: Vec<crate::app::gui_library::GuiHomeRowState> = workspace
+    let states: Vec<MediaSemanticState> = workspace
         .episodes
         .iter()
         .map(|row| row.state.clone())
@@ -211,8 +212,10 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     assert_eq!(
         states,
         vec![
-            crate::app::gui_library::GuiHomeRowState::Played,
-            crate::app::gui_library::GuiHomeRowState::Active { progress: Some(25) },
+            MediaSemanticState::Played,
+            MediaSemanticState::Active {
+                progress: Some(ActiveProgress::new(25))
+            },
         ],
         "the Workspace rows carry the played/progress states"
     );

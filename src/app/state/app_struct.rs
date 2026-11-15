@@ -217,13 +217,20 @@ pub struct App {
     pub(in crate::app) list_pane_width: Option<u16>,
     pub(in crate::app) visual_slot_hidden: bool,
     pub(in crate::app) panel_mode: PanelMode,
-    /// The GUI Client's setting (add-gui-library-panel design D4, D9): the
-    /// GUI arranges its own panels from its measured size and always paints
-    /// the Queue panel, so the TUI's terminal-width Mini check and its hidden
-    /// empty queue column do not apply, and the GUI's own launch location
-    /// replaces the TUI's. Set by the GUI Client before its first step
-    /// (`App::enable_gui_client`); the TUI Client never sets it.
-    pub(in crate::app) gui_client: bool,
+    /// A Client-supplied geometry fact (add-gui-library-panel design D4,
+    /// D9): the Client arranges its own panels from its measured size and
+    /// always paints the Queue panel, so `terminal_width` has no meaning
+    /// there, and the terminal-width Mini check and the hidden empty queue
+    /// column do not apply. The GUI Client sets it before its first step
+    /// (`App::enable_gui_client`); the TUI Client keeps the terminal-cell
+    /// rules.
+    pub(in crate::app) client_arranges_panels: bool,
+    /// A Client-supplied capability fact: whether the Client paints the
+    /// visualizer and a control for the visual slot's hide. The TUI Client
+    /// paints both. The GUI Client paints neither, so it clears this before
+    /// its first step (`App::enable_gui_client`), and the visualizer and hide
+    /// setters and the persisted hide then do nothing for it.
+    pub(in crate::app) visual_slot_controls: bool,
     /// The GUI Library panel's selected collection per destination
     /// (add-gui-library-panel design D2, D5, D6): a Grouped Music library's
     /// selected group id, keyed by the library index. One group is always

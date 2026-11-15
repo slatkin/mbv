@@ -16,6 +16,7 @@ use mbv_audiobookshelf::{
 use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, LaunchPanelFocus, TabIdentity};
 use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
+use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 /// The generation the event arms accept while the test's runtime holds none.
@@ -596,9 +597,10 @@ fn a_stale_show_pill_falls_back_to_latest() {
     );
 }
 
-/// The rows carry the TUI podcast row's played state (row 10.1): a finished
-/// episode is `Played`, a partly played one is `Active` with its percent, and
-/// every other episode is `Ordinary`.
+/// The rows carry the shared row rule (row 10.1, spec `playback-resume`):
+/// the Audiobookshelf constructor's states — a finished episode is `Played`
+/// whatever its position, an unfinished one that Play would resume is
+/// `Active` with its percent, and every other episode is `Ordinary`.
 #[test]
 fn the_rows_carry_the_played_and_resume_state() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -608,7 +610,7 @@ fn the_rows_carry_the_played_and_resume_state() {
 
     let projection = app.gui_podcasts_projection(1);
 
-    let states: Vec<crate::app::GuiHomeRowState> = projection
+    let states: Vec<MediaSemanticState> = projection
         .rows
         .iter()
         .map(|row| row.state.clone())
@@ -616,9 +618,11 @@ fn the_rows_carry_the_played_and_resume_state() {
     assert_eq!(
         states,
         [
-            crate::app::GuiHomeRowState::Ordinary,
-            crate::app::GuiHomeRowState::Active { progress: Some(50) },
-            crate::app::GuiHomeRowState::Played,
+            MediaSemanticState::Ordinary,
+            MediaSemanticState::Active {
+                progress: Some(ActiveProgress::new(50))
+            },
+            MediaSemanticState::Played,
         ]
     );
 }

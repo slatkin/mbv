@@ -5,6 +5,7 @@
 //! 6.2); these shell halves project what the App stores.
 
 use super::Model;
+use crate::app::state::events::ModelContentEvent;
 use crate::app::state::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
@@ -17,6 +18,17 @@ use mbv_ui_model::library::LibraryKey;
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
 
+/// What this Client projects after the App applied a `ModelContent` event.
+enum ModelContentFollowUp {
+    LatestSnapshot {
+        library_id: String,
+        items: Vec<mbv_queue::QueueItem>,
+    },
+    HomeContent,
+    RecentlyAdded,
+    None,
+}
+
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
         // The App's write owns the eviction; this half is the projection
@@ -25,32 +37,60 @@ impl Model {
         self.push_home_content();
     }
 
-    pub(in crate::app) fn update_emby_latest_snapshot(
+    /// Applies one `ModelContent` event: the App is the single applier of its
+    /// write (`handle_model_content_event`), and this Client then keeps only
+    /// what the App does not store: the destination Latest snapshot store and
+    /// the projection pushes. A Latest snapshot's items are captured before
+    /// the App consumes them. Returns whether the event stored fetched
+    /// `Recently added` rows, whose Home projection the drain pushes once at
+    /// its tail.
+    pub(in crate::app) fn apply_model_content_event(&mut self, event: ModelContentEvent) -> bool {
+        let follow_up = match &event {
+            ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
+                ModelContentFollowUp::LatestSnapshot {
+                    library_id: library_id.clone(),
+                    items: items
+                        .iter()
+                        .cloned()
+                        .map(Box::new)
+                        .map(mbv_queue::QueueItem::Emby)
+                        .collect(),
+                }
+            }
+            ModelContentEvent::HomeContentRefreshed(_) | ModelContentEvent::HomeContentCleared => {
+                ModelContentFollowUp::HomeContent
+            }
+            ModelContentEvent::HomeRecentlyAddedFetched { .. } => {
+                ModelContentFollowUp::RecentlyAdded
+            }
+            // The drain loop's tail projects the TV workspace.
+            ModelContentEvent::TvUpcomingSnapshotFetched { .. }
+            | ModelContentEvent::TvUpcomingSnapshotFailed { .. } => ModelContentFollowUp::None,
+        };
+        self.app.handle_model_content_event(event);
+        match follow_up {
+            ModelContentFollowUp::LatestSnapshot { library_id, items } => {
+                self.store_emby_latest_snapshot(&library_id, items);
+            }
+            ModelContentFollowUp::HomeContent => self.push_home_content(),
+            ModelContentFollowUp::RecentlyAdded => return true,
+            ModelContentFollowUp::None => {}
+        }
+        false
+    }
+
+    /// Stores one library's destination Latest snapshot in the shell-owned
+    /// store and projects the active Emby library owner.
+    pub(in crate::app) fn store_emby_latest_snapshot(
         &mut self,
         library_id: &str,
         items: Vec<mbv_queue::QueueItem>,
     ) {
-        let emby_items = items
-            .iter()
-            .filter_map(mbv_queue::QueueItem::as_emby)
-            .cloned()
-            .collect::<Vec<_>>();
         self.tv_latest_snapshots.insert(
             library_id.to_string(),
             DestinationLatestSnapshot::new(items),
         );
-        // The App's write owns the Latest root level's fill (row 7.1); this
-        // half is the shell-owned snapshot store above and the projection
-        // below.
-        self.app.apply_tv_latest_snapshot(library_id, emby_items);
         self.push_active_emby_library_owner_content();
-    }
-
-    pub(in crate::app) fn clear_home_content(&mut self) {
-        // The App's write owns the snapshot clear and the eviction (review
-        // P2); this half is the projection below.
-        self.app.apply_home_content(None);
-        self.push_home_content();
     }
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {

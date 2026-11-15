@@ -47,9 +47,11 @@
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
 //! moves (U13). Two fills still name role values because the frame carries
 //! roles and the chrome fills, not surface fills (design D7): the recessed
-//! box names the chrome's `queuePanel` pair — `Surface::QueuePanel`,
-//! focus-reactive like the TUI's `queue_row_background(focused)` — and the
-//! zebra stripe the `queueColumn` pair. Their names are not part of the
+//! box names the chrome's `queuePanel` resting fill — `Surface::QueuePanel`
+//! — and the zebra stripe the `queueColumn` resting fill. Neither follows
+//! the panel's focus: the GUI holds one fill for the queue at every focus
+//! state (user decision 2026-11-15), unlike the TUI's focus-reactive
+//! `queue_row_background(focused)`. Their names are not part of the
 //! window's `--mbv-*` token set, so each `var()` is invalid at
 //! computed-value time and the fill stays transparent, as it painted in the
 //! reference build (`window/theme.rs::write_chrome` holds the rule and the
@@ -59,7 +61,7 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::focus::{GuiPanel, GuiSurface};
+use crate::bridge::frame::focus::GuiSurface;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiRightColumn};
 use crate::bridge::frame::theme::GuiRole;
@@ -114,21 +116,12 @@ fn bars(queue: &GuiQueue, focused: bool, slot: u64) -> bool {
 /// The row's painted background: the hovered or picked row's fill, then the
 /// zebra stripe. The playing row keeps its own fill, because a highlight
 /// marks focus only.
-fn row_background(
-    row: &ItemRow,
-    queue: &GuiQueue,
-    focused: bool,
-    panel_focused: bool,
-) -> Option<String> {
+fn row_background(row: &ItemRow, queue: &GuiQueue, focused: bool) -> Option<String> {
     if queue.hover == Some(row.slot) || bars(queue, focused, row.slot) {
         return Some(canvas_var("selected"));
     }
     if row.striped {
-        return Some(if panel_focused {
-            "var(--mbv-queueColumnFocused)".to_owned()
-        } else {
-            "var(--mbv-queueColumn)".to_owned()
-        });
+        return Some("var(--mbv-queueColumn)".to_owned());
     }
     None
 }
@@ -235,10 +228,6 @@ pub fn QueuePanel() -> Element {
     // Whether the queue surface holds interaction focus (`GuiFocus::surface`):
     // the selection bar's rule, the TUI's `focused || multi_selected`.
     let focused = focus.surface == Some(GuiSurface::Queue);
-    // Whether the queue Panel holds the appearance focus (`GuiFocus::panel`):
-    // the TUI's `panel_appearance_focus`, which picks the focused fills of
-    // the focus-reactive `QueuePanel` and `QueueColumn` surfaces.
-    let panel_focused = focus.panel == GuiPanel::Queue;
 
     // The open row menu, or `None` while another overlay (or none) is up.
     let menu = match overlay.as_ref() {
@@ -263,15 +252,11 @@ pub fn QueuePanel() -> Element {
         GuiOverlayFrame::RowMenu { anchor_slot, .. } => menu_top(&queue, *anchor_slot),
         _ => String::new(),
     });
-    // The recessed box's fill: the chrome's `queuePanel` pair,
-    // focus-reactive like the TUI's `queue_row_background(focused)`. The
-    // property is undefined on purpose (`window/theme.rs::write_chrome`), so
-    // the box paints no fill of its own and the backdrops behind it show.
-    let box_background = if panel_focused {
-        "var(--mbv-queuePanelFocused)"
-    } else {
-        "var(--mbv-queuePanel)"
-    };
+    // The recessed box's fill: the chrome's `queuePanel` resting fill at
+    // every focus state (user decision 2026-11-15). The property is undefined
+    // on purpose (`window/theme.rs::write_chrome`), so the box paints no fill
+    // of its own and the backdrops behind it show.
+    let box_background = "var(--mbv-queuePanel)";
 
     // Each paint that moved a region reports (design D4): this effect runs
     // after the DOM update, and the layout epoch reports layout-driven moves.
@@ -451,7 +436,7 @@ pub fn QueuePanel() -> Element {
                                         if hovered { "4px 2px" } else { "8px" }
                                     );
                                     if let Some(background) =
-                                        row_background(&item, &queue, focused, panel_focused)
+                                        row_background(&item, &queue, focused)
                                     {
                                         let _ = write!(button_style, " background: {background};");
                                     }

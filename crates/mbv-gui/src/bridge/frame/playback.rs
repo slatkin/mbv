@@ -265,6 +265,10 @@ pub struct GuiTargetChoice {
     pub label: String,
     /// Whether the target is the Owner's attached playback output.
     pub is_active: bool,
+    /// Whether the target is a peer device with a direct Player-owner
+    /// endpoint (an `mbvd` or another mbv), which paints the mpv mark instead
+    /// of the Emby one.
+    pub is_direct_peer: bool,
 }
 
 impl From<&PlaybackTargetChoice> for GuiTargetChoice {
@@ -273,6 +277,7 @@ impl From<&PlaybackTargetChoice> for GuiTargetChoice {
             key: GuiTargetKey::from(&choice.key),
             label: choice.label.clone(),
             is_active: choice.is_active,
+            is_direct_peer: choice.is_direct_peer,
         }
     }
 }

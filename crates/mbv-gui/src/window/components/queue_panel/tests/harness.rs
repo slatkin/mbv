@@ -332,11 +332,13 @@ pub(super) fn chooser() -> GuiOverlayFrame {
                 key: GuiTargetKey::Emby("session-1".to_owned()),
                 label: "Living room".to_owned(),
                 is_active: true,
+                is_direct_peer: false,
             },
             GuiTargetChoice {
                 key: GuiTargetKey::Cast("receiver-1".to_owned()),
                 label: "Kitchen speaker".to_owned(),
                 is_active: false,
+                is_direct_peer: false,
             },
         ],
     }

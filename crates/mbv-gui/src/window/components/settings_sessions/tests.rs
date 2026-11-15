@@ -98,11 +98,13 @@ fn sessions_content() -> GuiSettingsContent {
                 key: crate::bridge::frame::playback::GuiTargetKey::Local,
                 label: "This machine".to_owned(),
                 is_active: true,
+                is_direct_peer: false,
             },
             crate::bridge::frame::playback::GuiTargetChoice {
                 key: crate::bridge::frame::playback::GuiTargetKey::Emby("sess-1".to_owned()),
                 label: "Bedroom".to_owned(),
                 is_active: false,
+                is_direct_peer: false,
             },
         ],
     }

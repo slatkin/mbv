@@ -32,6 +32,10 @@ pub struct PlaybackTargetChoice {
     /// Whether this target is the Owner's attached playback output: a Cast
     /// receiver by its receiver id, an Emby Session by the output's device id.
     pub is_active: bool,
+    /// Whether the target is a peer device that owns a Player with a direct
+    /// endpoint: an `mbvd`, or another mbv. `false` for this machine's own
+    /// row, for a plain Emby device, and for every cast receiver.
+    pub is_direct_peer: bool,
 }
 
 /// The track chips the canvas paints under the transport: the video stream's
@@ -373,6 +377,7 @@ impl App {
             key: ChooserTargetKey::Local,
             label: mbv_emby::device_name(),
             is_active: !self.remote_playback_attached(),
+            is_direct_peer: false,
         };
         let remote = self.panel_targets.iter().map(|target| {
             let key = target.key();
@@ -394,10 +399,15 @@ impl App {
                     .any(|session| &session.id == id && &session.device_id == device_id),
                 _ => false,
             };
+            let is_direct_peer = match target {
+                PanelTarget::Emby(session) => self.session_has_direct_endpoint(session),
+                PanelTarget::Cast(_) => false,
+            };
             PlaybackTargetChoice {
                 key: ChooserTargetKey::Target(key),
                 label,
                 is_active,
+                is_direct_peer,
             }
         });
         std::iter::once(local).chain(remote).collect()

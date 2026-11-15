@@ -63,20 +63,10 @@ fn fixture_theme() -> GuiTheme {
                 g: 91,
                 b: 92,
             },
-            queue_column_focused: GuiRgb {
-                r: 93,
-                g: 94,
-                b: 95,
-            },
             queue_panel: GuiRgb {
                 r: 96,
                 g: 97,
                 b: 98,
-            },
-            queue_panel_focused: GuiRgb {
-                r: 99,
-                g: 100,
-                b: 101,
             },
             queue_playback_band: GuiRgb {
                 r: 102,

@@ -1,5 +1,4 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::gui_client_state::GuiOverlay;
 use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
@@ -524,14 +523,8 @@ impl App {
                 .to_string(),
             restart_error: None,
         };
-        // The GUI Client presents the same dialog as its own blocking overlay
-        // and mounts no TUI modal component, so the raise holds it there too
-        // (the confirmation's `ask_confirm` pattern); the shell request stays
-        // undrained. Raising it replaces whatever overlay was open, as the
-        // TUI's `dismiss_blocking_modals` does.
-        if self.gui_client {
-            self.gui_overlay = Some(GuiOverlay::DaemonLost(modal.clone()));
-        }
+        // The GUI Client presents the request from its own drain (it mounts no
+        // TUI modal component).
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DaemonLost(modal));
     }
 

@@ -13,7 +13,7 @@ use mbv_render::components::media_list::{
 };
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
 use mbv_ui_model::targets::HomeItemTarget;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::ui_util::row_date;
 
 type HomeRow = MediaListRow<HomeItemTarget>;
 
@@ -56,7 +56,7 @@ fn recent_item_rows(recent_rows: &[HomeRecentRow], now_secs: u64) -> Vec<HomeRow
                     HomeItemTarget::Recent(row.item.content_id()),
                     &row.item,
                     row.feed_name.as_deref(),
-                    timestamp.map(fmt_publish_date_short),
+                    row_date(timestamp),
                 )
             })
         })

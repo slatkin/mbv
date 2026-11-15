@@ -107,9 +107,7 @@ fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
         border,
         input,
         queue_column: _queue_column,
-        queue_column_focused: _queue_column_focused,
         queue_panel: _queue_panel,
-        queue_panel_focused: _queue_panel_focused,
         queue_playback_band: _queue_playback_band,
         queue_footer_band: _queue_footer_band,
     } = chrome;

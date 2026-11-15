@@ -6,7 +6,7 @@
 //! changed is pure waste.
 
 use mbv_surfaces::queue::QueueCursorUpdate;
-use mbv_ui_model::media_list::MediaListRow;
+use mbv_ui_model::media_list::{ActiveProgress, MediaListRow};
 use mbv_ui_model::playback::PlaybackState;
 
 use crate::app::{App, QueueLink};
@@ -29,12 +29,11 @@ pub(in crate::app) struct QueueProjectionFingerprint {
 }
 
 fn progress_bucket(playback: PlaybackState) -> u16 {
-    if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
-        u16::try_from((playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100))
-            .expect("clamped progress bucket fits in u16")
-    } else {
-        u16::MAX
+    if !playback.active {
+        return u16::MAX;
     }
+    ActiveProgress::of_ticks(playback.position_ticks, playback.runtime_ticks)
+        .map_or(u16::MAX, |progress| u16::from(progress.percent()))
 }
 
 /// The observed active slot, or the owner's pending slot when idle.

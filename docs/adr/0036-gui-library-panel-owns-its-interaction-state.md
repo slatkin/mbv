@@ -63,3 +63,29 @@ does not need parity with the TUI.
   router.
 - `openspec/specs/client-interaction-core/spec.md` and
   `openspec/specs/gui-client/spec.md` own the scope of the shared rules.
+
+## Amendment (2026-11-15, row Service facts)
+
+The original decision drew the line as interaction state (front end) versus
+Service data (core). Three row facts sit on the Service side of that line,
+and the amendment names them so they cannot drift apart between the two
+Library panels:
+
+**Row resume state, the progress percentage, and the row date are Service
+facts.** They are not per-panel presentation choices. One shared rule per
+provider in `mbv-ui-model` derives them — `MediaSemanticState` and its
+per-provider constructors gate the resume state with the Playback resume
+rule, and one row-date helper formats the gutter date — and every list in
+either Client reads them from that rule. The rule and its rationale live in
+`openspec/specs/playback-resume/spec.md`.
+
+**The two Library panels differ only in which facts they show and where.**
+The TUI Library panel and the GUI Library panel may place the resume state,
+the percentage, and the date differently, and may show different subsets of
+them, but neither panel re-derives a Service fact from an item's raw played
+or position fields. A panel that needs a new Service fact adds it to the
+shared rule first, then consumes it.
+
+This amendment does not change the original decision: interaction state —
+cursor, hover, scroll, focus, filters, overlays — stays in the GUI front
+end, and the Client core still owns the data selection and the actions.

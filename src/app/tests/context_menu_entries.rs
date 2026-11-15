@@ -9,6 +9,8 @@ use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
 
+use crate::app::gui_client_state::GuiOverlay;
+
 fn emby_library_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
@@ -218,6 +220,64 @@ fn a_queue_row_menu_hides_shuffle_without_the_capability() {
 
     let labels = opened_menu_labels(&mut app);
 
+    assert!(!labels.contains(&"Shuffle"));
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle": the GUI
+/// Client's per-row right-click menu offers the same Queue list Shuffle entry
+/// the TUI offers, after the play entries and before the removals (a music
+/// row, which takes no mark or go-to entries, shows the full order).
+#[test]
+fn the_gui_row_menu_offers_shuffle_before_the_removals() {
+    let mut app = queue_shuffle_capable_app();
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
+        Box::new(leaf_item("queued track", "Audio", "Audio", false)),
+    )]));
+
+    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+
+    let labels = match app.gui_overlay.take() {
+        Some(GuiOverlay::RowMenu(menu)) => menu
+            .entries
+            .iter()
+            .map(|entry| entry.label)
+            .collect::<Vec<_>>(),
+        None => panic!("expected a row menu overlay, got none"),
+        Some(_) => panic!("expected a row menu overlay, got another overlay"),
+    };
+    assert_eq!(
+        labels,
+        vec![
+            "Play now",
+            "Play next",
+            "Shuffle",
+            "Remove from queue",
+            "Clear queue"
+        ]
+    );
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
+/// without the capability): the GUI row menu hides the entry when the owner
+/// does not advertise the `queue-shuffle` ctrl capability, leaving the rest.
+#[test]
+fn the_gui_row_menu_hides_shuffle_without_the_capability() {
+    let mut app = make_app_stub();
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
+        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
+    )]));
+
+    app.open_gui_row_menu(&[mbv_queue::QueueSlotId::from_raw(1)]);
+
+    let labels = match app.gui_overlay.take() {
+        Some(GuiOverlay::RowMenu(menu)) => menu
+            .entries
+            .iter()
+            .map(|entry| entry.label)
+            .collect::<Vec<_>>(),
+        None => panic!("expected a row menu overlay, got none"),
+        Some(_) => panic!("expected a row menu overlay, got another overlay"),
+    };
     assert!(!labels.contains(&"Shuffle"));
 }
 

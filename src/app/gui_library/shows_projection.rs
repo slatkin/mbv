@@ -17,10 +17,10 @@ use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::components::home_video::format_release_date;
 use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
-use mbv_ui_model::ui_util::{fmt_duration_short, fmt_publish_date_short};
+use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
-use super::home::{GuiArtShape, GuiHomeRowState, media_row_state};
+use super::home::GuiArtShape;
 use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
@@ -179,7 +179,7 @@ pub struct GuiShowsEpisodeRow {
     pub duration: String,
     /// The played/progress state, the shared media-list semantic state's
     /// arms.
-    pub state: GuiHomeRowState,
+    pub state: MediaSemanticState,
 }
 
 /// A series Hero's Workspace (design D12): the season pills and the selected
@@ -562,9 +562,7 @@ fn latest_row(episode: &EmbyItem) -> GuiShowsRow {
         Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
         None => (parts.title.text.clone(), None),
     };
-    let date = mbv_ui_model::home_latest::provider_timestamp_secs(&item)
-        .map(fmt_publish_date_short)
-        .filter(|date| !date.is_empty());
+    let date = row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item));
     GuiShowsRow {
         id: episode.id.clone(),
         title,
@@ -618,7 +616,7 @@ pub(super) fn episode_row(episode: &EmbyItem, position: usize) -> GuiShowsEpisod
         } else {
             String::new()
         },
-        state: media_row_state(&MediaSemanticState::from_emby(episode)),
+        state: MediaSemanticState::from_emby(episode),
     }
 }
 

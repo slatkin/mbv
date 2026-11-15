@@ -8,6 +8,7 @@
 
 use super::*;
 use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, LaunchPanelFocus, TabIdentity};
+use mbv_ui_model::media_list::MediaSemanticState;
 
 /// The two subscriptions the tests configure: the feed identity is the URL,
 /// as the fetch stamps it on every entry.
@@ -410,9 +411,9 @@ fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
 }
 
 /// An entry with a resume position and no known duration is `Active` with no
-/// percent, never `Ordinary` (row 7C.4): the shared `GuiHomeRowState::
-/// from_progress` arm keeps the resume-position fact separate from the
-/// percent, which only a known duration can name.
+/// percent, never `Ordinary` (row 7C.4): the shared
+/// `MediaSemanticState::from_feed_entry` rule keeps the resume-position fact
+/// separate from the percent, which only a known duration can name.
 #[test]
 fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
     let mut app = make_app_stub();
@@ -438,7 +439,7 @@ fn a_resume_position_without_a_duration_stays_active_with_no_percent() {
 
     assert_eq!(
         rows[0].state,
-        crate::app::GuiHomeRowState::Active { progress: None },
+        MediaSemanticState::Active { progress: None },
         "the position without a duration is an Active row with no percent"
     );
 }

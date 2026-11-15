@@ -10,7 +10,7 @@
 //! replaces the TUI's surname buckets) and a book row of its own fields, so
 //! it takes the selection arm only.
 
-use super::home::GuiHomeRowState;
+use mbv_ui_model::media_list::MediaSemanticState;
 
 /// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1):
 /// Latest first, then one pill per scope in the destination's order. The
@@ -42,10 +42,11 @@ pub struct GuiEntryRow {
     /// undated entry, and `Some("")` never rides here — the TUI's rows drop
     /// an empty gutter too.
     pub date: Option<String>,
-    /// The row's played state: the TUI row's arm — `Played` for a finished
-    /// entry, `Active` with the resume percent while some of it is played,
-    /// otherwise `Ordinary`.
-    pub state: GuiHomeRowState,
+    /// The row's played state, the shared media-list semantic state its
+    /// provider's constructor derives: `Played` for an item Play would not
+    /// resume, `Active` with the resume percent exactly when Play would
+    /// resume a saved position, otherwise `Ordinary`.
+    pub state: MediaSemanticState,
 }
 
 /// The pill-scoped entry-list projection a destination paints (rows 10.1,

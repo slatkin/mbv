@@ -6,9 +6,9 @@
 
 use mbv::{
     GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
-    GuiHomeRowState,
 };
 use mbv_queue::QueueItemContentId;
+use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
 use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -113,10 +113,10 @@ pub enum GuiHomeRowIdFrame {
     Recent(QueueItemContentId),
 }
 
-/// The state one item row paints (design D12), mirroring
-/// `mbv::GuiHomeRowState`: `playing`'s resume position is `active` with the
-/// bounded percentage, `played` without one is `played`, otherwise
-/// `ordinary`.
+/// The state one item row paints (design D12), from the shared
+/// `MediaSemanticState`: a resume state is `active` with the bounded
+/// percentage (`playing`'s resume position maps the same way), `played` is
+/// `played`, otherwise `ordinary`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowStateFrame {
     Ordinary,
@@ -210,13 +210,14 @@ impl From<GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
     }
 }
 
-impl From<&GuiHomeRowState> for GuiHomeRowStateFrame {
-    fn from(state: &GuiHomeRowState) -> Self {
+impl From<&MediaSemanticState> for GuiHomeRowStateFrame {
+    fn from(state: &MediaSemanticState) -> Self {
         match state {
-            GuiHomeRowState::Ordinary => Self::Ordinary,
-            GuiHomeRowState::Played => Self::Played,
-            GuiHomeRowState::Active { progress } => Self::Active {
-                progress: *progress,
+            MediaSemanticState::Ordinary => Self::Ordinary,
+            MediaSemanticState::Played => Self::Played,
+            MediaSemanticState::Active { progress }
+            | MediaSemanticState::NowPlaying { progress } => Self::Active {
+                progress: progress.map(ActiveProgress::percent),
             },
         }
     }

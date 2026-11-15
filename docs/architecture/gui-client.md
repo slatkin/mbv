@@ -417,8 +417,12 @@ The window reads no font from disk at runtime. `assets/app.css` sets
 `mbv-art` scheme, which the net provider answers.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
-`src/window/icons.rs` only (the Lucide set, drawn as inline SVG): the transport controls and the playback-target
-indicator are Lucide icons. The now-playing row shows the canvas's play glyph
+`src/window/icons.rs` only (the Lucide set, drawn as inline SVG), with one
+exception: a playback-target chooser row paints the brand mark of its target
+kind (`src/window/icons.rs`, whose three paths are simple-icons', CC0) for
+Emby, Google Cast, and the mpv Player owner, because Lucide carries no brand
+glyph. The transport controls and the playback-target indicator are Lucide
+icons. The now-playing row shows the canvas's play glyph
 beside its title, in the accent colour (the `queue` section still names
 `active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
@@ -1244,9 +1248,11 @@ column holds between its 400 px artboard and the width that leaves the
 Library column its 480 px Mini threshold, and the list column holds between
 320 px and 640 px, short enough to leave the Hero pane its minimum.
 `panelWidths` resolves the two painted widths and the Library column they
-leave — a divider's 6 px included — and the arrangement classifies that same
-value, so a drag paints the geometry the thresholds measure and the two
-never disagree. A double-click returns a divider to its default. The
+leave, and the arrangement classifies that same value, so a drag paints the
+geometry the thresholds measure and the two never disagree. A divider takes
+no width in the row: its 6 px grab band overlays the seam through negative
+margins, so the columns meet directly. A double-click returns a divider to
+its default. The
 dividers are the window content's: they report no region to the core, which
 needs none, because the Queue panel's own resize observer re-reports the
 regions a drag moved.
