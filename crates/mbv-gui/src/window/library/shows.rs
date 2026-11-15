@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiShowsList, GuiShowsModeFrame};
+use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{
     ListMove, clamp_scroll_top, jump_to_letter, list_window, scroll_top_to_show_cursor,
@@ -392,13 +392,9 @@ impl LibraryState {
     /// Enter select, and the pill the row paints the accent outline on
     /// (design D6, D12).
     #[must_use]
-    pub fn focused_shows_pill(&self, shows: &GuiShowsList) -> Option<GuiShowsModeFrame> {
+    pub fn focused_shows_pill(&self, modes: &[GuiShowsModeFrame]) -> Option<GuiShowsModeFrame> {
         let focused = self.shows_ui.peek().focused_pill?;
-        shows
-            .pills
-            .iter()
-            .find(|pill| pill.mode == focused)
-            .map(|pill| pill.mode)
+        modes.iter().copied().find(|mode| *mode == focused)
     }
 
     /// Move the focused pill one pill along the row (design D12): Right and

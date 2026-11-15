@@ -2,12 +2,13 @@
 //! (`add-gui-library-panel` design D3, row 7C.2, the port of
 //! `lib/library/keys-shared.ts`): the keys the Library keeps from the core's
 //! router, the list movement each cursor key names, and the one key handler the
-//! Feeds, Podcasts, Emby, and Audiobooks destinations run over their own facts —
-//! the frame, the rows, the pill row, and the item commands. [`super::keys`]
-//! routes the vocabulary for Music and Home and `shows-keys` for Shows, so one
-//! table serves both and they cannot drift; [`route_panel_list_key`] serves the
-//! four flat destinations, which copy nothing but their own extras — Emby's
-//! play-next, the Audiobooks chapter Workspace.
+//! Feeds, Podcasts, Emby, Audiobooks, and Shows destinations run over their own
+//! facts — the frame, the rows, the pill row, and the item commands.
+//! [`super::keys`] routes the vocabulary for Music and Home;
+//! [`route_panel_list_key`] serves the other five destinations, which copy
+//! nothing but their own extras — Emby's play-next, the Audiobooks chapter
+//! Workspace, and the Shows tree's open, close, and toggle hooks and episode
+//! Workspace.
 
 use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
@@ -121,6 +122,26 @@ pub trait PanelKeys {
 
     /// Play the item Enter or a double-click names.
     fn play_item(&self, item_id: &str);
+
+    /// Right on the list's cursor row. A flat list has nothing to open, so
+    /// the key is consumed and changes nothing; the Shows tree opens the
+    /// node under the cursor.
+    fn open_cursor_row(&self) {}
+
+    /// Left on the list's cursor row: the counterpart of
+    /// [`PanelKeys::open_cursor_row`], a no-op on a flat list.
+    fn close_cursor_row(&self) {}
+
+    /// Enter on the list's cursor row: play the item it rests on. The Shows
+    /// tree overrides this, because Enter on a series or season node toggles
+    /// it instead.
+    fn enter_cursor_row(&self) {
+        if let Some(row) = self.cursor_row()
+            && let Some(item_id) = self.item_id(&row)
+        {
+            self.play_item(&item_id);
+        }
+    }
 
     /// Add the item `a` names to the queue's tail.
     fn queue_item(&self, item_id: &str);
@@ -259,20 +280,29 @@ fn route_pill_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> Key
 }
 
 /// Route a key to the list's cursor (design D12): the arrows, Page Up, Page
-/// Down, Home, and End move the cursor, Enter plays the item it rests on, and
-/// `n` and `a` play it next or queue it.
+/// Down, Home, and End move the cursor, Right, Left, and Enter act on the row
+/// under it through the destination's hooks (a tree opens, closes, or toggles
+/// a node; a flat list plays the item), and `n` and `a` play it next or queue
+/// it.
 fn route_list_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
     if let Some(mv) = cursor_move(&key.key) {
         keys.move_list_cursor(mv);
         return KeyOutcome::Handled;
     }
-    if key.key == "Enter" {
-        if let Some(row) = keys.cursor_row()
-            && let Some(item_id) = keys.item_id(&row)
-        {
-            keys.play_item(&item_id);
+    match key.key.as_str() {
+        "ArrowRight" => {
+            keys.open_cursor_row();
+            return KeyOutcome::Handled;
         }
-        return KeyOutcome::Handled;
+        "ArrowLeft" => {
+            keys.close_cursor_row();
+            return KeyOutcome::Handled;
+        }
+        "Enter" => {
+            keys.enter_cursor_row();
+            return KeyOutcome::Handled;
+        }
+        _ => {}
     }
     if key.key == "n" || key.key == "a" {
         let item = keys.cursor_row().and_then(|row| keys.item_id(&row));
