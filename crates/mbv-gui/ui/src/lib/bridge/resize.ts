@@ -30,9 +30,10 @@ export const LIBRARY_LIST_MIN_WIDTH_PX = 320;
  * the other away: the list column's own minimum. */
 export const HERO_MIN_WIDTH_PX = LIBRARY_LIST_MIN_WIDTH_PX;
 
-/** A divider's painted width: the band between two columns takes this much of
- * the container, and the Library column the Queue column leaves is measured
- * without it, so the painted columns and the thresholds stay one geometry. */
+/** A divider's grab band width. The band overlays the seam between two
+ * columns and takes no width in the row, so the columns meet directly and the
+ * Library column the Queue column leaves is the container minus the Queue
+ * column. */
 export const DIVIDER_WIDTH_PX = 6;
 
 /** The widths the user dragged this session, in pixels: `null` while the
@@ -96,7 +97,7 @@ draggedWidths.subscribe((widths) => saveDraggedWidths(widths));
 export function clampQueueWidth(width: number, containerWidth: number): number {
 	const max = Math.max(
 		QUEUE_PANEL_WIDTH_PX,
-		Math.round(containerWidth) - LIBRARY_MINI_MAX_WIDTH_PX - DIVIDER_WIDTH_PX,
+		Math.round(containerWidth) - LIBRARY_MINI_MAX_WIDTH_PX,
 	);
 	return Math.min(Math.max(Math.round(width), QUEUE_PANEL_WIDTH_PX), max);
 }
@@ -107,10 +108,7 @@ export function clampQueueWidth(width: number, containerWidth: number): number {
  * gives the list its minimum.
  */
 export function clampListWidth(width: number, libraryColumn: number): number {
-	const max = Math.max(
-		LIBRARY_LIST_MIN_WIDTH_PX,
-		Math.round(libraryColumn) - HERO_MIN_WIDTH_PX - DIVIDER_WIDTH_PX,
-	);
+	const max = Math.max(LIBRARY_LIST_MIN_WIDTH_PX, Math.round(libraryColumn) - HERO_MIN_WIDTH_PX);
 	return Math.min(Math.max(Math.round(width), LIBRARY_LIST_MIN_WIDTH_PX), max);
 }
 
@@ -121,8 +119,7 @@ export interface PanelWidths {
 	queue: number;
 	/** The list column's painted width, which only Wide paints. */
 	list: number;
-	/** The Library column's width: the container minus the Queue column and
-	 * the divider between them. */
+	/** The Library column's width: the container minus the Queue column. */
 	libraryColumn: number;
 }
 
@@ -141,9 +138,7 @@ export function panelWidths(
 		panel,
 		clampQueueWidth(dragged.queue ?? QUEUE_PANEL_WIDTH_PX, container.width),
 	);
-	// The collapsed rail paints no divider, so its 6 px stay in the column.
-	const divider = panel.collapsed ? 0 : DIVIDER_WIDTH_PX;
-	const libraryColumn = libraryColumnWidth(container, queue + divider);
+	const libraryColumn = libraryColumnWidth(container, queue);
 	return {
 		queue,
 		list: clampListWidth(dragged.list ?? LIBRARY_LIST_DEFAULT_WIDTH_PX, libraryColumn),

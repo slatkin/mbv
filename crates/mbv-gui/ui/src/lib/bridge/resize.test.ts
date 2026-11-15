@@ -9,7 +9,6 @@ import { beforeEach, expect, test } from 'vitest';
 import { libraryArrangement } from './arrangement';
 import {
 	DEFAULT_DRAGGED_WIDTHS,
-	DIVIDER_WIDTH_PX,
 	LIBRARY_LIST_DEFAULT_WIDTH_PX,
 	LIBRARY_LIST_MIN_WIDTH_PX,
 	PANEL_WIDTHS_STORAGE_KEY,
@@ -42,8 +41,8 @@ test('both dividers start at their defaults', () => {
 	// The request made the list column 15 % wider than the canvas's index.
 	expect(LIBRARY_LIST_DEFAULT_WIDTH_PX).toBe(Math.round(LIBRARY_LIST_MIN_WIDTH_PX * 1.15));
 	expect(widths.list).toBe(LIBRARY_LIST_DEFAULT_WIDTH_PX);
-	// The divider between the columns takes its own width.
-	expect(widths.libraryColumn).toBe(1200 - DIVIDER_WIDTH_PX);
+	// The divider overlays the seam, so the columns meet directly.
+	expect(widths.libraryColumn).toBe(1200);
 });
 
 test('the Queue column stays between its canvas width and the Library Mini threshold', () => {
@@ -51,7 +50,7 @@ test('the Queue column stays between its canvas width and the Library Mini thres
 	expect(get(draggedWidths).queue).toBe(400);
 
 	dragQueueWidth(1400, 1600);
-	expect(get(draggedWidths).queue).toBe(1120 - DIVIDER_WIDTH_PX);
+	expect(get(draggedWidths).queue).toBe(1120);
 
 	dragQueueWidth(500, 1600);
 	expect(panelWidths(container, expanded, get(draggedWidths)).queue).toBe(500);
@@ -61,9 +60,9 @@ test('the list column stays between the canvas index and the room the Hero leave
 	dragListWidth(100, 1200);
 	expect(get(draggedWidths).list).toBe(LIBRARY_LIST_MIN_WIDTH_PX);
 
-	// 1200 px less the Hero's 320 px minimum and the 6 px divider.
+	// 1200 px less the Hero's 320 px minimum.
 	dragListWidth(900, 1200);
-	expect(get(draggedWidths).list).toBe(874);
+	expect(get(draggedWidths).list).toBe(880);
 
 	dragListWidth(500, 1200);
 	expect(panelWidths(container, expanded, get(draggedWidths)).list).toBe(500);
@@ -81,7 +80,7 @@ test('a stored width is clamped again when the window narrows', () => {
 	dragQueueWidth(1100, 1600);
 	const widths = panelWidths({ width: 1200, height: 900 }, expanded, get(draggedWidths));
 
-	expect(widths.queue).toBe(720 - DIVIDER_WIDTH_PX);
+	expect(widths.queue).toBe(720);
 	expect(widths.libraryColumn).toBe(480);
 });
 
@@ -89,7 +88,7 @@ test('a stored width is clamped again when the window narrows', () => {
 // the columns paint, so a drag that shrinks the Library column crosses the
 // threshold instead of leaving the paint and the classification apart.
 test('the arrangement classifies the width a drag paints', () => {
-	dragQueueWidth(1120 - DIVIDER_WIDTH_PX, 1600);
+	dragQueueWidth(1120, 1600);
 	const widths = panelWidths(container, expanded, get(draggedWidths));
 
 	expect(libraryArrangement(container, widths.queue)).toBe('narrow');

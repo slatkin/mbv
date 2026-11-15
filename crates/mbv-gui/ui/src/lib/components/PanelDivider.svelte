@@ -5,7 +5,8 @@
 	// keeps it (`$lib/bridge/resize`), so this component holds nothing beyond
 	// the drag itself. A double-click reports the reset to the default width,
 	// and the pointer affordance is the column-resize cursor over a band that
-	// lights while hovered or dragged.
+	// lights while hovered or dragged. The band takes no width in the row: its
+	// negative margins lay it over the seam, so the two columns meet directly.
 	//
 	// The window listens for the drag's moves: the pointer leaves the band's
 	// few pixels as soon as the drag starts. The sized column sits on one side
@@ -67,8 +68,9 @@
 	aria-label={label}
 	data-divider={name}
 	data-divider-dragging={dragging ? '' : undefined}
-	class="relative flex-none self-stretch border-0 p-0 hover:bg-[var(--canvas-border)] data-[divider-dragging]:bg-[var(--canvas-border)]"
+	class="relative z-10 flex-none self-stretch border-0 p-0 hover:bg-[var(--canvas-border)] data-[divider-dragging]:bg-[var(--canvas-border)]"
 	style:width="{DIVIDER_WIDTH_PX}px"
+	style:margin-inline="-{DIVIDER_WIDTH_PX / 2}px"
 	style:cursor="col-resize"
 	onpointerdown={startDrag}
 	ondblclick={onReset}

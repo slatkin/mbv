@@ -1184,9 +1184,11 @@ column holds between its 400 px artboard and the width that leaves the
 Library column its 480 px Mini threshold, and the list column holds between
 320 px and 640 px, short enough to leave the Hero pane its minimum.
 `panelWidths` resolves the two painted widths and the Library column they
-leave — a divider's 6 px included — and the arrangement classifies that same
-value, so a drag paints the geometry the thresholds measure and the two
-never disagree. A double-click returns a divider to its default. The
+leave, and the arrangement classifies that same value, so a drag paints the
+geometry the thresholds measure and the two never disagree. A divider takes
+no width in the row: its 6 px grab band overlays the seam through negative
+margins, so the columns meet directly. A double-click returns a divider to
+its default. The
 dividers are the window content's: they report no region to the core, which
 needs none, because the Queue panel's own resize observer re-reports the
 regions a drag moved.
