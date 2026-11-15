@@ -25,7 +25,7 @@ schemars.workspace = true
 # Fixture-vs-schema validation for the ctrl protocol conformance gate.
 # Default features are off: they pull HTTP/file reference resolvers (reqwest,
 # TLS) this gate never needs — every fixture schema resolves locally.
-jsonschema = { version = "0.60", default-features = false }
+jsonschema = { version = "0.61", default-features = false }
 rstest.workspace = true
 # Enum iteration for the conformance fixture tables: a shape enum variant
 # missing from a hand-kept list plus a missing fixture passes silently, so
