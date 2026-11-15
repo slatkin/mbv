@@ -81,8 +81,8 @@ pub fn LibraryPodcastsList() -> Element {
     // from the section store's own storage through the memo's revision key.
     let carried = library.sections.library_list.cloned();
     let detail_section = library.sections.library_detail.cloned();
-    let frame = library_podcasts_list(carried.as_ref());
-    let detail = library_podcasts_detail(detail_section.as_ref());
+    let frame = library_podcasts_list(carried.as_deref());
+    let detail = library_podcasts_detail(detail_section.as_deref());
 
     // The interaction state and the scroll store this list paints (design
     // D1, D9).

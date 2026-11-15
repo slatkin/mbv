@@ -38,7 +38,7 @@ use crate::window::components::settings_services::SettingsServices;
 use crate::window::components::settings_sessions::SettingsSessions;
 use crate::window::components::settings_sidebar::SettingsSidebar;
 use crate::window::components::settings_status_bar::SettingsStatusBar;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 use crate::window::settings::entries::SettingsEntry;
 use crate::window::settings::state::{
     SettingsPane, SettingsState, current_settings_entries, cursor_entry_id,
@@ -92,8 +92,9 @@ pub(crate) fn section_wire(section: GuiSettingsSection) -> &'static str {
 /// instead of taking the frame and its rows as props, so no repaint clones a
 /// frame's rows through a prop (the port's store-read rule).
 pub(crate) struct SettingsSectionView {
-    /// The shown frame.
-    pub frame: GuiSettingsFrame,
+    /// The shown frame, held as the one handle every reader of it clones
+    /// (`share-gui-sections-by-rc` design D3).
+    pub frame: SectionRef<GuiSettingsFrame>,
     /// The section's entries with the held marks applied.
     pub entries: Vec<SettingsEntry>,
     /// The entry id the content cursor rests on, or `None` while the sidebar

@@ -38,7 +38,7 @@ use crate::window::components::queue_footer::QueueFooter;
 use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::playhead::{Playhead, Times};
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 use crate::window::theme::theme_style_rule;
 use crate::window::time::format_wall_clock;
 
@@ -520,7 +520,7 @@ impl Fixture {
         let anchor = anchor();
         let mut playhead = self.playhead.clone();
         self.doc.vdom.in_runtime(move || {
-            sections.queue.set(rows);
+            sections.queue.set(SectionRef::new(rows));
             sections.summary.set(summary);
             sections.overlay.set(overlay);
             sections.focus.set(GuiFocus {

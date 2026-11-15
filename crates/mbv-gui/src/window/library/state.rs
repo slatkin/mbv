@@ -314,7 +314,7 @@ impl LibraryState {
     #[must_use]
     pub fn active_library_panes(&self) -> &'static [LibraryPane] {
         let list = self.sections.library_list.peek();
-        match list.as_ref().map(|list| &list.destination) {
+        match list.as_deref().map(|list| &list.destination) {
             Some(GuiDestinationList::Home(_)) => HOME_PANES,
             Some(GuiDestinationList::Shows(_)) => {
                 if self.library_detail_has_hero() {
@@ -368,7 +368,7 @@ impl LibraryState {
     #[must_use]
     fn library_detail_has_hero(&self) -> bool {
         let detail = self.sections.library_detail.peek();
-        match detail.as_ref() {
+        match detail.as_deref() {
             Some(GuiLibraryDetail::Music(detail)) => detail.hero.is_some(),
             Some(GuiLibraryDetail::Home(detail)) => detail.hero.is_some(),
             Some(GuiLibraryDetail::Shows(detail)) => detail.hero.is_some(),
@@ -501,7 +501,7 @@ impl LibraryState {
     #[must_use]
     fn music_hero(&self) -> Option<crate::bridge::frame::library::GuiMusicHeroFrame> {
         let detail = self.sections.library_detail.peek();
-        library_music_detail(detail.as_ref()).and_then(|detail| detail.hero.clone())
+        library_music_detail(detail.as_deref()).and_then(|detail| detail.hero.clone())
     }
 
     /// Move the Hero's tracklist cursor one movement along (design D3): the

@@ -20,6 +20,7 @@ use crate::bridge::frame::library::{
     GuiPodcastsDetail, GuiPodcastsList,
 };
 use crate::bridge::library::GuiPodcastPill;
+use crate::window::sections::SectionRef;
 
 /// The frame's Status bar facts: nothing armed and no live toast.
 fn idle() -> GuiStatusBar {
@@ -81,15 +82,15 @@ fn music_props(status: GuiStatusBar) -> LibraryStatusBarProps {
             label: "Music".to_owned(),
         }],
         current_tab: Some(1),
-        list: Some(GuiLibraryList {
+        list: Some(SectionRef::new(GuiLibraryList {
             tabs: vec![GuiLibraryTabFrame {
                 position: 1,
                 label: "Music".to_owned(),
             }],
             current_tab: Some(1),
             destination: music_list(),
-        }),
-        detail: Some(music_detail()),
+        })),
+        detail: Some(SectionRef::new(music_detail())),
         status,
     }
 }
@@ -333,15 +334,15 @@ fn destination_props(
             label: label.to_owned(),
         }],
         current_tab: Some(2),
-        list: Some(GuiLibraryList {
+        list: Some(SectionRef::new(GuiLibraryList {
             tabs: vec![GuiLibraryTabFrame {
                 position: 2,
                 label: label.to_owned(),
             }],
             current_tab: Some(2),
             destination,
-        }),
-        detail: Some(detail),
+        })),
+        detail: Some(SectionRef::new(detail)),
         status: idle(),
     }
 }

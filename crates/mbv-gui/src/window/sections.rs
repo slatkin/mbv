@@ -30,6 +30,11 @@ use crate::bridge::frame::theme::{GuiRole, GuiTheme};
 use crate::bridge::frame::{GuiAttachState, GuiPanelToggles};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 
+mod shared;
+
+pub use shared::SectionRef;
+use shared::shared_option;
+
 /// The window's section stores (D6): one signal per section, the
 /// context-provided port of the store module. Create once in the root's
 /// `use_hook` and provide as context; the signals need the root's scope.
@@ -45,8 +50,8 @@ pub struct Sections {
     /// The focused surface and the Panel that holds focus.
     pub focus: Signal<GuiFocus>,
     /// The Queue rows inside the viewport, with the cursor, marks, and the
-    /// active slot.
-    pub queue: Signal<GuiQueue>,
+    /// active slot, as the one handle every reader clones.
+    pub queue: Signal<SectionRef<GuiQueue>>,
     /// The queue summary: the remaining count, the finish clock, the right
     /// column's mode, and the filter.
     pub summary: Signal<GuiQueueSummary>,
@@ -67,19 +72,21 @@ pub struct Sections {
     /// The Status bar projection.
     pub status: Signal<GuiStatusBar>,
     /// The Library list: the destination tabs and the active destination's
-    /// list part, `None` while no presented destination is active.
-    pub library_list: Signal<Option<GuiLibraryList>>,
+    /// list part, `None` while no presented destination is active, as the one
+    /// handle every reader clones.
+    pub library_list: Signal<Option<SectionRef<GuiLibraryList>>>,
     /// The Library detail: the active destination's selection, Hero,
     /// Workspace, and playing marks, `None` while no presented destination
-    /// is active.
-    pub library_detail: Signal<Option<GuiLibraryDetail>>,
+    /// is active, as the one handle every reader clones.
+    pub library_detail: Signal<Option<SectionRef<GuiLibraryDetail>>>,
     /// The right-click item menu the window last opened, `None` while none
     /// is open.
     pub row_menu: Signal<Option<GuiLibraryRowMenuFrame>>,
     /// The Search section's results, `None` while the field is closed.
     pub search: Signal<Option<GuiSearchFrame>>,
-    /// The Settings screen, `None` while the screen is closed.
-    pub settings: Signal<Option<GuiSettingsFrame>>,
+    /// The Settings screen, `None` while the screen is closed, as the one
+    /// handle every reader clones.
+    pub settings: Signal<Option<SectionRef<GuiSettingsFrame>>>,
     /// Whether a section batch has arrived: the window paints the main
     /// content while this holds and the `attach` section is `None`, and the
     /// attach screen before that — the wait before the first batch is not
@@ -140,7 +147,7 @@ impl Sections {
             attach: Signal::new(None),
             theme: Signal::new(None),
             focus: Signal::new(fresh_focus()),
-            queue: Signal::new(fresh_queue()),
+            queue: Signal::new(SectionRef::new(fresh_queue())),
             summary: Signal::new(fresh_summary()),
             panel: Signal::new(fresh_panel()),
             overlay: Signal::new(None),
@@ -179,7 +186,12 @@ impl Sections {
         write(batch.attach.as_ref(), &mut held.attach, self.attach);
         write(batch.theme.as_ref(), &mut held.theme, self.theme);
         write(batch.focus.as_ref(), &mut held.focus, self.focus);
-        write(batch.queue.as_ref(), &mut held.queue, self.queue);
+        write_shared(
+            batch.queue.as_ref(),
+            &mut held.queue,
+            self.queue,
+            SectionRef::new,
+        );
         write(batch.summary.as_ref(), &mut held.summary, self.summary);
         write(batch.panel.as_ref(), &mut held.panel, self.panel);
         write(batch.overlay.as_ref(), &mut held.overlay, self.overlay);
@@ -187,19 +199,26 @@ impl Sections {
         write(batch.hover.as_ref(), &mut held.hover, self.hover);
         write(batch.footer.as_ref(), &mut held.footer, self.footer);
         write(batch.status.as_ref(), &mut held.status, self.status);
-        write(
+        write_shared(
             batch.library_list.as_ref(),
             &mut held.library_list,
             self.library_list,
+            shared_option,
         );
-        write(
+        write_shared(
             batch.library_detail.as_ref(),
             &mut held.library_detail,
             self.library_detail,
+            shared_option,
         );
         write(batch.row_menu.as_ref(), &mut held.row_menu, self.row_menu);
         write(batch.search.as_ref(), &mut held.search, self.search);
-        write(batch.settings.as_ref(), &mut held.settings, self.settings);
+        write_shared(
+            batch.settings.as_ref(),
+            &mut held.settings,
+            self.settings,
+            shared_option,
+        );
     }
 }
 
@@ -209,7 +228,21 @@ impl Sections {
 fn write<T: Clone + 'static, S: From<T> + 'static>(
     carried: Option<&GuiSection<T>>,
     held: &mut Option<u64>,
+    signal: Signal<S>,
+) {
+    write_shared(carried, held, signal, S::from);
+}
+
+/// Write one carried section as one shared handle (`share-gui-sections-by-rc`
+/// design D2): the batch carries an owned value across the core channel, and
+/// the window builds the one [`SectionRef`] its readers clone here, inside the
+/// write, so a section update copies its content once however many readers it
+/// has.
+fn write_shared<T: Clone + 'static, S: 'static>(
+    carried: Option<&GuiSection<T>>,
+    held: &mut Option<u64>,
     mut signal: Signal<S>,
+    share: impl FnOnce(T) -> S,
 ) {
     let Some(section) = carried else {
         return;
@@ -218,7 +251,7 @@ fn write<T: Clone + 'static, S: From<T> + 'static>(
         return;
     }
     *held = Some(section.revision);
-    signal.set(S::from(section.value.clone()));
+    signal.set(share(section.value.clone()));
 }
 
 /// The fresh focus: no surface holds focus, and the Queue panel does.

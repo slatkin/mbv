@@ -48,7 +48,7 @@ impl LibraryState {
     #[must_use]
     pub fn home_rows(&self, filter: &str) -> Arc<[HomeListRow]> {
         let list = self.sections.library_list.peek();
-        let Some(home) = library_home_list(list.as_ref()) else {
+        let Some(home) = library_home_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();

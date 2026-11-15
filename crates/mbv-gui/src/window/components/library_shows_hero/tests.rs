@@ -26,16 +26,18 @@ use super::{
     queue_episode, select_season,
 };
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiHomeRowStateFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiShowsDetail,
-    GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiArtShapeFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiMetaKindFrame,
+    GuiMetaSegmentFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame,
+    GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
+use crate::window::library::parts::library_shows_detail;
 use crate::window::library::shows_workspace::press_shows_episode;
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The library index the Shows commands name.
 const LIB_IDX: usize = 2;
@@ -120,13 +122,13 @@ fn detail(facts: Option<GuiShowsHeroFrame>) -> GuiShowsDetail {
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    detail: GuiShowsDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The context handles the root hands the test: the Library store and the
 /// Shows detail the presses read.
-type FixtureHandles = (LibraryState, GuiShowsDetail);
+type FixtureHandles = (LibraryState, SectionRef<GuiLibraryDetail>);
 
 /// The root: provides the Library store and paints the Hero, as the panel
 /// composes it.
@@ -167,7 +169,7 @@ fn shows_hero_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    detail: GuiShowsDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -280,7 +282,7 @@ fn built(facts: Option<GuiShowsHeroFrame>) -> Fixture {
             shows_hero_app,
             FixtureProps {
                 sender,
-                detail: detail(facts),
+                detail: SectionRef::new(GuiLibraryDetail::Shows(detail(facts))),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -587,7 +589,9 @@ fn a_press_on_an_episode_moves_the_cursor_onto_its_row() {
 fn the_series_hero_play_sends_the_play_command_for_the_selected_season() {
     let mut fixture = built_series();
 
-    let target = action_target(&fixture.detail);
+    let detail =
+        library_shows_detail(Some(&fixture.detail)).expect("the fixture carries a Shows detail");
+    let target = action_target(detail);
     let state = fixture.state.clone();
     fixture.in_runtime(move || act_on(&state, ShowsAction::Play, LIB_IDX, target.as_deref()));
 
@@ -609,7 +613,9 @@ fn the_series_hero_play_sends_the_play_command_for_the_selected_season() {
 fn the_latest_hero_add_to_queue_sends_the_queue_command_for_the_selected_episode() {
     let mut fixture = built(Some(hero(|facts| facts.workspace = None)));
 
-    let target = action_target(&fixture.detail);
+    let detail =
+        library_shows_detail(Some(&fixture.detail)).expect("the fixture carries a Shows detail");
+    let target = action_target(detail);
     let state = fixture.state.clone();
     fixture.in_runtime(move || act_on(&state, ShowsAction::Queue, LIB_IDX, target.as_deref()));
 

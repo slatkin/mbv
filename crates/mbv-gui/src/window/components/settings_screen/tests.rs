@@ -22,7 +22,7 @@ use crate::bridge::frame::settings::{GuiSettingsContent, GuiSettingsFrame, GuiSe
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 use crate::window::settings::state::{SettingsPane, SettingsState};
 
 /// What the root hands the test: the section stores and the Settings store.
@@ -58,7 +58,9 @@ impl Fixture {
     /// Write the Settings section's frame, as the drain task would.
     fn set_frame(&mut self, frame: GuiSettingsFrame) {
         let mut settings = self.sections.settings;
-        self.doc.vdom.in_runtime(move || settings.set(Some(frame)));
+        self.doc
+            .vdom
+            .in_runtime(move || settings.set(Some(SectionRef::new(frame))));
         self.poll_until_idle();
     }
 

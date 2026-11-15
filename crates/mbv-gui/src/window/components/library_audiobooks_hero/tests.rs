@@ -23,7 +23,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::{AbsAction, LibraryAudiobooksHero, act_book, play_chapter_row};
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame,
-    GuiAudiobooksWorkspaceFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiAudiobooksWorkspaceFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -32,7 +32,7 @@ use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::library::audiobooks_workspace::press_abs_chapter;
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::ticks_f64;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The library index the Audiobooks commands name.
 const LIB_IDX: usize = 4;
@@ -112,14 +112,14 @@ fn detail(
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    detail: GuiAudiobooksDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     position_ticks: f64,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The context handles the root hands the test: the Library store and the
 /// Audiobooks detail the presses read.
-type FixtureHandles = (LibraryState, GuiAudiobooksDetail);
+type FixtureHandles = (LibraryState, SectionRef<GuiLibraryDetail>);
 
 /// The root: provides the Library store and paints the Hero, as the panel
 /// composes it.
@@ -161,7 +161,7 @@ fn abs_hero_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    detail: GuiAudiobooksDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -298,7 +298,9 @@ fn built_at(
             abs_hero_app,
             FixtureProps {
                 sender,
-                detail: detail(facts, loading, playing),
+                detail: SectionRef::new(GuiLibraryDetail::Audiobooks(detail(
+                    facts, loading, playing,
+                ))),
                 position_ticks,
                 handle: Rc::clone(&handle),
             },

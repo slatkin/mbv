@@ -22,8 +22,8 @@ use super::HomeAction;
 use super::LibraryHomeHero;
 use super::act;
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiHomeDetail, GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiMetaKindFrame,
-    GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiHomeDetail, GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail,
+    GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -31,7 +31,7 @@ use crate::window::clock::FiredTimers;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The selected row's identity: the Hero's actions name it.
 fn selected() -> GuiHomeRowIdFrame {
@@ -74,7 +74,7 @@ fn home(facts: GuiHomeHeroFrame) -> GuiHomeDetail {
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    detail: GuiHomeDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
@@ -117,12 +117,12 @@ fn home_hero_app(props: FixtureProps) -> Element {
 
 /// The context handles the root hands the test: the Library store and the
 /// Home detail the presses read.
-type FixtureHandles = (LibraryState, GuiHomeDetail);
+type FixtureHandles = (LibraryState, SectionRef<GuiLibraryDetail>);
 
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    detail: GuiHomeDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -215,7 +215,7 @@ fn built(facts: GuiHomeHeroFrame) -> Fixture {
             home_hero_app,
             FixtureProps {
                 sender,
-                detail: home(facts),
+                detail: SectionRef::new(GuiLibraryDetail::Home(home(facts))),
                 handle: Rc::clone(&handle),
             },
         ),

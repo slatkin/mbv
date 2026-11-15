@@ -12,17 +12,20 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiHomeDetail;
+use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_summary::LibraryHeroSummary;
+use crate::window::library::parts::library_home_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Home Hero (the `LibraryHomeHero` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHomeHeroProps {
     /// The carried Home content (design D12): the selected row and its Hero
-    /// facts.
-    pub detail: GuiHomeDetail,
+    /// facts, as the one handle every reader clones
+    /// (`share-gui-sections-by-rc` design D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Home action a button sends.
@@ -38,8 +41,13 @@ enum HomeAction {
 
 /// Send a Home command for the frame's selected row (design D12): the frame's
 /// selected row, never a position. The command sends only while the frame
-/// holds both the selection and a Hero.
-fn act(library: &LibraryState, action: HomeAction, detail: &GuiHomeDetail) {
+/// holds both the selection and a Hero. The handle is narrowed here, so the
+/// press reads the carried detail without the Hero cloning it per render
+/// (`share-gui-sections-by-rc` design D3).
+fn act(library: &LibraryState, action: HomeAction, detail: &SectionRef<GuiLibraryDetail>) {
+    let Some(detail) = library_home_detail(Some(detail)) else {
+        return;
+    };
     let (Some(selected), Some(_)) = (&detail.selected, &detail.hero) else {
         return;
     };
@@ -72,7 +80,12 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
     let queue_library = library.clone();
     let on_queue = Callback::new(move |()| act(&queue_library, HomeAction::Queue, &queue_detail));
 
-    let Some(hero) = props.detail.hero else {
+    // The Home part of the carried detail, narrowed from the handle in this
+    // body, and the Hero's facts, present exactly while the pane paints.
+    let Some(detail) = library_home_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(hero) = detail.hero.clone() else {
         return rsx! {};
     };
 

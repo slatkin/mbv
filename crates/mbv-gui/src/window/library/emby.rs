@@ -46,12 +46,12 @@ pub fn initial_emby_ui() -> EmbyUiState {
 }
 
 impl LibraryState {
-    /// The carried Emby content, or `None` while another destination holds
-    /// the window. The frame is the section's carried value; a keydown copies
-    /// none of it.
-    pub(super) fn emby_frame(&self) -> Option<GuiEmbyList> {
+    /// The Emby library index a command names, or `None` while another
+    /// destination holds the window. The frame is the section's carried
+    /// value; a keydown borrows it and copies only the index.
+    pub(super) fn emby_lib_idx(&self) -> Option<usize> {
         let list = self.sections.library_list.peek();
-        library_emby_list(list.as_ref()).cloned()
+        library_emby_list(list.as_deref()).map(|emby| emby.lib_idx)
     }
 
     /// The painted rows of the carried Emby content (row 8.1): the plain
@@ -61,7 +61,7 @@ impl LibraryState {
     #[must_use]
     pub fn emby_rows(&self) -> Arc<[EmbyListRow]> {
         let list = self.sections.library_list.peek();
-        let Some(frame) = library_emby_list(list.as_ref()) else {
+        let Some(frame) = library_emby_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
@@ -161,11 +161,11 @@ impl LibraryState {
         let EmbyListRow::Item(item) = row else {
             return;
         };
-        let Some(emby) = self.emby_frame() else {
+        let Some(lib_idx) = self.emby_lib_idx() else {
             return;
         };
         self.link.library(GuiLibraryCommand::EmbySelect {
-            lib_idx: emby.lib_idx,
+            lib_idx,
             row: item.row.id.clone(),
         });
         let mut ui = self.ui;
@@ -187,33 +187,33 @@ impl LibraryState {
     /// the core's folder-play rule expands a collection row. The row id is the
     /// item's stable Service id.
     pub fn play_emby_row(&self, row_id: &str) {
-        let Some(emby) = self.emby_frame() else {
+        let Some(lib_idx) = self.emby_lib_idx() else {
             return;
         };
         self.link.library(GuiLibraryCommand::EmbyPlay {
-            lib_idx: emby.lib_idx,
+            lib_idx,
             item_id: row_id.to_owned(),
         });
     }
 
     /// Play a row next (row 8.1): `n` on the cursor row.
     pub fn play_emby_row_next(&self, row_id: &str) {
-        let Some(emby) = self.emby_frame() else {
+        let Some(lib_idx) = self.emby_lib_idx() else {
             return;
         };
         self.link.library(GuiLibraryCommand::EmbyPlayNext {
-            lib_idx: emby.lib_idx,
+            lib_idx,
             item_id: row_id.to_owned(),
         });
     }
 
     /// Add a row to the queue's tail (row 8.1): `a` on the cursor row.
     pub fn queue_emby_row(&self, row_id: &str) {
-        let Some(emby) = self.emby_frame() else {
+        let Some(lib_idx) = self.emby_lib_idx() else {
             return;
         };
         self.link.library(GuiLibraryCommand::EmbyQueue {
-            lib_idx: emby.lib_idx,
+            lib_idx,
             item_id: row_id.to_owned(),
         });
     }
@@ -301,7 +301,8 @@ impl LibraryState {
     /// walk the pills, and the first of them with no pill focused takes the end
     /// it walks from.
     pub fn move_emby_pill_focus(&self, step: i32) {
-        let Some(emby) = self.emby_frame() else {
+        let list = self.sections.library_list.peek();
+        let Some(emby) = library_emby_list(list.as_deref()) else {
             return;
         };
         let pills: Vec<GuiEmbyFeedGroupFrame> =

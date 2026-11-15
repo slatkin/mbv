@@ -69,7 +69,7 @@ impl LibraryState {
     /// carried value; a keydown copies only the index.
     fn podcasts_lib_idx(&self) -> Option<usize> {
         let list = self.sections.library_list.peek();
-        library_podcasts_list(list.as_ref()).map(|podcasts| podcasts.lib_idx)
+        library_podcasts_list(list.as_deref()).map(|podcasts| podcasts.lib_idx)
     }
 
     /// The painted rows of the carried Podcasts content (design D12), narrowed
@@ -79,7 +79,7 @@ impl LibraryState {
     #[must_use]
     pub fn podcasts_rows(&self) -> Arc<[PodcastsItemRow]> {
         let list = self.sections.library_list.peek();
-        let Some(podcasts) = library_podcasts_list(list.as_ref()) else {
+        let Some(podcasts) = library_podcasts_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
@@ -292,7 +292,7 @@ impl LibraryState {
     /// the end it walks from.
     pub fn move_podcasts_pill_focus(&self, step: i32) {
         let list = self.sections.library_list.peek();
-        let Some(podcasts) = library_podcasts_list(list.as_ref()) else {
+        let Some(podcasts) = library_podcasts_list(list.as_deref()) else {
             return;
         };
         let pills: Vec<GuiPodcastPill> = podcasts

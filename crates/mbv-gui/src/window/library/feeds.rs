@@ -59,7 +59,7 @@ impl LibraryState {
     #[must_use]
     pub fn feeds_rows(&self) -> Arc<[FeedsItemRow]> {
         let list = self.sections.library_list.peek();
-        let Some(feeds) = library_feeds_list(list.as_ref()) else {
+        let Some(feeds) = library_feeds_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
@@ -263,7 +263,7 @@ impl LibraryState {
     /// the end it walks from.
     pub fn move_feeds_pill_focus(&self, step: i32) {
         let list = self.sections.library_list.peek();
-        let Some(feeds) = library_feeds_list(list.as_ref()) else {
+        let Some(feeds) = library_feeds_list(list.as_deref()) else {
             return;
         };
         let pills: Vec<GuiFeedPill> = feeds.pills.iter().map(|frame| frame.pill.clone()).collect();

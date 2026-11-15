@@ -55,7 +55,7 @@ use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, Times};
 use crate::window::resize::PanelWidthsStore;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 use crate::window::settings::state::SettingsState;
 
 /// The viewport the screens paint at: the wide arrangement's realistic size.
@@ -379,7 +379,7 @@ impl Fixture {
                     .attach
                     .set(Some(GuiAttachState::Mismatch("mbv 0.26.10".to_owned()))),
                 Screen::Queue | Screen::PanelArtboard | Screen::PanelFolded => {
-                    sections.queue.set(queue());
+                    sections.queue.set(SectionRef::new(queue()));
                     sections.summary.set(summary());
                     sections.playback.set(playing(GuiArtRef::Image {
                         src: "mbv-art://localhost/card/1".to_owned(),
@@ -390,7 +390,7 @@ impl Fixture {
                     });
                 }
                 Screen::QueuePlaceholder | Screen::PanelCompactStrip | Screen::PanelRail => {
-                    sections.queue.set(queue());
+                    sections.queue.set(SectionRef::new(queue()));
                     sections.summary.set(summary());
                     sections.playback.set(playing(GuiArtRef::Placeholder {
                         src: "mbv-art://localhost/card/1".to_owned(),

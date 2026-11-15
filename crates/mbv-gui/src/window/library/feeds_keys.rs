@@ -39,7 +39,7 @@ impl FeedsFrame {
     /// rows.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
-        let feeds = library_feeds_list(list.as_ref())?;
+        let feeds = library_feeds_list(list.as_deref())?;
         Some(Self {
             pills: feeds.pills.iter().map(|frame| frame.pill.clone()).collect(),
         })
@@ -111,12 +111,12 @@ impl PanelKeys for FeedsKeys<'_> {
 
     fn has_hero(&self, _frame: &FeedsFrame) -> bool {
         let detail = self.state.sections.library_detail.peek();
-        library_feeds_detail(detail.as_ref()).is_some_and(|detail| detail.hero.is_some())
+        library_feeds_detail(detail.as_deref()).is_some_and(|detail| detail.hero.is_some())
     }
 
     fn selected_item_id(&self, _frame: &FeedsFrame) -> Option<String> {
         let detail = self.state.sections.library_detail.peek();
-        library_feeds_detail(detail.as_ref()).and_then(|detail| detail.selected.clone())
+        library_feeds_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
     fn cursor_row(&self) -> Option<FeedsItemRow> {

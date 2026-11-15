@@ -724,7 +724,10 @@ call per destination, so the three slots share one build, and each slot keeps
 its own compare. A build that matches the slot's last built value sends nothing.
 
 The window keeps one signal per section: `libraryList`, `libraryDetail`, and
-`rowMenu` in `src/window/sections.rs`. `Sections::apply_batch` writes a signal only
+`rowMenu` in `src/window/sections.rs`. The four large sections (`library_list`,
+`library_detail`, `queue`, and `settings`) are held as `SectionRef` — a shared
+`Rc` handle — so a section update costs one copy of its content.
+`Sections::apply_batch` writes a signal only
 when the batch carries a revision the window does not hold. `src/window/components/library_panel.rs`
 narrows the list and the detail through `library_pair`
 (`src/window/library/parts.rs`). The pair narrows only when both `kind` tags

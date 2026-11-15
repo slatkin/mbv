@@ -38,7 +38,7 @@ impl AudiobooksFrame {
     /// destination holds the window.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
-        library_audiobooks_list(list.as_ref()).map(|audiobooks| Self {
+        library_audiobooks_list(list.as_deref()).map(|audiobooks| Self {
             lib_idx: audiobooks.lib_idx,
         })
     }
@@ -63,12 +63,12 @@ impl PanelKeys for AudiobooksKeys<'_> {
 
     fn has_hero(&self, _frame: &AudiobooksFrame) -> bool {
         let detail = self.state.sections.library_detail.peek();
-        library_audiobooks_detail(detail.as_ref()).is_some_and(|detail| detail.hero.is_some())
+        library_audiobooks_detail(detail.as_deref()).is_some_and(|detail| detail.hero.is_some())
     }
 
     fn selected_item_id(&self, _frame: &AudiobooksFrame) -> Option<String> {
         let detail = self.state.sections.library_detail.peek();
-        library_audiobooks_detail(detail.as_ref()).and_then(|detail| detail.selected.clone())
+        library_audiobooks_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
     fn cursor_row(&self) -> Option<AudiobooksItemRow> {
@@ -107,7 +107,7 @@ impl PanelKeys for AudiobooksKeys<'_> {
 /// have no play-next.
 fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> KeyOutcome {
     let detail_section = state.sections.library_detail.peek();
-    let Some(detail) = library_audiobooks_detail(detail_section.as_ref()) else {
+    let Some(detail) = library_audiobooks_detail(detail_section.as_deref()) else {
         return KeyOutcome::Core;
     };
     if let Some(mv) = cursor_move(&key.key) {

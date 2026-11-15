@@ -42,7 +42,7 @@ impl EmbyFrame {
     /// destination holds the window.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
-        let emby = library_emby_list(list.as_ref())?;
+        let emby = library_emby_list(list.as_deref())?;
         Some(Self {
             feed_group: emby.feed_group,
             pills: emby.pills.iter().map(|pill| pill.group.clone()).collect(),
@@ -115,12 +115,12 @@ impl PanelKeys for EmbyKeys<'_> {
 
     fn has_hero(&self, _frame: &EmbyFrame) -> bool {
         let detail = self.state.sections.library_detail.peek();
-        library_emby_detail(detail.as_ref()).is_some_and(|detail| detail.hero.is_some())
+        library_emby_detail(detail.as_deref()).is_some_and(|detail| detail.hero.is_some())
     }
 
     fn selected_item_id(&self, _frame: &EmbyFrame) -> Option<String> {
         let detail = self.state.sections.library_detail.peek();
-        library_emby_detail(detail.as_ref()).and_then(|detail| detail.selected.clone())
+        library_emby_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
     fn cursor_row(&self) -> Option<EmbyItemRow> {

@@ -90,7 +90,7 @@ impl LibraryState {
     /// carried value; a keydown copies only the index.
     fn shows_lib_idx(&self) -> Option<usize> {
         let list = self.sections.library_list.peek();
-        library_shows_list(list.as_ref()).map(|shows| shows.lib_idx)
+        library_shows_list(list.as_deref()).map(|shows| shows.lib_idx)
     }
 
     /// The painted rows of the carried Shows content (design D14), narrowed by
@@ -100,7 +100,7 @@ impl LibraryState {
     #[must_use]
     pub fn shows_rows(&self) -> Arc<[ShowsListRow]> {
         let list = self.sections.library_list.peek();
-        let Some(shows) = library_shows_list(list.as_ref()) else {
+        let Some(shows) = library_shows_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
@@ -406,7 +406,7 @@ impl LibraryState {
     /// the end it walks from.
     pub fn move_shows_pill_focus(&self, step: i32) {
         let list = self.sections.library_list.peek();
-        let Some(shows) = library_shows_list(list.as_ref()) else {
+        let Some(shows) = library_shows_list(list.as_deref()) else {
             return;
         };
         let pills: Vec<GuiShowsModeFrame> = shows.pills.iter().map(|pill| pill.mode).collect();

@@ -33,9 +33,9 @@ use super::{
     shuffle_artist,
 };
 use crate::bridge::frame::library::{
-    GuiArtistKey, GuiDestinationList, GuiLibraryList, GuiMusicAlbumFrame, GuiMusicArtistFrame,
-    GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicMenuEntryFrame, GuiMusicTrackFrame,
-    GuiMusicTrackTotalFrame,
+    GuiArtistKey, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiMusicAlbumFrame,
+    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicMenuEntryFrame,
+    GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -44,7 +44,7 @@ use crate::window::clock::{Clock, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The layout rules the fixture resolves with, in place of the app
 /// stylesheet a real window loads: the handful of utilities the Hero tree
@@ -80,7 +80,7 @@ const FIXTURE_CSS: &str = concat!(
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     artists: Vec<GuiMusicArtistFrame>,
-    detail: GuiMusicDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
@@ -120,18 +120,20 @@ fn hero_app(props: FixtureProps) -> Element {
     // The carried Music content, as the core's batch would: the union the
     // shuffle reads, under the Music destination's own list.
     let mut sections = state.sections.clone();
-    sections.library_list.set(Some(GuiLibraryList {
-        tabs: Vec::new(),
-        current_tab: None,
-        destination: GuiDestinationList::Music(GuiMusicList {
-            lib_idx: 0,
-            pills: Vec::new(),
-            collection_names: vec!["Hip-Hop".to_owned()],
-            loading: false,
-            failure: None,
-            artists,
-        }),
-    }));
+    sections
+        .library_list
+        .set(Some(SectionRef::new(GuiLibraryList {
+            tabs: Vec::new(),
+            current_tab: None,
+            destination: GuiDestinationList::Music(GuiMusicList {
+                lib_idx: 0,
+                pills: Vec::new(),
+                collection_names: vec!["Hip-Hop".to_owned()],
+                loading: false,
+                failure: None,
+                artists,
+            }),
+        })));
     provide_context(state.clone());
     handle.borrow_mut().replace((state, epoch));
     rsx! {
@@ -341,7 +343,7 @@ fn built(artists: Vec<GuiMusicArtistFrame>, detail: GuiMusicDetail) -> Fixture {
             FixtureProps {
                 sender,
                 artists,
-                detail,
+                detail: SectionRef::new(GuiLibraryDetail::Music(detail)),
                 handle: Rc::clone(&handle),
             },
         ),

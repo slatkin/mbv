@@ -6,6 +6,9 @@
 //! fixture batches in one effect and paints the store values as text, so no
 //! test opens a window or sleeps.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
@@ -73,6 +76,23 @@ fn sections_app(batches: Vec<GuiSectionBatch>) -> Element {
     rsx! {
         div { "cursor={cursor:?} remaining={remaining} owner_live={owner_live}" }
     }
+}
+
+/// The root that hands its stores to the test, so the test reads the same
+/// signals a batch writes.
+fn stores_app(props: StoreProps) -> Element {
+    let sections = use_hook(Sections::new);
+    let stores = props.stores;
+    stores.borrow_mut().replace(sections);
+    rsx! {
+        div {}
+    }
+}
+
+/// The props of [`stores_app`]: where the root puts its stores.
+#[derive(Clone)]
+struct StoreProps {
+    stores: Rc<RefCell<Option<Sections>>>,
 }
 
 /// A document whose root applied `batches`, and the text it paints.
@@ -147,6 +167,51 @@ fn a_batch_writes_all_its_sections_in_one_pass() {
     assert!(text.contains("cursor=Some(2)"), "{text}");
     assert!(text.contains("remaining=3"), "{text}");
     assert!(text.contains("owner_live=true"), "{text}");
+}
+
+/// Contract (`share-gui-sections-by-rc` task 1.3, the spec's "A repaint
+/// copies no section content"): a batch that does not name a section leaves
+/// that section's handle as it was, so the read before and the read after it
+/// are pointer-equal — no repaint copies the section's content. A batch that
+/// carries a new revision of the section writes a new handle.
+#[test]
+fn a_batch_that_does_not_name_the_queue_keeps_its_handle() {
+    let stores = Rc::new(RefCell::new(None));
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new_with_props(
+            stores_app,
+            StoreProps {
+                stores: Rc::clone(&stores),
+            },
+        ),
+        DocumentConfig::default(),
+    );
+    doc.initial_build();
+    poll_until_idle(&mut doc);
+    let sections = stores
+        .borrow()
+        .clone()
+        .expect("the root provides its stores");
+    let mut applied = sections.clone();
+    doc.vdom
+        .in_runtime(move || applied.apply_batch(&summary_batch(7, 3)));
+    let before = sections.queue.peek().clone();
+    let mut applied = sections.clone();
+    doc.vdom
+        .in_runtime(move || applied.apply_batch(&summary_batch(8, 5)));
+    let after = sections.queue.peek().clone();
+    assert_eq!(
+        before, after,
+        "a batch that named only the summary rebuilt the queue handle"
+    );
+    let mut applied = sections.clone();
+    doc.vdom
+        .in_runtime(move || applied.apply_batch(&queue_batch(1, Some(2))));
+    assert_ne!(
+        after,
+        sections.queue.peek().clone(),
+        "a new queue revision kept the old queue handle"
+    );
 }
 
 /// Contract 3 (task 3.1): a batch carries only the sections that changed —

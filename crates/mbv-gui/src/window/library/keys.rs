@@ -377,7 +377,7 @@ fn route_panel_key(
         // every one of them (design D2, D10).
         None => return KeyOutcome::Core,
     }
-    let Some(music) = super::parts::library_music_list(list.as_ref()) else {
+    let Some(music) = super::parts::library_music_list(list.as_deref()) else {
         return KeyOutcome::Core;
     };
     route_music_panel_key(state, key, ui, music)
@@ -493,7 +493,7 @@ pub fn route_library_key(
     // D2, D10): sections that carry no Library list take no Library key,
     // even while the window still holds the content of an earlier frame. The
     // content names the active destination's section (design D12).
-    if !LibraryState::library_shown(sections.library_list.peek().as_ref()) {
+    if !LibraryState::library_shown(sections.library_list.peek().as_deref()) {
         return KeyOutcome::Core;
     }
     // The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes

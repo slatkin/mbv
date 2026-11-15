@@ -38,7 +38,7 @@ impl LibraryState {
     pub fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
         let list = self.sections.library_list.peek();
         let artists =
-            library_music_list(list.as_ref()).map_or(&[][..], |music| music.artists.as_slice());
+            library_music_list(list.as_deref()).map_or(&[][..], |music| music.artists.as_slice());
         self.rows_memo.rows(
             self.sections.library_list_revision(),
             artists,

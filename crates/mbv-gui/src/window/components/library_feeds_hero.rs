@@ -16,7 +16,9 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiEntryRowFrame, GuiFeedsDetail, GuiHomeRowStateFrame};
+use crate::bridge::frame::library::{
+    GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
@@ -24,8 +26,10 @@ use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow, WorkspaceRowState,
 };
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Feeds Hero (the `LibraryFeedsHero` props, narrowed
 /// to what the Hero reads): the carried Feeds rows — the active pill's rows,
@@ -33,11 +37,13 @@ use crate::window::library::state::LibraryState;
 /// Hero facts.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryFeedsHeroProps {
-    /// The active pill's entry rows (design D12, row 11.1): the list band
-    /// paints the ones that belong to the Hero's feed.
-    pub rows: Vec<GuiEntryRowFrame>,
+    /// The active pill's entry rows (design D12, row 11.1): the carried list,
+    /// as the one handle every reader clones, which the list band narrows to
+    /// the rows that belong to the Hero's feed (`share-gui-sections-by-rc`
+    /// design D3).
+    pub list: SectionRef<GuiLibraryList>,
     /// The selected entry's Hero facts and the selection the actions name.
-    pub detail: GuiFeedsDetail,
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Feeds action a button sends.
@@ -50,9 +56,14 @@ enum FeedsAction {
 }
 
 /// Send a Feeds command for the frame's selected entry (design D12, row
-/// 11.1): the row the frame painted, never a position. The command sends only
-/// while the frame holds both the selection and a Hero.
-fn act(library: &LibraryState, action: FeedsAction, detail: &GuiFeedsDetail) {
+/// 11.1): the row the frame painted, never a position. The command sends
+/// only while the frame holds both the selection and a Hero. The handle is
+/// narrowed here, so the press reads the carried detail without the Hero
+/// cloning it per render (`share-gui-sections-by-rc` design D3).
+fn act(library: &LibraryState, action: FeedsAction, detail: &SectionRef<GuiLibraryDetail>) {
+    let Some(detail) = library_feeds_detail(Some(detail)) else {
+        return;
+    };
     let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
         return;
     };
@@ -82,8 +93,12 @@ fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
 pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The Hero's facts, present exactly while the pane paints.
-    let Some(ref hero) = props.detail.hero else {
+    // The Feeds part of the carried detail, narrowed from the handle in this
+    // body, and the Hero's facts, present exactly while the pane paints.
+    let Some(detail) = library_feeds_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(ref hero) = detail.hero else {
         return rsx! {};
     };
 
@@ -102,11 +117,14 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
 
     // The feed's entries, newest first, as the Workspace table paints them:
     // the active pill's rows that belong to the Hero's feed, the selected
-    // entry marked by the table's cursor. A date takes the time cell.
+    // entry marked by the table's cursor. A date takes the time cell. The
+    // rows are narrowed from the list handle, so a Hero repaint never clones
+    // them (`share-gui-sections-by-rc` design D3).
+    let rows: &[GuiEntryRowFrame] =
+        library_feeds_list(Some(&props.list)).map_or(&[][..], |list| list.rows.as_slice());
     let entry_rows: Vec<WorkspaceRow> = match hero.parent.as_deref() {
         None => Vec::new(),
-        Some(parent) => props
-            .rows
+        Some(parent) => rows
             .iter()
             .filter(|row| row.subtitle.as_deref() == Some(parent))
             .enumerate()
@@ -177,7 +195,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                     hook: "feeds-entry",
                     noun: "Entry",
                     rows: entry_rows,
-                    cursor: props.detail.selected.clone(),
+                    cursor: detail.selected.clone(),
                     actions: row_actions,
                     on_press,
                     on_play,

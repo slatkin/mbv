@@ -24,15 +24,15 @@ use rstest::rstest;
 
 use super::{EmbyAction, LibraryEmbyHero, act, open_imdb};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiMetaKindFrame,
-    GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiLibraryDetail,
+    GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The library index the Emby commands name.
 const LIB_IDX: usize = 3;
@@ -76,13 +76,13 @@ fn detail(facts: Option<GuiEmbyHeroFrame>) -> GuiEmbyDetail {
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    detail: GuiEmbyDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The context handles the root hands the test: the Library store and the
 /// Emby detail the presses read.
-type FixtureHandles = (LibraryState, GuiEmbyDetail);
+type FixtureHandles = (LibraryState, SectionRef<GuiLibraryDetail>);
 
 /// The root: provides the Library store and paints the Hero, as the panel
 /// composes it.
@@ -123,7 +123,7 @@ fn emby_hero_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    detail: GuiEmbyDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -221,7 +221,7 @@ fn built(facts: Option<GuiEmbyHeroFrame>) -> Fixture {
             emby_hero_app,
             FixtureProps {
                 sender,
-                detail: detail(facts),
+                detail: SectionRef::new(GuiLibraryDetail::Emby(detail(facts))),
                 handle: Rc::clone(&handle),
             },
         ),
