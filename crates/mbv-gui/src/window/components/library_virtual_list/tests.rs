@@ -24,13 +24,18 @@ use crate::window::library::scroll::ListScroll;
 type FixtureHandles = (LayoutEpoch, Signal<f32>, Rc<RefCell<Vec<String>>>);
 
 /// The layout rules the fixture resolves with, in place of the app
-/// stylesheet a real window loads: the shell's utilities, and the fixed
-/// 100 px scroller box that makes the 300 px of rows scrollable.
+/// stylesheet a real window loads: the shell's utilities, the fixed
+/// 100 px scroller box that makes the 300 px of rows scrollable, and the
+/// fixed 30 px row box. Without the row height a bare text row measures by
+/// font metrics: the CI container has no fonts, so the rows lay out 0 px
+/// tall, the content shrinks to the spacers, and the scroller clamps the
+/// store's offset.
 const FIXTURE_CSS: &str = concat!(
     ".flex { display: flex; }",
     ".min-h-0 { min-height: 0; }",
     ".flex-1 { flex: 1 1 0%; }",
     "[data-library-list] { height: 100px; }",
+    "[data-row] { height: 30px; }",
 );
 
 /// One fixture row: `height` tall at `top`, named `id`.
