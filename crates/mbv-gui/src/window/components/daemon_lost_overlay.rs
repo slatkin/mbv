@@ -19,8 +19,9 @@ use std::collections::HashMap;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::overlay::{GuiConfirmButton, GuiConfirmButtonTone};
+use crate::bridge::frame::overlay::GuiConfirmButton;
 use crate::bridge::layout::{DaemonLostTargetId, RegionTarget};
+use crate::window::components::confirm_overlay::{BUTTON_FILL, button_color};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
@@ -51,19 +52,6 @@ impl std::fmt::Debug for DaemonLostOverlayProps {
             .field("restart_error", &self.restart_error)
             .field("buttons", &self.buttons)
             .finish()
-    }
-}
-
-/// The dialog's button fill: the canvas's recessed dark fill for every tone.
-const BUTTON_FILL: &str = "var(--canvas-well)";
-
-/// The dialog's button text colour: the tone's token — the affirmative pill
-/// reads as accent text on the dim surface, never as the picked row's fill
-/// (the dark-on-green contrast bug the test guards).
-fn button_color(tone: GuiConfirmButtonTone) -> &'static str {
-    match tone {
-        GuiConfirmButtonTone::Affirmative => "var(--canvas-accent)",
-        GuiConfirmButtonTone::Cancel => "var(--canvas-destructive)",
     }
 }
 

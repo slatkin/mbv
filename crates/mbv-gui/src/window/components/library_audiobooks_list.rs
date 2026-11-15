@@ -23,7 +23,9 @@ use std::cell::RefCell;
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryTrailPart, row_background,
+};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -36,19 +38,6 @@ use crate::window::library::audiobooks_workspace::reset_abs_chapter_cursor;
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
-
-/// A row's painted fill (row 9.1): the cursor row's focus fill, and the
-/// core's selected book the raised fill while the cursor sits elsewhere —
-/// the selection is what the Hero shows, so its row stays marked.
-fn row_background(cursor_row: bool, selected_row: bool) -> Option<String> {
-    if cursor_row {
-        Some(canvas_var("selected"))
-    } else if selected_row {
-        Some(canvas_var("library-raise"))
-    } else {
-        None
-    }
-}
 
 /// One painted row of the list (the Svelte row snippet): the letter heading
 /// or the book row.

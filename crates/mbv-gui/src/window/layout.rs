@@ -274,13 +274,13 @@ pub fn use_layout_reporter() -> LayoutReporter {
             regions: Vec::new(),
             container_size: container_size.cloned(),
         };
-        for (_, contribution) in contributions.cloned() {
-            report.lists.extend(contribution.lists);
-            report.regions.extend(contribution.regions);
+        for (_, contribution) in contributions.read().iter() {
+            report.lists.extend_from_slice(&contribution.lists);
+            report.regions.extend_from_slice(&contribution.regions);
         }
         // A report that equals the last one sends nothing (D9): the core's
         // hit map stays the one the last layout painted.
-        if last_sent.cloned().as_ref() != Some(&report) {
+        if last_sent.peek().as_ref() != Some(&report) {
             link.layout(report.clone());
             last_sent.set(Some(report));
         }
@@ -312,11 +312,16 @@ impl LayoutReporter {
     /// surface's life. A contribution identical to the last one reported under
     /// the key is a no-op.
     pub fn report_layout(&mut self, key: LayoutKey, contribution: LayoutContribution) {
+        let unchanged = self
+            .contributions
+            .peek()
+            .iter()
+            .any(|(held, last)| *held == key && *last == contribution);
+        if unchanged {
+            return;
+        }
         let mut contributions = self.contributions.write();
         if let Some(held) = contributions.iter_mut().find(|(held, _)| *held == key) {
-            if held.1 == contribution {
-                return;
-            }
             // A re-set updates in place: the TypeScript `Map`'s `set` keeps
             // the key's original insertion position, so the surface keeps
             // its paint layer in the merged report.

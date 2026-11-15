@@ -27,7 +27,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiShowsList, GuiShowsModeFrame};
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
+use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart, mark};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -115,14 +115,6 @@ fn row_background(
         return Some(canvas_var("selected"));
     }
     is_selected_row(row, selected).then(|| canvas_var("library-raise"))
-}
-
-/// The mark a row paints only while it holds the state (the Svelte
-/// `undefined` values painted nothing).
-fn mark(name: &'static str, on: bool) -> Vec<Attribute> {
-    on.then(|| Attribute::new(name, "", None, false))
-        .into_iter()
-        .collect()
 }
 
 /// The open node's caret: the Svelte chevron svg, whose rotation names the

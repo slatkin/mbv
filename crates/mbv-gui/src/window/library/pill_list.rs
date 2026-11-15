@@ -189,24 +189,3 @@ pub fn move_pill_focus<Pill: Clone + 'static, Focus: Clone + 'static>(
         ui.with_mut(|state| state.focused_pill = Some(focus_of(&pill)));
     }
 }
-
-/// Ask for the focused pill to be selected: Space and Enter request it (design
-/// D6, D12).
-pub fn request_pill_select<Pill: 'static, Focus: 'static>(
-    ui: &mut Signal<PillListUiState<Pill, Focus>>,
-    pill: Pill,
-) {
-    ui.with_mut(|state| state.pill_select = Some(pill));
-}
-
-/// Consume the keys' pill request, or `None` while none is pending: the intent
-/// is consumed here, so one key sends one command.
-pub fn take_pill_select<Pill: Clone + 'static, Focus: 'static>(
-    ui: &mut Signal<PillListUiState<Pill, Focus>>,
-) -> Option<Pill> {
-    let pill = ui.peek().pill_select.clone();
-    if pill.is_some() {
-        ui.with_mut(|state| state.pill_select = None);
-    }
-    pill
-}

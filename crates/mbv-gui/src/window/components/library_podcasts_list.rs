@@ -15,33 +15,16 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiHomeRowStateFrame;
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryTrailPart, name_color, row_background,
+};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
+use crate::window::library::shows_workspace::episode_progress;
 use crate::window::library::state::LibraryState;
-use crate::window::theme::canvas_var;
-
-/// An episode row's title colour: the canvas's text tone, dimmed on a played
-/// row (design D12), as a Home item row.
-fn name_color(state: &GuiHomeRowStateFrame) -> String {
-    if *state == GuiHomeRowStateFrame::Played {
-        canvas_var("muted")
-    } else {
-        canvas_var("text")
-    }
-}
-
-/// The resume percent an active episode row paints, or `None`.
-fn row_progress(state: &GuiHomeRowStateFrame) -> Option<u8> {
-    match state {
-        GuiHomeRowStateFrame::Active { progress } => *progress,
-        _ => None,
-    }
-}
 
 /// One painted row of the flat list (the Svelte row snippet): the episode
 /// row.
@@ -53,13 +36,7 @@ fn paint_podcasts_row(
 ) -> Element {
     let cursor_row = Some(row.id.as_str()) == cursor;
     let selected_row = Some(row.id.as_str()) == selected;
-    let background = if cursor_row {
-        Some(canvas_var("selected"))
-    } else if selected_row {
-        Some(canvas_var("library-raise"))
-    } else {
-        None
-    };
+    let background = row_background(cursor_row, selected_row);
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
@@ -80,7 +57,7 @@ fn paint_podcasts_row(
             background,
             cursor: cursor_row,
             selected: selected_row,
-            progress: row_progress(&row.row.state).map(f32::from),
+            progress: episode_progress(&row.row.state).map(f32::from),
             on_press: Callback::new(move |()| press_library.press_podcasts_row(&press_row)),
             on_play: Callback::new(move |()| play_library.play_podcasts_row(&play_id)),
             on_context: Some(Callback::new(

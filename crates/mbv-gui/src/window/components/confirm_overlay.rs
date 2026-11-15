@@ -37,12 +37,12 @@ impl std::fmt::Debug for ConfirmOverlayProps {
     }
 }
 
-/// The modal's button fill: the canvas's recessed dark fill for every tone.
-const BUTTON_FILL: &str = "var(--canvas-well)";
+/// The modal and dialog button fill: the canvas.s recessed dark fill for every tone.
+pub(super) const BUTTON_FILL: &str = "var(--canvas-well)";
 
 /// The modal's button text colour: the tone's token — the affirmative pill
 /// reads as accent text on the dim surface, never as the picked row's fill.
-fn button_color(tone: GuiConfirmButtonTone) -> &'static str {
+pub(super) fn button_color(tone: GuiConfirmButtonTone) -> &'static str {
     match tone {
         GuiConfirmButtonTone::Affirmative => "var(--canvas-accent)",
         GuiConfirmButtonTone::Cancel => "var(--canvas-destructive)",

@@ -21,6 +21,7 @@ use dioxus_native::prelude::*;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{GuiHomeRowIdFrame, GuiHomeRowStateFrame};
 use crate::window::components::art_image::ArtImage;
+use crate::window::components::library_item_row::{mark, name_color};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_list_notice::LibraryListNotice;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -48,24 +49,6 @@ fn art_kind(art: &GuiArtRef) -> &'static str {
         GuiArtRef::Image { .. } => "image",
         GuiArtRef::Placeholder { .. } => "placeholder",
         GuiArtRef::Loading => "loading",
-    }
-}
-
-/// The mark a row paints only while it holds the state (the Svelte
-/// `undefined` values painted nothing).
-fn mark(name: &'static str, on: bool) -> Vec<Attribute> {
-    on.then(|| Attribute::new(name, "", None, false))
-        .into_iter()
-        .collect()
-}
-
-/// An item row's name colour: the canvas's text tone, dimmed on a played
-/// row (design D12).
-fn name_color(state: &GuiHomeRowStateFrame) -> String {
-    if *state == GuiHomeRowStateFrame::Played {
-        canvas_var("muted")
-    } else {
-        canvas_var("text")
     }
 }
 

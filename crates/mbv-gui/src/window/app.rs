@@ -358,11 +358,11 @@ pub fn App() -> Element {
     // (design D4): the dividers and the arrangement read one resolution.
     let connected = sections.connected.cloned();
     let attach = sections.attach.cloned();
-    let settings = sections.settings.cloned();
+    let settings_open = sections.settings.read().is_some();
     let overlay = sections.overlay.cloned();
     let focus = sections.focus.cloned();
     let panel = sections.panel.cloned();
-    let library_list = sections.library_list.cloned();
+    let has_library_list = sections.library_list.read().is_some();
     let container_size = container.cloned();
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
     let arrangement = library_arrangement(container_size, widths.queue);
@@ -377,7 +377,7 @@ pub fn App() -> Element {
     // window holds the active destination's content, whose painters the
     // panel mounts. The key router gates on the same fact. (`libraryShown`
     // of `lib/library/state.ts`; its port lands with task 6.1.)
-    let panel_shows = library_list.is_some();
+    let panel_shows = has_library_list;
     let queue_visible = !panel_shows || arrangement != GuiArrangement::Mini || queue_focused;
     let library_visible = panel_shows && (arrangement != GuiArrangement::Mini || !queue_focused);
     let two_columns = queue_visible && library_visible;
@@ -472,7 +472,7 @@ pub fn App() -> Element {
                     "data-arrangement": arrangement.name(),
                     style: "background: {queue_canvas};",
                     onmounted: move |event| container_mounted.set(Some(event)),
-                    if settings.is_some() {
+                    if settings_open {
                         // The Settings screen replaces the two panels while
                         // its section is present (add-gui-settings-screen
                         // design D11): no player panel, queue, or Library
@@ -519,7 +519,7 @@ pub fn App() -> Element {
                                 },
                             }
                         }
-                        if library_visible && library_list.is_some() {
+                        if library_visible && has_library_list {
                             LibraryPanel {
                                 arrangement,
                                 list_width: widths.list,

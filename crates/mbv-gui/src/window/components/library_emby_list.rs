@@ -16,7 +16,9 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEmbyRowKindFrame;
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
+use crate::window::components::library_item_row::{
+    LibraryItemRow, LibraryTrailPart, row_background,
+};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -32,19 +34,6 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
     match kind {
         GuiEmbyRowKindFrame::Collection => "collection",
         GuiEmbyRowKindFrame::Media => "media",
-    }
-}
-
-/// A row's painted fill (row 8.1): the cursor row's focus fill, and the
-/// core's selected row the raised fill while the cursor sits elsewhere — the
-/// selection is what the Hero shows, so its row stays marked.
-fn row_background(cursor_row: bool, selected_row: bool) -> Option<String> {
-    if cursor_row {
-        Some(canvas_var("selected"))
-    } else if selected_row {
-        Some(canvas_var("library-raise"))
-    } else {
-        None
     }
 }
 

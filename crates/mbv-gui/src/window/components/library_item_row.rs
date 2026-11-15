@@ -13,8 +13,10 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiHomeRowStateFrame;
 use crate::window::components::library_attr::library_attr;
 use crate::window::input::f32_from_f64;
+use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The trailing text's hook part: the date gutter or the duration.
@@ -205,4 +207,38 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             }
         }
     }
+}
+
+/// A row's painted fill: the cursor row's focus fill, and the core's selected
+/// row the raised fill while the cursor sits elsewhere — the selection is what
+/// the Hero shows, so its row stays marked.
+#[must_use]
+pub fn row_background(cursor_row: bool, selected_row: bool) -> Option<String> {
+    if cursor_row {
+        Some(canvas_var("selected"))
+    } else if selected_row {
+        Some(canvas_var("library-raise"))
+    } else {
+        None
+    }
+}
+
+/// An item row's title colour: the canvas's text tone, dimmed on a played row
+/// (design D12).
+#[must_use]
+pub fn name_color(state: &GuiHomeRowStateFrame) -> String {
+    if *state == GuiHomeRowStateFrame::Played {
+        canvas_var("muted")
+    } else {
+        canvas_var("text")
+    }
+}
+
+/// The mark a row paints only while it holds the state (the Svelte
+/// `undefined` values painted nothing).
+#[must_use]
+pub fn mark(name: &'static str, on: bool) -> Vec<Attribute> {
+    on.then(|| Attribute::new(name, "", None, false))
+        .into_iter()
+        .collect()
 }
