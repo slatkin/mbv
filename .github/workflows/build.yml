@@ -468,6 +468,9 @@ jobs:
       - name: Lint front end
         run: make ui-lint
 
+      - name: Check front end format
+        run: make ui-format-check
+
       - name: Test front end
         run: make ui-test
 
