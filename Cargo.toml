@@ -142,6 +142,12 @@ debug = 1
 [profile.dev]
 debug = "line-tables-only"
 
+# Dependencies carry no debuginfo: the workspace crates keep their line tables,
+# and a panic inside a dependency still names its function from the symbol
+# table. Line tables alone left `mbv-gui` at 406 MB, 60% of it DWARF.
+[profile.dev.package."*"]
+debug = false
+
 # The GUI's render stack at the debug profile's opt-level 0 makes every resize
 # frame pay unoptimized restyle, layout, text shaping, scene building, and
 # raster encoding on the event-loop thread, which is what stretches the stale
