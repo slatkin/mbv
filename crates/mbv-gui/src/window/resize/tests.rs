@@ -17,8 +17,8 @@ use mbv_config::GuiPanelWidths;
 use rstest::rstest;
 
 use super::{
-    DIVIDER_WIDTH_PX, DraggedWidths, LIBRARY_LIST_DEFAULT_WIDTH_PX, LIBRARY_LIST_MIN_WIDTH_PX,
-    PanelWidthsStore, WidthsSaver, clamp_list_width, clamp_queue_width, panel_widths,
+    DraggedWidths, LIBRARY_LIST_DEFAULT_WIDTH_PX, LIBRARY_LIST_MIN_WIDTH_PX, PanelWidthsStore,
+    WidthsSaver, clamp_list_width, clamp_queue_width, panel_widths,
 };
 use crate::bridge::frame::GuiPanelToggles;
 use crate::window::arrangement::{GuiArrangement, library_arrangement};
@@ -68,7 +68,8 @@ fn both_dividers_start_at_their_defaults() {
         LIBRARY_LIST_DEFAULT_WIDTH_PX
     );
     assert_eq!(widths.list, LIBRARY_LIST_DEFAULT_WIDTH_PX);
-    assert_eq!(widths.library_column, 1200.0 - DIVIDER_WIDTH_PX);
+    // The divider overlays the seam, so the columns meet directly.
+    assert_eq!(widths.library_column, 1200.0);
 }
 
 /// Contract 2: the Queue column stays between its canvas width and the width
@@ -77,7 +78,7 @@ fn both_dividers_start_at_their_defaults() {
 #[test]
 fn the_queue_column_stays_between_its_canvas_width_and_the_mini_threshold() {
     assert_eq!(clamp_queue_width(100.0, 1600.0), 400.0);
-    assert_eq!(clamp_queue_width(1400.0, 1600.0), 1120.0 - DIVIDER_WIDTH_PX);
+    assert_eq!(clamp_queue_width(1400.0, 1600.0), 1120.0);
 
     let mut session = dragged(None, None);
     session.queue = Some(clamp_queue_width(500.0, 1600.0));
@@ -89,8 +90,8 @@ fn the_queue_column_stays_between_its_canvas_width_and_the_mini_threshold() {
 #[test]
 fn the_list_column_stays_between_the_canvas_index_and_the_heros_minimum() {
     assert_eq!(clamp_list_width(100.0, 1200.0), LIBRARY_LIST_MIN_WIDTH_PX);
-    // 1200 px less the Hero's 320 px minimum and the 6 px divider.
-    assert_eq!(clamp_list_width(900.0, 1200.0), 874.0);
+    // 1200 px less the Hero's 320 px minimum.
+    assert_eq!(clamp_list_width(900.0, 1200.0), 880.0);
 
     let mut session = dragged(None, None);
     session.list = Some(clamp_list_width(500.0, 1200.0));
@@ -98,8 +99,7 @@ fn the_list_column_stays_between_the_canvas_index_and_the_heros_minimum() {
 }
 
 /// Contract 4: the collapsed rail keeps its width and hands the rest to the
-/// Library column — the rail paints no divider, so its 6 px stay in the
-/// column.
+/// Library column.
 #[test]
 fn the_collapsed_rail_keeps_its_width_and_hands_the_rest_to_the_library_column() {
     let session = dragged(Some(500.0), None);
@@ -118,7 +118,7 @@ fn a_stored_width_is_clamped_again_when_the_window_narrows() {
 
     let widths = panel_widths(container(1200.0, 900.0), &expanded(), &session);
 
-    assert_eq!(widths.queue, 720.0 - DIVIDER_WIDTH_PX);
+    assert_eq!(widths.queue, 720.0);
     assert_eq!(widths.library_column, 480.0);
 }
 
@@ -127,10 +127,7 @@ fn a_stored_width_is_clamped_again_when_the_window_narrows() {
 /// threshold instead of leaving the paint and the classification apart.
 #[test]
 fn the_arrangement_classifies_the_width_a_drag_paints() {
-    let session = dragged(
-        Some(clamp_queue_width(1120.0 - DIVIDER_WIDTH_PX, 1600.0)),
-        None,
-    );
+    let session = dragged(Some(clamp_queue_width(1120.0, 1600.0)), None);
     let widths = panel_widths(measured(), &expanded(), &session);
 
     assert_eq!(

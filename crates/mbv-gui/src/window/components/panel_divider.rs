@@ -5,7 +5,9 @@
 //! keeps it ([`crate::window::resize`]), so this component holds nothing
 //! beyond the drag itself. A double-click reports the reset to the default
 //! width, and the pointer affordance is the column-resize cursor over a band
-//! that lights while hovered or dragged.
+//! that lights while hovered or dragged. The band takes no width in the row:
+//! its negative margins lay it over the seam, above both columns, so the two
+//! columns meet directly.
 //!
 //! The Svelte port listened for the drag's moves on the `window`: the pointer
 //! leaves the band's few pixels as soon as the drag starts. The Dioxus tree
@@ -208,8 +210,8 @@ pub fn PanelDivider(props: PanelDividerProps) -> Element {
             "aria-label": props.name.label(),
             "data-divider": props.name.name(),
             "data-divider-dragging": dragging.cloned().then_some(""),
-            class: "relative flex-none self-stretch border-0 p-0 hover:bg-[var(--canvas-border)] data-[divider-dragging]:bg-[var(--canvas-border)]",
-            style: "width: {DIVIDER_WIDTH_PX}px; cursor: col-resize;",
+            class: "relative z-10 flex-none self-stretch border-0 p-0 hover:bg-[var(--canvas-border)] data-[divider-dragging]:bg-[var(--canvas-border)]",
+            style: "width: {DIVIDER_WIDTH_PX}px; margin-inline: -{DIVIDER_WIDTH_PX / 2.0}px; cursor: col-resize;",
             onpointerdown: move |event: PointerEvent| {
                 // Only the primary button drags, as the Svelte `startDrag`
                 // did; the press itself forwards to the core through the

@@ -36,9 +36,10 @@ pub const LIBRARY_LIST_MIN_WIDTH_PX: f32 = 320.0;
 /// the other away: the list column's own minimum.
 pub const HERO_MIN_WIDTH_PX: f32 = LIBRARY_LIST_MIN_WIDTH_PX;
 
-/// A divider's painted width: the band between two columns takes this much of
-/// the container, and the Library column the Queue column leaves is measured
-/// without it, so the painted columns and the thresholds stay one geometry.
+/// A divider's grab band width. The band overlays the seam between two
+/// columns and takes no width in the row, so the columns meet directly and the
+/// Library column the Queue column leaves is the container minus the Queue
+/// column.
 pub const DIVIDER_WIDTH_PX: f32 = 6.0;
 
 /// The widths the user dragged this session, in CSS pixels: `None` while the
@@ -61,8 +62,7 @@ pub type WidthsSaver = Arc<dyn Fn(&GuiPanelWidths) + Send + Sync>;
 /// column's two-panel states.
 #[must_use]
 pub fn clamp_queue_width(width: f32, container_width: f32) -> f32 {
-    let max = (QUEUE_PANEL_WIDTH_PX)
-        .max(container_width.round() - LIBRARY_MINI_MAX_WIDTH_PX - DIVIDER_WIDTH_PX);
+    let max = (QUEUE_PANEL_WIDTH_PX).max(container_width.round() - LIBRARY_MINI_MAX_WIDTH_PX);
     width.round().clamp(QUEUE_PANEL_WIDTH_PX, max)
 }
 
@@ -71,8 +71,7 @@ pub fn clamp_queue_width(width: f32, container_width: f32) -> f32 {
 /// panes gives the list its minimum.
 #[must_use]
 pub fn clamp_list_width(width: f32, library_column: f32) -> f32 {
-    let max = LIBRARY_LIST_MIN_WIDTH_PX
-        .max(library_column.round() - HERO_MIN_WIDTH_PX - DIVIDER_WIDTH_PX);
+    let max = LIBRARY_LIST_MIN_WIDTH_PX.max(library_column.round() - HERO_MIN_WIDTH_PX);
     width.round().clamp(LIBRARY_LIST_MIN_WIDTH_PX, max)
 }
 
@@ -84,8 +83,7 @@ pub struct PanelWidths {
     pub queue: f32,
     /// The list column's painted width, which only Wide paints.
     pub list: f32,
-    /// The Library column's width: the container minus the Queue column and
-    /// the divider between them.
+    /// The Library column's width: the container minus the Queue column.
     pub library_column: f32,
 }
 
@@ -106,13 +104,7 @@ pub fn panel_widths(
             container.width,
         ),
     );
-    // The collapsed rail paints no divider, so its 6 px stay in the column.
-    let divider = if panel.collapsed {
-        0.0
-    } else {
-        DIVIDER_WIDTH_PX
-    };
-    let library_column = library_column_width(container, queue + divider);
+    let library_column = library_column_width(container, queue);
     PanelWidths {
         queue,
         list: clamp_list_width(
