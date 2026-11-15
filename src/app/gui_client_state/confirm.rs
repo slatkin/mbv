@@ -24,7 +24,7 @@ impl App {
     }
 
     /// Execute the confirm overlay's button at `index` (the press on the
-    /// region the front end reported): the same execution the button's key
+    /// region the window reported): the same execution the button's key
     /// hint applies (`execute_gui_overlay_entry`'s confirm arm). Gated on
     /// the open overlay being the confirm — a stale press while another
     /// overlay or none holds the slot executes nothing.

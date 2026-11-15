@@ -9,13 +9,11 @@
 //! the window, and a closed field rides as the section's `null`.
 
 use mbv::{GuiSearchProjection, GuiSearchRow};
-use serde::Serialize;
 
 /// The Search facts one frame carries (design D12, row 12.1). `None` on the
 /// frame while the store holds no query and no row: no field text is up, or
 /// the last query closed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSearchFrame {
     /// The query the section answers, as the last `searchQuery` command
     /// carried it.
@@ -32,8 +30,7 @@ pub struct GuiSearchFrame {
 /// Service id and type an activate command sends back, never a row position,
 /// so a command built from a stale frame addresses the row that frame painted
 /// or nothing.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSearchRowFrame {
     /// The Emby item id the activate command names.
     pub id: String,

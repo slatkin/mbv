@@ -82,7 +82,7 @@ pub struct GuiHomeItemRow {
     /// `fmt_publish_date_short` over the provider timestamp, a `day month`
     /// text the window content paints as-is. `None` on `Continue watching`
     /// rows and on an item with no parseable provider date. The GUI carries
-    /// the formatted text — not the raw seconds — so the front end keeps no
+    /// the formatted text — not the raw seconds — so the window keeps no
     /// date-formatting rule.
     pub date: Option<String>,
     /// The row's kind.
@@ -121,7 +121,7 @@ pub struct GuiHomeHero {
     /// The cleaned overview text, when the item's payload carries one.
     pub overview: Option<String>,
     /// The artwork box the Hero reserves: the artwork policy's declared
-    /// shape, so the front end places the art at the policy's arm.
+    /// shape, so the window places the art at the policy's arm.
     pub art_shape: GuiArtShape,
     /// The Hero's artwork, display-encoded for Emby items only (the
     /// USER-APPROVED Home design: the Audiobookshelf and Feed rows paint

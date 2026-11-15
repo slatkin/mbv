@@ -41,6 +41,7 @@ impl App {
     /// never does, so the TUI's values do not change.
     pub fn enable_gui_client(&mut self) {
         self.client_arranges_panels = true;
+        self.visual_slot_controls = false;
         self.launch_restore = LaunchRestore::Done;
     }
 

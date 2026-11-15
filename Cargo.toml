@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-surfaces", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd", "crates/mbv-gui"]
 # mbv-gui is a member but not a default member, so default builds and nextest
-# runs skip its Tauri and WebKitGTK stack.
+# runs skip its Dioxus Native and Blitz window stack.
 default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-surfaces", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 
 [workspace.package]
@@ -134,6 +134,71 @@ unused_lifetimes = "warn"
 # Keep enough debuginfo for readable criterion profiles without paying for
 # full debug builds on manual bench runs (#896).
 debug = 1
+
+# The GUI's render stack at the debug profile's opt-level 0 makes every resize
+# frame pay unoptimized restyle, layout, text shaping, scene building, and
+# raster encoding on the event-loop thread, which is what stretches the stale
+# buffer during a window drag. These packages are the hot path of one frame;
+# they keep full debuginfo and unoptimized *crates* stay as they are.
+#
+# opt-level 2, not 3: the loops are already vectorizable and the extra
+# inlining of 3 mainly costs compile time on this dependency graph.
+[profile.dev.package.stylo]
+opt-level = 2
+
+[profile.dev.package.stylo_taffy]
+opt-level = 2
+
+[profile.dev.package.taffy]
+opt-level = 2
+
+[profile.dev.package.blitz-dom]
+opt-level = 2
+
+[profile.dev.package.blitz-paint]
+opt-level = 2
+
+[profile.dev.package.kurbo]
+opt-level = 2
+
+[profile.dev.package.peniko]
+opt-level = 2
+
+[profile.dev.package.parley]
+opt-level = 2
+
+[profile.dev.package.parley_engine]
+opt-level = 2
+
+[profile.dev.package.fontique]
+opt-level = 2
+
+[profile.dev.package.read-fonts]
+opt-level = 2
+
+[profile.dev.package.skrifa]
+opt-level = 2
+
+[profile.dev.package.vello_common]
+opt-level = 2
+
+[profile.dev.package.vello_gpu]
+opt-level = 2
+
+[profile.dev.package.anyrender]
+opt-level = 2
+
+[profile.dev.package.anyrender_vello_hybrid]
+opt-level = 2
+
+[profile.dev.package.wgpu]
+opt-level = 2
+
+[profile.dev.package.wgpu-core]
+opt-level = 2
+
+[profile.dev.package.wgpu-hal]
+opt-level = 2
 
 [package]
 name = "mbv"
@@ -288,7 +353,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "mpv/Emby and Audiobookshelf front-end. Runs mpv in a child process for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "mpv, libc6, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libfontconfig1, libwebkit2gtk-4.1-0"
+depends = "mpv, libc6, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libx11-6, libfontconfig1, libvulkan1"
 section = "video"
 priority = "optional"
 assets = [
@@ -307,4 +372,10 @@ assets = [
     ["scripts/mbv_intro.lua", "usr/share/mbv/scripts/mbv_intro.lua", "644"],
     ["fonts/Material-Design-Iconic-Font.ttf", "usr/share/mbv/fonts/Material-Design-Iconic-Font.ttf", "644"],
     ["dist/config.toml", "usr/share/mbv/config.toml", "644"],
+    ["LICENSES/MPL-2.0.txt", "usr/share/doc/mbv/LICENSES/MPL-2.0.txt", "644"],
+    ["crates/mbv-gui/assets/fonts/ibm-plex-sans-OFL-1.1.txt", "usr/share/doc/mbv/LICENSES/ibm-plex-sans-OFL-1.1.txt", "644"],
+    ["crates/mbv-gui/assets/fonts/jetbrains-mono-OFL-1.1.txt", "usr/share/doc/mbv/LICENSES/jetbrains-mono-OFL-1.1.txt", "644"],
+    ["crates/mbv-gui/assets/vendor/lucide-ISC.txt", "usr/share/doc/mbv/LICENSES/lucide-ISC.txt", "644"],
+    ["crates/mbv-gui/assets/vendor/shadcn-svelte-MIT.txt", "usr/share/doc/mbv/LICENSES/shadcn-svelte-MIT.txt", "644"],
+    ["crates/mbv-gui/assets/vendor/tw-animate-css-MIT.txt", "usr/share/doc/mbv/LICENSES/tw-animate-css-MIT.txt", "644"],
 ]

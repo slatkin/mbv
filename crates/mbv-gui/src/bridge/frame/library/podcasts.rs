@@ -8,7 +8,6 @@
 //! (`entry_list.rs`); the Hero and the frame struct are the destination's own.
 
 use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
-use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
@@ -19,8 +18,7 @@ use crate::bridge::library::GuiPodcastPill;
 /// The Podcasts destination's list part (add-gui-library-panel design D12, row
 /// 10.1; `gui-change-driven-sections` design D8): the pill row and the active
 /// pill's episode rows, with the load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPodcastsList {
     /// The Podcasts library index the Podcasts commands name (design D2, D12):
     /// the library whose content this is.
@@ -40,8 +38,7 @@ pub struct GuiPodcastsList {
 
 /// The Podcasts destination's detail part (`gui-change-driven-sections` design
 /// D8): the core's selected episode and its Hero.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPodcastsDetail {
     /// The core's selected episode (design D2, D12), as the frame painted it:
     /// a select, play, or enqueue command sends it back. The first row is the
@@ -54,8 +51,7 @@ pub struct GuiPodcastsDetail {
 /// The selected episode's Hero facts (row 10.1): the shared
 /// `hero_content_abs_episode` producer's facts, the cleaned description, and
 /// the parent show's Square cover.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPodcastsHeroFrame {
     /// The hero's title: the episode title.
     pub title: String,

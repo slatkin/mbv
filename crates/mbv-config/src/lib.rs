@@ -29,6 +29,11 @@ pub use launch_state::{
     TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState, load_tui_launch_state,
     save_tui_launch_state, tui_launch_state_path,
 };
+mod gui_panel_widths;
+#[doc(inline)]
+pub use gui_panel_widths::{
+    GuiPanelWidths, gui_panel_widths_path, load_gui_panel_widths, save_gui_panel_widths,
+};
 mod gui_launch_state;
 #[cfg(test)]
 pub(crate) use gui_launch_state::clear_gui_launch_state_at;

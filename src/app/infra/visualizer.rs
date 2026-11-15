@@ -55,7 +55,7 @@ impl App {
             && !self.output_is_cast()
             && active
             && !audio_pipe_enabled
-            && !self.visual_slot_hidden
+            && !self.visual_slot_hide_in_effect()
     }
 
     pub(in crate::app) fn stop_visualizer_capture(&mut self) {
@@ -66,7 +66,7 @@ impl App {
     }
 
     pub(in crate::app) fn toggle_visualizer(&mut self) {
-        if self.visual_slot_hidden {
+        if self.visual_slot_hide_in_effect() {
             return;
         }
         self.set_visualizer(!self.visualizer_enabled);
@@ -75,7 +75,15 @@ impl App {
     /// Select the artwork (`false`) or the visualizer (`true`), reconcile
     /// capture, and persist. The visual slot menu carries the target content
     /// directly; `toggle_visualizer` is this setter's only keyboard caller.
+    ///
+    /// The GUI Client paints no visualizer surface, and its slot paints the
+    /// item's art (`App::queue_card_artwork` answers `Hidden` while the
+    /// visualizer owns the slot), so enabling it there would blank the art with
+    /// nothing in its place: a GUI Client's selection is a no-op.
     pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
+        if !self.visual_slot_controls {
+            return;
+        }
         self.visualizer_enabled = enabled;
         self.visualizer_failed = false;
         if enabled {
@@ -88,8 +96,13 @@ impl App {
 
     /// Set the persisted visual-slot hidden state, reconcile capture, and
     /// persist. Shared by the `h` keyboard action and the visual slot menu's
-    /// Hide entry.
+    /// Hide entry. The GUI Client neither acts on the hide nor writes it
+    /// (`App::visual_slot_hide_in_effect`), so the state and the stored
+    /// preference stay the TUI's.
     pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
+        if !self.visual_slot_controls {
+            return;
+        }
         self.visual_slot_hidden = hidden;
         self.sync_visualizer();
         self.save_prefs();

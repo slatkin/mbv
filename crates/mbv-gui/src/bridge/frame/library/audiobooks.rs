@@ -8,7 +8,6 @@ use mbv::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
     GuiAudiobooksWorkspace,
 };
-use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -17,8 +16,7 @@ use crate::art::GuiArtRef;
 /// The Audiobooks destination's list part (add-gui-library-panel design D12,
 /// row 9.1; `gui-change-driven-sections` design D8): the book list and the
 /// catalog's load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksList {
     /// The Audiobooks library index the Audiobooks commands name (design
     /// D2, D12): the library whose content this is.
@@ -34,8 +32,7 @@ pub struct GuiAudiobooksList {
 /// The Audiobooks destination's detail part (`gui-change-driven-sections`
 /// design D8): the core's selected book, the playing book, and its Hero with
 /// the chapters Workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksDetail {
     /// Whether the selected book's detail fetch has not landed yet: the
     /// Workspace's loading state.
@@ -53,8 +50,7 @@ pub struct GuiAudiobooksDetail {
 }
 
 /// One row of the book list (row 9.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksRowFrame {
     /// The book's stable `library_item_id` (design D2, D12): a command names
     /// it, the frame's `selected` carries it, never a row position.
@@ -72,8 +68,7 @@ pub struct GuiAudiobooksRowFrame {
 }
 
 /// The book Hero's facts (row 9.1), with the chapters Workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksHeroFrame {
     /// The hero's title.
     pub title: String,
@@ -102,16 +97,14 @@ pub struct GuiAudiobooksHeroFrame {
 /// The book Hero's Workspace (row 9.1): the book's chapter rows — or its
 /// `Part N` rows when the book holds no chapters — in the TUI's
 /// `visible_rows` order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksWorkspaceFrame {
     /// The chapter rows in the TUI's `visible_rows` order.
     pub rows: Vec<GuiAudiobooksChapterRowFrame>,
 }
 
 /// One chapter row of the Hero's Workspace (row 9.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiAudiobooksChapterRowFrame {
     /// The row's stable Service discriminator: the chapter number on a
     /// chapter row, the audio-part index on a `Part N` row. A chapter

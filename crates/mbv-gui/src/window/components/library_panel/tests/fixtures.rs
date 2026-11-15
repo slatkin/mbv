@@ -1,0 +1,372 @@
+//! The carried-section fixtures the panel's test modules share: the port of
+//! `LibraryPanel.test.ts`'s fixture builders, one per destination, with the
+//! Hero facts each mount contract needs.
+
+use crate::bridge::frame::library::{
+    GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList, GuiAudiobooksRowFrame,
+    GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyFeedGroupFrame,
+    GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeDetail,
+    GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
+    GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicList, GuiPillFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList,
+    GuiShowsModeFrame, GuiShowsPillFrame, GuiShowsRowFrame,
+};
+use crate::bridge::library::GuiFeedPill;
+
+/// The carried Music list part with no album picked.
+pub(super) fn music_list() -> GuiMusicList {
+    GuiMusicList {
+        lib_idx: 0,
+        pills: Vec::new(),
+        collection_names: Vec::new(),
+        loading: false,
+        failure: None,
+        artists: Vec::new(),
+    }
+}
+
+/// The carried Music sections, with `picked` as the Hero's album.
+pub(super) fn music_sections(
+    picked: Option<GuiMusicHeroFrame>,
+) -> (GuiLibraryList, GuiLibraryDetail) {
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 1,
+                label: "Music".to_owned(),
+            }],
+            current_tab: Some(1),
+            destination: GuiDestinationList::Music(music_list()),
+        },
+        GuiLibraryDetail::Music(GuiMusicDetail {
+            hero: picked,
+            art: None,
+            playing_track_id: None,
+        }),
+    )
+}
+
+/// The picked album's Hero facts: the album block a pick fills (design D5).
+pub(super) fn music_hero() -> GuiMusicHeroFrame {
+    GuiMusicHeroFrame {
+        artist: "Beastie Boys".to_owned(),
+        collections: vec!["Hip-Hop".to_owned()],
+        album_count: 1,
+        artist_tracks: None,
+        album: GuiMusicAlbumFrame {
+            album_id: "al1".to_owned(),
+            name: "Licensed To Ill".to_owned(),
+            year: "1986".to_owned(),
+            tracks: None,
+            total: None,
+        },
+        menu: Vec::new(),
+    }
+}
+
+/// A meta segment the fixtures' Hero rows carry.
+pub(super) fn segment(text: &str, kind: GuiMetaKindFrame) -> Vec<GuiMetaSegmentFrame> {
+    vec![GuiMetaSegmentFrame {
+        text: text.to_owned(),
+        kind,
+    }]
+}
+
+/// The carried Home sections: one item row and its Hero.
+pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetail) {
+    let row_id = GuiHomeRowIdFrame::Continue("e1".to_owned());
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 1,
+                label: "Music".to_owned(),
+            }],
+            current_tab: None,
+            destination: GuiDestinationList::Home(GuiHomeList {
+                loading: false,
+                rows: vec![
+                    GuiHomeRowFrame::Heading {
+                        text: "Continue watching".to_owned(),
+                    },
+                    GuiHomeRowFrame::Item(GuiHomeItemRowFrame {
+                        id: row_id.clone(),
+                        title: "Better Call Saul".to_owned(),
+                        subtitle: None,
+                        date: None,
+                        kind: GuiHomeRowKindFrame::Media,
+                        state: GuiHomeRowStateFrame::Ordinary,
+                        art: None,
+                    }),
+                ],
+            }),
+        },
+        GuiLibraryDetail::Home(GuiHomeDetail {
+            selected: Some(row_id),
+            hero: with_hero.then(|| GuiHomeHeroFrame {
+                title: "Better Call Saul".to_owned(),
+                meta_rows: vec![segment("1 h 47 m left", GuiMetaKindFrame::Time)],
+                duration_row: Some(0),
+                progress_row: None,
+                overview: None,
+                art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
+                art: None,
+            }),
+        }),
+    )
+}
+
+/// The carried Shows list part of `mode`: the three mode pills and one row.
+pub(super) fn shows_list(mode: GuiShowsModeFrame) -> GuiShowsList {
+    let selected = |pill_mode| pill_mode == mode;
+    GuiShowsList {
+        lib_idx: 0,
+        pills: vec![
+            GuiShowsPillFrame {
+                mode: GuiShowsModeFrame::Latest,
+                name: "Latest".to_owned(),
+                selected: selected(GuiShowsModeFrame::Latest),
+                collection: false,
+            },
+            GuiShowsPillFrame {
+                mode: GuiShowsModeFrame::Upcoming,
+                name: "Upcoming".to_owned(),
+                selected: selected(GuiShowsModeFrame::Upcoming),
+                collection: false,
+            },
+            GuiShowsPillFrame {
+                mode: GuiShowsModeFrame::All,
+                name: "All series".to_owned(),
+                selected: selected(GuiShowsModeFrame::All),
+                collection: false,
+            },
+        ],
+        collection_names: vec![
+            match mode {
+                GuiShowsModeFrame::Latest => "latest",
+                GuiShowsModeFrame::Upcoming => "upcoming",
+                GuiShowsModeFrame::All => "all",
+            }
+            .to_owned(),
+        ],
+        loading: false,
+        series: Vec::new(),
+        upcoming_failed: false,
+        rows: vec![GuiShowsRowFrame {
+            id: "s1".to_owned(),
+            title: "Atlanta".to_owned(),
+            subtitle: None,
+            date: None,
+            sort_letter: Some('A'),
+        }],
+    }
+}
+
+/// The carried Shows detail part of `mode`: the series Hero, which the
+/// Upcoming mode does not paint (design D12).
+pub(super) fn shows_detail(mode: GuiShowsModeFrame) -> GuiShowsDetail {
+    GuiShowsDetail {
+        workspace_loading: false,
+        selected: Some("s1".to_owned()),
+        hero: (mode != GuiShowsModeFrame::Upcoming).then(|| GuiShowsHeroFrame {
+            title: "Atlanta".to_owned(),
+            parent: None,
+            meta_rows: vec![segment("4 seasons", GuiMetaKindFrame::Count)],
+            duration_row: None,
+            progress_row: None,
+            overview: None,
+            art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
+            art: None,
+            workspace: None,
+        }),
+    }
+}
+
+/// The Shows sections of `mode`, under the Shows tab.
+pub(super) fn shows_sections(mode: GuiShowsModeFrame) -> (GuiLibraryList, GuiLibraryDetail) {
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 3,
+                label: "Shows".to_owned(),
+            }],
+            current_tab: Some(3),
+            destination: GuiDestinationList::Shows(shows_list(mode)),
+        },
+        GuiLibraryDetail::Shows(shows_detail(mode)),
+    )
+}
+
+/// The plain Emby-library sections: the plain mode's list, or the feed-group
+/// mode's pills and date-ordered rows.
+pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, GuiLibraryDetail) {
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 3,
+                label: label.to_owned(),
+            }],
+            current_tab: Some(3),
+            destination: GuiDestinationList::Emby(GuiEmbyList {
+                lib_idx: 3,
+                library_name: "Movies".to_owned(),
+                pills: if feed_group {
+                    vec![GuiEmbyPillFrame {
+                        group: GuiEmbyFeedGroupFrame::All,
+                        name: "All".to_owned(),
+                        selected: true,
+                        collection: false,
+                    }]
+                } else {
+                    Vec::new()
+                },
+                collection_names: if feed_group {
+                    vec!["All".to_owned()]
+                } else {
+                    Vec::new()
+                },
+                feed_group,
+                loading: false,
+                failed: false,
+                rows: vec![GuiEmbyRowFrame {
+                    id: "m1".to_owned(),
+                    title: "Alien".to_owned(),
+                    subtitle: Some("1979".to_owned()),
+                    date: feed_group.then(|| "1979".to_owned()),
+                    sort_letter: (!feed_group).then_some('A'),
+                    kind: GuiEmbyRowKindFrame::Media,
+                }],
+            }),
+        },
+        GuiLibraryDetail::Emby(GuiEmbyDetail {
+            selected: Some("m1".to_owned()),
+            hero: Some(GuiEmbyHeroFrame {
+                kind: "movie".to_owned(),
+                title: "Alien".to_owned(),
+                meta_rows: vec![segment("1979", GuiMetaKindFrame::Date)],
+                duration_row: Some(0),
+                progress_row: None,
+                overview: None,
+                art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
+                art: None,
+                credits: Vec::new(),
+                imdb_url: None,
+            }),
+        }),
+    )
+}
+
+/// The carried Audiobooks sections, with `hero` the selected book's Hero the
+/// frame paints (row 9.1).
+pub(super) fn audiobooks_sections(
+    hero: Option<GuiAudiobooksHeroFrame>,
+) -> (GuiLibraryList, GuiLibraryDetail) {
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 4,
+                label: "Audiobooks".to_owned(),
+            }],
+            current_tab: Some(4),
+            destination: GuiDestinationList::Audiobooks(GuiAudiobooksList {
+                lib_idx: 4,
+                loading: false,
+                failed: false,
+                rows: vec![GuiAudiobooksRowFrame {
+                    id: "b1".to_owned(),
+                    title: "Aftermath".to_owned(),
+                    subtitle: Some("Bill Wyman".to_owned()),
+                    duration: "4:32".to_owned(),
+                    sort_letter: 'A',
+                }],
+            }),
+        },
+        GuiLibraryDetail::Audiobooks(GuiAudiobooksDetail {
+            workspace_loading: false,
+            selected: Some("b1".to_owned()),
+            playing_book_id: None,
+            hero,
+        }),
+    )
+}
+
+/// The book Hero the Audiobooks fixtures paint, with `workspace` its
+/// chapters Workspace.
+pub(super) fn audiobooks_hero(
+    workspace: Option<GuiAudiobooksWorkspaceFrame>,
+) -> GuiAudiobooksHeroFrame {
+    GuiAudiobooksHeroFrame {
+        title: "Aftermath".to_owned(),
+        meta_rows: vec![
+            segment("Bill Wyman", GuiMetaKindFrame::Plain),
+            segment("4:32", GuiMetaKindFrame::Time),
+        ],
+        duration_row: Some(1),
+        progress_row: None,
+        overview: None,
+        art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Portrait,
+        art: None,
+        workspace,
+    }
+}
+
+/// The carried Feeds sections, with `hero` the selected entry's Hero the
+/// frame paints (row 11.1).
+pub(super) fn feeds_sections(
+    hero: Option<GuiFeedsHeroFrame>,
+) -> (GuiLibraryList, GuiLibraryDetail) {
+    (
+        GuiLibraryList {
+            tabs: vec![GuiLibraryTabFrame {
+                position: 5,
+                label: "Feeds".to_owned(),
+            }],
+            current_tab: Some(5),
+            destination: GuiDestinationList::Feeds(GuiFeedsList {
+                pills: vec![
+                    GuiPillFrame {
+                        pill: GuiFeedPill::Latest,
+                        name: "Latest".to_owned(),
+                        selected: true,
+                        collection: false,
+                    },
+                    GuiPillFrame {
+                        pill: GuiFeedPill::Subscription("https://sub.one".to_owned()),
+                        name: "Sub One".to_owned(),
+                        selected: false,
+                        collection: false,
+                    },
+                ],
+                loading: false,
+                failed: false,
+                rows: vec![GuiEntryRowFrame {
+                    id: "s1::e1".to_owned(),
+                    title: "Entry A".to_owned(),
+                    subtitle: Some("Sub One".to_owned()),
+                    date: Some("12 May".to_owned()),
+                    state: GuiHomeRowStateFrame::Ordinary,
+                }],
+            }),
+        },
+        GuiLibraryDetail::Feeds(GuiFeedsDetail {
+            selected: Some("s1::e1".to_owned()),
+            hero,
+        }),
+    )
+}
+
+/// The entry Hero the Feeds fixtures paint.
+pub(super) fn feeds_hero() -> GuiFeedsHeroFrame {
+    GuiFeedsHeroFrame {
+        title: "Entry A".to_owned(),
+        parent: None,
+        meta_rows: vec![
+            segment("Sub One", GuiMetaKindFrame::Plain),
+            segment("12:30", GuiMetaKindFrame::Time),
+        ],
+        duration_row: Some(1),
+        progress_row: None,
+        art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
+    }
+}

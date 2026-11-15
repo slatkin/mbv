@@ -116,7 +116,7 @@ impl App {
     }
 
     /// Activate a result (row 12.1): Enter on the row, a press, or the
-    /// double-click a front end sends with this same command.
+    /// double-click a window sends with this same command.
     ///
     /// The navigation is the TUI's own (`App::spawn_navigate_to_item` over the
     /// library tabs), and the results close as the TUI's sidebar dismiss

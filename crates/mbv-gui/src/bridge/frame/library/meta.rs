@@ -3,11 +3,9 @@
 //! nothing it has not been given.
 
 use mbv_ui_model::meta::{MetaKind, MetaSegment};
-use serde::Serialize;
 
 /// One typed segment of a meta row: `{ text, kind }` on the wire.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMetaSegmentFrame {
     /// The segment's text.
     pub text: String,
@@ -16,8 +14,7 @@ pub struct GuiMetaSegmentFrame {
 }
 
 /// The data type of a meta segment, mirroring `mbv_ui_model::meta::MetaKind`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiMetaKindFrame {
     Plain,
     Time,

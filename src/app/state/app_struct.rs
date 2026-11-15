@@ -225,6 +225,12 @@ pub struct App {
     /// (`App::enable_gui_client`); the TUI Client keeps the terminal-cell
     /// rules.
     pub(in crate::app) client_arranges_panels: bool,
+    /// A Client-supplied capability fact: whether the Client paints the
+    /// visualizer and a control for the visual slot's hide. The TUI Client
+    /// paints both. The GUI Client paints neither, so it clears this before
+    /// its first step (`App::enable_gui_client`), and the visualizer and hide
+    /// setters and the persisted hide then do nothing for it.
+    pub(in crate::app) visual_slot_controls: bool,
     /// The GUI Library panel's selected collection per destination
     /// (add-gui-library-panel design D2, D5, D6): a Grouped Music library's
     /// selected group id, keyed by the library index. One group is always

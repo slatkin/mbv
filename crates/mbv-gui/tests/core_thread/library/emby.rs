@@ -4,7 +4,7 @@
 //! Hero, and an `embySetFeedGroup` pill switch loads the chosen group's items
 //! into the next frame. The Emby answers come from the in-memory mock
 //! transport, so no request leaves the process, and no live Owner, Service,
-//! or webview runs (design D13).
+//! or window runs (design D13).
 
 use crate::Held;
 use mbv::ClientTickHost;

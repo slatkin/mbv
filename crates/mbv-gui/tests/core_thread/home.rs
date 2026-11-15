@@ -2,7 +2,7 @@
 //! asynchronous Emby bootstrap completes on the core thread's own tick, and
 //! the frame that tick emits reads the Continue Watching items the App
 //! stores. The completion rides the queued startup channel, so no live
-//! Owner, Service, or webview runs; the state directory is a
+//! Owner, Service, or window runs; the state directory is a
 //! `TestStateDirGuard` scratch path (design D13).
 
 use crate::Held;

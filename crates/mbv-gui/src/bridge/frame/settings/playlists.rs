@@ -6,11 +6,9 @@ use mbv::{
     GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
     GuiSettingsPlaylistRowProjection,
 };
-use serde::Serialize;
 
 /// One saved playlist (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPlaylistRow {
     /// The playlist's stable Emby id: every playlist command addresses it.
     pub id: String,
@@ -29,8 +27,7 @@ impl From<&GuiSettingsPlaylistRowProjection> for GuiPlaylistRow {
 }
 
 /// The open playlist and its items (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiOpenPlaylist {
     pub id: String,
     pub name: String,
@@ -48,8 +45,7 @@ impl From<&GuiSettingsOpenPlaylistProjection> for GuiOpenPlaylist {
 }
 
 /// One item of the open playlist (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPlaylistItem {
     pub id: String,
     pub name: String,

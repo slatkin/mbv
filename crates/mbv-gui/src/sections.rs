@@ -305,7 +305,7 @@ impl SectionLedger {
     /// next collect sends every present section at its current revision.
     ///
     /// The playhead is the one exception (design D5): its value is a
-    /// position-at-send sample the front end stamps on receipt, so replaying
+    /// position-at-send sample the window stamps on receipt, so replaying
     /// it would rewind the position by the age of the anchor. Sync forgets it
     /// instead, and the next collect re-adopts a fresh anchor — current
     /// position, fresh send instant — at a new revision.

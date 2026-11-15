@@ -10,11 +10,9 @@ use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
 use mbv_ui_model::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use serde::Serialize;
 
 /// The Queue section.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueue {
     /// The display rows that the viewport shows, in paint order.
     pub rows: Vec<GuiQueueRow>,
@@ -27,7 +25,7 @@ pub struct GuiQueue {
     /// viewport, so it is read from every row, not from `rows`.
     pub active: Option<u64>,
     /// The row the pointer rests on (the canvas row hover,
-    /// add-tauri-gui-client row 6.5): the front end paints that row's grip and
+    /// add-tauri-gui-client row 6.5): the window paints that row's grip and
     /// actions button. `None` while the pointer rests on no row.
     pub hover: Option<u64>,
     /// The row drag in progress, if any: the drag ghost and insertion line.
@@ -37,8 +35,7 @@ pub struct GuiQueue {
 /// The row drag the window paints (add-tauri-gui-client row 6.5, design D5):
 /// the dragged row's content as the ghost, the final index the drop would
 /// leave it at, and the insertion line's anchor. `None` while no drag runs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueDrag {
     /// The dragged slot (`QueueSlotId::raw`).
     pub slot: u64,
@@ -53,8 +50,7 @@ pub struct GuiQueueDrag {
 /// One row drag's insertion line (add-tauri-gui-client row 6.5): the row it
 /// anchors on and the side it paints. A stable slot anchors it, so the line
 /// keeps its place while the rows above it move.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(tag = "at", rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiQueueInsertion {
     /// The line paints above this slot's row.
     Before { slot: u64 },
@@ -138,7 +134,7 @@ impl GuiQueue {
         // flipped per item row — headings and spacers keep the box's own
         // fill and do not flip. The parity rides the row so the stripe stays
         // stable while the viewport moves; under a filter it re-seeds over
-        // the kept rows, whose list the front end paints.
+        // the kept rows, whose list the window paints.
         let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));
@@ -253,8 +249,7 @@ fn active_slot(row: &MediaListRow<QueueSlotId>) -> Option<u64> {
 }
 
 /// One display row of the Queue, mirroring `MediaListRow<QueueSlotId>`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "row", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiQueueRow {
     /// A selectable row for one stable slot.
     Item {
@@ -292,8 +287,7 @@ pub enum GuiQueueRow {
 /// caret fact. Mirrors `QueueSummaryProjection`'s remaining, next-item, and
 /// filter facts; the tail offset comes from the shown queue's end offsets
 /// (design D5), which the window turns into the finish wall clock.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueSummary {
     /// The rows that do not carry the playhead: the canvas's remaining count
     /// counts every non-playhead row, rows before the playhead included —
@@ -339,8 +333,7 @@ impl GuiQueueSummary {
 
 /// Which value the queue rows' right column paints (design D4's "Length" /
 /// "Ends at" switch), mirroring `QueueRightColumn` variant for variant.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum GuiRightColumn {
     /// Each row paints its total runtime.
     #[default]
@@ -394,8 +387,7 @@ impl GuiQueueRow {
 
 /// Gutter metadata that a row paints in the right-aligned column, mirroring
 /// `MediaListTrailing`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiTrailing {
     /// The release year, publish date, or minutes-precision runtime.
     Gutter(String),
@@ -410,8 +402,7 @@ impl From<&MediaListTrailing> for GuiTrailing {
 }
 
 /// Whether a row drills into a container or plays a leaf, mirroring `MediaKind`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiMediaKind {
     Collection,
     Media,
@@ -431,8 +422,7 @@ impl From<MediaKind> for GuiMediaKind {
 /// carries one. The now-playing state carries no progress (design D5): the
 /// window reads the playhead's played fraction for the row whose slot is the
 /// active slot.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiSemanticState {
     Ordinary,
     Played,

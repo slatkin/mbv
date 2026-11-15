@@ -16,7 +16,6 @@ pub mod services;
 pub mod sessions;
 
 use mbv::{App, GuiSettingsSection as CoreSettingsSection, QueuePlaybackProjection};
-use serde::{Deserialize, Serialize};
 
 use self::feeds::GuiSettingsFeed;
 use self::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};
@@ -28,8 +27,7 @@ use crate::bridge::frame::playback::GuiTargetChoice;
 
 /// The Settings screen's section value (design D9). `None` while the screen is
 /// closed.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GuiSettingsFrame {
     /// The section the window shows.
     pub section: GuiSettingsSection,
@@ -61,8 +59,7 @@ impl GuiSettingsFrame {
 
 /// One Settings section (design D3), in sidebar order. The wire names are the
 /// section names the window content sends back in `selectSection`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiSettingsSection {
     Services,
     Playback,
@@ -117,12 +114,7 @@ impl From<GuiSettingsSection> for CoreSettingsSection {
 }
 
 /// The shown section's content (design D9): one variant per kind of section.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GuiSettingsContent {
     /// The F2 rows of a settings page (Playback, Display, Session, Queue,
     /// Mpv, Actions).

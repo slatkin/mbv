@@ -229,7 +229,7 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
 
 // The destructive flag is GUI-only and derives from the entry's action
 // (design DR6): the row menu projects its remove entry destructive and no
-// other entry, so the front end paints the canvas's tone from the flag and
+// other entry, so the window paints the canvas's tone from the flag and
 // never from a label or a position.
 #[test]
 fn the_row_menu_projects_only_the_remove_entry_as_destructive() {

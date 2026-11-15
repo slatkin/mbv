@@ -1,0 +1,128 @@
+//! The Hero's tracklist (`replace-tauri-with-blitz` task 7.3, the port of
+//! `LibraryTracklist.svelte`; add-gui-library-panel design D5, D8, D15): the
+//! picked album's cached tracks, painted by the one Workspace table every
+//! destination shares. The row under the tracklist's cursor paints the
+//! cursor fill so the movement keys show what Enter and the item keys act
+//! on.
+//!
+//! The two hover controls run play next and add to queue on that track
+//! (design D8); a press on either sends the track's own id. A track plays
+//! from its row's play button, which replaces the track number on hover, and
+//! from a double-click on the row: the queue is replaced, and under autoload
+//! the album plays from that track onward. The row of the track playing at
+//! the playhead shows a play glyph beside its title (the `GuiQueue` frame
+//! names `active`); a highlight marks focus only, so it keeps its own fill.
+
+use dioxus_native::prelude::*;
+
+use crate::bridge::frame::library::GuiMusicTrackFrame;
+use crate::bridge::library::GuiLibraryCommand;
+use crate::window::components::library_workspace_table::{
+    LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceRow,
+};
+use crate::window::library::hero::resolve_track_cursor;
+use crate::window::library::state::LibraryState;
+
+/// The props of the tracklist (the `LibraryTracklist.svelte` props, narrowed
+/// to what the tracklist reads): the album's cached tracks — the rows' own
+/// data, moved from the carried Hero, so a Hero repaint never clones the
+/// album's tracklist for the rows (the 7.3-7.4 review's whole-list finding)
+/// — and the id of the track playing at the playhead (design D8).
+#[derive(Props, Debug, Clone, PartialEq)]
+pub struct LibraryTracklistProps {
+    /// The picked album's cached tracks (design D5): the rows the table
+    /// paints.
+    pub tracks: Vec<GuiMusicTrackFrame>,
+    /// The id of the track playing at the playhead, or `None` while idle:
+    /// the frame's playing fact (design D8).
+    pub playing_track_id: Option<String>,
+}
+
+/// The Hero's tracklist: the album's rows over the shared Workspace table,
+/// with the tracklist's own cursor, actions, and row menu.
+#[component]
+pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
+    let library = consume_context::<LibraryState>();
+
+    // The picked album's cached tracks (design D5): the rows the table
+    // paints, moved from the carried Hero.
+    let tracks = &props.tracks;
+
+    // The cursor's track: the row the movement keys rest on (design D3). It
+    // is derived from the tracks that paint, so a tracklist whose cache
+    // lands after the Hero pane took focus shows the cursor its keys act on.
+    let ui = library.ui.cloned();
+    let cursor = resolve_track_cursor(tracks, ui.track_cursor.as_deref());
+
+    let rows: Vec<WorkspaceRow> = props
+        .tracks
+        .iter()
+        .map(|track| WorkspaceRow {
+            id: track.track_id.clone(),
+            number: track.number.to_string(),
+            name: track.name.clone(),
+            duration: track.duration.clone(),
+            playing: Some(track.track_id.as_str()) == props.playing_track_id.as_deref(),
+            state: None,
+            progress: None,
+        })
+        .collect();
+
+    // The hover actions (design D8): play next enters directly after the
+    // active slot, and add to queue appends to the tail.
+    let next_library = library.clone();
+    let queue_library = library.clone();
+    let actions = vec![
+        WorkspaceAction {
+            key: "playNext".to_owned(),
+            label: "Play next".to_owned(),
+            icon: WorkspaceActionIcon::ListEnd,
+            run: Callback::new(move |track_id: String| {
+                next_library
+                    .link
+                    .library(GuiLibraryCommand::PlayNext { item_id: track_id });
+            }),
+        },
+        WorkspaceAction {
+            key: "addToQueue".to_owned(),
+            label: "Add to queue".to_owned(),
+            icon: WorkspaceActionIcon::Plus,
+            run: Callback::new(move |track_id: String| {
+                queue_library
+                    .link
+                    .library(GuiLibraryCommand::AddToQueue { item_id: track_id });
+            }),
+        },
+    ];
+
+    // A press moves the tracklist's cursor onto the row; a play — the play
+    // control or the double-click — plays the track; a right-press opens the
+    // row menu at the pointer.
+    let press_library = library.clone();
+    let on_press = Callback::new(move |track_id: String| {
+        press_library.press_library_track(track_id);
+    });
+    let play_library = library.clone();
+    let on_play = Callback::new(move |track_id: String| {
+        play_library.play_library_track(track_id);
+    });
+    let menu_library = library.clone();
+    let on_context = Callback::new(move |(x, y, track_id): (f32, f32, String)| {
+        menu_library.open_library_row_menu(track_id, x, y);
+    });
+
+    rsx! {
+        LibraryWorkspaceTable {
+            root: "data-library-tracklist",
+            label: "Tracklist",
+            hook: "track",
+            noun: "Track",
+            rows,
+            cursor,
+            actions,
+            on_press,
+            on_play,
+            on_context: Some(on_context),
+        }
+    }
+}

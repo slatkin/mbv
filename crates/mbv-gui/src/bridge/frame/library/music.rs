@@ -9,7 +9,6 @@ use mbv::{
     GuiMusicTrack, GuiMusicTrackTotal,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
-use serde::Serialize;
 
 use super::GuiMusicMenuEntryFrame;
 use crate::art::GuiArtRef;
@@ -17,8 +16,7 @@ use crate::art::GuiArtRef;
 /// The Music destination's list part (design D8): the group pills, the union
 /// of the selected groups' artists with their albums and cached tracklists,
 /// and the load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicList {
     /// The Grouped Music library index the set-collections command names
     /// (design D2, D6): the library whose group pills these are.
@@ -40,8 +38,7 @@ pub struct GuiMusicList {
 
 /// The Music destination's detail part (design D8): the Hero of the picked
 /// album, its square artwork, and the id of the playing track.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicDetail {
     /// The Hero's facts; `None` while the window content has picked no album
     /// of the union.
@@ -110,8 +107,7 @@ impl GuiMusicDetail {
 }
 
 /// One group pill of the Music destination (design D6).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicPillFrame {
     /// The group's stable Service id: the set-collections command and the
     /// collection store key it.
@@ -126,8 +122,7 @@ pub struct GuiMusicPillFrame {
 }
 
 /// One artist row of the Music list (design D7).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicArtistFrame {
     /// The stable artist identity the union groups by.
     pub artist_key: GuiArtistKey,
@@ -143,16 +138,14 @@ pub struct GuiMusicArtistFrame {
 /// An artist's stable identity, mirroring `mbv_ui_model::ArtistKey`: the
 /// Service-resolved identity, or the fallback name when the Service resolves
 /// none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiArtistKey {
     Service(String),
     Fallback(String),
 }
 
 /// One album row of the Music list, and the Hero's picked album.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicAlbumFrame {
     /// The album's stable Service id: the commands that name it, and the key
     /// its artwork and its track fetch use.
@@ -169,8 +162,7 @@ pub struct GuiMusicAlbumFrame {
 }
 
 /// One tracklist row of the album block.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicTrackFrame {
     /// The track's stable Service id.
     pub track_id: String,
@@ -183,8 +175,7 @@ pub struct GuiMusicTrackFrame {
 }
 
 /// A track count with its total time, mirroring `mbv::GuiMusicTrackTotal`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicTrackTotalFrame {
     pub count: usize,
     pub duration: String,
@@ -192,8 +183,7 @@ pub struct GuiMusicTrackTotalFrame {
 
 /// The Hero's facts for the picked album (design D5): the artist header, the
 /// picked album block, and its tracklist.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicHeroFrame {
     /// The picked album's artist.
     pub artist: String,

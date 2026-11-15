@@ -6,7 +6,7 @@ pkgdesc="mpv/Emby and Audiobookshelf front-end"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-depends=('mpv' 'pipewire' 'wayland' 'libxkbcommon' 'fontconfig' 'webkit2gtk-4.1')
+depends=('mpv' 'pipewire' 'wayland' 'libxkbcommon' 'libxkbcommon-x11' 'libxcb' 'libx11' 'fontconfig' 'vulkan-icd-loader')
 optdepends=('pinwin>=0.4.1: pinned panel support')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('f54bbcbf0297bde34e1da7233bfa21b4f31af2431b434a04fd8f45dcc854fd04')
@@ -28,4 +28,10 @@ package() {
     install -Dm640 "mbvd.toml" "${pkgdir}/etc/mbv/config.toml"
     install -Dm644 "mbvd.service" "${pkgdir}/usr/lib/systemd/system/mbvd.service"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+    # Only release tarballs built from a commit that has LICENSES/ ship notices.
+    if [ -d LICENSES ]; then
+        for notice in LICENSES/*.txt; do
+            install -Dm644 "${notice}" "${pkgdir}/usr/share/licenses/${pkgname}/${notice}"
+        done
+    fi
 }

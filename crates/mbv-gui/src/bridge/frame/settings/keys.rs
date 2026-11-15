@@ -3,11 +3,9 @@
 //! chords, and the last refused edit.
 
 use mbv::{GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection};
-use serde::Serialize;
 
 /// One Keys row (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsKeyRow {
     /// The action's stable id: the `keysReset` command's `action`.
     pub id: String,
@@ -40,8 +38,7 @@ impl From<&GuiSettingsKeyRowProjection> for GuiSettingsKeyRow {
 
 /// A refused Keys edit (design D9): the action's id and the refusal text the
 /// validator gave.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsKeyRefusal {
     pub action: String,
     pub text: String,

@@ -192,6 +192,9 @@ impl App {
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the TUI's panel rules.
             client_arranges_panels: false,
+            // The GUI Client clears this before its first step; a TUI Client
+            // paints the visualizer and the hide control.
+            visual_slot_controls: true,
             // The GUI Library panel's Client-core state starts empty:
             // the window content's first command selects a destination's
             // collections and an item's detail (add-gui-library-panel

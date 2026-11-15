@@ -1,8 +1,7 @@
-//! Public-API tests of the `pointer` command's bridge
-//! (`mbv_gui::bridge::pointer`): the DTO wire contract (the modifier flags
-//! flatten into the same object as the `key` command's, and the fields an
-//! older front end could omit read as their defaults), and the
-//! command-to-core translation the command pushes after (design D4).
+//! Public-API tests of the `pointer` bridge (`mbv_gui::bridge::pointer`): the
+//! command-to-core translation the window's pointer handlers run (design D4,
+//! `replace-tauri-with-blitz` D8). The event values are built as Rust; the
+//! wire form the window sent went at the switch (D18).
 
 use mbv_gui::bridge::keys::DomModifiers;
 use mbv_gui::bridge::pointer::{DomPointer, DomPointerKind, neutral_pointer};
@@ -29,41 +28,6 @@ fn dom(kind: DomPointerKind, button: i16, buttons: u16, delta_y: f32) -> DomPoin
 /// The neutral event at (10, 20) for `kind` with no modifier held.
 fn neutral(kind: PointerKind) -> PointerEvent {
     PointerEvent::new(kind, Position { x: 10.0, y: 20.0 }, KeyModifiers::NONE)
-}
-
-/// The pointer payload for a primary press with Ctrl held (design D4): the
-/// modifier flags sit at the top level of the same object, as the `key`
-/// command's payload does.
-#[test]
-fn pointer_payload_reads_the_top_level_modifier_flags() {
-    let event: DomPointer = serde_json::from_str(
-        r#"{"kind":"press","button":0,"buttons":1,"x":10.5,"y":20.0,
-            "metaKey":false,"ctrlKey":true,"shiftKey":false,"altKey":false}"#,
-    )
-    .unwrap();
-    assert_eq!(event.kind, DomPointerKind::Press);
-    assert_eq!(
-        event.modifiers,
-        DomModifiers {
-            shift_key: false,
-            ctrl_key: true,
-            alt_key: false
-        }
-    );
-    assert!(!event.meta_key);
-}
-
-/// A payload from before the `buttons` and `metaKey` fields existed leaves
-/// them at their defaults: no held buttons, no meta.
-#[test]
-fn pointer_payload_without_the_newer_fields_reads_their_defaults() {
-    let event: DomPointer = serde_json::from_str(
-        r#"{"kind":"move","button":-1,"x":1.0,"y":2.0,
-            "ctrlKey":false,"shiftKey":false,"altKey":false}"#,
-    )
-    .unwrap();
-    assert_eq!(event.buttons, 0);
-    assert!(!event.meta_key);
 }
 
 /// Each DOM pointer event translates to the neutral `PointerEvent` the TUI's

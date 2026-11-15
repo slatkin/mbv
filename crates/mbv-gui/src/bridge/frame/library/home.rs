@@ -9,7 +9,6 @@ use mbv::{
 };
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
-use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -17,8 +16,7 @@ use crate::art::GuiArtRef;
 
 /// The Home destination's list part (design D8): whether the first fetch has
 /// landed, and the flat list's rows in paint order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiHomeList {
     /// Whether the Home content's first fetch has not landed yet: the list
     /// paints its loading line.
@@ -32,8 +30,7 @@ pub struct GuiHomeList {
 
 /// The Home destination's detail part (design D8): the core's selected row and
 /// its Hero.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiHomeDetail {
     /// The core's selected row (design D2, D12), as the window painted it:
     /// a select, play, or enqueue command sends it back.
@@ -66,8 +63,7 @@ impl GuiHomeDetail {
 
 /// One row of the flat Home list, as the window paints it (design D12):
 /// the row tag names the three row kinds the projection builds.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "row", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowFrame {
     /// A section heading row (`Continue watching`, `Recently added`).
     Heading {
@@ -81,8 +77,7 @@ pub enum GuiHomeRowFrame {
 }
 
 /// One item row of the flat Home list (design D12).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiHomeItemRowFrame {
     /// The row's stable identity (design D2, D12): a command names it, the
     /// section's `selected` carries it, never a row position.
@@ -110,8 +105,7 @@ pub struct GuiHomeItemRowFrame {
 /// D12): the identity `App::home_stable_target` resolves. `Recent` carries
 /// the queue item's content id, whose serde form is itself (`provider` and
 /// `value`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowIdFrame {
     /// A `Continue watching` row's Emby item id.
     Continue(String),
@@ -123,8 +117,7 @@ pub enum GuiHomeRowIdFrame {
 /// `MediaSemanticState`: a resume state is `active` with the bounded
 /// percentage (`playing`'s resume position maps the same way), `played` is
 /// `played`, otherwise `ordinary`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowStateFrame {
     Ordinary,
     Played,
@@ -137,8 +130,7 @@ pub enum GuiHomeRowStateFrame {
 
 /// The kind one item row paints (design D12), mirroring
 /// `mbv::GuiHomeRowKind`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiHomeRowKindFrame {
     Collection,
     Media,
@@ -146,8 +138,7 @@ pub enum GuiHomeRowKindFrame {
 
 /// The Hero's facts for the selected row (design D12): the meta rows with
 /// their duration and progress roles, the overview, and the artwork.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiHomeHeroFrame {
     /// The hero's title.
     pub title: String,
@@ -197,6 +188,25 @@ impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
         }
+    }
+}
+
+/// The wire row id a carried row's identity sends (design D12): the same
+/// shape on the way out, so a command built from a carried row addresses
+/// exactly that row. The owned form is the ref form's delegate, so the
+/// variant names are hand-written once.
+impl From<&GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
+    fn from(id: &GuiHomeRowIdFrame) -> Self {
+        match id {
+            GuiHomeRowIdFrame::Continue(item_id) => Self::Continue(item_id.clone()),
+            GuiHomeRowIdFrame::Recent(content_id) => Self::Recent(content_id.clone()),
+        }
+    }
+}
+
+impl From<GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
+    fn from(id: GuiHomeRowIdFrame) -> Self {
+        Self::from(&id)
     }
 }
 

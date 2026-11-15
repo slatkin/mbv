@@ -8,7 +8,6 @@ use mbv::{
     GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
     GuiEmbyRowKind,
 };
-use serde::Serialize;
 
 use super::GuiArtShapeFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -16,8 +15,7 @@ use crate::art::GuiArtRef;
 
 /// The plain Emby-library destination's list part (row 8.1; design D8): the
 /// feed-group pills, the active list's rows, and the load facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyList {
     /// The plain Emby-library index the Emby commands name (design D2, row
     /// 8.1): the library whose content this is.
@@ -44,8 +42,7 @@ pub struct GuiEmbyList {
 
 /// The plain Emby-library destination's detail part (`gui-change-driven-sections`
 /// design D8): the core's selected row and its Hero.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyDetail {
     /// The core's selected row (design D2, row 8.1), as the frame painted
     /// it: a select command sends it back. The first row is the Hero
@@ -57,8 +54,7 @@ pub struct GuiEmbyDetail {
 
 /// The feed-group pill a press selects (row 8.1): `New` (the destination
 /// Latest view), `All`, or one root folder by its stable Service id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiEmbyFeedGroupFrame {
     /// The New pill: the library's destination-Latest snapshot, newest first.
     Latest,
@@ -79,8 +75,7 @@ impl From<GuiEmbyFeedGroup> for GuiEmbyFeedGroupFrame {
 }
 
 /// One pill of a feed-view library's pill row (row 8.1): single-select.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyPillFrame {
     /// The group the pill selects: the set-feed-group command carries it.
     pub group: GuiEmbyFeedGroupFrame,
@@ -97,16 +92,14 @@ pub struct GuiEmbyPillFrame {
 /// One row's kind (row 8.1), mirroring `mbv::GuiEmbyRowKind`: `collection`
 /// when the row is a folder or a boxset the folder-play rule expands,
 /// `media` on a playable leaf.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiEmbyRowKindFrame {
     Collection,
     Media,
 }
 
 /// One row of the plain Emby-library list (row 8.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyRowFrame {
     /// The row's stable identity (design D2, row 8.1): a command names it,
     /// the frame's `selected` carries it, never a row position.
@@ -125,8 +118,7 @@ pub struct GuiEmbyRowFrame {
 
 /// The Hero's facts for the selected row (row 8.1), with no Workspace: a
 /// plain Emby-library Hero carries none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyHeroFrame {
     /// The item's kind word for the Hero's kicker (design D17): `movie`,
     /// `video`, as the projection carries it.
@@ -157,8 +149,7 @@ pub struct GuiEmbyHeroFrame {
 
 /// One credit of the Hero's credits table (design D17, Q7), mirroring
 /// `mbv::GuiEmbyHeroCredit`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyHeroCreditFrame {
     /// The person's name.
     pub name: String,
@@ -258,5 +249,24 @@ impl From<&GuiEmbyHeroCredit> for GuiEmbyHeroCreditFrame {
             name: credit.name.clone(),
             role: credit.role.clone(),
         }
+    }
+}
+
+/// The wire feed group a carried pill's group sends (row 8.1): the same
+/// shape on the way out, so a command built from a carried pill addresses
+/// exactly that group.
+impl From<&GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
+    fn from(group: &GuiEmbyFeedGroupFrame) -> Self {
+        match group {
+            GuiEmbyFeedGroupFrame::Latest => Self::Latest,
+            GuiEmbyFeedGroupFrame::All => Self::All,
+            GuiEmbyFeedGroupFrame::Folder(folder_id) => Self::Folder(folder_id.clone()),
+        }
+    }
+}
+
+impl From<GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
+    fn from(group: GuiEmbyFeedGroupFrame) -> Self {
+        Self::from(&group)
     }
 }

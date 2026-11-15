@@ -1,36 +1,41 @@
 # GUI Client guide
 
 Read before any change to `crates/mbv-gui/`: the core thread, a bridge DTO, a
-window section, a leaf, a reported region, the theme, or the front end. Term
+window section, a leaf, a reported region, the theme, or the window. Term
 definitions live in `CONTEXT.md` and win any disagreement with this file. The
-`gui-client` spec and the `add-tauri-gui-client` design own the requirements
-and the decisions; this file describes what the code does.
+`gui-client` spec owns the requirements. The design of the first GUI change
+(`add-tauri-gui-client`, Tauri) recorded the first decisions, and the ADRs
+record the later ones. This file describes what the code does.
 
-The GUI Client is the Tauri 2 program `mbv-gui` (`crates/mbv-gui/`). It is a
+The GUI Client is the Dioxus Native program `mbv-gui` (`crates/mbv-gui/`),
+rendered by Blitz in the same process as its core thread (ADR 0039). It is a
 workspace member outside `default-members`: the default `cargo build` and
-nextest runs skip it, while `--workspace` clippy and fmt cover it. Every
-`--workspace` build compiles it, so it needs WebKitGTK 4.1 and a built `ui/`
-(`tauri::generate_context!` fails when `frontendDist` does not exist). The
-`make ui-install`, `ui-build`, `ui-check`, `ui-lint`, and `ui-test` targets
-wrap the pnpm steps. `make dev` builds `ui/`, builds `mbv` and `mbv-gui`
-together, and starts the window with `cargo run -p mbv-gui`. Both binaries
+nextest runs skip it, while `--workspace` clippy and fmt cover it. It needs no
+webview and no Node toolchain. Its GPU surface needs a Vulkan or GL driver.
+`make dev` builds `mbv` and `mbv-gui` together, and starts the window with
+`cargo run -p mbv-gui`. Both binaries
 must come from one build: the GUI starts its Owner from the sibling `mbv`
 binary, and the handshake refuses an Owner with a different build id.
 
 ## Process shape: one core thread
 
-Tauri owns the main thread and the window's event loop. `src/main.rs` builds
-the Tauri application, registers the six bridge commands, starts the core
-thread in `setup`, turns the webview's context menu off, and joins the core
-thread after the event loop ends so a quit's exit teardown completes before
-the process exits.
+The window's event loop runs on the main thread. `src/main.rs` installs the
+app log, starts the core thread with `core_thread::spawn`, and launches the
+window (`src/window/launch.rs`, a copy of the `dioxus-native` launch body with
+five changes: the net provider, the viewport and frame hooks, the window
+attributes, the shell proxy for the quit edge, and no tokio runtime). It joins
+the core thread after
+the event loop ends so a quit's exit teardown completes before the process
+exits.
 
 `src/core_thread.rs` runs one dedicated, synchronous thread. It loads the
 configuration, declares the GUI Client (`declare_gui_client`), runs the Owner
 attach campaign (`src/attach.rs`), and then runs `ClientCore::tick` in a
 loop. The thread waits on a `std::sync::mpsc` channel of `CoreInput` values
-(`Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Wake`, `Sync`, `Close`)
-with a timeout of `CLIENT_IDLE_CADENCE`. The installed `ClientWaker` sends
+(`Key`, `Pointer`, `Layout`, `Library`, `Settings`, `Sync`, `Art`, `Wake`,
+`Close`) with a timeout of `CLIENT_IDLE_CADENCE`. `Art` carries one image load
+that the `mbv-art` scheme raised: an `ArtRequest` with the request path and a
+reply callback that answers it once. The installed `ClientWaker` sends
 `Wake` into the same channel, so Owner events and timers wake the core as
 they wake the TUI. `CoreThread` implements `ClientTickHost` over the slice's
 Surface state; the drains for surfaces the first slice does not present are
@@ -40,10 +45,10 @@ TV-workspace re-push) runs because the Queue playback visual slot paints: it
 lands the slot's artwork fetches in the image cache the `mbv-art` scheme
 answers from.
 
-The Tauri command handlers never touch the `App`. They only translate the
-input and push it into the channel. tokio stays inside Tauri's runtime; no
-mbv code in `mbv-gui` is `async` apart from what a Tauri command signature
-requires (design D12 — `mbv-gui` is a tokio edge, like `mbv-desktop`).
+The window's event handlers never touch the `App`. They only translate the
+input and push it into the channel through `CoreLink`. No mbv code in
+`mbv-gui` is `async`. The `dioxus-native` asset resolver is the only tokio
+edge in `mbv-gui`.
 
 The core thread sends a section batch after every tick that changed state,
 through `SectionLedger::collect` (`src/sections.rs`, design D2): the compared
@@ -54,11 +59,9 @@ timeout tick with nothing changed sends nothing. The wait on
 `CLIENT_IDLE_CADENCE` is a tick timer, not a repaint timer: the shared tick
 has time-based phases (the delayed settings save, the session polls, the
 websocket keepalive, toast expiry), so the wait stays, and a tick it ends
-sends only what changed. The window asks for a full snapshot with the `sync`
-command once its `mbv://sections` listener is subscribed, so a
-window-content reload does not wait for a state change. The window's
-`Destroyed`
-event delivers `CoreInput::Close`; the run ends as a quit, and the exit
+sends only what changed. The window asks for a full snapshot with `CoreLink::sync` when its root
+mounts, so a restarted window does not wait for a state change. When the
+event loop ends, `main` delivers `CoreInput::Close`; the run ends as a quit, and the exit
 boundary runs `client_exit_teardown` before the `App` drops.
 
 When the Owner process itself exits while the window is open, the Client
@@ -76,7 +79,7 @@ the reason with the App's exit message.) An unannounced ctrl-link loss is
 not an exit: the App raises the DaemonLost recovery modal
 (`daemon-disconnect-handling`: "An unannounced connection loss raises a
 recovery dialog"), and the GUI presents it as the blocking
-`GuiOverlay::DaemonLost` overlay (`DaemonLostOverlay.svelte`, the
+`GuiOverlay::DaemonLost` overlay (`src/window/components/daemon_lost_overlay.rs`, the
 `daemonLost` overlay section). The window stays open and dead until one of
 the dialog's three choices answers it, and each answer runs the shared
 `App::apply_daemon_lost_intent` — the same action the TUI's modal handler
@@ -84,9 +87,10 @@ runs — so the GUI holds no recovery path of its own.
 
 ## The bridge contract
 
-Rust to front end there is one event, `mbv://sections` (`SECTIONS_EVENT` in
-`src/main.rs`). Its payload is a `GuiSectionBatch` (`src/bridge/sections.rs`),
-the one update the core sends for a tick. The batch has one optional field
+The core sends the window one message, `WindowEvent::Batch`, on the window
+channel. It carries a `GuiSectionBatch` (`src/bridge/sections.rs`), the one
+update the core sends for a tick. The batch is a Rust value that crosses the
+channel as it is: no serialization runs. The batch has one optional field
 for each window section; a present field is a `GuiSection { revision, value }`,
 and an absent field means the window already holds that section's revision.
 A section whose content can be absent has an `Option` value, so a `null`
@@ -99,7 +103,7 @@ marks, active slot, row hover, row drag, and each item row's zebra parity
 queue finish's tail offset, right-column mode, and filter text with its
 caret fact (`summary`, `GuiQueueSummary`), the collapse and queue-fold
 toggles the
-Client core holds, with the UI-reset counter `uiResetEpoch` beside them
+Client core holds, with the UI-reset counter `ui_reset_epoch` beside them
 (`panel`, `GuiPanelToggles`), the open menu or popover (`overlay`,
 `Option<GuiOverlayFrame>`: the row menu with its entries, key hints, and
 destructive flags, the track popover, the playback-target chooser, the
@@ -139,15 +143,14 @@ to `mbv-art://localhost/card/<key>` for a cached card, a `placeholder`
 reference to the bundled placeholder, a `loading` reference with no URL while
 the fetch is in flight or awaits its retry, or no reference when the slot has
 none. `src/art.rs` builds every URL, and the core answers each load from its
-image cache through `App::gui_art_source`. The `playback` section's compare
+image cache through an `ArtRequest` (`src/art.rs`). The `playback` section's compare
 carries the reference again only when the slot's art changed (design D10); a
-window-content reload's `sync` re-sends the section. The window paints the
-reference through `ArtImage.svelte`. The payload is a URL, never the cached
-bytes, so the section does not grow with the artwork. The `mbv-art` scheme
-answers a cached key with 200, the source's own MIME type, and
-`Cache-Control: max-age=31536000, immutable`; a key with no entry answers 404
-with `Cache-Control: no-store`, so the webview asks the core again on its next
-load. The GUI attaches with `ImageDecode::SourceOnly`, so its image cache keeps
+window restart's `sync` re-sends the section. The window paints the
+reference through `src/window/components/art_image.rs`. The payload is a URL, never the cached
+bytes, so the section does not grow with the artwork. The net provider
+(`src/window/net.rs`) answers a cached key with the source's bytes. A key with
+no entry sends `ArtEvent::Failed` for the URL, and the window asks again on its
+capped retry (*Clocks and frames*). The GUI attaches with `ImageDecode::SourceOnly`, so its image cache keeps
 only the server bytes and the size from the image header, and never decodes
 pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
@@ -168,24 +171,26 @@ bar carries no hover. An item with no
 trickplay, a sheet not yet cached, or a tile the server does not hold paints
 the time and the chapter without a tile.
 
-Front end to Rust there are six commands, registered in
-`src/main.rs`. Each only pushes into the core channel:
+The window reaches the core through six methods on `CoreLink`
+(`src/window/channel.rs`). Each only pushes into the core channel:
 
-- `key(DomKey)`: the DOM `KeyboardEvent` fields. `src/bridge/keys.rs`
-  translates them to a neutral `KeyEvent`, following the TUI's crossterm
+- `key(KeyEvent)`: a neutral key. `src/window/input.rs` builds a `DomKey` from
+  the Dioxus keyboard event, and `src/bridge/keys.rs` translates it to a
+  neutral `KeyEvent`, following the TUI's crossterm
   edge: SHIFT folds an uppercase letter to lowercase, Shift+Tab is `BackTab`,
   Meta produces `Key::Null` (the neutral modifiers have no Meta bit), and a
   key the vocabulary cannot name is `Key::Null` too.
-- `pointer(DomPointer)`: kind (press, release, move, wheel, cancel), button,
-  held buttons, position in logical pixels, and wheel deltas.
-  `src/bridge/pointer.rs` translates to `Option<PointerEvent>`, mirroring the
+- `pointer(PointerEvent)`: a neutral pointer event. `src/window/input.rs`
+  builds a `DomPointer` (kind: press, release, move, wheel, cancel; button;
+  held buttons; position in logical pixels; wheel deltas), and
+  `src/bridge/pointer.rs` translates it to `Option<PointerEvent>`, mirroring the
   TUI's `neutral_pointer`: a move with the primary button held is the neutral
   drag, the vertical delta's sign picks the wheel direction, and an event the
   neutral vocabulary cannot represent drops. A `cancel` is the one kind no
-  button or position decides: the front end sends it when the webview loses
-  the gesture — a `pointercancel`, a `pointerleave` with a button held, or the
+  button or position decides: the window sends it when the window loses the
+  gesture — a `pointercancel`, a `pointerleave` with a button held, or the
   window's blur — and the core drops the drag state and sends no move.
-- `report_layout(LayoutReport)`: whole visible rows per list, the painted
+- `layout(LayoutReport)`: whole visible rows per list, the painted
   regions with their semantic target ids, and the panel container's painted
   size in logical pixels (`src/bridge/layout.rs`).
 - `library(GuiLibraryCommand)`: the Library panel's one semantic request,
@@ -194,20 +199,20 @@ Front end to Rust there are six commands, registered in
 - `settings(GuiSettingsCommand)`: the Settings screen's one semantic request,
   pushed into the core channel as `CoreInput::Settings` (*The Settings screen*
   names the variants).
-- `sync()`: the window asks for a full snapshot once its `mbv://sections`
-  listener is subscribed (design D4). The core pushes `CoreInput::Sync`, and
+- `sync()`: the window asks for a full snapshot when its root mounts. The core pushes `CoreInput::Sync`, and
   the ledger releases every section the window holds, so the next batch
-  carries every present section at its current revision. No batch can fall
-  between the subscribe and the snapshot. A `sync` marks no section.
+  carries every present section at its current revision. No batch can be lost
+  between the mount and the snapshot, because the channel holds it until the
+  root drains it. A `sync` marks no section.
 
-The front end interprets no input apart from the Library panel's own keys and
-gestures (*The Library panel*). `ui/src/lib/bridge/input.ts` prevents the
-default action of every keydown (no webview default such as reload, find,
-zoom, or back navigation runs) and forwards pointerdown, pointerup,
-pointermove, and wheel events; it converts a wheel delta in lines or pages to
+The window interprets no input apart from the Library panel's own keys and
+gestures (*The Library panel*). `src/window/input.rs` builds the `DomKey` and
+`DomPointer` values from the Dioxus events. It prevents the default action of
+every keydown that the window does not leave to a focused text field, so no
+browser-style default runs, and it converts a wheel delta in lines or pages to
 logical pixels before it sends. A keydown meets the window's key router first
-(`KeyRouter`), which `App.svelte` installs, and only a key the router leaves to
-the core reaches the `key` command. A lost gesture — a `pointercancel`, a
+(the Settings screen's steps, then the Library panel's), and only a key the
+router leaves to the core reaches the `key` method. A lost gesture — a `pointercancel`, a
 `pointerleave` with a button held, or the window's blur — forwards the
 `cancel` kind. The core's `PointerGestureState` recognizes
 the gesture; a recognized gesture's point resolves against the combined hit
@@ -219,12 +224,23 @@ resolves to nothing. The leaf adapters (`src/leaves.rs`: `QueueLeaf`,
 fields and emit the same semantic `Msg`s the TUI components' pointer paths
 emit.
 
+Every key rests on one DOM fact: the document's focus sits on the root
+`main`, which carries the window's only `keydown` handler (`ROOT_ELEMENT_ID`
+in `src/window/app.rs`). Blitz clears the DOM focus after a click that
+matches no text input, checkbox, radio, summary, label or link — every queue
+row is a `button` and every panel is a `div` — and it drops the focus when
+the focused node is removed, so the launch copy gives the root the focus
+back after each window event (`restore_root_focus` in
+`src/window/launch.rs`, invariant 33). Without that repair the shell delivers
+every keydown to the document's `<html>` element, which carries no Dioxus
+id, and no key of the window works at all.
+
 ## Layout reports and the hit map
 
-`ui/src/lib/bridge/layout.ts` is the single layout registry. Every mounted
+`src/window/layout.rs` is the single layout registry. Every mounted
 surface registers a contribution of list capacities and painted regions
 under a `Symbol` key; the reporter merges all contributions into one
-`LayoutReport` and sends it through `report_layout`. Reports coalesce to one
+`LayoutReport` and sends it through `LayoutReporter::report_layout`. Reports coalesce to one
 send per turn of the event loop, and a contribution identical to its last
 value sends nothing — a batch that moves only the cursor moves no region.
 A report marks no section and forces no batch (design D4): a layout change
@@ -232,7 +248,7 @@ that moves a section's content moves it through the section's own compare,
 and a report that moves nothing sends nothing. The core rebuilds its whole
 hit map from each report, so a surface must
 never send a partial one: report on mount, report after each paint that
-moved a region, and `retractLayout` on unmount. Even a surface with no
+moved a region, and `LayoutReporter::retract_layout` on unmount. Even a surface with no
 interactive regions reports its (empty) contribution, so the merged report
 accounts for it.
 
@@ -241,7 +257,7 @@ The core's `apply_layout` (`src/core_thread.rs`) does three things: a list's
 resting-scroll clamp — `QueueSurface::set_viewport_height`); the reported
 regions rebuild the combined `HitMap<RegionTarget>` (`hit_map` in
 `src/bridge/layout.rs`, in paint order); and the reported container size is
-stored as painted (design D10). The core does not classify the size. The front end
+stored as painted (design D10). The core does not classify the size. The window
 picks the panel state from the same measurement, and the reported capacity
 and regions already measure the layout that size painted (design D10). The
 `RegionTarget` ids mirror the surface hit-target enums variant
@@ -259,11 +275,60 @@ scroll. The core's viewport decides which rows the `queue` section carries;
 wheel
 input goes to the core like any pointer event, so scroll follows the cursor
 through the same Surface state rules as the TUI. The list's rows are 30
-logical pixels tall (`QueuePanel.svelte`), and the front end measures the
-list's height and reports whole rows as capacity. `App.svelte` measures the
-panel container with a `ResizeObserver` and reports that size through the
-same reporter (`reportContainerSize`), so the state it paints and the
+logical pixels tall (`src/window/components/queue_panel.rs`), and the window measures the
+list's height and reports whole rows as capacity. `track_container_size`
+(`src/window/layout.rs`) measures the panel container after each layout epoch
+and reports that size through the same reporter, so the state it paints and the
 capacity the core applies come from one measurement.
+
+## Clocks, the stylesheet, and the ellipsis
+
+The window has no `setTimeout` and no `requestAnimationFrame`. `src/window/clock.rs`
+provides both as a `Clock`.
+
+- **Timers.** `TimerClock` runs one thread with a deadline queue. A passed
+  deadline sends `WindowEvent::Timer`, and the root routes it to the surface
+  that asked. The search debounce (200 ms, `library/search.rs`), the artwork
+  retry, and the minute clock use it. Tests inject a clock, and no test sleeps.
+- **Frames.** Every presented frame makes the launch copy's redraw hook send
+  `WindowEvent::Frame`; `Clock::want_frames` gates only the request for the
+  next redraw. The playhead wants frames while it plays. The frames follow the
+  presented frames that the renderer paces, so a paused window still answers a
+  pending re-measure (see below).
+- **Artwork retry.** A missed image keeps its loading fill and asks again for
+  the same URL. The wait starts at 1 s, doubles, and stops at 30 s
+  (`components/art_image.rs`). A new URL drops the failure and its timer.
+
+The stylesheet is `assets/app.css`. It imports Tailwind CSS v4 and the vendored
+shadcn and `tw-animate-css` files (MIT, in `assets/vendor/`). It scans
+`src/window` for classes, and it declares the six `@font-face` rules. `make
+gui-css` builds `assets/app.generated.css` from it with the Tailwind standalone
+CLI, release v4.3.5. The developer installs the release asset
+`tailwindcss-linux-x64` (SHA-256
+`e47695cee3f0d90623a91f3939b08bdee610eb5ad99340adff9d4145b284d6cc`) on `PATH`
+as `tailwindcss`, or passes `TAILWINDCSS=/path`. The generated file is
+committed, and `src/window/app.rs` includes it with `include_str!`. A normal
+build runs no CSS tool, and CI does not check the committed file against the
+sources. A class added to the Rust sources needs `make gui-css` before its
+commit. A fresh worktree needs only the CLI on `PATH`; no Node package is
+installed.
+
+`Truncate` (`src/window/truncate.rs`) replaces the `truncate` text box. It keeps
+the box's `MountedData`. When the full text does not fit the content width, an
+effect writes a cut text that ends in `…`. The measure uses one process-wide
+`parley` font context with the six bundled faces, and a `TextStyle` that each
+call site passes with the family, size, weight, and letter spacing of its class
+string. A binary search over grapheme boundaries finds the longest prefix that
+fits with the ellipsis. The `truncate` class stays, so the box still clips. A
+measure that runs one frame late shows a clipped text, not an overflow. A box
+with no measured width — a client rect of zero, from a document whose layout
+has not resolved — keeps its whole text and clips it; it never paints the
+ellipsis alone. A box mounts unmeasured: its first measure can read the layout
+from before its insertion, so that first measure sets a window-wide re-measure
+request, and the drain's presented-frame handler (`WindowEvent::Frame`) takes it
+and bumps the layout epoch once, after the frame resolved the document. Only a
+first measure asks, so the re-measure it drives asks for nothing and a
+collapsed box settles after one bump.
 
 ## Theme mapping
 
@@ -273,7 +338,7 @@ things. The
 variant for variant — `Role` stays foreground-only — and the two `From`
 conversions are exhaustive, so a new role fails the build until both sides
 carry it (`GuiRole::ALL` is the one unchecked list; add the role there too).
-The `chrome` section carries the eight fill values the shadcn-svelte
+The `chrome` section carries the eight fill values the shadcn
 chrome variables point at (`background`, `card`, `popover`, `muted`,
 `secondary`, `sidebar`, `border`, `input`) plus the queue column's own
 surfaces: `queueColumn` and `queueColumnFocused`
@@ -284,14 +349,14 @@ column paints), `queuePanel` and `queuePanelFocused`
 collapsed rail), and `queueFooterBand` (`Surface::QueuePanelBand`, behind
 the footer pills). Each chrome fill resolves the `Surface` the TUI paints
 the same concept with through `surface_colors` — the focus-reactive
-pairs carry both slots, and the front end picks between them on the
+pairs carry both slots, and the window picks between them on the
 `focus` section's Panel-focus fact — so the `mbv-theme` surface table stays
 the
 one fill authority and a palette edit recolours the chrome together with
 the roles.
 
 The queue's canvas paint also uses colours that name no `mbv-theme` slot.
-`app.css` carries them as GUI-local `--canvas-*` custom properties — the
+`assets/app.css` carries them as GUI-local `--canvas-*` custom properties — the
 header, rows, footer, hover, row menu, popover, and drag chrome — and every
 component references a token, never a literal hex. No `theme.rs` remap rides
 along: `mbv-theme` stays the TUI's palette (`align-gui-with-design-canvas`
@@ -302,10 +367,10 @@ live check.
 
 The theme is a gated section (design D4): the ledger marks it once at core
 start, so the first batch carries it; a palette change marks it again; and
-a `sync` re-sends it, so a window-content reload gets the theme without a
-state change. `ui/src/lib/bridge/theme.ts`
+a `sync` re-sends it, so a window restart gets the theme without a
+state change. `src/window/theme.rs`
 writes each role and chrome fill into a `--mbv-<name>` custom property on
-`:root`, and `ui/src/app.css` points every shadcn-svelte variable at the mbv
+`:root`, and `assets/app.css` points every shadcn variable at the mbv
 properties. There is one palette and no light or dark variant.
 
 ### Colour by data type
@@ -313,7 +378,7 @@ properties. There is one palette and no light or dark variant.
 Weight and size carry hierarchy; colour carries the data type (design D14).
 A title or a body line stays `--canvas-heading`, `--canvas-text`, or
 `--canvas-muted`, and each data type names one `--canvas-type-*` token in
-`app.css`. Each token aliases the hue the palette already carried, except
+`assets/app.css`. Each token aliases the hue the palette already carried, except
 the secondary title's purple, which the GUI adds.
 
 | Type | Token |
@@ -327,8 +392,8 @@ the secondary title's purple, which the GUI adds.
 
 A line that joins values of several types is built as typed segments where it
 is built, never split in the window. The core's Hero meta rows and the
-window's own facts lines (`ui/src/lib/library/hero.ts`) return segments, and
-`ui/src/lib/components/TypedText.svelte` paints them: each segment maps its
+window's own facts lines (`src/window/library/hero.rs`) return segments, and
+`src/window/components/typed_text.rs` paints them: each segment maps its
 kind to its token, and a plain segment inherits the line's own colour. A
 time or a date repeated down a list — a duration column, a tree row's year,
 the queue's right column — paints at `--canvas-type-repeat-opacity`; a
@@ -340,23 +405,24 @@ for a parent line).
 
 ## Text and icons
 
-The front end bundles the two canvas faces (design D8): IBM Plex Sans at
+The window bundles the two canvas faces (design D8): IBM Plex Sans at
 weights 400, 500, and 600 for text, and JetBrains Mono at the same weights
-for times, key hints, chips, and counters, with tabular figures. `main.ts`
-imports the latin woff2 subsets from `@fontsource/ibm-plex-sans` and
-`@fontsource/jetbrains-mono`, and `app.css` sets `--font-sans` to
-`'IBM Plex Sans', system-ui, sans-serif` and `--font-mono` to
-`'JetBrains Mono', monospace`. The woff2 files build into `ui/dist`, so the
-window fetches no font at runtime and the CSP's `default-src 'self'` covers
-`font-src`. The CSP's `img-src` is `'self' mbv-art:`: the window loads an image
-only through the `mbv-art` scheme.
+for times, key hints, chips, and counters, with tabular figures. The latin
+woff2 subsets of `@fontsource/ibm-plex-sans` and `@fontsource/jetbrains-mono`
+(5.3.0) sit in `assets/fonts/`, and `src/window/net.rs` compiles them into the
+binary with `include_bytes!` and answers `mbv-asset://localhost/font/<file>`.
+The window reads no font from disk at runtime. `assets/app.css` sets
+`--font-sans` to `'IBM Plex Sans', system-ui, sans-serif` and `--font-mono` to
+`'JetBrains Mono', monospace`. The window loads an image only through the
+`mbv-art` scheme, which the net provider answers.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
-`@lucide/svelte`, with one exception: a playback-target chooser row paints
-the brand mark of its target kind (`TargetBrandIcon.svelte`, whose three paths
-are simple-icons', CC0) for Emby, Google Cast, and the mpv Player owner,
-because Lucide carries no brand glyph. The transport controls and the
-playback-target indicator are Lucide icons. The now-playing row shows the canvas's play glyph
+`src/window/icons.rs` only (the Lucide set, drawn as inline SVG), with one
+exception: a playback-target chooser row paints the brand mark of its target
+kind (`src/window/brand_icons.rs`, whose three paths are simple-icons', CC0) for
+Emby, Google Cast, and the mpv Player owner, because Lucide carries no brand
+glyph. The transport controls and the playback-target indicator are Lucide
+icons. The now-playing row shows the canvas's play glyph
 beside its title, in the accent colour (the `queue` section still names
 `active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
@@ -372,15 +438,15 @@ no leading icon, as the canvas draws them.
 
 ## The panel's four states
 
-`ui/src/lib/bridge/panel.ts` picks one of four states (design D10):
+`src/window/panel.rs` picks one of four states (design D10):
 expanded, compact strip, expanded without queue, and rail. The state comes
 from the measured size of the panel container plus the `panel` section's
 two toggles.
 It never comes from the window size, and the window holds no interaction
 state: the size is a measurement and the toggles are the Client core's.
-`App.svelte` measures the container with a `ResizeObserver` and reports the
-size through `reportContainerSize` — the same measurement
-`LayoutReport.containerSize` carries to the core — so the painted state, the
+`track_container_size` measures the container after each layout epoch and
+reports the size through `LayoutReporter::report_container_size` — the same
+measurement `LayoutReport.container_size` carries to the core — so the painted state, the
 list capacity, and the hit map follow one size.
 
 The `z` toggle (`GuiPanelToggles.collapsed`) wins over every size and paints
@@ -392,25 +458,23 @@ line reads `GuiQueueSummary.nextTitle`, which the core resolves from the
 queue rather than from the painted rows, because the strip paints no queue
 list. The `q` toggle (`GuiPanelToggles.queueFolded`) paints the expanded
 artboard with the queue replaced by its one-line summary. A height of zero
-reads as "not measured yet" and paints the expanded artboard, so a reload
-does not flash a strip. `Panel.svelte` holds the artwork and the trickplay
+reads as "not measured yet" and paints the expanded artboard, so a restart
+does not flash a strip. `src/window/components/panel.rs` holds the artwork and the trickplay
 sheet above the state branches, because a frame re-carries each only when it
 changed: a state that mounts on a later frame paints the value the expanded
 artboard already adopted.
 
-`tauri.conf.json` declares a 400×200 minimum window size, so a floating
-window cannot shrink past a usable state. The width is the canvas
-artboard's authored 400 px; the height sits under the 520 px strip
-threshold, so the floor leaves every state reachable — the rail through
-`z`, the strip by size, the expanded artboard above it. A tiling manager
-may impose its own larger floor; that floor is the compositor's, not the
-window's.
+The window sets a 400×200 logical-pixel floor, the Tauri build's
+`minWidth`/`minHeight` (`tauri.conf.json`): `window/launch.rs` builds the
+window attributes with `with_min_surface_size`, so a floating window cannot be
+dragged below the size at which the compact strip lays out. A tiling manager
+may impose a larger floor; that floor is the compositor's, not the window's.
 
 ## The player panel and the queue
 
 The slice's one window paints the design canvas's player panel on the queue
-column's backdrop (`App.svelte`, `Panel.svelte`).
-`ui/src/lib/bridge/cells.ts` fixes one TUI text row at 28 logical pixels and
+column's backdrop (`src/window/app.rs`, `src/window/components/panel.rs`).
+`src/window/cells.rs` fixes one TUI text row at 28 logical pixels and
 one text column at 14 (the terminal cell's 1:2 aspect at that height), and
 every panel offset — the paddings, the gaps, the queue box's inset — is a
 `calc()` over the `--mbv-cell-row` and `--mbv-cell-col` properties.
@@ -419,7 +483,7 @@ The `align-gui-with-design-canvas` change aligned the queue's paint with the
 canvas and nothing else: a paint-only restyle of the queue's four bands
 with no new command, derivation, key, or contract. The artboards (`Main.dc.html`, `Menus.dc.html`)
 and the change's gap audits, copied into that change's directory under
-`openspec/changes/align-gui-with-design-canvas/`, are the reference for
+`openspec/changes/archive/2026-11-07-align-gui-with-design-canvas/`, are the reference for
 the exact values; this file records what the paint changed, not every
 canvas value.
 
@@ -431,8 +495,8 @@ controls) and the right-aligned status word. A press on the target opens the
 output marked; Esc or a press elsewhere closes it in the core. The artwork
 follows the header with the season-and-episode badge, and the title and
 parent line sit below it: where the TUI composites the title into the
-artwork's top text row with a scrolling marquee, the GUI truncates it with
-CSS ellipsis. The art has no fixed pixel box: the slot sizes at most 24 row
+artwork's top text row with a scrolling marquee, the GUI measures and cuts it with
+`Truncate`. The art has no fixed pixel box: the slot sizes at most 24 row
 units of the cell grid.
 
 The scrubber paints the played fraction, the chapter boundaries, the intro
@@ -445,28 +509,28 @@ The window predicts the playhead between the `playhead` section's anchors
 `GuiPlayhead`: the active fact, the active slot, the position and runtime in
 ticks, and the paused fact — only on a changed fact or a new sample that
 drifted past the one-second tolerance, and it carries no timestamp, because
-the core and the webview share no clock. The window stamps each anchor with
-its own `performance.now()` at receipt (`ui/src/lib/bridge/playhead.ts`, the
-one module the sections' `applyBatch` stamps it through) and derives from it,
-until the next anchor: the predicted position (the anchor's position advanced
-by the elapsed monotonic time while playing, held while paused, clamped into
+the core and the window share no clock. The window stamps each anchor
+with its own monotonic clock at receipt: `apply_batch` (`src/window/app.rs`)
+calls `Playhead::stamp_if_new` (`src/window/playhead.rs`), which reads the clock
+through the `Times` seam. The window derives from that stamp until the next
+anchor: the predicted position (the anchor's position advanced by the elapsed monotonic time while playing, held while paused, clamped into
 the runtime), the played fraction, the elapsed and remaining clocks
-(`formatDurationShort`, the port of the TUI's shared duration formatter), and
-the active item's finish epoch. A `requestAnimationFrame` loop drives the
-prediction only while the anchor is active and not paused, and a `minute`
-store — one `setTimeout` re-armed at each wall-clock minute — moves the
-finish times while playback is paused, with no update from the core. The
-panels read the derived stores: the scrubber's fill and clocks, the
-transport's finish clock (`formatWallClock`, the zero-padded `HH:MM` in the
+(`format_duration_short`, the port of the TUI's shared duration formatter),
+and the active item's finish epoch. The frame clock advances the prediction
+only while the anchor is active and not paused (see *Clocks* above). The
+`minute` counter (`Playhead::minute`) moves the finish times while playback is
+paused, with no update from the core: one timer re-arms at each wall-clock
+minute. The panels read the derived signals: the scrubber's fill and clocks, the
+transport's finish clock (`format_wall_clock`, the zero-padded `HH:MM` in the
 window's local zone), the rail's ring and remaining time, the compact
 strip's progress line, the queue header's and the folded line's finish
-clock — the wall clock at the summary's `tailSecs` past the active item's
+clock — the wall clock at the summary's `tail_secs` past the active item's
 end, with the ` +1d` suffix when the finish lands past the local day, the
 rule `queue_finish_clock` runs in Rust for the TUI — each row's "Ends at"
-clock (the same wall clock at the row's `endsAfterSecs` offset), the active
+clock (the same wall clock at the row's `ends_after_secs` offset), the active
 queue row's progress, and the Audiobooks Workspace's current chapter: the
 chapter row whose `startTicks <= position < endTicks` span holds the
-predicted position while the Hero's book is the frame's `playingBookId`;
+predicted position while the Hero's book is the frame's `playing_book_id`;
 the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
 — never holds one.
 
@@ -539,7 +603,7 @@ one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
 for the same move on the keyboard-selected row. A `cancel` pointer kind
 drops the drag, the row hover, and the scrubber hover without a move.
 
-The shared confirmation modal (`ConfirmOverlay.svelte`) paints window-modal
+The shared confirmation modal (`src/window/components/confirm_overlay.rs`) paints window-modal
 over every panel on the `--canvas-modal-scrim` backdrop. `ask_confirm` holds
 the modal as `GuiOverlay::Confirm` and still raises the shell's own
 `OverlayRequest::Confirm`, which the GUI leaves undrained because it mounts
@@ -555,7 +619,7 @@ transfer the prompt guarded unwinds. Each button reports a `confirm` region
 and the core executes the button's own key hint, so a press answers what the
 window painted; a press whose region outlived the modal executes nothing.
 
-The daemon-lost recovery dialog (`DaemonLostOverlay.svelte`) paints in that
+The daemon-lost recovery dialog (`src/window/components/daemon_lost_overlay.rs`) paints in that
 same window-modal language, on the same scrim, whenever the App raised the
 TUI's DaemonLost modal: `raise_daemon_lost_modal` holds the shared
 `DaemonLostModal` as `GuiOverlay::DaemonLost` beside the TUI's raise, and
@@ -582,7 +646,7 @@ toast paints inline at its centre in the severity colour.
 
 `GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
 state and the live toast with its severity. The Queue column's canvas has no
-separate status bar: `QueueFooter.svelte` paints both facts in the footer
+separate status bar: `src/window/components/queue_footer.rs` paints both facts in the footer
 line. The
 badge drops while a toast is live — the TUI's pill-drop rule — and the
 toast moves no layout, because the line is always painted and the toast
@@ -598,12 +662,12 @@ place of the hints.
 ## The Library panel
 
 The GUI paints a Library panel in a column beside the Queue panel
-(`LibraryPanel.svelte`). It follows the design canvas's Library artboard, not
+(`src/window/components/library_panel.rs`). It follows the design canvas's Library artboard, not
 the TUI: the GUI does not keep parity with the TUI, and the TUI does not change
 (ADR 0036). The panel's interaction state lives in the window content, and the
 Client core holds the data selection and the actions (design D1).
 
-| Window content (`ui/src/lib/library/`) | Client core (`App`) |
+| Window content (`src/window/library/`) | Client core (`App`) |
 | --- | --- |
 | Cursor, hover, scroll, open tree nodes | The active destination (`App::tab`) |
 | Focus inside the panel (pill row, list, Hero, tracklist) | The selected collections of each destination |
@@ -616,7 +680,7 @@ what to save at exit. The window content changes it only by a command, and the
 frame carries it back, so the pill row paints the core's set. The panel uses
 no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
-recogniser or hit map. `LibraryPanel.svelte` paints `LibraryTopBar` (the
+recogniser or hit map. `src/window/components/library_panel.rs` paints `LibraryTopBar` (the
 Home icon, one tab per Service library destination, and the Search field
 with its results dropdown), the destination's pill row (`LibraryPills` in
 Music; `LibraryShowsPills`, `LibraryEmbyPills`, `LibraryPodcastsPills`, and
@@ -650,7 +714,7 @@ list can hold thousands of rows, so each section carries its revision, and its
 value rides a batch only when that revision changes, as the visual slot's
 artwork does. The ledger compares each slot on its own. A pick therefore sends
 only `libraryDetail`, and a row-menu open sends only `rowMenu`. Each value is an
-`Option`, so a `null` clears its section. A window-content reload calls `sync`,
+`Option`, so a `null` clears its section. A window restart calls `sync`,
 which releases every section the window holds, so the next batch re-sends each
 present Library section at its current revision.
 
@@ -659,11 +723,11 @@ The `library` mark (design D3) names the pass. The pass makes one projection
 call per destination, so the three slots share one build, and each slot keeps
 its own compare. A build that matches the slot's last built value sends nothing.
 
-The window keeps one store per section: `libraryList`, `libraryDetail`, and
-`rowMenu` in `ui/src/lib/bridge/sections.ts`. `applyBatch` writes a store only
-when the batch carries a revision the window does not hold. `LibraryPanel.svelte`
-narrows the list and the detail through `libraryPair`
-(`ui/src/lib/library/parts.ts`). The pair narrows only when both `kind` tags
+The window keeps one signal per section: `libraryList`, `libraryDetail`, and
+`rowMenu` in `src/window/sections.rs`. `Sections::apply_batch` writes a signal only
+when the batch carries a revision the window does not hold. `src/window/components/library_panel.rs`
+narrows the list and the detail through `library_pair`
+(`src/window/library/parts.rs`). The pair narrows only when both `kind` tags
 match, so a mismatched pair paints nothing.
 
 `search` is the Search section (design D12, row 12.1):
@@ -714,7 +778,7 @@ shared flat-list vocabulary); `state` (`ordinary`, `played`, or
 `{ active: { progress } }` with the Continue Watching resume percent);
 and `art` (`GuiArtRef | null`, the row's card art for Emby items only —
 the Audiobookshelf and Feed rows paint without art in Phase 2, and the
-front end paints its own placeholder while `null`). `GuiHomeDetail`'s `selected`
+window paints its own placeholder while `null`). `GuiHomeDetail`'s `selected`
 carries the core's selected row the select command last named — the first item row is
 the Hero default, so the Hero paints as soon as a section lands; a stale
 frame's selection resolves on its own rows or falls back without a hero.
@@ -927,7 +991,7 @@ tree shows no playing marker). An album carries `album_id`,
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
 `album`, and its `menu` entries with `label`, `key_hint`, and `index` (the
-entry's index in the shared builder's order, so a front end that paints only
+entry's index in the shared builder's order, so a window that paints only
 some entries still executes the one it painted). The `rowMenu` section
 (`GuiLibraryRowMenuFrame`) carries the item of the `rowMenu` command with the
 TUI menu builder's full entries for it, which the right-click item menu
@@ -954,7 +1018,7 @@ Hero keeps its Service-scoped cover key and is not warmed.
 
 ### The `library` command
 
-`library(GuiLibraryCommand)` is the fourth bridge command (`src/main.rs`). It
+`library(GuiLibraryCommand)` is the fourth `CoreLink` method (`src/window/channel.rs`). It
 only pushes `CoreInput::Library` into the core channel, as the other commands
 do. `src/bridge/library.rs` translates the wire variants and
 `App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
@@ -1016,7 +1080,7 @@ runs the TUI's `ActivateChapter` rule on a Workspace chapter row — one
 absolute seek on the active book's merged timeline, or a replace-and-start at
 the chapter's offset on another book; and `absQueue` (`libIdx`, `itemId`)
 appends the book at the tail. There is no play-next command: `n` is consumed
-by the front end and does nothing for books. Every play and enqueue honours
+by the window and does nothing for books. Every play and enqueue honours
 `player.can_admit_audiobookshelf()`, and a refusal flashes the TUI's
 owner-unavailable toast; the Owner owns the queue, so no Audiobooks command
 mutates it directly, and a book or chapter id the Service data no longer
@@ -1032,7 +1096,7 @@ episode the Hero shows; `podcastsPlay` (`libIdx`, `itemId`) — the command
 Enter and a double-click both send — replaces the queue with the episode
 through the TUI's episode play path; and `podcastsQueue` (`libIdx`, `itemId`)
 appends it at the tail. There is no play-next command: `n` is consumed by the
-front end and does nothing for podcast episodes. Every play and enqueue
+window and does nothing for podcast episodes. Every play and enqueue
 honours `player.can_admit_audiobookshelf()`, and a refusal flashes the TUI's
 owner-unavailable toast; the Owner owns the queue, so no Podcasts command
 mutates it directly. A row id of no valid shape, or an episode the per-show
@@ -1048,7 +1112,7 @@ changes nothing. `feedsSelect` (`row`) selects the entry the Hero shows.
 replaces the queue through the TUI's `play_feed_entry`, and `feedsQueue`
 (`itemId`) appends through `enqueue_feed_entry`; both flash the TUI's
 "Feed entry has no playable source" toast for an entry with no enclosure and
-no link. There is no play-next command: `n` is consumed by the front end and
+no link. There is no play-next command: `n` is consumed by the window and
 does nothing for feed entries, because the TUI has no feed play-next producer.
 The Owner owns the queue, so no Feeds command mutates it directly. A row id of
 no valid shape, or an entry the App's data no longer holds, logs and changes
@@ -1091,17 +1155,17 @@ the TUI's library cursor.
 
 ### The key routing order
 
-`input.ts` forwards a keydown only after the window's key router, and it
+`src/window/input.rs` forwards a keydown only after the window's key router, and it
 never interprets the key itself. The router answers one of three outcomes
-(`KeyOutcome`): `core` sends the key to the `key` command with its default
+(`KeyOutcome`): `core` sends the key to the `key` method with its default
 action prevented, `handled` means the window content took the key so the core
 receives none, and `text` means an open text field takes it, so the browser's
-own default types it. `App.svelte` installs `routeLibraryKey`
-(`ui/src/lib/library/keys.ts`) as that router, so the Library's handler runs
+own default types it. `src/window/app.rs` installs `routeLibraryKey`
+(`src/window/library/keys.rs`) as that router, so the Library's handler runs
 before the forwarder (design D3).
 
 While the frame carries `settings`, `routeLibraryKey` hands the key to
-`routeSettingsKey` (`ui/src/lib/settings/keys.ts`) after the overlay, prefix,
+`routeSettingsKey` (`src/window/settings/keys.rs`) after the overlay, prefix,
 and Queue-filter steps, and the Library steps do not run
 (add-gui-settings-screen design D11). The Settings order is:
 
@@ -1158,12 +1222,12 @@ and `a` opens the audio popover as before (design D3).
 
 ### The arrangement
 
-`libraryArrangement` (`ui/src/lib/bridge/arrangement.ts`) picks the
+`libraryArrangement` (`src/window/arrangement.rs`) picks the
 arrangement from the measured Library column width — the window width minus
 the Queue panel's current painted width, 400 px expanded, 72 px in the rail,
 or the width a drag gave it — with the canvas sizes as thresholds. Below
 480 px is Mini, from 880 px with at least 600 px of height is Wide, and
-between them is Narrow. The thresholds are front-end constants beside the
+between them is Narrow. The thresholds are window constants beside the
 Queue panel's state constants, and the core does not classify the size. Mini
 mounts only the panel that holds Panel focus. Narrow mounts both panels, and
 a picked item opens the Hero as an overlay over the list. Wide mounts both
@@ -1172,12 +1236,12 @@ inside every arrangement, and a resize across a threshold moves no cursor,
 pill selection, or picked item, because those live in the window content and
 the core.
 
-Both columns are resizable (`ui/src/lib/bridge/resize.ts`). A drag on either
-divider (`PanelDivider.svelte`) reports the sized column's new width in
+Both columns are resizable (`src/window/resize.rs`). A drag on either
+divider (`src/window/components/panel_divider.rs`) reports the sized column's new width in
 pixels — the Queue panel's column, or the Wide arrangement's list column —
 and the window content keeps it for the session. A width survives tab and
 breakpoint changes because the store is module state, and every drag is saved
-to the webview's local storage (`mbv.gui.panelWidths`), so the next launch
+to `gui-panel-widths.toml` in the state directory, so the next launch
 reads the widths back; a corrupt value falls back to the defaults. The list
 column defaults to 368 px, the canvas's 320 px index 15 % wider. The Queue
 column holds between its 400 px artboard and the width that leaves the
@@ -1248,7 +1312,7 @@ album (design D13).
 
 ## The Settings screen
 
-`settings(GuiSettingsCommand)` is the fifth bridge command (`src/main.rs`). It
+`settings(GuiSettingsCommand)` is the fifth `CoreLink` method (`src/window/channel.rs`). It
 only pushes `CoreInput::Settings` into the core channel, as the other commands
 do. `src/bridge/settings.rs` translates the wire variants and
 `App::apply_gui_settings_command` (`src/app/gui_settings/command.rs`) applies
@@ -1320,21 +1384,20 @@ a queue-scoped gate such as `ClearQueuePrompt` reads a focus that is not the
 Queue and stays closed. Settings is not added to `is_blocking_overlay`, so the
 two Clients' overlay rules stay the TUI's.
 
-The `panel` section carries the UI-reset counter `uiResetEpoch` (design
+The `panel` section carries the UI-reset counter `ui_reset_epoch` (design
 D10): the window
 resets its Library interaction stores and its panel widths when the value
 changes, and the TUI's own reset does not move it.
 
-The window-content half lives in `ui/src/lib/settings/` (design D11):
-`state.ts` holds the screen store — the keyboard pane, the sidebar and
+The window-content half lives in `src/window/settings/` (design D11):
+`settings/state.rs` holds the screen store — the keyboard pane, the sidebar and
 content cursors, the Mini pane (which is the keyboard pane), the form
-drafts, the choice marks, and the capture — and `entries.ts` builds each
-section's flat list of activatable controls, which `keys.ts` routes the
-screen keys over. `ui/src/lib/components/Settings*.svelte` holds the screen,
+drafts, the choice marks, and the capture — and `settings/entries.rs` builds each
+section's flat list of activatable controls, which `settings/keys.rs` routes the
+screen keys over. `src/window/components/settings_*.rs` holds the screen,
 the sidebar, one component per section kind, and the status line, and
-`App.svelte` mounts `SettingsScreen` in place of the two columns while
-`frame.settings` is present. Commands go through `sendSettingsCommand`
-(`ui/src/lib/bridge/settings.ts`) to the `settings` bridge command.
+`src/window/app.rs` mounts `SettingsScreen` in place of the two columns while
+`frame.settings` is present. Commands go through `CoreLink::settings`.
 
 The screen paints the design canvas `canvas/Settings.dc.html` of the
 `add-gui-settings-screen` change (design D13). The pointer is the primary
@@ -1346,7 +1409,7 @@ the screen at Services and does nothing while it is open. The sidebar's
 measures the window width minus it. The sidebar's rows carry one Lucide icon
 each, and the Services section is labelled Sources (a UI label only; the
 code and the domain keep Service). Every section paints only through the
-shared parts in `ui/src/lib/components/settings/`: `SettingsCard`,
+shared parts in `src/window/components/`: `SettingsCard`,
 `SettingsRow`, `SettingsSwitch` (every toggle), `SettingsButton` (secondary,
 primary, destructive, ghost), `SettingsCheckboxGrid` (the choice lists, with
 their Apply), `SettingsStatePill` (a Service's state), and
@@ -1359,15 +1422,10 @@ value, so the two Clients share one effect. The value lists come from
 `mbv-ui-model` (`SUBTITLE_MODES`, `lang_cycle`), and the empty language
 paints as Any.
 
-The ACL grant rule (design D5). Tauri's ACL sits between `invoke` and the
-command: a command that `generate_handler!` registers but that
-`crates/mbv-gui/build.rs`'s app manifest does not declare, or that
-`capabilities/default.json` does not grant, is refused before the core sees it,
-and the front end's fire-and-forget invoke logs only to the webview console.
-Every command is therefore declared and granted once, and
-`crates/mbv-gui/tests/capabilities.rs` derives the command list from
-`generate_handler!` in `src/main.rs` and asserts both. No list in the test
-names a command, so a new one cannot ship without its grant.
+The Tauri command grant rule no longer applies. Under Tauri, every command had
+to be declared in the app manifest and granted in the capability file, or the
+core never saw it. The window now calls `CoreLink` methods in the same process,
+so no command registry and no grant exist.
 
 ## The attach states
 
@@ -1413,7 +1471,7 @@ present stays absent — no stub, no placeholder (the `gui-client` spec).
 The GUI does not keep parity with the TUI; the design canvas is the
 reference. These steps are for a surface that both Clients share, such as
 the Queue panel. A GUI-only surface owns its interaction state in the
-front end, and the Client core supplies only its data and actions: the GUI
+window, and the Client core supplies only its data and actions: the GUI
 Library panel is the first one
 ([ADR 0036](../adr/0036-gui-library-panel-owns-its-interaction-state.md),
 and `docs/architecture/interactive-surface-ledger.md` records it GUI-owned
@@ -1428,7 +1486,7 @@ actions.
    the owner). If a TUI component still owns the state, port it to Surface
    state first (`docs/architecture/tui-frontend.md`, *Surface state and
    adapters*). Never reimplement an interaction rule in `mbv-gui`.
-2. **Carry it in a section.** Add a serde DTO under `src/bridge/frame/`,
+2. **Carry it in a section.** Add a DTO under `src/bridge/frame/`,
    built from the shared projection or the adopted Surface state, a field on
    `GuiSectionBatch`, a `Section` variant, and — for a gated section — its
    mark row (`src/sections/marks.rs`) or its mark source. Keep text
@@ -1445,33 +1503,54 @@ glyph-free.
    hold the Surface state, adopt its projection once per emitted frame (as
    `sync_queue_surface` does), and route keys and resolved gestures with
    the leaf.
-6. **Paint it.** Add a Svelte component under `ui/src/lib/components/` that
+6. **Paint it.** Add a component under `src/window/components/` that
    paints the section, reports its list capacities and painted
-   regions through `reportLayout`, retracts on unmount, and mounts in
-   `App.svelte`. Icons are Lucide only. Every control a pointer can reach
+   regions through `LayoutReporter`, retracts on unmount, and mounts in
+   `src/window/app.rs`. Icons are Lucide only. Every control a pointer can reach
    must keep a key chord (the `gui-client` spec: every action is reachable
    from the keyboard).
 7. **Prove the contract.** Rust side, a nextest in `crates/mbv-gui/tests/`
-   for a mapping that is new (region-to-`Msg`, capacity applied). Front
-   end, a vitest asserting delivery and structure, not appearance.
+   for a mapping that is new (region-to-`Msg`, capacity applied). Window,
+   a headless test asserting the painted structure, not appearance.
 
 ## Tests and checks
 
-The Rust tests (`crates/mbv-gui/tests/`, nextest) mock the channel, the
-batch sink, and the Owner steps: no Tauri runtime, no webview, no live
-Owner. The front-end tests (vitest with `@testing-library/svelte`,
-`@tauri-apps/api` mocked) assert delivery and structure. Live behaviour in
-the real window is the user's manual check.
+The window tests sit beside their modules in `src/window/**/tests.rs`. Each
+test is stateless: it builds its input, calls once, and asserts on the return
+value or the painted output. A component test renders a fixture batch through
+`DioxusDocument` and asserts on what it paints. No test opens a window, sleeps,
+or reaches an Owner or a network. The Rust tests in `crates/mbv-gui/tests/`
+mock the channel, the batch sink, and the Owner steps. Live behaviour in the
+real window is the user's manual check.
 
 The crate's logs go to `mbv-gui.log` in the mbv state directory, not the
 TUI's `mbv.log`.
 
-## WebKitGTK renderer note
+## Blitz gaps
 
-On some GPU and Wayland setups, WebKitGTK's DMA-BUF renderer shows a blank
-window. The workaround is `WEBKIT_DISABLE_DMABUF_RENDERER=1` in the
-environment that starts `mbv-gui`. The app does not set it by default
-(design, *Risks*).
+Blitz is pre-release, and its gaps shape the window (ADR 0039). Each gap has
+one handling:
+
+| Gap | Where | Handling |
+| --- | --- | --- |
+| No `text-overflow: ellipsis` | boxes that need an ellipsis | `Truncate` (`src/window/truncate.rs`) measures the text and cuts it with `…` |
+| An animation repaints the whole window | `animate-spin`, `transition` classes | Accepted. They run only while shown. |
+| No `NetHandler` error callback | artwork misses | The net provider sends `ArtEvent::Failed` (`src/window/net.rs`) |
+| Transform painting | the scrubber thumb's `translate` | Accepted. |
+| Slow Wayland resize, and surface timeouts | every resize | Accepted. |
+| No GPU: surface creation panics | hosts with no Vulkan or GL | Accepted. The packages depend on the Vulkan loader. |
+| Some DOM event kinds panic | none | No handler uses them (`src/window/input.rs`). |
+| No reload of the window content | dev reload | Reload scenarios no longer exist. |
+
+## Dependency notes
+
+- `calloop` 0.14.5 depends on `tracing` with `tracing`'s `log` feature, so its
+  tracing events also reach `log` for the whole workspace.
+- `unicode-segmentation` 1.13 is a dependency of `mbv-gui` for the grapheme cut
+  of the ellipsis (`src/window/truncate.rs`).
+- `time` and `num-traits` are direct `mbv-gui` dependencies. They were behind the
+  `blitz` feature while the port ran, and they are not in the
+  dependency list of the port's design.
 
 ### Library Hero and list shared pieces
 

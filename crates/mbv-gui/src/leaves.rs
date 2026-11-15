@@ -126,7 +126,7 @@ impl<'a> QueueLeaf<'a> {
     }
 
     /// The viewport length the row-local delegation clamps its wheel with:
-    /// the capacity the front end reported, at least one row.
+    /// the capacity the window reported, at least one row.
     fn viewport_len(&self) -> usize {
         self.surface.viewport_height().max(1)
     }
@@ -327,7 +327,7 @@ impl GuiSurfaceLeaf for QueueLeaf<'_> {
 }
 
 /// Which transport controls are actionable: the Queue playback projection's
-/// availability, read at routing time. The front end paints an unavailable
+/// availability, read at routing time. The window paints an unavailable
 /// control dimmed and still reports its region, so the leaf carries the gate
 /// the TUI component resolves against its transport projection.
 #[derive(Debug, Clone, Copy)]

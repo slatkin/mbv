@@ -7,7 +7,7 @@
 //! [`GuiRole::ALL`] lists the mirror in declaration order and is the one list
 //! that the compiler does not check: a new role must be added there too.
 //!
-//! [`GuiTheme::chrome`] carries the fill values the front end's chrome
+//! [`GuiTheme::chrome`] carries the fill values the window's chrome
 //! variables point at (the review correction of design D7: the frame once
 //! carried foreground roles only, so the chrome could not follow the palette).
 //! It needs no mirror of its own: `mbv-theme`'s [`Surface`] set and the
@@ -17,12 +17,11 @@
 use std::collections::BTreeMap;
 
 use mbv_theme::{Rgb, Role, Surface, surface_colors};
-use serde::Serialize;
 
 /// The active theme: one colour for every role (design D7) and the chrome
-/// fills the front end's shadcn-svelte variables point at. The front end
+/// fills the window's shadcn-svelte variables point at. The window
 /// writes each entry into a CSS custom property on `:root`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTheme {
     /// The colour of each role, keyed by the role's camelCase name.
     pub roles: BTreeMap<GuiRole, GuiRgb>,
@@ -45,16 +44,16 @@ impl GuiTheme {
     }
 }
 
-/// The GUI chrome's fill values (design D7): the fills the front end's
+/// The GUI chrome's fill values (design D7): the fills the window's
 /// shadcn-svelte background, surface, border, and input variables point at.
 /// Each one resolves the [`Surface`] the TUI paints the same concept with,
 /// so the chrome tracks the palette with no second palette: a palette edit
 /// recolours the chrome together with the roles. Every field resolves the
 /// resting fill (`surface_colors(surface, false)`), because the queue
 /// column paints one fill at every focus state (user decision 2026-11-15);
-/// the TUI keeps its focus-reactive pick. The fill tiers the front end
+/// the TUI keeps its focus-reactive pick. The fill tiers the window
 /// aliases are named in the field docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiChrome {
     /// The app backdrop: `Surface::PlaybackPanel`, which the surface table
     /// fixes at the backdrop in both focus states.
@@ -125,7 +124,7 @@ fn chrome_fill(surface: Surface) -> GuiRgb {
 }
 
 /// An 8-bit RGB colour, mirroring `mbv_theme::Rgb`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuiRgb {
     pub r: u8,
     pub g: u8,
@@ -143,10 +142,9 @@ impl From<Rgb> for GuiRgb {
 }
 
 /// A semantic foreground colour role, mirroring `mbv_theme::Role` variant for
-/// variant. The front end names each CSS custom property after the role's
+/// variant. The window names each CSS custom property after the role's
 /// camelCase name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuiRole {
     TextPrimary,
     TextSecondary,
@@ -243,6 +241,60 @@ impl GuiRole {
         Self::PillSelectedFg,
         Self::PillOverflowFg,
     ];
+
+    /// The role's camelCase name, spelled out for the window's CSS
+    /// custom-property writer (`window/theme.rs`): the same spelling as the
+    /// role's name in the DTO, which stays the
+    /// authority this match must not drift from.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TextPrimary => "textPrimary",
+            Self::TextSecondary => "textSecondary",
+            Self::TextMuted => "textMuted",
+            Self::TextStrong => "textStrong",
+            Self::TextEmphasis => "textEmphasis",
+            Self::TabSelectedUnderline => "tabSelectedUnderline",
+            Self::TextFocusAccent => "textFocusAccent",
+            Self::TextHeroTitle => "textHeroTitle",
+            Self::WorkspaceHeaderFg => "workspaceHeaderFg",
+            Self::TextOnAccent => "textOnAccent",
+            Self::TextAccentMuted => "textAccentMuted",
+            Self::PlaylistLoadedFg => "playlistLoadedFg",
+            Self::TextDetailMeta => "textDetailMeta",
+            Self::TextMetadata => "textMetadata",
+            Self::SelectedRowFg => "selectedRowFg",
+            Self::SelectedRowProgressFg => "selectedRowProgressFg",
+            Self::StatusError => "statusError",
+            Self::StatusAvailable => "statusAvailable",
+            Self::Duration => "duration",
+            Self::SplitRowContextFg => "splitRowContextFg",
+            Self::SplitRowTitleFg => "splitRowTitleFg",
+            Self::IndicatorResolutionFg => "indicatorResolutionFg",
+            Self::IndicatorAudioFg => "indicatorAudioFg",
+            Self::PlaybackValueFg => "playbackValueFg",
+            Self::PlaybackMetaFg => "playbackMetaFg",
+            Self::PlaybackTitleFg => "playbackTitleFg",
+            Self::PlaybackContextFg => "playbackContextFg",
+            Self::PlaybackHostRemoteFg => "playbackHostRemoteFg",
+            Self::PlaybackTargetLocalFg => "playbackTargetLocalFg",
+            Self::PlaybackTargetRemoteFg => "playbackTargetRemoteFg",
+            Self::IdleFeedTitleFg => "idleFeedTitleFg",
+            Self::ProgressTrack => "progressTrack",
+            Self::ProgressPercent => "progressPercent",
+            Self::GroupHeadingFg => "groupHeadingFg",
+            Self::EmptyQueueFg => "emptyQueueFg",
+            Self::Scrollbar => "scrollbar",
+            Self::SidebarScrollbar => "sidebarScrollbar",
+            Self::HeroOverviewSeparator => "heroOverviewSeparator",
+            Self::HeroCreditsName => "heroCreditsName",
+            Self::Accent => "accent",
+            Self::AccentActive => "accentActive",
+            Self::AccentAudiobookshelf => "accentAudiobookshelf",
+            Self::PillSelectedFg => "pillSelectedFg",
+            Self::PillOverflowFg => "pillOverflowFg",
+        }
+    }
 }
 
 impl From<Role> for GuiRole {

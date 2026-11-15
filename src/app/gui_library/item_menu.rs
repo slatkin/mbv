@@ -1,7 +1,7 @@
 //! The GUI Library panel's item menu (add-gui-library-panel design D8): the
 //! frame's carried menu types, and the App half that builds the shared context
 //! menu for one item and runs a chosen entry. The entry indexes are the shared
-//! builder's, so a front end that paints only some of the entries still
+//! builder's, so a window that paints only some of the entries still
 //! executes the one it painted. The TUI's own menu paths do not change.
 
 use mbv_ui_model::context_menu::ContextAction;
@@ -23,7 +23,7 @@ pub struct GuiLibraryRowMenu {
 /// One entry of the GUI Library panel's item menu (design D8): the label the
 /// row menu paints, the key hint its surface shows when the entry has one, and
 /// the entry's index in the shared builder's order — the index a chosen entry
-/// sends back, so a front end that paints only some of the entries (the
+/// sends back, so a window that paints only some of the entries (the
 /// Hero's More actions drops its duplicated ones) still executes the entry it
 /// painted.
 #[derive(Clone, Debug, PartialEq, Eq)]

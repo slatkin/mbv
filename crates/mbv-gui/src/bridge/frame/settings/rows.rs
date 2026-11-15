@@ -3,13 +3,11 @@
 //! toggle flag, and its choice list once loaded.
 
 use mbv::GuiSettingsRowProjection;
-use serde::Serialize;
 
 use crate::bridge::settings::GuiChoicesKind;
 
 /// One F2 row (design D9).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GuiSettingRow {
     /// The setting's stable wire name: the `activate` command's `setting`.
     pub key: String,
@@ -52,8 +50,7 @@ impl From<&GuiSettingsRowProjection> for GuiSettingRow {
 }
 
 /// How an F2 row is edited (design D9, D13).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiSettingRowKind {
     Toggle,
     Cycle,
@@ -78,8 +75,7 @@ impl From<mbv::GuiSettingsRowKind> for GuiSettingRowKind {
 
 /// One choice of a choice-list row (design D9): `id` is the value the apply
 /// command sends back.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingChoice {
     pub id: String,
     pub label: String,

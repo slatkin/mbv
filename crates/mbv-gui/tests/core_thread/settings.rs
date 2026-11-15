@@ -228,7 +228,7 @@ fn a_press_at_a_retracted_queue_row_runs_no_queue_action() {
     assert!(test.core.step());
     assert!(test.held().settings().is_some(), "the screen opened");
 
-    // The screen unmounted the panels, so the front end reported no regions.
+    // The screen unmounted the panels, so the window reported no regions.
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
     let before = test.held().queue().cursor;

@@ -30,7 +30,7 @@ fn step_input(test: &mut TestCore, input: CoreInput) {
 }
 
 /// A report that carries a new container size re-binds the capacity and the
-/// regions (task row 6.3, design D10): the front end's container resize
+/// regions (task row 6.3, design D10): the window's container resize
 /// painted a new layout, so the report's whole rows replace the Queue
 /// viewport's height and its regions rebuild the hit map — a press resolves
 /// against the newest report's regions, and the first report's region

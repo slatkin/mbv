@@ -1,6 +1,6 @@
 //! The Settings frame section's tests (`add-gui-settings-screen` design D9):
 //! the closed screen carries no section, an open F2 section carries its rows
-//! with their values, and a failed setup carries no password. Split from
+//! with their values, and a failed setup carries its error. Split from
 //! `frame.rs` to keep that file under the line limit.
 
 use mbv_gui::bridge::frame::settings::GuiSettingsContent;
@@ -95,12 +95,14 @@ fn an_open_f2_section_carries_its_rows_with_values() {
     assert_eq!(owner.value, app.version_row_value(SettingKey::OwnerVersion));
 }
 
-/// A Services frame after a failed Emby setup carries the error and the server
-/// URL and no password (`add-gui-settings-screen` design D9, the spec's
-/// *A failed setup does not echo the password*): the whole frame serializes
-/// with neither the typed secret nor a field that could hold one.
+/// A Services frame after a failed Emby setup carries the error, the server
+/// URL, and the busy flag (`add-gui-settings-screen` design D9, the spec's
+/// *A failed setup does not echo the password*). That the frame carries no
+/// password is the type's own guarantee now: the setup content has no field
+/// that could hold one, and the window reads the Rust value directly
+/// (`replace-tauri-with-blitz` D18).
 #[test]
-fn a_failed_emby_setup_frame_carries_no_password() {
+fn a_failed_emby_setup_frame_carries_its_error_and_no_password() {
     let mut app = mbv::stub_app_with_failed_emby_setup();
 
     let frame = frame_after_tick(&mut app);
@@ -117,23 +119,4 @@ fn a_failed_emby_setup_frame_carries_no_password() {
     assert_eq!(setup.server_url, "https://emby.example.test");
     assert_eq!(setup.error, "Invalid username or password");
     assert!(!setup.busy);
-
-    let json = serde_json::to_value(&frame.0).expect("the frame serializes");
-    let setup = &json["settings"]["value"]["content"]["setup"];
-    let mut fields: Vec<&str> = setup
-        .as_object()
-        .expect("the setup form is an object")
-        .keys()
-        .map(String::as_str)
-        .collect();
-    fields.sort_unstable();
-    assert_eq!(
-        fields,
-        ["busy", "error", "serverUrl", "service"],
-        "no setup field can hold a password"
-    );
-    assert!(
-        !json.to_string().contains("hunter2"),
-        "no frame carries the typed password"
-    );
 }

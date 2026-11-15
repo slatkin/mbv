@@ -342,7 +342,7 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
 }
 
 /// A footer pill's text is glyph-free (design D8): no Nerd Font private-use
-/// codepoint and no emoji fallback reaches the front end. The stub's Nerd
+/// codepoint and no emoji fallback reaches the window. The stub's Nerd
 /// Font setting is off, so the projection's composed text carries the emoji
 /// fallbacks the frame must drop, and the unsaved queue's dirty pill carries
 /// its word.

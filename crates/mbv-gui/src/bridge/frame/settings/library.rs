@@ -4,14 +4,11 @@
 //! inline in this section, so the `LibraryRoutes` F2 row is absent from the
 //! rows (design D9).
 
-use serde::Serialize;
-
 /// One routable library (design D9): `library` is the lowercased name the
 /// saved route table is keyed by — the `routeDevices` and `assignRoute`
 /// commands' identity — and `endpoint` the assigned device route, `null` while
 /// the library uses the automatic route.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsRoute {
     pub library: String,
     /// The library's display name, as the TUI paints it.
@@ -33,8 +30,7 @@ impl From<&mbv::GuiSettingsRouteProjection> for GuiSettingsRoute {
 /// device the `assignRoute` command names, and `endpoint` the direct-connect
 /// endpoint that command saves, `null` when the device is not currently
 /// routable.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsRouteDevice {
     pub name: String,
     pub endpoint: Option<String>,

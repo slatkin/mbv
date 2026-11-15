@@ -2,11 +2,9 @@
 //! the subscriptions, addressed by URL, and whether an add is in flight.
 
 use mbv::GuiSettingsFeedProjection;
-use serde::Serialize;
 
 /// One feed subscription (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsFeed {
     pub name: String,
     /// The subscription's only stable identity: the `feedEdit` and

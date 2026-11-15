@@ -4,11 +4,9 @@
 //! Service credential — the setup form carries the server URL only.
 
 use mbv::GuiSettingsServiceProjection;
-use serde::{Deserialize, Serialize};
 
 /// The Services section's content (design D9).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GuiSettingsService {
     pub entry: GuiServiceEntry,
     pub name: String,
@@ -41,8 +39,7 @@ impl From<&GuiSettingsServiceProjection> for GuiSettingsService {
 }
 
 /// The three Services (design D9).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiServiceEntry {
     Emby,
     Audiobookshelf,
@@ -60,8 +57,7 @@ impl From<mbv_ui_model::settings::ServiceEntry> for GuiServiceEntry {
 }
 
 /// One action a Service row offers (design D9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiServiceAction {
     /// The intent the `serviceAction` command carries.
     pub intent: GuiServiceActionIntent,
@@ -70,8 +66,7 @@ pub struct GuiServiceAction {
 
 /// One Service action the window content can run (design D5): the wire names
 /// of `mbv_ui_model::settings::ServiceActionIntent`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiServiceActionIntent {
     SetupEmby,
     RetryEmby,
@@ -127,8 +122,7 @@ impl From<GuiServiceActionIntent> for mbv_ui_model::settings::ServiceActionInten
 /// The open setup form's facts (design D9): the service it belongs to, the
 /// server URL, and its progress and error. The typed password and API key stay
 /// in the core.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiSettingsSetup {
     pub service: GuiSetupService,
     pub server_url: String,
@@ -148,8 +142,7 @@ impl From<&mbv::GuiSettingsSetupProjection> for GuiSettingsSetup {
 }
 
 /// The setup form the `cancelSetup` command names (design D5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiSetupService {
     Emby,
     Audiobookshelf,

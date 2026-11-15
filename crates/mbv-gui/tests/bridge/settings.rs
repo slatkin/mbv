@@ -1,8 +1,12 @@
-//! Public-API tests of the `settings` command's wire translation
-//! (`add-gui-settings-screen` design D5): one variant of each payload shape —
-//! a unit variant, a key name, a nested target, and a `DomKey` — so the wire
-//! vocabulary's four kinds of field all reach their neutral form.
+//! Public-API tests of the `settings` command's translation
+//! (`add-gui-settings-screen` design D5, `replace-tauri-with-blitz` D18): one
+//! request of each payload shape — a unit variant, a key name, a nested
+//! target, and a `DomKey` — so the vocabulary's four kinds of field all reach
+//! their neutral form. The window builds these values as Rust; the wire form
+//! the window sent went at the switch.
 
+use mbv_gui::bridge::frame::playback::GuiTargetKey;
+use mbv_gui::bridge::keys::{DomKey, DomModifiers};
 use mbv_gui::bridge::settings::{GuiSettingsCommand, neutral};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::settings::SettingKey;
@@ -11,19 +15,19 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 /// The unit payload shape: `close` carries no field.
 #[test]
 fn the_close_command_carries_no_payload() {
-    let command: GuiSettingsCommand =
-        serde_json::from_str(r#"{"command":"close"}"#).expect("the wire command parses");
-
-    assert_eq!(neutral(command), Some(mbv::GuiSettingsCommand::Close));
+    assert_eq!(
+        neutral(GuiSettingsCommand::Close),
+        Some(mbv::GuiSettingsCommand::Close)
+    );
 }
 
 /// The key-name payload shape: `activate` carries the row's stable setting
 /// name, which resolves to the `SettingKey` the App activates.
 #[test]
 fn the_activate_command_names_its_setting_key() {
-    let command: GuiSettingsCommand =
-        serde_json::from_str(r#"{"command":"activate","setting":"consumeAudio"}"#)
-            .expect("the wire command parses");
+    let command = GuiSettingsCommand::Activate {
+        setting: "consumeAudio".to_string(),
+    };
 
     assert_eq!(
         neutral(command),
@@ -37,9 +41,9 @@ fn the_activate_command_names_its_setting_key() {
 /// frame that carried it is stale, so the edit changes nothing.
 #[test]
 fn an_unknown_setting_name_resolves_to_no_command() {
-    let command: GuiSettingsCommand =
-        serde_json::from_str(r#"{"command":"activate","setting":"noSuchSetting"}"#)
-            .expect("the wire command parses");
+    let command = GuiSettingsCommand::Activate {
+        setting: "noSuchSetting".to_string(),
+    };
 
     assert_eq!(neutral(command), None);
 }
@@ -48,10 +52,9 @@ fn an_unknown_setting_name_resolves_to_no_command() {
 /// stable target key, and the local output is the unit kind inside it.
 #[test]
 fn the_select_target_command_carries_the_nested_target_key() {
-    let command: GuiSettingsCommand = serde_json::from_str(
-        r#"{"command":"selectTarget","target":{"kind":"emby","id":"session-2"}}"#,
-    )
-    .expect("the wire command parses");
+    let command = GuiSettingsCommand::SelectTarget {
+        target: GuiTargetKey::Emby("session-2".to_string()),
+    };
     assert_eq!(
         neutral(command),
         Some(mbv::GuiSettingsCommand::SelectTarget {
@@ -59,9 +62,9 @@ fn the_select_target_command_carries_the_nested_target_key() {
         })
     );
 
-    let command: GuiSettingsCommand =
-        serde_json::from_str(r#"{"command":"selectTarget","target":{"kind":"local"}}"#)
-            .expect("the wire command parses");
+    let command = GuiSettingsCommand::SelectTarget {
+        target: GuiTargetKey::Local,
+    };
     assert_eq!(
         neutral(command),
         Some(mbv::GuiSettingsCommand::SelectTarget {
@@ -74,12 +77,16 @@ fn the_select_target_command_carries_the_nested_target_key() {
 /// bridge translates it to the neutral key the router normalizes.
 #[test]
 fn the_keys_capture_command_translates_its_dom_key() {
-    let command: GuiSettingsCommand = serde_json::from_str(
-        r#"{"command":"keysCapture","target":"settings_open",
-            "key":{"key":"F3","code":"F3","metaKey":false,"repeat":false,
-                   "shiftKey":false,"ctrlKey":false,"altKey":false}}"#,
-    )
-    .expect("the wire command parses");
+    let command = GuiSettingsCommand::KeysCapture {
+        target: "settings_open".to_string(),
+        key: DomKey {
+            key: "F3".to_string(),
+            code: "F3".to_string(),
+            meta_key: false,
+            repeat: false,
+            modifiers: DomModifiers::default(),
+        },
+    };
 
     assert_eq!(
         neutral(command),
@@ -95,9 +102,9 @@ fn the_keys_capture_command_translates_its_dom_key() {
 /// for (design D5, design D9).
 #[test]
 fn the_route_devices_command_names_its_library() {
-    let command: GuiSettingsCommand =
-        serde_json::from_str(r#"{"command":"routeDevices","library":"music"}"#)
-            .expect("the wire command parses");
+    let command = GuiSettingsCommand::RouteDevices {
+        library: "music".to_string(),
+    };
 
     assert_eq!(
         neutral(command),

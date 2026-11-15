@@ -3,8 +3,8 @@
 //! names, and the frame carries the result. The Settings screen's open, close,
 //! and key-routing contracts stay in the parent module
 //! (`tests/core_thread/settings.rs`). Mocked channel, mocked frame sink, and
-//! the in-memory Emby transport only (design D13): no Tauri runtime, no
-//! webview, no live Owner.
+//! the in-memory Emby transport only (design D13): no
+//! live Owner.
 
 use super::*;
 

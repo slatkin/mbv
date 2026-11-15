@@ -3,8 +3,8 @@
 //! the request and answer that cross the core channel, and the art reference
 //! the section DTOs carry.
 //!
-//! The Tauri handler never touches the `App`: it pushes an [`ArtRequest`]
-//! into the core channel with the `UriSchemeResponder` wired into the
+//! The window's net provider never touches the `App`: it pushes an [`ArtRequest`]
+//! into the core channel with its reply edge wired into the
 //! request's `reply`, and the tick host answers through the `App`'s
 //! read-only cache queries. The scheme name and the path encoding live here,
 //! so no other call site builds or parses an art URL.
@@ -12,10 +12,8 @@
 use std::fmt;
 use std::fmt::Write as _;
 
-use serde::Serialize;
-
-/// The scheme host the window loads images through (design D7). On Linux,
-/// `WebKitGTK` serves the scheme as `mbv-art://localhost/<path>`.
+/// The scheme host the window loads images through (design D7).
+/// The net provider answers the scheme `mbv-art://localhost/<path>`.
 const SCHEME_HOST: &str = "mbv-art://localhost";
 
 /// The path that names the queue card's bundled placeholder bytes.
@@ -24,8 +22,7 @@ pub const PLACEHOLDER_PATH: &str = "placeholder";
 /// The image reference a section DTO carries (design D7): the window paints
 /// `src` as the image's URL, and a `loading` reference paints the loading
 /// fill. `src` is built only by [`art_url`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiArtRef {
     /// The cached image the URL names.
     Image { src: String },
@@ -35,7 +32,7 @@ pub enum GuiArtRef {
     Loading,
 }
 
-/// The URL for `path`, as the webview requests it (design D7): one place owns
+/// The URL for `path`, as the window requests it (design D7): one place owns
 /// the scheme name, so the wire spelling lives here alone.
 #[must_use]
 pub fn art_url(path: &str) -> String {
@@ -56,10 +53,10 @@ pub fn trickplay_path(wire_key: &str) -> String {
 
 /// One request the window's image load raised (design D7): the percent-encoded
 /// request path and the one-shot edge that answers it. Production wires the
-/// `reply` to a Tauri `UriSchemeResponder`; the tests mock it, so
-/// `core_thread` stays free of Tauri types.
+/// `reply` to the net provider's responder; the tests mock it, so
+/// `core_thread` stays free of window types.
 pub struct ArtRequest {
-    /// The request path as the webview sent it, percent-encoded and without
+    /// The request path as the window sent it, percent-encoded and without
     /// the leading slash.
     pub path: String,
     /// The edge the one answer travels through. Every request is answered
@@ -76,10 +73,9 @@ impl fmt::Debug for ArtRequest {
     }
 }
 
-/// The answer one [`ArtRequest`] carries (design D7). `Found` becomes a 200
-/// response with the source's own MIME type and an immutable-cache header;
-/// `Missing` a 404 the webview does not keep, so a later load of the same URL
-/// asks the core again.
+/// The answer one [`ArtRequest`] carries (design D7). `Found` becomes the
+/// source's bytes with its own MIME type; `Missing` is a failed load, so the
+/// window asks again for the same URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtResponse {
     /// The cached source: its bytes and the MIME type those bytes declare.
