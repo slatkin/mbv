@@ -228,7 +228,13 @@ impl Model {
                 .tv_latest_snapshots
                 .get(&library_id)
                 .map_or(items, |snapshot| snapshot.items.clone());
-            self.update_emby_latest_snapshot(&library_id, items);
+            let emby_items = items
+                .iter()
+                .filter_map(mbv_queue::QueueItem::as_emby)
+                .cloned()
+                .collect();
+            self.app.apply_tv_latest_snapshot(&library_id, emby_items);
+            self.store_emby_latest_snapshot(&library_id, items);
         }
     }
 

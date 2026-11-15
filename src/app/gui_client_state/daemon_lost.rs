@@ -13,8 +13,8 @@ use mbv_ui_msg::{DaemonLostIntent, Key};
 
 use super::overlay::GuiOverlay;
 use super::projection::{GuiConfirmButtonProjection, GuiConfirmButtonTone};
-use crate::app::App;
 use crate::app::dispatch::session::daemon_lost::DaemonLostAnswer;
+use crate::app::{App, DaemonLostModal};
 
 /// The dialog's choices in paint order: the intent the choice answers with,
 /// the button's label, the key hint inside the pill, and the tone it paints
@@ -82,6 +82,23 @@ pub(super) fn daemon_lost_entry_index(code: Key) -> Option<usize> {
 }
 
 impl App {
+    /// Present the daemon-lost dialog as the GUI canvas's own blocking
+    /// overlay: the GUI drain's answer to `OverlayRequest::DaemonLost`. It
+    /// replaces whatever overlay was open, as the TUI's
+    /// `dismiss_blocking_modals` does.
+    pub fn present_gui_daemon_lost(&mut self, modal: DaemonLostModal) {
+        self.gui_overlay = Some(GuiOverlay::DaemonLost(modal));
+    }
+
+    /// Clear the held daemon-lost dialog: the GUI drain's answer to
+    /// `OverlayRequest::DismissDaemonLost` (a successful restart raises it).
+    /// Another open overlay stays.
+    pub fn dismiss_gui_daemon_lost(&mut self) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+            self.gui_overlay = None;
+        }
+    }
+
     /// Answer the held daemon-lost dialog with the choice at `index`: the
     /// shared `App::apply_daemon_lost_intent`, whose success dismisses the
     /// dialog (`restart_local_daemon`'s own dismissal, which now clears the

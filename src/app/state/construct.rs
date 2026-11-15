@@ -191,7 +191,7 @@ impl App {
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the TUI's panel rules.
-            gui_client: false,
+            client_arranges_panels: false,
             // The GUI Library panel's Client-core state starts empty:
             // the window content's first command selects a destination's
             // collections and an item's detail (add-gui-library-panel

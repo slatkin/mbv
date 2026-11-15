@@ -2,6 +2,7 @@ use std::sync::mpsc::Receiver;
 
 use mbv_ctrl::{CtrlCmd, WireCommand};
 use mbv_ui_model::context_menu::ContextAction;
+use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest, TrackChipKind};
 
@@ -12,6 +13,17 @@ use crate::app::tests::{
     QueueViewTestExt, make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx_and_compat,
     make_remote_app_stub_with_cmd_rx,
 };
+
+/// Stands in for the GUI core thread's drain of the two modal requests
+/// (`crates/mbv-gui` `apply_pending_overlay_request`): the App only raises
+/// the request, and the GUI drain presents it.
+fn present_pending_modal(app: &mut App) {
+    match app.take_pending_overlay() {
+        Some(OverlayRequest::Confirm(modal)) => app.present_gui_confirm(modal),
+        Some(OverlayRequest::DaemonLost(modal)) => app.present_gui_daemon_lost(modal),
+        other => panic!("expected a modal request, got {other:?}"),
+    }
+}
 
 /// An `App` stub whose Owner advertises the `playback-output` capability
 /// and offers one cast receiver (`receiver-1`) as a playback target: the
@@ -630,6 +642,7 @@ fn queue_intent_clear_opens_the_confirm_overlay_and_enter_clears_the_queue() {
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::QueueIntent(
         mbv_ui_msg::QueueIntent::Clear,
     ))));
+    present_pending_modal(&mut app);
 
     let playback = app.queue_playback_projection();
     let Some(GuiOverlayProjection::Confirm { message, buttons }) =
@@ -682,6 +695,7 @@ fn row_menu_clear_queue_entry_raises_the_clear_confirm() {
     };
 
     app.select_gui_row_menu_entry(index);
+    present_pending_modal(&mut app);
 
     match &app.gui_overlay {
         Some(GuiOverlay::Confirm(modal)) => {
@@ -751,6 +765,7 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     app.playback_queue_mut().adopt_items(make_items(2), 0);
 
     app.raise_daemon_lost_modal();
+    present_pending_modal(&mut app);
 
     let playback = app.queue_playback_projection();
     let Some(GuiOverlayProjection::DaemonLost {

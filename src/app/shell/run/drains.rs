@@ -7,8 +7,8 @@ use super::super::{
 use super::pin_swap::PinSwapLink;
 use super::{Duration, Instant, PollStrategy};
 use crate::app::{
-    BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, ModelContentEvent, MusicEvent,
-    PlayerEventDrain, SeriesEvent,
+    BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, MusicEvent, PlayerEventDrain,
+    SeriesEvent,
 };
 
 impl Model {
@@ -94,49 +94,10 @@ impl Model {
         while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
             had_events = true;
             match ev {
-                LibEvent::ModelContent(ModelContentEvent::EmbyLatestSnapshotFetched {
-                    library_id,
-                    items,
-                }) => {
-                    // The App-side half (the Latest root level's fill) runs
-                    // inside `update_emby_latest_snapshot` (row 7.1); this
-                    // Client's half is the shell-owned snapshot store and
-                    // the projection push below it.
-                    self.update_emby_latest_snapshot(
-                        &library_id,
-                        items
-                            .into_iter()
-                            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
-                            .collect(),
-                    );
-                }
-                LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFetched {
-                    library_id,
-                    items,
-                }) => {
-                    // The App-side half is the shared acceptance (row 7.1);
-                    // this Client's half is the projection at the loop tail.
-                    self.app.accept_tv_upcoming_snapshot(&library_id, items);
-                }
-                LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed {
-                    library_id,
-                }) => {
-                    // The App-side half is the shared failed-mark write
-                    // (row 7.1); this Client's half is the projection at the
-                    // loop tail.
-                    self.app.tv_upcoming_snapshot_failed(&library_id);
-                }
-                LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
-                    source,
-                    generation,
-                    items,
-                }) => {
-                    // The fetched rows land on the App's store (row 6.2); this
-                    // Client's half is the projection below, so the merged
-                    // rows reach the Home owner.
-                    self.app
-                        .accept_home_recently_added(source, generation, items);
-                    fetched_recently_added = true;
+                // The App applies the write; this Client's half is the snapshot
+                // store and the projections (`apply_model_content_event`).
+                LibEvent::ModelContent(event) => {
+                    fetched_recently_added |= self.apply_model_content_event(event);
                 }
                 LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
@@ -183,9 +144,6 @@ impl Model {
                     // event carries must never re-point the tree.
                     self.push_inline_search_content();
                 }
-                LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed(content)) => {
-                    self.assign_home_content(*content);
-                }
                 LibEvent::Series(SeriesEvent::DetailFetched { .. }) => {
                     self.app.handle_lib_event(ev);
                     self.push_tv_workspace_content();
@@ -199,9 +157,6 @@ impl Model {
                     | MusicEvent::ArtistArtworkFetched { .. },
                 ) => {
                     self.app.handle_lib_event(ev);
-                }
-                LibEvent::ModelContent(ModelContentEvent::HomeContentCleared) => {
-                    self.clear_home_content();
                 }
                 ev => self.handle_inline_search_lib_event(ev),
             }
@@ -267,7 +222,7 @@ impl Model {
         items: Vec<mbv_queue::QueueItem>,
     ) {
         if mode == Some(&mbv_queue::TvContentMode::Latest) {
-            self.update_emby_latest_snapshot(library_id, items);
+            self.store_emby_latest_snapshot(library_id, items);
         }
     }
 

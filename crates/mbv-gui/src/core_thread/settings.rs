@@ -55,8 +55,18 @@ impl CoreThread {
     /// keys route with no leaf while the screen shows and the Panel focus
     /// returns on the pop. The GUI adds no `GuiSurfaceLeaf` for the id.
     pub(super) fn drain_pending_overlay(&mut self, outcome: &mut TickOutcome) {
+        self.apply_pending_overlay_request(&mut outcome.input_received);
+        self.mirror_settings_focus();
+    }
+
+    /// Apply the App's pending shell request, if any. The input phase runs it
+    /// after every routed input, so a later input's request cannot replace an
+    /// earlier one in the App's single slot; the player-event drain runs it
+    /// too, because a restart ends the tick before the input phase and a
+    /// daemon-lost request would otherwise wait a tick.
+    pub(super) fn apply_pending_overlay_request(&mut self, input_received: &mut bool) {
         if let Some(request) = self.app.take_pending_overlay() {
-            outcome.input_received = true;
+            *input_received = true;
             match &request {
                 OverlayRequest::ToggleSidebar(sidebar) => match sidebar {
                     // F2 toggles the F2 group — every section except the two
@@ -116,13 +126,15 @@ impl CoreThread {
                         log_undelivered(&request);
                     }
                 },
-                // The GUI presented the confirmation and the daemon-lost
-                // dialog as their own overlays at raise time (`ask_confirm`
-                // and `raise_daemon_lost_modal`); the TUI-modal requests
-                // themselves are undelivered (design D2).
-                OverlayRequest::Confirm(_) | OverlayRequest::DaemonLost(_) => {
-                    log_undelivered(&request);
+                // The confirmation and the daemon-lost dialog present as the
+                // canvas's own blocking overlays, and their dismissals clear
+                // them; the GUI mounts no TUI modal component for either.
+                OverlayRequest::Confirm(modal) => self.app.present_gui_confirm(modal.clone()),
+                OverlayRequest::DaemonLost(modal) => {
+                    self.app.present_gui_daemon_lost(modal.clone());
                 }
+                OverlayRequest::DismissConfirm => self.app.dismiss_gui_confirm(),
+                OverlayRequest::DismissDaemonLost => self.app.dismiss_gui_daemon_lost(),
                 // A TUI overlay the GUI does not present (design D2): the
                 // save-playlist and confirm-family modals, the context menu
                 // and its dismissal, and the nested Settings popups (the
@@ -133,11 +145,13 @@ impl CoreThread {
                 | OverlayRequest::OpenMultiselect(_)
                 | OverlayRequest::OpenLibraryRoutes
                 | OverlayRequest::OpenFeedsManage
-                | OverlayRequest::DismissConfirm
-                | OverlayRequest::DismissDaemonLost
                 | OverlayRequest::DismissSavePlaylist => log_undelivered(&request),
             }
         }
+    }
+
+    /// Mirror the Settings screen's state onto the core `FocusStack`.
+    fn mirror_settings_focus(&mut self) {
         // The Settings id's stack membership follows the App's state (design
         // D2): the push and the pop are idempotent, so a tick that changed
         // nothing re-records the same membership.

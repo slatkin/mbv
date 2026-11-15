@@ -40,7 +40,7 @@ impl App {
     /// focus. The GUI Client calls it before its first step; the TUI Client
     /// never does, so the TUI's values do not change.
     pub fn enable_gui_client(&mut self) {
-        self.gui_client = true;
+        self.client_arranges_panels = true;
         self.launch_restore = LaunchRestore::Done;
     }
 

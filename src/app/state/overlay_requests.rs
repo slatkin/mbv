@@ -3,7 +3,6 @@
 //! Client's shell to mount.
 
 use super::app_struct::App;
-use crate::app::gui_client_state::GuiOverlay;
 use crate::app::{ConfirmModal, SavePlaylistDialog};
 
 impl App {
@@ -41,12 +40,6 @@ impl App {
     }
 
     pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
-        // The GUI Client presents the shared confirmation as its own blocking
-        // overlay (the canvas's modal); the shell request stays undrained —
-        // the GUI mounts no TUI modal component.
-        if self.gui_client {
-            self.gui_overlay = Some(GuiOverlay::Confirm(modal.clone()));
-        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal));
     }
 
@@ -55,21 +48,10 @@ impl App {
     }
 
     pub(in crate::app) fn dismiss_confirm(&mut self) {
-        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
-            self.gui_overlay = None;
-        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
     }
 
     pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
-        // The GUI Client presents the dialog as its own blocking overlay and
-        // mounts no TUI modal component, so the dismissal clears that held
-        // overlay; the shell request stays undrained, as the confirmation's
-        // does. A successful restart reaches here from
-        // `restart_local_daemon`.
-        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
-            self.gui_overlay = None;
-        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
     }
 

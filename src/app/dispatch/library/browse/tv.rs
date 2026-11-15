@@ -385,8 +385,8 @@ impl App {
 
     /// The App-side half of an `EmbyLatestSnapshotFetched` completion
     /// (add-gui-library-panel row 7.1): the TV library's Latest root level
-    /// fills from the snapshot — the same write the presenting Client's
-    /// shell drain runs inside `update_emby_latest_snapshot`, so a Client
+    /// fills from the snapshot — the one write every Client's drain reaches
+    /// through `handle_model_content_event`, so a Client
     /// that keeps no shell state (the GUI) fills the level too through its
     /// own drain arm. A library whose Latest root is not the level in wait
     /// (no TV library, no root level, another mode) keeps it unchanged.
