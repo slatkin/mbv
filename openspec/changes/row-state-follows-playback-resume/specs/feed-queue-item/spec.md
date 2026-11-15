@@ -4,7 +4,7 @@
 
 ### Requirement: Mark Played starts a feed entry over
 
-Mark Played on a feed entry SHALL store played as true and position as zero, as playback completion does. This SHALL apply to a single row, a multi-selection, and the played toggle on a Home or Queue row. Mark Unplayed SHALL store played as false and SHALL keep the entry's position. The loaded Feeds list SHALL show the stored state at once, without a refetch.
+Mark Played on a feed entry SHALL store played as true and position as zero, as playback completion does. This SHALL apply to a single row, a multi-selection, and the played toggle on a Home `Recently added` row. Mark Unplayed SHALL store played as false and SHALL keep the entry's position. The loaded Feeds list SHALL show the stored state at once, without a refetch.
 
 #### Scenario: Mark Played on a half-played entry
 
