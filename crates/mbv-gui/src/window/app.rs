@@ -317,7 +317,7 @@ pub fn App() -> Element {
             &reset_settings,
         );
         let frame = reset_sections.settings.cloned();
-        reset_settings.sync_settings_frame(frame.as_ref());
+        reset_settings.sync_settings_frame(frame.as_deref());
     });
 
     // The panel container the layout report carries the size of (D9): the

@@ -259,13 +259,13 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
         carry(state, Some(list.clone()), Some(detail.clone()));
         let list_part = state.sections.library_list.peek().clone();
         let detail_part = state.sections.library_detail.peek().clone();
-        let GuiDestinationList::Music(music) = list_part.expect("list").destination else {
+        let GuiDestinationList::Music(music) = &list_part.expect("list").destination else {
             panic!("music fixture");
         };
-        let GuiLibraryDetail::Music(detail) = detail_part.expect("detail") else {
+        let GuiLibraryDetail::Music(detail) = &*detail_part.expect("detail") else {
             panic!("detail fixture");
         };
-        state.reveal_picked_album(&music, &detail);
+        state.reveal_picked_album(music, detail);
         state.measure_library_list(40.0);
         facts.lock().expect("facts").push(music_scroll(state));
     });

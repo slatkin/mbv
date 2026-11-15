@@ -51,7 +51,7 @@ impl LibraryState {
     /// none of it.
     pub(super) fn emby_frame(&self) -> Option<GuiEmbyList> {
         let list = self.sections.library_list.peek();
-        library_emby_list(list.as_ref()).cloned()
+        library_emby_list(list.as_deref()).cloned()
     }
 
     /// The painted rows of the carried Emby content (row 8.1): the plain
@@ -61,7 +61,7 @@ impl LibraryState {
     #[must_use]
     pub fn emby_rows(&self) -> Arc<[EmbyListRow]> {
         let list = self.sections.library_list.peek();
-        let Some(frame) = library_emby_list(list.as_ref()) else {
+        let Some(frame) = library_emby_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();

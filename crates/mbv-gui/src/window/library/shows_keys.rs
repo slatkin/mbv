@@ -35,11 +35,11 @@ use super::state::{LibraryPane, LibraryState};
 #[must_use]
 pub fn route_shows_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
     let list = state.sections.library_list.peek();
-    let Some(shows) = library_shows_list(list.as_ref()) else {
+    let Some(shows) = library_shows_list(list.as_deref()) else {
         return KeyOutcome::Core;
     };
     let detail_section = state.sections.library_detail.peek();
-    let Some(detail) = library_shows_detail(detail_section.as_ref()) else {
+    let Some(detail) = library_shows_detail(detail_section.as_deref()) else {
         return KeyOutcome::Core;
     };
     let lib_idx = shows.lib_idx;

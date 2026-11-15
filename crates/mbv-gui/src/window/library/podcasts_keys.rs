@@ -40,7 +40,7 @@ impl PodcastsFrame {
     /// rows.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
-        let podcasts = library_podcasts_list(list.as_ref())?;
+        let podcasts = library_podcasts_list(list.as_deref())?;
         Some(Self {
             pills: podcasts
                 .pills
@@ -116,12 +116,12 @@ impl PanelKeys for PodcastsKeys<'_> {
 
     fn has_hero(&self, _frame: &PodcastsFrame) -> bool {
         let detail = self.state.sections.library_detail.peek();
-        library_podcasts_detail(detail.as_ref()).is_some_and(|detail| detail.hero.is_some())
+        library_podcasts_detail(detail.as_deref()).is_some_and(|detail| detail.hero.is_some())
     }
 
     fn selected_item_id(&self, _frame: &PodcastsFrame) -> Option<String> {
         let detail = self.state.sections.library_detail.peek();
-        library_podcasts_detail(detail.as_ref()).and_then(|detail| detail.selected.clone())
+        library_podcasts_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
     fn cursor_row(&self) -> Option<PodcastsItemRow> {

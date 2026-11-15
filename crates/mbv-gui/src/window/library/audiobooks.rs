@@ -52,7 +52,7 @@ impl LibraryState {
     /// carried value; a keydown copies only the index.
     fn audiobooks_lib_idx(&self) -> Option<usize> {
         let list = self.sections.library_list.peek();
-        library_audiobooks_list(list.as_ref()).map(|audiobooks| audiobooks.lib_idx)
+        library_audiobooks_list(list.as_deref()).map(|audiobooks| audiobooks.lib_idx)
     }
 
     /// The painted rows of the carried book content (row 9.1), narrowed by
@@ -62,7 +62,7 @@ impl LibraryState {
     #[must_use]
     pub fn audiobooks_rows(&self, filter: &str) -> Arc<[AudiobooksListRow]> {
         let list = self.sections.library_list.peek();
-        let Some(audiobooks) = library_audiobooks_list(list.as_ref()) else {
+        let Some(audiobooks) = library_audiobooks_list(list.as_deref()) else {
             return Arc::from([]);
         };
         let revision = self.sections.library_list_revision();
