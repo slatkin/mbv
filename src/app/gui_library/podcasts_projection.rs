@@ -20,7 +20,7 @@ use mbv_components::library_panel::hero::hero_content_abs_episode;
 use mbv_emby_model::seconds_to_ticks;
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
-use mbv_ui_model::media_list::ActiveProgress;
+use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
@@ -28,7 +28,7 @@ use super::GuiLibraryArtwork;
 use super::entry_list::{
     GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
 };
-use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
+use super::home::{GuiArtShape, artwork_shape};
 use super::podcasts::GuiPodcastPill;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
@@ -418,24 +418,22 @@ fn show_of<'a>(
 }
 
 /// One row's played state (row 10.1): the TUI podcast row's rule through the
-/// shared `from_progress` arm — a finished episode is `Played`, an unfinished
-/// one with a playback position is `Active` with the progress percentage of
-/// its duration (no percentage when the duration is unknown, but still
-/// `Active`), and every other episode is `Ordinary`.
+/// shared Audiobookshelf constructor — a finished episode is `Played`
+/// whatever its position, because the server restarts it; an unfinished one
+/// is `Active` exactly when Play would resume from its position, with the
+/// progress percentage of its duration (no percentage when the duration is
+/// unknown, but still `Active`); and an episode with no progress entry has
+/// neither fact, so its row is `Ordinary`.
 fn episode_row_state(
     progress: Option<&AudiobookshelfProgress>,
     duration_seconds: Option<f64>,
-) -> GuiHomeRowState {
+) -> MediaSemanticState {
     match progress {
-        Some(progress) => GuiHomeRowState::from_progress(
+        Some(progress) => MediaSemanticState::from_audiobookshelf(
             progress.is_finished,
-            progress.current_time_seconds > 0.0,
-            ActiveProgress::of_ticks(
-                seconds_to_ticks(progress.current_time_seconds),
-                duration_seconds.map_or(0, seconds_to_ticks),
-            )
-            .map(ActiveProgress::percent),
+            seconds_to_ticks(progress.current_time_seconds),
+            duration_seconds.map_or(0, seconds_to_ticks),
         ),
-        None => GuiHomeRowState::Ordinary,
+        None => MediaSemanticState::Ordinary,
     }
 }

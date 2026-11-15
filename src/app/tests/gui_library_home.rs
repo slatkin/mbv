@@ -10,6 +10,7 @@ use super::*;
 use crate::config::TestStateDirGuard;
 use mbv_config::FeedSubscription;
 use mbv_queue::{QueueItem, QueueItemContentId};
+use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
 /// One Continue Watching row's Emby item, `position_ticks` of resume.
 fn continue_item(id: &str, name: &str, position_ticks: i64, runtime_ticks: i64) -> EmbyItem {
@@ -101,7 +102,7 @@ fn item_of(row: &GuiHomeRow) -> &crate::app::gui_library::GuiHomeItemRow {
 }
 
 /// One item row's state of the projection's `row`.
-fn row_state(row: &GuiHomeRow) -> &GuiHomeRowState {
+fn row_state(row: &GuiHomeRow) -> &MediaSemanticState {
     &item_of(row).state
 }
 
@@ -191,10 +192,15 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
     );
     assert_eq!(
         row_state(&projection.rows[1]),
-        &GuiHomeRowState::Active { progress: Some(50) },
+        &MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(50))
+        },
         "the resume position carries the row's progress"
     );
-    assert_eq!(row_state(&projection.rows[6]), &GuiHomeRowState::Ordinary);
+    assert_eq!(
+        row_state(&projection.rows[6]),
+        &MediaSemanticState::Ordinary
+    );
 
     // Home's Hero default (row 6.2): the first item row, with its shared
     // hero facts.

@@ -20,7 +20,7 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
-use super::home::{GuiArtShape, GuiHomeRowState, media_row_state};
+use super::home::GuiArtShape;
 use super::projection::sort_letter;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
@@ -179,7 +179,7 @@ pub struct GuiShowsEpisodeRow {
     pub duration: String,
     /// The played/progress state, the shared media-list semantic state's
     /// arms.
-    pub state: GuiHomeRowState,
+    pub state: MediaSemanticState,
 }
 
 /// A series Hero's Workspace (design D12): the season pills and the selected
@@ -616,7 +616,7 @@ pub(super) fn episode_row(episode: &EmbyItem, position: usize) -> GuiShowsEpisod
         } else {
             String::new()
         },
-        state: media_row_state(&MediaSemanticState::from_emby(episode)),
+        state: MediaSemanticState::from_emby(episode),
     }
 }
 
