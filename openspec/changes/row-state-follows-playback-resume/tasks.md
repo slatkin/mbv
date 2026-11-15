@@ -36,8 +36,8 @@
 
 ## 7. Integration checks
 
-- [ ] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three exit with status 0.
-- [ ] 7.2 Run `openspec validate row-state-follows-playback-resume --strict`. Verify: it reports the change as valid.
+- [x] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and fix every failure. Verify: all three exit with status 0.
+- [x] 7.2 Run `openspec validate row-state-follows-playback-resume --strict`. Verify: it reports the change as valid.
 
 ## Workflow follow-up
 
