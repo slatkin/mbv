@@ -22,13 +22,10 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::GuiFeedsList;
 use crate::bridge::library::{GuiFeedPill, GuiLibraryCommand};
 use crate::window::library::feeds_list::{FeedsItemRow, move_feeds_cursor};
-use crate::window::library::list::{
-    ListMove, clamp_scroll_top, list_window, scroll_top_to_show_cursor, step_pill_focus,
-};
+use crate::window::library::list::ListMove;
 use crate::window::library::parts::library_feeds_list;
-use crate::window::library::scroll::ListScroll;
 
-use super::pill_list::PillListUiState;
+use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
 use super::state::LibraryState;
 
 /// The Feeds list's interaction state: the shared pill-list state over the
@@ -79,72 +76,27 @@ impl LibraryState {
             .cloned()
     }
 
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (design D12, D9).
-    fn follow_feeds_cursor(&self, rows: &[FeedsItemRow], cursor: Option<&str>) {
-        let held = *self.scrolls.feeds.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut feeds_scroll = self.scrolls.feeds;
-            feeds_scroll.set(shown);
+    /// The Feeds list under the shared list controller (design D12).
+    fn feeds_list(
+        &self,
+    ) -> ListControl<FeedsUiState, FeedsItemRow, impl Fn() -> Arc<[FeedsItemRow]> + '_> {
+        ListControl {
+            ui: self.feeds_ui,
+            scroll: self.scrolls.feeds,
+            rows: || self.feeds_rows(),
+            move_over: move_feeds_cursor,
         }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (design
-    /// D12): the cursor keeps its row while that row still paints, and falls
-    /// to the first painted row otherwise. The scroll store then shows the
-    /// cursor — the Music filter's own resolve (design D7).
-    fn settle_feeds_cursor(&self) {
-        let ui = self.feeds_ui.peek().clone();
-        let rows = self.feeds_rows();
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_feeds_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut feeds_ui = self.feeds_ui;
-            feeds_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_feeds_cursor(&rows, cursor.as_deref());
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
     /// (design D7's filter rule): the cursor follows the rows.
     pub fn set_feeds_filter(&self, filter: String) {
-        let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.filter = filter);
-        self.settle_feeds_cursor();
+        self.feeds_list().set_filter(filter);
     }
 
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it.
     pub fn close_feeds_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.filter.clear());
-        self.settle_feeds_cursor();
-    }
-
-    /// Accept the filter with Enter: the field closes and the list keeps the
-    /// text (design D3, step 2).
-    pub fn accept_feeds_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
+        self.feeds_list().close_filter(self.ui);
     }
 
     /// Select the row (design D12): the select command the core stores, whose
@@ -200,47 +152,19 @@ impl LibraryState {
     /// End take the list's ends. The scroll offset follows, so the cursor row
     /// stays fully visible.
     pub fn move_feeds_list_cursor(&self, mv: ListMove) {
-        let ui = self.feeds_ui.peek().clone();
-        let rows = self.feeds_rows();
-        let held = *self.scrolls.feeds.peek();
-        let view = list_window(&rows, held.scroll_top, held.viewport_height);
-        let cursor = move_feeds_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        if cursor == ui.cursor {
-            return;
-        }
-        let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_feeds_cursor(&rows, cursor.as_deref());
+        self.feeds_list().move_cursor(mv);
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_feeds_list(&self, viewport_height: f32) {
-        let rows = self.feeds_rows();
-        let held = *self.scrolls.feeds.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut feeds_scroll = self.scrolls.feeds;
-            feeds_scroll.set(shown);
-        }
+        self.feeds_list().measure(viewport_height);
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_feeds_list(&self, scroll_top: f32) {
-        let rows = self.feeds_rows();
-        let held = *self.scrolls.feeds.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut feeds_scroll = self.scrolls.feeds;
-            feeds_scroll.set(shown);
-        }
+        self.feeds_list().scroll_to(scroll_top);
     }
 
     /// The pill the pill row's focus holds, resolved against the carried
@@ -267,13 +191,14 @@ impl LibraryState {
             return;
         };
         let pills: Vec<GuiFeedPill> = feeds.pills.iter().map(|frame| frame.pill.clone()).collect();
-        let focused = self.feeds_ui.peek().focused_pill.clone();
-        let focused_key = focused.as_ref().map(feed_pill_key);
-        let moved = step_pill_focus(&pills, focused_key.as_deref(), feed_pill_key, step);
-        if let Some(pill) = moved {
-            let mut feeds_ui = self.feeds_ui;
-            feeds_ui.with_mut(|ui| ui.focused_pill = Some(pill));
-        }
+        move_pill_focus(
+            self.feeds_ui,
+            &pills,
+            feed_pill_key,
+            Clone::clone,
+            feed_pill_key,
+            step,
+        );
     }
 
     /// Ask for the focused pill to be selected: Space and Enter request it

@@ -24,14 +24,10 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::emby_list::{
     EmbyItemRow, EmbyListRow, emby_group_key, emby_letter_rail, move_emby_cursor,
 };
-use crate::window::library::list::{
-    ListMove, clamp_scroll_top, jump_to_letter, list_window, scroll_top_to_show_cursor,
-    step_pill_focus,
-};
+use crate::window::library::list::{ListMove, jump_to_letter};
 use crate::window::library::parts::library_emby_list;
-use crate::window::library::scroll::ListScroll;
 
-use super::pill_list::PillListUiState;
+use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
 use super::state::LibraryState;
 
 /// The Emby list's interaction state: the shared pill-list state over the
@@ -84,72 +80,27 @@ impl LibraryState {
         })
     }
 
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (row 8.1, design D9).
-    fn follow_emby_cursor(&self, rows: &[EmbyListRow], cursor: Option<&str>) {
-        let held = *self.scrolls.emby.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut emby_scroll = self.scrolls.emby;
-            emby_scroll.set(shown);
+    /// The Emby list under the shared list controller (row 8.1).
+    fn emby_list(
+        &self,
+    ) -> ListControl<EmbyUiState, EmbyListRow, impl Fn() -> Arc<[EmbyListRow]> + '_> {
+        ListControl {
+            ui: self.emby_ui,
+            scroll: self.scrolls.emby,
+            rows: || self.emby_rows(),
+            move_over: move_emby_cursor,
         }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (row 8.1):
-    /// the cursor keeps its row while that row still paints, and falls to the
-    /// first painted row otherwise. The scroll store then shows the cursor —
-    /// the Music filter's own resolve (design D7).
-    fn settle_emby_cursor(&self) {
-        let ui = self.emby_ui.peek().clone();
-        let rows = self.emby_rows();
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id() == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_emby_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut emby_ui = self.emby_ui;
-            emby_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_emby_cursor(&rows, cursor.as_deref());
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
     /// (design D7's filter rule): the cursor follows the rows.
     pub fn set_emby_filter(&self, filter: String) {
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.filter = filter);
-        self.settle_emby_cursor();
+        self.emby_list().set_filter(filter);
     }
 
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it.
     pub fn close_emby_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.filter.clear());
-        self.settle_emby_cursor();
-    }
-
-    /// Accept the filter with Enter: the field closes and the list keeps the
-    /// text (design D3, step 2).
-    pub fn accept_emby_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
+        self.emby_list().close_filter(self.ui);
     }
 
     /// Select the row (row 8.1): the select command the core stores, whose
@@ -223,17 +174,7 @@ impl LibraryState {
     /// the list's ends, stepping over the letter headings. The scroll offset
     /// follows, so the cursor row stays fully visible.
     pub fn move_emby_list_cursor(&self, mv: ListMove) {
-        let ui = self.emby_ui.peek().clone();
-        let rows = self.emby_rows();
-        let held = *self.scrolls.emby.peek();
-        let view = list_window(&rows, held.scroll_top, held.viewport_height);
-        let cursor = move_emby_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        if cursor == ui.cursor {
-            return;
-        }
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_emby_cursor(&rows, cursor.as_deref());
+        self.emby_list().move_cursor(mv);
     }
 
     /// Jump to a letter of the rail (row 8.1, design D7): the cursor moves to
@@ -256,31 +197,13 @@ impl LibraryState {
     /// Report the list's measured viewport height (row 8.1): the rows in view
     /// follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_emby_list(&self, viewport_height: f32) {
-        let rows = self.emby_rows();
-        let held = *self.scrolls.emby.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut emby_scroll = self.scrolls.emby;
-            emby_scroll.set(shown);
-        }
+        self.emby_list().measure(viewport_height);
     }
 
     /// Report the list's native scroll offset (row 8.1): a user scroll moves
     /// the rows in view, and the offset stays inside the list's range.
     pub fn scroll_emby_list(&self, scroll_top: f32) {
-        let rows = self.emby_rows();
-        let held = *self.scrolls.emby.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut emby_scroll = self.scrolls.emby;
-            emby_scroll.set(shown);
-        }
+        self.emby_list().scroll_to(scroll_top);
     }
 
     /// The pill the pill row's focus holds, resolved against the carried pills
@@ -307,13 +230,14 @@ impl LibraryState {
         };
         let pills: Vec<GuiEmbyFeedGroupFrame> =
             emby.pills.iter().map(|pill| pill.group.clone()).collect();
-        let focused = self.emby_ui.peek().focused_pill.clone();
-        let moved = step_pill_focus(&pills, focused.as_deref(), emby_group_key, step);
-        if let Some(pill) = moved {
-            let key = emby_group_key(&pill);
-            let mut emby_ui = self.emby_ui;
-            emby_ui.with_mut(|ui| ui.focused_pill = Some(key));
-        }
+        move_pill_focus(
+            self.emby_ui,
+            &pills,
+            emby_group_key,
+            emby_group_key,
+            String::clone,
+            step,
+        );
     }
 
     /// Ask for the focused pill to be selected: Space and Enter request it

@@ -131,7 +131,7 @@ pub fn LibraryFeedsList() -> Element {
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter entries".to_owned(),
                     on_input: move |value: String| filter_library.set_feeds_filter(value),
-                    on_accept: move |()| accept_library.accept_feeds_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

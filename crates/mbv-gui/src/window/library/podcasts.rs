@@ -21,14 +21,11 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiPodcastsList;
 use crate::bridge::library::{GuiLibraryCommand, GuiPodcastPill, GuiPodcastState};
-use crate::window::library::list::{
-    ListMove, clamp_scroll_top, list_window, scroll_top_to_show_cursor, step_pill_focus,
-};
+use crate::window::library::list::ListMove;
 use crate::window::library::parts::library_podcasts_list;
 use crate::window::library::podcasts_list::{PodcastsItemRow, move_podcasts_cursor};
-use crate::window::library::scroll::ListScroll;
 
-use super::pill_list::PillListUiState;
+use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
 use super::state::LibraryState;
 
 /// The Podcasts list's interaction state: the shared pill-list state over the
@@ -100,72 +97,28 @@ impl LibraryState {
             .cloned()
     }
 
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (design D12, D9).
-    fn follow_podcasts_cursor(&self, rows: &[PodcastsItemRow], cursor: Option<&str>) {
-        let held = *self.scrolls.podcasts.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut podcasts_scroll = self.scrolls.podcasts;
-            podcasts_scroll.set(shown);
+    /// The Podcasts list under the shared list controller (design D12).
+    fn podcasts_list(
+        &self,
+    ) -> ListControl<PodcastsUiState, PodcastsItemRow, impl Fn() -> Arc<[PodcastsItemRow]> + '_>
+    {
+        ListControl {
+            ui: self.podcasts_ui,
+            scroll: self.scrolls.podcasts,
+            rows: || self.podcasts_rows(),
+            move_over: move_podcasts_cursor,
         }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (design
-    /// D12): the cursor keeps its row while that row still paints, and falls
-    /// to the first painted row otherwise. The scroll store then shows the
-    /// cursor — the Music filter's own resolve (design D7).
-    fn settle_podcasts_cursor(&self) {
-        let ui = self.podcasts_ui.peek().clone();
-        let rows = self.podcasts_rows();
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_podcasts_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut podcasts_ui = self.podcasts_ui;
-            podcasts_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_podcasts_cursor(&rows, cursor.as_deref());
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
     /// (design D7's filter rule): the cursor follows the rows.
     pub fn set_podcasts_filter(&self, filter: String) {
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.filter = filter);
-        self.settle_podcasts_cursor();
+        self.podcasts_list().set_filter(filter);
     }
 
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it.
     pub fn close_podcasts_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.filter.clear());
-        self.settle_podcasts_cursor();
-    }
-
-    /// Accept the filter with Enter: the field closes and the list keeps the
-    /// text (design D3, step 2).
-    pub fn accept_podcasts_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
+        self.podcasts_list().close_filter(self.ui);
     }
 
     /// Select the row (design D12): the select command the core stores, whose
@@ -226,47 +179,19 @@ impl LibraryState {
     /// End take the list's ends. The scroll offset follows, so the cursor row
     /// stays fully visible.
     pub fn move_podcasts_list_cursor(&self, mv: ListMove) {
-        let ui = self.podcasts_ui.peek().clone();
-        let rows = self.podcasts_rows();
-        let held = *self.scrolls.podcasts.peek();
-        let view = list_window(&rows, held.scroll_top, held.viewport_height);
-        let cursor = move_podcasts_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        if cursor == ui.cursor {
-            return;
-        }
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_podcasts_cursor(&rows, cursor.as_deref());
+        self.podcasts_list().move_cursor(mv);
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_podcasts_list(&self, viewport_height: f32) {
-        let rows = self.podcasts_rows();
-        let held = *self.scrolls.podcasts.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut podcasts_scroll = self.scrolls.podcasts;
-            podcasts_scroll.set(shown);
-        }
+        self.podcasts_list().measure(viewport_height);
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_podcasts_list(&self, scroll_top: f32) {
-        let rows = self.podcasts_rows();
-        let held = *self.scrolls.podcasts.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut podcasts_scroll = self.scrolls.podcasts;
-            podcasts_scroll.set(shown);
-        }
+        self.podcasts_list().scroll_to(scroll_top);
     }
 
     /// The pill the pill row's focus holds, resolved against the carried
@@ -300,13 +225,14 @@ impl LibraryState {
             .iter()
             .map(|frame| frame.pill.clone())
             .collect();
-        let focused = self.podcasts_ui.peek().focused_pill.clone();
-        let focused_key = focused.as_ref().map(podcast_pill_key);
-        let moved = step_pill_focus(&pills, focused_key.as_deref(), podcast_pill_key, step);
-        if let Some(pill) = moved {
-            let mut podcasts_ui = self.podcasts_ui;
-            podcasts_ui.with_mut(|ui| ui.focused_pill = Some(pill));
-        }
+        move_pill_focus(
+            self.podcasts_ui,
+            &pills,
+            podcast_pill_key,
+            Clone::clone,
+            podcast_pill_key,
+            step,
+        );
     }
 
     /// Ask for the focused pill to be selected: Space and Enter request it

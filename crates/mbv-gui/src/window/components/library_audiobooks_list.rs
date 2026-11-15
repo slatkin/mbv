@@ -197,7 +197,7 @@ pub fn LibraryAudiobooksList() -> Element {
                     placeholder: "Filter books".to_owned(),
                     aria_label: "Filter books".to_owned(),
                     on_input: move |value: String| filter_library.set_audiobooks_filter(value),
-                    on_accept: move |()| accept_library.accept_audiobooks_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

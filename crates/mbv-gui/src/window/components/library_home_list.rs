@@ -267,7 +267,7 @@ pub fn LibraryHomeList() -> Element {
                     placeholder: "Filter home".to_owned(),
                     aria_label: "Filter home".to_owned(),
                     on_input: move |value: String| filter_library.set_home_filter(value),
-                    on_accept: move |()| accept_library.accept_home_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

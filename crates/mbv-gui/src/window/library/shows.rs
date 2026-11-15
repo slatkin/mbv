@@ -16,16 +16,13 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::list::{
-    ListMove, clamp_scroll_top, jump_to_letter, list_window, scroll_top_to_show_cursor,
-    step_pill_focus,
-};
+use crate::window::library::list::{ListMove, jump_to_letter};
 use crate::window::library::parts::library_shows_list;
-use crate::window::library::scroll::ListScroll;
 use crate::window::library::shows_list::{
     ShowsListRow, active_shows_mode, move_shows_cursor, shows_letter_rail,
 };
 
+use super::pill_list::{ListControl, ListUi, PillFocusUi, move_pill_focus};
 use super::state::LibraryState;
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
@@ -51,6 +48,32 @@ pub struct ShowsUiState {
     /// override the filter's auto-open, so a press still closes a node under a
     /// filter (the Music tree's `closed` rule).
     pub closed: Vec<String>,
+}
+
+impl ListUi for ShowsUiState {
+    fn cursor(&self) -> Option<&str> {
+        self.cursor.as_deref()
+    }
+
+    fn set_cursor(&mut self, cursor: Option<String>) {
+        self.cursor = cursor;
+    }
+
+    fn set_filter(&mut self, filter: String) {
+        self.filter = filter;
+    }
+}
+
+impl PillFocusUi for ShowsUiState {
+    type Focus = GuiShowsModeFrame;
+
+    fn focused_pill(&self) -> Option<&GuiShowsModeFrame> {
+        self.focused_pill.as_ref()
+    }
+
+    fn set_focused_pill(&mut self, focus: GuiShowsModeFrame) {
+        self.focused_pill = Some(focus);
+    }
 }
 
 impl ShowsUiState {
@@ -130,72 +153,27 @@ impl LibraryState {
             .cloned()
     }
 
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (design D12, D9).
-    fn follow_shows_cursor(&self, rows: &[ShowsListRow], cursor: Option<&str>) {
-        let held = *self.scrolls.shows.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut shows_scroll = self.scrolls.shows;
-            shows_scroll.set(shown);
+    /// The Shows list under the shared list controller (design D12).
+    fn shows_list(
+        &self,
+    ) -> ListControl<ShowsUiState, ShowsListRow, impl Fn() -> Arc<[ShowsListRow]> + '_> {
+        ListControl {
+            ui: self.shows_ui,
+            scroll: self.scrolls.shows,
+            rows: || self.shows_rows(),
+            move_over: move_shows_cursor,
         }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (design
-    /// D12): the cursor keeps its row while that row still paints, and falls
-    /// to the first painted row otherwise. The scroll store then shows the
-    /// cursor — the Music filter's own resolve (design D7).
-    fn settle_shows_cursor(&self) {
-        let ui = self.shows_ui.peek().clone();
-        let rows = self.shows_rows();
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id() == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_shows_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut shows_ui = self.shows_ui;
-            shows_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_shows_cursor(&rows, cursor.as_deref());
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
     /// (design D7's filter rule): the cursor follows the rows.
     pub fn set_shows_filter(&self, filter: String) {
-        let mut shows_ui = self.shows_ui;
-        shows_ui.with_mut(|ui| ui.filter = filter);
-        self.settle_shows_cursor();
+        self.shows_list().set_filter(filter);
     }
 
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it.
     pub fn close_shows_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut shows_ui = self.shows_ui;
-        shows_ui.with_mut(|ui| ui.filter.clear());
-        self.settle_shows_cursor();
-    }
-
-    /// Accept the filter with Enter: the field closes and the list keeps the
-    /// text (design D3, step 2).
-    pub fn accept_shows_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
+        self.shows_list().close_filter(self.ui);
     }
 
     /// Select the row (design D14): a series sends the series select (the core
@@ -327,17 +305,7 @@ impl LibraryState {
     /// take the list's ends, stepping over the letter headings. The scroll
     /// offset follows, so the cursor row stays fully visible.
     pub fn move_shows_list_cursor(&self, mv: ListMove) {
-        let ui = self.shows_ui.peek().clone();
-        let rows = self.shows_rows();
-        let held = *self.scrolls.shows.peek();
-        let view = list_window(&rows, held.scroll_top, held.viewport_height);
-        let cursor = move_shows_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        if cursor == ui.cursor {
-            return;
-        }
-        let mut shows_ui = self.shows_ui;
-        shows_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_shows_cursor(&rows, cursor.as_deref());
+        self.shows_list().move_cursor(mv);
     }
 
     /// Jump to a letter of the rail (design D12): the cursor moves to the
@@ -360,31 +328,13 @@ impl LibraryState {
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_shows_list(&self, viewport_height: f32) {
-        let rows = self.shows_rows();
-        let held = *self.scrolls.shows.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut shows_scroll = self.scrolls.shows;
-            shows_scroll.set(shown);
-        }
+        self.shows_list().measure(viewport_height);
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_shows_list(&self, scroll_top: f32) {
-        let rows = self.shows_rows();
-        let held = *self.scrolls.shows.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut shows_scroll = self.scrolls.shows;
-            shows_scroll.set(shown);
-        }
+        self.shows_list().scroll_to(scroll_top);
     }
 
     /// The pill the pill row's focus holds, resolved against the carried
@@ -406,17 +356,14 @@ impl LibraryState {
             return;
         };
         let pills: Vec<GuiShowsModeFrame> = shows.pills.iter().map(|pill| pill.mode).collect();
-        let focused = self.shows_ui.peek().focused_pill;
-        let moved = step_pill_focus(
+        move_pill_focus(
+            self.shows_ui,
             &pills,
-            focused.map(shows_mode_key),
+            |mode| shows_mode_key(*mode).to_owned(),
+            |mode| *mode,
             |mode| shows_mode_key(*mode).to_owned(),
             step,
         );
-        if let Some(mode) = moved {
-            let mut shows_ui = self.shows_ui;
-            shows_ui.with_mut(|ui| ui.focused_pill = Some(mode));
-        }
     }
 
     /// Ask for the focused pill to be selected: Space and Enter request it

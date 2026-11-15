@@ -18,7 +18,7 @@ use crate::window::sections::Sections;
 use dioxus_native::prelude::*;
 
 use super::keys_shared::{bare, cursor_move, is_list_and_hero_key};
-use super::list::step_pill_focus;
+use super::pill_list;
 use super::state::{LibraryPane, LibraryState};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::settings::keys::route_settings_key;
@@ -107,12 +107,14 @@ fn close_active_filter(state: &LibraryState) {
 fn accept_active_filter(state: &LibraryState) {
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
-        Some(GuiDestinationList::Home(_)) => state.accept_home_filter(),
-        Some(GuiDestinationList::Emby(_)) => state.accept_emby_filter(),
-        Some(GuiDestinationList::Shows(_)) => state.accept_shows_filter(),
-        Some(GuiDestinationList::Audiobooks(_)) => state.accept_audiobooks_filter(),
-        Some(GuiDestinationList::Podcasts(_)) => state.accept_podcasts_filter(),
-        Some(GuiDestinationList::Feeds(_)) => state.accept_feeds_filter(),
+        Some(
+            GuiDestinationList::Home(_)
+            | GuiDestinationList::Emby(_)
+            | GuiDestinationList::Shows(_)
+            | GuiDestinationList::Audiobooks(_)
+            | GuiDestinationList::Podcasts(_)
+            | GuiDestinationList::Feeds(_),
+        ) => state.accept_destination_filter(),
         _ => state.accept_library_filter(),
     }
 }
@@ -325,16 +327,8 @@ fn route_search_key(
 /// Left walk the pills, and the first of them with no pill focused takes the
 /// end it walks from.
 fn move_pill_focus(state: &LibraryState, pills: &[GuiMusicPillFrame], step: i32) {
-    let focused = state.ui.peek().focused_pill.clone();
-    let moved = step_pill_focus(
-        pills,
-        focused.as_deref(),
-        |pill| pill.group_id.clone(),
-        step,
-    );
-    if let Some(pill) = moved {
-        state.focus_library_pill(Some(pill.group_id));
-    }
+    let group_id = |pill: &GuiMusicPillFrame| pill.group_id.clone();
+    pill_list::move_pill_focus(state.ui, pills, group_id, group_id, String::clone, step);
 }
 
 /// Route a key to the active destination's keys (design D3, step 4), with the

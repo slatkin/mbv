@@ -138,7 +138,7 @@ pub fn LibraryPodcastsList() -> Element {
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter episodes".to_owned(),
                     on_input: move |value: String| filter_library.set_podcasts_filter(value),
-                    on_accept: move |()| accept_library.accept_podcasts_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

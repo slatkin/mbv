@@ -200,7 +200,7 @@ pub fn LibraryEmbyList() -> Element {
                     placeholder: filter_placeholder,
                     aria_label: "Filter items".to_owned(),
                     on_input: move |value: String| filter_library.set_emby_filter(value),
-                    on_accept: move |()| accept_library.accept_emby_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

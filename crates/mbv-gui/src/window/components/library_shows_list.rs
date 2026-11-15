@@ -519,7 +519,7 @@ pub fn LibraryShowsList() -> Element {
                     placeholder: filter_placeholder,
                     aria_label: "Filter series".to_owned(),
                     on_input: move |value: String| filter_library.set_shows_filter(value),
-                    on_accept: move |()| accept_library.accept_shows_filter(),
+                    on_accept: move |()| accept_library.accept_destination_filter(),
                 }
             }
             if let Some(frame) = frame {

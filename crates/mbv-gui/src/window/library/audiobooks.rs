@@ -18,12 +18,10 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::audiobooks_list::{
     AudiobooksListRow, audiobooks_letter_rail, move_audiobooks_cursor,
 };
-use crate::window::library::list::{
-    ListMove, clamp_scroll_top, jump_to_letter, list_window, scroll_top_to_show_cursor,
-};
+use crate::window::library::list::{ListMove, jump_to_letter};
 use crate::window::library::parts::library_audiobooks_list;
-use crate::window::library::scroll::ListScroll;
 
+use super::pill_list::{ListControl, ListUi};
 use super::state::LibraryState;
 
 /// The book list's interaction state (`audiobooks.ts`'s `AudiobooksUiState`).
@@ -36,6 +34,20 @@ pub struct AudiobooksUiState {
     /// contains it, without case (design D7's filter rule, the rail's
     /// keyboard path).
     pub filter: String,
+}
+
+impl ListUi for AudiobooksUiState {
+    fn cursor(&self) -> Option<&str> {
+        self.cursor.as_deref()
+    }
+
+    fn set_cursor(&mut self, cursor: Option<String>) {
+        self.cursor = cursor;
+    }
+
+    fn set_filter(&mut self, filter: String) {
+        self.filter = filter;
+    }
 }
 
 impl AudiobooksUiState {
@@ -84,72 +96,28 @@ impl LibraryState {
             .cloned()
     }
 
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (row 9.1, design D9).
-    fn follow_audiobooks_cursor(&self, rows: &[AudiobooksListRow], cursor: Option<&str>) {
-        let held = *self.scrolls.audiobooks.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut audiobooks_scroll = self.scrolls.audiobooks;
-            audiobooks_scroll.set(shown);
+    /// The Audiobooks list under the shared list controller (design D12).
+    fn audiobooks_list(
+        &self,
+    ) -> ListControl<AudiobooksUiState, AudiobooksListRow, impl Fn() -> Arc<[AudiobooksListRow]> + '_>
+    {
+        ListControl {
+            ui: self.audiobooks_ui,
+            scroll: self.scrolls.audiobooks,
+            rows: || self.audiobooks_rows(&self.audiobooks_ui.peek().filter),
+            move_over: move_audiobooks_cursor,
         }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (row 9.1):
-    /// the cursor keeps its row while that row still paints, and falls to the
-    /// first painted row otherwise. The scroll store then shows the cursor —
-    /// the Music filter's own resolve (design D7).
-    fn settle_audiobooks_cursor(&self) {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id() == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_audiobooks_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut audiobooks_ui = self.audiobooks_ui;
-            audiobooks_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_audiobooks_cursor(&rows, cursor.as_deref());
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
     /// (design D7's filter rule): the cursor follows the rows.
     pub fn set_audiobooks_filter(&self, filter: String) {
-        let mut audiobooks_ui = self.audiobooks_ui;
-        audiobooks_ui.with_mut(|ui| ui.filter = filter);
-        self.settle_audiobooks_cursor();
+        self.audiobooks_list().set_filter(filter);
     }
 
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it.
     pub fn close_audiobooks_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
-        let mut audiobooks_ui = self.audiobooks_ui;
-        audiobooks_ui.with_mut(|ui| ui.filter.clear());
-        self.settle_audiobooks_cursor();
-    }
-
-    /// Accept the filter with Enter: the field closes and the list keeps the
-    /// text (design D3, step 2).
-    pub fn accept_audiobooks_filter(&self) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.filter_open = false);
+        self.audiobooks_list().close_filter(self.ui);
     }
 
     /// Select the book (row 9.1): the select command the core stores, whose
@@ -213,17 +181,7 @@ impl LibraryState {
     /// End take the list's ends, stepping over the letter headings. The scroll
     /// offset follows, so the cursor row stays fully visible.
     pub fn move_audiobooks_list_cursor(&self, mv: ListMove) {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
-        let held = *self.scrolls.audiobooks.peek();
-        let view = list_window(&rows, held.scroll_top, held.viewport_height);
-        let cursor = move_audiobooks_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        if cursor == ui.cursor {
-            return;
-        }
-        let mut audiobooks_ui = self.audiobooks_ui;
-        audiobooks_ui.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_audiobooks_cursor(&rows, cursor.as_deref());
+        self.audiobooks_list().move_cursor(mv);
     }
 
     /// Jump to a letter of the rail (row 9.1, design D7): the cursor moves to
@@ -247,33 +205,13 @@ impl LibraryState {
     /// Report the list's measured viewport height (row 9.1): the rows in view
     /// follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_audiobooks_list(&self, viewport_height: f32) {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
-        let held = *self.scrolls.audiobooks.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut audiobooks_scroll = self.scrolls.audiobooks;
-            audiobooks_scroll.set(shown);
-        }
+        self.audiobooks_list().measure(viewport_height);
     }
 
-    /// Report the list's native scroll offset (row 9.1): a user scroll moves
-    /// the rows in view, and the offset stays inside the list's range.
+    /// Report the list's native scroll offset (design D12): a user scroll
+    /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_audiobooks_list(&self, scroll_top: f32) {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
-        let held = *self.scrolls.audiobooks.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut audiobooks_scroll = self.scrolls.audiobooks;
-            audiobooks_scroll.set(shown);
-        }
+        self.audiobooks_list().scroll_to(scroll_top);
     }
 }
 
