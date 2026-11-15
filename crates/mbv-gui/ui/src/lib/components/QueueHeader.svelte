@@ -14,7 +14,10 @@
 	// rule under it (user decision 2026-11-15): the Library top bar's own
 	// fill and border (`LibraryTopBar.svelte`), so the queue's header reads
 	// like the tab bar it sits beside. The band covers the recessed box's
-	// top edge, so the box's own fill starts under the divider.
+	// top edge, so the box's own fill starts under the divider. The band
+	// spans the full queue column — negative inline margins cancel the
+	// recessed box's two-column inset — so its divider runs edge to edge
+	// like the tab bar's, the same stroke at the same colour.
 	//
 	// The switch and the filter each carry a pointer target: the switch's
 	// inactive segment and the filter report the `rightColumn` and `filter`
@@ -53,6 +56,7 @@
 	class="flex items-center justify-between overflow-hidden whitespace-nowrap"
 	style:height="var(--canvas-queue-header-height)"
 	style:padding="12px 8px 8px 16px"
+	style:margin-inline="calc(var(--mbv-cell-col) * -2)"
 	style:background="var(--canvas-dim)"
 	style:border-bottom="1px solid var(--canvas-border)"
 	data-queue-header
