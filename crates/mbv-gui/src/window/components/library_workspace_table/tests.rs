@@ -1,6 +1,6 @@
 //! Headless tests of the Workspace table's hover swap (D16): the port
 //! review's regression test — off-hover the row's play control hides and the
-//! number paints, and the hovered row swaps them, exactly as the Svelte
+//! number paints, and the hovered row swaps them, exactly as the former client
 //! ternaries did. A headless document cannot fire a pointerenter, so the
 //! hovered half asserts the one style decision both cells route through. No
 //! test opens a window, sleeps, or reaches the core.

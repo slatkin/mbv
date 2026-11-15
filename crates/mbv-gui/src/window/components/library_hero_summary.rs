@@ -1,5 +1,5 @@
 //! The Hero's facts block (`replace-tauri-with-blitz` task 7.5, the port of
-//! `LibraryHeroSummary.svelte`; add-gui-library-panel design D15): the one
+//! `LibraryHeroSummary`; add-gui-library-panel design D15): the one
 //! summary every Library destination's Hero paints — the artwork arm, the
 //! title, the meta rows with their duration and progress roles, the hover
 //! actions, and the overview. A destination supplies its facts, its own
@@ -20,7 +20,7 @@ use crate::window::components::library_hero_art::LibraryHeroArt;
 use crate::window::components::library_hero_frame::own;
 use crate::window::components::typed_text::TypedText;
 
-/// The props of the summary (the `LibraryHeroSummary.svelte` props, in
+/// The props of the summary (the `LibraryHeroSummary` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroSummaryProps {
@@ -64,7 +64,7 @@ fn row_role(
     }
 }
 
-/// The Hero's facts block (the Svelte markup, character for character): the
+/// The Hero's facts block: the
 /// artwork arm, the title, the meta rows with their role hooks, the hover
 /// actions, and the overview.
 #[component]

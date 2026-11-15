@@ -81,7 +81,7 @@ fn click(fixture: &mut super::Fixture, x: f32, y: f32) {
     fixture.poll_until_idle();
 }
 
-/// Contract (`LibraryPanel.svelte`'s backdrop button, design D3, D4): a
+/// Contract: a
 /// click on the overlay's dim backdrop reaches the painted button's handler,
 /// so the overlay closes and the list under it paints again. The card covers
 /// the overlay's middle, so the click lands on the frame beside it.

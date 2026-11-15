@@ -1,5 +1,5 @@
 //! The Queue panel (`replace-tauri-with-blitz` task 5.5, the port of
-//! `QueuePanel.svelte`): the canvas header (`QueueHeader`), fixed 30 px rows
+//! `QueuePanel`): the canvas header (`QueueHeader`), fixed 30 px rows
 //! with no native DOM scroll — the core owns scroll and sends the viewport
 //! rows to paint — and the canvas footer line is `QueueFooter`'s. The
 //! component measures the list and reports the whole 30 px rows it fits
@@ -176,7 +176,7 @@ fn menu_top(queue: &GuiQueue, anchor_slot: u64) -> String {
     format!("calc(var(--canvas-queue-header-height) + {below}px)")
 }
 
-/// The whole 30 px rows a list box of `height` CSS pixels fits (the Svelte
+/// The whole 30 px rows a list box of `height` CSS pixels fits (the former client
 /// report's `wholeRows`): the capacity the core's queue viewport reads.
 fn whole_rows(height: f32) -> usize {
     let rows = mbv_emby_model::saturating_i64_from_f64(f64::from(height / ROW_HEIGHT).floor());
@@ -186,7 +186,7 @@ fn whole_rows(height: f32) -> usize {
 /// The Queue panel (task 5.5). The panel reads the `queue`, `summary`,
 /// `overlay`, and `focus` sections and the playhead's prediction; each paint
 /// that moved a region reports, and the layout epoch — the `ResizeObserver`
-/// the Svelte effect watched (D9) — re-reports on every layout change.
+/// the former effect watched (D9) — re-reports on every layout change.
 #[component]
 pub fn QueuePanel() -> Element {
     let sections = consume_context::<Sections>();
@@ -196,8 +196,7 @@ pub fn QueuePanel() -> Element {
     let menu_key = use_hook(LayoutKey::next);
 
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The header's controls' handles (the Svelte parent's `querySelectorAll`
-    // over `'[data-right-column-segment]'` and `'[data-filter]'`): the two
+    // The header's controls' handles: the two
     // switch segments' mounted events, keyed by the mode each paints, and
     // the filter control's mounted event. The panel picks the inactive
     // segment's handle from the summary's mode.
@@ -205,19 +204,19 @@ pub fn QueuePanel() -> Element {
         use_signal(Vec::new);
     let filter_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     // The painted rows' mounted events, by their stable slot — the handles
-    // the row regions read (the Svelte `querySelectorAll('[data-slot]')`).
+    // the row regions read (the former client `querySelectorAll('[data-slot]')`).
     let slot_handles: Signal<Vec<(u64, Event<MountedData>)>> = use_signal(Vec::new);
     // The hovered row's chrome handles: the grip and the actions button, one
-    // painted at a time (the Svelte `querySelectorAll('[data-grip]')` and
+    // painted at a time (the former client `querySelectorAll('[data-grip]')` and
     // `'[data-actions]'`).
     let grip_mounted: Signal<Option<(u64, Event<MountedData>)>> = use_signal(|| None);
     let actions_mounted: Signal<Option<(u64, Event<MountedData>)>> = use_signal(|| None);
-    // The open row menu's painted entries, by their entry index (the Svelte
+    // The open row menu's painted entries, by their entry index (the former client
     // `querySelectorAll('[data-menu-entry]')`).
     let mut menu_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // No region outlives the panel: the contributions retract on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     let queue = sections.queue.cloned();
@@ -299,8 +298,7 @@ pub fn QueuePanel() -> Element {
             }
             let mut regions: Vec<LayoutRegion> = Vec::new();
             // The queue header's `rightColumn` and `filter` segments report
-            // first (the Svelte `currentRegions` queries them before the
-            // rows): the switch's inactive segment — the active one reports
+            // first: the switch's inactive segment — the active one reports
             // no target, a press on it would toggle away from the mode it
             // shows — and the filter control.
             if let Some((_, mounted)) = right_column

@@ -1,4 +1,4 @@
-//! The Owner attach campaign (design D9 of `add-tauri-gui-client`): the core
+//! The Owner attach campaign (design D9 of the archived `add-tauri-gui-client`): the core
 //! thread's pre-attach phase. It finds the Owner, starts one from the `mbv`
 //! program when none runs, and attaches — and for every outcome that cannot
 //! attach immediately, it shows the window state that

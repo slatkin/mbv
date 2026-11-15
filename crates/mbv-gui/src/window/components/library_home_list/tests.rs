@@ -4,8 +4,8 @@
 //! rows in view; a press sends the select command with the row's opaque
 //! identity, a double-click the play command, and a right-press the row-menu
 //! command; the rows without art paint no art box, the active row paints its
-//! resume percent, and the load and empty facts paint their lines. The Tauri
-//! IPC of the Svelte tests is the mock core link here; the asserted commands
+//! resume percent, and the load and empty facts paint their lines. The
+//! IPC of the earlier tests is the mock core link here; the asserted commands
 //! are the same neutral shapes. A headless document cannot fire a DOM click,
 //! so the press, play, and menu contracts ride the state methods the
 //! component's own handlers call one line each. The core channel is a mock

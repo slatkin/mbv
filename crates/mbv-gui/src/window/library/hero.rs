@@ -242,7 +242,7 @@ pub enum HeroMetaRole {
 }
 
 impl HeroMetaRole {
-    /// The role's wire name, as the Svelte union spells it (design D15).
+    /// The role's wire name, as the former union spells it (design D15).
     #[must_use]
     pub fn wire(self) -> &'static str {
         match self {

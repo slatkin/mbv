@@ -1,4 +1,4 @@
-//! The Queue footer (task 5.6, the port of `QueueFooter.svelte`): one 40 px
+//! The Queue footer (task 5.6, the port of `QueueFooter`): one 40 px
 //! band at the queue column's bottom, with the canvas's top border and side
 //! padding, that merges what the TUI paints as the queue footer's status
 //! pills and the Status bar's prefix and toast rows — the queue source, the
@@ -55,7 +55,7 @@ use crate::window::status::toast_color;
 use crate::window::theme::role_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the Queue footer (the `QueueFooter.svelte` props).
+/// The props of the Queue footer (the `QueueFooter` props).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueFooterProps {
     /// Whether the Library panel shows beside this one: the Library Status
@@ -77,7 +77,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
     let key = use_hook(LayoutKey::next);
 
     // No region outlives the band: the contribution retracts on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     let watch_footer = sections.footer;

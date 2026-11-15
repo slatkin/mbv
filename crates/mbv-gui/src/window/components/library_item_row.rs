@@ -1,5 +1,5 @@
 //! The flat Library list's item row (`replace-tauri-with-blitz` task 7.2,
-//! the port of `LibraryItemRow.svelte`; add-gui-library-panel design D15,
+//! the port of `LibraryItemRow`; add-gui-library-panel design D15,
 //! invariant 30): the title over its subtitle, the date or duration at the
 //! right, the cursor and selection fills, and the resume run under the row.
 //! Every flat destination list — Emby, Audiobooks, Podcasts, Feeds — paints
@@ -39,7 +39,7 @@ impl LibraryTrailPart {
     }
 }
 
-/// The props of the item row (the `LibraryItemRow.svelte` props, in order).
+/// The props of the item row (the `LibraryItemRow` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryItemRowProps {
     /// The destination's hook prefix, as in `podcasts`, `feeds`, `emby`,
@@ -79,12 +79,12 @@ pub struct LibraryItemRowProps {
     pub on_context: Option<Callback<(f32, f32)>>,
 }
 
-/// The flat list's item row (the Svelte markup, character for character):
+/// The flat list's item row:
 /// the destination's hooks paint from its prefix, so a destination's tests
 /// keep their per-row parts beside the shared look.
 #[component]
 pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
-    // The row's own hooks (the Svelte `own` helper): the kind and the id
+    // The row's own hooks: the kind and the id
     // always paint, the cursor and selection marks only while they hold.
     let mut row_attrs = vec![
         Attribute::new(
@@ -234,7 +234,7 @@ pub fn name_color(state: &GuiHomeRowStateFrame) -> String {
     }
 }
 
-/// The mark a row paints only while it holds the state (the Svelte
+/// The mark a row paints only while it holds the state (the former client
 /// `undefined` values painted nothing).
 #[must_use]
 pub fn mark(name: &'static str, on: bool) -> Vec<Attribute> {

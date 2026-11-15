@@ -1,5 +1,5 @@
 //! One Settings button (`replace-tauri-with-blitz` task 8.2, the port of
-//! `SettingsButton.svelte`; add-gui-settings-screen design D13, D15): 36 px
+//! `SettingsButton`; add-gui-settings-screen design D13, D15): 36 px
 //! high with a 6 px radius in four kinds — secondary (the raised fill and
 //! the control border), primary (the accent fill and ink text), destructive
 //! (the destructive outline), and ghost (muted text with no fill). A
@@ -14,7 +14,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::components::cursor_reveal::cursor_reveal;
 
-/// The button's kind (`SettingsButton.svelte`'s `Variant`).
+/// The button's kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsButtonVariant {
     /// The raised fill and the control border.
@@ -30,7 +30,7 @@ pub enum SettingsButtonVariant {
 
 impl SettingsButtonVariant {
     /// The wire name the `data-settings-button` attribute paints, as the
-    /// Svelte variant's name.
+    /// the former client variant's name.
     #[must_use]
     fn name(self) -> &'static str {
         match self {
@@ -42,7 +42,7 @@ impl SettingsButtonVariant {
     }
 
     /// Each kind's fill, border, text colour, padding, and weight (the
-    /// Svelte `VARIANTS` map).
+    /// the former client `VARIANTS` map).
     fn paint(
         self,
     ) -> (
@@ -79,7 +79,7 @@ impl SettingsButtonVariant {
     }
 }
 
-/// The props of the button (the `SettingsButton.svelte` props, in order).
+/// The props of the button (the `SettingsButton` props, in order).
 #[derive(Props, Clone, PartialEq)]
 pub struct SettingsButtonProps {
     /// The button's kind; secondary is the default.
@@ -118,7 +118,7 @@ impl std::fmt::Debug for SettingsButtonProps {
     }
 }
 
-/// The one Settings button (the Svelte markup, character for character).
+/// The one Settings button.
 #[component]
 pub fn SettingsButton(props: SettingsButtonProps) -> Element {
     let (background, border, color, padding, weight) = props.variant.paint();

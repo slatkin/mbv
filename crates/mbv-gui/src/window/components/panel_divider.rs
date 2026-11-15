@@ -1,5 +1,5 @@
 //! The column divider (`replace-tauri-with-blitz` task 5.1, the port of
-//! `PanelDivider.svelte`; add-gui-library-panel design D4): the Queue panel's
+//! `PanelDivider`; add-gui-library-panel design D4): the Queue panel's
 //! column and the Wide arrangement's list column are resized by dragging.
 //! The drag reports the sized column's new width in pixels and the session
 //! keeps it ([`crate::window::resize`]), so this component holds nothing
@@ -9,7 +9,7 @@
 //! its negative margins lay it over the seam, above both columns, so the two
 //! columns meet directly.
 //!
-//! The Svelte port listened for the drag's moves on the `window`: the pointer
+//! the former client port listened for the drag's moves on the `window`: the pointer
 //! leaves the band's few pixels as soon as the drag starts. The Dioxus tree
 //! has no window listener, so the drag lives in the [`DividerDrag`] store the
 //! root provides: the divider's `pointerdown` arms it with the drag's
@@ -42,7 +42,7 @@ pub enum DividerName {
 }
 
 impl DividerName {
-    /// The `data-divider` value the Svelte markup paints.
+    /// The `data-divider` value the former markup paints.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -51,7 +51,7 @@ impl DividerName {
         }
     }
 
-    /// The divider's accessible name (the Svelte `label`).
+    /// The divider's accessible name.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -108,7 +108,7 @@ impl DividerDrag {
         }
     }
 
-    /// A divider's `pointerdown` (the Svelte `startDrag`): arm the drag over
+    /// A divider's `pointerdown`: arm the drag over
     /// the window's pointer events.
     pub fn start(
         &mut self,
@@ -130,7 +130,7 @@ impl DividerDrag {
         }));
     }
 
-    /// The root's `pointermove` (the Svelte `move` listener): report the
+    /// The root's `pointermove`: report the
     /// sized column's new width — the start width plus the signed drag
     /// distance. A drag under way ends only on a release, a cancel, or the
     /// divider's unmount.
@@ -142,7 +142,7 @@ impl DividerDrag {
         drag.on_drag.call(width);
     }
 
-    /// The root's `pointerup` or `pointercancel` (the Svelte `stop`): the
+    /// The root's `pointerup` or `pointercancel`: the
     /// drag ends and the band's drag look clears.
     pub fn end(&mut self) {
         let Some(mut drag) = self.active.cloned() else {
@@ -153,7 +153,7 @@ impl DividerDrag {
     }
 }
 
-/// The props of the column divider (the `PanelDivider.svelte` props, in
+/// The props of the column divider (the `PanelDivider` props, in
 /// order).
 #[derive(Props, Clone, PartialEq)]
 pub struct PanelDividerProps {
@@ -190,7 +190,7 @@ pub fn PanelDivider(props: PanelDividerProps) -> Element {
     let mut dragging = use_signal(|| false);
 
     // A divider that unmounts mid-drag (a rearrangement or the collapse
-    // toggle) leaves no drag armed: the Svelte `$effect` teardown stopped the
+    // toggle) leaves no drag armed: the former client `$effect` teardown stopped the
     // window listeners, and the band's own drag look is the ownership fact —
     // it is `true` only while this divider holds the drag.
     let mut drop_drag = divider_drag;
@@ -213,7 +213,7 @@ pub fn PanelDivider(props: PanelDividerProps) -> Element {
             class: "relative z-10 flex-none self-stretch border-0 p-0 hover:bg-[var(--canvas-border)] data-[divider-dragging]:bg-[var(--canvas-border)]",
             style: "width: {DIVIDER_WIDTH_PX}px; margin-inline: -{DIVIDER_WIDTH_PX / 2.0}px; cursor: col-resize;",
             onpointerdown: move |event: PointerEvent| {
-                // Only the primary button drags, as the Svelte `startDrag`
+                // Only the primary button drags, as the former client `startDrag`
                 // did; the press itself forwards to the core through the
                 // root's handler, as every other press does.
                 if !matches!(

@@ -4,8 +4,8 @@
 //! the row id while a double-click plays the entry, the cursor row and the
 //! core's selected entry carry their own fills, a played entry dims its
 //! title while an active one paints its resume percent, the loading fact
-//! paints its own line, and the header names the active pill. The Tauri IPC
-//! of the Svelte tests is the mock core link here; a headless document
+//! paints its own line, and the header names the active pill. The IPC
+//! of the earlier tests is the mock core link here; a headless document
 //! cannot fire a DOM click, so the press and play contracts ride the state
 //! methods the component's own handlers call one line each. The core channel
 //! is a mock pair; no test opens a window, sleeps, or reaches the core.

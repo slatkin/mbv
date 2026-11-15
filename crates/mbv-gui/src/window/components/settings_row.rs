@@ -1,5 +1,5 @@
 //! One setting row of a Settings card (`replace-tauri-with-blitz` task 8.2,
-//! the port of `SettingsRow.svelte`; add-gui-settings-screen design D13,
+//! the port of `SettingsRow`; add-gui-settings-screen design D13,
 //! D15, the canvas row): 60 px high, the label on the left at the canvas's
 //! 14 px heading colour, the control on the right, and the canvas's divider
 //! under every row but its card's last one. The cursor row takes the picked
@@ -12,7 +12,7 @@ use dioxus_native::prelude::*;
 use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the row (the `SettingsRow.svelte` props, in order).
+/// The props of the row (the `SettingsRow` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsRowProps {
     /// The row's label.
@@ -29,7 +29,7 @@ pub struct SettingsRowProps {
     pub children: Element,
 }
 
-/// One setting row (the Svelte markup, character for character).
+/// One setting row.
 #[component]
 pub fn SettingsRow(props: SettingsRowProps) -> Element {
     let background = if props.cursor {
@@ -49,7 +49,7 @@ pub fn SettingsRow(props: SettingsRowProps) -> Element {
     } else {
         String::new()
     };
-    // The row that paints the cursor reveals itself: the Svelte screen's
+    // The row that paints the cursor reveals itself: the former screen's
     // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
     let mut reveal = cursor_reveal(props.cursor);
     rsx! {
@@ -63,7 +63,7 @@ pub fn SettingsRow(props: SettingsRowProps) -> Element {
                 text: props.label,
                 class: "min-w-0 flex-1".to_owned(),
                 style: TextStyle::sans(14.0, 400.0),
-                // The Svelte row's `style:font-size="14px"`: the measure cuts
+                // the former client row's `style:font-size="14px"`: the measure cuts
                 // for 14 px, so the box must paint 14 px or the cut clips
                 // mid-glyph instead of ending in an ellipsis.
                 css: "font-size: 14px; color: var(--canvas-heading);".to_owned(),

@@ -6,7 +6,7 @@
 //! paints (there is no Feeds play-next command), the actions send the Feeds
 //! commands for the frame's selected entry with no library index, and the
 //! list band holds the selected feed's entries with the selected one carrying
-//! the cursor. The Tauri IPC of the Svelte tests is the mock core link here;
+//! the cursor. The IPC of the earlier tests is the mock core link here;
 //! the asserted commands are the same neutral shapes. A headless document
 //! cannot fire a DOM click, so the press contracts ride the handler functions
 //! the component's own handlers call one line each. The core channel is a

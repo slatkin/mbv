@@ -166,7 +166,7 @@ fn kind_field_text(doc: &DioxusDocument) -> String {
     node.text_content().trim().to_owned()
 }
 
-/// Contract (the Svelte `<select>`, the port's field): the kind control paints
+/// Contract: the kind control paints
 /// as one field showing the draft's kind, and the menu's other kind moves the
 /// draft, so the submit carries the same `feedAdd` command as a typed form.
 #[test]

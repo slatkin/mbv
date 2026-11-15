@@ -1,4 +1,4 @@
-//! The panel's folded queue (task 5.7, the port of `FoldedQueue.svelte`;
+//! The panel's folded queue (task 5.7, the port of `FoldedQueue`;
 //! add-tauri-gui-client row 6.6, design D10): the expanded artboard after
 //! the `q` toggle. The canvas replaces the queue's rows with one line — the
 //! remaining count, the queue finish clock, and the control that expands
@@ -35,7 +35,7 @@ pub fn FoldedQueue() -> Element {
     let mut expand_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
 
     // No region outlives the line: the contribution retracts on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     // Each paint that moved a region reports (design D4): this effect runs

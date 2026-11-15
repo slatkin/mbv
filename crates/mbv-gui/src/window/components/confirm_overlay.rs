@@ -1,5 +1,5 @@
 //! The shared confirmation modal (`replace-tauri-with-blitz` task 4.2, the
-//! port of `ConfirmOverlay.svelte`): the message and the button row the
+//! port of `ConfirmOverlay`): the message and the button row the
 //! frame's `confirm` overlay carries, painted window-modal over every panel.
 //! The core holds the action; Enter and Esc answer through the core's
 //! overlay key rules, and a press on a button forwards like every other

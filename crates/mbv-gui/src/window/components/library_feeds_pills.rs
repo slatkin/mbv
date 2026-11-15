@@ -1,5 +1,5 @@
 //! The Feeds destination's view pills (`replace-tauri-with-blitz` task 7.4,
-//! the port of `LibraryFeedsPills.svelte`; add-gui-library-panel design D12,
+//! the port of `LibraryFeedsPills`; add-gui-library-panel design D12,
 //! row 11.1): the latest scope and one pill per subscription, single-select
 //! — the core's active pill is always one of them, so a press selects it and
 //! the list loads that view. The pills paint the core's carried choice, so
@@ -18,7 +18,7 @@ use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::feeds::feed_pill_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Feeds pills (the `LibraryFeedsPills.svelte` props,
+/// The props of the Feeds pills (the `LibraryFeedsPills` props,
 /// narrowed to what the pills read): the carried pills of the one feed tab
 /// (row 11.1). The panel passes these alone, so a panel repaint never clones
 /// the list's rows for the pills.

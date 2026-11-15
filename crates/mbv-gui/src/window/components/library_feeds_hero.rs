@@ -1,5 +1,5 @@
 //! The Feeds Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryFeedsHero.svelte`; add-gui-library-panel design D12, row 11.1):
+//! `LibraryFeedsHero`; add-gui-library-panel design D12, row 11.1):
 //! the selected entry's detail pane in the Emby Hero look — the artwork box
 //! the `artShape` arm names, the title, and the meta rows with their duration
 //! role.
@@ -27,7 +27,7 @@ use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
 use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Feeds Hero (the `LibraryFeedsHero.svelte` props, narrowed
+/// The props of the Feeds Hero (the `LibraryFeedsHero` props, narrowed
 /// to what the Hero reads): the carried Feeds rows — the active pill's rows,
 /// which the list band filters to the Hero's feed — and the selected entry's
 /// Hero facts.
@@ -40,7 +40,7 @@ pub struct LibraryFeedsHeroProps {
     pub detail: GuiFeedsDetail,
 }
 
-/// The Feeds action a button sends (the Svelte `command` union).
+/// The Feeds action a button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FeedsAction {
     /// Play the selected entry.
@@ -64,7 +64,7 @@ fn act(library: &LibraryState, action: FeedsAction, detail: &GuiFeedsDetail) {
     library.link.library(command);
 }
 
-/// The row's played state (the Svelte `state` ternary): played, active with a
+/// The row's played state: played, active with a
 /// resume percent, or ordinary.
 fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     if is_played_episode(state) {
@@ -76,7 +76,7 @@ fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     WorkspaceRowState::Active
 }
 
-/// The Feeds Hero (the Svelte markup, character for character): the frame
+/// The Feeds Hero: the frame
 /// over the selected entry, with the feed's entries as the list band.
 #[component]
 pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {

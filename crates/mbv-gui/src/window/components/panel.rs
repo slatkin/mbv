@@ -1,5 +1,5 @@
 //! The player panel (`replace-tauri-with-blitz` task 5.1, the port of
-//! `Panel.svelte`): the panel's four states — the expanded canvas artboard,
+//! `Panel`): the panel's four states — the expanded canvas artboard,
 //! its queue folded to one line (`q`), the compact strip for a container
 //! shorter than 520 px, and the 72 px rail (`z`).
 //!
@@ -26,7 +26,7 @@ use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::panel::{self, GuiPanelState};
 use crate::window::sections::Sections;
 
-/// The props of the player panel (the `Panel.svelte` props, in order).
+/// The props of the player panel (the `Panel` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct PanelProps {
     /// The panel container's measured painted size (design D10), as `App`

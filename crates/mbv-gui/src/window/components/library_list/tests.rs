@@ -4,8 +4,8 @@
 //! and asks the core for the tracks, a press closes and reopens a node while
 //! the filter narrows the rows, a double-click on a track plays it, a track
 //! press moves the cursor onto the row, a right-press requests the row's
-//! item menu, and the header names the carried selection. The Tauri IPC of
-//! the Svelte tests is the mock core link here; the asserted commands are
+//! item menu, and the header names the carried selection. The IPC of
+//! the earlier tests is the mock core link here; the asserted commands are
 //! the same neutral shapes. A headless document cannot fire a DOM click,
 //! input, or context-menu event, so the press, filter, and menu contracts
 //! ride the state methods the component's own handlers call one line each

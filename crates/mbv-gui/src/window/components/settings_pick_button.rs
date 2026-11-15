@@ -1,5 +1,5 @@
 //! A Settings pick row's control (`replace-tauri-with-blitz` task 8.2, the
-//! port of `SettingsPickButton.svelte`; add-gui-settings-screen design D13,
+//! port of `SettingsPickButton`; add-gui-settings-screen design D13,
 //! D15, the canvas pick button): 34 px high, at least 140 px wide, the value
 //! and a `ChevronDown`, opening the row's values in the row menu's chrome.
 //! The press runs the row's activation (`pressSettingsEntry`), the same one
@@ -10,16 +10,16 @@
 //! it with no send. A press on an entry sends `setValue` for the row's
 //! setting and that value, the same command the keyboard's Enter sends.
 //!
-//! The Svelte component closed the menu from a `window` `pointerdown`
+//! the former client component closed the menu from a `window` `pointerdown`
 //! listener that skipped the button and the menu (`buttonEl` and `menuEl`
 //! containment); the same window also ran the Settings screen's
 //! `hideSettingsCursor` on every pointerdown, presses on the pick controls
 //! included. Blitz exposes no window listener, so the press-outside close
 //! runs where the presses meet — the Settings screen's root pointerdown
 //! (task 8.3), which owns the press-outside-close contract — and the button
-//! and the menu stop the press's propagation, as the Svelte skip list did.
+//! and the menu stop the press's propagation, as the former skip list did.
 //! Stopping alone would also swallow the root's cursor hide, so each
-//! handler hides the cursor first (`press_inside`): the Svelte behavior is
+//! handler hides the cursor first (`press_inside`): the former behavior is
 //! "not an outside press", never "not a press at all".
 
 use dioxus_native::prelude::*;
@@ -31,7 +31,7 @@ use crate::window::settings::pick_menu::pick_value_label;
 use crate::window::settings::state::SettingsState;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the pick button (the `SettingsPickButton.svelte` props, in
+/// The props of the pick button (the `SettingsPickButton` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsPickButtonProps {
@@ -48,7 +48,7 @@ pub struct SettingsPickButtonProps {
     pub onpress: Callback<()>,
 }
 
-/// The one pick button (the Svelte markup, character for character).
+/// The one pick button.
 #[component]
 pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
     let settings = consume_context::<SettingsState>();
@@ -93,9 +93,9 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
                 disabled: props.disabled,
                 // A press on the button is the row's activation, not an
                 // outside press: the screen root's close (task 8.3) skips it
-                // the way the Svelte listener skipped `buttonEl`. The cursor
+                // the way the former listener skipped `buttonEl`. The cursor
                 // hide is not an outside-press fact, so the press hides it
-                // itself, as the Svelte window listener did.
+                // itself, as the former window listener did.
                 onpointerdown: move |event: PointerEvent| {
                     press_inside(&button_press);
                     event.stop_propagation();
@@ -111,9 +111,9 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
             if let Some(menu) = menu.as_ref() {
                 div {
                     // A press inside the menu selects its entry; it is not an
-                    // outside press (the Svelte skip of `menuEl`), so it does
+                    // outside press, so it does
                     // not reach the screen root's close. The cursor hides, as
-                    // every Svelte pointerdown did.
+                    // every the former client pointerdown did.
                     onpointerdown: move |event: PointerEvent| {
                         press_inside(&menu_press);
                         event.stop_propagation();
@@ -136,7 +136,7 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
 }
 
 /// A pointer press inside this row's pick controls (`hideSettingsCursor`):
-/// the cursor hide the Svelte window listener ran on every pointerdown,
+/// the cursor hide the former window listener ran on every pointerdown,
 /// presses on the pick controls included. The caller stops the press from
 /// reaching the screen root's close afterwards.
 fn press_inside(settings: &SettingsState) {

@@ -1,7 +1,7 @@
 //! Headless tests of the Settings screen (D16): the contracts of
 //! `SettingsScreen.test.ts` — the content frame titles the shown section
 //! with its name, the Services section as Sources — and the screen root's
-//! pointer press contracts the Svelte `window` listeners owned: the open
+//! pointer press contracts the former client `window` listeners owned: the open
 //! pick menu closes with no send, and the settings cursor hides. The press
 //! contract rides the handler function the root's `onpointerdown` calls one
 //! line each (a headless document cannot fire a DOM pointerdown). The core
@@ -178,7 +178,7 @@ fn the_content_frame_titles_the_section_with_its_name(
     );
 }
 
-/// Contract (the Svelte markup): the screen paints its arrangement, so the
+/// Contract: the screen paints its arrangement, so the
 /// window's narrow-window fact is visible in the tree.
 #[test]
 fn the_screen_paints_its_arrangement() {
@@ -187,7 +187,7 @@ fn the_screen_paints_its_arrangement() {
     assert!(fixture.presents("[data-settings-arrangement=\"wide\"]"));
 }
 
-/// Contract (the spec's *Narrow window* requirement, the Svelte screen's Mini
+/// Contract (the spec's *Narrow window* requirement, the former screen's Mini
 /// gating): in Mini only the pane that holds the keyboard paints.
 #[rstest]
 #[case(SettingsPane::Sidebar)]
@@ -240,7 +240,7 @@ fn a_press_outside_the_menu_closes_it_and_sends_nothing() {
     );
 }
 
-/// Contract (`SettingsScreen.svelte`'s `svelte:window` `pointerdown`): a
+/// Contract: a
 /// press on the screen hides the settings cursor, like `:focus-visible` in
 /// reverse. The press rides the handler the screen root's `onpointerdown`
 /// calls.

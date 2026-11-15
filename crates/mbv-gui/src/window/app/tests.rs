@@ -260,14 +260,14 @@ fn the_window_stylesheet_applies_preflight_utilities_and_the_font() {
     );
 }
 
-/// Contract (task 11.1, look parity with the Svelte window): a `hover:`
+/// Contract (task 11.1, look parity with the former window): a `hover:`
 /// utility paints under the pointer through the window's own stylesheet. The
 /// document carries the committed sheet in the root's style element, as the
 /// window does; the test resolves layout, hovers the divider's box, and reads
 /// the fill, so the class paints the canvas border only while the pointer is
 /// on it. It fails when the rule never reaches the document — the sheet drops
 /// the class, or a gate around it stops matching — which is the look a port
-/// of the Svelte hover state must not lose. The divider is the one hover
+/// of the former hover state must not lose. The divider is the one hover
 /// utility the test can drive without a library frame (the Table's glow
 /// button needs one).
 #[test]

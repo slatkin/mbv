@@ -3,7 +3,7 @@
 //! `@lucide/svelte` 1.70.0. Lucide is ISC-licensed; the notice is
 //! `assets/vendor/lucide-ISC.txt`.
 //!
-//! The Svelte call sites render `<Icon size={..} class=".." />`, which
+//! the former client call sites render `<Icon size={..} class=".." />`, which
 //! Lucide's `buildLucideIconNode` turns into an `svg` with the default
 //! attributes (24 × 24 view box, `stroke="currentColor"`, `stroke-width="2"`,
 //! round caps and joins, no fill), the class list `lucide lucide-<name>`
@@ -15,7 +15,7 @@
 //! writes.
 //!
 //! The one attribute the ports cannot copy character for character is the
-//! colour: the Svelte call sites passed a `var(--mbv-…)` string into the
+//! colour: the former call sites passed a `var(--mbv-…)` string into the
 //! `stroke` and `fill` attributes, which a browser resolves and usvg cannot.
 //! Blitz paints an inline `svg` by serialising the subtree and re-parsing it
 //! with usvg, and usvg has no `var()` support: it drops the stroke and paints
@@ -27,30 +27,30 @@
 use dioxus_native::prelude::*;
 use std::fmt::Write as _;
 
-/// The props the Svelte call sites pass: the icon's size in CSS pixels
+/// The props the former call sites pass: the icon's size in CSS pixels
 /// (Lucide's default 24) and extra classes merged into the svg's `class`.
 #[derive(Props, Clone, PartialEq)]
 pub struct IconProps {
-    /// Extra classes, as a Svelte call site's `class="..."` value.
+    /// Extra classes, as a the former client call site's `class="..."` value.
     #[props(default)]
     pub class: String,
     /// The svg's rendered width and height, in CSS pixels.
     #[props(default = 24)]
     pub size: u16,
-    /// The colour the icon paints in, as a Svelte call site's `color={...}`
+    /// The colour the icon paints in, as a the former client call site's `color={...}`
     /// value: it lands on the svg's computed `color`, which the stroke and a
     /// filled body read as `currentColor`. Lucide's default is `currentColor`.
     #[props(default = "currentColor".to_owned())]
     pub color: String,
-    /// The svg's fill, as a Svelte call site's `fill={...}` value. Lucide's
+    /// The svg's fill, as a the former client call site's `fill={...}` value. Lucide's
     /// default is `none`; any other value paints the body in [`Self::color`].
     #[props(default = "none".to_owned())]
     pub fill: String,
-    /// The svg's stroke width, as a Svelte call site's `strokeWidth={...}`
+    /// The svg's stroke width, as a the former client call site's `strokeWidth={...}`
     /// value. Lucide's default is 2.
     #[props(default = 2.0)]
     pub stroke_width: f32,
-    /// The svg's `aria-hidden="true"`, as a Svelte call site's
+    /// The svg's `aria-hidden="true"`, as a the former client call site's
     /// `aria-hidden={...}` value. Lucide's default leaves it unset.
     #[props(default)]
     pub aria_hidden: bool,

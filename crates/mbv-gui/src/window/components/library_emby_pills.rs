@@ -1,6 +1,6 @@
 //! The plain Emby-library destination's pills
 //! (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryEmbyPills.svelte`; add-gui-library-panel design D12, row 8.1): in
+//! `LibraryEmbyPills`; add-gui-library-panel design D12, row 8.1): in
 //! the feed-group mode, the latest scope, `All`, and each root folder that
 //! holds items; in a plain library, the latest scope and `All`. A press
 //! selects its group and the core loads that group's items. The pills paint
@@ -18,7 +18,7 @@ use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::emby_list::emby_group_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Emby pills (the `LibraryEmbyPills.svelte` props,
+/// The props of the Emby pills (the `LibraryEmbyPills` props,
 /// narrowed to what the pills read): the carried pills and the library index
 /// the set-feed-group command names (row 8.1). The panel passes these alone,
 /// so a panel repaint never clones the list's rows for the pills.

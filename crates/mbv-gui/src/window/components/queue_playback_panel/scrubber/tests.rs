@@ -280,7 +280,7 @@ fn built() -> Fixture {
 /// Contract: the slider box carries `relative` — every painted part of the
 /// bar is `absolute`, so the box is the only positioned ancestor between
 /// them and the app root; without it the bar paints window-wide (the
-/// Svelte markup's `class="relative"`, `main` audits 9–12).
+/// the former client markup's `class="relative"`, `main` audits 9–12).
 #[test]
 fn the_slider_box_is_positioned_so_the_bar_paints_inside_it() {
     let fixture = built();

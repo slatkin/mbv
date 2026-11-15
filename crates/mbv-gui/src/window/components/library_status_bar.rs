@@ -1,5 +1,5 @@
 //! The Library Status bar (`replace-tauri-with-blitz` task 7.1, the port of
-//! `LibraryStatusBar.svelte`; add-gui-library-panel design D10): one 40 px
+//! `LibraryStatusBar`; add-gui-library-panel design D10): one 40 px
 //! band under the Library column, in the canvas's status-bar form — the
 //! canvas's mono type, 16 px side padding, its top border, and its
 //! list-column fill.
@@ -35,7 +35,7 @@ const HINTS: &[(&str, &str)] = &[
     ("1–7", "library"),
 ];
 
-/// The props of the Library Status bar (the `LibraryStatusBar.svelte` props,
+/// The props of the Library Status bar (the `LibraryStatusBar` props,
 /// in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryStatusBarProps {
@@ -61,7 +61,7 @@ pub struct LibraryStatusBarProps {
     pub status: GuiStatusBar,
 }
 
-/// The Library Status bar (the Svelte markup, character for character): the
+/// The Library Status bar: the
 /// canvas status bar band, the hints at the left edge — or the armed prefix
 /// or the live toast in their place — and the location flush at the right.
 #[component]
@@ -73,7 +73,7 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
         props.detail.as_ref(),
     );
     // The live toast's severity colour, resolved before the markup (the
-    // Svelte `toastColor` call in the attribute).
+    // the former client `toastColor` call in the attribute).
     let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
         format!("color: {};", toast_color(toast.severity))
     });

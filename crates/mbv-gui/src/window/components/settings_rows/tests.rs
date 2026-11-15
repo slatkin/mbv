@@ -3,7 +3,7 @@
 //! its pick button, an info row paints its value with no control, the action
 //! rows paint buttons, a choice list paints its checkbox-grid card with the
 //! frame's marks and its Apply, and the content cursor paints on the box it
-//! rests on. The press contracts of the Svelte file — a press sends the
+//! rests on. The press contracts of the former file — a press sends the
 //! row's own command and moves the content cursor onto it — ride the
 //! `press_settings_entry` handler the pane's controls call one line each, and
 //! the paint's `data-settings-entry` ids pin the controls to the entries that

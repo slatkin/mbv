@@ -1,10 +1,10 @@
 //! The window's root (D6 of `replace-tauri-with-blitz`): the port of
-//! `App.svelte` and `main.ts`. The stylesheet mounts with the cell-unit rule
+//! `App` and `main.ts`. The stylesheet mounts with the cell-unit rule
 //! of `window/cells.rs` first, so the first paint resolves every `calc()`
 //! over the two properties (main.ts's `applyCellUnit` before mount), the
 //! theme style (`window/theme.rs`) follows, and the tree composes the attach
 //! screen, the overlays, the Settings screen, and the player and Library
-//! trees exactly as `App.svelte` does. The `sync` on mount asks the core for
+//! trees exactly as `App` does. The `sync` on mount asks the core for
 //! its first full batch, as the `onMount` `sync` did.
 
 use std::sync::{Arc, LazyLock};
@@ -278,7 +278,7 @@ pub fn App() -> Element {
 
     // The sync on mount (D6): the window asks for the full snapshot once its
     // section listener is subscribed. The drain above is that listener; both
-    // live for the window's life, as `App.svelte`'s `onMount` set them up.
+    // live for the window's life, as `App`'s `onMount` set them up.
     let sync_link = CoreLink::clone(&link);
     use_effect(move || {
         sync_link.sync();
@@ -369,7 +369,7 @@ pub fn App() -> Element {
     // The Settings screen's own measure: its sidebar is the canvas's fixed
     // 260 px in the Queue column's place, so the screen's Mini threshold is
     // the window width minus that width, never the dragged Queue column's
-    // (design D11; `App.svelte`'s
+    // (design D11; `App`'s
     // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
     let settings_screen_arrangement = settings_arrangement(container_size);
     let queue_focused = focus.panel == GuiPanel::Queue;
@@ -399,7 +399,7 @@ pub fn App() -> Element {
     let mut drag_cancel = divider_drag;
     let drag_move = divider_drag;
     // The drag's width callback (D14): every step clamps and saves, as the
-    // Svelte `dragQueueWidth` did. It needs no layout bump: the step writes the
+    // the former client `dragQueueWidth` did. It needs no layout bump: the step writes the
     // width the tree paints, so the frame that resolves the new inline width
     // reports the change and the measure follows (D9).
     let mut drag_widths = widths_store.clone();
@@ -439,7 +439,7 @@ pub fn App() -> Element {
             },
             onpointermove: move |event: PointerEvent| {
                 // A divider drag's moves report through the drag's callback
-                // before the move forwards to the core, as the Svelte
+                // before the move forwards to the core, as the former client
                 // `window` listener and the root's forwarder both did.
                 drag_move.pointer_move(event.data.client_coordinates().x);
                 input::on_pointer(DomPointerKind::Move, &event.data, &move_link);
@@ -560,7 +560,7 @@ pub fn App() -> Element {
                         },
                         // The row menu, track popover, and playback-target
                         // chooser paint inside their panels; the root mounts
-                        // nothing for them, as `App.svelte` does.
+                        // nothing for them, as `App` does.
                         _ => rsx! {},
                     }
                 }

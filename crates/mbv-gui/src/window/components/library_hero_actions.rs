@@ -1,5 +1,5 @@
 //! The Hero's action buttons (`replace-tauri-with-blitz` task 7.5, the port
-//! of `LibraryHeroActions.svelte`; add-gui-library-panel design D15): Play,
+//! of `LibraryHeroActions`; add-gui-library-panel design D15): Play,
 //! Play next (`n`), and Add to queue (`a`), each painted only when the
 //! destination supplies its handler. The one set every Hero's action row
 //! paints, inside the row `LibraryHeroSummary` or `LibraryHeroFrame` owns,
@@ -10,7 +10,7 @@ use dioxus_native::prelude::*;
 use crate::window::components::library_hero_frame::own;
 use crate::window::icons::Play;
 
-/// The props of the action buttons (the `LibraryHeroActions.svelte` props, in
+/// The props of the action buttons (the `LibraryHeroActions` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroActionsProps {
@@ -43,7 +43,7 @@ fn paint_hint(hint: &str) -> Element {
 /// shared look.
 const RAISED_STYLE: &str = "height: 44px; padding: 0 14px; gap: 8px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 22px; color: var(--canvas-text); font-size: 14px; cursor: pointer;";
 
-/// The Hero's action buttons (the Svelte markup, character for character):
+/// The Hero's action buttons:
 /// the accent Play pill, and the raised Play-next and Add-to-queue pills with
 /// their muted mono key hints.
 #[component]

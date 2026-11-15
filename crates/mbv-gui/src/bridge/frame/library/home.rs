@@ -103,7 +103,7 @@ pub struct GuiHomeItemRowFrame {
 
 /// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
 /// D12): the identity `App::home_stable_target` resolves. `Recent` carries
-/// the queue item's content id, whose serde form is itself (`provider` and
+/// the queue item's content id, whose wire form is itself (`provider` and
 /// `value`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowIdFrame {

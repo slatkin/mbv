@@ -1,4 +1,4 @@
-//! The panel's rail state (task 5.7, the port of `CollapsedRail.svelte`;
+//! The panel's rail state (task 5.7, the port of `CollapsedRail`;
 //! add-tauri-gui-client row 6.6, design D10): the panel collapsed to 72 px
 //! by the `z` toggle. The canvas's rail is the artwork with the played
 //! fraction as a ring around it, the transport's play/pause and next, the
@@ -36,7 +36,7 @@ const RING_RADIUS_PX: f32 = (RING_SIZE_PX - RING_STROKE_PX) / 2.0;
 const RING_CIRCUMFERENCE_PX: f32 = 2.0 * std::f32::consts::PI * RING_RADIUS_PX;
 const ART_SIZE_PX: f32 = RING_SIZE_PX - 2.0 * RING_STROKE_PX - 4.0;
 
-/// The props of the collapsed rail (the `CollapsedRail.svelte` props).
+/// The props of the collapsed rail (the `CollapsedRail` props).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct CollapsedRailProps {
     /// The artwork the window carries for the active item (design D10):
@@ -63,7 +63,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
     let mut expand_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
 
     // No region outlives the rail: the contribution retracts on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     // Each paint that moved a region reports (design D4): this effect runs
@@ -118,7 +118,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
     let played_arc = crate::window::input::f32_from_f64(progress) * RING_CIRCUMFERENCE_PX;
     let ring_centre = RING_SIZE_PX / 2.0;
     // The remaining time paints only while the runtime is known (the
-    // Svelte `$runtimeTicks > 0`).
+    // the former client `$runtimeTicks > 0`).
     let show_remaining = playhead.runtime.cloned() > 0;
     let remaining = playhead.remaining.cloned();
     let next_glyph = glyph_color(playback.availability.next, GuiRole::TextStrong);

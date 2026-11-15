@@ -1,5 +1,5 @@
 //! The Settings screen's sidebar (`replace-tauri-with-blitz` task 8.3, the
-//! port of `SettingsSidebar.svelte`; add-gui-settings-screen design D11,
+//! port of `SettingsSidebar`; add-gui-settings-screen design D11,
 //! D13's canvas `nav`): the fixed section list in the Queue column's place.
 //! It paints the frame's `sections` in order — a section whose every row the
 //! GUI hides never arrives — each with its Lucide icon and its name, the
@@ -9,7 +9,7 @@
 //! above the title closes the screen (design D11 *Mouse-centric*), so a user
 //! can leave without a key, as Esc from the sidebar does.
 //!
-//! The Svelte sidebar's `scrollIntoView` effect ports as the cursor row's own
+//! the former client sidebar's `scrollIntoView` effect ports as the cursor row's own
 //! reveal ([`cursor_reveal`]): Blitz exposes no descendant query, so the row
 //! that paints `data-settings-cursor` keeps itself in view (D15).
 
@@ -28,13 +28,12 @@ use crate::window::icons::{
 use crate::window::sections::Sections;
 use crate::window::settings::state::{SettingsPane, SettingsState};
 
-/// One section's sidebar icon (the Svelte `ICONS` map, design D13): the
+/// One section's sidebar icon: the
 /// closest icon to the artboard's custom path, because the GUI's rule stays
 /// Lucide only.
 type SectionIcon = fn(IconProps) -> Element;
 
-/// The props the sidebar's icons paint with (the Svelte `<Icon size={16} />`
-/// call, whose other props keep Lucide's defaults).
+/// The props the sidebar's icons paint with.
 fn sidebar_icon_defaults() -> IconProps {
     IconProps {
         class: String::new(),
@@ -64,7 +63,7 @@ fn section_icon(section: GuiSettingsSection) -> SectionIcon {
     }
 }
 
-/// The one sidebar (the Svelte markup, character for character).
+/// The one sidebar.
 #[component]
 pub fn SettingsSidebar() -> Element {
     let sections = consume_context::<Sections>();
@@ -126,7 +125,7 @@ pub fn SettingsSidebar() -> Element {
     }
 }
 
-/// One sidebar row (the Svelte each-block's markup, character for character).
+/// One sidebar row.
 /// The listing renders one component per row, so the cursor reveal's hooks
 /// stay per row: a hook in the loop itself would change the listing
 /// component's hook count with the section count.
@@ -139,7 +138,7 @@ fn SidebarRow(
 ) -> Element {
     let label = section_label(section);
     let icon = section_icon(section);
-    // The row that paints the cursor reveals itself: the Svelte sidebar's
+    // The row that paints the cursor reveals itself: the former sidebar's
     // `scrollIntoView` on its `[data-settings-cursor]` row (D15).
     let mut reveal = cursor_reveal(cursor);
     rsx! {
@@ -167,7 +166,7 @@ fn SidebarRow(
 }
 
 /// The row's fill: the open section's accent, the cursor's selected tone, or
-/// none (the Svelte `style:background` chain).
+/// none.
 fn background(current: bool, cursor: bool) -> &'static str {
     if current {
         "var(--canvas-accent)"
@@ -201,7 +200,7 @@ fn weight(current: bool) -> &'static str {
     if current { "600" } else { "400" }
 }
 
-/// A press on a section row (`SettingsSidebar.svelte`'s `press`): the cursor
+/// A press on a section row: the cursor
 /// takes the row and the keyboard takes the sidebar, then the open command
 /// the Enter key sends moves the keyboard to the content — in Mini the
 /// content is what then shows (the spec's *Narrow window* requirement).

@@ -22,7 +22,7 @@ use super::{
     restore_root_focus, window_attributes,
 };
 
-/// Contract: the window keeps the Tauri window's 400x200 logical floor, so a
+/// Contract: the window keeps the earlier window's 400x200 logical floor, so a
 /// floating window cannot be dragged below the size at which the compact
 /// strip lays out.
 #[test]

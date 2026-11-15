@@ -1,5 +1,5 @@
 //! The plain Emby-library list (`replace-tauri-with-blitz` task 7.7, the
-//! port of `LibraryEmbyList.svelte`; add-gui-library-panel design D12, row
+//! port of `LibraryEmbyList`; add-gui-library-panel design D12, row
 //! 8.1): the plain mode's name-sorted rows under their letter headings, with
 //! the A–Z letter rail beside them, and the feed-group mode's flat rows with
 //! their date gutter and no rail.
@@ -37,7 +37,7 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
     }
 }
 
-/// One painted row of the list (the Svelte row snippet): the letter heading
+/// One painted row of the list: the letter heading
 /// or the item row.
 fn paint_emby_row(
     row: &EmbyListRow,
@@ -93,7 +93,7 @@ fn paint_emby_row(
     }
 }
 
-/// The plain Emby-library list (the Svelte markup, character for character):
+/// The plain Emby-library list:
 /// the header, the load, failure, and empty lines, the rows over native
 /// scroll, and the plain mode's letter rail.
 #[component]

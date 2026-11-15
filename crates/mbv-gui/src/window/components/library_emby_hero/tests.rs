@@ -6,7 +6,7 @@
 //! frame carries (the `IMDb` meta row mapped out of the header's facts), a
 //! Hero without facts paints nothing, no Workspace and no tracklist paint,
 //! and the actions send the Emby commands with the frame's selected row. The
-//! Tauri IPC of the Svelte tests is the mock core link here; the asserted
+//! The IPC of the earlier tests is the mock core link here; the asserted
 //! commands are the same neutral shapes. A headless document cannot fire a
 //! DOM click, so the press contracts ride the handler functions the
 //! component's own handlers call one line each. The core channel is a mock

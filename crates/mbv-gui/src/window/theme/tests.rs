@@ -109,7 +109,7 @@ fn declared_properties(rule: &str) -> Vec<String> {
         .collect()
 }
 
-/// The rule's `--mbv-` property set is exactly the one the reference Tauri
+/// The rule's `--mbv-` property set is exactly the one the reference
 /// build defined: every role, plus the eight chrome fills whose concept has a
 /// one-word name. Its chrome DTO had no `rename_all`, so the six two-word
 /// fills reached the webview as `--mbv-queue_column` and the like while every

@@ -1,4 +1,4 @@
-//! The scrubber seam (task 5.3): the port of `QueuePlaybackPanel.svelte`'s
+//! The scrubber seam (task 5.3): the port of `QueuePlaybackPanel`'s
 //! scrubber block — the 6 px track, the intro and credits blocks, the played
 //! fill, the 2×14 chapter ticks, the 16 px thumb, the hover position line,
 //! the hover preview with the trickplay tile, and the elapsed and
@@ -47,7 +47,7 @@ fn ticks(value: u32) -> f64 {
 
 /// The chapter boundaries the bar paints as 2×14 ticks, skipping the first
 /// boundary (the bar's own left edge) and any outside the runtime, in bar
-/// fractions (the Svelte `visibleChapters`).
+/// fractions.
 fn visible_chapters(chapters: &[GuiChapter], runtime: i64) -> Vec<f64> {
     chapters
         .iter()
@@ -57,7 +57,7 @@ fn visible_chapters(chapters: &[GuiChapter], runtime: i64) -> Vec<f64> {
 }
 
 /// One mark's start in bar fractions, `None` while unknown or outside the
-/// runtime (the Svelte `markLeft`).
+/// runtime.
 fn mark_left(mark: Option<&GuiSegmentMark>, runtime: i64) -> Option<f64> {
     let mark = mark?;
     if runtime <= 0 {
@@ -69,7 +69,7 @@ fn mark_left(mark: Option<&GuiSegmentMark>, runtime: i64) -> Option<f64> {
 /// The hover preview's tile crop (task 6.7): the thumbnail's place in its
 /// sheet, scaled to the preview box, as the sprite the paint crops. The
 /// sprite loads the sheet by its URL. `None` while the sheet is still
-/// loading, so the preview paints the in-flight box (the Svelte `tileCrop`).
+/// loading, so the preview paints the in-flight box.
 fn tile_crop(hover: &GuiScrubberHover) -> Option<String> {
     let tile = hover.tile.as_ref()?;
     let src = match &tile.sheet {
@@ -224,7 +224,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
 struct HoverPreviewProps {
     /// The hovered position the `hover` section carries.
     hover: GuiScrubberHover,
-    /// The hovered tile's sprite styles (the Svelte `tileCrop`), `None`
+    /// The hovered tile's sprite styles, `None`
     /// while no tile is offered or its sheet is still loading.
     tile_crop: Option<String>,
 }

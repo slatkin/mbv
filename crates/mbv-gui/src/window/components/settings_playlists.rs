@@ -1,5 +1,5 @@
 //! The Playlists section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsPlaylists.svelte`; add-gui-settings-screen design D9, D13): the
+//! `SettingsPlaylists`; add-gui-settings-screen design D9, D13): the
 //! saved playlists in a card, and the open playlist's items in one. Each
 //! playlist offers the TUI's actions — open, play, shuffle, add, rename,
 //! delete, refresh — and each item play, shuffle, and add, all as the
@@ -25,14 +25,14 @@ use crate::window::settings::state::{SettingsForm, SettingsState};
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The three whole-playlist and whole-item actions, in paint order (the
-/// Svelte `ACTIONS` list).
+/// the former client `ACTIONS` list).
 const ACTIONS: &[(GuiPlaylistAction, &str)] = &[
     (GuiPlaylistAction::Play, "Play"),
     (GuiPlaylistAction::Shuffle, "Shuffle"),
     (GuiPlaylistAction::Enqueue, "Add"),
 ];
 
-/// The one Playlists pane (the Svelte markup, character for character).
+/// The one Playlists pane.
 #[component]
 pub fn SettingsPlaylists() -> Element {
     let sections = consume_context::<Sections>();
@@ -196,7 +196,7 @@ pub fn SettingsPlaylists() -> Element {
     }
 }
 
-/// A playlist's action row (the Svelte `playlistActions` snippet): the three
+/// A playlist's action row: the three
 /// whole-playlist actions, Rename, and Delete.
 fn playlist_actions(onpress: Callback<String>, cursor_id: Option<&str>, id: &str) -> Element {
     rsx! {
@@ -247,7 +247,7 @@ fn playlist_actions(onpress: Callback<String>, cursor_id: Option<&str>, id: &str
     }
 }
 
-/// The rename field (the Svelte `renameField` snippet): the draft's input
+/// The rename field: the draft's input
 /// under its focus host, mounted with `focus_on_mount`, which arms the
 /// rename hold and focuses the input.
 fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
@@ -280,7 +280,7 @@ fn rename_field(settings: &SettingsState, name: Option<String>) -> Element {
     }
 }
 
-/// A refresh control's painted text (`SettingsPlaylists.svelte`'s
+/// A refresh control's painted text (`SettingsPlaylists`'s
 /// `refreshLabel`): the load flag while it runs.
 fn refresh_label(loading: bool) -> &'static str {
     if loading { "Refreshing…" } else { "Refresh" }

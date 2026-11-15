@@ -1,6 +1,6 @@
 //! The Blitz window half (D3 of `replace-tauri-with-blitz`): the window
 //! channel (D4), the launch copy (D5), and the window's own modules as the
-//! port lands them. One Rust module per Svelte component or TypeScript
+//! port lands them. One Rust module per the former client component or TypeScript
 //! module of the former `ui/src` tree (D15).
 
 pub mod app;

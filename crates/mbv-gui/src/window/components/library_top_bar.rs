@@ -1,5 +1,5 @@
 //! The Library top bar (`replace-tauri-with-blitz` task 7.1, the port of
-//! `LibraryTopBar.svelte`; add-gui-library-panel design D2, D12): the
+//! `LibraryTopBar`; add-gui-library-panel design D2, D12): the
 //! canvas's Home icon, then one tab per presented destination in the frame's
 //! catalog order, with the active destination's tab marked current. The icon
 //! is current while the Home content is present (the destinations are
@@ -32,7 +32,7 @@ use crate::window::library::state::LibraryState;
 use crate::window::theme::{canvas_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the Library top bar (the `LibraryTopBar.svelte` props, in
+/// The props of the Library top bar (the `LibraryTopBar` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryTopBarProps {
@@ -69,12 +69,12 @@ fn open_settings(library: &LibraryState) {
 
 /// The highlighted row's painted fill (the list's cursor fill, design D12):
 /// the highlight marks focus, like the list's cursor. `None` paints no
-/// background, as the Svelte `rowBackground` returned `undefined`.
+/// background, as the former client `rowBackground` returned `undefined`.
 fn row_background(highlight: Option<&str>, row: &GuiSearchRowFrame) -> Option<String> {
     (highlight == Some(row.id.as_str())).then(|| "background: var(--canvas-selected);".to_owned())
 }
 
-/// The Library top bar (the Svelte markup, character for character). The
+/// The Library top bar. The
 /// field's mount fact arms on the first render and retracts on unmount, the
 /// focus fact drives the input's DOM focus, and a results frame keeps the
 /// held highlight by row id.
@@ -134,7 +134,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     let highlight = search_state.highlight;
 
     // The Home icon's and the tabs' painted colours and the current tab's
-    // weight, resolved before the markup (the Svelte ternaries).
+    // weight, resolved before the markup.
     let home_color = if props.home_active {
         canvas_var("heading")
     } else {
@@ -305,7 +305,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                             Truncate {
                                                 text: title,
                                                 class: "min-w-0 flex-1".to_owned(),
-                                                // The Svelte row's 14 px title face:
+                                                // the former client row's 14 px title face:
                                                 // the measure cuts for 14 px, so
                                                 // the box must paint 14 px.
                                                 css: "font-size: 14px; color: var(--canvas-text);"
@@ -313,7 +313,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                                 style: TextStyle::sans(14.0, 400.0),
                                             }
                                             // The subtitle's own ellipsis (D12): the
-                                            // Svelte box clipped its 12 px mono
+                                            // the former client box clipped its 12 px mono
                                             // text with `text-overflow`, which
                                             // Blitz does not paint.
                                             Truncate {

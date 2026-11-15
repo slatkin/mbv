@@ -1,5 +1,5 @@
 //! The Shows list (`replace-tauri-with-blitz` task 7.7, the port of
-//! `LibraryShowsList.svelte`; add-gui-library-panel design D14): the Music
+//! `LibraryShowsList`; add-gui-library-panel design D14): the Music
 //! tree over the TUI's TV node kinds — series nodes, their seasons, and each
 //! season's episodes — under the letter headings of the first series of each
 //! letter, with the A–Z rail beside them, and the Latest and Upcoming modes'
@@ -117,7 +117,7 @@ fn row_background(
     is_selected_row(row, selected).then(|| canvas_var("library-raise"))
 }
 
-/// The open node's caret: the Svelte chevron svg, whose rotation names the
+/// The open node's caret: the former chevron svg, whose rotation names the
 /// open state.
 fn paint_chevron(open: bool) -> Element {
     let angle = if open { 90 } else { 0 };
@@ -143,7 +143,7 @@ fn paint_chevron(open: bool) -> Element {
     }
 }
 
-/// A series or season node row (the Svelte node branch): the chevron, the
+/// A series or season node row: the chevron, the
 /// name, and the press that opens or closes the node and selects it.
 fn paint_shows_node(
     row: &ShowsListRow,
@@ -188,7 +188,7 @@ fn paint_shows_node(
     let press_library = library.clone();
     let menu_id = row_source_id(row).map(str::to_owned);
     let menu_library = library.clone();
-    // The expandable node's `aria-expanded` names the open state (the Svelte
+    // The expandable node's `aria-expanded` names the open state (the former client
     // `undefined` painted none); the marks beyond it paint only while they
     // hold.
     let mut row_marks = Vec::new();
@@ -251,7 +251,7 @@ fn paint_shows_node(
     }
 }
 
-/// An episode leaf row (the Svelte episode branch): the number, the name,
+/// An episode leaf row: the number, the name,
 /// and the runtime, with the double-click's play.
 fn paint_shows_episode(
     row: &ShowsListRow,
@@ -325,7 +325,7 @@ fn paint_shows_episode(
     }
 }
 
-/// One painted row of the Shows list (the Svelte row snippet): the letter
+/// One painted row of the Shows list: the letter
 /// heading, the series and season nodes, the episode leaf, or the flat row.
 fn paint_shows_row(
     row: &ShowsListRow,
@@ -385,7 +385,7 @@ fn paint_shows_row(
     }
 }
 
-/// The Shows list (the Svelte markup, character for character): the header,
+/// The Shows list: the header,
 /// the load and failure lines, the rows over native scroll, and the All
 /// series mode's letter rail.
 #[component]

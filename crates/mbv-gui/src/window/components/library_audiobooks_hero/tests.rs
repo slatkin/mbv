@@ -4,7 +4,7 @@
 //! chapter rows once they have landed, the chapter the predicted position
 //! holds marked while the Hero's book plays, the loading line while the
 //! detail has not landed, and the commands the chapter gestures and the
-//! Hero's buttons send. The Tauri IPC of the Svelte tests is the mock core
+//! Hero's buttons send. The IPC of the earlier tests is the mock core
 //! link here; the asserted commands are the same neutral shapes. A headless
 //! document cannot fire a DOM click, so the press contracts ride the handler
 //! functions the component's own handlers call one line each. The core
@@ -37,7 +37,7 @@ use crate::window::sections::Sections;
 /// The library index the Audiobooks commands name.
 const LIB_IDX: usize = 4;
 
-/// The ticks in one second, as the Svelte test clock's `TEST_SECOND` is.
+/// The ticks in one second, as the former test clock's `TEST_SECOND` is.
 const SECOND: i64 = mbv_emby_model::TICKS_PER_SECOND;
 
 /// A book's chapters on the merged timeline: the first spans 0–21:00, the

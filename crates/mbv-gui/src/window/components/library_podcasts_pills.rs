@@ -1,6 +1,6 @@
 //! The Podcasts destination's episode pills
 //! (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPodcastsPills.svelte`; add-gui-library-panel design D12, row
+//! `LibraryPodcastsPills`; add-gui-library-panel design D12, row
 //! 10.1): the latest scope, the TUI's three state pills, and one pill per
 //! show, single-select — the core's active pill is always one of them, so a
 //! press selects it and the list loads that view. The pills paint the core's
@@ -19,7 +19,7 @@ use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::podcasts::podcast_pill_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Podcasts pills (the `LibraryPodcastsPills.svelte`
+/// The props of the Podcasts pills (the `LibraryPodcastsPills`
 /// props, narrowed to what the pills read): the carried pills and the
 /// library index the set-pill command names (design D12, row 10.1). The
 /// panel passes these alone, so a panel repaint never clones the list's rows

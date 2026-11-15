@@ -2,7 +2,7 @@
 //! `LibraryEmbyPills.test.ts` — the pills paint the core's single-select
 //! group with `aria-pressed` under the destination's own hook, a press sends
 //! the set-feed-group command with that pill's group, and the keys' pill
-//! request becomes the same command. The Tauri IPC of the Svelte tests is
+//! request becomes the same command. The IPC of the earlier tests is
 //! the mock core link here; the asserted commands are the same neutral
 //! shapes. A headless document cannot fire a DOM click, so the press
 //! contract rides the state method the component's own handler calls one

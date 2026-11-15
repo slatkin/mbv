@@ -1,5 +1,5 @@
 //! The Library list's header (`replace-tauri-with-blitz` task 7.2, the port
-//! of `LibraryListHeader.svelte`; add-gui-library-panel design D7, D14): the
+//! of `LibraryListHeader`; add-gui-library-panel design D7, D14): the
 //! canvas's list title beside the carried selection's label, and the `/`
 //! filter field under both. Every destination paints this one header, so the
 //! column cannot drift between tabs: a destination passes its title, the
@@ -12,7 +12,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::components::library_filter_field::LibraryFilterField;
 
-/// The props of the list header (the `LibraryListHeader.svelte` props, in
+/// The props of the list header (the `LibraryListHeader` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryListHeaderProps {
@@ -38,7 +38,7 @@ pub struct LibraryListHeaderProps {
     pub on_accept: Callback<()>,
 }
 
-/// The list header (the Svelte markup, character for character).
+/// The list header.
 #[component]
 pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
     // The destination's own title and label attributes, when it has one.

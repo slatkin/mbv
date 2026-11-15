@@ -1,7 +1,7 @@
 //! Headless test of the Settings field's paint (D16): the field paints its
 //! labelled mono input, and the optional `onmounted` prop stays out of the
 //! way when no caller attaches one. The mount passthrough itself — the port's
-//! stand-in for the Svelte `focusOnMount` action's first-input descendant
+//! stand-in for the former client `focusOnMount` action's first-input descendant
 //! query (task 8.4 attaches `focus_on_mount` through it) — observes a
 //! callback, which no stateless headless test can pin; the forms that mount
 //! it carry the contract (task 8.4).
@@ -35,7 +35,7 @@ fn painted() -> DioxusDocument {
     doc
 }
 
-/// Contract (the Svelte markup): the field paints its labelled input with
+/// Contract: the field paints its labelled input with
 /// the `data-settings-field` name the tests and the key router read.
 #[test]
 fn the_field_paints_its_named_input() {

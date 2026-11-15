@@ -1,5 +1,5 @@
 //! The Sessions section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsSessions.svelte`; add-gui-settings-screen design D9, D13): the
+//! `SettingsSessions`; add-gui-settings-screen design D9, D13): the
 //! same playback targets the header's chooser lists, each marked while it is
 //! the Owner's attached output, in a card of 36 px rows. Selecting one sends
 //! `selectTarget` — the chooser's own path — and the screen stays open.
@@ -14,7 +14,7 @@ use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::state::SettingsState;
 
-/// The one Sessions pane (the Svelte markup, character for character).
+/// The one Sessions pane.
 #[component]
 pub fn SettingsSessions() -> Element {
     let sections = consume_context::<Sections>();

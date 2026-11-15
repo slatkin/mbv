@@ -4,8 +4,8 @@
 //! with, the feed-group mode paints its flat date-ordered rows with their
 //! date gutter and no rail; a press sends the select command with the row's
 //! stable id and a double-click the play command, a collection row included;
-//! and the load, failure, and empty facts paint their lines. The Tauri IPC
-//! of the Svelte tests is the mock core link here; a headless document
+//! and the load, failure, and empty facts paint their lines. The IPC
+//! of the earlier tests is the mock core link here; a headless document
 //! cannot fire a DOM click, so the press, play, jump, and menu contracts
 //! ride the state methods the component's own handlers call one line each.
 //! The core channel is a mock pair; no test opens a window, sleeps, or

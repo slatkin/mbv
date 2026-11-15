@@ -17,7 +17,7 @@ path = "src/main.rs"
 [lints]
 workspace = true
 
-# Exact pins per openspec/changes/add-tauri-gui-client/design.md D2.
+# Exact pins per openspec/changes/replace-tauri-with-blitz/design.md D2.
 [dependencies]
 mbv = { path = "../.." }
 mbv-config = { path = "../mbv-config" }

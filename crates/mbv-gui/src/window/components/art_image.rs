@@ -1,5 +1,5 @@
 //! The window's one art painter (`replace-tauri-with-blitz` D7, the port of
-//! `ArtImage.svelte`): every `GuiArtRef` paints as an `img` whose `src` is the
+//! `ArtImage`): every `GuiArtRef` paints as an `img` whose `src` is the
 //! reference's URL. A `loading` reference paints no image, and a missed load
 //! paints the same loading fill; a failed load becomes
 //! [`ArtEvent::Failed`] for the painted URL, and the natural size
@@ -113,7 +113,7 @@ fn src_of(art: Option<&GuiArtRef>) -> Option<String> {
     }
 }
 
-/// The props of the art painter (the `ArtImage.svelte` props, in order).
+/// The props of the art painter (the `ArtImage` props, in order).
 #[derive(Props, Clone, PartialEq)]
 pub struct ArtImageProps {
     /// The reference the section carries, or `None` while the item has none.
@@ -123,7 +123,7 @@ pub struct ArtImageProps {
     /// The box the image also stays inside, as `capToNaturalSize` takes it.
     #[props(default)]
     pub bounds: Option<NaturalSizeBounds>,
-    /// Whether the image fills its box with no natural-size cap (the Svelte
+    /// Whether the image fills its box with no natural-size cap (the former client
     /// `bounds={false}`), as the queue still slot scales the artwork to the
     /// panel's width.
     #[props(default)]
@@ -166,14 +166,14 @@ struct ArtImageState {
     /// The misses of the painted URL the component last recorded.
     seen_misses: Signal<u64>,
     /// The misses of the painted URL when its source last changed: the count
-    /// of the current failure streak is `seen - base`, as the Svelte failure
+    /// of the current failure streak is `seen - base`, as the former failure
     /// reset on a source change did.
     misses_base: Signal<u64>,
     /// The painted URL's natural size, in device pixels, from `Loaded`.
     natural: Signal<Option<(u32, u32)>>,
 }
 
-/// A new URL starts a fresh load (the Svelte `$effect` on `src`): drop the old
+/// A new URL starts a fresh load: drop the old
 /// failure and its pending retry, and baseline the misses the new source
 /// already carries, so its old misses do not count into the new streak.
 fn drop_old_failure(
@@ -251,7 +251,7 @@ fn loaded_natural(mut state: ArtImageState, art_events: &ArtEvents, url: &str) {
     }
 }
 
-/// The URL to paint, `None` while the fill paints (the Svelte `painted`).
+/// The URL to paint, `None` while the fill paints.
 fn painted_url(src: Option<String>, failure: Option<Failure>) -> Option<String> {
     match (src, failure) {
         (Some(url), Some(current)) if current.waiting && current.src == url => None,
@@ -278,7 +278,7 @@ fn capped_style(style: &str, cap: Option<NaturalCap>, bounded: bool) -> String {
 
 /// The art painter (D7). The `img` element carries no error or load element
 /// handler (D8): a failure arrives only as [`ArtEvent::Failed`], and a load
-/// only as [`ArtEvent::Loaded`]. The retry keeps the Svelte rules: the fill
+/// only as [`ArtEvent::Loaded`]. The retry keeps the former rules: the fill
 /// paints, the wait starts at 1 s and doubles to the 30 s cap, and when it
 /// ends the `img` element is recreated with the same `src`, so Blitz requests
 /// the URL again.

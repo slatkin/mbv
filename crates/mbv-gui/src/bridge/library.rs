@@ -261,7 +261,7 @@ pub enum GuiEmbyFeedGroup {
 
 /// One Home row's stable identity (design D12): the identity the Home
 /// paths resolve, addressed by Service ids and never by a row position.
-/// `Recent` carries the queue item's content id, whose own serde form is
+/// `Recent` carries the queue item's content id, whose own wire form is
 /// itself (`provider` and `value`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiHomeRowId {

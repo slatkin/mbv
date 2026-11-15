@@ -1,5 +1,5 @@
 //! The Podcasts list (`replace-tauri-with-blitz` task 7.7, the port of
-//! `LibraryPodcastsList.svelte`; add-gui-library-panel design D12, row
+//! `LibraryPodcastsList`; add-gui-library-panel design D12, row
 //! 10.1): the active pill's flat episode rows — the episode's title over its
 //! show, and the publish date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
@@ -26,7 +26,7 @@ use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow
 use crate::window::library::shows_workspace::episode_progress;
 use crate::window::library::state::LibraryState;
 
-/// One painted row of the flat list (the Svelte row snippet): the episode
+/// One painted row of the flat list: the episode
 /// row.
 fn paint_podcasts_row(
     row: &PodcastsItemRow,
@@ -68,7 +68,7 @@ fn paint_podcasts_row(
     }
 }
 
-/// The Podcasts list (the Svelte markup, character for character): the
+/// The Podcasts list: the
 /// header, the load, failure, and empty lines, and the flat episode rows
 /// over native scroll.
 #[component]

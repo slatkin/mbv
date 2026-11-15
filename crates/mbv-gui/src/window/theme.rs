@@ -1,7 +1,7 @@
 //! The theme layer (D6 of `replace-tauri-with-blitz`): the port of
 //! `lib/bridge/theme.ts`. The theme section's role colours go into CSS
 //! custom properties on `:root` through the [`ThemeStyle`] element, and
-//! `app.css` points the shadcn-svelte variables at them, so shadcn
+//! `app.css` points the shadcn variables at them, so shadcn
 //! components paint in the mbv palette with no second palette.
 
 use std::fmt::Write as _;
@@ -13,7 +13,7 @@ use crate::window::sections::Sections;
 
 /// The CSS custom property a role colour writes to (D6): the `mbv` prefix
 /// plus the role's camelCase wire name, such as `--mbv-textPrimary`. The
-/// prefix keeps the role properties clear of the shadcn-svelte variables
+/// prefix keeps the role properties clear of the shadcn variables
 /// that point at them (`accent` would otherwise collide with `--accent`).
 #[must_use]
 pub fn role_property(role: GuiRole) -> String {
@@ -83,7 +83,7 @@ pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
 ///
 /// The writer sets the eight fills whose concept has a one-word name and
 /// leaves the six two-word fills unwritten, because that is the property set
-/// the reference Tauri front end defined. Its `GuiChrome` derived
+/// the reference front end defined. Its `GuiChrome` derived
 /// `Serialize` with no `rename_all`, so `applyTheme` wrote
 /// `--mbv-queue_column`, `--mbv-queue_panel`, and the rest, while every
 /// consumer read `var(--mbv-queueColumn)`, `var(--mbv-queuePanel)`, and the
@@ -151,7 +151,7 @@ fn write_chrome(rule: &mut String, chrome: &GuiChrome) {
 
 /// The theme's `style` element (D6): the `:root` rule the last carried theme
 /// section built. The root renders it with the attach, overlay, Library,
-/// Settings, and player trees, as `App.svelte` composes them.
+/// Settings, and player trees, as `App` composes them.
 #[component]
 pub fn ThemeStyle() -> Element {
     let sections = use_context::<Sections>();

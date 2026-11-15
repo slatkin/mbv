@@ -1,6 +1,6 @@
 //! The one pill button every Library selector paints
 //! (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPillButton.svelte`; add-gui-library-panel design D6, D15): the
+//! `LibraryPillButton`; add-gui-library-panel design D6, D15): the
 //! top pill rows and the Shows Hero's season pills. A destination supplies
 //! the pill's name, its selected and focused state, its own attributes, and
 //! the press; it never restates the pill's look, so the two selectors cannot
@@ -11,7 +11,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::theme::GuiRole;
 use crate::window::theme::role_var;
 
-/// The props of the pill button (the `LibraryPillButton.svelte` props, in
+/// The props of the pill button (the `LibraryPillButton` props, in
 /// order).
 #[derive(Props, Clone, PartialEq)]
 pub struct LibraryPillButtonProps {
@@ -41,7 +41,7 @@ impl std::fmt::Debug for LibraryPillButtonProps {
     }
 }
 
-/// The one pill button (the Svelte markup, character for character): the
+/// The one pill button: the
 /// selected pill fills in the source tone, the focused one paints the accent
 /// outline.
 #[component]

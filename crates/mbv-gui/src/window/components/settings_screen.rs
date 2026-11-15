@@ -1,5 +1,5 @@
 //! The Settings screen (`replace-tauri-with-blitz` task 8.3, the port of
-//! `SettingsScreen.svelte`; add-gui-settings-screen design D11, D13, ADR
+//! `SettingsScreen`; add-gui-settings-screen design D11, D13, ADR
 //! 0037): the sidebar in the Queue column's place and the shown section's
 //! content in the Library column's place, with the status line closing the
 //! screen. The sidebar is the canvas's fixed 260 px, independent of the
@@ -11,15 +11,15 @@
 //! of a flex container, so without them the screen shrinks to its content
 //! width instead of taking the canvas (live finding, Settings screen).
 //!
-//! The screen root owns the pointer press the Svelte `window` listener ran:
+//! The screen root owns the pointer press the former client `window` listener ran:
 //! it hides the settings cursor, and it closes the open pick menu — the
-//! press-outside close of `SettingsPickButton.svelte` (task 8.3's wiring
+//! press-outside close of `SettingsPickButton` (task 8.3's wiring
 //! requirement). The pick button and its menu stop the press's propagation,
 //! so a press that reaches this root is by construction outside them; their
 //! own handlers hide the cursor first (`settings_pick_button.rs`'s
 //! `press_inside`), because stopping alone would swallow the cursor hide.
 //!
-//! The Svelte screen's two `scrollIntoView` effects (keep the walked cursor
+//! the former client screen's two `scrollIntoView` effects (keep the walked cursor
 //! row in view) port as the cursor row's own reveal (D15's scroll rule):
 //! Blitz exposes no descendant query from an effect, so every row that paints
 //! `data-settings-cursor` keeps a mounted handle and scrolls itself to the
@@ -44,7 +44,7 @@ use crate::window::settings::state::{
     SettingsPane, SettingsState, current_settings_entries, cursor_entry_id,
 };
 
-/// Each section's sidebar and title label (the Svelte `LABELS` maps). The
+/// Each section's sidebar and title label. The
 /// Services section shows as Sources at the user's choice (design D13, the
 /// *Sources label* bullet): only the label changes.
 #[must_use]
@@ -65,7 +65,7 @@ pub(crate) fn section_label(section: GuiSettingsSection) -> &'static str {
     }
 }
 
-/// The wire name of one section, as the serde rename spells it: the value
+/// The wire name of one section, as the settings command names it: the value
 /// the sidebar's `data-settings-section` paints and the commands send.
 #[must_use]
 pub(crate) fn section_wire(section: GuiSettingsSection) -> &'static str {
@@ -101,8 +101,7 @@ pub(crate) struct SettingsSectionView {
     pub cursor_id: Option<String>,
 }
 
-/// The view the screen's components paint (the Svelte screen's `entries` and
-/// `cursorId` derivations, read per component from the section stores).
+/// The view the screen's components paint.
 pub(crate) fn settings_section_view(
     sections: &Sections,
     settings: &SettingsState,
@@ -122,7 +121,7 @@ pub(crate) fn settings_section_view(
     })
 }
 
-/// The props of the screen (the `SettingsScreen.svelte` props).
+/// The props of the screen (the `SettingsScreen` props).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsScreenProps {
     /// The arrangement the Library-column measurement picks; only Mini
@@ -130,7 +129,7 @@ pub struct SettingsScreenProps {
     pub arrangement: GuiArrangement,
 }
 
-/// The one Settings screen (the Svelte markup, character for character).
+/// The one Settings screen.
 #[component]
 pub fn SettingsScreen(props: SettingsScreenProps) -> Element {
     let sections = consume_context::<Sections>();
@@ -150,7 +149,7 @@ pub fn SettingsScreen(props: SettingsScreenProps) -> Element {
             "data-settings-screen": "",
             "data-settings-arrangement": props.arrangement.name(),
             // A pointer press hides the keyboard cursor, like
-            // `:focus-visible`, and closes the open pick menu: the Svelte
+            // `:focus-visible`, and closes the open pick menu: the former client
             // `window` `pointerdown` listeners, owned here where the presses
             // meet (see the module doc).
             onpointerdown: move |_| screen_press(&press_settings),
@@ -195,8 +194,7 @@ pub fn SettingsScreen(props: SettingsScreenProps) -> Element {
     }
 }
 
-/// The shown section's content pane (the Svelte screen's content-kind
-/// dispatch): one section component per content kind, each reading the
+/// The shown section's content pane: one section component per content kind, each reading the
 /// section stores itself.
 fn content_pane(frame: &GuiSettingsFrame) -> Element {
     match &frame.content {
@@ -210,12 +208,12 @@ fn content_pane(frame: &GuiSettingsFrame) -> Element {
     }
 }
 
-/// A pointer press on the screen root (`SettingsScreen.svelte`'s
+/// A pointer press on the screen root (`SettingsScreen`'s
 /// `svelte:window` `pointerdown`, plus the pick menu's press-outside close):
 /// the open pick menu and the feed form's open kind menu close with no send,
 /// and the settings cursor hides. The pick controls and the kind field stop
 /// their presses' propagation before here, so a press that arrives is outside
-/// them (the Svelte listener's containment skip).
+/// them.
 fn screen_press(settings: &SettingsState) {
     if settings.pick_menu.peek().is_some() {
         settings.close_pick_menu();

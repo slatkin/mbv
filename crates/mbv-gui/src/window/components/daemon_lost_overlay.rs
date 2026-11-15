@@ -1,6 +1,6 @@
 //! The daemon-lost recovery dialog the Client core raised
 //! (`replace-tauri-with-blitz` task 4.2, the port of
-//! `DaemonLostOverlay.svelte`; `App::raise_daemon_lost_modal`,
+//! `DaemonLostOverlay`; `App::raise_daemon_lost_modal`,
 //! `daemon-disconnect-handling`): the diagnostics and the recovery choices
 //! the frame's `daemonLost` overlay carries, painted window-modal over every
 //! panel in the confirmation modal's own look.

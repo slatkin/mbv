@@ -24,7 +24,7 @@ use crate::bridge::settings::{GuiChoicesKind, GuiPlaylistAction};
 pub mod entry_id {
     use super::{GuiPlaylistAction, GuiServiceActionIntent, GuiServiceEntry};
 
-    /// The wire name of one Service entry, as the serde rename spells it.
+    /// The wire name of one Service entry, as the settings command names it.
     fn service_entry_name(entry: GuiServiceEntry) -> &'static str {
         match entry {
             GuiServiceEntry::Emby => "emby",
@@ -33,8 +33,8 @@ pub mod entry_id {
         }
     }
 
-    /// The wire name of one Service action intent, as the serde rename
-    /// spells it.
+    /// The wire name of one Service action intent, as the settings command
+    /// names it.
     fn service_intent_name(intent: GuiServiceActionIntent) -> &'static str {
         match intent {
             GuiServiceActionIntent::SetupEmby => "setupEmby",
@@ -49,7 +49,7 @@ pub mod entry_id {
         }
     }
 
-    /// The wire name of one playlist action, as the serde rename spells it.
+    /// The wire name of one playlist action, as the settings command names it.
     fn playlist_action_name(action: GuiPlaylistAction) -> &'static str {
         match action {
             GuiPlaylistAction::Play => "play",

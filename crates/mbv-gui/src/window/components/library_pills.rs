@@ -1,5 +1,5 @@
 //! The Library pill row (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPills.svelte`; add-gui-library-panel design D6): the group pills
+//! `LibraryPills`; add-gui-library-panel design D6): the group pills
 //! of the active Grouped Music library. One group is always selected, as the
 //! TUI's Grouped Music pill is, so a press selects its pill and the others
 //! deselect. The pills paint the core's carried choice, so the row and the
@@ -16,7 +16,7 @@ use crate::bridge::frame::library::GuiMusicPillFrame;
 use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Music pills (the `LibraryPills.svelte` props, narrowed
+/// The props of the Music pills (the `LibraryPills` props, narrowed
 /// to what the pills read): the carried pills and the library index the
 /// select-collection command names (design D2, D6). The panel passes these
 /// alone, so a panel repaint never clones the list's rows for the pills.

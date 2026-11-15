@@ -89,7 +89,7 @@ impl SettingsState {
     }
 
     /// Open the feed form's kind menu on the kind the draft shows, or close
-    /// it when it is open (the port's stand-in for the Svelte `<select>`'s
+    /// it when it is open (the port's stand-in for the former client `<select>`'s
     /// drop-down, see `components/settings_feeds.rs`): the control's press
     /// and the router's Enter on it both run this one toggle.
     pub fn toggle_feed_kind_menu(&self) {

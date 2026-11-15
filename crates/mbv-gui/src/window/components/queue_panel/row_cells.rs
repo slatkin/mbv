@@ -1,5 +1,5 @@
 //! One queue row's canvas cells (the `rowCells` snippet of
-//! `QueuePanel.svelte`): the padded queue ordinal, the one title line over
+//! `QueuePanel`): the padded queue ordinal, the one title line over
 //! its progress track, and the right-column value. The hovered row reserves
 //! the leading and trailing slots its sibling chrome covers, and the drag
 //! ghost paints the title and the percent only. The row's colours come

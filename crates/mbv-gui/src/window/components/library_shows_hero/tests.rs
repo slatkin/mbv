@@ -4,7 +4,7 @@
 //! season pills with the core's selection pressed, the selected season's
 //! episode rows with their played state, the Latest mode's Hero with no
 //! Workspace, and the commands the season press, the episode gestures, and
-//! the Hero's buttons send. The Tauri IPC of the Svelte tests is the mock
+//! the Hero's buttons send. The IPC of the earlier tests is the mock
 //! core link here; the asserted commands are the same neutral shapes. A
 //! headless document cannot fire a DOM click, so the press contracts ride the
 //! handler functions the component's own handlers call one line each. The

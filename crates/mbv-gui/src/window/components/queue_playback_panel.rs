@@ -1,5 +1,5 @@
 //! The player panel's top block (`replace-tauri-with-blitz` task 5.2, the
-//! port of `QueuePlaybackPanel.svelte`'s artwork, title, and transport
+//! port of `QueuePlaybackPanel`'s artwork, title, and transport
 //! parts): the expanded canvas artboard's header, artwork with its episode
 //! badge, title and parent line, and transport. The canvas, not the TUI
 //! band, is the reference; the paint uses the theme's roles and chrome fills
@@ -89,9 +89,9 @@ fn art_src(art: Option<&GuiArtRef>) -> Option<String> {
 /// The player panel's top block (task 5.2). The block reads the `playback`
 /// and `overlay` sections and the playhead's anchor (the paused fact); each
 /// paint that moved a region reports, and the layout epoch — the
-/// `ResizeObserver` the Svelte effect watched (D9) — re-reports on every
+/// `ResizeObserver` the former effect watched (D9) — re-reports on every
 /// layout change. The artwork's own load answers subscribe too: its loaded
-/// natural size moves the rows below it, the fact the Svelte `ResizeObserver`
+/// natural size moves the rows below it, the fact the former client `ResizeObserver`
 /// on the art element watched.
 #[component]
 pub fn QueuePlaybackPanel() -> Element {
@@ -112,12 +112,12 @@ pub fn QueuePlaybackPanel() -> Element {
     let seek_forward_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let seekbar_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The open chooser's painted rows, by their choice index (the Svelte
+    // The open chooser's painted rows, by their choice index (the former client
     // `querySelectorAll('[data-choice]')`).
     let chooser_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // No region outlives the block: the contributions retract on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     // The playback target chooser: the overlay section's `targetChooser`
@@ -344,7 +344,7 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
     }
 }
 
-/// The chooser's popover (the Svelte `{#if chooser}` block). Each row's
+/// The chooser's popover. Each row's
 /// `onmounted` hands its event to the panel's chooser-regions signal, under
 /// the row's `data-choice` index.
 #[component]
@@ -431,8 +431,7 @@ impl std::fmt::Debug for TransportRowProps {
     }
 }
 
-/// The transport row (the Svelte `{#if $playback.showControls}` transport
-/// block): previous, `−10`, the 56 px round play/pause control, `+30`, and
+/// The transport row: previous, `−10`, the 56 px round play/pause control, `+30`, and
 /// next, on the canvas gap and insets.
 #[component]
 fn TransportRow(mut props: TransportRowProps) -> Element {
@@ -529,7 +528,7 @@ impl std::fmt::Debug for StillSlotProps {
     }
 }
 
-/// The still slot (the Svelte `{#if art}` block, `main` audit 6): the
+/// The still slot: the
 /// artwork on the raised control fill, and the canvas caption while no image
 /// lands. A loaded image spans the panel's full width (the TUI's visual slot
 /// at full column width) with no natural-size cap, and its height follows
@@ -627,7 +626,7 @@ impl std::fmt::Debug for HeaderRowProps {
     }
 }
 
-/// The header row (the Svelte header `div`): the playback target at the
+/// The header row: the playback target at the
 /// left, then the state label and the collapse control at the right. The
 /// target button is the `playbackTarget` region; its press opens the core's
 /// chooser, whose popover paints below it from the overlay section's

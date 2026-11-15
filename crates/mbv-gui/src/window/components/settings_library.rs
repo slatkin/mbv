@@ -1,5 +1,5 @@
 //! The Library section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsLibrary.svelte`; add-gui-settings-screen design D9, D13): the
+//! `SettingsLibrary`; add-gui-settings-screen design D9, D13): the
 //! section's choice rows (the hidden and the feed-view libraries) as
 //! checkbox-grid cards, then the routes list in a card of its own — each
 //! routable library with its assigned device, and, once a `routeDevices`
@@ -18,7 +18,7 @@ use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::state::SettingsState;
 
-/// The one Library pane (the Svelte markup, character for character).
+/// The one Library pane.
 #[component]
 pub fn SettingsLibrary() -> Element {
     let sections = consume_context::<Sections>();

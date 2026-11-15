@@ -3,7 +3,7 @@
 //! with `aria-pressed` and no check glyph, paints no clear control, a press
 //! sends the select-collection command, the keys' Space request becomes the
 //! same command, and the focus marks the pill the keys hold and sends
-//! nothing for it. The Tauri IPC of the Svelte tests is the mock core link
+//! nothing for it. The IPC of the earlier tests is the mock core link
 //! here; the asserted commands are the same neutral shapes. A headless
 //! document cannot fire a DOM click, so the press contract rides the state
 //! method the component's own handler calls one line each (the list's

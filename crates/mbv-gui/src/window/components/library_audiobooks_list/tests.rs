@@ -5,7 +5,7 @@
 //! double-click plays it from its saved position, the cursor row and the
 //! core's selected book paint their fills, the load and failure facts paint
 //! their lines, and a selection change starts the Hero's chapter cursor
-//! over. The Tauri IPC of the Svelte tests is the mock core link here; a
+//! over. The IPC of the earlier tests is the mock core link here; a
 //! headless document cannot fire a DOM click, so the press, play, and jump
 //! contracts ride the state methods the component's own handlers call one
 //! line each. The core channel is a mock pair; no test opens a window,

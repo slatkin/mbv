@@ -1,5 +1,5 @@
 //! The Library panel (`replace-tauri-with-blitz` task 7.1, the port of
-//! `LibraryPanel.svelte`; add-gui-library-panel design D4, D12): the column
+//! `LibraryPanel`; add-gui-library-panel design D4, D12): the column
 //! beside the Queue panel. It paints the shell and the arrangement's
 //! regions — the top bar above the list, and, in Wide, the Hero pane beside
 //! the list; in Narrow the Hero mounts as an overlay over the list once an
@@ -66,7 +66,7 @@ use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
 
-/// The props of the Library panel (the `LibraryPanel.svelte` props, in
+/// The props of the Library panel (the `LibraryPanel` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryPanelProps {
@@ -151,7 +151,7 @@ fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
     }
 }
 
-/// The active destination's list painter (row 7.7): the list the Svelte
+/// The active destination's list painter (row 7.7): the list the former client
 /// panel mounts for the pair's destination. Every list reads its carried
 /// frames from the section store itself, so a panel repaint never
 /// deep-clones a list's rows for it.
@@ -245,7 +245,7 @@ pub(crate) fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRow
         .collect()
 }
 
-/// The Library panel (the Svelte markup, character for character): the
+/// The Library panel: the
 /// Heroes mount (rows 7.5–7.6) and the destination lists mount (row 7.7).
 #[component]
 pub fn LibraryPanel(props: LibraryPanelProps) -> Element {

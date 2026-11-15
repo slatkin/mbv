@@ -1,5 +1,5 @@
 //! The Podcasts Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryPodcastsHero.svelte`; add-gui-library-panel design D12, row 10.1):
+//! `LibraryPodcastsHero`; add-gui-library-panel design D12, row 10.1):
 //! the selected episode's detail pane in the Emby Hero look — the artwork box
 //! the `artShape` arm names, the title, the meta rows with their duration and
 //! progress roles, and the episode description as the overview.
@@ -22,7 +22,7 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Podcasts Hero (the `LibraryPodcastsHero.svelte` props,
+/// The props of the Podcasts Hero (the `LibraryPodcastsHero` props,
 /// narrowed to what the Hero reads): the library index the Podcasts commands
 /// name, and the carried Podcasts detail — the selected episode and its Hero
 /// facts.
@@ -35,7 +35,7 @@ pub struct LibraryPodcastsHeroProps {
     pub detail: GuiPodcastsDetail,
 }
 
-/// The Podcasts action a button sends (the Svelte `command` union).
+/// The Podcasts action a button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PodcastsAction {
     /// Play the selected episode.
@@ -59,7 +59,7 @@ fn act(library: &LibraryState, action: PodcastsAction, lib_idx: usize, detail: &
     library.link.library(command);
 }
 
-/// The Podcasts Hero (the Svelte markup, character for character): the frame
+/// The Podcasts Hero: the frame
 /// over the selected episode, with no Workspace and no play-next control.
 #[component]
 pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {

@@ -22,7 +22,7 @@
 @custom-variant hover (&:hover);
 
 /* The six Latin faces the binary bundles (D11), served in process through
-   the net provider's `mbv-asset` font route (D7). The package CSS of the Tauri
+   the net provider's `mbv-asset` font route (D7). The package CSS of the earlier
    build resolved these through `@fontsource` relative URLs; the Dioxus window
    names the route instead. Weight 400 covers 'normal', 500 and 600 carry
    the medium and semibold weights the Svelte class strings named. */

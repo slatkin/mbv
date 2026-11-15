@@ -79,13 +79,13 @@ pub struct FeedFormDraft {
     pub url: String,
     pub kind: mbv_queue::FeedKind,
     /// The open kind menu's cursor, an index into [`FEED_KINDS`]; `None`
-    /// while the menu is closed. The Svelte `<select>` drew its own options,
+    /// while the menu is closed. the former client `<select>` drew its own options,
     /// so the port keeps the menu's one UI fact beside the draft it edits
     /// and lets it die with the form.
     pub kind_menu: Option<usize>,
 }
 
-/// The kinds the feed form offers, in the Svelte `<select>`'s option order.
+/// The kinds the feed form offers, in the former client `<select>`'s option order.
 pub const FEED_KINDS: [mbv_queue::FeedKind; 2] =
     [mbv_queue::FeedKind::Audio, mbv_queue::FeedKind::Video];
 

@@ -47,7 +47,7 @@ pub enum GuiArrangement {
 
 impl GuiArrangement {
     /// The `data-arrangement` and `data-library-arrangement` value the
-    /// markup paints: the wire name the Svelte attribute carried.
+    /// markup paints: the wire name the former attribute carried.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -96,7 +96,7 @@ pub fn library_arrangement(container: LayoutSize, queue_width: f32) -> GuiArrang
     GuiArrangement::Narrow
 }
 
-/// The arrangement the Settings screen paints (the Svelte
+/// The arrangement the Settings screen paints (the former client
 /// `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`): the Library
 /// column's measurement with the screen's fixed 260 px sidebar in the Queue
 /// column's place. The sidebar takes neither the session's dragged Queue

@@ -1,5 +1,5 @@
 //! The Audiobooks Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryAudiobooksHero.svelte`; add-gui-library-panel design D12, row 9.1):
+//! `LibraryAudiobooksHero`; add-gui-library-panel design D12, row 9.1):
 //! the selected book's detail pane in the Home and Shows Hero look — the
 //! portrait cover-box the book artwork policy declares, the title, and the
 //! meta rows with their duration and progress roles. The facts carry no
@@ -32,7 +32,7 @@ use crate::window::library::audiobooks_workspace::{
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Audiobooks Hero (the `LibraryAudiobooksHero.svelte`
+/// The props of the Audiobooks Hero (the `LibraryAudiobooksHero`
 /// props, narrowed to what the Hero reads): the library index the
 /// Audiobooks commands name, and the carried Audiobooks detail — the selected
 /// book, its playing book, and its Hero facts with the chapter Workspace.
@@ -45,7 +45,7 @@ pub struct LibraryAudiobooksHeroProps {
     pub detail: GuiAudiobooksDetail,
 }
 
-/// The Audiobooks action a button sends (the Svelte `command` union).
+/// The Audiobooks action a button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AbsAction {
     /// Play the selected book from its saved position.
@@ -94,7 +94,7 @@ fn play_chapter(
 }
 
 /// Play the chapter the Workspace row id names, when the Workspace still
-/// holds it (the Svelte `withChapter`).
+/// holds it.
 fn play_chapter_row(
     library: &LibraryState,
     lib_idx: usize,
@@ -112,7 +112,7 @@ fn play_chapter_row(
     play_chapter(library, lib_idx, detail, row.chapter);
 }
 
-/// The Audiobooks Hero (the Svelte markup, character for character): the
+/// The Audiobooks Hero: the
 /// frame over the selected book, with the chapters as the Workspace.
 #[component]
 pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {

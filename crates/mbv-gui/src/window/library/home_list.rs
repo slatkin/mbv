@@ -136,7 +136,7 @@ pub fn home_row_key(id: &GuiHomeRowIdFrame) -> String {
 }
 
 /// The content id's provider and value parts as the key carries them (the
-/// serde wire form's `provider` and `value`): a scalar value as itself, and
+/// wire form's `provider` and `value`): a scalar value as itself, and
 /// a struct value as its field list.
 fn home_content_parts(id: &QueueItemContentId) -> (&'static str, String) {
     match id {
@@ -248,7 +248,7 @@ pub fn move_home_cursor(
 }
 
 /// The rows the memo handed back last, with the cheap key and the filter they
-/// were built from. The rows sit behind an `Arc` because the Svelte semantics
+/// were built from. The rows sit behind an `Arc` because the former semantics
 /// the memo preserves are shared state: one scroll step reads the same rows
 /// the last one built, and the list repaints only its visible window.
 #[derive(Debug, Clone)]

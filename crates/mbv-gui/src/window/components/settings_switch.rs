@@ -1,5 +1,5 @@
 //! One Settings toggle (`replace-tauri-with-blitz` task 8.2, the port of
-//! `SettingsSwitch.svelte`; add-gui-settings-screen design D13, D15, the
+//! `SettingsSwitch`; add-gui-settings-screen design D13, D15, the
 //! canvas switch): a 44 by 24 px track with an 18 px knob, `role="switch"`
 //! and `aria-checked` for assistive technology, and the accent fill while it
 //! is on. A press runs the same store function the keyboard's Space runs, so
@@ -7,7 +7,7 @@
 
 use dioxus_native::prelude::*;
 
-/// The props of the switch (the `SettingsSwitch.svelte` props, in order).
+/// The props of the switch (the `SettingsSwitch` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsSwitchProps {
     /// The toggle's accessible name.
@@ -21,7 +21,7 @@ pub struct SettingsSwitchProps {
     pub onpress: Callback<()>,
 }
 
-/// The one Settings switch (the Svelte markup, character for character).
+/// The one Settings switch.
 #[component]
 pub fn SettingsSwitch(props: SettingsSwitchProps) -> Element {
     let checked = props.checked;

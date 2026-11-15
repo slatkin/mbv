@@ -1,5 +1,5 @@
 //! The Library list's letter rail (`replace-tauri-with-blitz` task 7.2, the
-//! port of `LibraryLetterRail.svelte`; add-gui-library-panel design D7): A
+//! port of `LibraryLetterRail`; add-gui-library-panel design D7): A
 //! to Z beside the list, one 22 px letter a row. A letter no painted row
 //! carries is disabled, so it cannot move the cursor; a press scrolls to the
 //! first row under the letter and moves the cursor there. The rail marks the
@@ -13,7 +13,7 @@ use crate::window::library::list::RailLetter;
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
 
-/// The props of the letter rail (the `LibraryLetterRail.svelte` props, in
+/// The props of the letter rail (the `LibraryLetterRail` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryLetterRailProps {
@@ -43,7 +43,7 @@ fn letter_color(entry: &RailLetter, marked: Option<char>) -> String {
     canvas_var("muted")
 }
 
-/// The letter rail (the Svelte markup, character for character).
+/// The letter rail.
 #[component]
 pub fn LibraryLetterRail(props: LibraryLetterRailProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -68,7 +68,7 @@ pub fn LibraryLetterRail(props: LibraryLetterRailProps) -> Element {
                     let color = letter_color(entry, props.marked);
                     // A disabled letter paints `disabled`, and the marked one
                     // `aria-current`; an enabled unmarked letter paints
-                    // neither, as the Svelte `undefined` values did not.
+                    // neither, as the former client `undefined` values did not.
                     let mut marks = Vec::new();
                     if disabled {
                         marks.push(Attribute::new("disabled", "true", None, false));

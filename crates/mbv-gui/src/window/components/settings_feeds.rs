@@ -1,5 +1,5 @@
 //! The Feeds section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsFeeds.svelte`; add-gui-settings-screen design D9, D13): the feed
+//! `SettingsFeeds`; add-gui-settings-screen design D9, D13): the feed
 //! subscriptions in a card of their own, the add control above them, and the
 //! add/edit form as a card beside the list — a recessed well of labelled
 //! mono fields with Cancel and the primary submit. A subscription's only
@@ -8,7 +8,7 @@
 //! identity. While a fetch runs the frame's `adding` flag shows the add in
 //! progress.
 //!
-//! The kind control is the port's one markup substitution: the Svelte
+//! The kind control is the port's one markup substitution: the former client
 //! `<select>` cannot work here — Blitz paints no options (its user-agent
 //! sheet sets `option { display: none }`), draws no popup, and fires no
 //! `change` event (`DomEventData` has no Change variant) — so the one field
@@ -23,7 +23,7 @@
 //! The form host owns the keyboard hold's focus facts (task 8.4's wiring
 //! requirement): its `focusin` re-arms the hold and its `focusout` drops it,
 //! and the form's first field mounts with `focus_on_mount`, which arms the
-//! hold and focuses the field — the port's stand-in for the Svelte
+//! hold and focuses the field — the port's stand-in for the former client
 //! `focusOnMount` action's first-input query, plus the arm Blitz's focus
 //! event does not deliver. The form's submit reads the shown frame from the
 //! section store at press time (`submit_settings_frame`), so no repaint
@@ -49,7 +49,7 @@ use crate::window::settings::state::{
 };
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The one Feeds pane (the Svelte markup, character for character).
+/// The one Feeds pane.
 #[component]
 pub fn SettingsFeeds() -> Element {
     let sections = consume_context::<Sections>();
@@ -167,7 +167,7 @@ pub fn SettingsFeeds() -> Element {
     }
 }
 
-/// The add/edit form (the Svelte `data-settings-feed-form` well): the edit's
+/// The add/edit form: the edit's
 /// identity line, the name and URL fields, the kind control, and the form's
 /// actions.
 fn feed_form(
@@ -255,7 +255,7 @@ fn feed_form(
     }
 }
 
-/// The kind control (the port's stand-in for the Svelte `<select>`, see the
+/// The kind control (the port's stand-in for the former client `<select>`, see the
 /// module doc): one `data-settings-field` button showing the chosen kind and
 /// its chevron, opening the two kinds in the pick button's menu chrome. A
 /// menu row's press runs [`SettingsState::choose_feed_kind`], the same
@@ -334,7 +334,7 @@ fn FeedKindControl(kind: FeedKind) -> Element {
     }
 }
 
-/// The painted name of one kind (the Svelte `<option>` labels), against
+/// The painted name of one kind, against
 /// [`FeedKind::as_str`]'s config spelling.
 fn feed_kind_label(kind: FeedKind) -> &'static str {
     match kind {

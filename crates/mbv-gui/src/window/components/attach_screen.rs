@@ -1,5 +1,5 @@
 //! The Owner attach screen (`replace-tauri-with-blitz` task 4.2, the port of
-//! `AttachScreen.svelte`): the state the window shows while the core thread's
+//! `AttachScreen`): the state the window shows while the core thread's
 //! attach campaign has no slice to paint — one variant per `GuiAttachState`,
 //! with the text the campaign carries. The mismatch state paints the Restart
 //! and Quit buttons and reports their regions through the shared layout
@@ -49,7 +49,7 @@ fn detail_of(attach: Option<&GuiAttachState>) -> Option<String> {
 }
 
 /// The detail text's colour role: the error role for the two refusals, the
-/// primary role for the rest — the Svelte `style:color` conditional.
+/// primary role for the rest — the former client `style:color` conditional.
 fn detail_color(attach: Option<&GuiAttachState>) -> String {
     match attach {
         Some(GuiAttachState::Refusal(_) | GuiAttachState::ExclusiveRefusal(_)) => {
@@ -81,7 +81,7 @@ pub fn AttachScreen() -> Element {
     let attach = sections.attach.cloned();
 
     // Each paint that moved a region reports (design D4): the attach change
-    // and the layout epoch — the ResizeObserver the Svelte effect watched —
+    // and the layout epoch — the ResizeObserver the former effect watched —
     // re-measure.
     let watch_attach = sections.attach;
     use_effect(move || {

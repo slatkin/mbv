@@ -1,5 +1,5 @@
 //! Typed text (add-gui-settings-screen design D14, the port of
-//! `TypedText.svelte`): colour carries the data type, so a line that joins
+//! `TypedText`): colour carries the data type, so a line that joins
 //! values of several types is built as typed segments where it is built and
 //! painted here, never split in the window. Each kind names one
 //! `--canvas-type-*` token; the caller keeps the weight, the size, and the
@@ -17,7 +17,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
 
-/// The props of one typed line (the `TypedText.svelte` props, in order).
+/// The props of one typed line (the `TypedText` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct TypedTextProps {
     /// The line's typed runs, in display order.

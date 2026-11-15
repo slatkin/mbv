@@ -1,5 +1,5 @@
 //! The Library list's scroll shell (`replace-tauri-with-blitz` task 7.2, the
-//! port of `LibraryVirtualList.svelte`; add-gui-library-panel design D7,
+//! port of `LibraryVirtualList`; add-gui-library-panel design D7,
 //! D12): the one windowed list every destination paints — the fixed-height
 //! rows over native scroll, the spacers that hold the scroll range of the
 //! rows outside the window, and the two facts only the DOM holds, the
@@ -12,7 +12,7 @@
 //! component boundary would skip the repaint those reads need when the row
 //! model itself is unchanged — a cursor step rebuilds no rows. Rendered
 //! inside the destination's own render, every state read the painter makes
-//! re-renders the window, as the Svelte each-block's reactive snippet did.
+//! re-renders the window, as the former each-block's reactive snippet did.
 //! The hooks the shell holds (the mounted handle and the two effects) attach
 //! to the calling destination's scope, which calls it exactly once per
 //! render.
@@ -26,8 +26,7 @@ use crate::window::layout::LayoutEpoch;
 use crate::window::library::list::{GeometryRow, list_window, rows_height};
 use crate::window::library::scroll::ListScroll;
 
-/// The Library list's scroll shell over `rows` (the Svelte markup, character
-/// for character). `view` is the destination's scroll store's two values
+/// The Library list's scroll shell over `rows`. `view` is the destination's scroll store's two values
 /// (design D9); `on_measure` reports the measured viewport height back to
 /// it, `on_scroll` its native scroll offset, and `paint_row` paints one row
 /// under the shell's own list item.
@@ -56,7 +55,7 @@ pub fn library_virtual_list<R: GeometryRow>(
 
     // Report the list's measured height (design D9): the rows in view follow
     // it. The effect reads the layout epoch — the `ResizeObserver` the
-    // Svelte effect watched — and the mounted handle; it writes no signal it
+    // the former client effect watched — and the mounted handle; it writes no signal it
     // reads, so it never re-runs itself.
     let epoch = consume_context::<LayoutEpoch>();
     let watch_mounted = list_mounted;
@@ -76,7 +75,7 @@ pub fn library_virtual_list<R: GeometryRow>(
     // The scroller mirrors the scroll store (design D9): a key that moved the
     // cursor set the offset, and the element follows it. A user scroll
     // already wrote the offset back, so this write is a no-op for it. The
-    // effect reads the offset first, as the Svelte effect read `el.scrollTop`.
+    // effect reads the offset first, as the former effect read `el.scrollTop`.
     let sync_mounted = list_mounted;
     use_effect(use_reactive(&(view.scroll_top,), move |(scroll_top,)| {
         let Some(event) = sync_mounted.cloned() else {

@@ -5,7 +5,7 @@
 //! contracts — the compact strip's meta line with and without a next item,
 //! the folded queue's remaining count and finish clock, the rail's
 //! remaining time, expand labels, and dim fill — and the region orders the
-//! Svelte tests awaited. The footer line's own painted content and its
+//! the former tests awaited. The footer line's own painted content and its
 //! regionless report are `queue_footer/tests.rs`; the Queue rows' are
 //! `queue_panel/tests/`. The clocks are the injected recorders over a fixed
 //! wall clock (D10); the core channel is a mock pair; no test opens a
@@ -276,7 +276,7 @@ impl Fixture {
     }
 
     /// Stamp the playhead anchor over the fixed clock and paint the
-    /// summary, as the Svelte fixture's `seed` did.
+    /// summary, as the former fixture's `seed` did.
     fn seed(&mut self, summary: GuiQueueSummary) {
         let mut sections = self.sections.clone();
         let mut playhead = self.playhead.clone();
@@ -467,8 +467,7 @@ fn the_collapse_toggle_renders_the_rail() {
         "the collapsed state paints the rail"
     );
     // The rail paints its own state attribute, and no state wrapper mounts
-    // around it (the Svelte contract's `expanded`/`compactStrip` wrappers
-    // name the other two states).
+    // around it.
     assert!(
         !fixture.presents("[data-panel-state=\"expanded\"]"),
         "the rail mounts no expanded artboard"

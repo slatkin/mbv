@@ -2,8 +2,8 @@
 //! `LibraryHomeHero.test.ts` — the Hero paints the title, the meta rows with
 //! their duration and progress roles, and the overview, and no Workspace;
 //! the artwork box reserves the arm the frame declares; and the actions send
-//! the Home commands for the frame's selected row. The Tauri IPC of the
-//! Svelte tests is the mock core link here; the asserted commands are the
+//! the Home commands for the frame's selected row. The IPC of the
+//! the tests is the mock core link here; the asserted commands are the
 //! same neutral shapes. A headless document cannot fire a DOM click, so the
 //! press contracts ride the handler function the component's own handlers
 //! call one line each. The core channel is a mock pair; no test opens a

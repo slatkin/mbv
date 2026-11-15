@@ -194,7 +194,7 @@ pub fn fit_text(text: &str, style: &TextStyle, width: f64) -> String {
     }
 }
 
-/// The `Truncate` component (D12): the port of a text box whose Svelte markup
+/// The `Truncate` component (D12): the port of a text box whose the former client markup
 /// carries the `truncate` class. It renders the box with the call site's
 /// classes plus `truncate` — so a measure that is one frame late still clips
 /// (`overflow: hidden`, `white-space: nowrap`) — and its current display
@@ -203,17 +203,17 @@ pub fn fit_text(text: &str, style: &TextStyle, width: f64) -> String {
 pub struct TruncateProps {
     /// The full text.
     pub text: String,
-    /// The Svelte class string, without `truncate` — the component appends it.
+    /// the former client class string, without `truncate` — the component appends it.
     #[props(default)]
     pub class: String,
-    /// The Svelte element's inline `style:` string — the attributes the
+    /// the former client element's inline `style:` string — the attributes the
     /// markup carried beside the `truncate` class (the colour and font size
     /// the text paints at, which the [`TextStyle`] only mirrors for the
     /// measure).
     #[props(default)]
     pub css: String,
     /// The further attributes the call site's box carries beside its classes
-    /// and style — the `data-*` paint hooks the Svelte markup set on the same
+    /// and style — the `data-*` paint hooks the former markup set on the same
     /// box.
     #[props(default)]
     pub attrs: Vec<Attribute>,

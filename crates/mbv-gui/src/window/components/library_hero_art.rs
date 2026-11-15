@@ -1,5 +1,5 @@
 //! The Library Hero's artwork arm (`replace-tauri-with-blitz` task 7.5, the
-//! port of `LibraryHeroArt.svelte`; add-gui-library-panel design D15, D14):
+//! port of `LibraryHeroArt`; add-gui-library-panel design D15, D14):
 //! the canvas's 300 px box for a portrait or square cover, and the TUI's
 //! layout for a landscape still — the artwork fills the Hero content width at
 //! 16:9, because a 16:9 still shrunk into a square box is not the TUI's hero.
@@ -38,10 +38,10 @@ const ART_HEIGHT: [f32; 3] = [
 /// without bound.
 const BAND_MAX_HEIGHT: f32 = 360.0;
 
-/// The box's text while no art is carried (the Svelte prop's default).
+/// The box's text while no art is carried.
 const DEFAULT_PLACEHOLDER: &str = "[No art · the window's placeholder]";
 
-/// The props of the art box (the `LibraryHeroArt.svelte` props, in order).
+/// The props of the art box (the `LibraryHeroArt` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroArtProps {
     /// The artwork box the Hero reserves, from the artwork policy.
@@ -58,7 +58,7 @@ pub struct LibraryHeroArtProps {
     pub placeholder: Option<String>,
 }
 
-/// The shape's wire name, as the Svelte union spells it.
+/// The shape's wire name, as the former union spells it.
 fn shape_wire(shape: GuiArtShapeFrame) -> &'static str {
     match shape {
         GuiArtShapeFrame::Landscape => "landscape",
@@ -67,7 +67,7 @@ fn shape_wire(shape: GuiArtShapeFrame) -> &'static str {
     }
 }
 
-/// The art reference's kind, as the Svelte `art?.kind` reads it.
+/// The art reference's kind, as the former client `art?.kind` reads it.
 fn art_kind(art: Option<&GuiArtRef>) -> &'static str {
     match art {
         Some(GuiArtRef::Image { .. }) => "image",
@@ -98,7 +98,7 @@ fn height_index(shape: GuiArtShapeFrame) -> usize {
     }
 }
 
-/// The art box's own hooks (the Svelte `own` helper): the art kind paints
+/// The art box's own hooks: the art kind paints
 /// always, the shape with it.
 fn box_attrs(
     attr: &'static str,
@@ -112,8 +112,7 @@ fn box_attrs(
     ]
 }
 
-/// The Library Hero's artwork box (the Svelte markup, character for
-/// character): the box's sizing per arm, and the art over the placeholder
+/// The Library Hero's artwork box: the box's sizing per arm, and the art over the placeholder
 /// fill.
 #[component]
 pub fn LibraryHeroArt(props: LibraryHeroArtProps) -> Element {

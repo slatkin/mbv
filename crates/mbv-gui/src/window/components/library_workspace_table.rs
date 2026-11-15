@@ -1,5 +1,5 @@
 //! The Hero's Workspace table (`replace-tauri-with-blitz` task 7.3, the port
-//! of `LibraryWorkspaceTable.svelte`; add-gui-library-panel design D15,
+//! of `LibraryWorkspaceTable`; add-gui-library-panel design D15,
 //! invariant 30): the one table every destination's Workspace paints —
 //! Music's tracklist, Shows' episodes, Audiobooks' chapters, and Feeds'
 //! entries. The header row, the row grid, the cursor fill, the playing
@@ -24,11 +24,11 @@ use crate::window::input::f32_from_f64;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The row grid the header and every row paint (the Svelte
+/// The row grid the header and every row paint (the former client
 /// `grid-template-columns`).
 const GRID_COLUMNS: &str = "grid-template-columns: 40px minmax(0, 1fr) 88px 64px;";
 
-/// One row of the table, as the destination maps its rows (the Svelte
+/// One row of the table, as the destination maps its rows (the former client
 /// `WorkspaceRow` interface).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceRow {
@@ -48,7 +48,7 @@ pub struct WorkspaceRow {
     pub progress: Option<f32>,
 }
 
-/// A row's played state (the Svelte `'played' | 'active' | 'ordinary'`).
+/// A row's played state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceRowState {
     /// The row is fully played.
@@ -60,7 +60,7 @@ pub enum WorkspaceRowState {
 }
 
 impl WorkspaceRowState {
-    /// The value the row's state hook paints (the Svelte union's spelling).
+    /// The value the row's state hook paints.
     #[must_use]
     pub fn wire(self) -> &'static str {
         match self {
@@ -71,7 +71,7 @@ impl WorkspaceRowState {
     }
 }
 
-/// The icon a hover action paints (the Svelte `icon: Component` prop): the
+/// The icon a hover action paints: the
 /// Lucide glyphs the destinations' actions carry. An enum, not a function
 /// pointer: the props' derived `PartialEq` over fn pointers trips the
 /// `unpredictable_function_pointer_comparisons` lint the workspace denies.
@@ -92,7 +92,7 @@ impl WorkspaceActionIcon {
     }
 }
 
-/// One hover action of a row (the Svelte `WorkspaceAction` interface).
+/// One hover action of a row.
 #[derive(Clone, PartialEq)]
 pub struct WorkspaceAction {
     /// The action's hook value and its accessible name's source.
@@ -115,7 +115,7 @@ impl std::fmt::Debug for WorkspaceAction {
     }
 }
 
-/// The loading line's facts (the Svelte `loading` prop): the line's text and
+/// The loading line's facts: the line's text and
 /// the destination's own attribute for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceLoading {
@@ -126,7 +126,7 @@ pub struct WorkspaceLoading {
     pub attr: &'static str,
 }
 
-/// The props of the table (the `LibraryWorkspaceTable.svelte` props, in
+/// The props of the table (the `LibraryWorkspaceTable` props, in
 /// order).
 #[derive(Props, Clone, PartialEq)]
 pub struct LibraryWorkspaceTableProps {
@@ -200,8 +200,7 @@ fn play_glyph() -> Element {
     }
 }
 
-/// The loading line, while the rows have not landed (the Svelte loading
-/// branch).
+/// The loading line, while the rows have not landed.
 fn paint_loading(loading: &WorkspaceLoading) -> Element {
     let attrs = vec![Attribute::new(loading.attr, "", None, false)];
     rsx! {
@@ -227,7 +226,7 @@ struct RowPaint<'a> {
     on_context: Option<Callback<(f32, f32, String)>>,
 }
 
-/// One row's own hooks (the Svelte `own` helper): the id always paints, the
+/// One row's own hooks: the id always paints, the
 /// cursor, playing, and state marks only while they hold.
 fn row_attrs(row: &WorkspaceRow, hook: &str, cursor_row: bool) -> Vec<Attribute> {
     let mut attrs = vec![Attribute::new(
@@ -263,7 +262,7 @@ fn row_attrs(row: &WorkspaceRow, hook: &str, cursor_row: bool) -> Vec<Attribute>
     attrs
 }
 
-/// The hover swap's display styles (the Svelte ternaries), as (number span,
+/// The hover swap's display styles, as (number span,
 /// play control): the two trade places while the pointer is over the row.
 /// The control is `display: none` off-hover — a missing style would leave it
 /// painted beside the number instead of swapping for it (the port review's
@@ -276,7 +275,7 @@ fn hover_styles(is_hovered: bool) -> (&'static str, &'static str) {
     }
 }
 
-/// The number cell (the Svelte number span): the ordinal that swaps for the
+/// The number cell: the ordinal that swaps for the
 /// play control while the pointer is over the row.
 fn paint_number_cell(
     hook: &'static str,
@@ -321,7 +320,7 @@ fn paint_number_cell(
     }
 }
 
-/// The name button (the Svelte name branch): the row's press target, with
+/// The name button: the row's press target, with
 /// the playing row's glyph beside its title.
 fn paint_name_button(
     hook: &'static str,
@@ -367,7 +366,7 @@ fn paint_name_button(
     }
 }
 
-/// One hover action's button (the Svelte action branch).
+/// One hover action's button.
 fn paint_action(hook: &'static str, action: &WorkspaceAction, row_id: &str) -> Element {
     let own_attrs = vec![Attribute::new(
         library_attr(hook, "action"),
@@ -392,7 +391,7 @@ fn paint_action(hook: &'static str, action: &WorkspaceAction, row_id: &str) -> E
     }
 }
 
-/// The actions cell (the Svelte actions span): the row's hover actions,
+/// The actions cell: the row's hover actions,
 /// shown only while the pointer is over the row.
 fn paint_actions_cell(
     hook: &'static str,
@@ -423,7 +422,7 @@ fn paint_actions_cell(
     }
 }
 
-/// The duration cell (the Svelte duration span): the time token at the
+/// The duration cell: the time token at the
 /// repeat opacity, the cursor row's own ink excepted (design D14).
 fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow, cursor_row: bool) -> Element {
     let own_attrs = vec![Attribute::new(
@@ -453,7 +452,7 @@ fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow, cursor_row: bool)
     }
 }
 
-/// One row of the table (the Svelte `li` branch): the cells over the row
+/// One row of the table: the cells over the row
 /// grid, with the cursor fill, the hover swap, and the resume run.
 fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
     let RowPaint {
@@ -522,7 +521,7 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
     }
 }
 
-/// The Hero's Workspace table (the Svelte markup, character for character).
+/// The Hero's Workspace table.
 #[component]
 pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
     // The row the pointer is over: the table's own paint, never shared

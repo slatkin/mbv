@@ -1,7 +1,7 @@
 //! The window channel and the core link (D4 of `replace-tauri-with-blitz`):
 //! one channel carries everything that reaches the window's Dioxus tree from
 //! outside it, and [`CoreLink`] holds the core's channel as the window's
-//! context value, with one method per former Tauri command. The one fact that
+//! context value, with one method per command. The one fact that
 //! does not travel it is a resize's layout size, which the launch copy writes
 //! into the tree directly so that it lands before the frame that resolves at
 //! the new size (`window::layout::ViewportSize`, D9).
@@ -24,7 +24,7 @@ use crate::window::net::ArtEvent;
 #[derive(Debug)]
 pub enum WindowEvent {
     /// A section batch from the core thread (D4). The batch is the Rust
-    /// value; no serde runs.
+    /// value; no wire encoding runs.
     Batch(Box<GuiSectionBatch>),
     /// The core's quit edge (D4): the root answers with the shell's close.
     Quit,
@@ -77,10 +77,10 @@ impl EventSlot {
     }
 }
 
-/// The core thread's channel as the window holds it (D4): every former Tauri
+/// The core thread's channel as the window holds it (D4): every
 /// command is a method, and each push is the command's whole body. A failed
 /// send means the core thread is gone — the window's close ended it — so the
-/// input logs its drop, as the former Tauri `push` did.
+/// input logs its drop, as a full channel does.
 #[derive(Clone, Debug)]
 pub struct CoreLink {
     core: Sender<CoreInput>,
@@ -113,13 +113,13 @@ impl CoreLink {
     }
 
     /// The `library` command (D4): the window's semantic request converts to
-    /// the neutral command here, as the former Tauri command did with `into`.
+    /// the neutral command here, with `into`.
     pub fn library(&self, command: GuiLibraryCommand) {
         self.push(CoreInput::Library(command.into()), "library");
     }
 
     /// The `settings` command (D4): a request this build cannot address — a
-    /// setting name no key declares — logs and drops, as the former Tauri command
+    /// setting name no key declares — logs and drops,
     /// does.
     pub fn settings(&self, command: GuiSettingsCommand) {
         if let Some(command) = crate::bridge::settings::neutral(command) {

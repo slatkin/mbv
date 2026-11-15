@@ -12,7 +12,7 @@ use dioxus_native::prelude::*;
 use super::list::LibraryRow;
 
 /// The rows the memo handed back last, with the cheap key and the interaction
-/// facts they were built from. The rows sit behind an `Arc` because the Svelte
+/// facts they were built from. The rows sit behind an `Arc` because the former client
 /// semantics the memo preserves are shared state: one scroll step reads the
 /// same rows the last one built, and the list repaints only its visible
 /// window.

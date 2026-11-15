@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use mbv_theme::{Rgb, Role, Surface, surface_colors};
 
 /// The active theme: one colour for every role (design D7) and the chrome
-/// fills the window's shadcn-svelte variables point at. The window
+/// fills the window's shadcn variables point at. The window
 /// writes each entry into a CSS custom property on `:root`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiTheme {
@@ -45,7 +45,7 @@ impl GuiTheme {
 }
 
 /// The GUI chrome's fill values (design D7): the fills the window's
-/// shadcn-svelte background, surface, border, and input variables point at.
+/// shadcn background, surface, border, and input variables point at.
 /// Each one resolves the [`Surface`] the TUI paints the same concept with,
 /// so the chrome tracks the palette with no second palette: a palette edit
 /// recolours the chrome together with the roles. Every field resolves the

@@ -1,4 +1,4 @@
-//! The Queue header (task 5.6, the port of `QueueHeader.svelte`): the
+//! The Queue header (task 5.6, the port of `QueueHeader`): the
 //! `Up next · N` heading over the `queue ends HH:MM` line at the left, the
 //! "Length / Ends at" right-column switch and the filter control at the
 //! right. All of it paints the frame's `summary` section — the switch's
@@ -27,7 +27,7 @@
 //! panel the two segments' mounted events (keyed by their mode, both set
 //! at the header's mount) and the filter's mounted event, and the panel
 //! picks the inactive segment's region from the summary's mode — the
-//! port of the Svelte parent's `querySelectorAll` over the painted DOM.
+//! port of the former parent's `querySelectorAll` over the painted DOM.
 
 use dioxus_native::prelude::*;
 
@@ -38,7 +38,7 @@ use crate::window::icons::Search;
 use crate::window::playhead::{Playhead, queue_finish_text};
 use crate::window::theme::canvas_var;
 
-/// The right-column switch's two modes in paint order (the Svelte `MODES`).
+/// The right-column switch's two modes in paint order.
 const MODES: [(GuiRightColumn, &str); 2] = [
     (GuiRightColumn::Length, "Length"),
     (GuiRightColumn::EndsAt, "Ends at"),
@@ -53,7 +53,7 @@ fn mode_name(mode: GuiRightColumn) -> &'static str {
     }
 }
 
-/// The props of the Queue header (the `QueueHeader.svelte` props, plus the
+/// The props of the Queue header (the `QueueHeader` props, plus the
 /// region handles the panel's report reads).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct QueueHeaderProps {

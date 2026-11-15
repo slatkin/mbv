@@ -1,5 +1,5 @@
 //! The Library pill row (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPillRow.svelte`; add-gui-library-panel design D6, D12): the
+//! `LibraryPillRow`; add-gui-library-panel design D6, D12): the
 //! canvas's single-select pill form, which every destination that has a
 //! selector row paints — the Music collections, the Shows modes, the Emby
 //! library's folders, the Podcasts views, and the Feeds views. The row is
@@ -18,7 +18,7 @@ use crate::window::components::library_attr::library_attr;
 use crate::window::components::library_pill_button::LibraryPillButton;
 
 /// One painted pill: its stable key (the press names it), its name, and
-/// whether the core carries it as the selected one (the Svelte
+/// whether the core carries it as the selected one (the former client
 /// `LibraryPill` interface).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryPill {
@@ -30,7 +30,7 @@ pub struct LibraryPill {
     pub selected: bool,
 }
 
-/// The props of the pill row (the `LibraryPillRow.svelte` props, in order).
+/// The props of the pill row (the `LibraryPillRow` props, in order).
 #[derive(Props, Clone, PartialEq)]
 pub struct LibraryPillRowProps {
     /// The row's accessible name, naming what the pills choose between.
@@ -60,8 +60,7 @@ impl std::fmt::Debug for LibraryPillRowProps {
     }
 }
 
-/// The destination's own pill attributes for one pill (the Svelte `attrs`
-/// spread): the per-tab hook beside the shared pill hook, and the focused
+/// The destination's own pill attributes for one pill: the per-tab hook beside the shared pill hook, and the focused
 /// mark only while the keys' focus holds the pill.
 fn pill_attrs(
     pill_attr: Option<&'static str>,
@@ -95,7 +94,7 @@ fn pill_attrs(
     attrs
 }
 
-/// The Library pill row (the Svelte markup, character for character): the
+/// The Library pill row: the
 /// pills region the arrangement paints, one button per carried pill.
 #[component]
 pub fn LibraryPillRow(props: LibraryPillRowProps) -> Element {

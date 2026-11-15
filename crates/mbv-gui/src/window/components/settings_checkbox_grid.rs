@@ -1,5 +1,5 @@
 //! A Settings checkbox grid (`replace-tauri-with-blitz` task 8.2, the port
-//! of `SettingsCheckboxGrid.svelte`; add-gui-settings-screen design D13,
+//! of `SettingsCheckboxGrid`; add-gui-settings-screen design D13,
 //! D15, the canvas My languages card): three columns of 36 px
 //! `role="checkbox"` buttons over a count header, closed by the Apply
 //! primary button. A checked box paints the success fill and border with an
@@ -19,7 +19,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 use super::settings_button::{SettingsButton, SettingsButtonVariant};
 use super::settings_card::SettingsCard;
 
-/// One box of the grid (the Svelte `options` row shape): the value the apply
+/// One box of the grid: the value the apply
 /// sends back and the label it paints.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckboxOption {
@@ -27,7 +27,7 @@ pub struct CheckboxOption {
     pub label: String,
 }
 
-/// The props of the grid (the `SettingsCheckboxGrid.svelte` props, in
+/// The props of the grid (the `SettingsCheckboxGrid` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsCheckboxGridProps {
@@ -50,7 +50,7 @@ pub struct SettingsCheckboxGridProps {
     pub count_label: Option<Callback<usize, String>>,
 }
 
-/// The one checkbox grid (the Svelte markup, character for character).
+/// The one checkbox grid.
 #[component]
 pub fn SettingsCheckboxGrid(props: SettingsCheckboxGridProps) -> Element {
     let apply_id = entry_id::choices_apply(&props.row_key);
@@ -113,8 +113,7 @@ pub fn SettingsCheckboxGrid(props: SettingsCheckboxGridProps) -> Element {
     }
 }
 
-/// One box of the grid (the Svelte each-block's markup, character for
-/// character). The grid renders one component per box, so the cursor
+/// One box of the grid. The grid renders one component per box, so the cursor
 /// reveal's hooks stay per box: a hook in the loop itself would change the
 /// grid's hook count with the option count.
 #[component]
@@ -162,7 +161,7 @@ fn ChoiceBox(
             "transparent"
         },
     );
-    // The box that paints the cursor reveals itself: the Svelte screen's
+    // The box that paints the cursor reveals itself: the former screen's
     // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
     let mut reveal = cursor_reveal(cursor);
     rsx! {

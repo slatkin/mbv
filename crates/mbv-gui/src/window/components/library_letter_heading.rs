@@ -1,6 +1,6 @@
 //! The letter heading of an alphabetical Library list
 //! (`replace-tauri-with-blitz` task 7.2, the port of
-//! `LibraryLetterHeading.svelte`; add-gui-library-panel design D15): the one
+//! `LibraryLetterHeading`; add-gui-library-panel design D15): the one
 //! heading the Emby and Audiobooks lists paint between letter groups. `attr`
 //! names the destination's own hook.
 
@@ -8,7 +8,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::components::library_attr::library_attr;
 
-/// The props of the letter heading (the `LibraryLetterHeading.svelte` props,
+/// The props of the letter heading (the `LibraryLetterHeading` props,
 /// in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryLetterHeadingProps {
@@ -20,7 +20,7 @@ pub struct LibraryLetterHeadingProps {
     pub height: f32,
 }
 
-/// The letter heading (the Svelte markup, character for character).
+/// The letter heading.
 #[component]
 pub fn LibraryLetterHeading(props: LibraryLetterHeadingProps) -> Element {
     let letter_attrs = vec![Attribute::new(

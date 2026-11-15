@@ -1,5 +1,5 @@
 //! The Services section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsServices.svelte`; add-gui-settings-screen design D9, D13's canvas
+//! `SettingsServices`; add-gui-settings-screen design D9, D13's canvas
 //! Services grid): one card for each Service in the canvas's two-column
 //! grid. The card's header carries the Service's name and, on the right, its
 //! state pill — or, for Feeds, the subscription count the frame projects.
@@ -18,7 +18,7 @@
 //! own fields blurs one field and focuses the next, so the hold survives the
 //! move and a focus-out of the form ends it. The form's first field mounts
 //! with `focus_on_mount`, which arms the hold and focuses the field: the
-//! port's stand-in for the Svelte `focusOnMount` action's first-input query,
+//! port's stand-in for the former client `focusOnMount` action's first-input query,
 //! plus the arm Blitz's focus event does not deliver.
 //!
 //! A form's submit reads the shown frame from the section store at press
@@ -42,7 +42,7 @@ use crate::window::settings::entries::entry_id;
 use crate::window::settings::focus::focus_on_mount;
 use crate::window::settings::state::{SettingsForm, SettingsState, submit_settings_frame};
 
-/// The one Services pane (the Svelte markup, character for character).
+/// The one Services pane.
 #[component]
 pub fn SettingsServices() -> Element {
     let sections = consume_context::<Sections>();
@@ -146,7 +146,7 @@ fn action_variant(intent: GuiServiceActionIntent) -> SettingsButtonVariant {
     }
 }
 
-/// The Emby setup form (the Svelte `data-settings-setup="emby"` well): the
+/// The Emby setup form: the
 /// three fields over the draft, the error, and the form's actions.
 fn emby_form(
     settings: &SettingsState,
@@ -219,8 +219,7 @@ fn emby_form(
     }
 }
 
-/// The Audiobookshelf setup form (the Svelte `data-settings-setup=
-/// "audiobookshelf"` well): the two fields over the draft, the error, and
+/// The Audiobookshelf setup form: the two fields over the draft, the error, and
 /// the form's actions.
 fn audiobookshelf_form(
     settings: &SettingsState,
@@ -282,7 +281,7 @@ fn audiobookshelf_form(
     }
 }
 
-/// The form's actions (the Svelte `formActions` snippet): a ghost Cancel that
+/// The form's actions: a ghost Cancel that
 /// cancels the form's setup, and the primary submit — its label the
 /// validation's progress while the form is busy, and disabled with it.
 fn form_actions(

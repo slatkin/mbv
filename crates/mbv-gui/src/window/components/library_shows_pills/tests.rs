@@ -1,7 +1,7 @@
 //! Headless tests of the Shows mode pills (D16): the contracts of
 //! `LibraryShowsPills.test.ts` — the pills paint the core's single-select
 //! view mode with `aria-pressed` under the shared hook, and a press sends
-//! the set-mode command with that pill's mode. The Tauri IPC of the Svelte
+//! the set-mode command with that pill's mode. The IPC of the earlier client
 //! tests is the mock core link here; the asserted command is the same
 //! neutral shape. A headless document cannot fire a DOM click, so the press
 //! contract rides the state method the component's own handler calls one

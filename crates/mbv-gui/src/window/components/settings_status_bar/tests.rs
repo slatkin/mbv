@@ -59,7 +59,7 @@ fn the_status_line_shows_the_prefix_and_the_toast_together() {
     );
 }
 
-/// Contract (the Svelte markup): with no prefix and no toast, the line paints
+/// Contract: with no prefix and no toast, the line paints
 /// its fixed key hints, and the shown section sits at the right.
 #[test]
 fn the_quiet_line_paints_the_key_hints_and_the_section() {
@@ -83,5 +83,5 @@ fn the_quiet_line_paints_the_key_hints_and_the_section() {
     );
 }
 
-/// The screen's fixed hint count (the Svelte `HINTS` list).
+/// The screen's fixed hint count.
 const HINT_COUNT: usize = 5;

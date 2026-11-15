@@ -5,7 +5,7 @@
 //! `WindowEvent::Frame` (D10), the frame's change fact the drain's re-measure
 //! reads (D12), and the resolve that keeps hit testing off a removed node (gap
 //! `G-Hit`). The pinned crate source is the authority
-//! for the copy; the spike's `crates/mbv-native/src/launch.rs` at commit
+//! for the copy; the spike's launch copy at commit
 //! `2a0510d2a` is a reference.
 //!
 //! [`MbvApplication`] is the copy of `dioxus_application::DioxusNativeApplication`
@@ -53,17 +53,17 @@ use crate::window::net::{MbvNetProvider, NetLoads};
 /// desktop entry still matches.
 const APP_ID: &str = "io.github.slatkin.mbv-gui";
 
-/// The minimum surface width, in logical pixels (D5). The Tauri window set
+/// The minimum surface width, in logical pixels (D5). The window sets
 /// `minWidth` 400, so a floating window cannot shrink below the width where
 /// the compact strip lays out.
 const MIN_SURFACE_WIDTH: f64 = 400.0;
 
-/// The minimum surface height, in logical pixels (D5). The Tauri window set
+/// The minimum surface height, in logical pixels (D5). The window sets
 /// `minHeight` 200.
 const MIN_SURFACE_HEIGHT: f64 = 200.0;
 
 /// The layout of the window the launch copy opens (D5): the title, the
-/// minimum surface size the Tauri window carried, and the Wayland app id.
+/// minimum surface size the earlier window carried, and the Wayland app id.
 /// Pure, so the attributes are checkable without a window.
 fn window_attributes() -> WindowAttributes {
     WindowAttributes::default()

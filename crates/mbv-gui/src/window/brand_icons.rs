@@ -1,5 +1,5 @@
 //! The brand mark beside a playback-target chooser row (the port of
-//! `TargetBrandIcon.svelte`). The three paths are simple-icons' own
+//! `TargetBrandIcon`). The three paths are simple-icons' own
 //! (<https://simpleicons.org>, CC0). Emby and Google Cast paint their brand
 //! hex; the mpv mark stands for a Player owner rather than a third-party
 //! brand, so it takes the theme's remote-host role instead of mpv's purple.
@@ -27,7 +27,7 @@ pub enum TargetBrand {
 }
 
 impl TargetBrand {
-    /// The `data-brand` value, as the Svelte component wrote it.
+    /// The `data-brand` value, as the former component wrote it.
     fn name(self) -> &'static str {
         match self {
             Self::Emby => "emby",

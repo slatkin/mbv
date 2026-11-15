@@ -161,7 +161,7 @@ pub fn dom_cancel(event: Option<&(impl PointerInteraction + InteractionLocation)
 /// key the router leaves to the core goes to the core with its default action
 /// prevented — no default such as Tab's focus move runs. The window content's
 /// own key handlers call `stop_propagation` before the root sees them, as the
-/// Svelte handlers did.
+/// the former client handlers did.
 pub fn on_keydown(event: &KeyboardEvent, route: &KeyRoute, link: &CoreLink) {
     let key = dom_key(&event.data);
     match route(&key) {
@@ -194,10 +194,10 @@ pub fn on_wheel(event: &WheelData, viewport_height: f64, link: &CoreLink) {
 }
 
 /// The context-menu default (D8): the window's own menu does not run — the
-/// job `App.svelte`'s `preventContextMenu` did. No pointer is forwarded:
+/// job the earlier client's `preventContextMenu` did. No pointer is forwarded:
 /// the right click's `pointerdown` already carried the press to the core,
-/// and a second forward would duplicate the neutral right press (input.ts
-/// has no contextmenu listener for the same reason). The handler takes any
+/// and a second forward would duplicate the neutral right press (the earlier
+/// input module has no contextmenu listener for the same reason). The handler takes any
 /// event type: Dioxus maps `contextmenu` to the mouse event, and only the
 /// default matters.
 pub fn on_contextmenu<T: 'static>(event: &Event<T>) {
@@ -233,7 +233,7 @@ fn send_pointer(pointer: DomPointer, link: &CoreLink) {
 
 /// The DOM's `clientX`/`clientY` are `f64` at the Dioxus layer, and the wheel
 /// delta is `f64`; the wire `DomPointer` and the neutral `Position` are `f32`
-/// — the same rounding the former serde deserialization did. A coordinate
+/// — the same rounding the earlier wire decoding did. A coordinate
 /// or delta that is not finite, or that lies outside `f32`'s range, reads as
 /// the neutral 0.0. The measured rects (D9) and the natural-size caps (D7)
 /// narrow their `f64` reads through it too.

@@ -1,5 +1,5 @@
 //! The Audiobooks book list (`replace-tauri-with-blitz` task 7.7, the port
-//! of `LibraryAudiobooksList.svelte`; add-gui-library-panel design D12, row
+//! of `LibraryAudiobooksList`; add-gui-library-panel design D12, row
 //! 9.1): the catalog's book rows in the TUI's sort — author sort key, then
 //! title — under their letter headings, with the A–Z letter rail beside
 //! them. No second mode rides on the destination and no pill row: the rail
@@ -39,7 +39,7 @@ use crate::window::library::parts::{library_audiobooks_detail, library_audiobook
 use crate::window::library::state::LibraryState;
 use crate::window::theme::canvas_var;
 
-/// One painted row of the list (the Svelte row snippet): the letter heading
+/// One painted row of the list: the letter heading
 /// or the book row.
 fn paint_audiobooks_row(
     row: &AudiobooksListRow,
@@ -96,7 +96,7 @@ fn paint_audiobooks_row(
     }
 }
 
-/// The Audiobooks book list (the Svelte markup, character for character):
+/// The Audiobooks book list:
 /// the header, the load, failure, and empty lines, the rows over native
 /// scroll, and the letter rail.
 #[component]

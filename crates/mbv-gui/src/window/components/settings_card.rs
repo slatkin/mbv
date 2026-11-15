@@ -1,5 +1,5 @@
 //! One card of a Settings section (`replace-tauri-with-blitz` task 8.2, the
-//! port of `SettingsCard.svelte`; add-gui-settings-screen design D13, D15):
+//! port of `SettingsCard`; add-gui-settings-screen design D13, D15):
 //! the raised fill, a border, a 10 px radius, and 20 px of padding. A card
 //! that holds setting rows paints the canvas's 8 px by 20 px padding instead,
 //! so each row's divider spans the card's inner width. The heading takes
@@ -7,7 +7,7 @@
 
 use dioxus_native::prelude::*;
 
-/// The props of the card (the `SettingsCard.svelte` props, in order).
+/// The props of the card (the `SettingsCard` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsCardProps {
     /// The card's heading. A card with no heading names itself through
@@ -28,7 +28,7 @@ pub struct SettingsCardProps {
     pub children: Element,
 }
 
-/// The one Settings card (the Svelte markup, character for character).
+/// The one Settings card.
 #[component]
 pub fn SettingsCard(props: SettingsCardProps) -> Element {
     // Whether the card paints a heading band.

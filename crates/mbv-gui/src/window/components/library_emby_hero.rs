@@ -1,5 +1,5 @@
 //! The plain Emby-library Hero (`replace-tauri-with-blitz` task 7.6, the port
-//! of `LibraryEmbyHero.svelte`; add-gui-library-panel design D12, row 8.1,
+//! of `LibraryEmbyHero`; add-gui-library-panel design D12, row 8.1,
 //! and D17): the Music Hero's frame (`LibraryHeroFrame`) over the selected
 //! row, as the TUI paints every Emby item through the one
 //! `hero_content_emby` producer. A movie is its own largest unit, so the
@@ -33,7 +33,7 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::library::hero::{HeroLayoutFacts, MetaRow, hero_layout};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Emby Hero (the `LibraryEmbyHero.svelte` props, narrowed
+/// The props of the Emby Hero (the `LibraryEmbyHero` props, narrowed
 /// to what the Hero reads): the library index the Emby commands name, and the
 /// carried plain Emby-library detail — the selected row and its Hero facts
 /// (design D12, row 8.1).
@@ -46,7 +46,7 @@ pub struct LibraryEmbyHeroProps {
     pub detail: GuiEmbyDetail,
 }
 
-/// The Emby action a button sends (the Svelte `command` union).
+/// The Emby action a button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EmbyAction {
     /// Play the selected row.
@@ -62,7 +62,7 @@ fn meta_row_text(row: &[GuiMetaSegmentFrame]) -> String {
     row.iter().map(|segment| segment.text.as_str()).collect()
 }
 
-/// The facts `hero_layout` maps (the Svelte `layoutFacts`): the `IMDb` meta
+/// The facts `hero_layout` maps: the `IMDb` meta
 /// row out of the plain rows (the header action paints it as a link), with
 /// the duration and progress indices remapped to the rows that remain.
 fn layout_facts(facts: &GuiEmbyHeroFrame) -> (Vec<MetaRow>, Option<usize>, Option<usize>) {
@@ -109,7 +109,7 @@ fn open_imdb(library: &LibraryState, url: &str) {
     });
 }
 
-/// One row of the credits table (the Svelte credit branch): the name at the
+/// One row of the credits table: the name at the
 /// left, the role at the right, the TUI's every-other-row stripe.
 fn paint_credit(index: usize, credit: &GuiEmbyHeroCreditFrame) -> Element {
     let stripe = if index % 2 == 1 {
@@ -139,7 +139,7 @@ fn paint_credit(index: usize, credit: &GuiEmbyHeroCreditFrame) -> Element {
     }
 }
 
-/// The plain Emby-library Hero (the Svelte markup, character for character):
+/// The plain Emby-library Hero:
 /// the frame over the selected row, with the `IMDb` link as the header's
 /// trailing action and the credits table as the list band.
 #[component]

@@ -1,5 +1,5 @@
 //! The Library rows' `data-library-*` hook names: the computed attribute
-//! names the Svelte components built per destination (`{...{ [key]: value
+//! names the former components built per destination (`{...{ [key]: value
 //! }}` spreads over the destination's prefix and a part name). Dioxus
 //! attribute names are `'static`, so each distinct name is built once and
 //! leaked; the names are the small cross product of the destinations' static
@@ -16,7 +16,7 @@ static INTERNED: LazyLock<Mutex<HashMap<Box<str>, &'static str>>> =
 /// The `data-library-*` attribute named by the destination's `prefix` and
 /// the part name: an empty prefix (the Music list) drops the prefix segment,
 /// and an empty part (the Workspace table's row hook) drops the part segment,
-/// as the Svelte spreads built them.
+/// as the former spreads built them.
 #[must_use]
 pub fn library_attr(prefix: &str, part: &str) -> &'static str {
     let name = if prefix.is_empty() {

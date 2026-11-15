@@ -4,7 +4,7 @@
 //! a press on a series node opens it and selects it, the flat modes paint
 //! their date-ordered rows with their date gutter and no rail, a press sends
 //! the select command with the row's stable id, and a double-click on a flat
-//! row plays the episode. The Tauri IPC of the Svelte tests is the mock core
+//! row plays the episode. The IPC of the earlier tests is the mock core
 //! link here; a headless document cannot fire a DOM click, so the press,
 //! play, and jump contracts ride the state methods the component's own
 //! handlers call one line each. The core channel is a mock pair; no test
@@ -423,7 +423,7 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_a_press_move
     );
 }
 
-/// Contract (`LibraryShowsList.svelte`): an expandable node paints its open
+/// Contract: an expandable node paints its open
 /// state as `aria-expanded` — `false` while closed, `true` once opened.
 #[test]
 fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
@@ -454,8 +454,8 @@ fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
     );
 }
 
-/// Contract (`LibraryShowsList.svelte`): a node that does not open paints no
-/// `aria-expanded` attribute at all (the Svelte `undefined` painted none).
+/// Contract: a node that does not open paints no
+/// `aria-expanded` attribute at all.
 #[test]
 fn a_node_that_does_not_open_paints_no_aria_expanded() {
     let series = GuiShowsSeriesFrame {

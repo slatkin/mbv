@@ -1,5 +1,5 @@
 //! One activatable row of a Settings section (`replace-tauri-with-blitz`
-//! task 8.3, the port of `SettingsEntryRow.svelte`; add-gui-settings-screen
+//! task 8.3, the port of `SettingsEntryRow`; add-gui-settings-screen
 //! design D11): the label, an optional leading mark, and an optional
 //! trailing value, in the one row look every section paints — 36 px inside
 //! the card that holds it, with no side padding of its own. The cursor fill
@@ -18,7 +18,7 @@ use crate::window::components::cursor_reveal::cursor_reveal;
 use crate::window::icons::Check;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the row (the `SettingsEntryRow.svelte` props, in order).
+/// The props of the row (the `SettingsEntryRow` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsEntryRowProps {
     /// The entry's id (`entryId` in the settings entries), which the press
@@ -45,7 +45,7 @@ pub struct SettingsEntryRowProps {
     pub indent: bool,
 }
 
-/// The one entry row (the Svelte markup, character for character).
+/// The one entry row.
 #[component]
 pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
     let indent = props.indent;
@@ -56,7 +56,7 @@ pub fn SettingsEntryRow(props: SettingsEntryRowProps) -> Element {
     let press_id = props.id.clone();
     let label = props.label;
     let trailing = props.trailing;
-    // The row that paints the cursor reveals itself: the Svelte screen's
+    // The row that paints the cursor reveals itself: the former screen's
     // `scrollIntoView` on the pane's `[data-settings-cursor]` row (D15).
     let mut reveal = cursor_reveal(cursor);
     rsx! {
@@ -107,7 +107,7 @@ fn row_background(cursor: bool) -> &'static str {
 }
 
 /// The row's text colour: the ordinal tone while disabled, the canvas text
-/// otherwise (the Svelte `style:color` chain).
+/// otherwise.
 fn text_color(disabled: bool) -> &'static str {
     if disabled {
         "var(--canvas-ordinal)"
@@ -116,7 +116,7 @@ fn text_color(disabled: bool) -> &'static str {
     }
 }
 
-/// The disabled row's dimming (the Svelte conditional `style:opacity`).
+/// The disabled row's dimming.
 fn opacity(disabled: bool) -> &'static str {
     if disabled { " opacity: 0.7;" } else { "" }
 }

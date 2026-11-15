@@ -1,7 +1,7 @@
-//! The shared whole-rows capacity rule, the port of the Svelte report's
+//! The shared whole-rows capacity rule, the port of the former report's
 //! `wholeRows` arithmetic.
 
-/// Contract (the Svelte report's `wholeRows`): the whole 30 px rows a list
+/// Contract: the whole 30 px rows a list
 /// box fits — whole rows only, a partial row counts none.
 #[test]
 fn the_capacity_counts_whole_30px_rows_only() {

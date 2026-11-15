@@ -1,5 +1,5 @@
 //! The Shows Hero (`replace-tauri-with-blitz` task 7.6, the port of
-//! `LibraryShowsHero.svelte`; add-gui-library-panel design D12, D14, D15):
+//! `LibraryShowsHero`; add-gui-library-panel design D12, D14, D15):
 //! the Music Hero's frame (`LibraryHeroFrame`) over the series, as the TUI
 //! paints the TV and Music heroes through one hero and one Workspace. The
 //! header band is the series — its genre, years, season count, and network —
@@ -37,7 +37,7 @@ use crate::window::library::shows_workspace::{
 };
 use crate::window::library::state::LibraryState;
 
-/// The props of the Shows Hero (the `LibraryShowsHero.svelte` props, narrowed
+/// The props of the Shows Hero (the `LibraryShowsHero` props, narrowed
 /// to what the Hero reads): the library index the Shows commands name, and
 /// the carried Shows detail — the selected row's Hero and its Workspace.
 #[derive(Props, Debug, Clone, PartialEq)]
@@ -49,7 +49,7 @@ pub struct LibraryShowsHeroProps {
     pub detail: GuiShowsDetail,
 }
 
-/// The Shows action a Hero button sends (the Svelte `command` union).
+/// The Shows action a Hero button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShowsAction {
     /// Play the target item.
@@ -126,7 +126,7 @@ fn act_on(library: &LibraryState, command: ShowsAction, lib_idx: usize, target: 
     send(library, command, lib_idx, item_id);
 }
 
-/// The row's played state (the Svelte `state` ternary): played, active with a
+/// The row's played state: played, active with a
 /// resume percent, or ordinary.
 fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     if is_played_episode(state) {
@@ -138,7 +138,7 @@ fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     WorkspaceRowState::Active
 }
 
-/// One season pill (the Svelte pill each-branch): the core's selected season
+/// One season pill: the core's selected season
 /// pressed, a press sending the select-season command.
 fn paint_season(
     season: &GuiShowsSeasonPillFrame,
@@ -162,7 +162,7 @@ fn paint_season(
     }
 }
 
-/// The Shows Hero (the Svelte markup, character for character): the frame
+/// The Shows Hero: the frame
 /// over the series or the Latest episode, with the season pills and the
 /// selected season's episodes as the Workspace.
 #[component]

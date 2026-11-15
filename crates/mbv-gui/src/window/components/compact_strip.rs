@@ -1,4 +1,4 @@
-//! The panel's compact strip (task 5.7, the port of `CompactStrip.svelte`;
+//! The panel's compact strip (task 5.7, the port of `CompactStrip`;
 //! add-tauri-gui-client row 6.6, design D10): the state a container shorter
 //! than 520 px paints. The canvas's strip is a 96×54 still, the title, its
 //! meta line (the parent line and the next item), a thin progress line, and
@@ -29,7 +29,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 const STILL_WIDTH_PX: i32 = 96;
 const STILL_HEIGHT_PX: i32 = 54;
 
-/// The props of the compact strip (the `CompactStrip.svelte` props, in
+/// The props of the compact strip (the `CompactStrip` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct CompactStripProps {
@@ -57,7 +57,7 @@ pub fn CompactStrip(props: CompactStripProps) -> Element {
     let mut next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
 
     // No region outlives the strip: the contribution retracts on unmount,
-    // as the Svelte `onMount` teardown did.
+    // as the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     // Each paint that moved a region reports (design D4): this effect runs

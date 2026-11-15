@@ -1,5 +1,5 @@
 //! The Home list (`replace-tauri-with-blitz` task 7.7, the port of
-//! `LibraryHomeList.svelte`; add-gui-library-panel design D12, the
+//! `LibraryHomeList`; add-gui-library-panel design D12, the
 //! USER-APPROVED GUI Home design): the flat list in the Music list slot —
 //! the two sections' heading rows, the item rows with their date gutter and
 //! their art thumb when the row carries art, and the playing state's
@@ -52,7 +52,7 @@ fn art_kind(art: &GuiArtRef) -> &'static str {
     }
 }
 
-/// One painted row of the flat list (the Svelte row snippet): the section
+/// One painted row of the flat list: the section
 /// heading, the spacer between two non-empty sections, or the item row.
 fn paint_home_row(
     row: &HomeListRow,
@@ -82,7 +82,7 @@ fn paint_home_row(
     }
 }
 
-/// One painted item row (the Svelte item branch): the art thumb when the row
+/// One painted item row: the art thumb when the row
 /// carries art, the two-line name, the date gutter, and the resume run.
 fn paint_home_item_row(
     id: &str,
@@ -198,7 +198,7 @@ fn paint_home_item_row(
     }
 }
 
-/// The Home list (the Svelte markup, character for character): the header,
+/// The Home list: the header,
 /// the load and empty lines, and the flat list's rows over native scroll.
 #[component]
 pub fn LibraryHomeList() -> Element {

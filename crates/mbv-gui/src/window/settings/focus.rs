@@ -4,7 +4,7 @@
 //! without reaching for the pointer (the spec's *keyboard reachability*). A
 //! form mounts exactly when it opens.
 //!
-//! The Svelte action focuses the first `input` descendant of the node it
+//! the former client action focuses the first `input` descendant of the node it
 //! mounts on, and on an input the input itself. Blitz exposes no descendant
 //! query from a mount handle, so the Rust call sites attach this helper to
 //! the mounted element that takes the keyboard — the input itself, or the

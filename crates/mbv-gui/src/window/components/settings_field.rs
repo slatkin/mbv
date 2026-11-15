@@ -1,17 +1,17 @@
 //! One labelled text field of a Settings form (`replace-tauri-with-blitz`
-//! task 8.2, the port of `SettingsField.svelte`; add-gui-settings-screen
+//! task 8.2, the port of `SettingsField`; add-gui-settings-screen
 //! design D13, D15): the canvas's small muted label above a mono input. The
 //! Services setup forms and the Feeds form paint every field through it.
 //!
 //! The optional `onmounted` passthrough hands the input's mount event to the
 //! caller, so a form can attach `window/settings/focus.rs`'s
-//! `focus_on_mount` to its first field's input (task 8.4) — the Svelte
+//! `focus_on_mount` to its first field's input (task 8.4) — the former client
 //! `focusOnMount` action focused the first `input` descendant, and the
 //! passthrough is the port's stand-in for that descendant query.
 
 use dioxus_native::prelude::*;
 
-/// The props of the field (the `SettingsField.svelte` props, in order).
+/// The props of the field (the `SettingsField` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsFieldProps {
     /// The label above the input.
@@ -36,7 +36,7 @@ pub struct SettingsFieldProps {
     pub onmounted: Option<Callback<Event<MountedData>>>,
 }
 
-/// One labelled text field (the Svelte markup, character for character).
+/// One labelled text field.
 #[component]
 pub fn SettingsField(props: SettingsFieldProps) -> Element {
     let oninput = props.oninput;

@@ -1,5 +1,5 @@
 //! The Library Hero (`replace-tauri-with-blitz` task 7.5, the port of
-//! `LibraryHero.svelte`; add-gui-library-panel design D5, D8): the canvas's
+//! `LibraryHero`; add-gui-library-panel design D5, D8): the canvas's
 //! detail pane for the picked album — the artist header with Shuffle artist,
 //! the album block with its square artwork and its Play, Play next, Add to
 //! queue, and More actions controls, and the album's tracklist. The Wide
@@ -37,7 +37,7 @@ use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
 
 /// The labels the Hero's own buttons already send (design D8): the menu's
-/// The props of the Music Hero (the `LibraryHero.svelte` props, in order).
+/// The props of the Music Hero (the `LibraryHero` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHeroProps {
     /// The carried Music content: the picked album's Hero facts, the id of
@@ -112,7 +112,7 @@ fn current_union(library: &LibraryState) -> Option<(Vec<GuiMusicArtistFrame>, Gu
     Some((list.artists.clone(), hero.clone()))
 }
 
-/// The Library Hero (the Svelte markup, character for character): the artist
+/// The Library Hero: the artist
 /// header with Shuffle artist, the album block with its square artwork and
 /// its action controls, and the album's tracklist.
 #[component]

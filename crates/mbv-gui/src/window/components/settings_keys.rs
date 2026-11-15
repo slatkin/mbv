@@ -1,5 +1,5 @@
 //! The Keys section (`replace-tauri-with-blitz` task 8.4, the port of
-//! `SettingsKeys.svelte`; add-gui-settings-screen design D9, D13): the
+//! `SettingsKeys`; add-gui-settings-screen design D9, D13): the
 //! configured prefix chord and one card for each action group, every card
 //! holding 36 px rows of buttons. Each action row shows the effective router
 //! chords, its prefix-namespace chord where one is assigned, and the
@@ -19,7 +19,7 @@ use crate::window::settings::entries::entry_id;
 use crate::window::settings::state::{Capture, SettingsState};
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The one Keys pane (the Svelte markup, character for character).
+/// The one Keys pane.
 #[component]
 pub fn SettingsKeys() -> Element {
     let sections = consume_context::<Sections>();
@@ -47,7 +47,7 @@ pub fn SettingsKeys() -> Element {
     let capture = settings.ui.cloned().capture;
 
     // The rows grouped into one card per section, in the frame's order (the
-    // Svelte `groups` derived).
+    // the former client `groups` derived).
     let mut groups: Vec<(&str, Vec<&GuiSettingsKeyRow>)> = Vec::new();
     for row in rows {
         match groups.last_mut() {
@@ -207,7 +207,7 @@ pub fn SettingsKeys() -> Element {
     }
 }
 
-/// The capture target's painted text (`SettingsKeys.svelte`'s
+/// The capture target's painted text (`SettingsKeys`'s
 /// `targetText`): "press a key" while its capture waits, the assigned chords
 /// otherwise.
 fn target_text(capture: Option<&Capture>, target: &str, chords: &str) -> String {
@@ -218,8 +218,7 @@ fn target_text(capture: Option<&Capture>, target: &str, chords: &str) -> String 
     }
 }
 
-/// The frame's last refusal under the edited row (the Svelte `refusal`
-/// snippet): the refusal text paints only on the row it names.
+/// The frame's last refusal under the edited row: the refusal text paints only on the row it names.
 fn refusal_line(refusal: Option<&GuiSettingsKeyRefusal>, action: &str) -> Element {
     match refusal.filter(|refusal| refusal.action == action) {
         Some(refusal) => rsx! {

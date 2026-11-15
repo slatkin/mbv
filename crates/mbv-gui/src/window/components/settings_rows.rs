@@ -1,5 +1,5 @@
 //! The F2-row sections (`replace-tauri-with-blitz` task 8.3, the port of
-//! `SettingsRows.svelte`; add-gui-settings-screen design D9, D13): Playback,
+//! `SettingsRows`; add-gui-settings-screen design D9, D13): Playback,
 //! Display, Session, Queue, Mpv, and Actions — each row's label, its value,
 //! and the way it is edited, painted with the shared Settings parts.
 //!
@@ -30,7 +30,7 @@ use crate::window::sections::Sections;
 use crate::window::settings::entries::entry_id;
 use crate::window::settings::state::SettingsState;
 
-/// The one rows pane (the Svelte markup, character for character).
+/// The one rows pane.
 #[component]
 pub fn SettingsRows() -> Element {
     let sections = consume_context::<Sections>();
@@ -179,7 +179,7 @@ pub fn SettingsRows() -> Element {
     }
 }
 
-/// The F2 rows the content carries (the Svelte screen's `rows` prop source):
+/// The F2 rows the content carries:
 /// a rows content's own rows, or the Library section's choice rows.
 fn content_rows(content: &GuiSettingsContent) -> &[GuiSettingRow] {
     match content {

@@ -4,7 +4,7 @@
 //! duration beside the art, no Workspace and no tracklist paint, no
 //! play-next control paints (`n` does nothing for podcast episodes), and the
 //! actions send the Podcasts commands with the frame's selected episode. The
-//! Tauri IPC of the Svelte tests is the mock core link here; the asserted
+//! The IPC of the earlier tests is the mock core link here; the asserted
 //! commands are the same neutral shapes. A headless document cannot fire a
 //! DOM click, so the press contracts ride the handler functions the
 //! component's own handlers call one line each. The core channel is a mock

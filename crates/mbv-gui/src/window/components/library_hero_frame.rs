@@ -1,5 +1,5 @@
 //! The Library Hero's frame (`replace-tauri-with-blitz` task 7.5, the port of
-//! `LibraryHeroFrame.svelte`; add-gui-library-panel design D5, D8, D15): the
+//! `LibraryHeroFrame`; add-gui-library-panel design D5, D8, D15): the
 //! one layout Music, Shows, Podcasts, Audiobooks, and Feeds paint, as the TUI
 //! paints them through one `HeroContentData` and one Workspace. Three bands,
 //! top to bottom:
@@ -33,7 +33,7 @@ use crate::window::components::library_hero_art::LibraryHeroArt;
 use crate::window::components::typed_text::TypedText;
 use crate::window::library::hero::{HeroMetaRole, HeroMetaRow, Segments};
 
-/// The props of the frame (the `LibraryHeroFrame.svelte` props, in order).
+/// The props of the frame (the `LibraryHeroFrame` props, in order).
 #[derive(Props, Clone, PartialEq)]
 pub struct LibraryHeroFrameProps {
     /// The destination's attribute prefix: empty for Music, `shows` for
@@ -84,7 +84,7 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
     }
 }
 
-/// The header band's lines (the Svelte `header` prop's interface).
+/// The header band's lines.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeroHeader {
     /// The section label's line.
@@ -95,7 +95,7 @@ pub struct HeroHeader {
     pub facts: Segments,
 }
 
-/// The detail block's text (the Svelte `block` prop's interface): each line
+/// The detail block's text: each line
 /// paints only when it is non-empty.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeroBlock {
@@ -113,19 +113,19 @@ pub struct HeroBlock {
     pub overview: Option<String>,
 }
 
-/// Whether a line has anything to paint (the Svelte `painted`): the line
+/// Whether a line has anything to paint: the line
 /// carries at least one segment.
 fn painted(segments: Option<&Segments>) -> bool {
     segments.is_some_and(|segments| !segments.is_empty())
 }
 
 /// Whether a line has a name to paint: the selected item's name, only when a
-/// parent took the header (the Svelte `(block.name ?? '') !== ''`).
+/// parent took the header (the former client `(block.name ?? '') !== ''`).
 fn named(name: Option<&str>) -> bool {
     name.is_some_and(|name| !name.is_empty())
 }
 
-/// The attribute name of one part of the destination's Hero (the Svelte
+/// The attribute name of one part of the destination's Hero (the former client
 /// `own` helper): the destination's prefix sits before the shared `hero`
 /// segment, and Music's empty prefix names the shared hooks.
 #[must_use]
@@ -140,12 +140,12 @@ pub(super) fn own(attr: &'static str, part: &str) -> &'static str {
     library_attr(&prefix, part)
 }
 
-/// The header facts line's own attribute (the Svelte frame's `facts`).
+/// The header facts line's own attribute.
 fn facts_attrs(attr: &'static str) -> Vec<Attribute> {
     vec![Attribute::new(own(attr, "facts"), "", None, false)]
 }
 
-/// The block facts line's own attribute (the Svelte frame's `block-facts`).
+/// The block facts line's own attribute.
 fn block_facts_attrs(attr: &'static str) -> Vec<Attribute> {
     vec![Attribute::new(own(attr, "block-facts"), "", None, false)]
 }
@@ -180,7 +180,7 @@ impl From<crate::window::library::hero::HeroLayoutBlock> for HeroBlock {
 }
 
 /// One meta row's painted role: the class and colour the role paints, as the
-/// Svelte ternaries route them.
+/// the former client ternaries route them.
 fn row_paint(role: &HeroMetaRow) -> (&'static str, &'static str) {
     match role.role {
         HeroMetaRole::Progress => ("font-mono tabular-nums", "var(--canvas-accent)"),
@@ -189,7 +189,7 @@ fn row_paint(role: &HeroMetaRow) -> (&'static str, &'static str) {
     }
 }
 
-/// The Library Hero's frame (the Svelte markup, character for character):
+/// The Library Hero's frame:
 /// the header band, the detail block with the artwork and the picked item's
 /// text, and the list band.
 #[component]

@@ -1,5 +1,5 @@
 //! A Service's state (`replace-tauri-with-blitz` task 8.2, the port of
-//! `SettingsStatePill.svelte`; add-gui-settings-screen design D13, D15, the
+//! `SettingsStatePill`; add-gui-settings-screen design D13, D15, the
 //! canvas state pill): a dot and the state's label in a 24 px pill. Ready
 //! paints the success fill and the accent tone; Not configured, Connecting,
 //! Needs authentication, and Unavailable paint the muted, source, partial,
@@ -7,7 +7,7 @@
 
 use dioxus_native::prelude::*;
 
-/// Each state's tone (`SettingsStatePill.svelte`'s `TONES`): the dot and the
+/// Each state's tone: the dot and the
 /// label share it. Not configured and any state the map does not name paint
 /// the muted tone.
 fn tone(state: &str) -> &'static str {
@@ -20,14 +20,14 @@ fn tone(state: &str) -> &'static str {
     }
 }
 
-/// The props of the state pill (the `SettingsStatePill.svelte` props).
+/// The props of the state pill (the `SettingsStatePill` props).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsStatePillProps {
     /// The Service's state label, as the frame carries it.
     pub state: String,
 }
 
-/// The one state pill (the Svelte markup, character for character).
+/// The one state pill.
 #[component]
 pub fn SettingsStatePill(props: SettingsStatePillProps) -> Element {
     let lower = props.state.to_lowercase();

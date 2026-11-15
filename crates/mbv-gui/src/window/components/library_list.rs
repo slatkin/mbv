@@ -1,5 +1,5 @@
 //! The Library list (`replace-tauri-with-blitz` task 7.2, the port of
-//! `LibraryList.svelte`; add-gui-library-panel design D7): the canvas's
+//! `LibraryList`; add-gui-library-panel design D7): the canvas's
 //! artist index in the list column — the *Artists* line over the selected
 //! collection names (design D6), the `/` filter field, the canvas tree of
 //! artist, album, and track rows under its letter headings, and the A–Z
@@ -58,7 +58,7 @@ fn row_padding(row: &LibraryRow) -> &'static str {
     }
 }
 
-/// The letter heading above the first artist of the letter (the Svelte
+/// The letter heading above the first artist of the letter (the former client
 /// letter branch).
 fn paint_letter_row(letter: char) -> Element {
     rsx! {
@@ -71,7 +71,7 @@ fn paint_letter_row(letter: char) -> Element {
     }
 }
 
-/// The track row under an open album (the Svelte track branch): the number,
+/// The track row under an open album: the number,
 /// the muted name, and the runtime.
 fn paint_track_row(
     row: &LibraryRow,
@@ -151,7 +151,7 @@ fn cursor_mark(cursor_row: bool) -> Vec<Attribute> {
         .collect()
 }
 
-/// One painted row of the canvas tree (the Svelte row snippet): the letter
+/// One painted row of the canvas tree: the letter
 /// heading, the track row, or the artist and album node row.
 fn paint_library_row(
     row: &LibraryRow,
@@ -261,7 +261,7 @@ fn paint_library_row(
     }
 }
 
-/// The Library list (the Svelte markup, character for character). It reads
+/// The Library list. It reads
 /// the carried Music frames from the section store itself, so a panel
 /// repaint never deep-clones the union's artists for it (the port review's
 /// whole-list finding).

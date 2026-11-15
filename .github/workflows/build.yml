@@ -372,7 +372,7 @@ jobs:
         run: cargo hack check --each-feature --workspace --all-targets
 
   gui:
-    # mbv-gui gate (design D14, change `add-tauri-gui-client`). A separate
+    # mbv-gui gate (design D14, change `replace-tauri-with-blitz`). A separate
     # job because `mbv-gui` sits outside `default-members`: the workspace
     # nextest, clippy, and `cargo build --all-targets` runs in `build` never
     # compile it, so its tests get no coverage there. Needs the same container: building `mbv-gui` compiles `mbv`'s

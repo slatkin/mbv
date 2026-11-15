@@ -162,8 +162,7 @@ pub fn route_settings_key(
     KeyOutcome::Core
 }
 
-/// The feed form's open kind menu's step (the Svelte `<select>`'s arrow keys
-/// and Enter, design D11's menu rule applied to the form's own control): Esc
+/// The feed form's open kind menu's step: Esc
 /// closes the menu, Enter sets the draft's kind at the menu's cursor, Up and
 /// Down walk the two kinds, and any other key closes the menu and hands the
 /// key back to the rest of the router. `None` while no kind menu is open.

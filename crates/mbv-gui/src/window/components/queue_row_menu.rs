@@ -1,11 +1,11 @@
 //! The queue row's menu (`replace-tauri-with-blitz` task 5.5, the port of
-//! `QueueRowMenu.svelte`; design D15): the frame's `rowMenu` overlay entries,
+//! `QueueRowMenu`; design D15): the frame's `rowMenu` overlay entries,
 //! each with the key hint that selects it directly, and the core's cursor row
 //! highlighted. The window holds no open, cursor, or hover state; a press on
 //! an entry forwards like every other pointer event and the core resolves it
 //! against the hit map, Esc and the hint chords resolve in the core's overlay
 //! key rules. The Library Hero's item menu paints the same face
-//! (add-gui-library-panel design D8) and will need the Svelte component's
+//! (add-gui-library-panel design D8) and will need the former component's
 //! optional `onSelect` prop then; no `click` event reaches a Blitz handler
 //! (`dioxus-native-dom` does not convert it), so this port paints the queue's
 //! presentation-only menu and no press callback.
@@ -37,7 +37,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The props of the row menu (the `QueueRowMenu.svelte` props, in order):
+/// The props of the row menu (the `QueueRowMenu` props, in order):
 /// the Queue panel passes the core's cursor and anchors the card at its
 /// value column; the Library's right-click item menu passes no cursor, its
 /// own pointer position, and the press callback that sends its command.
@@ -70,7 +70,7 @@ pub struct QueueRowMenuProps {
     #[props(default)]
     pub on_select: Option<Callback<usize>>,
     /// The menu's accessible name; a front-end menu names its own list (the
-    /// Settings pick's values, the Svelte `label` prop that defaulted to
+    /// Settings pick's values, the former client `label` prop that defaulted to
     /// `Row actions`).
     #[props(default = "Row actions".to_owned())]
     pub label: String,
@@ -87,16 +87,16 @@ fn paint_hint(hint: &str) -> &str {
     if hint == "Enter" { "⏎" } else { hint }
 }
 
-/// The row menu (the Svelte component's markup, character for character):
+/// The row menu:
 /// the 230 px card in the canvas chrome, one 34 px `menuitem` per entry with
 /// its muted mono hint, the cursor row filled, and the destructive entry in
 /// the canvas's destructive tone under a divider.
 #[component]
 pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
-    // The card's horizontal anchor (the Svelte `style:left`/`style:right`):
+    // The card's horizontal anchor:
     // a front-end menu sits at the pointer's left edge; the queue's sits at
     // its value column and the Hero's at its actions row's right edge. The
-    // Svelte paints `right` from its default whenever the parent passes no
+    // the former client paints `right` from its default whenever the parent passes no
     // `left`, so the port paints the same three styles.
     let mut position = format!("top: {};", props.top);
     if let Some(left) = props.left.as_ref() {

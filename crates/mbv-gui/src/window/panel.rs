@@ -54,7 +54,7 @@ pub fn panel_state(container: LayoutSize, panel: &GuiPanelToggles) -> GuiPanelSt
 }
 
 impl GuiPanelState {
-    /// The `data-panel-state` value the Svelte markup paints: `expanded`,
+    /// The `data-panel-state` value the former markup paints: `expanded`,
     /// `compactStrip`, `expandedWithoutQueue`, `rail`.
     #[must_use]
     pub fn name(self) -> &'static str {

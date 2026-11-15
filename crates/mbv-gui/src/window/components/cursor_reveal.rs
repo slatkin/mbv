@@ -1,14 +1,14 @@
 //! The Settings cursor reveal (`replace-tauri-with-blitz` task 8.3, the port
-//! of the `scrollIntoView` effects of `SettingsScreen.svelte` and
-//! `SettingsSidebar.svelte`; add-gui-settings-screen design D15's scroll
+//! of the `scrollIntoView` effects of `SettingsScreen` and
+//! `SettingsSidebar`; add-gui-settings-screen design D15's scroll
 //! rule): the row that paints `data-settings-cursor` already knows it is the
 //! cursor, so each such row calls this once per render with its own `cursor`
 //! fact, attaches the returned handle with `onmounted`, and the effect keeps
 //! the row in view while the keyboard walks the pane.
 //!
-//! The Svelte effects queried the pane for its cursor row; Blitz exposes no
+//! the former client effects queried the pane for its cursor row; Blitz exposes no
 //! descendant query, so the mounted row reveals itself. The effect reads the
-//! cursor fact, the layout epoch (the `ResizeObserver` the Svelte effect
+//! cursor fact, the layout epoch (the `ResizeObserver` the former effect
 //! watched), and the mounted handle, and writes no signal it reads.
 
 use dioxus_native::prelude::*;
@@ -17,7 +17,7 @@ use crate::window::layout::LayoutEpoch;
 
 /// Hand one cursor-painting row its mounted handle and keep it in view: the
 /// `use_effect` scrolls the row to `block: 'nearest', inline: 'nearest'`
-/// whenever the cursor lands on it or the layout changes, as the Svelte
+/// whenever the cursor lands on it or the layout changes, as the former client
 /// `row.scrollIntoView({ block: 'nearest' })` did. A test host provides no
 /// [`LayoutEpoch`], and the reveal then follows the mount and the cursor
 /// alone.

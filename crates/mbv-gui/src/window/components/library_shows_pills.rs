@@ -1,5 +1,5 @@
 //! The Shows destination's mode pills (`replace-tauri-with-blitz` task 7.4,
-//! the port of `LibraryShowsPills.svelte`; add-gui-library-panel design D12,
+//! the port of `LibraryShowsPills`; add-gui-library-panel design D12,
 //! row 7.1): the view modes New, Upcoming, and All series, single-select —
 //! the core's active mode is always one of them, so a press selects its mode
 //! and the list loads it. The pills paint the core's carried choice, so the
@@ -17,7 +17,7 @@ use crate::window::components::library_pill_row::{LibraryPill, LibraryPillRow};
 use crate::window::library::shows::shows_mode_key;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Shows pills (the `LibraryShowsPills.svelte` props,
+/// The props of the Shows pills (the `LibraryShowsPills` props,
 /// narrowed to what the pills read): the carried pills and the library index
 /// the set-mode command names (design D12). The panel passes these alone, so
 /// a panel repaint never clones the list's rows for the pills.

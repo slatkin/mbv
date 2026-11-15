@@ -3,7 +3,7 @@
 //! paints the diagnostics the frame carries and the recovery choices the
 //! core projects, a frame with nothing playing paints no title line, and the
 //! affirmative choice paints the accent text token on the recessed fill. The
-//! press-forward half of the Svelte suite's last test is the input layer's
+//! press-forward half of the former suite's last test is the input layer's
 //! contract (`window/input.rs` tests own it); the region half is the paint
 //! test here. The core channel is a mock pair; no test opens a window or
 //! sleeps.

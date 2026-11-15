@@ -11,8 +11,8 @@
 //! the tracklist's action closures, which a headless document cannot fire; the
 //! commands they build are the same shapes the album's Play-next and
 //! Add-to-queue tests assert, and the track ids they carry are the rows' own
-//! data the press contract (`play_library_track`) asserts. The Tauri IPC of
-//! the Svelte tests is the mock core link here; the asserted commands are the
+//! data the press contract (`play_library_track`) asserts. The IPC of
+//! the earlier tests is the mock core link here; the asserted commands are the
 //! same neutral shapes. A headless document cannot fire a DOM click, so the
 //! press contracts ride the handler functions the component's own handlers
 //! call one line each. The core channel is a mock pair; no test opens a
@@ -139,7 +139,7 @@ fn hero_app(props: FixtureProps) -> Element {
     }
 }
 
-/// The picked album's Hero facts (the Svelte `hero()` fixture): two union
+/// The picked album's Hero facts (the former client `hero()` fixture): two union
 /// albums behind it, a cached tracklist, and the item menu the core built for
 /// the album (design D8).
 fn hero() -> GuiMusicHeroFrame {
@@ -194,7 +194,7 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The carried Music content (the Svelte `music(facts)` fixture): the artist
+/// The carried Music content (the former client `music(facts)` fixture): the artist
 /// that owns the picked album, whose union albums Shuffle artist names.
 fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
     vec![GuiMusicArtistFrame {
@@ -205,7 +205,7 @@ fn artists(facts: &GuiMusicHeroFrame) -> Vec<GuiMusicArtistFrame> {
     }]
 }
 
-/// The union's second album (the Svelte fixture's `al2`).
+/// The union's second album.
 fn pauls_boutique() -> GuiMusicAlbumFrame {
     GuiMusicAlbumFrame {
         album_id: "al2".to_owned(),
@@ -217,7 +217,7 @@ fn pauls_boutique() -> GuiMusicAlbumFrame {
 }
 
 /// The Music detail part: the picked album's Hero, and the track playing at
-/// the playhead (the Svelte `musicDetail(facts, playingTrackId)` fixture).
+/// the playhead (the former client `musicDetail(facts, playingTrackId)` fixture).
 fn detail(facts: GuiMusicHeroFrame, playing_track_id: Option<String>) -> GuiMusicDetail {
     GuiMusicDetail {
         hero: Some(facts),
@@ -495,7 +495,7 @@ fn a_menu_press_sends_the_shared_builder_index_past_the_filtered_lists_end() {
     );
 }
 
-/// Contract (`LibraryHero.svelte`): the artwork box's placeholder names the
+/// Contract: the artwork box's placeholder names the
 /// missing art while the frame carries none.
 #[test]
 fn the_artwork_box_names_its_placeholder_while_the_frame_carries_no_art() {

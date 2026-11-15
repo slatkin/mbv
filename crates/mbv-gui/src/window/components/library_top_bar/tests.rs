@@ -404,7 +404,7 @@ fn the_dropdown_paints_the_rows_with_the_first_row_highlighted() {
     let mut fixture = built(two_tabs(), Some(1), false);
     fixture.set_search_frame(Some(results()));
 
-    // The row paints its title and its subtitle; the Svelte markup's
+    // The row paints its title and its subtitle; the former markup's
     // inter-element space is formatting, so the joined text asserts both
     // parts.
     let first = fixture.text_of("[data-library-search-row=\"r1\"]");

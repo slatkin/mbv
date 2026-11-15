@@ -1,4 +1,4 @@
-//! The track chips row (task 5.4, the port of `TrackChips.svelte`; design
+//! The track chips row (task 5.4, the port of `TrackChips`; design
 //! D4a): the video stream's resolved label as a label-only chip (the D4a
 //! ruling gives the video chip no popover, so it is not a button), and the
 //! audio and subtitle chips, each a button whose press opens the core's
@@ -105,12 +105,12 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
 
     let mut audio_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let mut subtitle_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The open popover's painted rows, by their choice index (the Svelte
+    // The open popover's painted rows, by their choice index (the former client
     // `querySelectorAll('[data-popover-row]')`).
     let popover_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // No region outlives the row: the contributions retract on unmount, as
-    // the Svelte `onMount` teardown did.
+    // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
     let popover = open_popover(props.overlay.as_ref());

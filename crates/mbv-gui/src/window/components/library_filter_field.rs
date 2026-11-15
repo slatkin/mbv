@@ -1,5 +1,5 @@
 //! The list's `/` filter field (`replace-tauri-with-blitz` task 7.1, the
-//! port of `LibraryFilterField.svelte`; add-gui-library-panel design D3,
+//! port of `LibraryFilterField`; add-gui-library-panel design D3,
 //! step 2, D7): the panel's open text field, in the one look every Library
 //! list paints it — the `/` glyph and the input in the canvas's bordered
 //! field. The key router types into it without checking focus, so the field
@@ -12,7 +12,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::library::state::LibraryState;
 
-/// The props of the filter field (the `LibraryFilterField.svelte` props, in
+/// The props of the filter field (the `LibraryFilterField` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryFilterFieldProps {
@@ -29,7 +29,7 @@ pub struct LibraryFilterFieldProps {
     pub on_accept: Callback<()>,
 }
 
-/// The filter field (the Svelte markup, character for character). The field
+/// The filter field. The field
 /// owns its focus (design D3, step 2): it takes the keyboard while the
 /// filter is open and gives it back when the filter closes. The effect reads
 /// the open fact and writes no signal — the DOM focus is the write.

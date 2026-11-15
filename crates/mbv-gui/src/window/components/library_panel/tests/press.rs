@@ -42,8 +42,7 @@ fn the_item_menu_paints_on_a_destination_that_is_not_music() {
     );
 }
 
-/// Contract (the Svelte `LibraryPanel.svelte` viewport anchor, design D8,
-/// D15): the right-click item menu opens at the pointer position in viewport
+/// Contract: the right-click item menu opens at the pointer position in viewport
 /// pixels. The card is `absolute` inside a zero-size `fixed` div at the
 /// origin, so its `left`/`top` — the pointer coordinates the core sends — are
 /// viewport pixels, not offsets into the column that paints it. Blitz places
@@ -73,7 +72,7 @@ fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {
     fixture.carry_row_menu("s1");
 }
 
-/// Contract (`LibraryPanel.svelte`'s outside-press rule, design D8): a press
+/// Contract: a press
 /// inside the panel while the menu is up closes it, and the press still
 /// takes focus.
 #[test]
@@ -95,7 +94,7 @@ fn a_press_inside_the_panel_closes_the_open_row_menu_and_takes_focus() {
     );
 }
 
-/// Contract (`LibraryPanel.svelte`'s take-focus listener, design D4): the
+/// Contract: the
 /// menu's own press handler takes focus without the outside-press close —
 /// the panel's close handler never runs for a press on the menu.
 #[test]

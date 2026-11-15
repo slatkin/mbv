@@ -1,5 +1,5 @@
 //! The Home Hero (`replace-tauri-with-blitz` task 7.5, the port of
-//! `LibraryHomeHero.svelte`; add-gui-library-panel design D12, the
+//! `LibraryHomeHero`; add-gui-library-panel design D12, the
 //! USER-APPROVED GUI Home design): the selected row's detail pane in the
 //! Music Hero's look — the artwork box the `artShape` arm names (landscape,
 //! square, or portrait), the title, the meta rows with their duration and
@@ -17,7 +17,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_summary::LibraryHeroSummary;
 use crate::window::library::state::LibraryState;
 
-/// The props of the Home Hero (the `LibraryHomeHero.svelte` props, in order).
+/// The props of the Home Hero (the `LibraryHomeHero` props, in order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryHomeHeroProps {
     /// The carried Home content (design D12): the selected row and its Hero
@@ -25,7 +25,7 @@ pub struct LibraryHomeHeroProps {
     pub detail: GuiHomeDetail,
 }
 
-/// The Home action a button sends (the Svelte `command` union).
+/// The Home action a button sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HomeAction {
     /// Play the selected row (design D12).
@@ -52,7 +52,7 @@ fn act(library: &LibraryState, action: HomeAction, detail: &GuiHomeDetail) {
     library.link.library(command);
 }
 
-/// The Home Hero (the Svelte markup, character for character): the summary
+/// The Home Hero: the summary
 /// block the one Hero summary paints, over the flat list.
 #[component]
 pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {

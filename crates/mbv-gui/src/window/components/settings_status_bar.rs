@@ -1,5 +1,5 @@
 //! The Settings screen's status line (`replace-tauri-with-blitz` task 8.3,
-//! the port of `SettingsStatusBar.svelte`; add-gui-settings-screen design D9,
+//! the port of `SettingsStatusBar`; add-gui-settings-screen design D9,
 //! the spec's *The Settings screen shows the toasts*; the canvas's status
 //! bar, design D13): the 36 px band that closes the screen, painting the
 //! shared Status bar projection — the armed prefix and the live toast —
@@ -23,7 +23,7 @@ const HINTS: &[(&str, &str)] = &[
     ("esc", "back"),
 ];
 
-/// The props of the status line (the `SettingsStatusBar.svelte` props, in
+/// The props of the status line (the `SettingsStatusBar` props, in
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsStatusBarProps {
@@ -33,11 +33,11 @@ pub struct SettingsStatusBarProps {
     pub section: String,
 }
 
-/// The one status line (the Svelte markup, character for character).
+/// The one status line.
 #[component]
 pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
     // The live toast's severity colour, resolved before the markup (the
-    // Svelte `toastColor` call in the attribute).
+    // the former client `toastColor` call in the attribute).
     let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
         format!("color: {};", toast_color(toast.severity))
     });

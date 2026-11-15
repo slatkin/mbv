@@ -1,5 +1,5 @@
 //! The Feeds list (`replace-tauri-with-blitz` task 7.7, the port of
-//! `LibraryFeedsList.svelte`; add-gui-library-panel design D12, row 11.1):
+//! `LibraryFeedsList`; add-gui-library-panel design D12, row 11.1):
 //! the active pill's flat entry rows — the entry's title over its
 //! subscription, and the entry date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
@@ -25,8 +25,8 @@ use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::shows_workspace::episode_progress;
 use crate::window::library::state::LibraryState;
 
-/// One painted row of the flat list (the Svelte row snippet): the entry row.
-/// A feed entry names no right-click menu — the Svelte row paints none.
+/// One painted row of the flat list: the entry row.
+/// A feed entry names no right-click menu — the former row paints none.
 fn paint_feeds_row(
     row: &FeedsItemRow,
     library: &LibraryState,
@@ -61,7 +61,7 @@ fn paint_feeds_row(
     }
 }
 
-/// The Feeds list (the Svelte markup, character for character): the header,
+/// The Feeds list: the header,
 /// the load, failure, and empty lines, and the flat entry rows over native
 /// scroll.
 #[component]

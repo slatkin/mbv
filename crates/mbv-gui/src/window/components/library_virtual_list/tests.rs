@@ -1,4 +1,4 @@
-//! Headless tests of the scroll shell (D16): the two seams the Svelte
+//! Headless tests of the scroll shell (D16): the two seams the former client
 //! component owned and no `.test.ts` covered directly — the spacers that
 //! hold the scroll range of the rows outside the window, and the scroller
 //! that mirrors the scroll store's offset (design D9, D15). The windowed

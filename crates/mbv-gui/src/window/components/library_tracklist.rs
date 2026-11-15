@@ -1,5 +1,5 @@
 //! The Hero's tracklist (`replace-tauri-with-blitz` task 7.3, the port of
-//! `LibraryTracklist.svelte`; add-gui-library-panel design D5, D8, D15): the
+//! `LibraryTracklist`; add-gui-library-panel design D5, D8, D15): the
 //! picked album's cached tracks, painted by the one Workspace table every
 //! destination shares. The row under the tracklist's cursor paints the
 //! cursor fill so the movement keys show what Enter and the item keys act
@@ -23,7 +23,7 @@ use crate::window::components::library_workspace_table::{
 use crate::window::library::hero::resolve_track_cursor;
 use crate::window::library::state::LibraryState;
 
-/// The props of the tracklist (the `LibraryTracklist.svelte` props, narrowed
+/// The props of the tracklist (the `LibraryTracklist` props, narrowed
 /// to what the tracklist reads): the album's cached tracks — the rows' own
 /// data, moved from the carried Hero, so a Hero repaint never clones the
 /// album's tracklist for the rows (the 7.3-7.4 review's whole-list finding)

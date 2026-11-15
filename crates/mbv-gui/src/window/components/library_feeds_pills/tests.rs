@@ -2,7 +2,7 @@
 //! `LibraryFeedsPills.test.ts` — the pills paint the core's single-select
 //! view with `aria-pressed` under the shared hook, and a press sends the
 //! set-pill command with that pill's object, as the frame carries it and
-//! never a stringified pill. The Tauri IPC of the Svelte tests is the mock
+//! never a stringified pill. The IPC of the earlier tests is the mock
 //! core link here; the asserted command is the same neutral shape. A
 //! headless document cannot fire a DOM click, so the press contract rides
 //! the state method the component's own handler calls one line each (the
