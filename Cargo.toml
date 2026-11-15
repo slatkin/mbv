@@ -135,11 +135,19 @@ unused_lifetimes = "warn"
 # full debug builds on manual bench runs (#896).
 debug = 1
 
+# Line tables only: file and line numbers for panics and backtraces, without the
+# variable and type DWARF. With full debuginfo the Blitz, stylo, and wgpu stack
+# made `mbv-gui` 1.1 GB (85% DWARF) and `target/debug` grew past 900 GB, which
+# stalled the dev machine's disk on every build.
+[profile.dev]
+debug = "line-tables-only"
+
 # The GUI's render stack at the debug profile's opt-level 0 makes every resize
 # frame pay unoptimized restyle, layout, text shaping, scene building, and
 # raster encoding on the event-loop thread, which is what stretches the stale
 # buffer during a window drag. These packages are the hot path of one frame;
-# they keep full debuginfo and unoptimized *crates* stay as they are.
+# they keep the profile's line-tables-only debuginfo and unoptimized *crates*
+# stay as they are.
 #
 # opt-level 2, not 3: the loops are already vectorizable and the extra
 # inlining of 3 mainly costs compile time on this dependency graph.
