@@ -4,10 +4,11 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 
 ## Start here
 
-* Read `CONTEXT.md` before you name domain concepts. Its *Avoid* terms name the words you must not use. Add new terms with the change. Ask before you rename or collide.
-* Architecture work follows fixed sources. `docs/adr/` holds accepted decisions (the why). `openspec/specs/` holds current behavior. For in-progress work, read the full `openspec/changes-l/<name>/` directory. Its delta specs overlay main specs until archived. Do not edit archived changes. Before you write or amend an ADR, read `docs/adr/README.md`.
+* Read `CONTEXT.md` before you name domain concepts. Each term's *Avoid* line names the words you must not use. Add new terms with the change. Ask before you rename or collide.
+* Architecture work follows fixed sources. `docs/adr/` holds accepted decisions (the why). `openspec/specs/` holds current behavior. For in-progress work, read the full `openspec/changes/<name>/` directory. Its delta specs overlay main specs until archived under `openspec/changes/archive/`. Do not edit archived changes. Before you write or amend an ADR, read `docs/adr/README.md`.
 * `docs/invariants/` holds properties that the code must maintain but that no type enforces. It tells why they matter, how the code upholds them today, and where they still fail. Read it before you touch queue, progress, or playback-lifecycle state. Add one when you find or fix this kind of bug. Do not leave the lesson only in a commit message.
 * `docs/recipes.md` holds ordered site lists for recurring multi-site changes: a ctrl protocol variant, a keybind action, a Service capability. Follow the recipe when your change is one of these kinds. Update the recipe when a site moves.
+* `docs/architecture/` also holds `interactive-tui-component-map.md`, `mpv-owned-playback-prompts.md`, `owner-client-operation-split.md`, and `performance.md`. `docs/plans/` holds dated plans; `openspec/handoffs/` holds cross-session handoffs.
 * Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/` and archive the change only when the user approves the PR for merge, as the last commit before the merge. Never sync or archive when you open a PR: the change stays open while review and live tests can still change it.
 * Probe the real service before you plan API work. If the design of a feature depends on what a remote API returns, probe that endpoint first. Emby, Audiobookshelf, feeds, and any remote endpoint are examples.
 * Change source-of-truth types before callers. Ask only about material design and product choices.
@@ -24,7 +25,10 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-surfaces/`: Surface state (cursor, selection, marks, viewport), the core `FocusStack`, `HitMap`, and per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit.
 * `crates/mbv-components/`: TuiRealm Interactive Components. A component over a shared surface (Queue, Queue playback, Status bar) is an adapter over its Surface state: it forwards neutral events, paints from that state, and reports geometry. Other components still own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/`: `screens/` prepare content, `arrangements/` place it, `components/` paint it, and `layout.rs` composes layouts.
-* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Never add another. The GUI Library panel takes its own keys in the GUI front end, before they reach this router (ADR 0036).
+* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Per-surface key modules sit beside them (`browse_dispatch.rs`, `confirm_keys`, `gui`, `lib_keys.rs`, `playlist_keys.rs`, `queue_keys.rs`, `search_sidebar_keys.rs`); precedence, order, and chords still resolve only in the three named files. Never add another routing site. The GUI Library panel takes its own keys in the GUI front end, before they reach this router (ADR 0036).
+* `src/startup.rs` and `src/main.rs`: `main` is the thin binary entry; `startup` is the one entry it calls — argument handling, configuration, the pinned panel launch, the Owner link, and the TUI Client run.
+* `src/owner_link.rs` (+`owner_link/`): implements the Client-side Owner find, start, and attach that `lib.rs` re-exports. `src/owner_restart.rs` (+`owner_restart/`) handles an Owner build mismatch at startup. `src/single_instance.rs` enforces a single instance (flock + socket, ADR 0006). `src/launch.rs` (+`launch/`) is the binary path a launcher starts.
+* `src/app.rs` + `src/app/`: the app module — `shell/` and `input/` above plus the Client core, dispatch, GUI client state, projections, and playback presentation modules. `src/config.rs` re-exports `mbv-config` and adds app-side config helpers.
 * `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the shared `mbv` library and the thin `mbv` binary over it.
 * `crates/mbv-audiobookshelf/`: Audiobookshelf provider client.
 * `crates/mbv-cast/`: Google Cast client, discovery, per-provider dispatch.
@@ -50,8 +54,8 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-images/`: image cache, loading and processing, terminal image protocol support.
 * `crates/mbv-ui-model/`: plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/`: typed messages crossing the interactive-component boundary.
-* `crates/mbv-gui/`: the GUI Client, a Tauri 2 binary that links the `mbv` library. Its synchronous core thread owns the `App` and the Client core tick (`src/core_thread.rs`, `src/attach.rs`); `src/bridge/` holds the wire DTOs and the DOM-input translation; `ui/` holds the Svelte front end. A workspace member outside `default-members`. `docs/architecture/gui-client.md` describes it.
-* `pinwin`: the external Rust program (Wayland layer-shell panel, separate repo `slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only caller: it builds every `pinwin` argv and runs the program. mbv links no pinwin library. Fix pinwin bugs upstream, never here.
+* `crates/mbv-gui/`: the GUI Client, a Tauri 2 binary that links the `mbv` library. Its synchronous core thread owns the `App` and the Client core tick (`src/core_thread.rs`, `src/attach.rs`); `src/bridge/` holds the wire DTOs and the DOM-input translation; `ui/` holds the Svelte front end. A workspace member outside `default-members`. `docs/architecture/gui-client.md` describes it; ADRs 0036–0038 cover its interaction state and change-driven sections.
+* `pinwin`: the external Rust program (Wayland layer-shell panel, separate repo `slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` (+`src/pin/`) is the only caller: it builds every `pinwin` argv and runs the program. mbv links no pinwin library. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 
