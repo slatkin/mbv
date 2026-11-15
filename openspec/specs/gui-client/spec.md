@@ -7,26 +7,37 @@ Defines the GUI Client: a Client that presents mbv in a native desktop window, w
 
 ### Requirement: The GUI Client is a separate program
 
-mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal program. The `mbv` program SHALL NOT load or link the windowing and webview stack that the GUI Client uses.
+mbv SHALL ship the GUI Client as a program separate from the `mbv` terminal program. The `mbv` program SHALL NOT load or link the windowing and rendering stack that the GUI Client uses. The GUI Client SHALL run no web engine process and no script engine.
 
 #### Scenario: The terminal program carries no window stack
 
 - **WHEN** the `mbv` program is built
-- **THEN** its dependency graph contains no windowing or webview library that the GUI Client uses
+- **THEN** its dependency graph contains no windowing or rendering library that the GUI Client uses
 
 #### Scenario: The GUI Client starts on its own
 
 - **WHEN** the user starts the GUI Client program
 - **THEN** it opens one native window and presents mbv in it without a terminal
 
+#### Scenario: The GUI Client is one process
+
+- **WHEN** the GUI Client window is open
+- **THEN** the GUI Client runs as one process with no web engine child process
+
 ### Requirement: The GUI program ships beside the terminal program
 
-Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the WebKitGTK 4.1 runtime dependency. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
+Every release artifact (the tarball, the `.deb`, and the Arch packages) SHALL install the `mbv-gui` program beside the `mbv` program, and SHALL declare the Vulkan loader and fontconfig runtime dependencies. No artifact SHALL declare a WebKitGTK dependency. The GUI Client finds and starts its Owner from the sibling `mbv` program, and the build-id handshake refuses a mismatched pair, so both programs SHALL come from one build.
 
 #### Scenario: A package installs both programs
 
 - **WHEN** the tarball, the `.deb`, or an Arch package is installed
 - **THEN** `mbv` and `mbv-gui` are installed in the same directory
+
+#### Scenario: A package declares the render stack
+
+- **WHEN** the `.deb` or an Arch package is inspected
+- **THEN** it depends on the Vulkan loader and fontconfig
+- **AND** it does not depend on WebKitGTK
 
 ### Requirement: The GUI Client attaches to the Owner process as a Client
 
@@ -186,7 +197,7 @@ Any animation in the GUI Client SHALL be feedback only. A key press SHALL take e
 
 ### Requirement: GUI pointer input resolves through semantic targets
 
-A pointer press, drag, or wheel step on the player panel SHALL resolve to the semantic target that the GUI painted at that point in the current frame. The effect SHALL be the gesture that the design canvas defines. Where the canvas is silent and the TUI has a matching gesture, the effect SHALL be the same. Pointer input on the Library panel is the window content's own (the requirement "The Library panel's interaction state lives in the window content").
+A pointer press, drag, or wheel step on the player panel SHALL resolve to the semantic target that the GUI painted at that point in the current frame. The effect SHALL be the gesture that the design canvas defines. Where the canvas is silent and the TUI has a matching gesture, the effect SHALL be the same. Pointer input on the Library panel is the window content's own (the requirement "The window content holds the Library panel's interaction state").
 
 #### Scenario: The slice gestures
 
@@ -213,23 +224,6 @@ A pointer press, drag, or wheel step on the player panel SHALL resolve to the se
 
 - **WHEN** the user clicks a point with no painted target
 - **THEN** nothing changes
-
-### Requirement: The window content holds no interaction state
-
-The interaction state of the player panel and the Status bar (focus, cursor, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the drag, and the open menu or popover) SHALL live in the Client core, not in the window content. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it. Panel focus between the Library panel and the Queue panel SHALL live in the Client core. The layout that the container size picks is not interaction state. The Library panel's interaction state is the exception that the requirement "The Library panel's interaction state lives in the window content" defines. The position that the window advances between two playhead updates is a prediction of the Client core's playhead, not interaction state.
-
-#### Scenario: The window content reloads
-
-- **GIVEN** the queue cursor is on a slot and the queue has focus
-- **WHEN** the window content reloads
-- **THEN** the window asks the Client core for its sections when it mounts
-- **AND** the queue has focus and the cursor is on the same slot
-
-#### Scenario: A key arrives in the window content
-
-- **GIVEN** the Library panel does not take the key
-- **WHEN** the user presses a key while the GUI window has focus
-- **THEN** the Client core resolves the chord through the one keyboard router
 
 ### Requirement: The panel changes state with its own size
 
@@ -346,7 +340,7 @@ The queue header SHALL show the remaining count as the canvas forms it (`Up next
 
 ### Requirement: The GUI Client uses the typography and colours of the canvas
 
-Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the front end, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. The queue, row menu, popover, and drag visuals SHALL paint the canvas hexes that name no `mbv-theme` slot through GUI-local `--canvas-*` tokens in the front end's `app.css`, and the TUI's palette SHALL NOT change.
+Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the GUI Client, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. The queue, row menu, popover, and drag visuals SHALL paint the canvas hexes that name no `mbv-theme` slot through GUI-local `--canvas-*` tokens in the window's stylesheet, and the TUI's palette SHALL NOT change.
 
 #### Scenario: Fonts load with no network
 
@@ -363,7 +357,7 @@ Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use Je
 #### Scenario: Queue canvas colours resolve locally
 
 - **WHEN** the queue, row menu, popover, or drag visuals paint a colour that names no `mbv-theme` slot
-- **THEN** the value is the canvas hex, read from the queue-local `--canvas-*` tokens of the front end's `app.css`
+- **THEN** the value is the canvas hex, read from the GUI-local `--canvas-*` tokens of the window's stylesheet
 - **AND** `mbv-theme`'s slot table and the TUI's palette stay unchanged
 
 ### Requirement: The GUI presents the Library panel beside the Queue panel
@@ -419,22 +413,6 @@ The GUI Client SHALL arrange the panels from the measured Library column width (
 - **GIVEN** the Library cursor is on an item
 - **WHEN** the Library column width crosses a threshold
 - **THEN** the arrangement changes and the cursor, the selected pill, and the Hero's item do not change
-
-### Requirement: The Library panel's interaction state lives in the window content
-
-The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collection, and the Hero's item. The window content SHALL change the data selection only through the Client core.
-
-#### Scenario: The window content reloads on a Library item
-
-- **GIVEN** Music is active with Hip-Hop selected and an album in the Hero
-- **WHEN** the window content reloads
-- **THEN** Music is active with Hip-Hop selected and the same album in the Hero
-- **AND** the list's cursor, scroll, and open nodes start from their defaults
-
-#### Scenario: The TUI Client browses a library
-
-- **WHEN** the user browses any destination in the TUI Client
-- **THEN** every key, pointer gesture, and painted frame behaves as before this change
 
 ### Requirement: The window content takes the window keys
 
@@ -828,28 +806,6 @@ The Client core SHALL send the window an update only when the content of at leas
 - **THEN** the update carries the Library detail
 - **AND** the update does not carry the Library list
 
-### Requirement: A window that mounts receives every section
-
-When the window content mounts, it SHALL ask the Client core for its sections. The Client core SHALL answer with one update that carries every section that is present. A window-content reload SHALL repaint the core's state, the theme included, without a state change behind it. Before the Owner attach completes, the answer SHALL carry the attach state and the theme.
-
-#### Scenario: The window content reloads
-
-- **GIVEN** the Library panel shows a picked album and the queue holds slots
-- **WHEN** the window content reloads
-- **THEN** the window asks for its sections when it mounts
-- **AND** the window paints the theme, the queue, the playback panel, the Library list, and the Hero as the core holds them
-
-#### Scenario: The window mounts during the attach
-
-- **GIVEN** the Owner attach waits for an Owner that shuts down
-- **WHEN** the window content mounts
-- **THEN** the window paints the waiting state in the theme
-
-#### Scenario: A layout report changes nothing
-
-- **WHEN** the window reports a layout that moves no list capacity and no region a section reads
-- **THEN** the window receives no update
-
 ### Requirement: The playhead advances in the window between discontinuities
 
 The Client core SHALL send the playhead (the active slot, the position, the runtime, and the paused state) only when it is discontinuous: a track change, a pause or a resume, a runtime change, a seek, or a drift past a tolerance between the position the window predicts and the position the Owner reports. Between two sends the window SHALL advance the position itself while playback is not paused.
@@ -903,3 +859,92 @@ The window SHALL derive every value that follows the playback position or the wa
 - **WHEN** the playback position passes into the next chapter
 - **THEN** the Hero marks the next chapter as the current chapter
 - **AND** the window receives no update
+
+### Requirement: The Client core holds the player panel's interaction state
+
+The interaction state of the player panel and the Status bar (focus, cursor, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the drag, and the open menu or popover) SHALL live in the Client core, not in the window content. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it. Panel focus between the Library panel and the Queue panel SHALL live in the Client core.
+
+#### Scenario: A key arrives in the window content
+
+- **GIVEN** the Library panel does not take the key
+- **WHEN** the user presses a key while the GUI window has focus
+- **THEN** the Client core resolves the chord through the one keyboard router
+
+### Requirement: Layout and the predicted playhead are not interaction state
+
+The layout that the container size picks SHALL NOT count as interaction state. The position that the window advances between two playhead updates SHALL be a prediction of the Client core's playhead, not interaction state. The Library panel's interaction state is the exception that the requirement "The window content holds the Library panel's interaction state" defines.
+
+#### Scenario: A resize picks a layout
+
+- **WHEN** the window content picks a panel state from its container size
+- **THEN** the Client core's collapse and queue-fold toggles do not change
+
+### Requirement: The window content holds the Library panel's interaction state
+
+The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collection, and the Hero's item. The window content SHALL change the data selection only through the Client core.
+
+#### Scenario: The TUI Client browses a library
+
+- **WHEN** the user browses any destination in the TUI Client
+- **THEN** every key, pointer gesture, and painted frame behaves as before this change
+
+### Requirement: A window that opens receives every section
+
+When the window content mounts, it SHALL ask the Client core for its sections. The Client core SHALL answer with one update that carries every section that is present. Before the Owner attach completes, the answer SHALL carry the attach state and the theme.
+
+#### Scenario: The window opens on an attached Owner
+
+- **GIVEN** the Owner holds queue slots and the GUI launch location names a picked album
+- **WHEN** the GUI Client window opens and the attach completes
+- **THEN** the window asks for its sections once when it mounts
+- **AND** the window paints the theme, the queue, the playback panel, the Library list, and the Hero as the core holds them
+
+#### Scenario: The window mounts during the attach
+
+- **GIVEN** the Owner attach waits for an Owner that shuts down
+- **WHEN** the window content mounts
+- **THEN** the window paints the waiting state in the theme
+
+#### Scenario: A layout report changes nothing
+
+- **WHEN** the window reports a layout that moves no list capacity and no region a section reads
+- **THEN** the window receives no update
+
+### Requirement: The window paints the stylesheet
+
+The window's author stylesheet SHALL apply to the document from the first frame. The author stylesheet is the generated Tailwind sheet (`app.generated.css`), the cell-unit rule, and the theme rule. A class in the window markup SHALL paint the declarations of its rule.
+
+#### Scenario: The window opens
+
+- **WHEN** the GUI Client window opens
+- **THEN** a Tailwind class in the markup resolves to the computed value of its rule
+
+### Requirement: The window content follows a resize
+
+When the surface size of the GUI Client window changes, the next presented frame SHALL lay out the window content at the new size. No later event SHALL be needed for the layout to change.
+
+#### Scenario: The user drags a window edge
+
+- **WHEN** the user drags a window edge
+- **THEN** each presented frame lays out the content at that frame's surface size
+
+### Requirement: Pointer input never stops the GUI Client
+
+A click, double-click, drag, or wheel step on any point of the window SHALL NOT end the GUI Client process. This holds when the input arrives after an earlier input changed the document.
+
+#### Scenario: The user double-clicks a queue row
+
+- **GIVEN** an earlier press rebuilt the queue rows
+- **WHEN** the user double-clicks a queue row
+- **THEN** the row plays
+- **AND** the window stays open and accepts the next input
+
+### Requirement: The window looks as the Svelte front end looked
+
+Each surface of the window SHALL paint the markup structure, class strings, and computed colours of its Svelte source at commit `38248e262^` (`crates/mbv-gui/ui/src/`). A difference from that source SHALL exist only where a Blitz gap named in `design.md` (D20) forces it.
+
+#### Scenario: The Queue panel paints at the queue column width
+
+- **WHEN** the Queue panel paints at the queue column width
+- **THEN** the panel fills that column
+- **AND** no band of a colour that the Svelte panel did not paint appears
