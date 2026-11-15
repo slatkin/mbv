@@ -15,7 +15,7 @@ use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestam
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_model::targets::HomeItemTarget;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
 use crate::app::App;
@@ -274,7 +274,7 @@ impl App {
                 continue;
             }
             let id = GuiHomeRowId::Recent(item.content_id());
-            let date = provider_timestamp_secs(item).map(fmt_publish_date_short);
+            let date = row_date(provider_timestamp_secs(item));
             recent_rows.push(self.home_item(item, id, feed_name.as_deref(), date));
         }
 

@@ -3,3 +3,7 @@
 mod media_list {
     mod tests;
 }
+
+mod ui_util {
+    mod tests;
+}

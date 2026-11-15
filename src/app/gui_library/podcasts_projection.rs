@@ -21,7 +21,7 @@ use mbv_emby_model::seconds_to_ticks;
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
 use mbv_ui_model::media_list::ActiveProgress;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
@@ -401,10 +401,7 @@ fn podcast_row(
             .encode(),
         title: episode.title.clone(),
         subtitle: show.map(|show| show.title.clone()),
-        date: episode
-            .published_at
-            .map(fmt_publish_date_short)
-            .filter(|date| !date.is_empty()),
+        date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
     }
 }

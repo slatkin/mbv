@@ -1,4 +1,5 @@
 use super::*;
+use mbv_render::components::media_list::ActiveProgress;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 fn latest_catalog(episode_id: &str) -> AudiobookshelfEpisodeCatalog {

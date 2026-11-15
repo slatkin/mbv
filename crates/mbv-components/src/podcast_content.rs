@@ -24,8 +24,7 @@ use super::media_list::{
     MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
 };
 use mbv_render::components::media_list::{
-    ActiveProgress, MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing,
-    MediaSemanticState,
+    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::current_time_secs;
@@ -34,7 +33,7 @@ use mbv_ui_model::audiobookshelf_browse::{
     podcast_display_rows,
 };
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
-use mbv_ui_model::ui_util::{fmt_publish_date_short, trunc_str};
+use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
@@ -228,6 +227,19 @@ impl PodcastContent {
                     let progress = state
                         .progress
                         .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));
+                    // The one Audiobookshelf row rule (design D1 of
+                    // `row-state-follows-playback-resume`): a finished
+                    // episode is Played whatever its position — the server
+                    // restarts it — and an unfinished one is Active only
+                    // when Play would resume. An episode with no progress
+                    // entry has neither fact, so its row is Ordinary.
+                    let semantic_state = MediaSemanticState::from_audiobookshelf(
+                        progress.is_some_and(|progress| progress.is_finished),
+                        progress.map_or(0, |progress| {
+                            seconds_to_ticks(progress.current_time_seconds)
+                        }),
+                        episode.duration_seconds.map_or(0, seconds_to_ticks),
+                    );
                     MediaListRow::Item {
                         target: PodcastEpisodeTarget::new(
                             episode.library_item_id.clone(),
@@ -250,27 +262,12 @@ impl PodcastContent {
                         // right-aligned gutter (`17 Sep`): the one thing
                         // that distinguishes two episodes of a show once the
                         // title is revealed only on the selected row.
-                        trailing: episode
-                            .published_at
-                            .map(fmt_publish_date_short)
-                            .filter(|date| !date.is_empty())
-                            .map(MediaListTrailing::Gutter),
+                        trailing: row_date(episode.published_at).map(MediaListTrailing::Gutter),
                         // Library lists carry no time column (only the Queue
                         // list and the sessions modal show one).
                         duration: None,
                         kind: MediaKind::Media,
-                        semantic_state: match progress {
-                            Some(progress) if progress.is_finished => MediaSemanticState::Played,
-                            Some(progress) if progress.current_time_seconds > 0.0 => {
-                                MediaSemanticState::Active {
-                                    progress: ActiveProgress::of_ticks(
-                                        seconds_to_ticks(progress.current_time_seconds),
-                                        episode.duration_seconds.map_or(0, seconds_to_ticks),
-                                    ),
-                                }
-                            }
-                            _ => MediaSemanticState::Ordinary,
-                        },
+                        semantic_state,
                     }
                 }
             })

@@ -32,7 +32,7 @@ use mbv_render::{
     LetterFilter, LetterFilterKind, TvWideRenderCtx, effective_sort_str, letter_bucket,
 };
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
-use mbv_ui_model::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
+use mbv_ui_model::ui_util::{fmt_duration_gutter, natural_sort_key, row_date};
 use mbv_ui_msg::TvTreeTarget;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use ratatui::layout::Position;

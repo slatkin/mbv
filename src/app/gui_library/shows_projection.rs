@@ -17,7 +17,7 @@ use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::components::home_video::format_release_date;
 use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
-use mbv_ui_model::ui_util::{fmt_duration_short, fmt_publish_date_short};
+use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
 use super::home::{GuiArtShape, GuiHomeRowState, media_row_state};
@@ -562,9 +562,7 @@ fn latest_row(episode: &EmbyItem) -> GuiShowsRow {
         Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
         None => (parts.title.text.clone(), None),
     };
-    let date = mbv_ui_model::home_latest::provider_timestamp_secs(&item)
-        .map(fmt_publish_date_short)
-        .filter(|date| !date.is_empty());
+    let date = row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item));
     GuiShowsRow {
         id: episode.id.clone(),
         title,

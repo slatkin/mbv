@@ -559,9 +559,7 @@ fn feed_row_date(item: &EmbyItem) -> Option<String> {
 /// `crates/mbv-components/src/emby_library_content.rs`).
 fn latest_row_date(item: &EmbyItem) -> Option<String> {
     let item = QueueItem::Emby(Box::new(item.clone()));
-    mbv_ui_model::home_latest::provider_timestamp_secs(&item)
-        .map(mbv_ui_model::ui_util::fmt_publish_date_short)
-        .filter(|date| !date.is_empty())
+    mbv_ui_model::ui_util::row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item))
 }
 
 /// The programme (root folder) an item sits in (row 8.1): the root listing's

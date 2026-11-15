@@ -15,7 +15,7 @@
 use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::home_latest::provider_timestamp_secs;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::ui_util::row_date;
 
 use super::GuiFeedPill;
 use super::entry_list::{
@@ -204,9 +204,9 @@ impl App {
             subtitle: self
                 .gui_feeds_subscription_name(entry.feed_id.as_deref())
                 .map(str::to_string),
-            date: provider_timestamp_secs(&mbv_queue::QueueItem::Feed(entry.clone()))
-                .map(fmt_publish_date_short)
-                .filter(|date| !date.is_empty()),
+            date: row_date(provider_timestamp_secs(&mbv_queue::QueueItem::Feed(
+                entry.clone(),
+            ))),
             state: feed_row_state(entry),
         }
     }

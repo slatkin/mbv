@@ -26,12 +26,13 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition, RowIntent};
 use mbv_render::components::media_list::{
-    ActiveProgress, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{FeedDisplayRow, current_time_secs, feed_display_rows};
 use mbv_ui_model::feed_tab::WatchedFilter;
-use mbv_ui_model::ui_util::trunc_str;
+use mbv_ui_model::home_latest::provider_timestamp_secs;
+use mbv_ui_model::ui_util::{row_date, trunc_str};
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
 /// Max feed-group pill label length. The Feeds owner and the podcast tab's
@@ -392,9 +393,7 @@ impl FeedsContent {
                         Some(context) => (context.text, Some(parts.title.text)),
                         None => (parts.title.text, None),
                     };
-                    let trailing = mbv_ui_model::home_latest::provider_timestamp_secs(&queue_item)
-                        .map(mbv_ui_model::ui_util::fmt_publish_date_short)
-                        .filter(|date| !date.is_empty())
+                    let trailing = row_date(provider_timestamp_secs(&queue_item))
                         .map(MediaListTrailing::Gutter);
                     (primary, secondary, trailing)
                 } else {
@@ -409,20 +408,11 @@ impl FeedsContent {
                     // list and the sessions modal show one).
                     duration: None,
                     kind: MediaKind::Media,
-                    semantic_state: if entry.played {
-                        MediaSemanticState::Played
-                    } else if entry.position_ticks > 0 {
-                        MediaSemanticState::Active {
-                            progress: ActiveProgress::of_ticks(
-                                entry.position_ticks,
-                                entry.duration_ticks.map_or(0, |duration| {
-                                    i64::try_from(duration).unwrap_or(i64::MAX)
-                                }),
-                            ),
-                        }
-                    } else {
-                        MediaSemanticState::Ordinary
-                    },
+                    // The one feed-entry row rule (design D1 of
+                    // `row-state-follows-playback-resume`): a played entry
+                    // that keeps a resumable local position shows Active,
+                    // because playback resumes from it.
+                    semantic_state: MediaSemanticState::from_feed_entry(entry),
                 }
             }
         }
