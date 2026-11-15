@@ -123,6 +123,11 @@ pub struct ArtImageProps {
     /// The box the image also stays inside, as `capToNaturalSize` takes it.
     #[props(default)]
     pub bounds: Option<NaturalSizeBounds>,
+    /// Whether the image fills its box with no natural-size cap (the Svelte
+    /// `bounds={false}`), as the queue still slot scales the artwork to the
+    /// panel's width.
+    #[props(default)]
+    pub uncapped: bool,
     /// The `img` class names.
     #[props(default)]
     pub class: String,
@@ -141,6 +146,7 @@ impl std::fmt::Debug for ArtImageProps {
             .field("art", &self.art)
             .field("alt", &self.alt)
             .field("bounds", &self.bounds)
+            .field("uncapped", &self.uncapped)
             .field("class", &self.class)
             .field("style", &self.style)
             .finish_non_exhaustive()
@@ -345,9 +351,13 @@ pub fn ArtImage(props: ArtImageProps) -> Element {
 
     // The natural-size cap in CSS pixels: the loaded size divided by the
     // window's scale factor, recomputed when either changes (D7).
-    let cap = state.natural.cloned().and_then(|(width, height)| {
-        capped_natural_size(width, height, scale.0.cloned(), props.bounds)
-    });
+    let cap = state
+        .natural
+        .cloned()
+        .filter(|_| !props.uncapped)
+        .and_then(|(width, height)| {
+            capped_natural_size(width, height, scale.0.cloned(), props.bounds)
+        });
     let style = capped_style(&props.style, cap, props.bounds.is_some());
 
     rsx! {

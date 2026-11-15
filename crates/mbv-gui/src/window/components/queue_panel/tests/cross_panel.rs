@@ -8,6 +8,27 @@ use super::harness::*;
 use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
 use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 
+/// Contract (`QueuePlaybackPanel.test.ts`, main cafcbc239): a chooser row
+/// paints the brand mark of its target kind.
+#[test]
+fn a_chooser_row_paints_the_brand_mark_of_its_target_kind() {
+    let mut fixture = built_sized(panel_tree_app);
+    let mut sections = fixture.sections.clone();
+    fixture.in_runtime(move || {
+        sections.playback.set(playing());
+        sections.overlay.set(Some(chooser()));
+    });
+
+    assert_eq!(
+        fixture.all("[data-choice='0'] [data-brand='emby']").len(),
+        1
+    );
+    assert_eq!(
+        fixture.all("[data-choice='1'] [data-brand='cast']").len(),
+        1
+    );
+}
+
 /// Contract (`QueuePlaybackPanel.test.ts`): an open chooser reports its rows
 /// after the queue and footer regions — the hit map's last push wins where
 /// a chooser row paints over a queue row beneath it. The header's

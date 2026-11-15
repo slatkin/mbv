@@ -41,6 +41,7 @@ use crate::bridge::frame::playback::{
 };
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
+use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::art_image::{ArtEvents, ArtImage};
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{
@@ -223,7 +224,7 @@ pub fn QueuePlaybackPanel() -> Element {
 
     rsx! {
         // The player panel block on the canvas's backdrop: the header row,
-        // then the fixed still slot, the title and parent line, the
+        // then the still slot, the title and parent line, the
         // scrubber, and the transport (`align-gui-with-design-canvas` U3;
         // `Main.dc.html` is the reference). The canvas paints no outer pad
         // and no gutter between these blocks: the header and the still slot
@@ -253,19 +254,9 @@ pub fn QueuePlaybackPanel() -> Element {
                 chooser_rows,
             }
             if let Some(title) = playback.now_playing_title.as_ref() {
-                // The still slot (`main` audit 6): a fixed 225 px box on the
-                // raised control fill, the artwork inside it, and the canvas
-                // caption while no image lands. The wrapper is the visual
-                // slot's painted region. The season-and-episode badge is the
-                // canvas chip at the box's bottom left (`main` audit 7); a
-                // non-episode item paints none.
+                // The still slot (`main` audit 6); `StillSlot` holds its
+                // shapes.
                 if let Some(art) = playback.artwork.as_ref() {
-                    // The still slot (`main` audit 6): a fixed 225 px box on
-                    // the raised control fill, the artwork inside it, and the
-                    // canvas caption while no image lands. The wrapper is the
-                    // visual slot's painted region. The season-and-episode
-                    // badge is the canvas chip at the box's bottom left
-                    // (`main` audit 7); a non-episode item paints none.
                     StillSlot {
                         art: art.clone(),
                         art_mounted,
@@ -388,8 +379,19 @@ fn TargetChooserPopover(mut props: TargetChooserPopoverProps) -> Element {
                                     Check { size: 14, color: role_var(GuiRole::Accent) }
                                 }
                             }
-                            if matches!(choice.key, GuiTargetKey::Local) {
-                                Monitor { size: 14, color: role_var(GuiRole::PlaybackTargetLocalFg) }
+                            match &choice.key {
+                                GuiTargetKey::Local => rsx! {
+                                    Monitor { size: 14, color: role_var(GuiRole::PlaybackTargetLocalFg) }
+                                },
+                                GuiTargetKey::Cast(_) => rsx! {
+                                    TargetBrandIcon { brand: TargetBrand::Cast }
+                                },
+                                GuiTargetKey::Emby(_) if choice.is_direct_peer => rsx! {
+                                    TargetBrandIcon { brand: TargetBrand::DirectPeer }
+                                },
+                                GuiTargetKey::Emby(_) => rsx! {
+                                    TargetBrandIcon { brand: TargetBrand::Emby }
+                                },
                             }
                             Truncate {
                                 text: choice.label.clone(),
@@ -527,22 +529,39 @@ impl std::fmt::Debug for StillSlotProps {
     }
 }
 
-/// The still slot (the Svelte `{#if art}` block, `main` audit 6): a fixed
-/// 225 px box on the raised control fill, the artwork inside it, and the
-/// canvas caption while no image lands. The wrapper is the visual slot's
-/// painted region. The season-and-episode badge is the canvas chip at the
-/// box's bottom left (`main` audit 7); a non-episode item paints none.
+/// The still slot (the Svelte `{#if art}` block, `main` audit 6): the
+/// artwork on the raised control fill, and the canvas caption while no image
+/// lands. A loaded image spans the panel's full width (the TUI's visual slot
+/// at full column width) with no natural-size cap, and its height follows
+/// the artwork's aspect, so the rows below it move with the image. The
+/// placeholder keeps the canvas's fixed 225 px box and hugs its image. The
+/// wrapper is the visual slot's painted region. The season-and-episode badge
+/// is the canvas chip at the slot's bottom left (`main` audit 7); a
+/// non-episode item paints none.
 #[component]
 fn StillSlot(mut props: StillSlotProps) -> Element {
-    // The image kinds paint their natural height; the rest hold the fixed
-    // 225 px slot.
-    let slot_style = match props.art {
-        GuiArtRef::Image { .. } => "background: var(--mbv-secondary);".to_owned(),
-        _ => "height: 225px; background: var(--mbv-secondary);".to_owned(),
+    let image = matches!(props.art, GuiArtRef::Image { .. });
+    let (width_class, slot_style, image_style, bounds) = if image {
+        (
+            "w-full",
+            "background: var(--mbv-secondary);",
+            "width: 100%; height: auto;",
+            None,
+        )
+    } else {
+        (
+            "w-fit",
+            "height: 225px; background: var(--mbv-secondary);",
+            "",
+            Some(NaturalSizeBounds {
+                width: None,
+                height: Some(225.0),
+            }),
+        )
     };
     rsx! {
         div {
-            class: "relative flex w-fit max-w-full items-center justify-center overflow-hidden",
+            class: "relative flex {width_class} max-w-full items-center justify-center overflow-hidden",
             style: "{slot_style}",
             "data-target": "visualSlot",
             onmounted: move |event| props.art_mounted.set(Some(event)),
@@ -550,10 +569,9 @@ fn StillSlot(mut props: StillSlotProps) -> Element {
                 art: Some(props.art.clone()),
                 alt: String::new(),
                 class: "block".to_owned(),
-                bounds: Some(NaturalSizeBounds {
-                    width: None,
-                    height: Some(225.0),
-                }),
+                style: image_style.to_owned(),
+                bounds,
+                uncapped: image,
                 fallback: rsx! {
                     // The canvas's source caption while no image lands
                     // (design D4a's still slot): the frame's still-caption

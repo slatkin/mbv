@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod arrangement;
+pub mod brand_icons;
 pub mod cells;
 pub mod channel;
 pub mod clock;

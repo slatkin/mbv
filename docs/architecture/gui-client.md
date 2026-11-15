@@ -419,7 +419,7 @@ The window reads no font from disk at runtime. `assets/app.css` sets
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
 `src/window/icons.rs` only (the Lucide set, drawn as inline SVG), with one
 exception: a playback-target chooser row paints the brand mark of its target
-kind (`src/window/icons.rs`, whose three paths are simple-icons', CC0) for
+kind (`src/window/brand_icons.rs`, whose three paths are simple-icons', CC0) for
 Emby, Google Cast, and the mpv Player owner, because Lucide carries no brand
 glyph. The transport controls and the playback-target indicator are Lucide
 icons. The now-playing row shows the canvas's play glyph
