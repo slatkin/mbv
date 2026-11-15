@@ -24,4 +24,4 @@
 ## 5. Docs and gates
 
 - [x] 5.1 Add one sentence to `docs/architecture/gui-client.md` (section-store paragraph): the four large sections are held as `SectionRef`, one copy per update. Verify: the sentence exists and names `SectionRef`.
-- [ ] 5.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, then `make check-code-file-lines`. Verify: all four pass; fix any red gate.
+- [x] 5.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-gui`, then `make check-code-file-lines`. Verify: all four pass; fix any red gate.
