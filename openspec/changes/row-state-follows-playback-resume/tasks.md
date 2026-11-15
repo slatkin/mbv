@@ -9,9 +9,9 @@
 
 ## 2. TUI destination rows use the rule
 
-- [ ] 2.1 In `crates/mbv-components/src/podcast_content.rs`, replace the inline `semantic_state` match with `MediaSemanticState::from_audiobookshelf` over the episode's progress, converting seconds with `seconds_to_ticks`; a missing progress entry stays `Ordinary`. Update the podcast row tests in `crates/mbv-components/src/podcast_content/tests/` that pin played-wins. Verify: `cargo nextest run -p mbv-components podcast`.
-- [ ] 2.2 In `crates/mbv-components/src/feeds_content.rs`, replace the inline `semantic_state` `if` with `MediaSemanticState::from_feed_entry`. Update the feeds row tests that pin played-wins. Verify: `cargo nextest run -p mbv-components feeds`.
-- [ ] 2.3 Confirm with `rg` that no file under `crates/mbv-components/src` builds `MediaSemanticState::Played` or `MediaSemanticState::Active` from provider facts (the painters' matches in `mbv-render` stay). Verify: the `rg -n "MediaSemanticState::(Played|Active \{)" crates/mbv-components/src` output holds no row-builder site.
+- [x] 2.1 In `crates/mbv-components/src/podcast_content.rs`, replace the inline `semantic_state` match with `MediaSemanticState::from_audiobookshelf` over the episode's progress, converting seconds with `seconds_to_ticks`; a missing progress entry stays `Ordinary`. Update the podcast row tests in `crates/mbv-components/src/podcast_content/tests/` that pin played-wins. Verify: `cargo nextest run -p mbv-components podcast`.
+- [x] 2.2 In `crates/mbv-components/src/feeds_content.rs`, replace the inline `semantic_state` `if` with `MediaSemanticState::from_feed_entry`. Update the feeds row tests that pin played-wins. Verify: `cargo nextest run -p mbv-components feeds`.
+- [x] 2.3 Confirm with `rg` that no file under `crates/mbv-components/src` builds `MediaSemanticState::Played` or `MediaSemanticState::Active` from provider facts (the painters' matches in `mbv-render` stay). Verify: the `rg -n "MediaSemanticState::(Played|Active \{)" crates/mbv-components/src` output holds no row-builder site.
 
 ## 3. GUI Library projections use the rule
 
@@ -22,8 +22,8 @@
 
 ## 4. One row-date helper
 
-- [ ] 4.1 Add `row_date(secs: Option<u64>) -> Option<String>` to `crates/mbv-ui-model/src/ui_util.rs` (design D3) with one test for the contract "an unformattable timestamp yields no date" in `crates/mbv-ui-model/tests/`. Verify: `cargo nextest run -p mbv-ui-model`.
-- [ ] 4.2 Replace every `fmt_publish_date_short` date-gutter chain in `crates/mbv-components/src` (podcast, feeds, Emby library, TV episode rows, Home flat) and `src/app/gui_library` (podcasts, feeds, home, shows, emby projections) with `row_date`. Hero dates (`fmt_publish_date`) do not change. Verify: `rg -n "map\(fmt_publish_date_short\)|map\(mbv_ui_model::ui_util::fmt_publish_date_short\)" src crates` returns no row-builder site, and `cargo nextest run -p mbv-components -p mbv` passes.
+- [x] 4.1 Add `row_date(secs: Option<u64>) -> Option<String>` to `crates/mbv-ui-model/src/ui_util.rs` (design D3) with one test for the contract "an unformattable timestamp yields no date" in `crates/mbv-ui-model/tests/`. Verify: `cargo nextest run -p mbv-ui-model`.
+- [x] 4.2 Replace every `fmt_publish_date_short` date-gutter chain in `crates/mbv-components/src` (podcast, feeds, Emby library, TV episode rows, Home flat) and `src/app/gui_library` (podcasts, feeds, home, shows, emby projections) with `row_date`. Hero dates (`fmt_publish_date`) do not change. Verify: `rg -n "map\(fmt_publish_date_short\)|map\(mbv_ui_model::ui_util::fmt_publish_date_short\)" src crates` returns no row-builder site, and `cargo nextest run -p mbv-components -p mbv` passes.
 
 ## 5. Feed store keeps played rows at position zero
 
