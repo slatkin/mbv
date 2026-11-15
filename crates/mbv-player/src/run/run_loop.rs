@@ -264,10 +264,7 @@ impl PlaybackRun {
                 // on_end_file returns false both for "continue normally" and for
                 // "end of playlist — return from thread". Detect end-of-playlist
                 // by checking active flag which on_end_file sets to false.
-                if !should_continue && !self.status.lock().unwrap().active {
-                    return true;
-                }
-                false
+                !should_continue && !self.status.lock().unwrap().active
             }
             MpvEvent::LogMessage {
                 prefix,
