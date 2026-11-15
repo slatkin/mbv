@@ -1,6 +1,6 @@
 //! The sidebar requests' GUI drain (`add-gui-settings-screen` design D2):
-//! the core thread takes `App::pending_overlay` once per tick, after input
-//! routing, and matches it exhaustively — one documented arm per variant, no
+//! the core thread takes `App::pending_overlay` after each routed input
+//! and after a player-event drain, and matches it exhaustively — one documented arm per variant, no
 //! wildcard. The open actions drive the Settings screen's core state; every
 //! TUI overlay request the GUI does not present logs
 //! `gui.overlay_request.undelivered` at debug level and drops.
