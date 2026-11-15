@@ -14,10 +14,12 @@ use dioxus_native::prelude::*;
 use dioxus_native::winit::dpi::{LogicalSize, Size};
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
+use crate::window::app::ROOT_ELEMENT_ID;
 use crate::window::input::f32_from_f64;
 
 use super::{
-    AnimationClock, carries_unresolved_change, resolve_before_hit_testing, window_attributes,
+    AnimationClock, carries_unresolved_change, focus_within, resolve_before_hit_testing,
+    restore_root_focus, window_attributes,
 };
 
 /// Contract: the window keeps the Tauri window's 400x200 logical floor, so a
@@ -63,25 +65,7 @@ fn rows_app() -> Element {
 /// A pointer press at `x`/`y` in the document's client coordinates, as the
 /// shell builds one from a winit pointer button.
 fn pointer_down(x: f32, y: f32) -> UiEvent {
-    let coords = PointerCoords {
-        page_x: x,
-        page_y: y,
-        screen_x: x,
-        screen_y: y,
-        client_x: x,
-        client_y: y,
-    };
-    UiEvent::PointerDown(BlitzPointerEvent {
-        id: BlitzPointerId::Mouse,
-        is_primary: true,
-        coords,
-        button: MouseEventButton::Main,
-        buttons: MouseEventButtons::Primary,
-        mods: Modifiers::default(),
-        details: PointerDetails::default(),
-        element: Point::default(),
-        active_pointers: Arc::default(),
-    })
+    pointer(BlitzPointerKind::Down, x, y, MouseEventButtons::Primary)
 }
 
 /// The clock a resolve passes in a window whose surfaces exist: the anchor
@@ -259,4 +243,152 @@ fn a_pre_hit_clock_ahead_of_the_frame_freezes_its_transition() {
     doc.inner.borrow_mut().resolve(FRAME_TIME);
 
     assert_eq!(bar_width(&doc, bar), BAR_WIDTH);
+}
+
+/// The window's root, as `window::app` paints it: the element that carries the
+/// window's one `keydown` handler, with a queue row as a `button` beside a text
+/// field.
+fn root_app() -> Element {
+    rsx! {
+        main {
+            id: "{ROOT_ELEMENT_ID}",
+            tabindex: 0,
+            onkeydown: move |_| {},
+            input { "data-field": "", r#type: "text" }
+            button { "type": "button", "data-row": "", "row" }
+        }
+    }
+}
+
+/// The root fixture, built and resolved, with the root element's node id.
+/// Nothing focused yet.
+fn root_document() -> (DioxusDocument, blitz_dom::NodeId) {
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(root_app),
+        DocumentConfig {
+            viewport: Some(Viewport::new(400, 300, 1.0, ColorScheme::Light)),
+            ua_stylesheets: vec![blitz_dom::UserAgentStylesheet::default_sheet()],
+            ..DocumentConfig::default()
+        },
+    );
+    doc.initial_build();
+    doc.inner.borrow_mut().resolve(0.0);
+    let root = doc
+        .inner()
+        .get_element_by_id(ROOT_ELEMENT_ID)
+        .expect("the root element carries the id");
+    (doc, root)
+}
+
+/// A node the selector names, in the root fixture.
+fn node_of(doc: &DioxusDocument, selector: &str) -> blitz_dom::NodeId {
+    doc.inner()
+        .query_selector(selector)
+        .expect("the selector is valid")
+        .unwrap_or_else(|| panic!("the fixture paints {selector}"))
+}
+
+/// The pointer event the shell builds for `x`/`y` in client coordinates, with
+/// the button `buttons` says is held.
+fn pointer(kind: BlitzPointerKind, x: f32, y: f32, buttons: MouseEventButtons) -> UiEvent {
+    let coords = PointerCoords {
+        page_x: x,
+        page_y: y,
+        screen_x: x,
+        screen_y: y,
+        client_x: x,
+        client_y: y,
+    };
+    let event = BlitzPointerEvent {
+        id: BlitzPointerId::Mouse,
+        is_primary: true,
+        coords,
+        button: MouseEventButton::Main,
+        buttons,
+        mods: Modifiers::default(),
+        details: PointerDetails::default(),
+        element: Point::default(),
+        active_pointers: Arc::default(),
+    };
+    match kind {
+        BlitzPointerKind::Move => UiEvent::PointerMove(event),
+        BlitzPointerKind::Down => UiEvent::PointerDown(event),
+        BlitzPointerKind::Up => UiEvent::PointerUp(event),
+    }
+}
+
+/// The pointer kind one step of a press-and-release carries.
+#[derive(Clone, Copy)]
+enum BlitzPointerKind {
+    Move,
+    Down,
+    Up,
+}
+
+/// One press and release on `node`, as the shell delivers a click.
+fn click(doc: &mut DioxusDocument, node: blitz_dom::NodeId) {
+    let rect = doc
+        .inner()
+        .get_client_bounding_rect(node)
+        .expect("the node is laid out");
+    let x = f32_from_f64(rect.x + rect.width / 2.0);
+    let y = f32_from_f64(rect.y + rect.height / 2.0);
+    doc.handle_ui_event(pointer(
+        BlitzPointerKind::Move,
+        x,
+        y,
+        MouseEventButtons::None,
+    ));
+    doc.handle_ui_event(pointer(
+        BlitzPointerKind::Down,
+        x,
+        y,
+        MouseEventButtons::Primary,
+    ));
+    doc.handle_ui_event(pointer(BlitzPointerKind::Up, x, y, MouseEventButtons::None));
+}
+
+/// Contract (D8): a click on a queue row does not cost the window its
+/// keyboard. Blitz clears the document's DOM focus on a click that matches no
+/// text input, checkbox, radio, summary, label or link (`handle_click`'s
+/// `if !matched { clear_focus() }`), and a row is a plain `button`; the shell
+/// then delivers a keydown to the document's `<html>` element, which carries no
+/// Dioxus id, so no key reaches the window's handler — every key in the window
+/// went dead after the first click on a row (live run of PR 1003). The launch
+/// copy gives the root the focus back, so the next keydown reaches it.
+#[test]
+fn a_click_that_blitz_clears_the_focus_of_leaves_the_window_root_focused() {
+    let (mut doc, root) = root_document();
+    doc.inner.borrow_mut().set_focus_to(root);
+    let row = node_of(&doc, "[data-row]");
+
+    click(&mut doc, row);
+
+    assert!(
+        !focus_within(&doc.inner(), root),
+        "a row click leaves the DOM focus outside the window's root, where no keydown reaches it"
+    );
+    restore_root_focus(&mut doc.inner.borrow_mut());
+    assert_eq!(
+        doc.inner().get_focussed_node_id(),
+        Some(root),
+        "the root takes the keyboard back"
+    );
+}
+
+/// Contract (D8): the restore fills an empty focus only. A text input that took
+/// the focus keeps it, so an open field still types.
+#[test]
+fn the_restore_keeps_the_focus_a_text_input_took() {
+    let (doc, _root) = root_document();
+    let field = node_of(&doc, "[data-field]");
+    doc.inner.borrow_mut().set_focus_to(field);
+
+    restore_root_focus(&mut doc.inner.borrow_mut());
+
+    assert_eq!(
+        doc.inner().get_focussed_node_id(),
+        Some(field),
+        "the field keeps the keyboard"
+    );
 }

@@ -212,6 +212,19 @@ fn note_ui_reset(
 }
 
 /// The window's root (D6).
+/// The id the window's root element carries (`main`, D8).
+///
+/// The shell delivers a keydown to the document's focused node, and this
+/// window's one `keydown` handler lives on the root: a key with nothing
+/// focused falls back to the document's `<html>` element, which carries no
+/// Dioxus id, so the event reaches no handler. Blitz clears the DOM focus on
+/// a click that matches no text input, checkbox, radio, summary, label or
+/// link (blitz-dom's `handle_click`: `if !matched { clear_focus() }`) — every
+/// queue row is such a click — and it drops the focus with a removed node
+/// (a closed search field). The launch copy finds the root by this id and
+/// gives the keyboard back (`window::launch::restore_root_focus`).
+pub(crate) const ROOT_ELEMENT_ID: &str = "mbv-root";
+
 #[component]
 pub fn App() -> Element {
     let window = use_window();
@@ -400,6 +413,7 @@ pub fn App() -> Element {
         {root_style_element()}
         ThemeStyle {}
         main {
+            id: "{ROOT_ELEMENT_ID}",
             class: "h-dvh w-full overflow-hidden bg-background text-foreground",
             tabindex: 0,
             onmounted: move |event| root_mounted.set(Some(event)),

@@ -224,6 +224,17 @@ resolves to nothing. The leaf adapters (`src/leaves.rs`: `QueueLeaf`,
 fields and emit the same semantic `Msg`s the TUI components' pointer paths
 emit.
 
+Every key rests on one DOM fact: the document's focus sits on the root
+`main`, which carries the window's only `keydown` handler (`ROOT_ELEMENT_ID`
+in `src/window/app.rs`). Blitz clears the DOM focus after a click that
+matches no text input, checkbox, radio, summary, label or link — every queue
+row is a `button` and every panel is a `div` — and it drops the focus when
+the focused node is removed, so the launch copy gives the root the focus
+back after each window event (`restore_root_focus` in
+`src/window/launch.rs`, invariant 33). Without that repair the shell delivers
+every keydown to the document's `<html>` element, which carries no Dioxus
+id, and no key of the window works at all.
+
 ## Layout reports and the hit map
 
 `src/window/layout.rs` is the single layout registry. Every mounted

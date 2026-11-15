@@ -40,6 +40,7 @@ use dioxus_native::{
 };
 
 use crate::core_thread::CoreInput;
+use crate::window::app::ROOT_ELEMENT_ID;
 use crate::window::channel::{CoreLink, EventSlot, WindowEvent, WindowEventSender};
 use crate::window::clock::Clock;
 use crate::window::layout::{
@@ -386,6 +387,10 @@ impl ApplicationHandler for MbvApplication {
         // The source's `event_handlers.apply_event` would run here; this copy
         // holds no handlers (see the struct's note).
         self.inner.window_event(event_loop, window_id, event);
+        // `This crate:` D8. A click Blitz clears the DOM focus of, and the
+        // removal of a focused node, would otherwise leave the window with no
+        // keyboard at all (see [`restore_root_focus`]).
+        restore_root_focus(&mut self.document.borrow_mut());
         if viewport {
             self.apply_viewport(window_id);
         }
@@ -422,6 +427,45 @@ impl ApplicationHandler for MbvApplication {
             }
         }
     }
+}
+
+/// Give the root element the DOM focus back when it sits outside the window's
+/// tree ([`ROOT_ELEMENT_ID`], D8).
+///
+/// The shell delivers a keydown to the document's focused node, and the
+/// window's one `keydown` handler lives on the root. Blitz clears the focus
+/// after a click that matches no text input, checkbox, radio, summary, label
+/// or link (blitz-dom's `handle_click`'s `if !matched { clear_focus() }`) —
+/// a press on a queue row is such a click — and the focus then lands on the
+/// document's `<html>` element, which carries no Dioxus id: the keydown
+/// reaches no handler and every key in the window is dead from the first row
+/// click on (live run of `replace-tauri-with-blitz`). A focused node the
+/// click removed (a closed search field) leaves the focus the same way. A
+/// node inside the root — a text input a click landed on, a field a shortcut
+/// armed — keeps the focus, so only the outside ones are answered here.
+fn restore_root_focus(document: &mut BaseDocument) {
+    let Some(root) = document.get_element_by_id(ROOT_ELEMENT_ID) else {
+        return;
+    };
+    if focus_within(document, root) {
+        return;
+    }
+    document.set_focus_to(root);
+}
+
+/// Whether the document's focus sits inside `root`, the window's own tree: the
+/// focused node or one of its ancestors is `root`. Focus on the document's
+/// `<html>` (`NodeId` 2 in a document built by `blitz-dom`) is not inside it,
+/// and neither is no focus at all.
+fn focus_within(document: &BaseDocument, root: blitz_dom::NodeId) -> bool {
+    let mut candidate = document.get_focussed_node_id();
+    while let Some(node) = candidate {
+        if node == root {
+            return true;
+        }
+        candidate = document.get_node(node).and_then(|node| node.parent);
+    }
+    false
 }
 
 impl MbvApplication {
