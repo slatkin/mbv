@@ -66,6 +66,16 @@ pub fn fmt_publish_date_short(secs: u64) -> String {
     format!("{} {month}", date.day())
 }
 
+/// The one row-date helper: a provider timestamp as the short gutter date
+/// ([`fmt_publish_date_short`]), or `None` when there is no timestamp or the
+/// value cannot be formatted — a list that has no date to paint reserves no
+/// gutter, and no list has to repeat the empty-string filter.
+#[must_use]
+pub fn row_date(secs: Option<u64>) -> Option<String> {
+    secs.map(fmt_publish_date_short)
+        .filter(|date| !date.is_empty())
+}
+
 /// The subtitle modes in the order [`next_subtitle_mode`] steps through them
 /// (`add-gui-settings-screen` design D13). The TUI's cycle and the GUI's pick
 /// both read this list, so the two Clients cannot disagree on a mode's order

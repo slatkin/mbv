@@ -2,6 +2,7 @@
 //! (extract-client-core row 4.3): the assertions are unchanged from their
 //! `mbv-components` home.
 
+use mbv_queue::FeedEntry;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::media_list::{
     ActiveProgress, MediaKind, MediaListRow, zebra_group_member_striped, zebra_group_start,
@@ -9,9 +10,9 @@ use mbv_ui_model::media_list::{
 };
 use rstest::rstest;
 
-/// The one canonical state derivation every list uses: `played` wins, a
-/// positive resume position yields `Active` with the bounded percentage (no
-/// percentage when the runtime is unknown), and no position is `Ordinary`.
+/// The one canonical state derivation every list uses: a position Play would
+/// resume from wins over played, a position below the one-percent gate does
+/// not, and no position is `Ordinary`.
 #[test]
 fn from_progress_is_the_one_state_derivation() {
     assert_eq!(
@@ -41,6 +42,125 @@ fn from_progress_is_the_one_state_derivation() {
         MediaSemanticState::from_progress(false, 0, 100),
         MediaSemanticState::Ordinary
     );
+}
+
+/// The row rule every list shares (spec `playback-resume`, #1005): a row is
+/// `Active` exactly when Play would resume the item, so each provider's
+/// constructor feeds the one-percent gate and owns its own exception. Only
+/// outcome-distinct cases belong here: the percentage itself is
+/// `ActiveProgress::of_ticks`' contract.
+#[rstest]
+#[case::emby_played_resumable(
+    "an Emby row Play would resume shows resume state even when played",
+    emby_row,
+    true,
+    500,
+    1_000,
+    MediaSemanticState::Active {
+        progress: Some(ActiveProgress::new(50)),
+    }
+)]
+#[case::emby_played_below_gate(
+    "an Emby row below the gate is not resumed, so it shows played state",
+    emby_row,
+    true,
+    5,
+    1_000,
+    MediaSemanticState::Played
+)]
+#[case::unknown_runtime(
+    "a positive position with unknown runtime resumes without a percentage",
+    emby_row,
+    false,
+    500,
+    0,
+    MediaSemanticState::Active { progress: None }
+)]
+#[case::audiobookshelf_finished(
+    "a finished Audiobookshelf row shows played state, because Play restarts it",
+    audiobookshelf_row,
+    true,
+    500,
+    1_000,
+    MediaSemanticState::Played
+)]
+#[case::audiobookshelf_unfinished(
+    "an unfinished Audiobookshelf row above the gate shows resume state",
+    audiobookshelf_row,
+    false,
+    500,
+    1_000,
+    MediaSemanticState::Active {
+        progress: Some(ActiveProgress::new(50)),
+    }
+)]
+#[case::feed_entry_played_resumable(
+    "a played feed entry keeps its local position, so it shows resume state",
+    feed_row,
+    true,
+    500,
+    1_000,
+    MediaSemanticState::Active {
+        progress: Some(ActiveProgress::new(50)),
+    }
+)]
+#[case::unplayed_below_gate(
+    "an unplayed row below the gate shows neither state",
+    feed_row,
+    false,
+    5,
+    1_000,
+    MediaSemanticState::Ordinary
+)]
+fn a_row_is_active_exactly_when_play_would_resume(
+    #[case] contract: &str,
+    #[case] row: fn(bool, i64, i64) -> MediaSemanticState,
+    #[case] flag: bool,
+    #[case] position_ticks: i64,
+    #[case] runtime_ticks: i64,
+    #[case] expected: MediaSemanticState,
+) {
+    assert_eq!(
+        row(flag, position_ticks, runtime_ticks),
+        expected,
+        "{contract}"
+    );
+}
+
+/// An Emby movie row that carries the given played flag and saved position.
+fn emby_row(played: bool, position_ticks: i64, runtime_ticks: i64) -> MediaSemanticState {
+    let mut item = mbv_emby_model::test_support::make_item("The Film", "Movie");
+    item.played = played;
+    item.playback_position_ticks = position_ticks;
+    item.runtime_ticks = runtime_ticks;
+    MediaSemanticState::from_emby(&item)
+}
+
+/// An Audiobookshelf episode row: its `finished` fact is the first argument.
+fn audiobookshelf_row(
+    finished: bool,
+    position_ticks: i64,
+    duration_ticks: i64,
+) -> MediaSemanticState {
+    MediaSemanticState::from_audiobookshelf(finished, position_ticks, duration_ticks)
+}
+
+/// A feed entry row: its `played` fact is the first argument.
+fn feed_row(played: bool, position_ticks: i64, duration_ticks: i64) -> MediaSemanticState {
+    let entry = FeedEntry {
+        guid: "entry".to_owned(),
+        title: "Entry".to_owned(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: u64::try_from(duration_ticks).ok(),
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks,
+        played,
+    };
+    MediaSemanticState::from_feed_entry(&entry)
 }
 
 /// The one progress constructor: `ActiveProgress::of_ticks` floors the played

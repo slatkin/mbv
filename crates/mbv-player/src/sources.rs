@@ -2,7 +2,7 @@ use super::{
     AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
     mpv_title_opt, mpv_url_for_queue_item,
 };
-use crate::resume::{ResumeSource, resume_source, resume_start_pos};
+use crate::resume::{ResumeSource, resume_source, resume_start_pos, session_start_seconds};
 use mbv_audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
@@ -244,10 +244,12 @@ fn prepare_episode_source(
         false,
         AudiobookshelfClient::REQUEST_HARD_BOUND,
     )?;
+    let start_seconds =
+        session_start_seconds(session.current_time_seconds, session.duration_seconds);
     let mut prepared = PreparedSource {
         url: session.source.url,
         mpv_options: Vec::new(),
-        start_seconds: session.current_time_seconds,
+        start_seconds,
         book_extra_sources: Vec::new(),
         merged_timeline: false,
         lifecycle: Some(PreparedLifecycle::Episode(
@@ -258,7 +260,7 @@ fn prepare_episode_source(
                 session.id,
                 episode.library_item_id.clone(),
                 Some(episode.episode_id.clone()),
-                session.current_time_seconds,
+                start_seconds,
                 session.duration_seconds,
                 context.progress_updates.clone(),
             ),
@@ -303,10 +305,12 @@ fn prepare_book_source(
         .next()
         .ok_or_else(|| AudiobookshelfError::from_class(AudiobookshelfFailureClass::Protocol))?;
     let first_method = first.method;
+    let start_seconds =
+        session_start_seconds(session.current_time_seconds, session.duration_seconds);
     let mut prepared = PreparedSource {
         url: first.url,
         mpv_options: Vec::new(),
-        start_seconds: session.current_time_seconds,
+        start_seconds,
         book_extra_sources: sources,
         merged_timeline: true,
         lifecycle: Some(PreparedLifecycle::Book(
@@ -317,7 +321,7 @@ fn prepare_book_source(
                 session.id,
                 book.library_item_id.clone(),
                 None,
-                session.current_time_seconds,
+                start_seconds,
                 session.duration_seconds,
                 context.book_progress_updates.clone(),
             ),

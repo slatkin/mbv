@@ -1,5 +1,6 @@
 use super::*;
-use crate::resume::{resume_source, resume_start_pos};
+use crate::resume::{resume_source, resume_start_pos, session_start_seconds};
+use rstest::rstest;
 
 #[test]
 fn abs_natural_eof_uses_runtime_without_changing_generic_audio_reporting() {
@@ -159,6 +160,21 @@ fn queue_slot_activation_preserves_saved_position() {
     session.load_active_item_state();
 
     assert_eq!(session.last_valid_pos, position_ticks);
+}
+
+/// Spec playback-resume (#1005): an opened Audiobookshelf session follows the
+/// same one-percent gate as every other Resume source.
+#[rstest]
+#[case::below_gate(30.0, 10_000.0, 0.0)]
+#[case::at_gate(100.0, 10_000.0, 100.0)]
+#[case::unknown_duration(30.0, 0.0, 30.0)]
+fn audiobookshelf_session_start_uses_resume_gate(
+    #[case] position_seconds: f64,
+    #[case] duration_seconds: f64,
+    #[case] expected: f64,
+) {
+    let actual = session_start_seconds(position_seconds, duration_seconds);
+    assert!((actual - expected).abs() < f64::EPSILON);
 }
 
 #[test]

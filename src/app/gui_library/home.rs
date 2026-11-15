@@ -15,7 +15,7 @@ use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestam
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_model::targets::HomeItemTarget;
-use mbv_ui_model::ui_util::fmt_publish_date_short;
+use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
 use crate::app::App;
@@ -53,41 +53,6 @@ impl GuiHomeRowId {
     }
 }
 
-/// One item row's state, the shared media-list semantic state's Home arms
-/// (`MediaSemanticState::from_queue_item`): a resume position is `Active`
-/// with the bounded percentage (no percentage when the runtime is unknown),
-/// `played` without a position is `Played`, otherwise the row is `Ordinary`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GuiHomeRowState {
-    Ordinary,
-    Played,
-    Active { progress: Option<u8> },
-}
-
-impl GuiHomeRowState {
-    /// The row state from a provider's play-progress facts, the shared arm
-    /// every pill-scoped entry list's row builder applies (rows 10.1, 11.1):
-    /// a finished entry is `Played`, an entry with a resume position is
-    /// `Active` with the bounded resume percent — `None` when the duration is
-    /// unknown, which is still `Active` — and every other entry is `Ordinary`.
-    /// The percent rides separately from the resume-position fact because a
-    /// position without a known duration has no percent to name.
-    #[must_use]
-    pub(in crate::app::gui_library) fn from_progress(
-        played: bool,
-        in_progress: bool,
-        percent: Option<u8>,
-    ) -> Self {
-        if played {
-            return Self::Played;
-        }
-        if in_progress {
-            return Self::Active { progress: percent };
-        }
-        Self::Ordinary
-    }
-}
-
 /// One item row's kind: `Collection` when the row targets a container — a
 /// folder-shaped Home item the play path refuses — and `Media` when it
 /// targets a playable leaf, which is every other row.
@@ -122,9 +87,10 @@ pub struct GuiHomeItemRow {
     pub date: Option<String>,
     /// The row's kind.
     pub kind: GuiHomeRowKind,
-    /// The row's state: the media-list semantic state's Home arms, which
-    /// carry the Continue Watching resume progress.
-    pub state: GuiHomeRowState,
+    /// The row's state: the shared media-list semantic state the queue-item
+    /// constructor derives, which carries the Continue Watching resume
+    /// progress.
+    pub state: MediaSemanticState,
     /// The row's artwork, display-encoded for Emby items only: the
     /// Audiobookshelf and Feed rows paint without art in Phase 2 (the
     /// USER-APPROVED Home design). A `Some` carries the cached art, the
@@ -274,7 +240,7 @@ impl App {
                 continue;
             }
             let id = GuiHomeRowId::Recent(item.content_id());
-            let date = provider_timestamp_secs(item).map(fmt_publish_date_short);
+            let date = row_date(provider_timestamp_secs(item));
             recent_rows.push(self.home_item(item, id, feed_name.as_deref(), date));
         }
 
@@ -335,7 +301,7 @@ impl App {
             None => (parts.title.text.clone(), None),
         };
         let kind = home_item_kind(item);
-        let state = home_item_state(item);
+        let state = MediaSemanticState::from_queue_item(item);
         let art = match item {
             // Emby rows fetch their card art through the image cache; the
             // other providers paint without art in Phase 2.
@@ -396,31 +362,6 @@ fn home_item_kind(item: &QueueItem) -> GuiHomeRowKind {
         GuiHomeRowKind::Collection
     } else {
         GuiHomeRowKind::Media
-    }
-}
-
-/// The item row's state, the media-list semantic state's Home arms: a resume
-/// position is `Active` with its bounded percentage, `played` without one is
-/// `Played`, and an undated music row is `Ordinary` per that state's rule.
-/// Shared with the Shows rows' states (design D12), which read the same
-/// media-list vocabulary.
-pub(in crate::app::gui_library) fn home_item_state(item: &QueueItem) -> GuiHomeRowState {
-    media_row_state(&MediaSemanticState::from_queue_item(item))
-}
-
-/// One media-list semantic state's row-state arm, mapped onto the shared
-/// row-state vocabulary. `from_queue_item` derives `Active`, `Played`, and
-/// `Ordinary` only; the `NowPlaying` arm stays exhaustive for the shared
-/// vocabulary.
-pub(in crate::app::gui_library) fn media_row_state(state: &MediaSemanticState) -> GuiHomeRowState {
-    match state {
-        MediaSemanticState::Active { progress } | MediaSemanticState::NowPlaying { progress } => {
-            GuiHomeRowState::Active {
-                progress: progress.map(mbv_ui_model::media_list::ActiveProgress::percent),
-            }
-        }
-        MediaSemanticState::Played => GuiHomeRowState::Played,
-        MediaSemanticState::Ordinary => GuiHomeRowState::Ordinary,
     }
 }
 

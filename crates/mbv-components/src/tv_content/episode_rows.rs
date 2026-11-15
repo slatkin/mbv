@@ -1,10 +1,11 @@
 use super::{
     Date, EmbyItem, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, Pane,
     QueueItem, ShellRequest, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
-    fmt_publish_date_short,
+    row_date,
 };
 use crate::now_playing::apply_emby_now_playing;
 use mbv_render::effective_sort_str;
+use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::ui_util::natural_sort_key;
 
 pub fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
@@ -44,10 +45,7 @@ pub fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<Stri
                 Some(context) => (context.text, Some(parts.title.text)),
                 None => (parts.title.text, None),
             };
-            let trailing = mbv_ui_model::home_latest::provider_timestamp_secs(&item)
-                .map(fmt_publish_date_short)
-                .filter(|date| !date.is_empty())
-                .map(MediaListTrailing::Gutter);
+            let trailing = row_date(provider_timestamp_secs(&item)).map(MediaListTrailing::Gutter);
             MediaListRow::Item {
                 target: episode.id.clone(),
                 primary,
