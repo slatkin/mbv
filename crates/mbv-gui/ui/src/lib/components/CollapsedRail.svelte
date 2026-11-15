@@ -16,28 +16,15 @@
 	import ArtImage from './ArtImage.svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
 	import { QUEUE_RAIL_WIDTH_PX } from '$lib/bridge/arrangement';
-	import {
-		elementRegion,
-		observeLayout,
-		reportLayout
-	} from '$lib/bridge/layout';
+	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
 	import { playhead } from '$lib/bridge/playhead';
 	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
-	import type {
-		GuiArtRef,
-		LayoutRegion,
-		QueuePlaybackTargetId
-	} from '$lib/bridge/types';
+	import type { GuiArtRef, LayoutRegion, QueuePlaybackTargetId } from '$lib/bridge/types';
 
 	/** The playhead's stores (design D5): the ring paints the predicted
 	 * played fraction, and the remaining time is the prediction's. */
-	const {
-		anchor: playheadAnchor,
-		runtime: runtimeTicks,
-		fraction,
-		remaining
-	} = playhead;
+	const { anchor: playheadAnchor, runtime: runtimeTicks, fraction, remaining } = playhead;
 
 	interface Props {
 		/** The artwork the window carries for the active item (design D10):
@@ -81,10 +68,8 @@
 
 	/** One element's painted region for a QueuePlayback target, `null` while
 	 * the element is absent. */
-	const region = (
-		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId
-	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
+	const region = (el: HTMLElement | undefined, id: QueuePlaybackTargetId): LayoutRegion | null =>
+		elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The painted regions (design D4): the transport's two controls, the
 	 * artwork slot, and the expand control. */

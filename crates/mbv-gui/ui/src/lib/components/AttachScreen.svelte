@@ -18,11 +18,7 @@
 	// reports, and the core resolves a press or chord.
 	import { onMount } from 'svelte';
 	import { LoaderCircle, RotateCcw, X } from '@lucide/svelte';
-	import {
-		elementRegion,
-		observeLayout,
-		reportLayout
-	} from '$lib/bridge/layout';
+	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
 	import { attach as attachSection } from '$lib/bridge/sections';
 	import { roleVar } from '$lib/bridge/theme';
 	import type { AttachTargetId, LayoutRegion } from '$lib/bridge/types';
@@ -76,11 +72,7 @@
 	{#if attach === null || attach.kind === 'waiting'}
 		<!-- The wait before the first frame and the wait for a shutting-down
 			Owner read the same: the core is still working toward the attach. -->
-		<LoaderCircle
-			size={20}
-			class="animate-spin"
-			color={roleVar('textMuted')}
-		/>
+		<LoaderCircle size={20} class="animate-spin" color={roleVar('textMuted')} />
 		<span class="text-sm font-medium" style:color={roleVar('textSecondary')}
 			>Attaching to the Owner process…</span
 		>
@@ -106,10 +98,7 @@
 				>
 					<RotateCcw size={14} color={roleVar('accent')} />
 					Restart
-					<span
-						class="font-mono text-xs tabular-nums"
-						style:color={roleVar('textMuted')}>[R]</span
-					>
+					<span class="font-mono text-xs tabular-nums" style:color={roleVar('textMuted')}>[R]</span>
 				</button>
 				<button
 					type="button"
@@ -122,10 +111,7 @@
 				>
 					<X size={14} color={roleVar('statusError')} />
 					Quit
-					<span
-						class="font-mono text-xs tabular-nums"
-						style:color={roleVar('textMuted')}>[Q]</span
-					>
+					<span class="font-mono text-xs tabular-nums" style:color={roleVar('textMuted')}>[Q]</span>
 				</button>
 			</div>
 		{/if}

@@ -89,65 +89,65 @@
 <svelte:window onpointerdown={hideSettingsCursor} />
 
 {#if settings !== null}
-<div
-	class="flex h-full min-h-0 min-w-0 flex-1 flex-col"
-	style:background="var(--canvas-library-column)"
-	data-settings-screen=""
-	data-settings-arrangement={arrangement}
->
-	<div class="flex min-h-0 flex-1">
-		{#if !mini || pane === 'sidebar'}
-			<div
-				class="flex h-full min-h-0 flex-col {mini ? 'min-w-0 flex-1' : 'flex-none'}"
-				style:width={mini ? undefined : `${SETTINGS_SIDEBAR_WIDTH_PX}px`}
-				data-settings-sidebar-pane=""
-			>
-				<SettingsSidebar {settings} />
-			</div>
-		{/if}
-		{#if !mini || pane === 'content'}
-			<div
-				bind:this={contentEl}
-				class="h-full min-h-0 min-w-0 flex-1 overflow-y-auto"
-				style:box-sizing="border-box"
-				style:padding="32px 48px"
-				style:background="var(--canvas-library-column)"
-				data-settings-content=""
-			>
-				<div class="flex flex-col" style:max-width="1120px" style:gap="24px">
-					<h1
-						style:margin="0"
-						style:font-size="24px"
-						style:font-weight="600"
-						style:color="var(--canvas-heading)"
-						data-settings-content-title=""
-					>
-						{LABELS[settings.section]}
-					</h1>
-					{#if settings.content.kind === 'rows'}
-						<SettingsRows
-							rows={settings.content.rows}
-							{entries}
-							{cursorId}
-							label={LABELS[settings.section]}
-						/>
-					{:else if settings.content.kind === 'library'}
-						<SettingsLibrary content={settings.content} {entries} {cursorId} />
-					{:else if settings.content.kind === 'services'}
-						<SettingsServices content={settings.content} {entries} {cursorId} />
-					{:else if settings.content.kind === 'feeds'}
-						<SettingsFeeds content={settings.content} {entries} {cursorId} />
-					{:else if settings.content.kind === 'keys'}
-						<SettingsKeys content={settings.content} {entries} {cursorId} />
-					{:else if settings.content.kind === 'sessions'}
-						<SettingsSessions content={settings.content} {entries} {cursorId} />
-					{:else if settings.content.kind === 'playlists'}
-						<SettingsPlaylists content={settings.content} {entries} {cursorId} />
-					{/if}
+	<div
+		class="flex h-full min-h-0 min-w-0 flex-1 flex-col"
+		style:background="var(--canvas-library-column)"
+		data-settings-screen=""
+		data-settings-arrangement={arrangement}
+	>
+		<div class="flex min-h-0 flex-1">
+			{#if !mini || pane === 'sidebar'}
+				<div
+					class="flex h-full min-h-0 flex-col {mini ? 'min-w-0 flex-1' : 'flex-none'}"
+					style:width={mini ? undefined : `${SETTINGS_SIDEBAR_WIDTH_PX}px`}
+					data-settings-sidebar-pane=""
+				>
+					<SettingsSidebar {settings} />
 				</div>
-			</div>
-		{/if}
+			{/if}
+			{#if !mini || pane === 'content'}
+				<div
+					bind:this={contentEl}
+					class="h-full min-h-0 min-w-0 flex-1 overflow-y-auto"
+					style:box-sizing="border-box"
+					style:padding="32px 48px"
+					style:background="var(--canvas-library-column)"
+					data-settings-content=""
+				>
+					<div class="flex flex-col" style:max-width="1120px" style:gap="24px">
+						<h1
+							style:margin="0"
+							style:font-size="24px"
+							style:font-weight="600"
+							style:color="var(--canvas-heading)"
+							data-settings-content-title=""
+						>
+							{LABELS[settings.section]}
+						</h1>
+						{#if settings.content.kind === 'rows'}
+							<SettingsRows
+								rows={settings.content.rows}
+								{entries}
+								{cursorId}
+								label={LABELS[settings.section]}
+							/>
+						{:else if settings.content.kind === 'library'}
+							<SettingsLibrary content={settings.content} {entries} {cursorId} />
+						{:else if settings.content.kind === 'services'}
+							<SettingsServices content={settings.content} {entries} {cursorId} />
+						{:else if settings.content.kind === 'feeds'}
+							<SettingsFeeds content={settings.content} {entries} {cursorId} />
+						{:else if settings.content.kind === 'keys'}
+							<SettingsKeys content={settings.content} {entries} {cursorId} />
+						{:else if settings.content.kind === 'sessions'}
+							<SettingsSessions content={settings.content} {entries} {cursorId} />
+						{:else if settings.content.kind === 'playlists'}
+							<SettingsPlaylists content={settings.content} {entries} {cursorId} />
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
+		<SettingsStatusBar {status} section={LABELS[settings.section]} />
 	</div>
-	<SettingsStatusBar {status} section={LABELS[settings.section]} />
-</div>
 {/if}

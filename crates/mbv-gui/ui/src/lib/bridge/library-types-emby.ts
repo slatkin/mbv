@@ -7,9 +7,7 @@ import type { GuiArtRef, GuiMetaRow } from './library-types';
  * destination Latest view), `All`, or one root folder by its stable Service
  * id. */
 export type GuiEmbyFeedGroup =
-	| { kind: 'latest' }
-	| { kind: 'all' }
-	| { kind: 'folder'; id: string };
+	{ kind: 'latest' } | { kind: 'all' } | { kind: 'folder'; id: string };
 
 /** The plain Emby-library destination's list part (design D12, row 8.1, D8):
  * the feed-group pills, and the active list's rows and load facts. */

@@ -5,6 +5,4 @@
 // through `ArtImage.svelte`, the one art painter.
 
 export type GuiArtRef =
-	| { kind: 'image'; src: string }
-	| { kind: 'placeholder'; src: string }
-	| { kind: 'loading' };
+	{ kind: 'image'; src: string } | { kind: 'placeholder'; src: string } | { kind: 'loading' };

@@ -46,9 +46,7 @@ function daemonLost(
 /** The region targets of the last merged layout report. */
 function lastReportedTargets(): unknown[] {
 	const calls = invokeMock.mock.calls.filter((entry) => entry[0] === 'report_layout');
-	const report = calls.at(-1)?.[1] as
-		| { report: { regions: { target: unknown }[] } }
-		| undefined;
+	const report = calls.at(-1)?.[1] as { report: { regions: { target: unknown }[] } } | undefined;
 	return report?.report.regions.map((entry) => entry.target) ?? [];
 }
 

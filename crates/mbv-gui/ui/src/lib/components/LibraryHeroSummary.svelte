@@ -64,25 +64,18 @@
 	<!-- The artwork arm every Hero shares (design D15): the 300 px box for a
 	portrait or square cover, and the TUI's full-width 16:9 still for a
 	landscape one. -->
-	<LibraryHeroArt
-		shape={hero.artShape}
-		art={hero.art ?? null}
-		title={hero.title}
-		{attr}
-	/>
-	<div
-		class="flex min-w-0 flex-1 flex-col"
-		style:gap="14px"
-		style:padding-top={band ? '0' : '8px'}
-	>
+	<LibraryHeroArt shape={hero.artShape} art={hero.art ?? null} title={hero.title} {attr} />
+	<div class="flex min-w-0 flex-1 flex-col" style:gap="14px" style:padding-top={band ? '0' : '8px'}>
 		<h2
 			style:margin="0"
 			style:font-size="26px"
 			style:font-weight="600"
 			style:letter-spacing="-0.01em"
 			style:color="var(--canvas-heading)"
-			{...own('title')}>{hero.title}</h2
+			{...own('title')}
 		>
+			{hero.title}
+		</h2>
 		<div class="flex flex-col" style:gap="4px">
 			{#each hero.metaRows as meta, index (index)}
 				{#if index === hero.durationRow}
@@ -121,8 +114,10 @@
 				style:font-size="14px"
 				style:line-height="1.5"
 				style:color="var(--canvas-muted)"
-				{...own('overview')}>{hero.overview}</p
+				{...own('overview')}
 			>
+				{hero.overview}
+			</p>
 		{/if}
 	</div>
 </section>

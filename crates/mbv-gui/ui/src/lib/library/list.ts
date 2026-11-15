@@ -44,7 +44,7 @@ export type LibraryRow =
 			 * the Service does not resolve. */
 			itemId: string | null;
 			open: boolean;
-		})
+	  })
 	| (RowBase & {
 			kind: 'album';
 			albumId: string;
@@ -55,7 +55,7 @@ export type LibraryRow =
 			/** Whether the carried content holds the album's tracklist: an album
 			 * without one asks the core to load it when it opens (design D5). */
 			tracksLoaded: boolean;
-		})
+	  })
 	| (RowBase & {
 			kind: 'track';
 			/** The album the track belongs to: a picked track picks its album
@@ -67,7 +67,7 @@ export type LibraryRow =
 			number: number;
 			/** The runtime, `M:SS` or `H:MM:SS`; empty when unknown. */
 			duration: string;
-		});
+	  });
 
 /** The fields the scroll and window geometry read (add-gui-library-panel
  * design D7, D12): the stable id, the top edge from the list's first row, and
@@ -144,16 +144,12 @@ export function buildLibraryRows(tree: LibraryTree): LibraryRow[] {
 	const narrowing = needle !== '';
 	/** Whether a name contains the filter's text; an empty filter matches
 	 * every name. */
-	const matches = (name: string): boolean =>
-		!narrowing || name.toLowerCase().includes(needle);
+	const matches = (name: string): boolean => !narrowing || name.toLowerCase().includes(needle);
 	const rows: LibraryRow[] = [];
 	let top = 0;
 	let heading: string | null = null;
 
-	function push<Row extends Omit<LibraryRow, 'top' | 'height'>>(
-		row: Row,
-		height: number,
-	): void {
+	function push<Row extends Omit<LibraryRow, 'top' | 'height'>>(row: Row, height: number): void {
 		rows.push({ ...row, top, height } as LibraryRow);
 		top += height;
 	}

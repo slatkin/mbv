@@ -6,7 +6,14 @@
 
 import { expect, test } from 'vitest';
 import type { GuiHomeRow } from '$lib/bridge/types';
-import { buildHomeRows, homeRowKey, HOME_ITEM_ROW_HEIGHT, moveHomeCursor, HOME_HEADING_ROW_HEIGHT, HOME_SPACER_ROW_HEIGHT } from './home-list';
+import {
+	buildHomeRows,
+	homeRowKey,
+	HOME_ITEM_ROW_HEIGHT,
+	moveHomeCursor,
+	HOME_HEADING_ROW_HEIGHT,
+	HOME_SPACER_ROW_HEIGHT,
+} from './home-list';
 import { listWindow } from './list';
 
 /** The `Continue watching` row the fixture carries: an Emby item with its

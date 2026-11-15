@@ -11,12 +11,7 @@ import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
 import { libraryDetail } from '$lib/bridge/sections';
 import { sendLibraryCommand } from '$lib/bridge/library';
-import type {
-	GuiLibraryList,
-	GuiMusicDetail,
-	GuiMusicList,
-	GuiMusicPill,
-} from '$lib/bridge/types';
+import type { GuiLibraryList, GuiMusicDetail, GuiMusicList, GuiMusicPill } from '$lib/bridge/types';
 import {
 	activeLibraryDestination,
 	libraryEmbyList,
@@ -607,11 +602,7 @@ function withHeroPane(ui: LibraryUiState): LibraryUiState {
 export function moveLibraryTrackCursor(move: ListMove): void {
 	libraryUi.update((ui) => {
 		const tracks = heroTracks(libraryMusicDetail()?.hero ?? null);
-		const cursor = moveTrackCursor(
-			tracks,
-			resolveTrackCursor(tracks, ui.trackCursor),
-			move,
-		);
+		const cursor = moveTrackCursor(tracks, resolveTrackCursor(tracks, ui.trackCursor), move);
 		return cursor === ui.trackCursor ? ui : { ...ui, trackCursor: cursor };
 	});
 }
@@ -625,10 +616,7 @@ export function moveLibraryTrackCursor(move: ListMove): void {
 export function focusedItemId(): string | null {
 	const ui = get(libraryUi);
 	if (ui.pane === 'hero') {
-		return resolveTrackCursor(
-			heroTracks(libraryMusicDetail()?.hero ?? null),
-			ui.trackCursor,
-		);
+		return resolveTrackCursor(heroTracks(libraryMusicDetail()?.hero ?? null), ui.trackCursor);
 	}
 	if (ui.pane === 'list') {
 		const row = cursorRow(ui);
@@ -641,9 +629,7 @@ export function focusedItemId(): string | null {
  * from the Library column, and the keys read it to close the Narrow Hero
  * overlay only where one paints. */
 export function reportLibraryArrangement(arrangement: GuiArrangement): void {
-	libraryUi.update((ui) =>
-		ui.arrangement === arrangement ? ui : { ...ui, arrangement },
-	);
+	libraryUi.update((ui) => (ui.arrangement === arrangement ? ui : { ...ui, arrangement }));
 }
 
 /** Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
@@ -652,11 +638,7 @@ export function reportLibraryArrangement(arrangement: GuiArrangement): void {
  * Shows Hero, or a plain Emby library's Hero (design D12), whichever
  * destination is active. Esc and a press on the backdrop close it. */
 export function heroOverlayOpen(ui: LibraryUiState): boolean {
-	return (
-		ui.arrangement === 'narrow' &&
-		!ui.heroDismissed &&
-		libraryDetailHasHero()
-	);
+	return ui.arrangement === 'narrow' && !ui.heroDismissed && libraryDetailHasHero();
 }
 
 /** Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
@@ -675,9 +657,7 @@ export function closeLibraryHero(): void {
 /** Open the picked item's menu (design D8): More actions paints the entries the
  * frame carries. */
 export function openLibraryItemMenu(): void {
-	libraryUi.update((ui) =>
-		ui.itemMenuOpen ? ui : { ...ui, itemMenuOpen: true, rowMenu: null },
-	);
+	libraryUi.update((ui) => (ui.itemMenuOpen ? ui : { ...ui, itemMenuOpen: true, rowMenu: null }));
 }
 
 /** Close the picked item's menu (design D8): a chosen entry closes it, and so

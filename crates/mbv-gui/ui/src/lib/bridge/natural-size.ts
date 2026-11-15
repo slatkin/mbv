@@ -19,7 +19,7 @@ export interface NaturalSizeBounds {
  * instead of holding a fixed box around it. */
 export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | undefined> = (
 	img,
-	bounds
+	bounds,
 ) => {
 	const cap = () => {
 		if (img.naturalWidth === 0 || img.naturalHeight === 0) {
@@ -40,6 +40,6 @@ export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | unde
 		destroy() {
 			img.removeEventListener('load', cap);
 			window.removeEventListener('resize', cap);
-		}
+		},
 	};
 };

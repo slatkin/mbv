@@ -22,11 +22,7 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiMusicDetail, GuiMusicList } from '$lib/bridge/types';
 	import { albumFacts, artistFacts, artistUnionAlbums, heroKicker } from '$lib/library/hero';
-	import {
-		closeLibraryItemMenu,
-		libraryUi,
-		openLibraryItemMenu,
-	} from '$lib/library/state';
+	import { closeLibraryItemMenu, libraryUi, openLibraryItemMenu } from '$lib/library/state';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryTracklist from './LibraryTracklist.svelte';

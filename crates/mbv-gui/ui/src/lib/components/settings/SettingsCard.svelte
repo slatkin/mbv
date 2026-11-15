@@ -42,7 +42,7 @@
 	style:background="var(--canvas-library-panel)"
 	style:border="1px solid var(--canvas-border)"
 	style:border-radius="10px"
-	style:padding={padding}
+	style:padding
 	style:gap={rows ? '0' : '16px'}
 	aria-label={label}
 	data-settings-card=""
@@ -58,8 +58,10 @@
 					style:margin="0"
 					style:font-size="16px"
 					style:font-weight="600"
-					style:color="var(--canvas-heading)">{title}</h2
+					style:color="var(--canvas-heading)"
 				>
+					{title}
+				</h2>
 			{/if}
 			{#if header !== undefined}
 				{@render header()}

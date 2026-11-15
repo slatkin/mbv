@@ -41,7 +41,7 @@
 		Pause,
 		Play,
 		SkipBack,
-		SkipForward
+		SkipForward,
 	} from '@lucide/svelte';
 	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { playhead } from '$lib/bridge/playhead';
@@ -55,7 +55,7 @@
 		GuiNowPlayingStatus,
 		GuiSegmentMark,
 		LayoutRegion,
-		QueuePlaybackTargetId
+		QueuePlaybackTargetId,
 	} from '$lib/bridge/types';
 
 	/** The playhead's stores (design D5): the predicted position drives the
@@ -67,7 +67,7 @@
 		fraction,
 		elapsed,
 		remaining,
-		finish: playheadFinish
+		finish: playheadFinish,
 	} = playhead;
 
 	/** Whether the transport is paused: the anchor's fact (design D5). `true`
@@ -105,21 +105,12 @@
 	/** The chapter boundaries the bar paints as 2×14 ticks, skipping the first
 	 * boundary (the bar's own left edge) and any outside the runtime, in bar
 	 * fractions. */
-	const chapterTicks = $derived(
-		visibleChapters(
-			$playback.chapters,
-			$runtimeTicks,
-		),
-	);
+	const chapterTicks = $derived(visibleChapters($playback.chapters, $runtimeTicks));
 
 	/** The intro and credits marks' starts in bar fractions (`main` audit 10);
 	 * `null` while a mark is unknown. */
-	const introLeft = $derived(
-		markLeft($playback.introMark, $runtimeTicks),
-	);
-	const creditsLeft = $derived(
-		markLeft($playback.creditsMark, $runtimeTicks),
-	);
+	const introLeft = $derived(markLeft($playback.introMark, $runtimeTicks));
+	const creditsLeft = $derived(markLeft($playback.creditsMark, $runtimeTicks));
 
 	/** The scrubber's hover preview, painted from the hover section: the pointer's
 	 * fraction, the time it names, the chapter covering it, and the trickplay
@@ -154,31 +145,19 @@
 
 	/** One element's painted region for a QueuePlayback target, `null` while
 	 * the element is absent. */
-	const region = (
-		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId
-	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
+	const region = (el: HTMLElement | undefined, id: QueuePlaybackTargetId): LayoutRegion | null =>
+		elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The chapter boundaries inside the runtime, with their bar fractions. */
-	function visibleChapters(
-		chapters: GuiChapter[],
-		runtime: number,
-	): number[] {
+	function visibleChapters(chapters: GuiChapter[], runtime: number): number[] {
 		return chapters
-			.filter(
-				(chapter) =>
-					chapter.startTicks > 0 &&
-					chapter.startTicks < runtime,
-			)
+			.filter((chapter) => chapter.startTicks > 0 && chapter.startTicks < runtime)
 			.map((chapter) => clampRatio(chapter.startTicks, runtime));
 	}
 
 	/** One mark's start in bar fractions, `null` while unknown or outside the
 	 * runtime. */
-	function markLeft(
-		mark: GuiSegmentMark | null,
-		runtime: number,
-	): number | null {
+	function markLeft(mark: GuiSegmentMark | null, runtime: number): number | null {
 		if (!mark || runtime <= 0) {
 			return null;
 		}
@@ -278,10 +257,7 @@
 	});
 
 	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
+		const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(report);
 		artObserver = observer;
 		if (panelEl) {
 			observer?.observe(panelEl);
@@ -343,8 +319,7 @@
 				style:font-size="11px"
 				style:letter-spacing="0.08em"
 				style:padding="0 8px"
-				style:color={statusColor($playback.status)}
-				>{`\u25CF ${statusWord($playback.status)}`}</span
+				style:color={statusColor($playback.status)}>{`\u25CF ${statusWord($playback.status)}`}</span
 			>
 			<button
 				type="button"
@@ -409,17 +384,14 @@
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
-				<ArtImage art={art} alt="" class="block" bounds={{ height: 225 }}>
+				<ArtImage {art} alt="" class="block" bounds={{ height: 225 }}>
 					{#snippet fallback()}
 						<!-- The canvas's source caption while no image lands
 							(design D4a's still slot): the frame's still-caption
 							fact, one `[...]` line per item kind; an item with no
 							image source paints no caption. -->
 						{#if $playback.stillCaption}
-							<span
-								class="font-mono"
-								style:font-size="12px"
-								style:color={roleVar('textMuted')}
+							<span class="font-mono" style:font-size="12px" style:color={roleVar('textMuted')}
 								>{`[${$playback.stillCaption}]`}</span
 							>
 						{/if}
@@ -434,8 +406,7 @@
 						style:padding="3px 6px"
 						style:border-radius="4px"
 						style:background="var(--mbv-background)"
-						style:color="var(--canvas-type-count)"
-						>{$playback.episodeBadge}</span
+						style:color="var(--canvas-type-count)">{$playback.episodeBadge}</span
 					>
 				{/if}
 			</div>
@@ -452,10 +423,8 @@
 				style:color={roleVar('playbackTitleFg')}>{$playback.nowPlayingTitle}</span
 			>
 			{#if $playback.parentLine}
-				<span
-					class="truncate"
-					style:font-size="13px"
-					style:color="var(--canvas-type-secondary)">{$playback.parentLine}</span
+				<span class="truncate" style:font-size="13px" style:color="var(--canvas-type-secondary)"
+					>{$playback.parentLine}</span
 				>
 			{/if}
 		</div>
@@ -517,8 +486,9 @@
 										style:border="1px solid var(--mbv-border)"
 										style:border-radius="4px"
 										style:color={roleVar('textSecondary')}
-										>[trickplay]</div
 									>
+										[trickplay]
+									</div>
 								{/if}
 							{/if}
 							<div
@@ -528,10 +498,11 @@
 								style:border-radius="3px"
 								style:background="var(--mbv-background)"
 								style:color={roleVar('playbackTitleFg')}
-								>{hoverPreview.timeLabel}{hoverPreview.chapterNumber !== null
-									? ` · Ch. ${hoverPreview.chapterNumber}`
-									: ''}</div
 							>
+								{hoverPreview.timeLabel}{hoverPreview.chapterNumber !== null
+									? ` · Ch. ${hoverPreview.chapterNumber}`
+									: ''}
+							</div>
 						</div>
 					{/if}
 					<div
@@ -627,11 +598,7 @@
 				round play/pause control, `+30`, and next, on the canvas gap and
 				insets. The spec's list carries no stop control, so the canvas
 				panel paints none. -->
-			<div
-				class="flex items-center justify-center"
-				style:gap="4px"
-				style:padding="0 16px 6px"
-			>
+			<div class="flex items-center justify-center" style:gap="4px" style:padding="0 16px 6px">
 				<button
 					type="button"
 					class="flex items-center justify-center"
@@ -672,17 +639,9 @@
 					aria-label={paused ? 'Play' : 'Pause'}
 				>
 					{#if paused}
-						<Play
-							size={22}
-							fill={roleVar('textOnAccent')}
-							color={roleVar('textOnAccent')}
-						/>
+						<Play size={22} fill={roleVar('textOnAccent')} color={roleVar('textOnAccent')} />
 					{:else}
-						<Pause
-							size={22}
-							fill={roleVar('textOnAccent')}
-							color={roleVar('textOnAccent')}
-						/>
+						<Pause size={22} fill={roleVar('textOnAccent')} color={roleVar('textOnAccent')} />
 					{/if}
 				</button>
 				<button

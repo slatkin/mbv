@@ -102,9 +102,7 @@ test('a press on a choice box holds the mark, and Apply sends the marked ids', a
 		props: { rows: content.rows, entries, cursorId: null },
 	});
 
-	await fireEvent.click(
-		container.querySelector('[data-settings-checkbox="music"]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-settings-checkbox="music"]') as HTMLElement);
 	expect(invokeMock).not.toHaveBeenCalled();
 
 	await fireEvent.click(getByRole('button', { name: 'Apply' }));
@@ -175,9 +173,7 @@ test('a pointer mark is the set a keyboard Apply saves', async () => {
 		props: { rows: content.rows, entries, cursorId: null },
 	});
 
-	await fireEvent.click(
-		container.querySelector('[data-settings-checkbox="music"]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-settings-checkbox="music"]') as HTMLElement);
 	focusContent(indexOf(entries, 'apply:hiddenLibraries'));
 	routeSettingsKey(new KeyboardEvent('keydown', { key: 'Enter' }), rowsFrame(content));
 

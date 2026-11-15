@@ -55,10 +55,7 @@ function workspace(
 const LIB_IDX = 2;
 
 /** The selected series' detail part, with a series Hero. */
-function shows(
-	episodes: GuiShowsEpisodeRow[] = EPISODES,
-	selectedSeason = 's1',
-): GuiShowsDetail {
+function shows(episodes: GuiShowsEpisodeRow[] = EPISODES, selectedSeason = 's1'): GuiShowsDetail {
 	const hero: GuiShowsHero = {
 		title: 'Better Call Saul',
 		metaRows: [[{ text: 'TV Series', kind: 'plain' }]],

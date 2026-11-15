@@ -15,7 +15,7 @@ import { applyCellUnit } from './lib/bridge/cells';
 
 const target = document.getElementById('app');
 if (!target) {
-  throw new Error('index.html has no #app mount point');
+	throw new Error('index.html has no #app mount point');
 }
 
 // The cell unit's CSS properties exist before the first paint, so every

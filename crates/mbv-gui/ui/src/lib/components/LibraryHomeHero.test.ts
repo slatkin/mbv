@@ -33,7 +33,10 @@ const SELECTED = { kind: 'continue', id: 'e1' } as const;
 function hero(artShape: GuiHomeHero['artShape'] = 'landscape'): GuiHomeHero {
 	return {
 		title: 'Better Call Saul',
-		metaRows: [[{ text: '1 h 47 m left', kind: 'time' }], [{ text: 'S3E4 · Sabrosito', kind: 'plain' }]],
+		metaRows: [
+			[{ text: '1 h 47 m left', kind: 'time' }],
+			[{ text: 'S3E4 · Sabrosito', kind: 'plain' }],
+		],
 		durationRow: 0,
 		progressRow: null,
 		overview: 'Jimmy turns to paying work.',
@@ -92,9 +95,7 @@ test('a landscape hero fills the content width at 16:9 instead of the 300 px box
 test('Play sends the play command for the selected row', async () => {
 	const container = mountHero();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-home-hero-play]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-home-hero-play]') as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'homePlay', row: SELECTED },
@@ -116,9 +117,7 @@ test('Play next sends the play-next command for the selected row', async () => {
 test('Add to queue sends the enqueue command for the selected row', async () => {
 	const container = mountHero();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-home-hero-add]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-home-hero-add]') as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'homeQueue', row: SELECTED },

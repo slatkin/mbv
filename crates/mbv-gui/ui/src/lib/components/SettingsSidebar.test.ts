@@ -15,7 +15,12 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiSettingsFrame, GuiSettingsSection } from '$lib/bridge/types';
-import { hideSettingsCursor, initialSettingsUi, settingsUi, showSettingsCursor } from '$lib/settings/state';
+import {
+	hideSettingsCursor,
+	initialSettingsUi,
+	settingsUi,
+	showSettingsCursor,
+} from '$lib/settings/state';
 import SettingsSidebar from './SettingsSidebar.svelte';
 
 const invokeMock = vi.mocked(invoke);

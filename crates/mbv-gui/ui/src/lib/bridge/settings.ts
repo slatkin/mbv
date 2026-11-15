@@ -12,14 +12,8 @@ import type { GuiSettingsCommand } from './types';
  * IPC — is logged to the webview console instead of vanishing, as the
  * `library` command does: the commands are fire-and-forget intents, and no
  * caller awaits the answer. */
-export function sendSettingsCommand(
-	command: GuiSettingsCommand,
-): Promise<unknown> {
+export function sendSettingsCommand(command: GuiSettingsCommand): Promise<unknown> {
 	return invoke('settings', { command }).catch((error: unknown) => {
-		console.error(
-			`the settings command ${command.command} failed`,
-			command,
-			error,
-		);
+		console.error(`the settings command ${command.command} failed`, command, error);
 	});
 }

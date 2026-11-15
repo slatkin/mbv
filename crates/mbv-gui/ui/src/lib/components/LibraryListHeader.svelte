@@ -65,11 +65,5 @@
 			{...labelAttrs}>{label}</span
 		>
 	</div>
-	<LibraryFilterField
-		value={filter}
-		{placeholder}
-		{ariaLabel}
-		{oninput}
-		{onaccept}
-	/>
+	<LibraryFilterField value={filter} {placeholder} {ariaLabel} {oninput} {onaccept} />
 </div>

@@ -14,14 +14,8 @@ import type { GuiLibraryCommand } from './types';
  * because the callers fire the command and move on. The failure stays
  * non-throwing: the commands are fire-and-forget intents, and no caller
  * awaits the answer. */
-export function sendLibraryCommand(
-	command: GuiLibraryCommand,
-): Promise<unknown> {
+export function sendLibraryCommand(command: GuiLibraryCommand): Promise<unknown> {
 	return invoke('library', { command }).catch((error: unknown) => {
-		console.error(
-			`the library command ${command.command} failed`,
-			command,
-			error,
-		);
+		console.error(`the library command ${command.command} failed`, command, error);
 	});
 }

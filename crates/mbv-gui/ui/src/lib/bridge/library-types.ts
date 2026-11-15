@@ -7,10 +7,7 @@
 // module.
 
 import type { GuiArtRef } from './art';
-import type {
-	GuiAudiobooksDetail,
-	GuiAudiobooksList,
-} from './library-types-audiobooks';
+import type { GuiAudiobooksDetail, GuiAudiobooksList } from './library-types-audiobooks';
 import type { GuiEmbyDetail, GuiEmbyFeedGroup, GuiEmbyList } from './library-types-emby';
 import type { GuiFeedsDetail, GuiFeedsLibraryCommand, GuiFeedsList } from './library-types-feeds';
 import type {
@@ -280,9 +277,7 @@ export type GuiLibraryCommand =
  * view, or one show by its stable `library_item_id`. The pill row is
  * single-select; the state pills are dropped. */
 export type GuiPodcastPill =
-	| { kind: 'latest' }
-	| { kind: 'state'; id: GuiPodcastState }
-	| { kind: 'show'; id: string };
+	{ kind: 'latest' } | { kind: 'state'; id: GuiPodcastState } | { kind: 'show'; id: string };
 
 /** One Podcasts state pill (design D12, row 10.1): the play state the view
  * filters on, named as the TUI's `AudiobookshelfEpisodeFilter` names it. */
@@ -606,11 +601,7 @@ export type {
 
 export type { GuiLibraryEntryRow, GuiLibraryPill } from './library-types-entry-list';
 
-export type {
-	GuiSearchFrame,
-	GuiSearchLibraryCommand,
-	GuiSearchRow,
-} from './library-types-search';
+export type { GuiSearchFrame, GuiSearchLibraryCommand, GuiSearchRow } from './library-types-search';
 
 export type {
 	GuiFeedPill,

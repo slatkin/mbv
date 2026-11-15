@@ -27,7 +27,6 @@
 	}
 	const { summary }: Props = $props();
 
-
 	/** The playhead's finish-facts store (design D5): the queue's finish
 	 * clock is the wall clock at the summary's tail past the active item's
 	 * end, with its ` +1d` suffix. */

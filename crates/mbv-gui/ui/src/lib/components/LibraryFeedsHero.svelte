@@ -13,7 +13,7 @@
 	// selected entry — the core owns the selection, so the actions name the
 	// row the frame painted and never a position. A Client holds one feed
 	// tab, so no library index rides the commands.
-	
+
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import { ListEnd } from '@lucide/svelte';
@@ -69,7 +69,6 @@
 			run: (id: string) => void sendLibraryCommand({ command: 'feedsQueue', itemId: id }),
 		},
 	];
-
 
 	/** Send a Feeds command for the frame's selected entry (design D12, row
 	 * 11.1): the row the frame painted, never a position. */

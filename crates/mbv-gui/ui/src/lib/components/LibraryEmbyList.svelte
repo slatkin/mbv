@@ -21,11 +21,7 @@
 	// folder's item count) carries the distinction, with the kind on
 	// `data-library-emby-row`.
 	import type { GuiEmbyDetail, GuiEmbyList } from '$lib/bridge/types';
-	import {
-		embyRowsOf,
-		embyLetterRail,
-		embyRowLetter,
-	} from '$lib/library/emby-list';
+	import { embyRowsOf, embyLetterRail, embyRowLetter } from '$lib/library/emby-list';
 	import type { EmbyListRow } from '$lib/library/emby-list';
 	import {
 		acceptEmbyFilter,
@@ -89,7 +85,6 @@
 	/** The letter the rail marks: the one the cursor row belongs to. */
 	const marked = $derived(cursorRow === null ? null : embyRowLetter(cursorRow));
 
-
 	/** The row's painted fill (row 8.1): the cursor row's focus fill, and the
 	 * core's selected row the raised fill while the cursor sits elsewhere — the
 	 * selection is what the Hero shows, so its row stays marked. */
@@ -127,10 +122,7 @@
 	{#if list.failed}
 		<!-- The plain mode's root-list fetch failed (row 8.1): the failure line
 			naming what failed, and no row until the library opens again. -->
-		<LibraryListNotice
-			text="Couldn’t load this library."
-			attr="data-library-emby-failed"
-		/>
+		<LibraryListNotice text="Couldn’t load this library." attr="data-library-emby-failed" />
 	{/if}
 	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The library landed and holds no item (row 8.1): one line says so,
@@ -139,39 +131,39 @@
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
-		{rows}
-		scrollTop={$embyScroll.scrollTop}
-		viewportHeight={$embyScroll.viewportHeight}
-		attr="emby"
-		padding="8px 0 8px 8px"
-		onmeasure={measureEmbyList}
-		onscroll={scrollEmbyList}
-	>
-		{#snippet row(row)}
-			{#if row.kind === 'heading'}
-				<LibraryLetterHeading attr="emby" letter={row.letter} height={row.height} />
-			{:else}
-				<LibraryItemRow
-					attr="emby"
-					kind={row.row.kind}
-					id={row.id}
-					height={row.height}
-					title={row.row.title}
-					subtitle={row.row.subtitle}
-					trail={row.row.date}
-					trailPart="date"
-					titleColor={canvasVar('text')}
-					background={rowBackground(row)}
-					cursor={row.id === $embyUi.cursor}
-					selected={row.id === detail.selected}
-					progress={null}
-					onpress={() => pressEmbyRow(row)}
-					onplay={() => playEmbyRow(row.row.id)}
-					oncontext={(event) => rowMenu(event, row)}
-				/>
-			{/if}
-		{/snippet}
-	</LibraryVirtualList>
+			{rows}
+			scrollTop={$embyScroll.scrollTop}
+			viewportHeight={$embyScroll.viewportHeight}
+			attr="emby"
+			padding="8px 0 8px 8px"
+			onmeasure={measureEmbyList}
+			onscroll={scrollEmbyList}
+		>
+			{#snippet row(row)}
+				{#if row.kind === 'heading'}
+					<LibraryLetterHeading attr="emby" letter={row.letter} height={row.height} />
+				{:else}
+					<LibraryItemRow
+						attr="emby"
+						kind={row.row.kind}
+						id={row.id}
+						height={row.height}
+						title={row.row.title}
+						subtitle={row.row.subtitle}
+						trail={row.row.date}
+						trailPart="date"
+						titleColor={canvasVar('text')}
+						background={rowBackground(row)}
+						cursor={row.id === $embyUi.cursor}
+						selected={row.id === detail.selected}
+						progress={null}
+						onpress={() => pressEmbyRow(row)}
+						onplay={() => playEmbyRow(row.row.id)}
+						oncontext={(event) => rowMenu(event, row)}
+					/>
+				{/if}
+			{/snippet}
+		</LibraryVirtualList>
 		{#if !list.feedGroup}
 			<LibraryLetterRail letters={rail} {marked} jump={jumpEmbyToLetter} />
 		{/if}

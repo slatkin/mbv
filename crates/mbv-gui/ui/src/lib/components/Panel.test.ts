@@ -173,8 +173,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 function lastReportedRegionIds(): unknown[] {
 	const calls = invokeMock.mock.calls.filter((entry) => entry[0] === 'report_layout');
 	const report = calls.at(-1)?.[1] as
-		| { report: { regions: { target: { id: unknown } }[] } }
-		| undefined;
+		{ report: { regions: { target: { id: unknown } }[] } } | undefined;
 	return report?.report.regions.map((entry) => entry.target.id) ?? [];
 }
 
@@ -197,9 +196,9 @@ test('a container shorter than 520 px renders the compact strip', async () => {
 	// the old viewport reading named no next item. The summary carries it, so
 	// the strip still paints it.
 	seed(
-			{ collapsed: false, queueFolded: false },
-			{ queue: { ...queue(), rows: [item(2, 'Second track')], active: 1 } },
-		);
+		{ collapsed: false, queueFolded: false },
+		{ queue: { ...queue(), rows: [item(2, 'Second track')], active: 1 } },
+	);
 	const { container, getByText, queryByText } = render(Panel, {
 		container: SHORT,
 		libraryVisible: false,
@@ -262,12 +261,7 @@ test('the collapse toggle renders the 72 px rail', async () => {
 	expect(queryByText('woims')).toBeNull();
 
 	await vi.waitFor(() =>
-		expect(lastReportedRegionIds()).toEqual([
-			'playPause',
-			'next',
-			'visualSlot',
-			'collapse',
-		]),
+		expect(lastReportedRegionIds()).toEqual(['playPause', 'next', 'visualSlot', 'collapse']),
 	);
 });
 

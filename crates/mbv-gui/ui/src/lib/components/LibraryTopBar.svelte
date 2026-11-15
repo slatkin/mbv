@@ -152,8 +152,8 @@
 			stroke="currentColor"
 			stroke-width="1.8"
 			stroke-linejoin="round"
-			aria-hidden="true"
-		><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+			aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg
+		>
 	</button>
 	{#each tabs as tab (tab.position)}
 		{@const current = tab.position === currentTab}
@@ -299,10 +299,8 @@
 							data-library-search-highlight={row.id === $librarySearch.highlight ? '' : undefined}
 							onclick={() => activateSearchRow(row)}
 						>
-							<span
-								class="min-w-0 flex-1 truncate"
-								style:color="var(--canvas-text)"
-							>{row.title}</span
+							<span class="min-w-0 flex-1 truncate" style:color="var(--canvas-text)"
+								>{row.title}</span
 							>
 							<span
 								class="font-mono"
@@ -312,8 +310,7 @@
 								style:flex="0 1 auto"
 								style:overflow="hidden"
 								style:text-overflow="ellipsis"
-								style:white-space="nowrap"
-							>{row.subtitle}</span
+								style:white-space="nowrap">{row.subtitle}</span
 							>
 						</button>
 					{/each}

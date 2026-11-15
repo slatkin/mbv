@@ -58,10 +58,4 @@
 	});
 </script>
 
-<LibraryPillRow
-	ariaLabel="Podcasts views"
-	{pills}
-	{focused}
-	pillAttr="podcasts"
-	onpress={press}
-/>
+<LibraryPillRow ariaLabel="Podcasts views" {pills} {focused} pillAttr="podcasts" onpress={press} />

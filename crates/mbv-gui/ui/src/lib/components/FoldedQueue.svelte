@@ -38,7 +38,7 @@
 	function currentRegions(): LayoutRegion[] {
 		const region = elementRegion(expandEl, {
 			surface: 'queuePlayback',
-			id: 'queueFold'
+			id: 'queueFold',
 		});
 		return region === null ? [] : [region];
 	}
@@ -73,10 +73,8 @@
 	<span class="text-xs font-semibold tracking-widest uppercase" style:color={roleVar('textMuted')}
 		>Queue</span
 	>
-	<span
-		class="font-mono text-xs tabular-nums"
-		style:color={roleVar('textSecondary')}
-		data-remaining>{summary.remaining}</span
+	<span class="font-mono text-xs tabular-nums" style:color={roleVar('textSecondary')} data-remaining
+		>{summary.remaining}</span
 	>
 	<span class="flex-1"></span>
 	{#if queueFinish}

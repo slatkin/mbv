@@ -39,7 +39,11 @@ test('an item that is its own largest unit titles the header and leaves the bloc
 	const layout = heroLayout(
 		{
 			title: 'The Caves of Steel',
-			metaRows: [[{ text: 'Isaac Asimov', kind: 'plain' }], [{ text: '9 h 51 m', kind: 'time' }], [{ text: '17%', kind: 'plain' }]],
+			metaRows: [
+				[{ text: 'Isaac Asimov', kind: 'plain' }],
+				[{ text: '9 h 51 m', kind: 'time' }],
+				[{ text: '17%', kind: 'plain' }],
+			],
 			durationRow: 1,
 			progressRow: 2,
 		},

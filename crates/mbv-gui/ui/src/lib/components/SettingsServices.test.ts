@@ -112,9 +112,7 @@ test('a submit sends embySetup with the three fields, then the password field is
 		},
 	});
 	// The password input is a password field, and the submit emptied it.
-	const password = form.querySelector(
-		'[data-settings-field="password"]',
-	) as HTMLInputElement;
+	const password = form.querySelector('[data-settings-field="password"]') as HTMLInputElement;
 	expect(password.type).toBe('password');
 	expect(password.value).toBe('');
 });
@@ -135,9 +133,7 @@ test.each<[string, GuiSettingsCommand]>([
 			props: { content, entries, cursorId: null },
 		});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+		await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
 		const ui = get(settingsUi);
@@ -146,7 +142,7 @@ test.each<[string, GuiSettingsCommand]>([
 	},
 );
 
-test('the setup form\'s Cancel sends cancelSetup for the form\'s service', async () => {
+test("the setup form's Cancel sends cancelSetup for the form's service", async () => {
 	const content = servicesContent();
 	settingsUi.update((ui) => ({
 		...ui,

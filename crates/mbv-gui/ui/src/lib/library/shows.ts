@@ -11,7 +11,13 @@
 import { get, writable } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiShowsList, GuiShowsMode } from '$lib/bridge/types';
-import { clampScrollTop, jumpToLetter, listWindow, scrollTopToShowCursor, stepPillFocus } from './list';
+import {
+	clampScrollTop,
+	jumpToLetter,
+	listWindow,
+	scrollTopToShowCursor,
+	stepPillFocus,
+} from './list';
 import type { ListMove } from './list';
 import { libraryShowsList } from './parts';
 import { libraryUi } from './state';

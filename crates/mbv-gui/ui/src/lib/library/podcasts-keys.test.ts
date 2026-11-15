@@ -12,19 +12,10 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { initialListScroll, podcastsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
-import type {
-	GuiPanel,
-	GuiPodcastsDetail,
-	GuiPodcastsPill,
-} from '$lib/bridge/types';
+import type { GuiPanel, GuiPodcastsDetail, GuiPodcastsPill } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
-import {
-	initialPodcastsUi,
-	podcastPillKey,
-	podcastsCursorRow,
-	podcastsUi,
-} from './podcasts';
+import { initialPodcastsUi, podcastPillKey, podcastsCursorRow, podcastsUi } from './podcasts';
 import { libraryList } from '$lib/bridge/sections';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
@@ -70,8 +61,20 @@ function press(key: string, options: KeyboardEventInit = {}, held = frame()): Ke
 
 /** The episode rows the Latest pill merges, newest first. */
 const EPISODES = [
-	{ id: 'e1:ep1', title: 'Episode A', subtitle: 'Show One', date: '12 May', state: 'ordinary' as const },
-	{ id: 'e2:ep2', title: 'Episode B', subtitle: 'Show Two', date: '9 May', state: 'played' as const },
+	{
+		id: 'e1:ep1',
+		title: 'Episode A',
+		subtitle: 'Show One',
+		date: '12 May',
+		state: 'ordinary' as const,
+	},
+	{
+		id: 'e2:ep2',
+		title: 'Episode B',
+		subtitle: 'Show Two',
+		date: '9 May',
+		state: 'played' as const,
+	},
 ];
 
 /** The Latest pill and two show pills, with the frame carrying `selected`
@@ -262,7 +265,7 @@ test('Esc closes the Podcasts filter and drops its text', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('a in the Hero pane queues the frame\'s selected episode', () => {
+test("a in the Hero pane queues the frame's selected episode", () => {
 	carryPodcasts(podcastsContent('latest', EPISODES, HERO), 'hero');
 
 	press('a');

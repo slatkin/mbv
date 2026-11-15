@@ -4,20 +4,10 @@
 
 import { beforeEach, expect, test } from 'vitest';
 import { get } from 'svelte/store';
-import type {
-	GuiMusicArtist,
-	GuiMusicDetail,
-	GuiMusicList,
-	GuiMusicHero,
-} from '$lib/bridge/types';
+import type { GuiMusicArtist, GuiMusicDetail, GuiMusicList, GuiMusicHero } from '$lib/bridge/types';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
-import {
-	initialLibraryUi,
-	libraryUi,
-	measureLibraryList,
-	revealPickedAlbum,
-} from './state';
+import { initialLibraryUi, libraryUi, measureLibraryList, revealPickedAlbum } from './state';
 import { initialListScroll, musicScroll } from './scroll';
 
 beforeEach(() => {

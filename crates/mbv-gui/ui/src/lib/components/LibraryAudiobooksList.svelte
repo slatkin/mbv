@@ -67,7 +67,6 @@
 	/** The letter the rail marks: the one the cursor row belongs to. */
 	const marked = $derived(cursorRow === null ? null : audiobooksRowLetter(cursorRow));
 
-
 	/** The row's painted fill (row 9.1): the cursor row's focus fill, and the
 	 * core's selected book the raised fill while the cursor sits elsewhere —
 	 * the selection is what the Hero shows, so its row stays marked. */
@@ -123,10 +122,7 @@
 	{#if list.failed}
 		<!-- The catalog fetch failed (row 9.1): the failure line naming what
 			failed, and no row until the destination opens again. -->
-		<LibraryListNotice
-			text="Couldn’t load this catalog."
-			attr="data-library-abs-failed"
-		/>
+		<LibraryListNotice text="Couldn’t load this catalog." attr="data-library-abs-failed" />
 	{/if}
 	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The catalog landed and holds no book (row 9.1): the TUI's empty
@@ -135,39 +131,39 @@
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
-		{rows}
-		scrollTop={$audiobooksScroll.scrollTop}
-		viewportHeight={$audiobooksScroll.viewportHeight}
-		attr="abs"
-		padding="8px 0 8px 8px"
-		onmeasure={measureAudiobooksList}
-		onscroll={scrollAudiobooksList}
-	>
-		{#snippet row(row)}
-			{#if row.kind === 'heading'}
-				<LibraryLetterHeading attr="abs" letter={row.letter} height={row.height} />
-			{:else}
-				<LibraryItemRow
-					attr="abs"
-					kind="book"
-					id={row.id}
-					height={row.height}
-					title={row.row.title}
-					subtitle={row.row.subtitle}
-					trail={row.row.duration}
-					trailPart="duration"
-					titleColor={canvasVar('text')}
-					background={rowBackground(row)}
-					cursor={row.id === $audiobooksUi.cursor}
-					selected={row.id === detail.selected}
-					progress={null}
-					onpress={() => pressAudiobooksRow(row)}
-					onplay={() => playAudiobooksRow(row.row.id)}
-					oncontext={(event) => rowMenu(event, row)}
-				/>
-			{/if}
-		{/snippet}
-	</LibraryVirtualList>
+			{rows}
+			scrollTop={$audiobooksScroll.scrollTop}
+			viewportHeight={$audiobooksScroll.viewportHeight}
+			attr="abs"
+			padding="8px 0 8px 8px"
+			onmeasure={measureAudiobooksList}
+			onscroll={scrollAudiobooksList}
+		>
+			{#snippet row(row)}
+				{#if row.kind === 'heading'}
+					<LibraryLetterHeading attr="abs" letter={row.letter} height={row.height} />
+				{:else}
+					<LibraryItemRow
+						attr="abs"
+						kind="book"
+						id={row.id}
+						height={row.height}
+						title={row.row.title}
+						subtitle={row.row.subtitle}
+						trail={row.row.duration}
+						trailPart="duration"
+						titleColor={canvasVar('text')}
+						background={rowBackground(row)}
+						cursor={row.id === $audiobooksUi.cursor}
+						selected={row.id === detail.selected}
+						progress={null}
+						onpress={() => pressAudiobooksRow(row)}
+						onplay={() => playAudiobooksRow(row.row.id)}
+						oncontext={(event) => rowMenu(event, row)}
+					/>
+				{/if}
+			{/snippet}
+		</LibraryVirtualList>
 		<LibraryLetterRail letters={rail} {marked} jump={jumpAudiobooksToLetter} />
 	</div>
 </div>

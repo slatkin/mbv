@@ -12,19 +12,11 @@
 	import { onMount } from 'svelte';
 	import ArtImage from './ArtImage.svelte';
 	import { Pause, Play, SkipForward } from '@lucide/svelte';
-	import {
-		elementRegion,
-		observeLayout,
-		reportLayout
-	} from '$lib/bridge/layout';
+	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
 	import { playhead } from '$lib/bridge/playhead';
 	import { playback as playbackSection } from '$lib/bridge/sections';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
-	import type {
-		GuiArtRef,
-		LayoutRegion,
-		QueuePlaybackTargetId
-	} from '$lib/bridge/types';
+	import type { GuiArtRef, LayoutRegion, QueuePlaybackTargetId } from '$lib/bridge/types';
 
 	interface Props {
 		/** The next item's title (`GuiQueueSummary.nextTitle`, review of this
@@ -70,10 +62,8 @@
 
 	/** One element's painted region for a QueuePlayback target, `null` while
 	 * the element is absent. */
-	const region = (
-		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId
-	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
+	const region = (el: HTMLElement | undefined, id: QueuePlaybackTargetId): LayoutRegion | null =>
+		elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The painted regions (design D4): the still's slot, the transport's two
 	 * controls. */
@@ -119,16 +109,15 @@
 		bind:this={stillEl}
 		data-target="visualSlot"
 	>
-		<ArtImage art={art} alt="" class="h-full w-full object-cover">
+		<ArtImage {art} alt="" class="h-full w-full object-cover">
 			{#snippet fallback()}
 				<div class="h-full w-full" style:background="var(--mbv-textMuted)"></div>
 			{/snippet}
 		</ArtImage>
 	</div>
 	<div class="flex min-w-0 flex-1 flex-col" style:gap="calc(var(--mbv-cell-row) / 4)">
-		<span
-			class="truncate font-semibold"
-			style:color={roleVar('playbackTitleFg')}>{playback.nowPlayingTitle ?? ''}</span
+		<span class="truncate font-semibold" style:color={roleVar('playbackTitleFg')}
+			>{playback.nowPlayingTitle ?? ''}</span
 		>
 		{#if meta}
 			<span class="truncate text-xs" style:color={roleVar('playbackContextFg')}>{meta}</span>

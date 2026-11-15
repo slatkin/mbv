@@ -110,9 +110,7 @@ export function stepShowsSeason(delta: -1 | 1, libIdx: number, detail: GuiShowsD
 	if (workspace === null || workspace.selectedSeason === null) {
 		return;
 	}
-	const at = workspace.seasons.findIndex(
-		(season) => season.seasonId === workspace.selectedSeason,
-	);
+	const at = workspace.seasons.findIndex((season) => season.seasonId === workspace.selectedSeason);
 	const next = workspace.seasons[at + delta];
 	if (at < 0 || next === undefined) {
 		return;

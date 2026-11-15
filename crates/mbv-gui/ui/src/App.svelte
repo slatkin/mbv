@@ -102,9 +102,7 @@
 		// life (designs D4 and D6); both clean up on unmount. Every keydown meets
 		// the Library's router first, which takes the keys the Library handles
 		// and lets the forwarder send the rest (add-gui-library-panel design D3).
-		const detachInput = installInput(window, (event) =>
-			routeLibraryKey(event, keyFrame()),
-		);
+		const detachInput = installInput(window, (event) => routeLibraryKey(event, keyFrame()));
 		const unlisten = connectSections();
 		return () => {
 			detachInput();
@@ -116,8 +114,8 @@
 <svelte:document oncontextmenu={preventContextMenu} />
 
 <main class="h-dvh w-full overflow-hidden bg-background text-foreground">
-  {#if $connected && $attachSection === null}
-    <!-- The two-panel arrangement (add-gui-library-panel design D4): the Queue
+	{#if $connected && $attachSection === null}
+		<!-- The two-panel arrangement (add-gui-library-panel design D4): the Queue
       panel beside the Library panel, picked from the measured Library column
       width — the window width minus the Queue panel's current width. Mini
       mounts only the panel with Panel focus, Narrow mounts both with the Hero
@@ -126,83 +124,81 @@
       every arrangement, and its backdrop fill stays focus-reactive like the
       TUI's `panel_appearance_focus` picks it. Until Music content arrives the
       Library panel does not mount and the Queue panel paints as before. -->
-    <!-- The Queue panel's column and the Wide list column are the session's
+		<!-- The Queue panel's column and the Wide list column are the session's
       widths (design D4): the dividers below and the arrangement read one
       resolution, so a drag paints the width the thresholds classify. -->
-    {@const widths = panelWidths(container, $panel, $draggedWidths)}
-    {@const arrangement = libraryArrangement(container, widths.queue)}
-    {@const queueFocused = $focus.panel === 'queue'}
-    <!-- The Library panel's one presence fact (design D2, D10, D12): the
+		{@const widths = panelWidths(container, $panel, $draggedWidths)}
+		{@const arrangement = libraryArrangement(container, widths.queue)}
+		{@const queueFocused = $focus.panel === 'queue'}
+		<!-- The Library panel's one presence fact (design D2, D10, D12): the
       window holds the active destination's content, whose painters the panel
       mounts. The key router gates on the same fact, so a destination that
       leaves unmounts the panel and stops its keys together. -->
-    {@const panelShows = libraryShown($libraryList)}
-    {@const queueVisible = !panelShows || arrangement !== 'mini' || queueFocused}
-    {@const libraryVisible = panelShows && (arrangement !== 'mini' || !queueFocused)}
-    {@const twoColumns = queueVisible && libraryVisible}
-    <div
-      bind:this={containerEl}
-      class="relative flex h-full min-h-0 w-full min-w-0 overflow-hidden"
-      data-arrangement={arrangement}
-      style:background={queueFocused
-        ? 'var(--canvas-queue-column-focused)'
-        : 'var(--canvas-queue-column)'}
-    >
-      {#if $settings !== null}
-        <!-- The Settings screen replaces the two panels while its section is
+		{@const panelShows = libraryShown($libraryList)}
+		{@const queueVisible = !panelShows || arrangement !== 'mini' || queueFocused}
+		{@const libraryVisible = panelShows && (arrangement !== 'mini' || !queueFocused)}
+		{@const twoColumns = queueVisible && libraryVisible}
+		<div
+			bind:this={containerEl}
+			class="relative flex h-full min-h-0 w-full min-w-0 overflow-hidden"
+			data-arrangement={arrangement}
+			style:background={queueFocused
+				? 'var(--canvas-queue-column-focused)'
+				: 'var(--canvas-queue-column)'}
+		>
+			{#if $settings !== null}
+				<!-- The Settings screen replaces the two panels while its section is
           present (add-gui-settings-screen design D11): no player panel, queue,
           or Library panel mounts, and playback continues. The screen's own
           Mini check measures the window minus its fixed 260 px sidebar. -->
-        <SettingsScreen
-          arrangement={libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)}
-        />
-      {:else}
-      {#if queueVisible}
-        <div
-          class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
-          style:width={twoColumns ? `${widths.queue}px` : undefined}
-          data-queue-column=""
-        >
-          <Panel {container} {libraryVisible} />
-        </div>
-      {/if}
-      {#if twoColumns && !$panel.collapsed}
-        <!-- The Queue panel's divider (design D4): dragging it resizes the
+				<SettingsScreen arrangement={libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)} />
+			{:else}
+				{#if queueVisible}
+					<div
+						class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
+						style:width={twoColumns ? `${widths.queue}px` : undefined}
+						data-queue-column=""
+					>
+						<Panel {container} {libraryVisible} />
+					</div>
+				{/if}
+				{#if twoColumns && !$panel.collapsed}
+					<!-- The Queue panel's divider (design D4): dragging it resizes the
           Queue column and, with it, the Library column the arrangement
           measures; a double-click returns the canvas width. -->
-        <PanelDivider
-          side="left"
-          name="queue"
-          width={widths.queue}
-          onDrag={(width) => dragQueueWidth(width, container.width)}
-          onReset={resetQueueWidth}
-        />
-      {/if}
-      {#if libraryVisible && $libraryList !== null}
-        <LibraryPanel
-          {arrangement}
-          listWidth={widths.list}
-          libraryColumn={widths.libraryColumn}
-        />
-      {/if}
-      {/if}
-    </div>
-    {#if $overlay?.kind === 'confirm'}
-      <!-- The App's raised confirmation modal, window-modal over every panel
+					<PanelDivider
+						side="left"
+						name="queue"
+						width={widths.queue}
+						onDrag={(width) => dragQueueWidth(width, container.width)}
+						onReset={resetQueueWidth}
+					/>
+				{/if}
+				{#if libraryVisible && $libraryList !== null}
+					<LibraryPanel
+						{arrangement}
+						listWidth={widths.list}
+						libraryColumn={widths.libraryColumn}
+					/>
+				{/if}
+			{/if}
+		</div>
+		{#if $overlay?.kind === 'confirm'}
+			<!-- The App's raised confirmation modal, window-modal over every panel
         (add-gui-library-panel queue fixes): Enter and Esc answer in the
         core's overlay key rules, and the buttons report their press
         regions. -->
-      <ConfirmOverlay confirm={$overlay} />
-    {:else if $overlay?.kind === 'daemonLost'}
-      <!-- The App's raised daemon-lost recovery dialog, window-modal over
+			<ConfirmOverlay confirm={$overlay} />
+		{:else if $overlay?.kind === 'daemonLost'}
+			<!-- The App's raised daemon-lost recovery dialog, window-modal over
         every panel: the dialog blocks every other input until one of its
         choices runs, and the buttons report their press regions. -->
-      <DaemonLostOverlay daemonLost={$overlay} />
-    {/if}
-  {:else}
-    <!-- The pre-attach states (design D9): the wait before the first batch,
+			<DaemonLostOverlay daemonLost={$overlay} />
+		{/if}
+	{:else}
+		<!-- The pre-attach states (design D9): the wait before the first batch,
       the Owner attach outcomes, and the mismatch prompt. The attach screen
       reads the `attach` section itself. -->
-    <AttachScreen />
-  {/if}
+		<AttachScreen />
+	{/if}
 </main>

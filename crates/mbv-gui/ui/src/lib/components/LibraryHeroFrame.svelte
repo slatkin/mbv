@@ -90,12 +90,7 @@
 	}
 </script>
 
-<div
-	class="flex flex-col"
-	style:padding="28px 32px"
-	style:gap="28px"
-	{...{ [root]: '' }}
->
+<div class="flex flex-col" style:padding="28px 32px" style:gap="28px" {...{ [root]: '' }}>
 	<!-- The header band. -->
 	<div
 		class="flex items-end justify-between"
@@ -116,8 +111,10 @@
 				style:font-weight="600"
 				style:letter-spacing="-0.01em"
 				style:color="var(--canvas-heading)"
-				{...own('title')}>{header.title}</h1
+				{...own('title')}
 			>
+				{header.title}
+			</h1>
 			{#if painted(header.facts)}
 				<span
 					class="font-mono"
@@ -137,13 +134,7 @@
 		aria-label={block.label}
 		{...own('block')}
 	>
-		<LibraryHeroArt
-			shape={artShape}
-			{art}
-			title={artTitle}
-			{attr}
-			placeholder={artPlaceholder}
-		/>
+		<LibraryHeroArt shape={artShape} {art} title={artTitle} {attr} placeholder={artPlaceholder} />
 		<div
 			class="flex min-w-0 flex-1 flex-col"
 			style:gap="18px"
@@ -157,8 +148,7 @@
 							class="font-mono"
 							style:font-size="12px"
 							style:letter-spacing="0.08em"
-							style:color="var(--canvas-muted)"
-							><TypedText segments={block.eyebrow} /></span
+							style:color="var(--canvas-muted)"><TypedText segments={block.eyebrow} /></span
 						>
 					{/if}
 					{#if (block.name ?? '') !== ''}
@@ -167,8 +157,10 @@
 							style:font-size="24px"
 							style:font-weight="600"
 							style:color="var(--canvas-heading)"
-							{...own('block-name')}>{block.name}</h2
+							{...own('block-name')}
 						>
+							{block.name}
+						</h2>
 					{/if}
 					{#if painted(block.facts)}
 						<span
@@ -200,8 +192,10 @@
 					style:font-size="14px"
 					style:line-height="1.5"
 					style:color="var(--canvas-muted)"
-					{...own('overview')}>{block.overview}</p
+					{...own('overview')}
 				>
+					{block.overview}
+				</p>
 			{/if}
 		</div>
 	</section>

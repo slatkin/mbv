@@ -31,7 +31,6 @@
 		resolveShowsEpisodeCursor,
 		showsWorkspace,
 	} from '$lib/library/shows-workspace';
-	
 
 	interface Props {
 		/** The carried Shows content (design D12): the selected row's Hero, its
@@ -58,9 +57,7 @@
 
 	/** The selected season's name: the detail block's name, as the album's is
 	 * Music's. Empty on a Hero that paints no Workspace. */
-	const seasonName = $derived(
-		workspace?.seasons.find((season) => season.selected)?.name ?? '',
-	);
+	const seasonName = $derived(workspace?.seasons.find((season) => season.selected)?.name ?? '');
 
 	/** The selected season's episode count, once its episodes have landed. */
 	const seasonFacts = $derived(
@@ -85,7 +82,11 @@
 	 * tracklist. The Owner owns the queue, so the shared play path replaces
 	 * it. */
 	function play(episode: GuiShowsEpisodeRow): void {
-		void sendLibraryCommand({ command: 'showsPlay', libIdx: list.libIdx, itemId: episode.episodeId });
+		void sendLibraryCommand({
+			command: 'showsPlay',
+			libIdx: list.libIdx,
+			itemId: episode.episodeId,
+		});
 	}
 
 	/** Admit an episode directly after the active slot (design D12). */
@@ -143,7 +144,12 @@
 			icon: ListEnd,
 			run: (id: string) => withEpisode(id, playNext),
 		},
-		{ key: 'queue', label: 'Add to queue', icon: Plus, run: (id: string) => withEpisode(id, queue) },
+		{
+			key: 'queue',
+			label: 'Add to queue',
+			icon: Plus,
+			run: (id: string) => withEpisode(id, queue),
+		},
 	];
 
 	/** Run `act` for the episode `id` names, when the Workspace still holds it. */
@@ -187,40 +193,35 @@
 				onqueue={() => actOn('showsQueue')}
 			/>
 		{/snippet}
-	{#if workspace !== null}
-		<!-- The series Hero's Workspace (design D12): the season pills, then
+		{#if workspace !== null}
+			<!-- The series Hero's Workspace (design D12): the season pills, then
 		the selected season's episodes. -->
-		<section class="flex flex-col" style:gap="10px" data-library-shows-workspace="">
-			<div
-				class="flex flex-wrap items-center"
-				role="group"
-				aria-label="Seasons"
-				style:gap="6px"
-			>
-				{#each workspace.seasons as season (season.seasonId)}
-					<LibraryPillButton
-						name={season.name}
-						selected={season.selected}
-						attrs={{ 'data-library-shows-season': season.seasonId }}
-						onpress={() => selectSeason(season.seasonId)}
-					/>
-				{/each}
-			</div>
-			<LibraryWorkspaceTable
-				root="data-library-shows-episodes"
-				label="Episodes"
-				hook="shows-episode"
-				noun="Episode"
-				rows={episodeRows}
-				cursor={cursorEpisode}
-				actions={rowActions}
-				onpress={pressShowsEpisode}
-				onplay={playById}
-				loading={detail.workspaceLoading
-					? { text: 'Loading episodes…', attr: 'data-library-shows-episodes-loading' }
-					: null}
-			/>
-		</section>
-	{/if}
+			<section class="flex flex-col" style:gap="10px" data-library-shows-workspace="">
+				<div class="flex flex-wrap items-center" role="group" aria-label="Seasons" style:gap="6px">
+					{#each workspace.seasons as season (season.seasonId)}
+						<LibraryPillButton
+							name={season.name}
+							selected={season.selected}
+							attrs={{ 'data-library-shows-season': season.seasonId }}
+							onpress={() => selectSeason(season.seasonId)}
+						/>
+					{/each}
+				</div>
+				<LibraryWorkspaceTable
+					root="data-library-shows-episodes"
+					label="Episodes"
+					hook="shows-episode"
+					noun="Episode"
+					rows={episodeRows}
+					cursor={cursorEpisode}
+					actions={rowActions}
+					onpress={pressShowsEpisode}
+					onplay={playById}
+					loading={detail.workspaceLoading
+						? { text: 'Loading episodes…', attr: 'data-library-shows-episodes-loading' }
+						: null}
+				/>
+			</section>
+		{/if}
 	</LibraryHeroFrame>
 {/if}

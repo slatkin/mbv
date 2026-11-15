@@ -147,12 +147,7 @@ function pills() {
  * Left walk the pills, and the first of them with no pill focused takes the
  * end it walks from. */
 function movePillFocus(step: number): void {
-	const pill = stepPillFocus(
-		pills(),
-		get(libraryUi).focusedPill,
-		(entry) => entry.groupId,
-		step,
-	);
+	const pill = stepPillFocus(pills(), get(libraryUi).focusedPill, (entry) => entry.groupId, step);
 	if (pill !== null) {
 		focusLibraryPill(pill.groupId);
 	}
@@ -487,10 +482,7 @@ function routeHomePanelKey(event: KeyboardEvent): KeyOutcome {
  * Route one keydown (design D3): the front end does its part, and the answer is
  * what the input forwarder must do with the key.
  */
-export function routeLibraryKey(
-	event: KeyboardEvent,
-	frame: LibraryKeyFrame | null,
-): KeyOutcome {
+export function routeLibraryKey(event: KeyboardEvent, frame: LibraryKeyFrame | null): KeyOutcome {
 	if (!frame) {
 		return 'core';
 	}

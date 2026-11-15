@@ -66,7 +66,10 @@ function music(facts: GuiMusicHero): GuiMusicList {
 				artistKey: { kind: 'service', id: 'a1' },
 				name: 'Beastie Boys',
 				sortLetter: 'B',
-				albums: [facts.album, { albumId: 'al2', name: 'Paul’s Boutique', year: '1989', tracks: null, total: null }],
+				albums: [
+					facts.album,
+					{ albumId: 'al2', name: 'Paul’s Boutique', year: '1989', tracks: null, total: null },
+				],
 			},
 		],
 	};
@@ -131,7 +134,9 @@ test("a track's Play next sends that track's id", async () => {
 	const container = mountHero();
 
 	await fireEvent.click(
-		container.querySelector('[data-library-track="t2"] [data-library-track-action="playNext"]') as HTMLElement,
+		container.querySelector(
+			'[data-library-track="t2"] [data-library-track-action="playNext"]',
+		) as HTMLElement,
 	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
@@ -143,7 +148,9 @@ test("a track's Add to queue sends that track's id", async () => {
 	const container = mountHero();
 
 	await fireEvent.click(
-		container.querySelector('[data-library-track="t1"] [data-library-track-action="addToQueue"]') as HTMLElement,
+		container.querySelector(
+			'[data-library-track="t1"] [data-library-track-action="addToQueue"]',
+		) as HTMLElement,
 	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
@@ -219,7 +226,9 @@ test('the play button on a tracklist row sends that track play', async () => {
 	const container = mountHero();
 
 	await fireEvent.click(
-		container.querySelector('[data-library-track="t2"] [data-library-track-action="play"]') as HTMLElement,
+		container.querySelector(
+			'[data-library-track="t2"] [data-library-track-action="play"]',
+		) as HTMLElement,
 	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
@@ -238,7 +247,9 @@ test('the tracklist marks the frame playing track with a play glyph, not a fill'
 	expect(playing.querySelector('svg')).toBeTruthy();
 	expect(playing.style.background).not.toBe('var(--canvas-accent)');
 	expect(
-		container.querySelector('[data-library-track="t2"]')?.hasAttribute('data-library-track-playing'),
+		container
+			.querySelector('[data-library-track="t2"]')
+			?.hasAttribute('data-library-track-playing'),
 	).toBe(false);
 });
 

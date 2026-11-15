@@ -10,20 +10,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type {
-	GuiPanel,
-	GuiSearchFrame,
-	GuiSearchRow,
-} from '$lib/bridge/types';
+import type { GuiPanel, GuiSearchFrame, GuiSearchRow } from '$lib/bridge/types';
 import { routeLibraryKey } from './keys';
 import type { LibraryKeyFrame } from './keys';
 import { libraryList } from '$lib/bridge/sections';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
-import {
-	initialLibraryUi,
-	libraryUi,
-} from './state';
+import { initialLibraryUi, libraryUi } from './state';
 import {
 	focusLibrarySearch,
 	initialLibrarySearch,
@@ -43,10 +36,7 @@ beforeEach(() => {
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
-function frame(
-	panel: GuiPanel = 'library',
-	rest: Partial<LibraryKeyFrame> = {},
-): LibraryKeyFrame {
+function frame(panel: GuiPanel = 'library', rest: Partial<LibraryKeyFrame> = {}): LibraryKeyFrame {
 	return {
 		focus: { surface: panel, panel },
 		overlay: null,
@@ -93,8 +83,8 @@ const ROWS: GuiSearchRow[] = [
 ];
 
 /** Arm the field's keyboard the way the mounted top bar's focus event does: the
-** mount fact and the focus fact hold together (design D3, step 2, row 12.1).
-*/
+ ** mount fact and the focus fact hold together (design D3, step 2, row 12.1).
+ */
 function focusField(): void {
 	librarySearch.update((s) => (s.mounted ? s : { ...s, mounted: true }));
 	focusLibrarySearch();
@@ -111,10 +101,7 @@ function results(): GuiSearchFrame {
 }
 
 /** A keydown as the webview's event carries it. */
-function keyEvent(
-	key: string,
-	rest: Partial<KeyboardEventInit> = {},
-): KeyboardEvent {
+function keyEvent(key: string, rest: Partial<KeyboardEventInit> = {}): KeyboardEvent {
 	return new KeyboardEvent('keydown', { key, bubbles: true, ...rest });
 }
 
@@ -131,10 +118,7 @@ test('Ctrl+K focuses the Search field while the Queue panel holds Panel focus', 
 	// The chord is a window key (design D3, step 3): it is not a Library
 	// panel-focus key, so Queue Panel focus does not keep it from the field.
 	librarySearch.set({ ...initialLibrarySearch(), mounted: true });
-	const outcome = routeLibraryKey(
-		keyEvent('k', { ctrlKey: true }),
-		shownSearch(null),
-	);
+	const outcome = routeLibraryKey(keyEvent('k', { ctrlKey: true }), shownSearch(null));
 
 	expect(outcome).toBe('handled');
 	expect(get(librarySearch).focused).toBe(true);

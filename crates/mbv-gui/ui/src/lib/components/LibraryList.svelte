@@ -86,9 +86,7 @@
 	 * derivation, carried on the Music frame so the list header and the Status
 	 * bar location cannot disagree. An empty selection is the whole library:
 	 * the header names it `All` instead of an empty label. */
-	const selectedNames = $derived(
-		list.collectionNames.length > 0 ? list.collectionNames : ['All'],
-	);
+	const selectedNames = $derived(list.collectionNames.length > 0 ? list.collectionNames : ['All']);
 
 	/** The header's right line: the canvas's selection label — the names joined
 	 * by ` + ` for several, one name with its sort rule for one, and `All` for
@@ -111,9 +109,7 @@
 	const rail = $derived(letterRail(rows));
 
 	/** The letter the rail marks: the one the cursor row belongs to. */
-	const marked = $derived(
-		rows.find((row) => row.id === $libraryUi.cursor)?.letter ?? null,
-	);
+	const marked = $derived(rows.find((row) => row.id === $libraryUi.cursor)?.letter ?? null);
 
 	/** The album the Hero shows: the list paints its row in the canvas's picked
 	 * fill (design D7). */
@@ -145,7 +141,6 @@
 		}
 		openLibraryRowMenu(itemId, event.clientX, event.clientY);
 	}
-
 
 	/** Whether the row is the album the Hero shows. */
 	function isPicked(row: LibraryRow): boolean {
@@ -182,7 +177,6 @@
 		}
 		return row.kind === 'album' ? '0 8px 0 22px' : '0 8px 0 40px';
 	}
-
 </script>
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-list-column="">
@@ -223,109 +217,103 @@
 			onscroll={scrollLibraryList}
 		>
 			{#snippet row(row)}
-					{#if row.kind === 'letter'}
-						<div
-							class="flex items-end font-mono"
-							style:height="{LETTER_ROW_HEIGHT}px"
-							style:padding="0 8px 2px"
-							style:font-size="12px"
-							style:color="var(--canvas-type-label)"
-							data-library-letter={row.letter}
-						>
-							{row.letter}
-						</div>
-					{:else if row.kind === 'track'}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{TRACK_ROW_HEIGHT}px"
-							style:padding={rowPadding(row)}
-							style:gap="8px"
-							style:border="0"
-							style:border-radius={isPicked(row) ? '4px' : '0'}
-							style:text-align="left"
-							style:font-size="14px"
-							style:background={rowBackground(row)}
-										style:cursor="pointer"
-										data-library-row={row.kind}
-										data-library-row-id={row.id}
-										data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
-										onclick={() => pressLibraryRow(row)}
+				{#if row.kind === 'letter'}
+					<div
+						class="flex items-end font-mono"
+						style:height="{LETTER_ROW_HEIGHT}px"
+						style:padding="0 8px 2px"
+						style:font-size="12px"
+						style:color="var(--canvas-type-label)"
+						data-library-letter={row.letter}
+					>
+						{row.letter}
+					</div>
+				{:else if row.kind === 'track'}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{TRACK_ROW_HEIGHT}px"
+						style:padding={rowPadding(row)}
+						style:gap="8px"
+						style:border="0"
+						style:border-radius={isPicked(row) ? '4px' : '0'}
+						style:text-align="left"
+						style:font-size="14px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						data-library-row={row.kind}
+						data-library-row-id={row.id}
+						data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
+						onclick={() => pressLibraryRow(row)}
 						oncontextmenu={(event) => rowMenu(event, row)}
-					ondblclick={() => playLibraryTrack(row.trackId)}
-									>
-										<span
-											class="flex flex-none items-center justify-end font-mono tabular-nums"
-											style:width="18px"
-											style:font-size="12px"
-											style:color="var(--canvas-ordinal)">{row.number}</span
-										>
+						ondblclick={() => playLibraryTrack(row.trackId)}
+					>
+						<span
+							class="flex flex-none items-center justify-end font-mono tabular-nums"
+							style:width="18px"
+							style:font-size="12px"
+							style:color="var(--canvas-ordinal)">{row.number}</span
+						>
+						<span class="min-w-0 flex-1 truncate" style:color={rowColor(row)}>{row.name}</span>
+						<span
+							class="flex-none font-mono tabular-nums"
+							style:font-size="12px"
+							style:color="var(--canvas-muted)">{row.duration}</span
+						>
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="flex w-full items-center overflow-hidden"
+						style:height="{NODE_ROW_HEIGHT}px"
+						style:padding={rowPadding(row)}
+						style:gap="8px"
+						style:border="0"
+						style:border-radius={isPicked(row) ? '4px' : '0'}
+						style:text-align="left"
+						style:font-size="14.5px"
+						style:background={rowBackground(row)}
+						style:cursor="pointer"
+						aria-expanded={row.open}
+						data-library-row={row.kind}
+						data-library-row-id={row.id}
+						data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
+						onclick={() => pressLibraryRow(row)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					>
+						<span
+							class="flex flex-none items-center justify-center"
+							style:width="18px"
+							style:color={rowColor(row)}
+						>
 							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={rowColor(row)}>{row.name}</span
+								class="flex"
+								style:transform="rotate({row.open ? 90 : 0}deg)"
+								style:transition="transform 120ms ease"
 							>
+								<ChevronRight size={10} strokeWidth={3} />
+							</span>
+						</span>
+						<span
+							class="min-w-0 flex-1 truncate"
+							style:color={rowColor(row)}
+							style:font-weight={rowWeight(row)}>{row.name}</span
+						>
+						{#if row.kind === 'album' && row.year !== ''}
+							<!-- A year repeats down the tree, so it paints the date
+									token at the repeat opacity; the picked album keeps its
+									own ink (design D14). -->
 							<span
 								class="flex-none font-mono tabular-nums"
 								style:font-size="12px"
-								style:color="var(--canvas-muted)">{row.duration}</span
+								style:color={isPicked(row) ? 'var(--canvas-muted)' : undefined}
+								data-library-row-year
 							>
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="flex w-full items-center overflow-hidden"
-							style:height="{NODE_ROW_HEIGHT}px"
-							style:padding={rowPadding(row)}
-							style:gap="8px"
-							style:border="0"
-							style:border-radius={isPicked(row) ? '4px' : '0'}
-							style:text-align="left"
-							style:font-size="14.5px"
-							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							aria-expanded={row.open}
-							data-library-row={row.kind}
-							data-library-row-id={row.id}
-							data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
-							onclick={() => pressLibraryRow(row)}
-							oncontextmenu={(event) => rowMenu(event, row)}
-						>
-							<span
-								class="flex flex-none items-center justify-center"
-								style:width="18px"
-								style:color={rowColor(row)}
-							>
-								<span
-									class="flex"
-									style:transform="rotate({row.open ? 90 : 0}deg)"
-									style:transition="transform 120ms ease"
-								>
-									<ChevronRight size={10} strokeWidth={3} />
-								</span>
+								<TypedText segments={[{ text: row.year, kind: 'date' }]} repeat={!isPicked(row)} />
 							</span>
-							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={rowColor(row)}
-								style:font-weight={rowWeight(row)}>{row.name}</span
-							>
-							{#if row.kind === 'album' && row.year !== ''}
-								<!-- A year repeats down the tree, so it paints the date
-									token at the repeat opacity; the picked album keeps its
-									own ink (design D14). -->
-								<span
-									class="flex-none font-mono tabular-nums"
-									style:font-size="12px"
-									style:color={isPicked(row) ? 'var(--canvas-muted)' : undefined}
-									data-library-row-year
-								>
-									<TypedText
-										segments={[{ text: row.year, kind: 'date' }]}
-										repeat={!isPicked(row)}
-									/>
-								</span>
-							{/if}
-						</button>
-					{/if}
+						{/if}
+					</button>
+				{/if}
 			{/snippet}
 		</LibraryVirtualList>
 		<LibraryLetterRail letters={rail} {marked} />

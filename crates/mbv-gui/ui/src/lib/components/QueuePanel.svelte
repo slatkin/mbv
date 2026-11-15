@@ -62,11 +62,7 @@
 		summary as summarySection,
 	} from '$lib/bridge/sections';
 	import { canvasVar, roleVar } from '$lib/bridge/theme';
-	import type {
-		GuiQueueRow,
-		LayoutRegion,
-		QueueTargetId,
-	} from '$lib/bridge/types';
+	import type { GuiQueueRow, LayoutRegion, QueueTargetId } from '$lib/bridge/types';
 	import QueueHeader from './QueueHeader.svelte';
 	import QueueRowMenu from './QueueRowMenu.svelte';
 	import TypedText from './TypedText.svelte';
@@ -87,11 +83,7 @@
 	/** The playhead's stores (design D5): the rows' "Ends at" clocks are the
 	 * wall clock at each row's offset past the active item's end, and the
 	 * active row's progress is the predicted played fraction. */
-	const {
-		anchor: playheadAnchor,
-		finish: playheadFinish,
-		fraction
-	} = playhead;
+	const { anchor: playheadAnchor, finish: playheadFinish, fraction } = playhead;
 
 	/** The slot that carries the now-playing marker: the playhead's active
 	 * slot, whose row paints the predicted progress. */
@@ -154,9 +146,7 @@
 
 	/** The drag ghost's content, `null` while no drag runs or the ghost
 	 * row is structural (the core builds it from an item row). */
-	const ghost = $derived(
-		queue.drag && queue.drag.ghost.row === 'item' ? queue.drag.ghost : null,
-	);
+	const ghost = $derived(queue.drag && queue.drag.ghost.row === 'item' ? queue.drag.ghost : null);
 
 	/** The ghost's top edge in list pixels: the row top the drop would
 	 * insert at — the anchor row's top edge for `before`, its bottom edge
@@ -211,7 +201,6 @@
 		}
 		return row.kind === 'media' ? row.duration : null;
 	}
-
 
 	/** The row's painted background: the hovered or picked row's fill, then the
 	 * zebra stripe. The playing row keeps its own fill, because a highlight marks
@@ -298,9 +287,7 @@
 		if (!panelEl) {
 			return regions;
 		}
-		for (const el of panelEl.querySelectorAll<HTMLElement>(
-			'[data-right-column-segment]',
-		)) {
+		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-right-column-segment]')) {
 			regions.push(region(el, 'rightColumn'));
 		}
 		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-filter]')) {
@@ -349,10 +336,7 @@
 	});
 
 	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
+		const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(report);
 		if (panelEl) {
 			observer?.observe(panelEl);
 		}
@@ -394,8 +378,7 @@
 				style:font-weight={cellTone.weight}
 				style:text-decoration-color={cellTone.strike}
 				class:line-through={row.state.state === 'played'}
-				style:color={chrome === 'ghost' ? canvasVar('heading') : cellTone.title}
-				>{row.primary}</span
+				style:color={chrome === 'ghost' ? canvasVar('heading') : cellTone.title}>{row.primary}</span
 			>
 		</span>
 		{#if progress !== null && chrome !== 'ghost'}
@@ -423,7 +406,8 @@
 		{#if row.state.state === 'nowPlaying'}
 			<span
 				class="shrink-0 font-mono text-xs tabular-nums"
-				style:color={canvasVar('ink')} data-right-value>{right}</span
+				style:color={canvasVar('ink')}
+				data-right-value>{right}</span
 			>
 		{:else}
 			<span class="shrink-0 font-mono text-xs tabular-nums" data-right-value>
@@ -455,9 +439,7 @@
 	<div
 		class="relative flex min-h-0 flex-1 flex-col"
 		style:margin-inline="calc(var(--mbv-cell-col) * 2)"
-		style:background={panelFocused
-			? 'var(--mbv-queuePanelFocused)'
-			: 'var(--mbv-queuePanel)'}
+		style:background={panelFocused ? 'var(--mbv-queuePanelFocused)' : 'var(--mbv-queuePanel)'}
 	>
 		<QueueHeader {summary} />
 		<div
@@ -472,9 +454,8 @@
 					display-sized, medium weight, wide tracking — in the
 					`emptyQueueFg` role, centred in the list box. -->
 				<div class="flex h-full items-center justify-center">
-					<span
-						class="text-2xl font-medium tracking-widest"
-						style:color={roleVar('emptyQueueFg')}>{EMPTY_QUEUE_TEXT}</span
+					<span class="text-2xl font-medium tracking-widest" style:color={roleVar('emptyQueueFg')}
+						>{EMPTY_QUEUE_TEXT}</span
 					>
 				</div>
 			{:else}
@@ -494,11 +475,7 @@
 								style:background={rowBackground(row)}
 								data-slot={row.slot}
 							>
-								{@render rowCells(
-									row,
-									tone(row),
-									queue.hover === row.slot ? 'hover' : 'row',
-								)}
+								{@render rowCells(row, tone(row), queue.hover === row.slot ? 'hover' : 'row')}
 							</button>
 							{#if insertion?.slot === row.slot}
 								<!-- The drag's insertion line, anchored on this row's
@@ -543,11 +520,7 @@
 									data-actions={row.slot}
 									aria-label="Row actions"
 								>
-									<Ellipsis
-										size={14}
-										fill={canvasVar('heading')}
-										color={canvasVar('heading')}
-									/>
+									<Ellipsis size={14} fill={canvasVar('heading')} color={canvasVar('heading')} />
 								</button>
 							{/if}
 						</div>
@@ -556,8 +529,10 @@
 							class="flex items-center overflow-hidden uppercase"
 							style:height="{ROW_HEIGHT}px"
 							style:padding-inline="calc(var(--mbv-cell-col) * 2)"
-							style:color={roleVar('groupHeadingFg')}>{row.text}</div
+							style:color={roleVar('groupHeadingFg')}
 						>
+							{row.text}
+						</div>
 					{:else}
 						<div style:height="{ROW_HEIGHT}px"></div>
 					{/if}

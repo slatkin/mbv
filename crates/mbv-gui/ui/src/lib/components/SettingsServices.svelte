@@ -52,14 +52,14 @@
 		removeEmby: 'destructive',
 		removeAudiobookshelf: 'destructive',
 	};
-
 </script>
 
 {#snippet formActions(service: 'emby' | 'audiobookshelf')}
 	<div class="flex justify-end" style:gap="8px">
 		<SettingsButton
 			variant="ghost"
-			onpress={() => void sendSettingsCommand({ command: 'cancelSetup', service })}>Cancel</SettingsButton
+			onpress={() => void sendSettingsCommand({ command: 'cancelSetup', service })}
+			>Cancel</SettingsButton
 		>
 		<SettingsButton
 			variant="primary"
@@ -142,8 +142,10 @@
 						<div
 							style:font-size="13px"
 							style:color="var(--canvas-destructive)"
-							data-settings-setup-error="">{setup.error}</div
+							data-settings-setup-error=""
 						>
+							{setup.error}
+						</div>
 					{/if}
 					{@render formActions('emby')}
 				</div>
@@ -181,8 +183,10 @@
 						<div
 							style:font-size="13px"
 							style:color="var(--canvas-destructive)"
-							data-settings-setup-error="">{setup.error}</div
+							data-settings-setup-error=""
 						>
+							{setup.error}
+						</div>
 					{/if}
 					{@render formActions('audiobookshelf')}
 				</div>

@@ -14,10 +14,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
-import type {
-	GuiOverlayFrame,
-	GuiTrackChips,
-} from '$lib/bridge/types';
+import type { GuiOverlayFrame, GuiTrackChips } from '$lib/bridge/types';
 import TrackChips from './TrackChips.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -179,9 +176,7 @@ test('the subtitle popover paints the canvas dialog below its chip and marks the
 			{ id: 2, label: 'Japanese', forced: false, chosen: false },
 		],
 	});
-	const audioDialog = audioPopoverChip.container.querySelector(
-		'[data-popover-row]',
-	) as HTMLElement;
+	const audioDialog = audioPopoverChip.container.querySelector('[data-popover-row]') as HTMLElement;
 	expect(audioDialog.parentElement?.getAttribute('aria-label')).toBe('Audio');
 	expect(dialog.style.width).toBe('260px');
 	expect(dialog.style.padding).toBe('6px');

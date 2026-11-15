@@ -9,7 +9,14 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { initialListScroll, audiobooksScroll } from './scroll';
 import type { GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRow } from '$lib/bridge/types';
-import { audiobooksUi, initialAudiobooksUi, jumpAudiobooksToLetter, playAudiobooksRow, pressAudiobooksRow, queueAudiobooksRow } from './audiobooks';
+import {
+	audiobooksUi,
+	initialAudiobooksUi,
+	jumpAudiobooksToLetter,
+	playAudiobooksRow,
+	pressAudiobooksRow,
+	queueAudiobooksRow,
+} from './audiobooks';
 import { buildAudiobooksRows } from './audiobooks-list';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
@@ -115,7 +122,7 @@ test('queueing a book sends absQueue with its id', () => {
 	});
 });
 
-test('a rail jump puts the cursor on the letter\'s first book', () => {
+test("a rail jump puts the cursor on the letter's first book", () => {
 	carry();
 
 	jumpAudiobooksToLetter('B');

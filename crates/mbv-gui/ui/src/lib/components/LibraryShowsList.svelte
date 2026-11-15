@@ -59,9 +59,7 @@
 
 	/** The painted rows (design D14): the tree in the All mode, the flat rows
 	 * in the Latest and Upcoming modes, narrowed by the filter's text. */
-	const rows = $derived(
-		showsRowsOf(list, mode, $showsUi.filter, $showsUi.open, $showsUi.closed),
-	);
+	const rows = $derived(showsRowsOf(list, mode, $showsUi.filter, $showsUi.open, $showsUi.closed));
 
 	/** The rail's A–Z letters over the painted rows: the All series mode paints
 	 * it, and the flat modes paint none. */
@@ -84,7 +82,6 @@
 	/** The filter field's placeholder, naming the selection as the Music list
 	 * does. */
 	const filterPlaceholder = $derived(`Filter ${list.collectionNames[0] ?? 'shows'}`);
-
 
 	/** The stable Service id a row names, or `null` on a heading: the item the
 	 * menu and the double-click act on. */
@@ -209,16 +206,16 @@
 	{/if}
 	<div class="flex min-h-0 flex-1" style:overflow="hidden">
 		<LibraryVirtualList
-		{rows}
-		scrollTop={$showsScroll.scrollTop}
-		viewportHeight={$showsScroll.viewportHeight}
-		attr="shows"
-		padding="8px 0 8px 8px"
-		onmeasure={measureShowsList}
-		onscroll={scrollShowsList}
-	>
-		{#snippet row(row)}
-					{#if row.kind === 'heading'}
+			{rows}
+			scrollTop={$showsScroll.scrollTop}
+			viewportHeight={$showsScroll.viewportHeight}
+			attr="shows"
+			padding="8px 0 8px 8px"
+			onmeasure={measureShowsList}
+			onscroll={scrollShowsList}
+		>
+			{#snippet row(row)}
+				{#if row.kind === 'heading'}
 					<LibraryLetterHeading attr="shows" letter={row.letter} height={row.height} />
 				{:else if row.kind === 'series' || row.kind === 'season'}
 					<button
@@ -334,7 +331,7 @@
 					/>
 				{/if}
 			{/snippet}
-	</LibraryVirtualList>
+		</LibraryVirtualList>
 		{#if showsSeriesMode(mode)}
 			<LibraryLetterRail letters={rail} {marked} jump={jumpShowsToLetter} />
 		{/if}

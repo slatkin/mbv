@@ -19,12 +19,7 @@ import {
 import { DEFAULT_DRAGGED_WIDTHS, draggedWidths } from '$lib/bridge/resize';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
-import type {
-	GuiSettingsFrame,
-	GuiMusicHero,
-	GuiPanel,
-	LayoutSize,
-} from '$lib/bridge/types';
+import type { GuiSettingsFrame, GuiMusicHero, GuiPanel, LayoutSize } from '$lib/bridge/types';
 import { initialSettingsUi, settingsUi } from '$lib/settings/state';
 import { selectSettingsSection } from '$lib/settings/state';
 import App from './App.svelte';
@@ -105,7 +100,10 @@ function seed(
 	libraryMusic: LibrarySections | null,
 	overrides: {
 		panel?: Partial<{ collapsed: boolean; queueFolded: boolean; uiResetEpoch: number }>;
-		status?: { prefixArmed: boolean; toast: { text: string; severity: 'neutral' | 'success' | 'warning' | 'error' } | null };
+		status?: {
+			prefixArmed: boolean;
+			toast: { text: string; severity: 'neutral' | 'success' | 'warning' | 'error' } | null;
+		};
 		settings?: GuiSettingsFrame | null;
 		library?: LibrarySections | null;
 	} = {},
@@ -362,8 +360,8 @@ test('the Settings sidebar lists the frame sections in order', async () => {
 	seed('queue', null, { settings: settingsFrame() });
 	const { container } = await mount({ width: 1600, height: 900 });
 
-	const sections = [...container.querySelectorAll('[data-settings-section]')].map(
-		(el) => el.getAttribute('data-settings-section'),
+	const sections = [...container.querySelectorAll('[data-settings-section]')].map((el) =>
+		el.getAttribute('data-settings-section'),
 	);
 
 	expect(sections).toEqual([
@@ -514,7 +512,12 @@ function podcastsContent(): LibrarySections {
 				libIdx: 2,
 				pills: [
 					{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-					{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
+					{
+						pill: { kind: 'show', id: 'sh1' },
+						name: 'Show One',
+						selected: false,
+						collection: false,
+					},
 				],
 				loading: false,
 				failed: false,

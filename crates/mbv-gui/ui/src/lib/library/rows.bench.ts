@@ -37,7 +37,15 @@ function artist(index: number): GuiMusicArtist {
 		artistKey: { kind: 'service', id: `artist-${index}` },
 		name: `Artist ${index}`,
 		sortLetter: letter,
-		albums: [{ albumId: `album-${index}`, name: `Album ${index}`, year: '2000', tracks: null, total: null }],
+		albums: [
+			{
+				albumId: `album-${index}`,
+				name: `Album ${index}`,
+				year: '2000',
+				tracks: null,
+				total: null,
+			},
+		],
 	};
 }
 

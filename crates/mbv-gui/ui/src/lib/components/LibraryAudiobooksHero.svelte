@@ -16,14 +16,18 @@
 	// Play, and Add to queue (`a`), send the Audiobooks commands with the
 	// frame's selected book — the core owns the selection, so the actions name
 	// the book the frame painted and never a position.
-	
+
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { playhead } from '$lib/bridge/playhead';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
 	import LibraryWorkspaceTable from './LibraryWorkspaceTable.svelte';
 	import { heroLayout } from '$lib/library/hero';
-	import type { GuiAudiobooksChapterRow, GuiAudiobooksDetail, GuiAudiobooksList } from '$lib/bridge/types';
+	import type {
+		GuiAudiobooksChapterRow,
+		GuiAudiobooksDetail,
+		GuiAudiobooksList,
+	} from '$lib/bridge/types';
 	import {
 		audiobooksWorkspace,
 		currentChapterRow,
@@ -58,10 +62,7 @@
 	 * stable within its span, so the per-frame prediction re-renders the
 	 * Workspace only when the mark moves. */
 	const markedChapter = $derived.by(() => {
-		if (
-			detail.playingBookId === null ||
-			detail.playingBookId !== detail.selected
-		) {
+		if (detail.playingBookId === null || detail.playingBookId !== detail.selected) {
 			return null;
 		}
 		return currentChapterRow(workspace?.rows ?? [], $playheadPosition);
@@ -73,7 +74,6 @@
 	const cursorChapter = $derived(
 		resolveAbsChapterCursor(workspace, $audiobooksWorkspace.cursor, markedChapter)?.chapter ?? null,
 	);
-
 
 	/** Send the book command for the frame's selected book (design D12, row
 	 * 9.1): the book the frame painted, never a position. */

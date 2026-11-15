@@ -43,29 +43,21 @@ beforeEach(() => {
 test.each<[string, GuiSettingsCommand]>([
 	['route:shows', { command: 'routeDevices', library: 'shows' }],
 	['routeClear:music', { command: 'assignRoute', library: 'music', endpoint: null }],
-	[
-		'routeDevice:music:Phone',
-		{ command: 'assignRoute', library: 'music', endpoint: 'dlna:phone' },
-	],
-])(
-	'a press on %s sends its command and moves the content cursor to it',
-	async (id, command) => {
-		const content = libraryContent();
-		const entries = settingsEntries(content, {});
-		const { container } = render(SettingsLibrary, {
-			props: { content, entries, cursorId: null },
-		});
+	['routeDevice:music:Phone', { command: 'assignRoute', library: 'music', endpoint: 'dlna:phone' }],
+])('a press on %s sends its command and moves the content cursor to it', async (id, command) => {
+	const content = libraryContent();
+	const entries = settingsEntries(content, {});
+	const { container } = render(SettingsLibrary, {
+		props: { content, entries, cursorId: null },
+	});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
-		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
-		const ui = get(settingsUi);
-		expect(ui.pane).toBe('content');
-		expect(cursorEntryId(entries, ui)).toBe(id);
-	},
-);
+	expect(invokeMock).toHaveBeenCalledWith('settings', { command });
+	const ui = get(settingsUi);
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe(id);
+});
 
 test('a press on a device with no endpoint sends no command', async () => {
 	const content = libraryContent();

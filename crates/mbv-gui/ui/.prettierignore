@@ -1,0 +1,5 @@
+# pnpm writes this file; Prettier's YAML reflow fights its output on every change.
+pnpm-lock.yaml
+
+node_modules/
+dist/

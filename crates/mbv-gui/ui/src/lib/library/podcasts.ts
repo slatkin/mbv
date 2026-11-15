@@ -102,7 +102,11 @@ export function acceptPodcastsFilter(): void {
  * overlay and closes an open menu, because the facts they paint belong to
  * the previous episode, as a Music pick's do. */
 export function selectPodcastsRow(rowId: string): void {
-	pillList.select((podcasts) => ({ command: 'podcastsSelect', libIdx: podcasts.libIdx, row: rowId }));
+	pillList.select((podcasts) => ({
+		command: 'podcastsSelect',
+		libIdx: podcasts.libIdx,
+		row: rowId,
+	}));
 }
 
 /** Press an episode row (design D12): the press selects the episode the Hero

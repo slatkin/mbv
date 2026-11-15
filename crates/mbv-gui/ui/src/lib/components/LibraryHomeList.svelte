@@ -16,11 +16,7 @@
 	// selects the row, and a double-click plays it (design D12): the keys'
 	// Enter plays the cursor row, and the press is the selection's half.
 	import type { GuiHomeDetail, GuiHomeList } from '$lib/bridge/types';
-	import {
-		homeRowsOf,
-		HOME_ITEM_ROW_HEIGHT,
-		homeRowKey,
-	} from '$lib/library/home-list';
+	import { homeRowsOf, HOME_ITEM_ROW_HEIGHT, homeRowKey } from '$lib/library/home-list';
 	import type { HomeListRow } from '$lib/library/home-list';
 	import {
 		acceptHomeFilter,
@@ -58,7 +54,6 @@
 	 * filter's text. */
 	const rows = $derived(homeRowsOf(list.rows, $homeUi.filter));
 
-
 	/** An item row's name colour: the canvas's text tone, dimmed on a played
 	 * row (design D12). */
 	function nameColor(row: HomeListRow): string {
@@ -89,9 +84,7 @@
 
 	/** The resume percent an active item row paints, or `null`. */
 	function rowProgress(row: HomeListRow): number | null {
-		return row.kind === 'item' && typeof row.state === 'object'
-			? row.state.active.progress
-			: null;
+		return row.kind === 'item' && typeof row.state === 'object' ? row.state.active.progress : null;
 	}
 </script>
 

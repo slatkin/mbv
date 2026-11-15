@@ -58,13 +58,9 @@ test('the refusal text from the frame shows on the edited row', () => {
 
 	const row = container.querySelector('[data-settings-key-row="stop"]') as HTMLElement;
 	expect(row.nextElementSibling?.getAttribute('data-settings-key-refusal')).not.toBeNull();
-	expect(row.nextElementSibling?.textContent).toContain(
-		'the chord collides with `stop`',
-	);
+	expect(row.nextElementSibling?.textContent).toContain('the chord collides with `stop`');
 	// The unchanged row paints no refusal, and the section paints one.
-	expect(
-		container.querySelectorAll('[data-settings-key-refusal]'),
-	).toHaveLength(1);
+	expect(container.querySelectorAll('[data-settings-key-refusal]')).toHaveLength(1);
 });
 
 test('a reset sends keysReset with the action id', async () => {
@@ -91,9 +87,7 @@ test.each<[string, GuiSettingsCommand]>([
 		props: { content, entries, cursorId: null },
 	});
 
-	await fireEvent.click(
-		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('settings', { command });
 	const ui = get(settingsUi);
@@ -109,9 +103,7 @@ test('a press on a chord arms its capture and sends no command', async () => {
 	});
 
 	const id = 'keyTarget:stop';
-	await fireEvent.click(
-		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 	expect(invokeMock).not.toHaveBeenCalled();
 	const ui = get(settingsUi);

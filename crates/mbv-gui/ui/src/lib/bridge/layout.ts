@@ -113,8 +113,7 @@ export function observeLayout(
 	el: HTMLElement | undefined,
 	report: () => void,
 ): () => void {
-	const observer =
-		typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(report);
+	const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(report);
 	if (el) {
 		observer?.observe(el);
 	}

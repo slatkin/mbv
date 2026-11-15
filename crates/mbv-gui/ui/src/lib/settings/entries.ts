@@ -43,8 +43,7 @@ export const entryId = {
 	keyClear: (target: string) => `keyClear:${target}`,
 	target: (index: number) => `target:${index}`,
 	playlist: (id: string) => `playlist:${id}`,
-	playlistAction: (id: string, action: GuiPlaylistAction) =>
-		`playlistAction:${id}:${action}`,
+	playlistAction: (id: string, action: GuiPlaylistAction) => `playlistAction:${id}:${action}`,
 	playlistItemAction: (id: string, itemId: string, action: GuiPlaylistAction) =>
 		`item:${id}:${itemId}:${action}`,
 	playlistRename: (id: string) => `playlistRename:${id}`,
@@ -199,10 +198,7 @@ export type SettingsEntry =
 
 /** The marked ids a row's choice list holds, seeded from the frame's
  * `selected` flags and overridden by the user's marks. */
-function markedIds(
-	row: GuiSettingRow,
-	marks: Record<string, string[]>,
-): Record<string, boolean> {
+function markedIds(row: GuiSettingRow, marks: Record<string, string[]>): Record<string, boolean> {
 	const ids = marks[row.key] ?? row.choices?.filter((c) => c.selected).map((c) => c.id) ?? [];
 	return Object.fromEntries(ids.map((id) => [id, true]));
 }

@@ -183,7 +183,9 @@ test('a press sends the select command with the row id', async () => {
 test('a double-click on a row plays it', async () => {
 	const container = await mountList(false, MOVIES);
 
-	await fireEvent.dblClick(container.querySelector('[data-library-emby-row-id="m3"]') as HTMLElement);
+	await fireEvent.dblClick(
+		container.querySelector('[data-library-emby-row-id="m3"]') as HTMLElement,
+	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'embyPlay', libIdx: 3, itemId: 'm3' },
@@ -195,7 +197,9 @@ test('a double-click on a row plays it', async () => {
 test('a double-click on a collection row plays it', async () => {
 	const container = await mountList(true, FEED);
 
-	await fireEvent.dblClick(container.querySelector('[data-library-emby-row-id="f1"]') as HTMLElement);
+	await fireEvent.dblClick(
+		container.querySelector('[data-library-emby-row-id="f1"]') as HTMLElement,
+	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'embyPlay', libIdx: 3, itemId: 'f1' },

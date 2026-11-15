@@ -10,10 +10,7 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { homeScroll, initialListScroll, musicScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
-import {
-	initialHomeUi,
-	homeUi,
-} from './home';
+import { initialHomeUi, homeUi } from './home';
 import { homeRowKey } from './home-list';
 import type {
 	GuiLibraryTab,
@@ -48,10 +45,7 @@ beforeEach(() => {
 });
 
 /** A slice frame's routing facts (design D3) with the Library panel shown. */
-function frame(
-	panel: GuiPanel = 'library',
-	rest: Partial<LibraryKeyFrame> = {},
-): LibraryKeyFrame {
+function frame(panel: GuiPanel = 'library', rest: Partial<LibraryKeyFrame> = {}): LibraryKeyFrame {
 	return {
 		focus: { surface: panel, panel },
 		overlay: null,
@@ -161,11 +155,7 @@ function carryList(open: string[] = []): void {
 
 /** Dispatch one keydown through the installed forwarder, its router reading
  * the frame the press is routed with. */
-function press(
-	key: string,
-	options: KeyboardEventInit = {},
-	held = frame(),
-): KeyboardEvent {
+function press(key: string, options: KeyboardEventInit = {}, held = frame()): KeyboardEvent {
 	const detach = installInput(window, (event) => routeLibraryKey(event, held));
 	const event = new KeyboardEvent('keydown', {
 		...options,
@@ -200,11 +190,7 @@ test('Queue Panel focus sends / to the core', () => {
 test('an armed prefix sends a Library key to the core', () => {
 	carryPanel();
 
-	press(
-		'n',
-		{},
-		frame('library', { status: { prefixArmed: true, toast: null } }),
-	);
+	press('n', {}, frame('library', { status: { prefixArmed: true, toast: null } }));
 
 	expect(invokeMock).toHaveBeenCalledWith('key', {
 		event: expect.objectContaining({ key: 'n' }),

@@ -12,7 +12,7 @@
 	// Play and Add to queue send the Podcasts commands with the frame's
 	// selected episode — the core owns the selection, so the actions name the
 	// row the frame painted and never a position.
-	
+
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroActions from './LibraryHeroActions.svelte';
 	import LibraryHeroFrame from './LibraryHeroFrame.svelte';
@@ -32,7 +32,6 @@
 
 	/** The frame's header and block for the Hero (invariant 30). */
 	const layout = $derived(hero === null ? null : heroLayout(hero, 'podcast'));
-
 
 	/** Send a Podcasts command for the frame's selected episode (design D12,
 	 * row 10.1): the row the frame painted, never a position. */

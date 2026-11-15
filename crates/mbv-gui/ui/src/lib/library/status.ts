@@ -45,9 +45,7 @@ function selectedTitle(
 /** The location line's middle segment a pill row names (design D10, D12): the
  * selected pill's own name. A pill row with no selected pill leaves the segment
  * out. */
-function selectedPill(
-	pills: readonly { selected: boolean; name: string }[],
-): string | null {
+function selectedPill(pills: readonly { selected: boolean; name: string }[]): string | null {
 	return pills.find((pill) => pill.selected)?.name ?? null;
 }
 
@@ -74,31 +72,15 @@ function segmentsOf(
 		case 'home':
 			return ['Home', detail?.kind === 'home' ? (detail.hero?.title ?? null) : null];
 		case 'shows':
-			return [
-				label,
-				...list.collectionNames,
-				selectedTitle(detailSelected(detail), list.rows),
-			];
+			return [label, ...list.collectionNames, selectedTitle(detailSelected(detail), list.rows)];
 		case 'emby':
-			return [
-				label,
-				embySelectedGroup(list),
-				selectedTitle(detailSelected(detail), list.rows),
-			];
+			return [label, embySelectedGroup(list), selectedTitle(detailSelected(detail), list.rows)];
 		case 'audiobooks':
 			return [label, selectedTitle(detailSelected(detail), list.rows)];
 		case 'podcasts':
-			return [
-				label,
-				selectedPill(list.pills),
-				selectedTitle(detailSelected(detail), list.rows),
-			];
+			return [label, selectedPill(list.pills), selectedTitle(detailSelected(detail), list.rows)];
 		case 'feeds':
-			return [
-				label,
-				selectedPill(list.pills),
-				selectedTitle(detailSelected(detail), list.rows),
-			];
+			return [label, selectedPill(list.pills), selectedTitle(detailSelected(detail), list.rows)];
 		case 'music':
 			return [
 				label,

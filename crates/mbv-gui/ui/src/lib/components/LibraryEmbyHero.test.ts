@@ -58,7 +58,9 @@ function emby(): GuiEmbyList {
 		feedGroup: false,
 		loading: false,
 		failed: false,
-		rows: [{ id: 'movie1', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' }],
+		rows: [
+			{ id: 'movie1', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' },
+		],
 	};
 }
 
@@ -98,7 +100,7 @@ test('a landscape Hero fills the content width at 16:9 instead of the 300 px box
 
 // Invariant 30: the header's big title is the movie itself (a movie is its own
 // largest unit), and the kicker is the item's kind word in upper case.
-test('the header paints the item kind\'s kicker and the movie\'s title', () => {
+test("the header paints the item kind's kicker and the movie's title", () => {
 	const container = mount();
 
 	expect(container.querySelector('[data-library-emby-hero-kicker]')?.textContent).toBe('MOVIE');

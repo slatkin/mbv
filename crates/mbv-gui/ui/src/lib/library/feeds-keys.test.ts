@@ -268,7 +268,7 @@ test('Esc closes the Feeds filter and drops its text', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('a in the Hero pane queues the frame\'s selected entry', () => {
+test("a in the Hero pane queues the frame's selected entry", () => {
 	carryFeeds(feedsContent('latest', ENTRIES, HERO), 'hero');
 
 	press('a');

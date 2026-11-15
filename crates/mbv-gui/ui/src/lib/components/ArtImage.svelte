@@ -24,14 +24,7 @@
 		 * fails to load, or its retry waits. */
 		fallback?: Snippet;
 	}
-	const {
-		art,
-		alt,
-		bounds,
-		class: className = '',
-		style,
-		fallback,
-	}: Props = $props();
+	const { art, alt, bounds, class: className = '', style, fallback }: Props = $props();
 
 	/** The first retry's wait; each further failure doubles it. */
 	const RETRY_BASE_MS = 1000;
@@ -55,9 +48,7 @@
 	});
 
 	/** The URL to paint, `null` while the fill paints. */
-	const painted = $derived(
-		src !== null && !(failure?.waiting && failure.src === src) ? src : null,
-	);
+	const painted = $derived(src !== null && !(failure?.waiting && failure.src === src) ? src : null);
 
 	/** The wait before the retry after the `count`-th failure in a row. */
 	function retryDelay(count: number): number {

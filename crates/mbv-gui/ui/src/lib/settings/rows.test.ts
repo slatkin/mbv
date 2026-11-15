@@ -132,14 +132,10 @@ test('selecting a library in the routes list sends routeDevices', () => {
 // a routable device assigns its endpoint, and a device with no endpoint
 // activates nothing.
 test('assigning a device sends assignRoute with the library and the endpoint', () => {
-	const frame = libraryFrame(
-		[{ library: 'movies', name: 'Movies', endpoint: null }],
-		'movies',
-		[
-			{ name: 'Living Room', endpoint: 'tcp://tv:8096' },
-			{ name: 'Phone', endpoint: null },
-		],
-	);
+	const frame = libraryFrame([{ library: 'movies', name: 'Movies', endpoint: null }], 'movies', [
+		{ name: 'Living Room', endpoint: 'tcp://tv:8096' },
+		{ name: 'Phone', endpoint: null },
+	]);
 	// Entries: route, the automatic entry, the two devices.
 	cursorAt(2);
 
@@ -166,11 +162,9 @@ test('the automatic entry clears the route', () => {
 });
 
 test('a device with no endpoint assigns nothing', () => {
-	const frame = libraryFrame(
-		[{ library: 'movies', name: 'Movies', endpoint: null }],
-		'movies',
-		[{ name: 'Phone', endpoint: null }],
-	);
+	const frame = libraryFrame([{ library: 'movies', name: 'Movies', endpoint: null }], 'movies', [
+		{ name: 'Phone', endpoint: null },
+	]);
 	cursorAt(2);
 
 	expect(press('Enter', frame)).toBe('handled');

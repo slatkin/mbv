@@ -42,13 +42,7 @@
 		 * hints while active. */
 		status: GuiStatusBar;
 	}
-	const {
-		tabs,
-		currentTab,
-		list = null,
-		detail = null,
-		status,
-	}: Props = $props();
+	const { tabs, currentTab, list = null, detail = null, status }: Props = $props();
 
 	/** The canvas's key hints, key glyph then what the key does (design D3,
 	 * D10). */
@@ -70,9 +64,7 @@
 	 * tab's label, the selected pill, and the selected episode (row 10.1); on a
 	 * Feeds destination the tab's label, the selected pill, and the selected
 	 * entry (row 11.1). */
-	const location = $derived(
-		libraryLocation(tabs, currentTab, list, detail),
-	);
+	const location = $derived(libraryLocation(tabs, currentTab, list, detail));
 </script>
 
 <!-- The canvas status bar: 40 px, 16 px side padding, the canvas's 1 px top

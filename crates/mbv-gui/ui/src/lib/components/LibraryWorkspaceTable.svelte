@@ -176,10 +176,8 @@
 									<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
 								</span>
 							{/if}
-							<span
-								class="min-w-0 truncate"
-								style:font-size="13.5px"
-								style:color={nameColor(row)}>{row.name}</span
+							<span class="min-w-0 truncate" style:font-size="13.5px" style:color={nameColor(row)}
+								>{row.name}</span
 							>
 						</span>
 					</button>

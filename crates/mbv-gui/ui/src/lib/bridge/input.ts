@@ -11,12 +11,7 @@
 // terminal edge drops it.
 
 import { invoke } from '@tauri-apps/api/core';
-import type {
-	DomKey,
-	DomPointer,
-	DomPointerKind,
-	LayoutReport,
-} from './types';
+import type { DomKey, DomPointer, DomPointerKind, LayoutReport } from './types';
 
 /**
  * What the key router did with one keydown (design D3 of
@@ -55,10 +50,7 @@ export function domKey(event: KeyboardEvent): DomKey {
 }
 
 /** The modifier flags and position every pointer kind carries. */
-function pointerFields(
-	kind: DomPointerKind,
-	event: PointerEvent | WheelEvent,
-): DomPointer {
+function pointerFields(kind: DomPointerKind, event: PointerEvent | WheelEvent): DomPointer {
 	return {
 		kind,
 		button: event.button,
@@ -102,11 +94,7 @@ export function domWheel(event: WheelEvent): DomPointer {
 	// deltaMode: 0 pixels, 1 lines, 2 pages (DOM_DELTA_*). A page stands for
 	// the window's height.
 	const unit =
-		event.deltaMode === 1
-			? PIXELS_PER_LINE
-			: event.deltaMode === 2
-				? window.innerHeight
-				: 1;
+		event.deltaMode === 1 ? PIXELS_PER_LINE : event.deltaMode === 2 ? window.innerHeight : 1;
 	pointer.deltaX = event.deltaX * unit;
 	pointer.deltaY = event.deltaY * unit;
 	return pointer;

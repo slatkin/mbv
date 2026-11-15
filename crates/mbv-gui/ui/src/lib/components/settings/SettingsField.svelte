@@ -17,11 +17,23 @@
 		/** The input's own event: the new value. */
 		oninput: (value: string) => void;
 	}
-	const { label, value, field, ariaLabel, placeholder = label, type = 'text', oninput }: Props =
-		$props();
+	const {
+		label,
+		value,
+		field,
+		ariaLabel,
+		placeholder = label,
+		type = 'text',
+		oninput,
+	}: Props = $props();
 </script>
 
-<label class="flex flex-col" style:gap="6px" style:font-size="12px" style:color="var(--canvas-muted)">
+<label
+	class="flex flex-col"
+	style:gap="6px"
+	style:font-size="12px"
+	style:color="var(--canvas-muted)"
+>
 	{label}
 	<input
 		{type}

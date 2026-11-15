@@ -11,11 +11,7 @@ import { beforeEach, expect, test } from 'vitest';
 import type { GuiMusicArtist, GuiMusicList } from '$lib/bridge/types';
 import { buildLibraryRows, letterRail } from '$lib/library/list';
 import { carryLibrary } from '$lib/bridge/test-library';
-import {
-	initialLibraryUi,
-	libraryUi,
-	measureLibraryList,
-} from '$lib/library/state';
+import { initialLibraryUi, libraryUi, measureLibraryList } from '$lib/library/state';
 import { initialListScroll, musicScroll } from '$lib/library/scroll';
 import LibraryLetterRail from './LibraryLetterRail.svelte';
 

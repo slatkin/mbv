@@ -72,7 +72,8 @@ beforeEach(() => {
 /** The two sections' item rows: the Emby row with art and a resume percent,
  * the Feed row without art, and the played row between them. */
 function homeFrame(): GuiHomeList {
-	return { loading: false,
+	return {
+		loading: false,
 		rows: [
 			{ row: 'heading', text: 'Continue watching' },
 			{
@@ -132,7 +133,9 @@ test('the sections paint their headings and the date gutter in order', async () 
 	expect(headings).toEqual(['Continue watching', 'Recently added']);
 	expect(
 		container
-			.querySelector(`[data-library-home-row-id="${homeRowKey({ kind: 'recent', id: { provider: 'Feed', value: 'f1' } })}"] [data-library-home-date]`)
+			.querySelector(
+				`[data-library-home-row-id="${homeRowKey({ kind: 'recent', id: { provider: 'Feed', value: 'f1' } })}"] [data-library-home-date]`,
+			)
 			?.textContent?.trim(),
 	).toBe('12 May');
 	expect(container.querySelector('[data-library-home-row="spacer"]')).toBeNull();
@@ -154,10 +157,14 @@ test('the list paints only the rows in view', async () => {
 	const container = await mountList(HOME_ITEM_ROW_HEIGHT);
 
 	expect(
-		container.querySelector(`[data-library-home-row-id="${homeRowKey({ kind: 'continue', id: 'e1' })}"]`),
+		container.querySelector(
+			`[data-library-home-row-id="${homeRowKey({ kind: 'continue', id: 'e1' })}"]`,
+		),
 	).toBeTruthy();
 	expect(
-		container.querySelector(`[data-library-home-row-id="${homeRowKey({ kind: 'continue', id: 'e2' })}"]`),
+		container.querySelector(
+			`[data-library-home-row-id="${homeRowKey({ kind: 'continue', id: 'e2' })}"]`,
+		),
 	).toBeNull();
 });
 
@@ -255,7 +262,9 @@ test('an empty Home paints the empty line', async () => {
 // row's stable id, which the core resolves and the panel paints (D15).
 test('a right-click on a row sends the row-menu command with its id', async () => {
 	const container = await mountList(300);
-	const row = container.querySelector('[data-library-home-row-id="home-continue:e1"]') as HTMLElement;
+	const row = container.querySelector(
+		'[data-library-home-row-id="home-continue:e1"]',
+	) as HTMLElement;
 
 	await fireEvent.contextMenu(row, { clientX: 5, clientY: 6 });
 

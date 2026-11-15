@@ -99,12 +99,8 @@ test('the Home icon is current only while the Home content is present', () => {
 		homeActive: true,
 	});
 
-	expect(
-		container.querySelector('[data-library-home]')?.getAttribute('aria-current'),
-	).toBe('page');
-	expect(
-		container.querySelector('[data-library-tab]')?.getAttribute('aria-current'),
-	).toBeNull();
+	expect(container.querySelector('[data-library-home]')?.getAttribute('aria-current')).toBe('page');
+	expect(container.querySelector('[data-library-tab]')?.getAttribute('aria-current')).toBeNull();
 });
 
 // ---- Search (row 12.1) -----------------------------------------------------
@@ -166,7 +162,9 @@ test('the dropdown paints the rows in the list-row look, with the first row high
 	// No held highlight: the first row marks itself (row 12.1).
 	expect(get(librarySearch).highlight).toBe('r1');
 	expect(
-		container.querySelector('[data-library-search-highlight]')?.getAttribute('data-library-search-row'),
+		container
+			.querySelector('[data-library-search-highlight]')
+			?.getAttribute('data-library-search-row'),
 	).toBe('r1');
 });
 
@@ -186,7 +184,9 @@ test('the highlight survives a rerendered results frame by row id, not object id
 	});
 
 	expect(
-		container.querySelector('[data-library-search-highlight]')?.getAttribute('data-library-search-row'),
+		container
+			.querySelector('[data-library-search-highlight]')
+			?.getAttribute('data-library-search-row'),
 	).toBe('r2');
 });
 
