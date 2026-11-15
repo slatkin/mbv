@@ -63,6 +63,15 @@ fn long_past() -> Instant {
     Instant::now() + Duration::from_secs(3600)
 }
 
+/// Fire every armed timer into the playhead, and report how many fired.
+fn fire(clock: &RecordingClock, playhead: &mut Playhead) -> usize {
+    let fired = clock.fire_due(long_past());
+    for timer in &fired {
+        playhead.on_timer(*timer);
+    }
+    fired.len()
+}
+
 /// The handles a test drives, shared out of the document's root. The
 /// document stays alive for the fixture's life: the playhead's signals live
 /// in the root's scope, so dropping the document drops the playhead's
@@ -139,7 +148,7 @@ fn built_playhead() -> Fixture {
 
 /// Contract 1 (task 3.2): the predicted position advances by the injected
 /// elapsed time while playing — one frame five seconds after the stamp
-/// lands five seconds of ticks ahead.
+/// lands five seconds of ticks ahead once the tick fires.
 #[test]
 fn the_predicted_position_advances_by_the_injected_elapsed_time_while_playing() {
     let Fixture {
@@ -150,16 +159,16 @@ fn the_predicted_position_advances_by_the_injected_elapsed_time_while_playing() 
     } = built_playhead();
     let mut playhead = playhead;
     playhead.stamp(playing(60 * SECOND));
-    assert!(clock.frames_wanted(), "a playing anchor wants frames");
+    assert_eq!(clock.pending(), 2, "a playing anchor arms the tick");
 
     times.advance_ms(5_000.0);
-    playhead.on_frame();
+    fire(&clock, &mut playhead);
 
     assert_eq!(playhead.position.cloned(), 65.0 * SECOND_F);
 }
 
 /// Contract 2 (task 3.2): the predicted position holds while paused, and the
-/// frame loop stops — the window sends no update, so the finish times move
+/// tick stops — the window sends no update, so the finish times move
 /// only with the wall clock.
 #[test]
 fn the_predicted_position_holds_while_paused() {
@@ -175,10 +184,10 @@ fn the_predicted_position_holds_while_paused() {
         paused: true,
         ..playing(60 * SECOND)
     });
-    assert!(!clock.frames_wanted(), "a paused anchor wants no frames");
-
     times.advance_ms(10_000.0);
-    playhead.on_frame();
+    let fired = fire(&clock, &mut playhead);
+
+    assert_eq!(fired, 1, "a paused anchor fires only the minute clock");
 
     assert_eq!(playhead.position.cloned(), 60.0 * SECOND_F);
 }

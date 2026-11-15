@@ -1,12 +1,9 @@
 //! The window's clocks (D10 of `replace-tauri-with-blitz`): one thread holds
-//! the deadline queue behind [`Clock::after`] and [`Clock::cancel`], and
-//! [`Clock::want_frames`] gates the launch copy's `RedrawRequested` hook, so
-//! a frame-driven surface (the playhead) paces at vsync. Tests inject
-//! [`RecordingClock`], so no test sleeps.
+//! the deadline queue behind [`Clock::after`] and [`Clock::cancel`]. Tests
+//! inject [`RecordingClock`], so no test sleeps.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,14 +27,6 @@ pub trait Clock: Send + Sync + 'static {
 
     /// Cancel a timer: a cancelled timer sends nothing, even at its deadline.
     fn cancel(&self, timer: TimerId);
-
-    /// Gate the frame loop (D10): while frames are wanted, the launch copy's
-    /// `RedrawRequested` hook requests the next redraw, which paces the loop
-    /// at vsync.
-    fn want_frames(&self, wanted: bool);
-
-    /// Whether frames are currently wanted.
-    fn frames_wanted(&self) -> bool;
 }
 
 /// The deadline queue the timer thread waits over.
@@ -53,7 +42,6 @@ pub struct TimerClock {
     deadlines: Arc<Mutex<Deadlines>>,
     wake: Arc<Condvar>,
     events: WindowEventSender,
-    frames_wanted: AtomicBool,
 }
 
 impl TimerClock {
@@ -69,7 +57,6 @@ impl TimerClock {
             })),
             wake: Arc::new(Condvar::new()),
             events,
-            frames_wanted: AtomicBool::new(false),
         };
         let deadlines = Arc::clone(&clock.deadlines);
         let wake = Arc::clone(&clock.wake);
@@ -101,14 +88,6 @@ impl Clock for TimerClock {
         for entry in kept {
             deadlines.queue.push(entry);
         }
-    }
-
-    fn want_frames(&self, wanted: bool) {
-        self.frames_wanted.store(wanted, Ordering::Relaxed);
-    }
-
-    fn frames_wanted(&self) -> bool {
-        self.frames_wanted.load(Ordering::Relaxed)
     }
 }
 
@@ -192,7 +171,6 @@ struct RecordedDeadlines {
     cancelled: std::collections::HashSet<TimerId>,
     next_id: u64,
     fired: Vec<TimerId>,
-    frames_wanted: bool,
 }
 
 /// The recording clock the tests inject (D10, D16): `after` and `cancel`
@@ -266,20 +244,6 @@ impl Clock for RecordingClock {
             .expect("the test clock lives")
             .cancelled
             .insert(timer);
-    }
-
-    fn want_frames(&self, wanted: bool) {
-        self.deadlines
-            .lock()
-            .expect("the test clock lives")
-            .frames_wanted = wanted;
-    }
-
-    fn frames_wanted(&self) -> bool {
-        self.deadlines
-            .lock()
-            .expect("the test clock lives")
-            .frames_wanted
     }
 }
 

@@ -37,6 +37,10 @@ const TICKS_PER_MS: f64 = TICKS_PER_SECOND / 1000.0;
 /// One wall-clock minute, in milliseconds.
 const MINUTE_MS: i64 = 60_000;
 
+/// One second of position, in milliseconds: the elapsed and remaining clocks
+/// paint whole seconds, so the prediction advances once per second boundary.
+const SECOND_MS: f64 = 1_000.0;
+
 /// One tick count as f64, so the fractions and clocks divide without
 /// repeated casts. The i64→f64 cast is exact for |ticks| < 2^53 (about 28.5
 /// years of media at 100 ns per tick), so the tick facts never lose
@@ -110,7 +114,7 @@ pub struct PlayheadFinish {
 }
 
 /// The playhead one window keeps (D10): the anchor the batch stamps, the
-/// frame-driven prediction clock, and the minute counter the finish times
+/// timer-driven prediction clock, and the minute counter the finish times
 /// move with. Create once in the root's `use_hook` and provide as context —
 /// the signals and memos need the root's scope.
 #[derive(Clone)]
@@ -119,9 +123,13 @@ pub struct Playhead {
     times: Arc<dyn Times>,
     /// The stamped anchor, `None` before the first batch and after `reset`.
     pub anchor: Signal<Option<GuiPlayhead>>,
-    /// The monotonic clock the prediction reads, moved by the frame loop
+    /// The monotonic clock the prediction reads, moved by the tick timer
     /// only while the anchor is active and not paused (D10).
     pub now: Signal<f64>,
+    /// The tick timer: armed to the predicted position's next whole second
+    /// while playing, so the window repaints about once a second rather than
+    /// at vsync (a frame loop repainted the whole scene every frame).
+    tick_timer: Signal<Option<TimerId>>,
     /// The monotonic time the last stamp landed at.
     stamp_ms: Signal<f64>,
     /// The wall clock's minute counter: one timer re-arms to the next minute
@@ -219,6 +227,7 @@ impl Playhead {
             times,
             anchor,
             now,
+            tick_timer: Signal::new(None),
             stamp_ms,
             minute,
             minute_timer: Signal::new(None),
@@ -257,18 +266,16 @@ impl Playhead {
         self.stamp(section.value);
     }
 
-    /// One presented frame (D10): the prediction's monotonic clock moves.
-    /// The launch copy sends [`crate::window::channel::WindowEvent::Frame`]
-    /// for every presented frame; while paused the prediction still reads the
-    /// anchor's own position, so the extra stamps change nothing it paints,
-    /// and while frames are wanted this advances the prediction.
-    pub fn on_frame(&mut self) {
-        self.now.set(self.times.now_ms());
-    }
-
-    /// A passed timer (D10): the minute clock re-arms to the next boundary.
-    /// A timer the playhead did not arm drops.
+    /// A passed timer (D10): the tick advances the prediction and re-arms to
+    /// the next second; the minute clock re-arms to the next minute. A timer
+    /// the playhead did not arm drops.
     pub fn on_timer(&mut self, timer: TimerId) {
+        if self.tick_timer.peek().cloned() == Some(timer) {
+            self.tick_timer.set(None);
+            self.now.set(self.times.now_ms());
+            self.schedule_tick();
+            return;
+        }
         if self.minute_timer.peek().cloned() != Some(timer) {
             return;
         }
@@ -285,20 +292,44 @@ impl Playhead {
             self.clock.cancel(timer);
         }
         self.minute_timer.set(None);
+        self.cancel_tick();
         self.stamped_revision.set(None);
-        self.clock.want_frames(false);
         self.anchor.set(None);
     }
 
-    /// Start the frame loop while the anchor is active and not paused; stop
-    /// it otherwise (D10).
+    /// Re-arm the tick against the new stamp while the anchor is active and
+    /// not paused; stop it otherwise (D10).
     fn pump(&mut self) {
-        let should_run = self
+        self.cancel_tick();
+        self.schedule_tick();
+    }
+
+    /// Arm the tick at the predicted position's next whole second, while the
+    /// anchor is active and not paused.
+    fn schedule_tick(&mut self) {
+        let Some(anchor) = self
             .anchor
             .peek()
             .cloned()
-            .is_some_and(|anchor| anchor.active && !anchor.paused);
-        self.clock.want_frames(should_run);
+            .filter(|anchor| anchor.active && !anchor.paused)
+        else {
+            return;
+        };
+        let elapsed_ms = (self.times.now_ms() - *self.stamp_ms.peek()).max(0.0);
+        let position_ms = ticks_f64(anchor.position_ticks) / TICKS_PER_MS + elapsed_ms;
+        // One millisecond past the boundary, so the floored clocks land on
+        // the new second.
+        let delay_ms = SECOND_MS - position_ms.rem_euclid(SECOND_MS) + 1.0;
+        let delay = Duration::from_secs_f64(delay_ms / 1000.0);
+        self.tick_timer.set(Some(self.clock.after(delay)));
+    }
+
+    /// Cancel the armed tick, if any.
+    fn cancel_tick(&mut self) {
+        if let Some(timer) = self.tick_timer.peek().cloned() {
+            self.clock.cancel(timer);
+        }
+        self.tick_timer.set(None);
     }
 
     /// Arm the one-minute timer, once: the firing re-arms itself.

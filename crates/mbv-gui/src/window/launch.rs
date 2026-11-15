@@ -168,10 +168,9 @@ struct MbvApplication {
     /// the shell created its surfaces, so it never runs ahead of the clock the
     /// shell dates its own resolves with.
     animation: AnimationClock,
-    /// The document's id, so the frame hook requests the next redraw (D10).
+    /// The document's id, so a net answer requests the frame it needs (D12).
     doc_id: usize,
     events: WindowEventSender,
-    clock: Arc<dyn Clock>,
     /// `This crate:` the root's layout-size signal, written at every resize
     /// before the frame that resolves at it (D9).
     viewport_size: ViewportSize,
@@ -205,7 +204,6 @@ impl MbvApplication {
         document: Rc<RefCell<BaseDocument>>,
         doc_id: usize,
         events: WindowEventSender,
-        clock: Arc<dyn Clock>,
         viewport_size: ViewportSize,
         loads: NetLoads,
     ) -> Self {
@@ -216,7 +214,6 @@ impl MbvApplication {
             animation: AnimationClock::default(),
             doc_id,
             events,
-            clock,
             viewport_size,
             viewport_changed: false,
             resolved_early: false,
@@ -394,22 +391,15 @@ impl ApplicationHandler for MbvApplication {
         if viewport {
             self.apply_viewport(window_id);
         }
-        // `This crate:` D10. Every presented frame reports its change fact, and
-        // the next redraw is requested only while frames are wanted, which paces
-        // the loop at vsync. The report itself is never gated: a change no frame
-        // has resolved yet is answered by a frame's bump (D12), which a paused
-        // window must report too. An idle window presents none: nothing here
-        // asks for one, and blitz-shell's poll asks for a redraw on its own
-        // when the tree or a net answer gives it work.
+        // `This crate:` D12. Every presented frame reports its change fact: a
+        // change no frame has resolved yet is answered by a frame's bump. An
+        // idle window presents none: nothing here asks for one, and
+        // blitz-shell's poll asks for a redraw on its own when the tree or a
+        // net answer gives it work.
         if redraw {
             self.viewport_changed = false;
             self.resolved_early = false;
             let _ = self.events.unbounded_send(WindowEvent::Frame { changed });
-            if self.clock.frames_wanted() {
-                self.inner.proxy.send_event(BlitzShellEvent::RequestRedraw {
-                    doc_id: self.doc_id,
-                });
-            }
         }
     }
 
@@ -528,7 +518,7 @@ pub fn launch(
     ));
     vdom.provide_root_context(CoreLink::new(core));
     vdom.provide_root_context(Arc::clone(&net_provider));
-    vdom.provide_root_context(Arc::clone(&clock));
+    vdom.provide_root_context(clock);
     vdom.provide_root_context(EventSlot::new(event_receiver));
     // The root hands its layout-size signal back through this handle; a resize
     // writes the new size into it before the frame that resolves at it (D9).
@@ -562,7 +552,6 @@ pub fn launch(
         document,
         doc_id,
         events,
-        clock,
         viewport_size,
         loads,
     );

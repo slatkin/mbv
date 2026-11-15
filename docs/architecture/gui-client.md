@@ -289,12 +289,16 @@ provides both as a `Clock`.
 - **Timers.** `TimerClock` runs one thread with a deadline queue. A passed
   deadline sends `WindowEvent::Timer`, and the root routes it to the surface
   that asked. The search debounce (200 ms, `library/search.rs`), the artwork
-  retry, and the minute clock use it. Tests inject a clock, and no test sleeps.
+  retry, the minute clock, and the playhead tick use it. Tests inject a clock,
+  and no test sleeps.
+- **Playhead tick.** While it plays, the playhead arms a timer at the predicted
+  position's next whole second, so the window repaints about once a second.
+  Nothing paces at vsync: a frame loop repainted the whole Blitz scene every
+  frame and held the main thread near half a core.
 - **Frames.** Every presented frame makes the launch copy's redraw hook send
-  `WindowEvent::Frame`; `Clock::want_frames` gates only the request for the
-  next redraw. The playhead wants frames while it plays. The frames follow the
-  presented frames that the renderer paces, so a paused window still answers a
-  pending re-measure (see below).
+  `WindowEvent::Frame`. Nothing requests a redraw from that hook, so the window
+  presents frames only when the tree, a resize, or a net answer gives it work,
+  and a paused window still answers a pending re-measure (see below).
 - **Artwork retry.** A missed image keeps its loading fill and asks again for
   the same URL. The wait starts at 1 s, doubles, and stops at 30 s
   (`components/art_image.rs`). A new URL drops the failure and its timer.

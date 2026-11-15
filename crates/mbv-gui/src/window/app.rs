@@ -130,15 +130,13 @@ impl Drain {
                 self.library.on_search_timer(timer);
                 self.fired.push(timer);
             }
-            // A presented frame advances the playhead's prediction (D10), and
-            // carries the frame's change fact (D12): a frame whose resolve
+            // A presented frame carries the frame's change fact (D12): a frame whose resolve
             // applied a tree change, a viewport change, or a font bumps the
             // epoch once, so every measurement effect re-reads its box against
             // the layout this frame painted — before any effect or render body
             // of the bump's own turn reads it. A frame that resolved nothing
             // new bumps nothing.
             WindowEvent::Frame { changed } => {
-                self.playhead.on_frame();
                 note_presented_frame(self.epoch, changed);
             }
             // A section batch writes the stores (D6).
