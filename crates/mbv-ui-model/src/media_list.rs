@@ -17,6 +17,23 @@ impl ActiveProgress {
     pub fn percent(self) -> u8 {
         self.0
     }
+
+    /// The bounded percentage of a position within a duration, both in ticks:
+    /// `None` when either is not positive — a position of 0 is not painted as
+    /// "0%", and an unknown duration names no percentage — otherwise
+    /// `floor(position * 100 / duration)` bounded at 100, overflow-safe for
+    /// every `i64` pair.
+    #[must_use]
+    pub fn of_ticks(position_ticks: i64, duration_ticks: i64) -> Option<Self> {
+        if position_ticks <= 0 || duration_ticks <= 0 {
+            return None;
+        }
+        let percent = u128::try_from(position_ticks)
+            .unwrap_or(u128::MAX)
+            .saturating_mul(100)
+            / u128::try_from(duration_ticks).unwrap_or(u128::MAX);
+        Some(Self::new(u16::try_from(percent).unwrap_or(u16::MAX)))
+    }
 }
 
 /// Whether a canonical media-list item drills into a container or plays a leaf.
@@ -57,14 +74,9 @@ impl MediaSemanticState {
     #[must_use]
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
         if position_ticks > 0 {
-            let progress = (runtime_ticks > 0).then(|| {
-                (u128::try_from(position_ticks)
-                    .unwrap_or(u128::MAX)
-                    .saturating_mul(100)
-                    / u128::try_from(runtime_ticks).unwrap_or(u128::MAX))
-                .min(100) as u16
-            });
-            Self::active(progress)
+            Self::Active {
+                progress: ActiveProgress::of_ticks(position_ticks, runtime_ticks),
+            }
         } else if played {
             Self::Played
         } else {

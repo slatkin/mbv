@@ -8,6 +8,7 @@ use crate::app::App;
 use mbv_emby_model::seconds_to_ticks;
 use mbv_ids::ItemId;
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
+use mbv_ui_model::media_list::ActiveProgress;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::playback::PlaybackState;
 
@@ -28,7 +29,9 @@ pub(in crate::app) fn derive_workspace_now_playing(app: &App) -> Option<Workspac
     match app.playback_queue().item_at(state.active_idx?)? {
         QueueItem::Emby(item) => Some(WorkspaceNowPlaying::Item {
             item_id: ItemId::new(item.id.clone()),
-            progress: clamped_live_progress(state.position_ticks, state.runtime_ticks),
+            progress: ActiveProgress::of_ticks(state.position_ticks, state.runtime_ticks)
+                .map(ActiveProgress::percent)
+                .map(u16::from),
         }),
         // Feed entries, Audiobookshelf podcast episodes, and Twitch items
         // derive nothing: no workspace projects their rows (change non-goals;
@@ -75,15 +78,6 @@ fn playing_book_chapter(
         library_item_id: book.library_item_id.clone(),
         chapter_id: chapter.id,
         progress: u16::try_from(progress).unwrap_or(u16::MAX),
-    })
-}
-
-/// The clamped live progress percentage (`0..=100`) a workspace row paints,
-/// mirroring the Queue's active-row math (`queue_media_row_at`): no known
-/// position or runtime carries no percentage.
-fn clamped_live_progress(position_ticks: i64, runtime_ticks: i64) -> Option<u16> {
-    (position_ticks > 0 && runtime_ticks > 0).then(|| {
-        u16::try_from((position_ticks * 100 / runtime_ticks).clamp(0, 100)).unwrap_or(u16::MAX)
     })
 }
 

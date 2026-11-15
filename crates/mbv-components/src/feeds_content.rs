@@ -26,7 +26,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition, RowIntent};
 use mbv_render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+    ActiveProgress, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{FeedDisplayRow, current_time_secs, feed_display_rows};
@@ -412,18 +412,14 @@ impl FeedsContent {
                     semantic_state: if entry.played {
                         MediaSemanticState::Played
                     } else if entry.position_ticks > 0 {
-                        let progress =
-                            entry
-                                .duration_ticks
-                                .filter(|duration| *duration > 0)
-                                .map(|duration| {
-                                    (u64::try_from(entry.position_ticks.max(0))
-                                        .unwrap_or(u64::MAX)
-                                        .saturating_mul(100)
-                                        / duration)
-                                        .min(100) as u16
-                                });
-                        MediaSemanticState::active(progress)
+                        MediaSemanticState::Active {
+                            progress: ActiveProgress::of_ticks(
+                                entry.position_ticks,
+                                entry.duration_ticks.map_or(0, |duration| {
+                                    i64::try_from(duration).unwrap_or(i64::MAX)
+                                }),
+                            ),
+                        }
                     } else {
                         MediaSemanticState::Ordinary
                     },

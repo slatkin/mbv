@@ -9,7 +9,9 @@
 
 use mbv_audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_config::{AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity};
-use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_seconds};
+use mbv_emby_model::{
+    TICKS_PER_SECOND_F64, saturating_i64_from_f64, seconds_to_ticks, ticks_to_seconds,
+};
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 
 use super::library_panel::HeroContentData;
@@ -22,7 +24,8 @@ use super::media_list::{
     MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
 };
 use mbv_render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
+    ActiveProgress, MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing,
+    MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::current_time_secs;
@@ -259,20 +262,12 @@ impl PodcastContent {
                         semantic_state: match progress {
                             Some(progress) if progress.is_finished => MediaSemanticState::Played,
                             Some(progress) if progress.current_time_seconds > 0.0 => {
-                                #[expect(
-                                    clippy::cast_possible_truncation,
-                                    clippy::cast_sign_loss,
-                                    reason = "progress percentage through f64; no lossless integer-path conversion exists (approved, issue #804)"
-                                )]
-                                let percent = episode
-                                    .duration_seconds
-                                    .filter(|duration| *duration > 0.0)
-                                    .map(|duration| {
-                                        (progress.current_time_seconds * 100.0 / duration)
-                                            .clamp(0.0, 100.0)
-                                            as u16
-                                    });
-                                MediaSemanticState::active(percent)
+                                MediaSemanticState::Active {
+                                    progress: ActiveProgress::of_ticks(
+                                        seconds_to_ticks(progress.current_time_seconds),
+                                        episode.duration_seconds.map_or(0, seconds_to_ticks),
+                                    ),
+                                }
                             }
                             _ => MediaSemanticState::Ordinary,
                         },

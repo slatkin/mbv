@@ -4,8 +4,10 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::media_list::{
-    MediaKind, MediaListRow, zebra_group_member_striped, zebra_group_start, zebra_striped,
+    ActiveProgress, MediaKind, MediaListRow, zebra_group_member_striped, zebra_group_start,
+    zebra_striped,
 };
+use rstest::rstest;
 
 /// The one canonical state derivation every list uses: `played` wins, a
 /// positive resume position yields `Active` with the bounded percentage (no
@@ -39,6 +41,39 @@ fn from_progress_is_the_one_state_derivation() {
         MediaSemanticState::from_progress(false, 150, 100),
         MediaSemanticState::active(Some(100)),
         "the percentage is bounded at 100"
+    );
+}
+
+/// The one progress constructor: `ActiveProgress::of_ticks` floors the played
+/// fraction, bounds it at 100, and names no percentage for a non-positive
+/// position or duration (#995).
+#[rstest]
+#[case(0, 100, None)]
+#[case(20, 0, None)]
+#[case(1, 3, Some(ActiveProgress::new(33)))]
+#[case(150, 100, Some(ActiveProgress::new(100)))]
+#[case(i64::MAX, 1, Some(ActiveProgress::new(100)))]
+fn of_ticks_floors_and_bounds_the_percentage(
+    #[case] position_ticks: i64,
+    #[case] duration_ticks: i64,
+    #[case] expected: Option<ActiveProgress>,
+) {
+    assert_eq!(
+        ActiveProgress::of_ticks(position_ticks, duration_ticks),
+        expected
+    );
+}
+
+/// The podcast callers convert their seconds to ticks before the division, so
+/// an exact boundary keeps the true percentage: 20.4 s of 60 s is 34, where
+/// the f64 division floors to 33 (#995).
+#[test]
+fn of_ticks_corrects_the_podcast_seconds_boundary() {
+    let position_ticks = mbv_emby_model::seconds_to_ticks(20.4);
+    let duration_ticks = mbv_emby_model::seconds_to_ticks(60.0);
+    assert_eq!(
+        ActiveProgress::of_ticks(position_ticks, duration_ticks).map(ActiveProgress::percent),
+        Some(34)
     );
 }
 

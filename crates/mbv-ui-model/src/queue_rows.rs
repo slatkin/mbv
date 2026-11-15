@@ -54,15 +54,12 @@ fn queue_media_row_at(
     let semantic_state = if is_pending {
         MediaSemanticState::NowPlaying { progress: None }
     } else if is_active {
-        let progress = (pos_ticks > 0 && duration_ticks > 0).then(|| {
-            u16::try_from((pos_ticks * 100 / duration_ticks).clamp(0, 100)).unwrap_or(u16::MAX)
-        });
         MediaSemanticState::NowPlaying {
-            progress: progress.map(ActiveProgress::new),
+            progress: ActiveProgress::of_ticks(pos_ticks, duration_ticks),
         }
     } else {
         // The one canonical state derivation: a played slot paints the
-        // shared played colour, an in-progress slot its resume percentage.
+        // shared played colour, an in-progress slot its progress percentage.
         MediaSemanticState::from_queue_item(&slot.item)
     };
     MediaListRow::Item {

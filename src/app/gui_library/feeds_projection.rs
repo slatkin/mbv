@@ -23,6 +23,7 @@ use super::entry_list::{
 };
 use super::home::{GuiArtShape, GuiHomeRowState, artwork_shape};
 use crate::app::App;
+use mbv_ui_model::media_list::ActiveProgress;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One entry's stable identity across every list view and every
@@ -268,23 +269,16 @@ pub(in crate::app::gui_library) fn feed_entry_matches(
 
 /// One row's played state (row 11.1): the TUI feed row's rule through the
 /// shared `from_progress` arm — a finished entry is `Played`, an unfinished
-/// one with a resume position is `Active` with the percent of its duration
-/// (no percent when the duration is unknown, but still `Active`), and every
-/// other entry is `Ordinary`.
+/// one with a playback position is `Active` with the progress percentage of
+/// its duration (no percentage when the duration is unknown, but still
+/// `Active`), and every other entry is `Ordinary`.
 fn feed_row_state(entry: &FeedEntry) -> GuiHomeRowState {
+    let duration_ticks = entry
+        .duration_ticks
+        .map_or(0, |duration| i64::try_from(duration).unwrap_or(i64::MAX));
     GuiHomeRowState::from_progress(
         entry.played,
         entry.position_ticks > 0,
-        resume_percent(entry.position_ticks, entry.duration_ticks),
+        ActiveProgress::of_ticks(entry.position_ticks, duration_ticks).map(ActiveProgress::percent),
     )
-}
-
-/// The bounded resume percent of a partly played entry, the TUI row's
-/// computation: the played fraction of the duration, clamped to `0..=100`, and
-/// `None` when the duration is unknown or not positive.
-fn resume_percent(position_ticks: i64, duration_ticks: Option<u64>) -> Option<u8> {
-    let duration = duration_ticks.filter(|duration| *duration > 0)?;
-    let position = u64::try_from(position_ticks.max(0)).unwrap_or(u64::MAX);
-    let percent = (position.saturating_mul(100) / duration).min(100);
-    u8::try_from(percent).ok()
 }
