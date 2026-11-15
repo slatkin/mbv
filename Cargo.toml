@@ -151,9 +151,9 @@ debug = false
 # The GUI's render stack at the debug profile's opt-level 0 makes every resize
 # frame pay unoptimized restyle, layout, text shaping, scene building, and
 # raster encoding on the event-loop thread, which is what stretches the stale
-# buffer during a window drag. These packages are the hot path of one frame;
-# they keep the profile's line-tables-only debuginfo and unoptimized *crates*
-# stay as they are.
+# buffer during a window drag. These packages are the hot path of one frame,
+# so they take an optimized opt-level. They carry no debuginfo, like every
+# dependency; the other unoptimized dependency crates stay as they are.
 #
 # opt-level 2, not 3: the loops are already vectorizable and the extra
 # inlining of 3 mainly costs compile time on this dependency graph.

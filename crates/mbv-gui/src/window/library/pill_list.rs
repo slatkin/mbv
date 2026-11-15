@@ -279,8 +279,7 @@ pub fn move_pill_focus<Ui: PillFocusUi, Pill: Clone>(
 
 impl LibraryState {
     /// Accept a destination list's filter with Enter: the field closes and
-    /// the list keeps the text (design D3, step 2). The Music list's accept
-    /// also settles its cursor ([`LibraryState::accept_library_filter`]).
+    /// the list keeps the text (design D3, step 2).
     pub fn accept_destination_filter(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.filter_open = false);
