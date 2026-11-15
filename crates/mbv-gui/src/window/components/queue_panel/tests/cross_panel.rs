@@ -7,6 +7,7 @@ use dioxus_native::prelude::*;
 use super::harness::*;
 use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
 use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
+use crate::window::sections::SectionRef;
 
 /// Contract (`QueuePlaybackPanel.test.ts`, main cafcbc239): a chooser row
 /// paints the brand mark of its target kind.
@@ -42,7 +43,7 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     let mut playhead = fixture.playhead.clone();
     fixture.in_runtime(move || {
         sections.playback.set(playing());
-        sections.queue.set(queue(vec![item(1)]));
+        sections.queue.set(SectionRef::new(queue(vec![item(1)])));
         sections.summary.set(summary());
         sections.focus.set(GuiFocus {
             surface: None,
@@ -92,7 +93,7 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
     let mut playhead = fixture.playhead.clone();
     fixture.in_runtime(move || {
         sections.playback.set(playing());
-        sections.queue.set(queue(vec![item(1)]));
+        sections.queue.set(SectionRef::new(queue(vec![item(1)])));
         sections.summary.set(summary());
         sections.focus.set(GuiFocus {
             surface: None,

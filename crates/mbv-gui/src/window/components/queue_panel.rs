@@ -219,6 +219,8 @@ pub fn QueuePanel() -> Element {
     // the former client `onMount` teardown did.
     let mut drop_reporter = reporter.clone();
 
+    // The queue section travels as one handle (`share-gui-sections-by-rc`
+    // design D3): a render clones the handle, never the rows.
     let queue = sections.queue.cloned();
     let summary = sections.summary.cloned();
     let overlay = sections.overlay.cloned();
@@ -267,6 +269,8 @@ pub fn QueuePanel() -> Element {
     let watch_summary = sections.summary;
     let watch_overlay = sections.overlay;
     use_effect(move || {
+        // The effect reads its own handle to the queue, so a batch that wrote
+        // the section re-reports while a render that read it again would not.
         let queue = watch_queue.cloned();
         // The summary's changes move the header's controls: reading it keeps
         // the re-report on their paint, and its mode picks which switch

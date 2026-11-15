@@ -25,7 +25,7 @@ use crate::bridge::frame::settings::feeds::GuiSettingsFeed;
 use crate::bridge::frame::settings::{GuiSettingsContent, GuiSettingsFrame, GuiSettingsSection};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 use crate::window::settings::entries::{entry_id, settings_entries};
 use crate::window::settings::state::{SettingsForm, SettingsPane, SettingsState};
 
@@ -65,7 +65,7 @@ impl Fixture {
         let carried = frame.clone();
         self.doc
             .vdom
-            .in_runtime(move || settings.set(Some(carried)));
+            .in_runtime(move || settings.set(Some(SectionRef::new(carried))));
         let state = self.state.clone();
         self.doc
             .vdom
