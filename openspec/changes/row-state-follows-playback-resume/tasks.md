@@ -27,12 +27,12 @@
 
 ## 5. Feed store keeps played rows at position zero
 
-- [ ] 5.1 In `crates/mbv-feed/src/entry_state.rs`, make `FeedEntryStore::put` store position zero when `played` is true and update the `set_played` doc comment (design D4). Update the existing `set_played` test to the contract "Mark Played stores position zero; Mark Unplayed keeps the position" (spec `feed-queue-item`, cite #1005). Verify: `cargo nextest run -p mbv-feed`.
-- [ ] 5.2 Make `FeedEntryStore::load` set position zero on every played row with a positive position, save once when it changed a row, and log the count (design D4). Add one test for "an old played row with a position loads corrected and the file is rewritten" and one for "a clean file is not rewritten", using the crate's existing state-dir test isolation. Verify: `cargo nextest run -p mbv-feed`.
+- [x] 5.1 In `crates/mbv-feed/src/entry_state.rs`, make `FeedEntryStore::put` store position zero when `played` is true and update the `set_played` doc comment (design D4). Update the existing `set_played` test to the contract "Mark Played stores position zero; Mark Unplayed keeps the position" (spec `feed-queue-item`, cite #1005). Verify: `cargo nextest run -p mbv-feed`.
+- [x] 5.2 Make `FeedEntryStore::load` set position zero on every played row with a positive position, save once when it changed a row, and log the count (design D4). Add one test for "an old played row with a position loads corrected and the file is rewritten" and one for "a clean file is not rewritten", using the crate's existing state-dir test isolation. Verify: `cargo nextest run -p mbv-feed`.
 
 ## 6. A Feeds mark updates the loaded rows
 
-- [ ] 6.1 After `set_feed_entries_played` (`src/app/dispatch/context_menu/actions.rs`) writes the store, apply each entry's stored state to the matching loaded entries in `feed_tab.entries` and `feed_tab.all_entries`, matched by `feed_id` and `guid` (design D5). Add one App test for the contract "a Feeds Mark Played shows played state with position zero in the loaded rows without a refetch" (spec `feed-queue-item`, cite #1005) beside the existing Feeds context-menu tests. Verify: `cargo nextest run -p mbv feeds`.
+- [x] 6.1 After `set_feed_entries_played` (`src/app/dispatch/context_menu/actions.rs`) writes the store, apply each entry's stored state to the matching loaded entries in `feed_tab.entries` and `feed_tab.all_entries`, matched by `feed_id` and `guid` (design D5). Add one App test for the contract "a Feeds Mark Played shows played state with position zero in the loaded rows without a refetch" (spec `feed-queue-item`, cite #1005) beside the existing Feeds context-menu tests. Verify: `cargo nextest run -p mbv feeds`.
 
 ## 7. Integration checks
 
