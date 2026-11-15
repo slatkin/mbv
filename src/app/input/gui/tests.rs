@@ -10,8 +10,7 @@ use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
 use crate::app::tests::{
-    QueueViewTestExt, make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx_and_compat,
-    make_remote_app_stub_with_cmd_rx,
+    QueueViewTestExt, make_app_stub, make_items, make_remote_app_stub_with_cmd_rx,
 };
 
 /// Stands in for the GUI core thread's drain of the two modal requests
@@ -23,37 +22,6 @@ fn present_pending_modal(app: &mut App) {
         Some(OverlayRequest::DaemonLost(modal)) => app.present_gui_daemon_lost(modal),
         other => panic!("expected a modal request, got {other:?}"),
     }
-}
-
-/// An `App` stub whose Owner advertises the `playback-output` capability
-/// and offers one cast receiver (`receiver-1`) as a playback target: the
-/// `panel_targets` merge the chooser projects, with the command channel
-/// that records what a selection sends (add-tauri-gui-client row 6.4).
-fn cast_target_app() -> (App, Receiver<CtrlCmd>) {
-    let mut compat = mbv_ctrl::CtrlCompatibility::current();
-    compat.supports_playback_output = true;
-    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(Vec::new(), compat);
-    app.cast_receivers = vec![mbv_cast::discovery::CastReceiver {
-        id: "receiver-1".to_string(),
-        friendly_name: "Living Room".to_string(),
-        host: "192.168.0.5".to_string(),
-        port: 8009,
-    }];
-    app.rebuild_panel_targets();
-    while cmd_rx.try_recv().is_ok() {}
-    (app, cmd_rx)
-}
-
-/// The `SelectPlaybackOutput` selections the Owner received, in arrival
-/// order.
-fn output_selections(cmd_rx: &Receiver<CtrlCmd>) -> Vec<mbv_ctrl::OutputSelection> {
-    cmd_rx
-        .try_iter()
-        .filter_map(|cmd| match cmd {
-            CtrlCmd::SelectPlaybackOutput(selection) => Some(selection),
-            _ => None,
-        })
-        .collect()
 }
 
 /// The `Seek` commands the Owner received, in arrival order.
@@ -454,121 +422,6 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
     assert!(app.panel_collapsed, "the chord routed to its binding");
 }
 
-// The header's playback-target press emits the same opener the TUI's
-// indicator sends the Sessions sidebar (add-tauri-gui-client row 6.4); the
-// GUI's counterpart is the Client-core chooser overlay, and the press
-// toggles it as F3 toggles the sidebar.
-#[test]
-fn open_sessions_request_toggles_the_target_chooser() {
-    let (mut app, _cmd_rx) = cast_target_app();
-
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    assert!(matches!(
-        app.gui_overlay,
-        Some(GuiOverlay::TargetChooser(_))
-    ));
-
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    assert!(app.gui_overlay.is_none());
-}
-
-// The chooser's local row returns a remote output to this machine: the same
-// hand-back the Sessions sidebar's detach sends, reached from the chooser.
-#[test]
-fn the_local_chooser_row_returns_a_cast_output_to_local() {
-    let (mut app, cmd_rx) = cast_target_app();
-    app.playback_output = Some(mbv_ctrl::OutputState::Cast {
-        receiver_id: "receiver-1".to_string(),
-        name: "Living Room".to_string(),
-        connection: mbv_ctrl::OutputConnection::Connected,
-    });
-
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
-        mbv_ui_model::panel_targets::ChooserTargetKey::Local,
-    ))));
-
-    let selections: Vec<_> = cmd_rx
-        .try_iter()
-        .filter(|cmd| matches!(cmd, CtrlCmd::SelectPlaybackOutput(_)))
-        .collect();
-    assert!(matches!(
-        selections.as_slice(),
-        [CtrlCmd::SelectPlaybackOutput(
-            mbv_ctrl::OutputSelection::Local
-        )]
-    ));
-}
-
-// The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
-// no TUI default binds `r`, and Esc — the overlay's own key rule — closes
-// it.
-#[test]
-fn gui_context_r_opens_the_target_chooser() {
-    let (mut app, _cmd_rx) = cast_target_app();
-
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Char('r'), KeyModifiers::NONE)),
-        None,
-    );
-    assert!(matches!(
-        app.gui_overlay,
-        Some(GuiOverlay::TargetChooser(_))
-    ));
-
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-        None,
-    );
-    assert!(app.gui_overlay.is_none());
-}
-
-// A chooser Enter selects the cursor choice's output through the same
-// dispatch the TUI's Sessions sidebar applies: the cast receiver's stable
-// key resolves against the target snapshot and the Owner receives the
-// `SelectPlaybackOutput` the F3 selection sends (add-tauri-gui-client row
-// 6.4). The cursor starts on the local row, so the test moves it to the cast
-// receiver first.
-#[test]
-fn target_chooser_enter_selects_the_cursor_choice() {
-    let (mut app, cmd_rx) = cast_target_app();
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)),
-        None,
-    );
-
-    app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        None,
-    );
-
-    let selections = output_selections(&cmd_rx);
-    assert_eq!(selections.len(), 1);
-    assert!(matches!(
-        selections[0],
-        mbv_ctrl::OutputSelection::Cast { ref receiver_id, .. } if receiver_id == "receiver-1"
-    ));
-    assert!(app.gui_overlay.is_none());
-}
-
-// A chooser row's press emits the `SelectSession` request the TUI's
-// Sessions sidebar sends for its selected row: the dispatch resolves the
-// stable key, selects the output, and closes the chooser
-// (add-tauri-gui-client row 6.4).
-#[test]
-fn select_session_request_selects_the_output_and_closes() {
-    let (mut app, cmd_rx) = cast_target_app();
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
-
-    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectSession(
-        mbv_ui_model::panel_targets::SessionTargetKey::Cast("receiver-1".to_string()),
-    ))));
-
-    let selections = output_selections(&cmd_rx);
-    assert_eq!(selections.len(), 1);
-    assert!(app.gui_overlay.is_none());
-}
-
 // The canvas's back and forward controls emit the deltas the
 // `seek_back_10` and `seek_forward_30` chords carry (add-tauri-gui-client
 // row 6.4, the "back 10 s, forward 30 s" spec): the request's dispatch
@@ -805,3 +658,5 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     app.dismiss_open_gui_overlay();
     assert!(app.gui_overlay_is_open());
 }
+
+mod target_chooser;
