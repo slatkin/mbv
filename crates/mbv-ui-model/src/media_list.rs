@@ -58,13 +58,6 @@ pub enum MediaSemanticState {
 }
 
 impl MediaSemanticState {
-    /// Constructs active state, clamping prepared progress to the permitted range.
-    pub fn active(progress: Option<u16>) -> Self {
-        Self::Active {
-            progress: progress.map(ActiveProgress::new),
-        }
-    }
-
     /// The canonical state/colour policy, so no destination decides a row
     /// colour: a positive resume position yields `Active` with the bounded
     /// percentage (no percentage when the runtime is unknown); `played`

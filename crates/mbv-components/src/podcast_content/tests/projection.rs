@@ -246,7 +246,9 @@ fn episode_rows_are_split_rows_with_played_and_resume_status() {
         .expect("in-progress episode row");
     assert_eq!(
         in_progress,
-        MediaSemanticState::active(Some(16)),
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(16)),
+        },
         "in-progress progress renders the shared in-progress badge"
     );
 }

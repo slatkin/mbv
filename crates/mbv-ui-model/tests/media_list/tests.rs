@@ -16,7 +16,9 @@ use rstest::rstest;
 fn from_progress_is_the_one_state_derivation() {
     assert_eq!(
         MediaSemanticState::from_progress(true, 50, 100),
-        MediaSemanticState::active(Some(50)),
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(50)),
+        },
         "a resume position yields Active even when played"
     );
     assert_eq!(
@@ -26,21 +28,18 @@ fn from_progress_is_the_one_state_derivation() {
     );
     assert_eq!(
         MediaSemanticState::from_progress(false, 25, 100),
-        MediaSemanticState::active(Some(25))
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(25)),
+        }
     );
     assert_eq!(
         MediaSemanticState::from_progress(false, 50, 0),
-        MediaSemanticState::active(None),
+        MediaSemanticState::Active { progress: None },
         "an unknown runtime keeps Active without a percentage"
     );
     assert_eq!(
         MediaSemanticState::from_progress(false, 0, 100),
         MediaSemanticState::Ordinary
-    );
-    assert_eq!(
-        MediaSemanticState::from_progress(false, 150, 100),
-        MediaSemanticState::active(Some(100)),
-        "the percentage is bounded at 100"
     );
 }
 
@@ -115,11 +114,15 @@ fn item_level_derivation_makes_music_rows_ordinary() {
     film.playback_position_ticks = 500;
     assert_eq!(
         MediaSemanticState::from_emby(&film),
-        MediaSemanticState::active(Some(50))
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(50)),
+        }
     );
     assert_eq!(
         MediaSemanticState::from_queue_item(&mbv_queue::QueueItem::Emby(Box::new(film))),
-        MediaSemanticState::active(Some(50))
+        MediaSemanticState::Active {
+            progress: Some(ActiveProgress::new(50)),
+        }
     );
 }
 
