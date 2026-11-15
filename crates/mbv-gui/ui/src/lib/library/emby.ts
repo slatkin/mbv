@@ -18,12 +18,7 @@ import { sendLibraryCommand } from '$lib/bridge/library';
 import type { GuiEmbyFeedGroup, GuiEmbyList } from '$lib/bridge/types';
 import { jumpToLetter } from './list';
 import type { ListMove } from './list';
-import {
-	embyRowsOf,
-	embyGroupKey,
-	embyLetterRail,
-	moveEmbyCursor,
-} from './emby-list';
+import { embyRowsOf, embyGroupKey, embyLetterRail, moveEmbyCursor } from './emby-list';
 import type { EmbyItemRow, EmbyListRow } from './emby-list';
 import { createPillList, initialPillListUi, sendIfLoaded } from './pill-list';
 import type { PillListUiState } from './pill-list';

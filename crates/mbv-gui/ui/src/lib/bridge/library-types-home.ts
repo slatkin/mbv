@@ -12,8 +12,7 @@ import type { GuiArtRef, GuiMetaRow } from './library-types';
  * row position. A select, play, or enqueue command carries it back as the
  * frame painted it. */
 export type GuiHomeRowId =
-	| { kind: 'continue'; id: string }
-	| { kind: 'recent'; id: GuiHomeContentId };
+	{ kind: 'continue'; id: string } | { kind: 'recent'; id: GuiHomeContentId };
 
 /** The `Recently added` row's queue-item content id, mirroring
  * `mbv_queue.QueueItemContentId`'s serde form (`provider` and `value`,
@@ -60,7 +59,16 @@ export type GuiHomeRow =
 			text: string;
 	  }
 	| { row: 'spacer' }
-	| { row: 'item'; id: GuiHomeRowId; title: string; subtitle: string | null; date: string | null; kind: GuiHomeRowKind; state: GuiHomeRowState; art: GuiArtRef | null };
+	| {
+			row: 'item';
+			id: GuiHomeRowId;
+			title: string;
+			subtitle: string | null;
+			date: string | null;
+			kind: GuiHomeRowKind;
+			state: GuiHomeRowState;
+			art: GuiArtRef | null;
+	  };
 
 /** The kind one item row paints (design D12): `collection` when the row
  * targets a container the play path refuses, `media` on a playable leaf. */
@@ -69,10 +77,7 @@ export type GuiHomeRowKind = 'collection' | 'media';
 /** The state one item row paints (design D12): a resume position is
  * `active` with the bounded percentage, `played` without one is `played`,
  * otherwise `ordinary`. */
-export type GuiHomeRowState =
-	| 'ordinary'
-	| 'played'
-	| { active: { progress: number | null } };
+export type GuiHomeRowState = 'ordinary' | 'played' | { active: { progress: number | null } };
 
 /** The Hero's facts for the selected row (design D12). */
 export interface GuiHomeHero {

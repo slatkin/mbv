@@ -72,8 +72,10 @@
 			style:padding="0 0 6px"
 			style:font-size="13px"
 			style:color="var(--canvas-destructive)"
-			data-settings-key-refusal="">{content.refusal.text}</div
+			data-settings-key-refusal=""
 		>
+			{content.refusal.text}
+		</div>
 	{/if}
 {/snippet}
 
@@ -91,8 +93,10 @@
 			style:gap="8px"
 			data-settings-key-row="prefix"
 		>
-			<span class="min-w-0 flex-1 truncate" style:font-size="14px" style:color="var(--canvas-heading)"
-				>Assigned</span
+			<span
+				class="min-w-0 flex-1 truncate"
+				style:font-size="14px"
+				style:color="var(--canvas-heading)">Assigned</span
 			>
 			{@render chord(entryId.keyTarget('prefix'), 'prefix', content.prefix ?? 'none')}
 			{#if content.prefix !== null}

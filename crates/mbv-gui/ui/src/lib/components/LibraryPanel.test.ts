@@ -10,7 +10,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { resetSectionsForTest, status } from '$lib/bridge/sections';
-import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
+import {
+	DEFAULT_DRAGGED_WIDTHS,
+	LIBRARY_LIST_DEFAULT_WIDTH_PX,
+	draggedWidths,
+} from '$lib/bridge/resize';
 import type {
 	GuiAudiobooksDetail,
 	GuiAudiobooksList,
@@ -142,9 +146,7 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 	expect(overlay?.querySelector('[data-library-hero]')).toBeTruthy();
 	expect((overlay as HTMLElement).style.background).not.toBe('');
 
-	await fireEvent.click(
-		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-hero-backdrop]') as HTMLElement);
 
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
@@ -158,9 +160,7 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 		libraryColumn: 1200,
 	});
 
-	expect(
-		container.querySelector('[data-library-region="hero"] [data-library-hero]'),
-	).toBeTruthy();
+	expect(container.querySelector('[data-library-region="hero"] [data-library-hero]')).toBeTruthy();
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
 
@@ -254,9 +254,7 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 
 	expect(overlay?.querySelector('[data-library-home-hero]')).toBeTruthy();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-hero-backdrop]') as HTMLElement);
 
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
@@ -551,7 +549,17 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 			overview: null,
 			artShape: 'portrait',
 			art: null,
-			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
+			workspace: {
+				rows: [
+					{
+						chapter: 1,
+						title: 'Act one',
+						duration: '2:16',
+						startTicks: 0,
+						endTicks: 136 * 1_000_000,
+					},
+				],
+			},
 		}),
 	);
 	status.set(idle);
@@ -564,9 +572,7 @@ test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its
 
 	expect(overlay?.querySelector('[data-library-abs-hero]')).toBeTruthy();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-hero-backdrop]') as HTMLElement);
 
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });

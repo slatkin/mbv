@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn-svelte/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
 
 /* The mbv palette arrives in `mbv://frame` themes (design D7): each role
    colour and chrome fill is written to a `--mbv-<name>` custom property on

@@ -161,10 +161,7 @@ test('the flat modes paint no heading and keep each row its date', () => {
 	);
 
 	expect(latest.map((row) => row.kind)).toEqual(['flat', 'flat']);
-	expect(latest.map((row) => row.height)).toEqual([
-		SHOWS_FLAT_ROW_HEIGHT,
-		SHOWS_FLAT_ROW_HEIGHT,
-	]);
+	expect(latest.map((row) => row.height)).toEqual([SHOWS_FLAT_ROW_HEIGHT, SHOWS_FLAT_ROW_HEIGHT]);
 	expect(latest.map((row) => (row.kind === 'flat' ? row.row.date : null))).toEqual([
 		'12 May',
 		'9 May',
@@ -198,12 +195,8 @@ test('movement steps over the letter headings', () => {
 		closed: [],
 	});
 
-	expect(moveShowsCursor(painted, seriesRowId('s1'), 'down')).toBe(
-		seasonRowId('s1', 'se1'),
-	);
-	expect(moveShowsCursor(painted, seasonRowId('s1', 'se2'), 'down')).toBe(
-		seriesRowId('s2'),
-	);
+	expect(moveShowsCursor(painted, seriesRowId('s1'), 'down')).toBe(seasonRowId('s1', 'se1'));
+	expect(moveShowsCursor(painted, seasonRowId('s1', 'se2'), 'down')).toBe(seriesRowId('s2'));
 	expect(moveShowsCursor(painted, null, 'down')).toBe(seriesRowId('s1'));
 	expect(moveShowsCursor(painted, seriesRowId('s1'), 'end')).toBe(seriesRowId('s4'));
 });

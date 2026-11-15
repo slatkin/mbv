@@ -15,10 +15,7 @@
 	// The `/` filter field narrows the episodes to the titles that contain
 	// its text (design D7's filter rule).
 	import type { GuiPodcastsDetail, GuiPodcastsList } from '$lib/bridge/types';
-	import {
-		podcastsRowsOf,
-		PODCASTS_ROW_HEIGHT,
-	} from '$lib/library/podcasts-list';
+	import { podcastsRowsOf, PODCASTS_ROW_HEIGHT } from '$lib/library/podcasts-list';
 	import type { PodcastsItemRow } from '$lib/library/podcasts-list';
 	import {
 		acceptPodcastsFilter,
@@ -47,9 +44,7 @@
 
 	/** The header's selection label (design D15): the active pill's name, so the
 	 * column names the view it holds. */
-	const selectionLabel = $derived(
-		list.pills.find((pill) => pill.selected)?.name ?? 'Latest',
-	);
+	const selectionLabel = $derived(list.pills.find((pill) => pill.selected)?.name ?? 'Latest');
 
 	/** The filter field's placeholder, naming the active view. */
 	const filterPlaceholder = $derived(`Filter ${selectionLabel}`);
@@ -64,7 +59,6 @@
 	 * `$lib/library/podcasts` builds from the carried content, narrowed by
 	 * the filter's text. */
 	const rows = $derived(podcastsRowsOf(list.rows, $podcastsUi.filter));
-
 
 	/** An episode row's title colour: the canvas's text tone, dimmed on a
 	 * played row (design D12), as a Home item row. */
@@ -112,10 +106,7 @@
 	{#if list.failed}
 		<!-- The show catalog's fetch failed (row 10.1): the failure line, and no
 			row until the library opens again. -->
-		<LibraryListNotice
-			text="Couldn’t load this library."
-			attr="data-library-podcasts-failed"
-		/>
+		<LibraryListNotice text="Couldn’t load this library." attr="data-library-podcasts-failed" />
 	{/if}
 	{#if !list.loading && !list.failed && list.rows.length === 0}
 		<!-- The active view holds no episode (row 10.1): the TUI's empty slot. -->

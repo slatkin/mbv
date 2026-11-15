@@ -119,7 +119,8 @@ export interface ShowsFlatRow {
 
 /** One painted row of the Shows list (design D14). The `id` is the row's
  * stable key: the cursor's identity and the each-block's key. */
-export type ShowsListRow = ShowsHeadingRow | ShowsSeriesRow | ShowsSeasonRow | ShowsEpisodeRow | ShowsFlatRow;
+export type ShowsListRow =
+	ShowsHeadingRow | ShowsSeriesRow | ShowsSeasonRow | ShowsEpisodeRow | ShowsFlatRow;
 
 /** A painted row the cursor may rest on and the keys act on: every row but a
  * heading. */
@@ -204,8 +205,7 @@ function seriesShowsRows(
 ): ShowsListRow[] {
 	const needle = filter.trim().toLowerCase();
 	const narrowing = needle !== '';
-	const matches = (title: string): boolean =>
-		!narrowing || title.toLowerCase().includes(needle);
+	const matches = (title: string): boolean => !narrowing || title.toLowerCase().includes(needle);
 	const rows: ShowsListRow[] = [];
 	let top = 0;
 	let heading: string | null = null;

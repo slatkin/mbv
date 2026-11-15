@@ -61,9 +61,7 @@ function frame(
 ): GuiPodcastsList {
 	return {
 		libIdx: 0,
-		pills: [
-			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-		],
+		pills: [{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false }],
 		loading: facts.loading ?? false,
 		failed: facts.failed ?? false,
 		rows,
@@ -130,8 +128,9 @@ test('the flat list paints its date gutter with no heading and no rail', async (
 			?.textContent,
 	).toBe('9 May');
 	expect(
-		container.querySelector('[data-library-podcasts-row-id="e1:ep1"] [data-library-podcasts-subtitle]')
-			?.textContent,
+		container.querySelector(
+			'[data-library-podcasts-row-id="e1:ep1"] [data-library-podcasts-subtitle]',
+		)?.textContent,
 	).toBe('Show One');
 });
 
@@ -159,7 +158,7 @@ test('a double-click plays the episode', async () => {
 	});
 });
 
-test('the cursor row and the core\'s selected episode carry their own fills', async () => {
+test("the cursor row and the core's selected episode carry their own fills", async () => {
 	const container = await mountList(EPISODES);
 	podcastsUi.update((ui) => ({ ...ui, cursor: 'e2:ep2' }));
 	await tick();

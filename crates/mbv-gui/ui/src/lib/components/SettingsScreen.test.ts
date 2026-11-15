@@ -39,7 +39,5 @@ test.each<[GuiSettingsSection, string]>([
 		},
 	});
 
-	expect(
-		container.querySelector('[data-settings-content-title]')?.textContent?.trim(),
-	).toBe(title);
+	expect(container.querySelector('[data-settings-content-title]')?.textContent?.trim()).toBe(title);
 });

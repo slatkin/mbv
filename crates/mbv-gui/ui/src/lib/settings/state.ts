@@ -210,9 +210,7 @@ export function moveSettingsCursor(move: ListMove, count: number): void {
 		}
 		const cursor = ui.pane === 'sidebar' ? ui.sidebarCursor : ui.contentCursor;
 		const next = moveIndex(count, cursor, move, SETTINGS_PAGE);
-		return ui.pane === 'sidebar'
-			? { ...ui, sidebarCursor: next }
-			: { ...ui, contentCursor: next };
+		return ui.pane === 'sidebar' ? { ...ui, sidebarCursor: next } : { ...ui, contentCursor: next };
 	});
 }
 
@@ -268,13 +266,15 @@ export function markedChoices(
 	row: { key: string; choices: { id: string; selected: boolean }[] | null },
 	ui: SettingsUiState = get(settingsUi),
 ): string[] {
-	return (
-		ui.choiceMarks[row.key] ?? row.choices?.filter((c) => c.selected).map((c) => c.id) ?? []
-	);
+	return ui.choiceMarks[row.key] ?? row.choices?.filter((c) => c.selected).map((c) => c.id) ?? [];
 }
 
 /** Flip one mark of a choice list (design D11's Space). */
-export function toggleChoiceMark(setting: string, id: string, row: { choices: { id: string; selected: boolean }[] | null }): void {
+export function toggleChoiceMark(
+	setting: string,
+	id: string,
+	row: { choices: { id: string; selected: boolean }[] | null },
+): void {
 	settingsUi.update((ui) => {
 		const marked = markedChoices({ key: setting, choices: row.choices }, ui);
 		const next = marked.includes(id)
@@ -287,7 +287,10 @@ export function toggleChoiceMark(setting: string, id: string, row: { choices: { 
 /** Apply a choice list's marked ids (design D9): the `applyChoices` command
  * runs the TUI's multiselect commit with the kind the frame carried on the row
  * (design D11 *Choice kind*). */
-export function applyChoiceList(kind: GuiChoicesKind, row: { key: string; choices: { id: string; selected: boolean }[] | null }): void {
+export function applyChoiceList(
+	kind: GuiChoicesKind,
+	row: { key: string; choices: { id: string; selected: boolean }[] | null },
+): void {
 	void sendSettingsCommand({
 		command: 'applyChoices',
 		kind,
@@ -343,9 +346,7 @@ export function openRenameDraft(id: string, name: string): void {
 
 /** Change the rename draft's text. */
 export function setRenameDraft(name: string): void {
-	settingsUi.update((ui) =>
-		ui.rename === null ? ui : { ...ui, rename: { ...ui.rename, name } },
-	);
+	settingsUi.update((ui) => (ui.rename === null ? ui : { ...ui, rename: { ...ui.rename, name } }));
 }
 
 /** Change one Emby setup field (the input's own event). */
@@ -438,8 +439,7 @@ export function submitSettingsForm(content: GuiSettingsContent): void {
 /** Whether the named setup form is busy, so a submit under a running
  * validation sends nothing. */
 function setupBusy(content: GuiSettingsContent, service: 'emby' | 'audiobookshelf'): boolean {
-	const setup: GuiSettingsSetup | null =
-		content.kind === 'services' ? content.setup : null;
+	const setup: GuiSettingsSetup | null = content.kind === 'services' ? content.setup : null;
 	return setup !== null && setup.service === service && setup.busy;
 }
 
@@ -591,9 +591,7 @@ export function activateSettingsEntry(entry: SettingsEntry): void {
  * the core, where it plays or pauses (the spec's *Global keys keep working
  * behind the screen*). */
 export function spaceActivates(entry: SettingsEntry | null): boolean {
-	return (
-		(entry?.kind === 'setting' && entry.row.kind === 'toggle') || entry?.kind === 'choice'
-	);
+	return (entry?.kind === 'setting' && entry.row.kind === 'toggle') || entry?.kind === 'choice';
 }
 
 /** Fold one arriving frame's Settings section into the interaction state:
@@ -630,10 +628,7 @@ export function syncSettingsFrame(settings: GuiSettingsFrame | null): void {
 		}
 		const setup = settings.content.kind === 'services' ? settings.content.setup : null;
 		if (setup === null) {
-			if (
-				next.textField === 'embySetup' ||
-				next.textField === 'audiobookshelfSetup'
-			) {
+			if (next.textField === 'embySetup' || next.textField === 'audiobookshelfSetup') {
 				next = { ...next, textField: null };
 			}
 			next = { ...next, embySetup: null, audiobookshelfSetup: null };

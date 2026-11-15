@@ -40,7 +40,13 @@ const LIB_IDX = 4;
 /** A book's chapters on the merged timeline: the first spans 0–21:00, the
  * second 21:00–45:00 (design D5's `startTicks`/`endTicks`). */
 const CHAPTERS: GuiAudiobooksChapterRow[] = [
-	{ chapter: 1, title: 'First Contact', duration: '21:00', startTicks: 0, endTicks: 21 * 60 * SECOND },
+	{
+		chapter: 1,
+		title: 'First Contact',
+		duration: '21:00',
+		startTicks: 0,
+		endTicks: 21 * 60 * SECOND,
+	},
 	{
 		chapter: 2,
 		title: 'Fallen Angel',
@@ -99,7 +105,11 @@ function stampAtChapterTwo(): void {
 function hero(facts: Partial<GuiAudiobooksHero> = {}): GuiAudiobooksHero {
 	return {
 		title: 'The Caves of Steel',
-		metaRows: [[{ text: 'Isaac Asimov', kind: 'plain' }], [{ text: '9 h 51 m', kind: 'time' }], [{ text: '17%', kind: 'plain' }]],
+		metaRows: [
+			[{ text: 'Isaac Asimov', kind: 'plain' }],
+			[{ text: '9 h 51 m', kind: 'time' }],
+			[{ text: '17%', kind: 'plain' }],
+		],
 		durationRow: 1,
 		progressRow: 2,
 		overview: null,

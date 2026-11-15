@@ -91,13 +91,7 @@ export interface GuiSettingRow {
 }
 
 /** How an F2 row is edited (design D9, D13). */
-export type GuiSettingRowKind =
-	| 'toggle'
-	| 'cycle'
-	| 'pick'
-	| 'choiceList'
-	| 'action'
-	| 'info';
+export type GuiSettingRowKind = 'toggle' | 'cycle' | 'pick' | 'choiceList' | 'action' | 'info';
 
 /** One choice of a choice-list row (design D9): `id` is the value the apply
  * command sends back. */
@@ -320,10 +314,7 @@ export type GuiSettingsCommand =
 	| { command: 'resetUiState' };
 
 /** One choice-list kind the `applyChoices` command names (design D5). */
-export type GuiChoicesKind =
-	| 'hiddenLibraries'
-	| 'feedViewLibraries'
-	| 'myLanguages';
+export type GuiChoicesKind = 'hiddenLibraries' | 'feedViewLibraries' | 'myLanguages';
 
 /** The playlist operation a playlist command carries (design D5). */
 export type GuiPlaylistAction = 'play' | 'shuffle' | 'enqueue';

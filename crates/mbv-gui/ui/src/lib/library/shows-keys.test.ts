@@ -13,7 +13,6 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { initialListScroll, showsScroll } from './scroll';
 import { installInput } from '$lib/bridge/input';
 import type {
-
 	GuiPanel,
 	GuiShowsHero,
 	GuiShowsMode,
@@ -86,7 +85,13 @@ const SHOWS_TREE: GuiShowsSeries[] = [
 				id: 'se1',
 				name: 'Season 1',
 				episodes: [
-					{ episodeId: 'ep1', number: 1, name: 'The Big Bang', duration: '24:00', state: 'ordinary' },
+					{
+						episodeId: 'ep1',
+						number: 1,
+						name: 'The Big Bang',
+						duration: '24:00',
+						state: 'ordinary',
+					},
 				],
 			},
 		],

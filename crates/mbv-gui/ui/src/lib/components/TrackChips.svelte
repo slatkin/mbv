@@ -39,7 +39,7 @@
 		GuiTrackChip,
 		GuiTrackChips,
 		LayoutRegion,
-		QueuePlaybackTargetId
+		QueuePlaybackTargetId,
 	} from '$lib/bridge/types';
 
 	type TrackPopover = Extract<GuiOverlayFrame, { kind: 'trackPopover' }>;
@@ -72,13 +72,10 @@
 		return chosen?.label ?? (kind === 'subtitles' ? 'Off' : 'Audio');
 	}
 
-
 	/** One element's painted region for a QueuePlayback target, `null` while
 	 * the element is absent. */
-	const region = (
-		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId
-	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
+	const region = (el: HTMLElement | undefined, id: QueuePlaybackTargetId): LayoutRegion | null =>
+		elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The open popover's painted rows, each resolved to its choice index in
 	 * the frame's `choices` list. */
@@ -87,9 +84,7 @@
 			return [];
 		}
 		return [...rowEl.querySelectorAll<HTMLElement>('[data-popover-row]')]
-			.map((el) =>
-				region(el, { trackPopoverChoice: Number(el.dataset.popoverRow) }),
-			)
+			.map((el) => region(el, { trackPopoverChoice: Number(el.dataset.popoverRow) }))
 			.filter((entry) => entry !== null);
 	}
 
@@ -137,12 +132,10 @@
 		return () => observer.disconnect();
 	});
 
-	onMount(
-		() => () => {
-			retractLayout(reportKey);
-			retractLayout(popoverKey);
-		},
-	);
+	onMount(() => () => {
+		retractLayout(reportKey);
+		retractLayout(popoverKey);
+	});
 </script>
 
 {#snippet popoverList(pop: TrackPopover)}
@@ -190,11 +183,7 @@
 					{/if}
 				</span>
 				{#if choice.chosen}
-					<Check
-						size={14}
-						strokeWidth={2.5}
-						color={canvasVar('accent')}
-					/>
+					<Check size={14} strokeWidth={2.5} color={canvasVar('accent')} />
 				{/if}
 			</button>
 		{/each}
@@ -233,9 +222,7 @@
 				style:border-color={popover?.chip === 'audio'
 					? canvasVar('open-border')
 					: 'var(--mbv-border)'}
-				style:background={popover?.chip === 'audio'
-					? canvasVar('action')
-					: 'var(--mbv-secondary)'}
+				style:background={popover?.chip === 'audio' ? canvasVar('action') : 'var(--mbv-secondary)'}
 				style:color={roleVar('textPrimary')}
 				aria-expanded={popover?.chip === 'audio'}
 				data-chip="audio"

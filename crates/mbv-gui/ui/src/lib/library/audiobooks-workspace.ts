@@ -37,9 +37,7 @@ export function initialAudiobooksWorkspace(): AudiobooksWorkspaceState {
 }
 
 /** The Workspace's interaction state. */
-export const audiobooksWorkspace = writable<AudiobooksWorkspaceState>(
-	initialAudiobooksWorkspace(),
-);
+export const audiobooksWorkspace = writable<AudiobooksWorkspaceState>(initialAudiobooksWorkspace());
 
 /** The selected book's Workspace, or `null` while the book's detail has not
  * landed. */
@@ -62,9 +60,7 @@ export function currentChapterRow(
 		return null;
 	}
 	return (
-		rows.find(
-			(row) => row.startTicks <= positionTicks && positionTicks < row.endTicks,
-		) ?? null
+		rows.find((row) => row.startTicks <= positionTicks && positionTicks < row.endTicks) ?? null
 	);
 }
 
@@ -211,4 +207,3 @@ export function pressAbsChapter(chapter: number): void {
 		state.cursor === chapter ? state : { ...state, cursor: chapter },
 	);
 }
-

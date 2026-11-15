@@ -42,9 +42,11 @@ export function labelSegments(text: string): Segments {
 /** The segments of several meta rows on one line, joined by ` · ` as the
  * frames order them. */
 export function joinMetaRows(rows: readonly GuiMetaRow[]): Segments {
-	return rows.filter((row) => row.length > 0).flatMap((row, index) =>
-		index === 0 ? row : [{ text: ' · ', kind: 'plain' as const }, ...row],
-	);
+	return rows
+		.filter((row) => row.length > 0)
+		.flatMap((row, index) =>
+			index === 0 ? row : [{ text: ' · ', kind: 'plain' as const }, ...row],
+		);
 }
 
 /** The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
@@ -167,11 +169,7 @@ export function heroMetaRows(facts: {
 	return facts.metaRows.map((row, index) => ({
 		segments: row,
 		role:
-			index === facts.durationRow
-				? 'duration'
-				: index === facts.progressRow
-					? 'progress'
-					: 'meta',
+			index === facts.durationRow ? 'duration' : index === facts.progressRow ? 'progress' : 'meta',
 	}));
 }
 

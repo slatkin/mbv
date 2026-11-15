@@ -41,9 +41,7 @@ function feedsList(): GuiFeedsList {
 	return {
 		loading: false,
 		failed: false,
-		pills: [
-			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-		],
+		pills: [{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false }],
 		rows: [
 			{
 				id: 'sub1:guid12',
@@ -73,14 +71,17 @@ function mount(facts: GuiFeedsHero | null = hero('square')): HTMLElement {
 test.each([
 	['square', '300px', '300px'],
 	['landscape', '100%', 'auto'],
-] as const)('a %s Hero places its placeholder artwork box at the shared arm', (shape, width, height) => {
-	const container = mount(hero(shape));
-	const box = container.querySelector('[data-library-feeds-hero-art]') as HTMLElement;
+] as const)(
+	'a %s Hero places its placeholder artwork box at the shared arm',
+	(shape, width, height) => {
+		const container = mount(hero(shape));
+		const box = container.querySelector('[data-library-feeds-hero-art]') as HTMLElement;
 
-	expect(box.style.width).toBe(width);
-	expect(box.style.height).toBe(height);
-	expect(box.textContent).toContain("the window's placeholder");
-});
+		expect(box.style.width).toBe(width);
+		expect(box.style.height).toBe(height);
+		expect(box.textContent).toContain("the window's placeholder");
+	},
+);
 
 test('the Hero paints the feed as its title, the entry in the block, and the duration beside the art', () => {
 	const container = mount();
@@ -93,9 +94,7 @@ test('the Hero paints the feed as its title, the entry in the block, and the dur
 	);
 	const meta = [...container.querySelectorAll('[data-library-feeds-hero-role]')];
 	expect(meta.map((row) => row.textContent)).toEqual(['0 h 54 m']);
-	expect(meta.map((row) => row.getAttribute('data-library-feeds-hero-role'))).toEqual([
-		'duration',
-	]);
+	expect(meta.map((row) => row.getAttribute('data-library-feeds-hero-role'))).toEqual(['duration']);
 });
 
 // A feed entry carries no overview, so no overview paragraph paints (design
@@ -149,9 +148,9 @@ test('the Hero paints no play-next control', () => {
 	const container = mount();
 
 	expect(container.querySelector('[data-library-feeds-hero-play-next]')).toBeNull();
-	expect(
-		container.querySelector('[data-library-feeds-hero-block]')?.textContent,
-	).not.toContain('Play next');
+	expect(container.querySelector('[data-library-feeds-hero-block]')?.textContent).not.toContain(
+		'Play next',
+	);
 });
 
 // The Hero paints the frame's header band, as Music and Shows do: the kicker

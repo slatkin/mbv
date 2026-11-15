@@ -81,9 +81,7 @@ test('a library with no group names no collection', () => {
 // An unpicked Hero carries no item, so the location stops at the collections
 // the canvas joins.
 test('an unpicked item leaves the location without its last segment', () => {
-	expect(libraryLocation(TABS, 1, musicList(), musicDetail(null))).toBe(
-		'Music › Hip-Hop › Soul',
-	);
+	expect(libraryLocation(TABS, 1, musicList(), musicDetail(null))).toBe('Music › Hip-Hop › Soul');
 });
 
 // add-gui-library-panel row 8.1: on a plain Emby library the location reads the
@@ -125,7 +123,12 @@ test('the location reads the feed pill name in feed-group mode', () => {
 		libraryName: 'Movies',
 		pills: [
 			{ group: { kind: 'all' }, name: 'All', selected: false, collection: false },
-			{ group: { kind: 'folder', id: 'f1' }, name: 'Home videos', selected: true, collection: false },
+			{
+				group: { kind: 'folder', id: 'f1' },
+				name: 'Home videos',
+				selected: true,
+				collection: false,
+			},
 		],
 		collectionNames: ['Home videos'],
 		feedGroup: true,
@@ -157,7 +160,13 @@ test('the location reads the Audiobooks destination and the selected book', () =
 		failed: false,
 		rows: [
 			{ id: 'b1', title: 'Dune', subtitle: 'Frank Herbert', duration: '15:12:00', sortLetter: 'D' },
-			{ id: 'b2', title: 'Hyperion', subtitle: 'Dan Simmons', duration: '9:18:00', sortLetter: 'H' },
+			{
+				id: 'b2',
+				title: 'Hyperion',
+				subtitle: 'Dan Simmons',
+				duration: '9:18:00',
+				sortLetter: 'H',
+			},
 		],
 	};
 	const detail: GuiAudiobooksDetail & { kind: 'audiobooks' } = {

@@ -71,9 +71,9 @@ test('the bar paints the canvas key hints and the location', () => {
 	);
 
 	expect(hints).toEqual(['/ filter', '⏎ play', 'n next', 'a queue', 'tab pane', '1–7 library']);
-	expect(
-		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
-	).toBe('Music › Hip-Hop › Beastie Boys');
+	expect(container.querySelector('[data-library-status-location]')?.textContent?.trim()).toBe(
+		'Music › Hip-Hop › Beastie Boys',
+	);
 });
 
 test('a live toast replaces the hints and keeps the location', () => {
@@ -95,9 +95,7 @@ test('an armed prefix replaces the hints and keeps the location', () => {
 	const { container } = renderBar({ prefixArmed: true, toast: null });
 
 	expect(container.querySelector('[data-library-hint]')).toBeNull();
-	expect(container.querySelector('[data-library-status-prefix]')?.textContent).toContain(
-		'PREFIX',
-	);
+	expect(container.querySelector('[data-library-status-prefix]')?.textContent).toContain('PREFIX');
 	expect(container.querySelector('[data-library-status-location]')?.textContent).toContain(
 		'Music › Hip-Hop › Beastie Boys',
 	);
@@ -127,9 +125,9 @@ test('the bar paints the plain Emby location for the carried content', () => {
 		status: IDLE,
 	});
 
-	expect(
-		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
-	).toBe('Movies › Heat');
+	expect(container.querySelector('[data-library-status-location]')?.textContent?.trim()).toBe(
+		'Movies › Heat',
+	);
 	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });
 
@@ -149,13 +147,19 @@ test('the bar paints the Audiobooks location for the carried content', () => {
 		tabs: [{ position: 2, label: 'Audiobooks' }],
 		currentTab: 2,
 		list,
-		detail: { kind: 'audiobooks', workspaceLoading: false, selected: 'b1', playingBookId: null, hero: null },
+		detail: {
+			kind: 'audiobooks',
+			workspaceLoading: false,
+			selected: 'b1',
+			playingBookId: null,
+			hero: null,
+		},
 		status: IDLE,
 	});
 
-	expect(
-		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
-	).toBe('Audiobooks › Dune');
+	expect(container.querySelector('[data-library-status-location]')?.textContent?.trim()).toBe(
+		'Audiobooks › Dune',
+	);
 	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });
 
@@ -169,7 +173,12 @@ test('the bar paints the Podcasts location for the carried content', () => {
 		failed: false,
 		pills: [
 			{ pill: { kind: 'latest' }, name: 'Latest', selected: false, collection: false },
-			{ pill: { kind: 'show', id: 'show1' }, name: 'Bits and Bites', selected: true, collection: false },
+			{
+				pill: { kind: 'show', id: 'show1' },
+				name: 'Bits and Bites',
+				selected: true,
+				collection: false,
+			},
 		],
 		rows: [
 			{
@@ -189,8 +198,8 @@ test('the bar paints the Podcasts location for the carried content', () => {
 		status: IDLE,
 	});
 
-	expect(
-		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
-	).toBe('Podcasts › Bits and Bites › Episode 12: The Long Road');
+	expect(container.querySelector('[data-library-status-location]')?.textContent?.trim()).toBe(
+		'Podcasts › Bits and Bites › Episode 12: The Long Road',
+	);
 	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });

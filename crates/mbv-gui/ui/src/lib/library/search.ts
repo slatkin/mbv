@@ -49,10 +49,7 @@ interface ScheduledSearch {
 /** The debounce seam: schedules `send` to run after `delayMs` and returns the
  * release. The default is the real timer; the tests inject a recorder that
  * holds the pending send, so no test sleeps. */
-export type SearchScheduler = (
-	send: () => void,
-	delayMs: number,
-) => ScheduledSearch;
+export type SearchScheduler = (send: () => void, delayMs: number) => ScheduledSearch;
 
 let scheduleSearchSend: SearchScheduler = (send, delayMs) => {
 	const id = setTimeout(send, delayMs);

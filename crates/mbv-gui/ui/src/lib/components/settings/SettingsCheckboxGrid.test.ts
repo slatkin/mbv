@@ -40,7 +40,9 @@ test('a press on a box reports its choice entry', async () => {
 	const onpress = vi.fn();
 	const { container } = grid(onpress);
 
-	await fireEvent.click(container.querySelector('[data-settings-checkbox="french"]') as HTMLElement);
+	await fireEvent.click(
+		container.querySelector('[data-settings-checkbox="french"]') as HTMLElement,
+	);
 
 	expect(onpress).toHaveBeenCalledWith('choice:myLanguages:french');
 });

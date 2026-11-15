@@ -238,11 +238,7 @@ export function resetSectionsForTest(): void {
 		const value: unknown = FRESH[name];
 		// The table's key and the fresh value name the same section, so the
 		// types agree; a clone keeps the written object distinct from `FRESH`.
-		stores[name].set(
-			typeof value === 'object' && value !== null
-				? structuredClone(value)
-				: value,
-		);
+		stores[name].set(typeof value === 'object' && value !== null ? structuredClone(value) : value);
 	}
 	connected.set(false);
 }

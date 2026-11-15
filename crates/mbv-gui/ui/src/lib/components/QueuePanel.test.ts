@@ -22,12 +22,7 @@ import {
 	overlay as overlayStore,
 } from '$lib/bridge/sections';
 import { TEST_SECOND as SECOND, stampPlayheadForTest } from '$lib/bridge/test-clocks';
-import type {
-	GuiOverlayFrame,
-	GuiQueue,
-	GuiQueueRow,
-	GuiQueueSummary,
-} from '$lib/bridge/types';
+import type { GuiOverlayFrame, GuiQueue, GuiQueueRow, GuiQueueSummary } from '$lib/bridge/types';
 import QueuePanel from './QueuePanel.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -205,9 +200,7 @@ test('the header paints the canvas heading, the finish clock, the switch, and th
 	expect(getByText('Ends at')).toBeTruthy();
 	// The filter is the canvas's icon-only magnifier button at rest
 	// (tasks.md A.2: a magnifier icon, not the funnel).
-	expect(container.querySelector('[data-filter]')?.getAttribute('aria-label')).toBe(
-		'Filter queue',
-	);
+	expect(container.querySelector('[data-filter]')?.getAttribute('aria-label')).toBe('Filter queue');
 	const filterIcon = container.querySelector('[data-filter] svg');
 	expect(filterIcon?.classList).toContain('lucide-search');
 });
@@ -224,7 +217,7 @@ test('the active filter paints its text and the caret', () => {
 
 // The right column repeats a time down the list, so a non-current row paints
 // the time token at the repeat opacity (add-gui-settings-screen design D14).
-test('the right column paints the mode\'s value as a repeated time', () => {
+test("the right column paints the mode's value as a repeated time", () => {
 	const ends = renderPanel(queue([item(1)]), summary({ rightColumn: 'endsAt' }));
 
 	expect(ends.getByText('21:40').style.color).toBe('var(--canvas-type-time)');
@@ -239,9 +232,7 @@ test('the right column paints the mode\'s value as a repeated time', () => {
 // A highlight marks focus only, so the current row keeps its own ink in the
 // right column at full strength (design D14).
 test('the current row keeps its ink in the right column', () => {
-	const { container } = renderPanel(
-		queue([item(1, { state: { state: 'nowPlaying' } })]),
-	);
+	const { container } = renderPanel(queue([item(1, { state: { state: 'nowPlaying' } })]));
 
 	const value = container.querySelector('[data-slot="1"] [data-right-value]') as HTMLElement;
 	expect(value.style.color).toBe('var(--canvas-ink)');
@@ -302,11 +293,7 @@ test('the row paints the canvas one-liner: its ordinal, one title line, and the 
 
 test('the cursor and marked rows paint the canvas picked fill, playing or not', () => {
 	const { container } = renderPanel(
-		queue(
-			[item(1), item(2, { state: { state: 'nowPlaying' } })],
-			2,
-			{ cursor: 1, marks: [2] },
-		),
+		queue([item(1), item(2, { state: { state: 'nowPlaying' } })], 2, { cursor: 1, marks: [2] }),
 	);
 
 	expect((container.querySelector('[data-slot="1"]') as HTMLElement).style.background).toBe(
@@ -473,11 +460,7 @@ test('the drag ghost paints no percent when the dragged row has no progress', ()
 });
 
 test('the regions carry the header, slot, grip, actions, and menu-entry ids, menu last', async () => {
-	renderPanel(
-		queue([item(1), item(2)], null, { hover: 2 }),
-		summary(),
-		rowMenu(),
-	);
+	renderPanel(queue([item(1), item(2)], null, { hover: 2 }), summary(), rowMenu());
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
 	expect(reportedRegionIds()).toEqual([

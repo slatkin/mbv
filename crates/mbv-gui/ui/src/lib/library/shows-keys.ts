@@ -251,11 +251,7 @@ function routeWorkspaceKey(
 
 /** Run Enter, `n`, or `a` against the Workspace's selected episode (design
  * D12): the Hero owns the episode cursor, so the key names no episode id. */
-function routeWorkspaceItemKey(
-	event: KeyboardEvent,
-	libIdx: number,
-	detail: GuiShowsDetail,
-): void {
+function routeWorkspaceItemKey(event: KeyboardEvent, libIdx: number, detail: GuiShowsDetail): void {
 	if (event.key === 'n') {
 		playNextShowsEpisode(libIdx, detail);
 		return;

@@ -11,11 +11,7 @@ import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type {
-	GuiSettingsCommand,
-	GuiSettingsContent,
-	GuiSettingsFrame,
-} from '$lib/bridge/types';
+import type { GuiSettingsCommand, GuiSettingsContent, GuiSettingsFrame } from '$lib/bridge/types';
 import { settingsEntries } from '$lib/settings/entries';
 import { routeSettingsKey } from '$lib/settings/keys';
 import { cursorEntryId, initialSettingsUi, settingsUi } from '$lib/settings/state';
@@ -46,7 +42,9 @@ function openContent(): Extract<GuiSettingsContent, { kind: 'playlists' }> {
 }
 
 /** A settings frame over the Playlists section. */
-function playlistsFrame(content: Extract<GuiSettingsContent, { kind: 'playlists' }>): GuiSettingsFrame {
+function playlistsFrame(
+	content: Extract<GuiSettingsContent, { kind: 'playlists' }>,
+): GuiSettingsFrame {
 	return { section: 'playlists', sections: ['playlists'], content };
 }
 
@@ -63,7 +61,7 @@ test.each<[string, GuiSettingsCommand]>([
 	['playlistAction:p1:enqueue', { command: 'playlistAction', id: 'p1', action: 'enqueue' }],
 	['playlistDelete:p1', { command: 'playlistDelete', id: 'p1' }],
 ])(
-	'a press on the list\'s %s sends its command and moves the content cursor to it',
+	"a press on the list's %s sends its command and moves the content cursor to it",
 	async (id, command) => {
 		const content = listContent();
 		const entries = settingsEntries(content, {});
@@ -71,9 +69,7 @@ test.each<[string, GuiSettingsCommand]>([
 			props: { content, entries, cursorId: null },
 		});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+		await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
 		const ui = get(settingsUi);
@@ -90,7 +86,7 @@ test.each<[string, GuiSettingsCommand]>([
 		{ command: 'playlistItemAction', id: 'p1', itemId: 'i1', action: 'enqueue' },
 	],
 ])(
-	'a press on the open playlist\'s %s sends its command and moves the content cursor to it',
+	"a press on the open playlist's %s sends its command and moves the content cursor to it",
 	async (id, command) => {
 		const content = openContent();
 		const entries = settingsEntries(content, {});
@@ -98,9 +94,7 @@ test.each<[string, GuiSettingsCommand]>([
 			props: { content, entries, cursorId: null },
 		});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+		await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
 		const ui = get(settingsUi);
@@ -109,7 +103,7 @@ test.each<[string, GuiSettingsCommand]>([
 	},
 );
 
-test('a press on Rename opens the draft, and the field\'s Enter sends playlistRename', async () => {
+test("a press on Rename opens the draft, and the field's Enter sends playlistRename", async () => {
 	const content = listContent();
 	const entries = settingsEntries(content, {});
 	const { container } = render(SettingsPlaylists, {
@@ -117,9 +111,7 @@ test('a press on Rename opens the draft, and the field\'s Enter sends playlistRe
 	});
 
 	const id = 'playlistRename:p1';
-	await fireEvent.click(
-		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 	expect(invokeMock).not.toHaveBeenCalled();
 	expect(get(settingsUi).rename).toEqual({ id: 'p1', name: 'Mix' });

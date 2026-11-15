@@ -143,7 +143,11 @@ const AUIB_HERO: NonNullable<GuiAudiobooksDetail['hero']> = {
 	overview: null,
 	artShape: 'portrait',
 	art: null,
-	workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 }] },
+	workspace: {
+		rows: [
+			{ chapter: 1, title: 'Act one', duration: '2:16', startTicks: 0, endTicks: 136 * 1_000_000 },
+		],
+	},
 };
 
 /** Carry the content, focus the pane, and paint the list's cursor. */
@@ -269,7 +273,9 @@ test('the Hero pane consumes n without a Workspace call', () => {
 // Panel focus.
 test('the list pane and a hero-less Hero pane consume every Library key', () => {
 	carry('list');
-	const list = LIBRARY_KEYS.map((key) => routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()));
+	const list = LIBRARY_KEYS.map((key) =>
+		routeLibraryKey(new KeyboardEvent('keydown', { key }), frame()),
+	);
 	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
 	carryLibrary(content(null));
 	const hero = LIBRARY_KEYS.map((key) =>

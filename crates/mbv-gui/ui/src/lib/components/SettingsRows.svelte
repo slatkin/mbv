@@ -44,17 +44,13 @@
 	const settingRows = $derived(
 		rows.filter(
 			(row) =>
-				row.kind === 'toggle' ||
-				row.kind === 'cycle' ||
-				row.kind === 'pick' ||
-				row.kind === 'info',
+				row.kind === 'toggle' || row.kind === 'cycle' || row.kind === 'pick' || row.kind === 'info',
 		),
 	);
 	/** The action rows, which the canvas paints as buttons. */
 	const actionRows = $derived(rows.filter((row) => row.kind === 'action'));
 	/** The choice-list rows, one checkbox-grid card each. */
 	const choiceRows = $derived(rows.filter((row) => row.kind === 'choiceList'));
-
 </script>
 
 <div

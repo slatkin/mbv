@@ -35,22 +35,17 @@ beforeEach(() => {
 test.each<[string, GuiSettingsCommand]>([
 	['target:0', { command: 'selectTarget', target: { kind: 'local' } }],
 	['target:1', { command: 'selectTarget', target: { kind: 'emby', id: 'sess-1' } }],
-])(
-	'a press on %s sends its command and moves the content cursor to it',
-	async (id, command) => {
-		const content = sessionsContent();
-		const entries = settingsEntries(content, {});
-		const { container } = render(SettingsSessions, {
-			props: { content, entries, cursorId: null },
-		});
+])('a press on %s sends its command and moves the content cursor to it', async (id, command) => {
+	const content = sessionsContent();
+	const entries = settingsEntries(content, {});
+	const { container } = render(SettingsSessions, {
+		props: { content, entries, cursorId: null },
+	});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
-		expect(invokeMock).toHaveBeenCalledWith('settings', { command });
-		const ui = get(settingsUi);
-		expect(ui.pane).toBe('content');
-		expect(cursorEntryId(entries, ui)).toBe(id);
-	},
-);
+	expect(invokeMock).toHaveBeenCalledWith('settings', { command });
+	const ui = get(settingsUi);
+	expect(ui.pane).toBe('content');
+	expect(cursorEntryId(entries, ui)).toBe(id);
+});

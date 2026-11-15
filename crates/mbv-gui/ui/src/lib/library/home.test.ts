@@ -13,13 +13,7 @@ import { homeRowKey, HOME_ITEM_ROW_HEIGHT } from './home-list';
 import { carryLibrary } from '$lib/bridge/test-library';
 import type { LibrarySections } from '$lib/bridge/test-library';
 import { initialLibraryUi, libraryUi } from './state';
-import {
-	homeUi,
-	initialHomeUi,
-	measureHomeList,
-	moveHomeListCursor,
-	pressHomeRow,
-} from './home';
+import { homeUi, initialHomeUi, measureHomeList, moveHomeListCursor, pressHomeRow } from './home';
 import { buildHomeRows } from './home-list';
 
 const invokeMock = vi.mocked(invoke);

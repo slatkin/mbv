@@ -48,9 +48,7 @@ function podcastsList(): GuiPodcastsList {
 		libIdx: LIB_IDX,
 		loading: false,
 		failed: false,
-		pills: [
-			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
-		],
+		pills: [{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false }],
 		rows: [
 			{
 				id: 'show1:ep12',
@@ -70,7 +68,8 @@ function podcastsDetail(facts: GuiPodcastsHero | null): GuiPodcastsDetail {
 
 /** Render the Hero for the carried content. */
 function mount(facts: GuiPodcastsHero | null = hero()): HTMLElement {
-	return render(LibraryPodcastsHero, { list: podcastsList(), detail: podcastsDetail(facts) }).container;
+	return render(LibraryPodcastsHero, { list: podcastsList(), detail: podcastsDetail(facts) })
+		.container;
 }
 
 // The artwork box takes the arm every Hero shares (design D15): the square
@@ -94,9 +93,7 @@ test('the Hero paints the show as its title, the episode in the block, the durat
 	expect(container.querySelector('[data-library-podcasts-hero-title]')?.textContent).toBe(
 		'Bits and Bites',
 	);
-	expect(container.querySelector('[data-library-podcasts-hero-facts]')?.textContent).toBe(
-		'08 Oct',
-	);
+	expect(container.querySelector('[data-library-podcasts-hero-facts]')?.textContent).toBe('08 Oct');
 	expect(container.querySelector('[data-library-podcasts-hero-block-name]')?.textContent).toBe(
 		'Episode 12: The Long Road',
 	);
@@ -140,9 +137,7 @@ test('Play sends the play command for the selected episode', async () => {
 test('Add to queue sends the enqueue command for the selected episode', async () => {
 	const container = mount();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-podcasts-hero-add]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-podcasts-hero-add]') as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'podcastsQueue', libIdx: LIB_IDX, itemId: 'show1:ep12' },
@@ -155,9 +150,9 @@ test('the Hero paints no play-next control', () => {
 	const container = mount();
 
 	expect(container.querySelector('[data-library-podcasts-hero-play-next]')).toBeNull();
-	expect(
-		container.querySelector('[data-library-podcasts-hero-block]')?.textContent,
-	).not.toContain('Play next');
+	expect(container.querySelector('[data-library-podcasts-hero-block]')?.textContent).not.toContain(
+		'Play next',
+	);
 });
 
 // The Hero paints the frame's header band, as Music and Shows do: the kicker
@@ -165,6 +160,8 @@ test('the Hero paints no play-next control', () => {
 test('the Hero paints the frame header above its artwork', () => {
 	const container = mount();
 
-	expect(container.querySelector('[data-library-podcasts-hero-kicker]')?.textContent).toBe('podcast');
+	expect(container.querySelector('[data-library-podcasts-hero-kicker]')?.textContent).toBe(
+		'podcast',
+	);
 	expect(container.querySelector('[data-library-podcasts-hero-title]')?.tagName).toBe('H1');
 });

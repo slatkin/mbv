@@ -25,9 +25,7 @@
 		onReset: () => void;
 	}
 	let { side, width, name, onDrag, onReset }: Props = $props();
-	const label = $derived(
-		name === 'queue' ? 'Resize the Queue panel' : 'Resize the Library list',
-	);
+	const label = $derived(name === 'queue' ? 'Resize the Queue panel' : 'Resize the Library list');
 
 	/** Whether a drag is under way: the band paints its drag look. */
 	let dragging = $state(false);

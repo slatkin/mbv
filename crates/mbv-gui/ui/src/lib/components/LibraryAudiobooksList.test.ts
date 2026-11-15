@@ -11,11 +11,7 @@ import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { initialListScroll, audiobooksScroll } from '$lib/library/scroll';
-import type {
-	GuiAudiobooksDetail,
-	GuiAudiobooksList,
-	GuiAudiobooksRow,
-} from '$lib/bridge/types';
+import type { GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRow } from '$lib/bridge/types';
 import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
 import { audiobooksCursorRow, audiobooksUi, initialAudiobooksUi } from '$lib/library/audiobooks';
 import { carryLibrary } from '$lib/bridge/test-library';
@@ -59,11 +55,7 @@ const CATALOG: GuiAudiobooksRow[] = [
 ];
 
 /** The carried Audiobooks list part over `rows` (row 9.1). */
-function listOf(
-	rows: GuiAudiobooksRow[],
-	loading = false,
-	failed = false,
-): GuiAudiobooksList {
+function listOf(rows: GuiAudiobooksRow[], loading = false, failed = false): GuiAudiobooksList {
 	return { libIdx: 4, loading, failed, rows };
 }
 
@@ -205,9 +197,7 @@ test('loading and failed paint their placeholder lines', () => {
 			list: listOf(rows, true, true),
 			detail: detailOf(null),
 		});
-		expect(
-			failed.container.querySelector('[data-library-abs-loading]'),
-		).toBeTruthy();
+		expect(failed.container.querySelector('[data-library-abs-loading]')).toBeTruthy();
 		expect(failed.container.querySelector('[data-library-abs-failed]')).toBeTruthy();
 	})();
 });

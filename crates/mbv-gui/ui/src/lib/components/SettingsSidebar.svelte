@@ -137,7 +137,8 @@
 	<div bind:this={listEl} class="min-h-0 flex-1 overflow-y-auto">
 		{#each settings.sections as section, index (section)}
 			{@const current = section === settings.section}
-			{@const cursor = index === $settingsUi.sidebarCursor &&
+			{@const cursor =
+				index === $settingsUi.sidebarCursor &&
 				$settingsUi.pane === 'sidebar' &&
 				$settingsUi.keyboard}
 			{@const Icon = ICONS[section]}

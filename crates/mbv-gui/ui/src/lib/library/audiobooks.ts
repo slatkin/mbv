@@ -16,11 +16,7 @@ import type { ListMove } from './list';
 import { libraryAudiobooksList } from './parts';
 import { libraryUi } from './state';
 import { audiobooksScroll } from './scroll';
-import {
-	audiobooksRowsOf,
-	moveAudiobooksCursor,
-	audiobooksLetterRail,
-} from './audiobooks-list';
+import { audiobooksRowsOf, moveAudiobooksCursor, audiobooksLetterRail } from './audiobooks-list';
 import type { AudiobooksItemRow, AudiobooksListRow } from './audiobooks-list';
 
 /** The book list's interaction state. */

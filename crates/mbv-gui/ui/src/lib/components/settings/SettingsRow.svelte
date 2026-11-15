@@ -32,14 +32,14 @@
 	style:padding="0 12px"
 	style:border-radius="6px"
 	style:background={cursor ? 'var(--canvas-selected)' : undefined}
-	style:border-bottom={divider ? `1px solid ${cursor ? 'transparent' : 'var(--canvas-border)'}` : undefined}
+	style:border-bottom={divider
+		? `1px solid ${cursor ? 'transparent' : 'var(--canvas-border)'}`
+		: undefined}
 	data-settings-setting-row=""
 	data-settings-cursor={cursor ? '' : undefined}
 >
-	<span
-		class="min-w-0 flex-1 truncate"
-		style:font-size="14px"
-		style:color="var(--canvas-heading)">{label}</span
+	<span class="min-w-0 flex-1 truncate" style:font-size="14px" style:color="var(--canvas-heading)"
+		>{label}</span
 	>
 	<span class="flex flex-none items-center">
 		{@render children?.()}

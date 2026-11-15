@@ -162,9 +162,7 @@ test('the All series mode paints letter headings, its tree, and the rail a press
 	).toEqual(['A', 'B']);
 	expect(paintedRows(container)).toEqual(['shows-series:s1', 'shows-series:s3']);
 
-	await fireEvent.click(
-		container.querySelector('[data-library-rail-letter="B"]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-rail-letter="B"]') as HTMLElement);
 	await tick();
 
 	expect(

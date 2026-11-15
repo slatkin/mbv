@@ -80,9 +80,7 @@
 						: 'var(--canvas-destructive)'}
 				>
 					<span>{button.label}</span>
-					<span class="font-mono tabular-nums" style:font-size="11px"
-						>{button.keys}</span
-					>
+					<span class="font-mono tabular-nums" style:font-size="11px">{button.keys}</span>
 				</button>
 			{/each}
 		</div>

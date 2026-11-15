@@ -9,13 +9,7 @@
 
 import type { GuiEmbyFeedGroup, GuiEmbyRow } from '$lib/bridge/types';
 import type { RailLetter } from './list';
-import {
-	LETTER_ROW_HEIGHT,
-	buildFlatRows,
-	filterMatch,
-	letterRail,
-	moveCursor,
-} from './list';
+import { LETTER_ROW_HEIGHT, buildFlatRows, filterMatch, letterRail, moveCursor } from './list';
 import type { ListMove } from './list';
 import { memoRows } from './row-memo';
 
@@ -32,8 +26,7 @@ export const EMBY_ROW_HEIGHT = 40;
  * `id` is the row's stable key: the cursor's identity, the each-block's key,
  * and the id the scroll geometry reads. */
 export type EmbyListRow =
-	| { kind: 'heading'; id: string; top: number; height: number; letter: string }
-	| EmbyItemRow;
+	{ kind: 'heading'; id: string; top: number; height: number; letter: string } | EmbyItemRow;
 
 /** A painted row the cursor may rest on and the keys act on (row 8.1): every
  * item row, a folder and a boxset included, because the folder-play rule plays

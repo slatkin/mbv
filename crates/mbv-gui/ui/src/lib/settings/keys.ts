@@ -31,12 +31,7 @@ import {
 	submitSettingsForm,
 	switchSettingsPane,
 } from './state';
-import {
-	closePickMenu,
-	movePickMenuCursor,
-	pickMenu,
-	selectPickValue,
-} from './pick-menu';
+import { closePickMenu, movePickMenuCursor, pickMenu, selectPickValue } from './pick-menu';
 import { get } from 'svelte/store';
 
 /**

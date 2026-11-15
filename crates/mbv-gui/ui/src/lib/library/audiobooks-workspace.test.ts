@@ -46,7 +46,13 @@ beforeEach(() => {
 /** A book's chapters on the merged timeline: the first spans 0–21:00, the
  * second 21:00–45:00 (design D5's `startTicks`/`endTicks`). */
 const CHAPTERS: GuiAudiobooksChapterRow[] = [
-	{ chapter: 1, title: 'First Contact', duration: '21:00', startTicks: 0, endTicks: 21 * 60 * SECOND },
+	{
+		chapter: 1,
+		title: 'First Contact',
+		duration: '21:00',
+		startTicks: 0,
+		endTicks: 21 * 60 * SECOND,
+	},
 	{
 		chapter: 2,
 		title: 'Fallen Angel',
@@ -60,7 +66,11 @@ const CHAPTERS: GuiAudiobooksChapterRow[] = [
 function hero(rows: GuiAudiobooksChapterRow[] = CHAPTERS): GuiAudiobooksHero {
 	return {
 		title: 'The Caves of Steel',
-		metaRows: [[{ text: 'Isaac Asimov', kind: 'plain' }], [{ text: '9 h 51 m', kind: 'time' }], [{ text: '17%', kind: 'plain' }]],
+		metaRows: [
+			[{ text: 'Isaac Asimov', kind: 'plain' }],
+			[{ text: '9 h 51 m', kind: 'time' }],
+			[{ text: '17%', kind: 'plain' }],
+		],
 		durationRow: 1,
 		progressRow: 2,
 		overview: null,
@@ -112,7 +122,7 @@ test('a cursor move past the last chapter stays there', () => {
 // The current chapter is the window's derivation now (design D5): the row
 // whose span holds the predicted position, while the Hero's book is the
 // playing book. The fixed test clocks hold the position at its anchor.
-test('the marked chapter follows the predicted position while the Hero\'s book plays', () => {
+test("the marked chapter follows the predicted position while the Hero's book plays", () => {
 	stampPlayheadForTest({
 		active: true,
 		activeSlot: 1,
@@ -151,7 +161,7 @@ test('a different playing book marks no chapter', () => {
 // The span's end is exclusive: a position at a chapter's end marks the next
 // chapter, and an empty span (`startTicks === endTicks`, an audio-part row's
 // `0`/`0`) never holds one.
-test('a position at a chapter\'s end marks the next chapter', () => {
+test("a position at a chapter's end marks the next chapter", () => {
 	stampPlayheadForTest({
 		active: true,
 		activeSlot: 1,

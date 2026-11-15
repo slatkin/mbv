@@ -27,8 +27,7 @@ export const AUIB_ROW_HEIGHT = 40;
  * id the scroll geometry reads. A heading is structural; an item row is a
  * book. */
 export type AudiobooksListRow =
-	| { kind: 'heading'; id: string; top: number; height: number; letter: string }
-	| AudiobooksItemRow;
+	{ kind: 'heading'; id: string; top: number; height: number; letter: string } | AudiobooksItemRow;
 
 /** A painted row the cursor may rest on and the keys act on (row 9.1): a
  * book. A heading names no book. */

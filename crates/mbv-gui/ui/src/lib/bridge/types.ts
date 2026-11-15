@@ -365,9 +365,7 @@ export interface GuiQueueDrag {
 }
 
 /** The insertion line: the stable slot it anchors on and the side it paints. */
-export type GuiQueueInsertion =
-	| { at: 'before'; slot: number }
-	| { at: 'after'; slot: number };
+export type GuiQueueInsertion = { at: 'before'; slot: number } | { at: 'after'; slot: number };
 
 export type GuiQueueRow =
 	| {
@@ -578,9 +576,7 @@ export interface GuiTargetChoice {
 /** A playback target's stable identity: this machine's local output, the Emby
  * session id, or the cast receiver id. */
 export type GuiTargetKey =
-	| { kind: 'local' }
-	| { kind: 'emby'; id: string }
-	| { kind: 'cast'; id: string };
+	{ kind: 'local' } | { kind: 'emby'; id: string } | { kind: 'cast'; id: string };
 
 /** One status indicator of the queue band's cluster: the uppercased label
  * and the foreground role its text paints in. */

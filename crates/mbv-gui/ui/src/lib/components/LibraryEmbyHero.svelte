@@ -65,7 +65,9 @@
 	/** The frame's header and block for the Hero (invariant 30): the item is
 	 * its own largest unit, so it titles the header, and its kind word in
 	 * upper case is the kicker. */
-	const layout = $derived(hero === null ? null : heroLayout(layoutFacts(hero), hero.kind.toUpperCase()));
+	const layout = $derived(
+		hero === null ? null : heroLayout(layoutFacts(hero), hero.kind.toUpperCase()),
+	);
 
 	/** The Hero part's own attribute, so the tests keep their hook. */
 	function own(name: string): Record<string, string> {

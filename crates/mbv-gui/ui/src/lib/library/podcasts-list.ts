@@ -31,10 +31,7 @@ export type PodcastsItemRow = FlatRow<GuiPodcastsRow>;
  * (design D7's filter rule). Every row carries its top edge and height, so
  * the list paints a window of rows over native scroll.
  */
-export function buildPodcastsRows(
-	rows: readonly GuiPodcastsRow[],
-	filter = '',
-): PodcastsItemRow[] {
+export function buildPodcastsRows(rows: readonly GuiPodcastsRow[], filter = ''): PodcastsItemRow[] {
 	return buildFlatRows(rows, PODCASTS_ROW_HEIGHT, filter);
 }
 

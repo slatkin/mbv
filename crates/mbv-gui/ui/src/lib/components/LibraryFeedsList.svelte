@@ -15,10 +15,7 @@
 	// The `/` filter field narrows the entries to the titles that contain
 	// its text (design D7's filter rule).
 	import type { GuiFeedsDetail, GuiFeedsList } from '$lib/bridge/types';
-	import {
-		feedsRowsOf,
-		FEEDS_ROW_HEIGHT,
-	} from '$lib/library/feeds-list';
+	import { feedsRowsOf, FEEDS_ROW_HEIGHT } from '$lib/library/feeds-list';
 	import type { FeedsItemRow } from '$lib/library/feeds-list';
 	import {
 		acceptFeedsFilter,
@@ -51,7 +48,6 @@
 	const selectionLabel = $derived(list.pills.find((pill) => pill.selected)?.name ?? 'Latest');
 
 	const rows = $derived(feedsRowsOf(list.rows, $feedsUi.filter));
-
 
 	/** An entry row's title colour: the canvas's text tone, dimmed on a played
 	 * row (design D12), as a Home item row. */

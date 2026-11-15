@@ -20,7 +20,7 @@ test.each([
 	['59:59', 3599],
 	['1:01:01', 3661],
 	['12:34:56', 12 * 3600 + 34 * 60 + 56],
-])('a duration paints the TUI\'s shared form as %s from %s seconds', (expected, secs) => {
+])("a duration paints the TUI's shared form as %s from %s seconds", (expected, secs) => {
 	expect(formatDurationShort(secs)).toBe(expected);
 });
 

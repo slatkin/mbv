@@ -58,7 +58,6 @@
 	/** The tallest a landscape still paints: its box hugs the image up to the
 	 * content width, so a wide window never grows the still without bound. */
 	const BAND_MAX_HEIGHT = 360;
-
 </script>
 
 <div

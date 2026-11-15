@@ -24,7 +24,6 @@
 	}
 	const { letters, marked, jump = jumpToLetter }: Props = $props();
 
-
 	/** A letter's text colour: the marked letter is the canvas's green, an
 	 * enabled one the muted text, and a disabled one the canvas's dimmest. */
 	function letterColor(letter: RailLetter): string {

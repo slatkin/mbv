@@ -153,14 +153,12 @@ test('a double-click plays the entry', async () => {
 	});
 });
 
-test('the cursor row and the core\'s selected entry carry their own fills', async () => {
+test("the cursor row and the core's selected entry carry their own fills", async () => {
 	const container = await mountList(ENTRIES);
 	feedsUi.update((ui) => ({ ...ui, cursor: 's2::e2' }));
 	await tick();
 
-	const cursorRow = container.querySelector(
-		'[data-library-feeds-row-id="s2::e2"]',
-	) as HTMLElement;
+	const cursorRow = container.querySelector('[data-library-feeds-row-id="s2::e2"]') as HTMLElement;
 	const selectedRow = container.querySelector(
 		'[data-library-feeds-row-id="s1::e1"]',
 	) as HTMLElement;

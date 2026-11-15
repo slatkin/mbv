@@ -60,9 +60,7 @@ test.each<[string, string | null]>([
 			props: { content, entries, cursorId: null },
 		});
 
-		await fireEvent.click(
-			container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-		);
+		await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 		expect(invokeMock).not.toHaveBeenCalled();
 		const ui = get(settingsUi);
@@ -80,9 +78,7 @@ test('a press on a remove row sends feedRemove with the subscription URL', async
 	});
 
 	const id = 'feedRemove:https://a';
-	await fireEvent.click(
-		container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector(`[data-settings-entry="${id}"]`) as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('settings', {
 		command: { command: 'feedRemove', url: 'https://a' },
@@ -92,19 +88,15 @@ test('a press on a remove row sends feedRemove with the subscription URL', async
 	expect(cursorEntryId(entries, ui)).toBe(id);
 });
 
-test('the add form\'s submit sends feedAdd with the typed fields', async () => {
+test("the add form's submit sends feedAdd with the typed fields", async () => {
 	const content = feedsContent();
 	const { container, getByRole } = render(SettingsFeeds, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
 	});
-	await fireEvent.click(
-		container.querySelector('[data-settings-entry="feedAdd"]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-settings-entry="feedAdd"]') as HTMLElement);
 	await tick();
 
-	await fireEvent.focusIn(
-		container.querySelector('[data-settings-field="name"]') as Element,
-	);
+	await fireEvent.focusIn(container.querySelector('[data-settings-field="name"]') as Element);
 	await fireEvent.input(container.querySelector('[data-settings-field="name"]') as Element, {
 		target: { value: 'C feed' },
 	});
@@ -119,7 +111,7 @@ test('the add form\'s submit sends feedAdd with the typed fields', async () => {
 	expect(get(settingsUi).feedForm).toBeNull();
 });
 
-test('the edit form\'s submit sends feedEdit with the subscription URL as the identity', async () => {
+test("the edit form's submit sends feedEdit with the subscription URL as the identity", async () => {
 	const content = feedsContent();
 	const { container, getByRole } = render(SettingsFeeds, {
 		props: { content, entries: settingsEntries(content, {}), cursorId: null },
@@ -129,9 +121,7 @@ test('the edit form\'s submit sends feedEdit with the subscription URL as the id
 	);
 	await tick();
 
-	await fireEvent.focusIn(
-		container.querySelector('[data-settings-field="name"]') as Element,
-	);
+	await fireEvent.focusIn(container.querySelector('[data-settings-field="name"]') as Element);
 	await fireEvent.input(container.querySelector('[data-settings-field="name"]') as Element, {
 		target: { value: 'Renamed' },
 	});

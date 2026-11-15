@@ -9,7 +9,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { footer as footerStore, resetSectionsForTest, status as statusStore } from '$lib/bridge/sections';
+import {
+	footer as footerStore,
+	resetSectionsForTest,
+	status as statusStore,
+} from '$lib/bridge/sections';
 import type { GuiQueueFooter, GuiStatusBar } from '$lib/bridge/types';
 import QueueFooter from './QueueFooter.svelte';
 

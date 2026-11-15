@@ -180,8 +180,7 @@ test('the filter narrows the painted rows to the names that contain its text', a
 test('a press closes and reopens a node while the filter narrows the rows', async () => {
 	libraryUi.update((ui) => ({ ...ui, filter: 'rhymin' }));
 	const container = await mountList(240);
-	const album = () =>
-		container.querySelector('[data-library-row-id="album:al1"]');
+	const album = () => container.querySelector('[data-library-row-id="album:al1"]');
 
 	expect(album()?.getAttribute('aria-expanded')).toBe('true');
 	await fireEvent.click(album() as HTMLElement);

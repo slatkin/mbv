@@ -9,10 +9,10 @@
 	// Play, Play next (`n`), and Add to queue (`a`) send the Home commands
 	// with the frame's selected row — the core owns the selection, so the
 	// actions name the row the frame painted and never a position.
-	
+
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import LibraryHeroSummary from './LibraryHeroSummary.svelte';
-	
+
 	import type { GuiHomeDetail } from '$lib/bridge/types';
 
 	interface Props {
@@ -40,7 +40,7 @@
 {#if hero !== null}
 	<div class="flex flex-col" style:padding="28px 32px" style:gap="20px" data-library-hero="">
 		<LibraryHeroSummary
-						attr="home"
+			attr="home"
 			section="data-library-home-hero"
 			{hero}
 			onplay={() => act('homePlay', detail.selected)}

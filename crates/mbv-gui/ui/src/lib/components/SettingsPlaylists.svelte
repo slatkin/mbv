@@ -161,11 +161,7 @@
 							style:color="var(--canvas-text)">{item.name}</span
 						>
 						{#each ACTIONS as control (control.action)}
-							{@const itemActionId = entryId.playlistItemAction(
-								open.id,
-								item.id,
-								control.action,
-							)}
+							{@const itemActionId = entryId.playlistItemAction(open.id, item.id, control.action)}
 							<SettingsButton
 								entry={itemActionId}
 								cursor={itemActionId === cursorId}

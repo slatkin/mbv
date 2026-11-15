@@ -59,15 +59,13 @@
 			key: 'playNext',
 			label: 'Play next',
 			icon: ListEnd,
-			run: (trackId: string) =>
-				void sendLibraryCommand({ command: 'playNext', itemId: trackId }),
+			run: (trackId: string) => void sendLibraryCommand({ command: 'playNext', itemId: trackId }),
 		},
 		{
 			key: 'addToQueue',
 			label: 'Add to queue',
 			icon: Plus,
-			run: (trackId: string) =>
-				void sendLibraryCommand({ command: 'addToQueue', itemId: trackId }),
+			run: (trackId: string) => void sendLibraryCommand({ command: 'addToQueue', itemId: trackId }),
 		},
 	];
 

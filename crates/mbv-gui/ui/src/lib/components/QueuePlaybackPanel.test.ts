@@ -368,11 +368,13 @@ test('a press on the scrubber forwards a pointer press with its position', async
 });
 
 test('the scrubber paints the hover preview from the frame', () => {
-	const { container, getByText } = renderPanel(
-		playing(),
-		null,
-		{ fraction: 0.75, timeLabel: '2:30', chapter: 'Chapter Two', chapterNumber: 2, tile: null },
-	);
+	const { container, getByText } = renderPanel(playing(), null, {
+		fraction: 0.75,
+		timeLabel: '2:30',
+		chapter: 'Chapter Two',
+		chapterNumber: 2,
+		tile: null,
+	});
 
 	// The preview label reads the canvas's `12:31 · Ch. 2` form: the time and
 	// the chapter's number, not its full name (`main` audit 12).
@@ -435,10 +437,7 @@ test('an open target chooser reports one region per row', async () => {
 	renderPanel(playing(), chooserOverlay());
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
-	expect(reportedRegionIds().slice(-2)).toEqual([
-		{ targetChoice: 0 },
-		{ targetChoice: 1 },
-	]);
+	expect(reportedRegionIds().slice(-2)).toEqual([{ targetChoice: 0 }, { targetChoice: 1 }]);
 });
 
 // The hit map resolves a painted-over point to the LAST region reported
@@ -466,9 +465,7 @@ test('an open chooser reports its rows after the queue and footer regions', asyn
 	overlayStore.set(chooserOverlay());
 	await rerender({});
 
-	await vi.waitFor(() =>
-		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 1 }),
-	);
+	await vi.waitFor(() => expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 1 }));
 	const ids = lastReportedRegionIds();
 	const firstChoice = ids.findIndex(isChoice);
 	expect(ids.slice(0, firstChoice)).toEqual(
@@ -479,9 +476,7 @@ test('an open chooser reports its rows after the queue and footer regions', asyn
 
 test('closing the chooser retracts its row regions', async () => {
 	const { rerender } = renderPanel(playing(), chooserOverlay());
-	await vi.waitFor(() =>
-		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 0 }),
-	);
+	await vi.waitFor(() => expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 0 }));
 
 	overlayStore.set(null);
 	await rerender({});

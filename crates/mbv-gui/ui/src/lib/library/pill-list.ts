@@ -69,14 +69,7 @@ export function sendIfLoaded<Frame>(
  * frame builds its rows and pills, how the cursor moves over them, and how the
  * pill row's focus is stored. Every member stays a pure read of the frame or
  * the row — the command shapes stay in the destination's own module. */
-export interface PillListConfig<
-	Frame,
-	Row extends GeometryRow,
-	Item,
-	Pill,
-	Focus,
-	PillEntry,
-> {
+export interface PillListConfig<Frame, Row extends GeometryRow, Item, Pill, Focus, PillEntry> {
 	/** The carried content slice, or `null` while any other destination is
 	 * active. */
 	frame(): Frame | null;
@@ -90,12 +83,7 @@ export interface PillListConfig<
 	itemOf(row: Row): Item | null;
 	/** The cursor's movement over the painted rows (design D7): the plain
 	 * movement, or the destination's heading-skipping one. */
-	move(
-		rows: readonly Row[],
-		cursor: string | null,
-		move: ListMove,
-		page?: number,
-	): string | null;
+	move(rows: readonly Row[], cursor: string | null, move: ListMove, page?: number): string | null;
 	/** The frame's pill entries, in paint order. */
 	pills(frame: Frame): readonly PillEntry[];
 	/** The pill a pill entry carries: the set-pill command's payload. */
@@ -171,14 +159,7 @@ export interface PillListController<Frame, Row, Item, Pill, Focus> {
 /** Create one destination's pill-list controller (row 7C.1): the state store
  * and every action the keys and the list call, over the destination's frame,
  * rows, and pills. */
-export function createPillList<
-	Frame,
-	Row extends GeometryRow,
-	Item,
-	Pill,
-	Focus,
-	PillEntry,
->(
+export function createPillList<Frame, Row extends GeometryRow, Item, Pill, Focus, PillEntry>(
 	config: PillListConfig<Frame, Row, Item, Pill, Focus, PillEntry>,
 ): PillListController<Frame, Row, Item, Pill, Focus> {
 	const ui = writable<PillListUiState<Pill, Focus>>(initialPillListUi());
@@ -192,7 +173,12 @@ export function createPillList<
 	 * (design D12, D9). */
 	function followCursor(list: readonly Row[], cursor: string | null): void {
 		config.scroll.update((scroll) => {
-			const scrollTop = scrollTopToShowCursor(list, cursor, scroll.scrollTop, scroll.viewportHeight);
+			const scrollTop = scrollTopToShowCursor(
+				list,
+				cursor,
+				scroll.scrollTop,
+				scroll.viewportHeight,
+			);
 			return scrollTop === scroll.scrollTop ? scroll : { ...scroll, scrollTop };
 		});
 	}

@@ -88,9 +88,7 @@ function mount(facts: GuiShowsHero | null = hero()): HTMLElement {
 
 /** One episode row of the painted Workspace. */
 function episodeRow(container: HTMLElement, episodeId: string): HTMLElement {
-	return container.querySelector(
-		`[data-library-shows-episode="${episodeId}"]`,
-	) as HTMLElement;
+	return container.querySelector(`[data-library-shows-episode="${episodeId}"]`) as HTMLElement;
 }
 
 // The artwork box reserves the arm the frame declares (design D14): the
@@ -152,14 +150,22 @@ test("the Workspace paints the selected season's episodes", () => {
 	const container = mount();
 
 	const rows = [...container.querySelectorAll('[data-library-shows-episode]')];
-	expect(rows.map((row) => row.getAttribute('data-library-shows-episode'))).toEqual([
-		'ep1',
-		'ep2',
-	]);
-	expect(episodeRow(container, 'ep2').querySelector('[data-library-shows-episode-number]')?.textContent).toBe('2');
-	expect(episodeRow(container, 'ep2').querySelector('[data-library-shows-episode-name]')?.textContent?.trim()).toBe('Cat in the Bag');
-	expect(episodeRow(container, 'ep2').querySelector('[data-library-shows-episode-duration]')?.textContent).toBe('47:00');
-	expect(episodeRow(container, 'ep1').getAttribute('data-library-shows-episode-state')).toBe('played');
+	expect(rows.map((row) => row.getAttribute('data-library-shows-episode'))).toEqual(['ep1', 'ep2']);
+	expect(
+		episodeRow(container, 'ep2').querySelector('[data-library-shows-episode-number]')?.textContent,
+	).toBe('2');
+	expect(
+		episodeRow(container, 'ep2')
+			.querySelector('[data-library-shows-episode-name]')
+			?.textContent?.trim(),
+	).toBe('Cat in the Bag');
+	expect(
+		episodeRow(container, 'ep2').querySelector('[data-library-shows-episode-duration]')
+			?.textContent,
+	).toBe('47:00');
+	expect(episodeRow(container, 'ep1').getAttribute('data-library-shows-episode-state')).toBe(
+		'played',
+	);
 });
 
 test("the Latest mode's Hero paints its facts and no Workspace", () => {
@@ -181,9 +187,7 @@ test('a Hero that paints none paints nothing', () => {
 test('a season press sends the select-season command', async () => {
 	const container = mount();
 
-	await fireEvent.click(
-		container.querySelector('[data-library-shows-season="s2"]') as HTMLElement,
-	);
+	await fireEvent.click(container.querySelector('[data-library-shows-season="s2"]') as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'showsSelectSeason', libIdx: 2, seasonId: 's2' },

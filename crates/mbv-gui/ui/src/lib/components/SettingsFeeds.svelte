@@ -63,11 +63,9 @@
 			>
 		</div>
 		{#if content.adding}
-			<div
-				style:font-size="13px"
-				style:color="var(--canvas-muted)"
-				data-settings-feed-adding="">Adding…</div
-			>
+			<div style:font-size="13px" style:color="var(--canvas-muted)" data-settings-feed-adding="">
+				Adding…
+			</div>
 		{/if}
 		<div class="flex flex-col">
 			{#each content.subscriptions as feed (feed.url)}
@@ -110,8 +108,10 @@
 						class="truncate font-mono"
 						style:font-size="12px"
 						style:color="var(--canvas-muted)"
-						data-settings-feed-identity="">{form.identity}</div
+						data-settings-feed-identity=""
 					>
+						{form.identity}
+					</div>
 				{/if}
 				<SettingsField
 					label="Name"
@@ -153,19 +153,14 @@
 				<div class="flex justify-end" style:gap="8px">
 					<SettingsButton
 						variant="ghost"
-						onpress={() =>
-							settingsUi.update((ui) => ({ ...ui, feedForm: null, textField: null }))}
+						onpress={() => settingsUi.update((ui) => ({ ...ui, feedForm: null, textField: null }))}
 						>Cancel</SettingsButton
 					>
 					<SettingsButton
 						variant="primary"
 						disabled={content.adding}
 						onpress={() => submitSettingsForm(content)}
-						>{content.adding
-							? 'Adding…'
-							: form.identity === null
-								? 'Add'
-								: 'Save'}</SettingsButton
+						>{content.adding ? 'Adding…' : form.identity === null ? 'Add' : 'Save'}</SettingsButton
 					>
 				</div>
 			</div>
