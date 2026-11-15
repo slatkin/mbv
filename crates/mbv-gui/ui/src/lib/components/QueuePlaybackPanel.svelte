@@ -48,6 +48,7 @@
 	import { hover, overlay, playback } from '$lib/bridge/sections';
 	import ArtImage from './ArtImage.svelte';
 	import TrackChips from './TrackChips.svelte';
+	import TargetBrandIcon from './TargetBrandIcon.svelte';
 	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import { clampRatio, formatWallClock, minus } from '$lib/bridge/time';
 	import type {
@@ -363,6 +364,12 @@
 						</span>
 						{#if choice.key.kind === 'local'}
 							<Monitor size={14} color={roleVar('playbackTargetLocalFg')} />
+						{:else if choice.key.kind === 'cast'}
+							<TargetBrandIcon brand="cast" />
+						{:else if choice.isMbvd}
+							<TargetBrandIcon brand="mbvd" />
+						{:else}
+							<TargetBrandIcon brand="emby" />
 						{/if}
 						<span class="truncate">{choice.label}</span>
 					</button>

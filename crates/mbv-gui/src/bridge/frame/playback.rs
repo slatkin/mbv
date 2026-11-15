@@ -274,6 +274,9 @@ pub struct GuiTargetChoice {
     pub label: String,
     /// Whether the target is the Owner's attached playback output.
     pub is_active: bool,
+    /// Whether the target is an Emby Session with a direct Player-owner
+    /// endpoint (`mbvd`), which paints the mpv icon instead of the Emby one.
+    pub is_mbvd: bool,
 }
 
 impl From<&PlaybackTargetChoice> for GuiTargetChoice {
@@ -282,6 +285,7 @@ impl From<&PlaybackTargetChoice> for GuiTargetChoice {
             key: GuiTargetKey::from(&choice.key),
             label: choice.label.clone(),
             is_active: choice.is_active,
+            is_mbvd: choice.is_mbvd,
         }
     }
 }

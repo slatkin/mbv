@@ -102,11 +102,13 @@ function chooserOverlay(): GuiOverlayFrame {
 				key: { kind: 'emby', id: 'session-1' },
 				label: 'Living room',
 				isActive: true,
+				isMbvd: false,
 			},
 			{
 				key: { kind: 'cast', id: 'receiver-1' },
 				label: 'Kitchen speaker',
 				isActive: false,
+				isMbvd: false,
 			},
 		],
 	};
@@ -431,6 +433,14 @@ test('an open target chooser renders its choices', () => {
 
 	expect(getByText('Living room')).toBeTruthy();
 	expect(getByText('Kitchen speaker')).toBeTruthy();
+});
+
+test('a chooser row paints the brand icon of its target kind', () => {
+	const { container } = renderPanel(playing(), chooserOverlay());
+
+	expect(
+		[...container.querySelectorAll('[data-brand]')].map((el) => el.getAttribute('data-brand')),
+	).toEqual(['emby', 'cast']);
 });
 
 test('an open target chooser reports one region per row', async () => {
