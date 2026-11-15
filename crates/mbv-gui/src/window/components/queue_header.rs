@@ -13,7 +13,10 @@
 //! under it (user decision 2026-11-15): the Library top bar's own fill and
 //! border (`library_top_bar.rs`), so the queue's header reads like the tab
 //! bar it sits beside. The band covers the recessed box's top edge, so the
-//! box's own fill starts under the divider.
+//! box's own fill starts under the divider. The band spans the full queue
+//! column — negative inline margins cancel the recessed box's two-column
+//! inset — so its divider runs edge to edge like the tab bar's, the same
+//! stroke at the same colour.
 //!
 //! The switch and the filter each carry a pointer target: the switch's
 //! inactive segment and the filter report the `rightColumn` and `filter`
@@ -79,7 +82,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     rsx! {
         div {
             class: "flex items-center justify-between overflow-hidden whitespace-nowrap",
-            style: "height: var(--canvas-queue-header-height); padding: 12px 8px 8px 16px; background: var(--canvas-dim); border-bottom: 1px solid var(--canvas-border);",
+            style: "height: var(--canvas-queue-header-height); padding: 12px 8px 8px 16px; margin-inline: calc(var(--mbv-cell-col) * -2); background: var(--canvas-dim); border-bottom: 1px solid var(--canvas-border);",
             "data-queue-header": "",
             // The canvas's two heading lines, 2 px apart: the count over the
             // queue's finish clock. Both lines carry their data type (design
