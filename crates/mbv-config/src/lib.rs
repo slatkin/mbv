@@ -9,6 +9,7 @@ use mbv_queue::{FeedKind, LibraryPositionState, QueueState, ServiceKind};
 mod error;
 #[doc(inline)]
 pub use error::ConfigError;
+mod atomic_replace;
 mod types_paths;
 pub(crate) use types_paths::config_dir;
 #[doc(inline)]

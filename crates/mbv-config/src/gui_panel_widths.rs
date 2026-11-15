@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::atomic_replace::write_bytes_atomically;
 use super::state_dir;
 
 /// The dragged widths one GUI session leaves for the next start (D14): each
@@ -84,7 +85,12 @@ pub fn save_gui_panel_widths(widths: &GuiPanelWidths) {
 }
 
 pub(super) fn save_gui_panel_widths_at(path: &Path, widths: &GuiPanelWidths) {
-    if let Err(error) = write_state_at(path, widths) {
+    let result = toml::to_string(widths)
+        .map_err(|error| error.to_string())
+        .and_then(|text| {
+            write_bytes_atomically(path, text.as_bytes()).map_err(|error| error.to_string())
+        });
+    if let Err(error) = result {
         tracing::warn!(
             target: "gui_panel_widths",
             error = %error,
@@ -92,30 +98,4 @@ pub(super) fn save_gui_panel_widths_at(path: &Path, widths: &GuiPanelWidths) {
             "the panel widths do not save"
         );
     }
-}
-
-/// Serialize the widths, write a process-unique temporary file beside `path`,
-/// and atomically rename it over `path` — the same replace rule the launch
-/// states write by (see `launch_state::write_state_at`): a killed Client
-/// leaves the previous completed save intact.
-fn write_state_at(path: &Path, widths: &GuiPanelWidths) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let text = toml::to_string(widths).map_err(|error| std::io::Error::other(error.to_string()))?;
-    let file_name = path.file_name().map_or_else(
-        || "gui-panel-widths.toml".to_owned(),
-        |name| name.to_string_lossy().into_owned(),
-    );
-    let tmp = path.with_file_name(format!(
-        "{file_name}.tmp-{}-{}",
-        std::process::id(),
-        uuid::Uuid::new_v4()
-    ));
-    std::fs::write(&tmp, &text)?;
-    if let Err(error) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(error);
-    }
-    Ok(())
 }

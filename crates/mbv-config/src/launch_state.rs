@@ -21,6 +21,7 @@
 // Queue item, a nested Workspace selector, overlays/sidebars, search,
 // multi-selection, scroll offsets, loading/error state, or paint geometry.
 
+use super::atomic_replace::{AtomicReplaceStep, write_bytes_atomically};
 use super::{ServiceKind, state_dir};
 use std::path::{Path, PathBuf};
 
@@ -358,40 +359,33 @@ pub(super) fn save_tui_launch_state_at(
     write_state_at(path, state)
 }
 
-/// Serialize one launch-location snapshot, write a process-unique temporary
-/// file beside `path`, and atomically rename it over `path`. Both launch
-/// locations (the TUI's and the GUI's) write through this one path, so the
-/// replace rule holds for either file: a killed or crashed Client leaves the
-/// previous completed snapshot intact, and the next launch observes only a
-/// finished rename.
+/// Serialize one launch-location snapshot and write it through the shared
+/// atomic replace ([`super::atomic_replace::write_bytes_atomically`]). Both
+/// launch locations (the TUI's and the GUI's) write through this one path,
+/// so the replace rule holds for either file: a killed or crashed Client
+/// leaves the previous completed snapshot intact, and the next launch
+/// observes only a finished rename.
 pub(super) fn write_state_at<T: serde::Serialize>(
     path: &Path,
     state: &T,
 ) -> Result<(), LaunchStateError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| {
-            LaunchStateError::new(LaunchStateErrorKind::CreateDirectory(format!(
-                "{}: {e}",
-                dir.display()
-            )))
-        })?;
-    }
     let json = serde_json::to_string(state)
         .map_err(|e| LaunchStateError::new(LaunchStateErrorKind::Serialize(e.to_string())))?;
-    let tmp = tui_launch_state_tmp_path(path);
-    std::fs::write(&tmp, &json).map_err(|e| {
-        LaunchStateError::new(LaunchStateErrorKind::Write(format!(
-            "{}: {e}",
-            tmp.display()
-        )))
-    })?;
-    std::fs::rename(&tmp, path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        LaunchStateError::new(LaunchStateErrorKind::Replace(format!(
-            "{} to {}: {e}",
-            tmp.display(),
-            path.display()
-        )))
+    write_bytes_atomically(path, json.as_bytes()).map_err(|error| {
+        LaunchStateError::new(match error.step {
+            AtomicReplaceStep::CreateDirectory { dir } => LaunchStateErrorKind::CreateDirectory(
+                format!("{}: {}", dir.display(), error.source),
+            ),
+            AtomicReplaceStep::Write { tmp } => {
+                LaunchStateErrorKind::Write(format!("{}: {}", tmp.display(), error.source))
+            }
+            AtomicReplaceStep::Replace { tmp } => LaunchStateErrorKind::Replace(format!(
+                "{} to {}: {}",
+                tmp.display(),
+                path.display(),
+                error.source
+            )),
+        })
     })
 }
 
@@ -473,20 +467,4 @@ pub(super) fn load_state_at<T: serde::de::DeserializeOwned>(
             None
         }
     }
-}
-
-/// Process-unique sibling path for the atomic replace: same directory (so
-/// the rename stays atomic), qualified by pid and a fresh uuid so two
-/// Clients writing concurrently never share a pathname. Both launch-location
-/// files write through it, so the name is the TUI file's only by history.
-pub(super) fn tui_launch_state_tmp_path(path: &Path) -> PathBuf {
-    let file_name = path.file_name().map_or_else(
-        || "tui_launch_state.json".to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    );
-    path.with_file_name(format!(
-        "{file_name}.tmp-{}-{}",
-        std::process::id(),
-        uuid::Uuid::new_v4()
-    ))
 }

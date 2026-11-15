@@ -1,6 +1,5 @@
-use crate::launch_state::{
-    load_tui_launch_state_at, save_tui_launch_state_at, tui_launch_state_tmp_path,
-};
+use crate::atomic_replace::atomic_replace_tmp_path;
+use crate::launch_state::{load_tui_launch_state_at, save_tui_launch_state_at};
 use crate::{
     AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey, FeedsSelectorKey,
     HomeSelectorKey, LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity,
@@ -206,11 +205,11 @@ fn tui_launch_state_failed_replace_leaves_no_tmp_sibling() {
 }
 
 #[test]
-fn tui_launch_state_tmp_paths_are_distinct_within_the_state_dir() {
+fn atomic_replace_tmp_paths_are_distinct_within_the_state_dir() {
     let scratch = TestTempDir::new();
     let path = scratch.join("tui_launch_state.json");
-    let first = tui_launch_state_tmp_path(&path);
-    let second = tui_launch_state_tmp_path(&path);
+    let first = atomic_replace_tmp_path(&path);
+    let second = atomic_replace_tmp_path(&path);
     assert_ne!(first, second);
     assert_eq!(first.parent(), second.parent());
     assert_eq!(first.parent(), path.parent());
@@ -227,7 +226,7 @@ fn tui_launch_state_interrupted_write_keeps_previous_snapshot() {
     // A crashed writer leaves only its process-unique temp file behind; it
     // never renamed over the snapshot, so the previous launch location
     // must still load intact.
-    let orphan = tui_launch_state_tmp_path(&path);
+    let orphan = atomic_replace_tmp_path(&path);
     std::fs::write(&orphan, "{partial").unwrap();
     assert_eq!(load_tui_launch_state_at(&path), Some(first));
 
