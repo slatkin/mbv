@@ -41,7 +41,7 @@ While the Settings screen is open, the sidebar SHALL take one fixed width that d
 
 ### Requirement: Every Settings request reaches the Client core
 
-Every request that the Settings screen sends SHALL reach the Client core. The window's permissions SHALL grant every command that the GUI Client registers, so no Settings action is refused before the core sees it.
+Every request that the Settings screen sends SHALL reach the Client core. No permission layer SHALL stand between the window and the Client core, so no Settings action is refused before the core sees it.
 
 #### Scenario: A sidebar press reaches the core
 
@@ -457,12 +457,12 @@ While the Settings screen is open and no text field or capture holds the keyboar
 - **WHEN** the user presses the clear-queue chord
 - **THEN** no clear-queue prompt opens
 
-### Requirement: The window content owns the screen's interaction state
+### Requirement: The window content holds the screen's interaction state
 
-The Settings screen's cursor, keyboard position, scroll, form drafts, choice marks before apply, and capture state SHALL live in the window content. The Client core SHALL hold whether the screen is open, the selected section, the section's data, and the actions. A window-content reload SHALL keep the screen open at its section and SHALL reset the rest.
+The Settings screen's cursor, keyboard position, scroll, form drafts, choice marks before apply, and capture state SHALL live in the window content. The Client core SHALL hold whether the screen is open, the selected section, the section's data, and the actions. A section update from the Client core SHALL NOT reset the window content's state for that section.
 
-#### Scenario: A reload keeps the section
+#### Scenario: A section update keeps a draft
 
 - **GIVEN** the Settings screen shows Feeds with a half-typed URL
-- **WHEN** the window content reloads
-- **THEN** the screen shows Feeds with an empty form
+- **WHEN** an update of the Feeds section arrives from the Client core
+- **THEN** the screen shows Feeds with the half-typed URL
