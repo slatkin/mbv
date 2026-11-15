@@ -21,8 +21,13 @@ function sessionsContent(): Extract<GuiSettingsContent, { kind: 'sessions' }> {
 	return {
 		kind: 'sessions',
 		targets: [
-			{ key: { kind: 'local' }, label: 'This machine', isActive: true, isMbvd: false },
-			{ key: { kind: 'emby', id: 'sess-1' }, label: 'Bedroom', isActive: false, isMbvd: false },
+			{ key: { kind: 'local' }, label: 'This machine', isActive: true, isDirectPeer: false },
+			{
+				key: { kind: 'emby', id: 'sess-1' },
+				label: 'Bedroom',
+				isActive: false,
+				isDirectPeer: false,
+			},
 		],
 	};
 }

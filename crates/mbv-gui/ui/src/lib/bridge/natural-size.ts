@@ -16,11 +16,16 @@ export interface NaturalSizeBounds {
 /** Cap `img`'s rendered size at its natural size, and keep the cap current
  * as the image source or the display's pixel ratio changes. With `bounds`,
  * the image also stays inside that box, so its parent can hug the image
- * instead of holding a fixed box around it. */
-export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | undefined> = (
+ * instead of holding a fixed box around it. `false` skips the cap: the image
+ * fills its box, as the queue still slot scales the artwork to the panel's
+ * width. */
+export const capToNaturalSize: Action<HTMLImageElement, NaturalSizeBounds | false | undefined> = (
 	img,
 	bounds,
 ) => {
+	if (bounds === false) {
+		return;
+	}
 	const cap = () => {
 		if (img.naturalWidth === 0 || img.naturalHeight === 0) {
 			return;

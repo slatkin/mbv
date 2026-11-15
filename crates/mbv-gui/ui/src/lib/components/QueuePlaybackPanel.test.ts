@@ -102,13 +102,13 @@ function chooserOverlay(): GuiOverlayFrame {
 				key: { kind: 'emby', id: 'session-1' },
 				label: 'Living room',
 				isActive: true,
-				isMbvd: false,
+				isDirectPeer: false,
 			},
 			{
 				key: { kind: 'cast', id: 'receiver-1' },
 				label: 'Kitchen speaker',
 				isActive: false,
-				isMbvd: false,
+				isDirectPeer: false,
 			},
 		],
 	};

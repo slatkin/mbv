@@ -93,6 +93,26 @@
 	 * slot hides (design D7). */
 	const art = $derived($playback.artwork);
 
+	/** The still slot's two box shapes (`main` audit 6): a loaded image fills
+	 * the panel's width and takes its height from the artwork's aspect (the
+	 * TUI's visual slot at full column width), and the placeholder box keeps
+	 * the canvas's fixed 225 px and hugs its image. */
+	const artBox = $derived(
+		art?.kind === 'image'
+			? {
+					class: 'w-full',
+					height: undefined,
+					imageStyle: 'width: 100%; height: auto',
+					bounds: false as const,
+				}
+			: {
+					class: 'w-fit',
+					height: '225px',
+					imageStyle: undefined,
+					bounds: { height: 225 },
+				},
+	);
+
 	/** The open playback-target chooser, or `null` while another overlay (or
 	 * none) is up. The rows paint the core's live choice list; a row's press
 	 * resolves against its reported `targetChoice` index, so no cursor or
@@ -273,7 +293,7 @@
 </script>
 
 <!-- The player panel block on the canvas's backdrop: the header row, then
-	the fixed still slot, the title and parent line, the scrubber, and the
+	the still slot, the title and parent line, the scrubber, and the
 	transport (`align-gui-with-design-canvas` U3; `Main.dc.html` is the
 	reference). The canvas paints no outer pad and no gutter between these
 	blocks: the header and the still slot are full-bleed, and the title,
@@ -366,7 +386,7 @@
 							<Monitor size={14} color={roleVar('playbackTargetLocalFg')} />
 						{:else if choice.key.kind === 'cast'}
 							<TargetBrandIcon brand="cast" />
-						{:else if choice.isMbvd}
+						{:else if choice.isDirectPeer}
 							<TargetBrandIcon brand="mbvd" />
 						{:else}
 							<TargetBrandIcon brand="emby" />
@@ -389,22 +409,13 @@
 			bottom left (`main` audit 7); a non-episode item paints none. -->
 		{#if art}
 			<div
-				class="relative flex max-w-full items-center justify-center overflow-hidden {art.kind ===
-				'image'
-					? 'w-full'
-					: 'w-fit'}"
-				style:height={art.kind === 'image' ? undefined : '225px'}
+				class="relative flex max-w-full items-center justify-center overflow-hidden {artBox.class}"
+				style:height={artBox.height}
 				style:background="var(--mbv-secondary)"
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
-				<ArtImage
-					{art}
-					alt=""
-					class="block"
-					style={art.kind === 'image' ? 'width: 100%; height: auto' : undefined}
-					bounds={art.kind === 'image' ? undefined : { height: 225 }}
-				>
+				<ArtImage {art} alt="" class="block" style={artBox.imageStyle} bounds={artBox.bounds}>
 					{#snippet fallback()}
 						<!-- The canvas's source caption while no image lands
 							(design D4a's still slot): the frame's still-caption

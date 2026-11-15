@@ -571,8 +571,8 @@ export interface GuiTargetChoice {
 	label: string;
 	/** Whether the target is the Owner's attached playback output. */
 	isActive: boolean;
-	/** Whether an Emby session target is an mbvd (direct Player-owner endpoint). */
-	isMbvd: boolean;
+	/** Whether the target is a peer device with a direct Player-owner endpoint (an mbvd or another mbv). */
+	isDirectPeer: boolean;
 }
 
 /** A playback target's stable identity: this machine's local output, the Emby

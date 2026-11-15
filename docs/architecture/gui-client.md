@@ -352,8 +352,11 @@ window fetches no font at runtime and the CSP's `default-src 'self'` covers
 only through the `mbv-art` scheme.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
-`@lucide/svelte` only: the transport controls and the playback-target
-indicator are Lucide icons. The now-playing row shows the canvas's play glyph
+`@lucide/svelte`, with one exception: a playback-target chooser row paints
+the brand mark of its target kind (`TargetBrandIcon.svelte`, whose three paths
+are simple-icons', CC0) for Emby, Google Cast, and the mpv Player owner,
+because Lucide carries no brand glyph. The transport controls and the
+playback-target indicator are Lucide icons. The now-playing row shows the canvas's play glyph
 beside its title, in the accent colour (the `queue` section still names
 `active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's

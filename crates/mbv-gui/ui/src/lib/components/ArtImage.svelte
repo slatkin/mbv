@@ -14,8 +14,9 @@
 		art: GuiArtRef | null;
 		/** The image's alternative text; `""` for decorative art. */
 		alt: string;
-		/** The box the image stays inside, as `capToNaturalSize` takes it. */
-		bounds?: NaturalSizeBounds;
+		/** The box the image stays inside, as `capToNaturalSize` takes it.
+		 * `false` makes the image fill its box instead. */
+		bounds?: NaturalSizeBounds | false;
 		/** The `<img>` class names. */
 		class?: string;
 		/** The `<img>` inline style. */
