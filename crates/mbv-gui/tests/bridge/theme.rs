@@ -9,12 +9,12 @@ use mbv_theme::{Surface, surface_colors};
 /// chrome value is the resting fill of its named authority surface, so an
 /// authority swap that moves a tier cannot land silently. Aliased fields
 /// (`card`, `muted`, `input`) resolve their own authority, not another
-/// field's; the `focused` fields resolve the same surface's focused fill.
+/// field's. The queue fields resolve the resting fill only: the GUI paints
+/// one queue fill at every focus state (user decision 2026-11-15).
 #[test]
 fn chrome_values_resolve_their_documented_surfaces() {
     let chrome = GuiTheme::current().chrome;
     let fill = |surface| GuiRgb::from(surface_colors(surface, false).fill);
-    let focused = |surface| GuiRgb::from(surface_colors(surface, true).fill);
     assert_eq!(chrome.background, fill(Surface::PlaybackPanel));
     assert_eq!(chrome.card, fill(Surface::MainContentBox));
     assert_eq!(chrome.popover, fill(Surface::PopupFrame));
@@ -24,9 +24,7 @@ fn chrome_values_resolve_their_documented_surfaces() {
     assert_eq!(chrome.border, fill(Surface::PopupBorder));
     assert_eq!(chrome.input, fill(Surface::PopupBorder));
     assert_eq!(chrome.queue_column, fill(Surface::QueueColumn));
-    assert_eq!(chrome.queue_column_focused, focused(Surface::QueueColumn));
     assert_eq!(chrome.queue_panel, fill(Surface::QueuePanel));
-    assert_eq!(chrome.queue_panel_focused, focused(Surface::QueuePanel));
     assert_eq!(
         chrome.queue_playback_band,
         fill(Surface::QueueOnlyPlaybackPanel)

@@ -121,9 +121,11 @@
       mounts only the panel with Panel focus, Narrow mounts both with the Hero
       as an overlay, and Wide mounts both with the Hero pane beside the list.
       The Queue panel's four states (add-tauri-gui-client row 6.6) stay inside
-      every arrangement, and its backdrop fill stays focus-reactive like the
-      TUI's `panel_appearance_focus` picks it. Until Music content arrives the
-      Library panel does not mount and the Queue panel paints as before. -->
+      every arrangement, and the queue column's backdrop holds one fill at
+      every focus state (user decision 2026-11-15), unlike the TUI's
+      focus-reactive `panel_appearance_focus` pick. Until Music content
+      arrives the Library panel does not mount and the Queue panel paints as
+      before. -->
 		<!-- The Queue panel's column and the Wide list column are the session's
       widths (design D4): the dividers below and the arrangement read one
       resolution, so a drag paints the width the thresholds classify. -->
@@ -142,9 +144,7 @@
 			bind:this={containerEl}
 			class="relative flex h-full min-h-0 w-full min-w-0 overflow-hidden"
 			data-arrangement={arrangement}
-			style:background={queueFocused
-				? 'var(--canvas-queue-column-focused)'
-				: 'var(--canvas-queue-column)'}
+			style:background="var(--canvas-queue-column)"
 		>
 			{#if $settings !== null}
 				<!-- The Settings screen replaces the two panels while its section is

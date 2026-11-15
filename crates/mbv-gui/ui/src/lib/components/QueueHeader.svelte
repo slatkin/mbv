@@ -10,6 +10,12 @@
 	// `--canvas-*` tokens (U13): the canvas names no `mbv-theme` slot for
 	// them, and the TUI's palette stays untouched.
 	//
+	// The header band paints `--canvas-dim` with a 1 px `--canvas-border`
+	// rule under it (user decision 2026-11-15): the Library top bar's own
+	// fill and border (`LibraryTopBar.svelte`), so the queue's header reads
+	// like the tab bar it sits beside. The band covers the recessed box's
+	// top edge, so the box's own fill starts under the divider.
+	//
 	// The switch and the filter each carry a pointer target: the switch's
 	// inactive segment and the filter report the `rightColumn` and `filter`
 	// regions through `QueuePanel`'s own report key, so a press resolves in
@@ -47,6 +53,8 @@
 	class="flex items-center justify-between overflow-hidden whitespace-nowrap"
 	style:height="var(--canvas-queue-header-height)"
 	style:padding="12px 8px 8px 16px"
+	style:background="var(--canvas-dim)"
+	style:border-bottom="1px solid var(--canvas-border)"
 	data-queue-header
 >
 	<!-- The canvas's two heading lines, 2 px apart: the count over the

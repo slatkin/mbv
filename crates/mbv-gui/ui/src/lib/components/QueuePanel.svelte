@@ -48,9 +48,11 @@
 	// queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
 	// moves (U13). Two fills still alias role values because the frame
 	// carries roles and the chrome fills, not surface fills (design D7): the
-	// recessed box paints the chrome's `queuePanel` pair — `Surface::QueuePanel`,
-	// focus-reactive like the TUI's `queue_row_background(focused)` — and the
-	// zebra stripe paints the `queueColumn` pair.
+	// recessed box paints the chrome's `queuePanel` resting fill —
+	// `Surface::QueuePanel` — and the zebra stripe paints the `queueColumn`
+	// resting fill. Neither follows the panel's focus: the GUI holds one fill
+	// for the queue at every focus state (user decision 2026-11-15), unlike
+	// the TUI's focus-reactive `queue_row_background(focused)`.
 	import { onMount } from 'svelte';
 	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
@@ -102,13 +104,10 @@
 	const overlay = $derived($overlaySection);
 	/** Whether the queue surface holds interaction focus
 	 * (`GuiFocus::surface`): the selection bar's rule, the TUI's
-	 * `focused || multi_selected`. */
+	 * `focused || multi_selected`. The panel's own fills do not follow it:
+	 * the queue paints one fill at every focus state (user decision
+	 * 2026-11-15). */
 	const focused = $derived($focus.surface === 'queue');
-	/** Whether the queue Panel holds the appearance focus
-	 * (`GuiFocus::panel`): the TUI's `panel_appearance_focus`, which picks the
-	 * focused fills of the focus-reactive `QueuePanel` and `QueueColumn`
-	 * surfaces. */
-	const panelFocused = $derived($focus.panel === 'queue');
 
 	/** The canvas's fixed queue row height in logical pixels (the spec's
 	 * 30 px rows). Capacity is whole rows. */
@@ -210,7 +209,7 @@
 			return canvasVar('selected');
 		}
 		if (row.striped) {
-			return panelFocused ? 'var(--mbv-queueColumnFocused)' : 'var(--mbv-queueColumn)';
+			return 'var(--mbv-queueColumn)';
 		}
 		return undefined;
 	}
@@ -439,7 +438,7 @@
 	<div
 		class="relative flex min-h-0 flex-1 flex-col"
 		style:margin-inline="calc(var(--mbv-cell-col) * 2)"
-		style:background={panelFocused ? 'var(--mbv-queuePanelFocused)' : 'var(--mbv-queuePanel)'}
+		style:background="var(--mbv-queuePanel)"
 	>
 		<QueueHeader {summary} />
 		<div
