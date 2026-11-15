@@ -13,8 +13,9 @@ secondary title (the container name of a split row), an optional metadata slot, 
 and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`,
 now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable
 Heading and Spacer rows. Feed entries and `Collection` rows SHALL NOT carry a duration. Heading and
-Spacer SHALL be excluded from selectable-target indexing. `Active` SHALL mean stored resume
-progress; `NowPlaying` SHALL mean live playback with live progress. A now-playing row with unknown
+Spacer SHALL be excluded from selectable-target indexing. `Active` SHALL mean that playing the item
+would resume from a saved position, as `playback-resume` defines for rows; `NowPlaying` SHALL mean
+live playback with live progress. A now-playing row with unknown
 runtime SHALL show no progress. Only selectable Item rows SHALL carry a release year or publish
 date. The model SHALL contain no provider client, `App`, source/header, raw style, callback,
 breakpoint, or effect.
@@ -23,6 +24,10 @@ breakpoint, or effect.
 - **WHEN** a parent supplies active progress
 - **THEN** the control receives only a bounded percentage
 - **AND** playback and queue authority remain with the parent/shell
+
+#### Scenario: Active follows the resume decision
+- **WHEN** a parent projects a played item whose saved position Play would resume from
+- **THEN** the row carries active state, not played state
 
 #### Scenario: Now-playing with unknown runtime
 - **WHEN** a now-playing row carries no progress
