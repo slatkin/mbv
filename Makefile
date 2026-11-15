@@ -4,7 +4,7 @@ DATA_DIR    := $(HOME)/.local/share/mbv
 CONFIG_DIR  := $(HOME)/.config/mbv
 TAILWINDCSS ?= tailwindcss
 
-.PHONY: all build uninstall clean gui-css check-code-file-lines test-check-code-file-lines dev dev-release
+.PHONY: all build uninstall clean clean-dev gui-css check-code-file-lines test-check-code-file-lines dev dev-release
 
 all: build
 
@@ -17,6 +17,13 @@ uninstall:
 
 clean:
 	cargo clean
+
+# Only the dev profile (`target/debug`): the part of `target/` that grows with
+# every dependency or flag change, because cargo never removes stale artifacts.
+# It keeps the release build. Run it between large changes, not before every build:
+# the next build recompiles the whole dependency graph.
+clean-dev:
+	cargo clean --profile dev
 
 # The GUI starts its Owner from the sibling `mbv` binary, and the handshake
 # refuses an Owner whose build id differs. `cargo run -p mbv-gui` alone leaves
