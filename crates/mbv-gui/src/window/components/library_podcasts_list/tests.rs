@@ -31,6 +31,7 @@ use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
 
 /// The context handles the root hands the test: the Library store and the
@@ -130,14 +131,16 @@ impl Fixture {
     fn carry(&mut self, list: GuiPodcastsList, detail: GuiPodcastsDetail) {
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || {
-            sections.library_list.set(Some(GuiLibraryList {
-                tabs: Vec::new(),
-                current_tab: Some(2),
-                destination: GuiDestinationList::Podcasts(list),
-            }));
+            sections
+                .library_list
+                .set(Some(SectionRef::new(GuiLibraryList {
+                    tabs: Vec::new(),
+                    current_tab: Some(2),
+                    destination: GuiDestinationList::Podcasts(list),
+                })));
             sections
                 .library_detail
-                .set(Some(GuiLibraryDetail::Podcasts(detail)));
+                .set(Some(SectionRef::new(GuiLibraryDetail::Podcasts(detail))));
         });
         self.lay_out();
     }

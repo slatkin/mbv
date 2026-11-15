@@ -21,7 +21,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicArtistFrame, GuiMusicDetail,
+    GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicArtistFrame,
     GuiMusicHeroFrame, GuiMusicMenuEntryFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
@@ -33,6 +33,7 @@ use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, Shuffle};
 use crate::window::library::hero::{album_facts, artist_facts, artist_union_albums, hero_kicker};
 use crate::window::library::parts::{library_music_detail, library_music_list};
+use crate::window::sections::SectionRef;
 
 use crate::window::library::state::LibraryState;
 
@@ -42,8 +43,9 @@ use crate::window::library::state::LibraryState;
 pub struct LibraryHeroProps {
     /// The carried Music content: the picked album's Hero facts, the id of
     /// the track playing at the playhead, and the Hero's square artwork
-    /// (design D2, D5).
-    pub detail: GuiMusicDetail,
+    /// (design D2, D5), as the one handle every reader clones
+    /// (`share-gui-sections-by-rc` design D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Hero's play (design D8): the shared play-or-activate path, so the
@@ -107,8 +109,8 @@ fn press_menu_entry(library: &LibraryState, album_id: &str, index: usize) {
 fn current_union(library: &LibraryState) -> Option<(Vec<GuiMusicArtistFrame>, GuiMusicHeroFrame)> {
     let list = library.sections.library_list.peek();
     let detail = library.sections.library_detail.peek();
-    let list = library_music_list(list.as_ref())?;
-    let hero = library_music_detail(detail.as_ref())?.hero.as_ref()?;
+    let list = library_music_list(list.as_deref())?;
+    let hero = library_music_detail(detail.as_deref())?.hero.as_ref()?;
     Some((list.artists.clone(), hero.clone()))
 }
 
@@ -128,7 +130,13 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
     let row_slot: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
-    let Some(hero) = props.detail.hero else {
+    // The Music part of the carried detail, narrowed from the handle in this
+    // body (`share-gui-sections-by-rc` design D3), and the Hero's facts,
+    // present exactly while the pane paints.
+    let Some(detail) = library_music_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(hero) = detail.hero.as_ref() else {
         return rsx! {};
     };
 
@@ -216,9 +224,9 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
             attr: "",
             root: "data-library-hero",
             header: HeroHeader {
-                kicker: hero_kicker(&hero),
+                kicker: hero_kicker(hero),
                 title: hero.artist.clone(),
-                facts: artist_facts(&hero),
+                facts: artist_facts(hero),
             },
             header_action: Some(header_action),
             block: HeroBlock {
@@ -228,19 +236,19 @@ pub fn LibraryHero(props: LibraryHeroProps) -> Element {
                     kind: GuiMetaKindFrame::Date,
                 }]),
                 name: Some(hero.album.name.clone()),
-                facts: Some(album_facts(&hero)),
+                facts: Some(album_facts(hero)),
                 meta: Vec::new(),
                 overview: None,
             },
             art_shape: GuiArtShapeFrame::Square,
-            art: props.detail.art.clone(),
+            art: detail.art.clone(),
             art_title: hero.album.name.clone(),
             art_placeholder: Some("[Album art · Emby Primary]".to_owned()),
             actions: Some(actions),
             children: Some(rsx! {
                 LibraryTracklist {
-                    tracks: hero.album.tracks.unwrap_or_default(),
-                    playing_track_id: props.detail.playing_track_id.clone(),
+                    tracks: hero.album.tracks.clone().unwrap_or_default(),
+                    playing_track_id: detail.playing_track_id.clone(),
                 }
             }),
         }

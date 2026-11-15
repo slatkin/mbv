@@ -19,7 +19,8 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
-    GuiHomeRowStateFrame, GuiShowsDetail, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiShowsDetail, GuiShowsSeasonPillFrame,
+    GuiShowsWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
@@ -32,10 +33,12 @@ use crate::window::components::library_workspace_table::{
 use crate::window::library::hero::{
     HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
 };
+use crate::window::library::parts::library_shows_detail;
 use crate::window::library::shows_workspace::{
     episode_progress, is_played_episode, press_shows_episode, resolve_shows_episode_cursor,
 };
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Shows Hero (the `LibraryShowsHero` props, narrowed
 /// to what the Hero reads): the library index the Shows commands name, and
@@ -45,8 +48,9 @@ pub struct LibraryShowsHeroProps {
     /// The Shows library index the Shows commands name (design D2, D12).
     pub lib_idx: usize,
     /// The selected row's Hero facts, its Workspace, and the selection the
-    /// Latest Hero's actions name.
-    pub detail: GuiShowsDetail,
+    /// Latest Hero's actions name, as the one handle every reader clones
+    /// (`share-gui-sections-by-rc` design D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Shows action a Hero button sends.
@@ -169,8 +173,12 @@ fn paint_season(
 pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The Hero's facts, present exactly while the pane paints.
-    let Some(ref hero) = props.detail.hero else {
+    // The Shows part of the carried detail, narrowed from the handle in this
+    // body, and the Hero's facts, present exactly while the pane paints.
+    let Some(detail) = library_shows_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(hero) = detail.hero.as_ref() else {
         return rsx! {};
     };
 
@@ -186,7 +194,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
 
     // The selected season's episode count, once its episodes have landed.
     let season_facts = match workspace {
-        Some(workspace) if !props.detail.workspace_loading && !workspace.episodes.is_empty() => {
+        Some(workspace) if !detail.workspace_loading && !workspace.episodes.is_empty() => {
             let count = workspace.episodes.len();
             format!(
                 "{count} {}",
@@ -266,7 +274,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
 
     // The actions' sends (design D12): the item the Hero's buttons act on.
     let lib_idx = props.lib_idx;
-    let action_target = action_target(&props.detail);
+    let action_target = action_target(detail);
     let play_library = library.clone();
     let play_target = action_target.clone();
     let on_play = Callback::new(move |()| {
@@ -341,7 +349,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
 
     // The series Hero's Workspace (design D12): the season pills, then the
     // selected season's episodes.
-    let loading = props.detail.workspace_loading.then(|| WorkspaceLoading {
+    let loading = detail.workspace_loading.then(|| WorkspaceLoading {
         text: "Loading episodes…".to_owned(),
         attr: "data-library-shows-episodes-loading",
     });

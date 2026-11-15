@@ -24,15 +24,16 @@ use rstest::rstest;
 
 use super::{FeedsAction, LibraryFeedsHero, act};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiHomeRowStateFrame,
-    GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame,
+    GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame,
+    GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::library::state::LibraryState;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The selected entry's Hero facts: the feed as the parent and the duration
 /// row with its role (design D12, row 11.1). A feed entry has no artwork
@@ -77,21 +78,21 @@ fn detail(facts: Option<GuiFeedsHeroFrame>) -> GuiFeedsDetail {
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    rows: Vec<GuiEntryRowFrame>,
-    detail: GuiFeedsDetail,
+    list: SectionRef<GuiLibraryList>,
+    detail: SectionRef<GuiLibraryDetail>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
 /// The context handles the root hands the test: the Library store and the
 /// detail the presses read.
-type FixtureHandles = (LibraryState, GuiFeedsDetail);
+type FixtureHandles = (LibraryState, SectionRef<GuiLibraryDetail>);
 
 /// The root: provides the Library store and paints the Hero, as the panel
 /// composes it.
 fn feeds_hero_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        rows,
+        list,
         detail,
         handle,
     } = props;
@@ -119,14 +120,14 @@ fn feeds_hero_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace((state, detail.clone()));
     rsx! {
-        LibraryFeedsHero { rows, detail }
+        LibraryFeedsHero { list, detail }
     }
 }
 
 struct Fixture {
     doc: DioxusDocument,
     state: LibraryState,
-    detail: GuiFeedsDetail,
+    detail: SectionRef<GuiLibraryDetail>,
     receiver: mpsc::Receiver<CoreInput>,
 }
 
@@ -252,8 +253,17 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
             feeds_hero_app,
             FixtureProps {
                 sender,
-                rows,
-                detail: detail(facts),
+                list: SectionRef::new(GuiLibraryList {
+                    tabs: Vec::new(),
+                    current_tab: Some(2),
+                    destination: GuiDestinationList::Feeds(GuiFeedsList {
+                        pills: Vec::new(),
+                        loading: false,
+                        failed: false,
+                        rows,
+                    }),
+                }),
+                detail: SectionRef::new(GuiLibraryDetail::Feeds(detail(facts))),
                 handle: Rc::clone(&handle),
             },
         ),

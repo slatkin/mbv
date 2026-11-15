@@ -35,7 +35,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiMusicMenuEntryFrame;
+use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiMusicMenuEntryFrame};
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
@@ -65,6 +65,7 @@ use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
+use crate::window::sections::SectionRef;
 
 /// The props of the Library panel (the `LibraryPanel` props, in
 /// order).
@@ -185,47 +186,55 @@ fn list_painter(pair: LibraryPair) -> Element {
 /// the Narrow overlay mount, so the two cannot drift (design D4). The Music,
 /// Home, Shows, plain Emby, Audiobooks, Podcasts, and Feeds Heroes are rows
 /// 7.5 and 7.6's ports; the props carry what each Hero reads — the Emby,
-/// Shows, Audiobooks, and Podcasts commands name the library index, and the
-/// Feeds Hero reads the active pill's rows for its list band.
-fn hero_painter(pair: LibraryPair) -> Element {
-    match pair {
-        LibraryPair::Music(_, detail) => rsx! {
+/// Shows, Audiobooks, and Podcasts commands name the library index, and each
+/// Hero takes the carried handle and narrows its own part in its body, so a
+/// panel repaint clones no section's content (`share-gui-sections-by-rc`
+/// design D3).
+fn hero_painter(
+    list: Option<&SectionRef<GuiLibraryList>>,
+    detail: Option<&SectionRef<GuiLibraryDetail>>,
+) -> Option<Element> {
+    let list = list?;
+    let detail = detail?;
+    let pair = library_pair(Some(&**list), Some(&**detail))?;
+    Some(match pair {
+        LibraryPair::Music(..) => rsx! {
             LibraryHero { detail: detail.clone() }
         },
-        LibraryPair::Home(_, detail) => rsx! {
+        LibraryPair::Home(..) => rsx! {
             LibraryHomeHero { detail: detail.clone() }
         },
-        LibraryPair::Shows(list, detail) => rsx! {
+        LibraryPair::Shows(list_part, _) => rsx! {
             LibraryShowsHero {
-                lib_idx: list.lib_idx,
+                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Emby(list, detail) => rsx! {
+        LibraryPair::Emby(list_part, _) => rsx! {
             LibraryEmbyHero {
-                lib_idx: list.lib_idx,
+                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Audiobooks(list, detail) => rsx! {
+        LibraryPair::Audiobooks(list_part, _) => rsx! {
             LibraryAudiobooksHero {
-                lib_idx: list.lib_idx,
+                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Podcasts(list, detail) => rsx! {
+        LibraryPair::Podcasts(list_part, _) => rsx! {
             LibraryPodcastsHero {
-                lib_idx: list.lib_idx,
+                lib_idx: list_part.lib_idx,
                 detail: detail.clone(),
             }
         },
-        LibraryPair::Feeds(list, detail) => rsx! {
+        LibraryPair::Feeds(..) => rsx! {
             LibraryFeedsHero {
-                rows: list.rows.clone(),
+                list: list.clone(),
                 detail: detail.clone(),
             }
         },
-    }
+    })
 }
 
 /// The right-click menu's entries in the row menu's entry shape: the
@@ -257,23 +266,24 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // `library_pair`; the Search section's results; the Status bar's facts;
     // and the right-click item menu the window last opened.
     let list_section = library.sections.library_list.cloned();
-    let detail = library.sections.library_detail.cloned();
+    let detail_section = library.sections.library_detail.cloned();
     let search = library.sections.search.cloned();
     let status = library.sections.status.cloned();
     let menu = library.sections.row_menu.cloned();
     let ui = library.ui.cloned();
 
     // The presented destination tabs and the active one (design D2): the
-    // top bar paints them.
+    // top bar paints them. The tabs are small and bounded by the tab count,
+    // so they stay cloned (`share-gui-sections-by-rc` non-goal).
     let tabs = list_section
         .as_ref()
         .map(|list| list.tabs.clone())
         .unwrap_or_default();
     let current_tab = list_section.as_ref().and_then(|list| list.current_tab);
     // The active destination's list and detail parts, narrowed together on
-    // the destination's kind (design D8); `None` while no Library panel
-    // shows.
-    let pair = library_pair(list_section.as_ref(), detail.as_ref());
+    // the destination's kind (design D8), borrowed from the handles: `None`
+    // while no Library panel shows.
+    let pair = library_pair(list_section.as_deref(), detail_section.as_deref());
 
     // Whether the Hero sits beside the list rather than over it.
     let arrangement = props.arrangement;
@@ -347,8 +357,10 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                         class: "flex min-h-0 min-w-0 flex-1 flex-col",
                         style: "background: var(--canvas-library-column); overflow-y: auto;",
                         if pair_paints_hero {
-                            if let Some(pair) = pair {
-                                { hero_painter(pair) }
+                            if let Some(hero) =
+                                hero_painter(list_section.as_ref(), detail_section.as_ref())
+                            {
+                                { hero }
                             }
                         }
                     }
@@ -418,8 +430,10 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                             style: "background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 8px;",
                             "data-library-hero-card": "",
                             if pair_paints_hero {
-                                if let Some(pair) = pair {
-                                    { hero_painter(pair) }
+                                if let Some(hero) =
+                                    hero_painter(list_section.as_ref(), detail_section.as_ref())
+                                {
+                                    { hero }
                                 }
                             }
                         }
@@ -433,7 +447,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 tabs,
                 current_tab,
                 list: list_section,
-                detail,
+                detail: detail_section,
                 status,
             }
             if let Some((menu, row_menu)) = menu_open {

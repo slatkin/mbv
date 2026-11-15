@@ -34,6 +34,7 @@ use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::home_list::{HOME_ITEM_ROW_HEIGHT, HomeListRow, home_row_key};
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
 
 /// The context handles the root hands the test: the Library store and the
@@ -145,14 +146,16 @@ impl Fixture {
     fn carry(&mut self, list: GuiHomeList, detail: GuiHomeDetail) {
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || {
-            sections.library_list.set(Some(GuiLibraryList {
-                tabs: Vec::new(),
-                current_tab: None,
-                destination: GuiDestinationList::Home(list),
-            }));
+            sections
+                .library_list
+                .set(Some(SectionRef::new(GuiLibraryList {
+                    tabs: Vec::new(),
+                    current_tab: None,
+                    destination: GuiDestinationList::Home(list),
+                })));
             sections
                 .library_detail
-                .set(Some(GuiLibraryDetail::Home(detail)));
+                .set(Some(SectionRef::new(GuiLibraryDetail::Home(detail))));
         });
         self.lay_out();
     }

@@ -25,13 +25,15 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{
-    GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiMetaSegmentFrame,
+    GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiLibraryDetail, GuiMetaSegmentFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame, own};
 use crate::window::library::hero::{HeroLayoutFacts, MetaRow, hero_layout};
+use crate::window::library::parts::library_emby_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Emby Hero (the `LibraryEmbyHero` props, narrowed
 /// to what the Hero reads): the library index the Emby commands name, and the
@@ -42,8 +44,10 @@ pub struct LibraryEmbyHeroProps {
     /// The plain Emby-library index the Emby commands name (design D2, row
     /// 8.1).
     pub lib_idx: usize,
-    /// The selected row's Hero facts and the selection the actions name.
-    pub detail: GuiEmbyDetail,
+    /// The selected row's Hero facts and the selection the actions name, as
+    /// the one handle every reader clones (`share-gui-sections-by-rc` design
+    /// D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Emby action a button sends.
@@ -86,8 +90,18 @@ fn layout_facts(facts: &GuiEmbyHeroFrame) -> (Vec<MetaRow>, Option<usize>, Optio
 
 /// Send an Emby-library command for the frame's selected row (design D12,
 /// row 8.1): the row the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero.
-fn act(library: &LibraryState, action: EmbyAction, lib_idx: usize, detail: &GuiEmbyDetail) {
+/// only while the frame holds both the selection and a Hero. The handle is
+/// narrowed here, so the press reads the carried detail without the Hero
+/// cloning it per render (`share-gui-sections-by-rc` design D3).
+fn act(
+    library: &LibraryState,
+    action: EmbyAction,
+    lib_idx: usize,
+    detail: &SectionRef<GuiLibraryDetail>,
+) {
+    let Some(detail) = library_emby_detail(Some(detail)) else {
+        return;
+    };
     let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
         return;
     };
@@ -146,8 +160,13 @@ fn paint_credit(index: usize, credit: &GuiEmbyHeroCreditFrame) -> Element {
 pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The Hero's facts, present exactly while the pane paints.
-    let Some(ref hero) = props.detail.hero else {
+    // The plain Emby-library part of the carried detail, narrowed from the
+    // handle in this body, and the Hero's facts, present exactly while the
+    // pane paints.
+    let Some(detail) = library_emby_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(ref hero) = detail.hero else {
         return rsx! {};
     };
 

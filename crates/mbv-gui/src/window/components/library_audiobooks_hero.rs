@@ -19,7 +19,9 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiAudiobooksDetail, GuiAudiobooksWorkspaceFrame};
+use crate::bridge::frame::library::{
+    GuiAudiobooksDetail, GuiAudiobooksWorkspaceFrame, GuiLibraryDetail,
+};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
@@ -30,7 +32,9 @@ use crate::window::library::audiobooks_workspace::{
     marked_chapter_of, press_abs_chapter, resolve_abs_chapter_cursor, workspace_of,
 };
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Audiobooks Hero (the `LibraryAudiobooksHero`
 /// props, narrowed to what the Hero reads): the library index the
@@ -41,8 +45,10 @@ pub struct LibraryAudiobooksHeroProps {
     /// The Audiobooks library index the Audiobooks commands name (design D2,
     /// D12).
     pub lib_idx: usize,
-    /// The selected book's Hero facts, its Workspace, and the playing book.
-    pub detail: GuiAudiobooksDetail,
+    /// The selected book's Hero facts, its Workspace, and the playing book,
+    /// as the one handle every reader clones (`share-gui-sections-by-rc`
+    /// design D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Audiobooks action a button sends.
@@ -57,12 +63,20 @@ enum AbsAction {
 /// Send the book command for the frame's selected book (design D12, row
 /// 9.1): the book the frame painted, never a position. The command sends
 /// only while the frame holds both the selection and a Hero.
+/// Send the book command for the frame's selected book (design D12, row
+/// 9.1): the book the frame painted, never a position. The command sends
+/// only while the frame holds both the selection and a Hero. The handle is
+/// narrowed here, so the press reads the carried detail without the Hero
+/// cloning it per render (`share-gui-sections-by-rc` design D3).
 fn act_book(
     library: &LibraryState,
     action: AbsAction,
     lib_idx: usize,
-    detail: &GuiAudiobooksDetail,
+    detail: &SectionRef<GuiLibraryDetail>,
 ) {
+    let Some(detail) = library_audiobooks_detail(Some(detail)) else {
+        return;
+    };
     let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
         return;
     };
@@ -98,9 +112,12 @@ fn play_chapter(
 fn play_chapter_row(
     library: &LibraryState,
     lib_idx: usize,
-    detail: &GuiAudiobooksDetail,
+    detail: &SectionRef<GuiLibraryDetail>,
     chapter_id: &str,
 ) {
+    let Some(detail) = library_audiobooks_detail(Some(detail)) else {
+        return;
+    };
     let Some(row) = workspace_of(detail).and_then(|workspace| {
         workspace
             .rows
@@ -118,11 +135,17 @@ fn play_chapter_row(
 pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The Hero's facts, present exactly while the pane paints.
-    let Some(ref hero) = props.detail.hero else {
+    // The Audiobooks part of the carried detail, narrowed from the handle in
+    // this body, and the Hero's facts, present exactly while the pane paints.
+    let Some(detail) = library_audiobooks_detail(Some(&props.detail)) else {
         return rsx! {};
     };
-
+    let Some(hero) = detail.hero.as_ref() else {
+        return rsx! {};
+    };
+    // Whether the detail fetch is still landing, as the Workspace line reads
+    // it.
+    let workspace_loading = detail.workspace_loading;
     // The book's chapter Workspace, or `None` while the detail has not
     // landed.
     let workspace: Option<&GuiAudiobooksWorkspaceFrame> = hero.workspace.as_ref();
@@ -135,7 +158,7 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     // while another book plays or none does. The marked row's identity is
     // stable within its span, so the per-frame prediction re-renders the
     // Workspace only when the mark moves.
-    let marked = marked_chapter_of(&props.detail, Some(position));
+    let marked = marked_chapter_of(detail, Some(position));
 
     // The chapter the cursor rests on (design D12): the state's chapter while
     // the carried Workspace paints it, the marked chapter, or the first
@@ -212,12 +235,11 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     // The book Hero's Workspace (design D12): the book's chapter rows, or
     // the loading line while the detail fetch has not landed. A chapter has
     // no row action beyond play, so the actions list stays empty.
-    let loading =
-        (workspace.is_none() && props.detail.workspace_loading).then(|| WorkspaceLoading {
-            text: "Loading chapters…".to_owned(),
-            attr: "data-library-abs-chapters-loading",
-        });
-    let children = (workspace.is_some() || props.detail.workspace_loading).then(move || {
+    let loading = (workspace.is_none() && workspace_loading).then(|| WorkspaceLoading {
+        text: "Loading chapters…".to_owned(),
+        attr: "data-library-abs-chapters-loading",
+    });
+    let children = (workspace.is_some() || workspace_loading).then(move || {
         rsx! {
             LibraryWorkspaceTable {
                 root: "data-library-abs-workspace",

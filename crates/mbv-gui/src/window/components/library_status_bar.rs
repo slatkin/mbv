@@ -22,6 +22,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::chrome::GuiStatusBar;
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame};
 use crate::window::library::status::library_location;
+use crate::window::sections::SectionRef;
 use crate::window::status::toast_color;
 
 /// The canvas's key hints, key glyph then what the key does (design D3,
@@ -48,14 +49,16 @@ pub struct LibraryStatusBarProps {
     pub current_tab: Option<usize>,
     /// The Library list section (gui-change-driven-sections design D8): the
     /// location's destination, the selected collections, and the selected
-    /// row's title. `None` while no destination is active.
+    /// row's title. `None` while no destination is active. The handle is the
+    /// one the panel paints from (`share-gui-sections-by-rc` design D3), so
+    /// a bar repaint clones no list's rows.
     #[props(default)]
-    pub list: Option<GuiLibraryList>,
+    pub list: Option<SectionRef<GuiLibraryList>>,
     /// The active destination's detail part: the picked item's Hero title,
     /// and the selected row the location names. `None` while no destination
-    /// is active.
+    /// is active, as the same one handle.
     #[props(default)]
-    pub detail: Option<GuiLibraryDetail>,
+    pub detail: Option<SectionRef<GuiLibraryDetail>>,
     /// The armed prefix and the live toast (design D10): they replace the
     /// hints while active.
     pub status: GuiStatusBar,
@@ -69,8 +72,8 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
     let location = library_location(
         &props.tabs,
         props.current_tab,
-        props.list.as_ref(),
-        props.detail.as_ref(),
+        props.list.as_deref(),
+        props.detail.as_deref(),
     );
     // The live toast's severity colour, resolved before the markup (the
     // the former client `toastColor` call in the attribute).

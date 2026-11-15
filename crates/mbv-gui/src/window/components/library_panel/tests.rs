@@ -33,7 +33,7 @@ use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::resize::PanelWidthsStore;
-use crate::window::sections::Sections;
+use crate::window::sections::{SectionRef, Sections};
 
 /// The context handle the root hands the test: the Library store and the
 /// layout epoch the re-measures read.
@@ -174,8 +174,8 @@ impl Fixture {
     fn carry(&mut self, list: GuiLibraryList, detail: GuiLibraryDetail) {
         let mut sections = self.state.sections.clone();
         self.in_runtime(move || {
-            sections.library_list.set(Some(list));
-            sections.library_detail.set(Some(detail));
+            sections.library_list.set(Some(SectionRef::new(list)));
+            sections.library_detail.set(Some(SectionRef::new(detail)));
         });
         self.lay_out();
     }

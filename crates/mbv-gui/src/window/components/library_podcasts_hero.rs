@@ -15,12 +15,14 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiPodcastsDetail;
+use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout};
+use crate::window::library::parts::library_podcasts_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::sections::SectionRef;
 
 /// The props of the Podcasts Hero (the `LibraryPodcastsHero` props,
 /// narrowed to what the Hero reads): the library index the Podcasts commands
@@ -31,8 +33,10 @@ pub struct LibraryPodcastsHeroProps {
     /// The Podcasts library index the Podcasts commands name (design D2,
     /// D12).
     pub lib_idx: usize,
-    /// The selected episode's Hero facts and the selection the actions name.
-    pub detail: GuiPodcastsDetail,
+    /// The selected episode's Hero facts and the selection the actions name,
+    /// as the one handle every reader clones (`share-gui-sections-by-rc`
+    /// design D3).
+    pub detail: SectionRef<GuiLibraryDetail>,
 }
 
 /// The Podcasts action a button sends.
@@ -46,8 +50,18 @@ enum PodcastsAction {
 
 /// Send a Podcasts command for the frame's selected episode (design D12,
 /// row 10.1): the row the frame painted, never a position. The command sends
-/// only while the frame holds both the selection and a Hero.
-fn act(library: &LibraryState, action: PodcastsAction, lib_idx: usize, detail: &GuiPodcastsDetail) {
+/// only while the frame holds both the selection and a Hero. The handle is
+/// narrowed here, so the press reads the carried detail without the Hero
+/// cloning it per render (`share-gui-sections-by-rc` design D3).
+fn act(
+    library: &LibraryState,
+    action: PodcastsAction,
+    lib_idx: usize,
+    detail: &SectionRef<GuiLibraryDetail>,
+) {
+    let Some(detail) = library_podcasts_detail(Some(detail)) else {
+        return;
+    };
     let (Some(item_id), Some(_)) = (&detail.selected, &detail.hero) else {
         return;
     };
@@ -65,8 +79,12 @@ fn act(library: &LibraryState, action: PodcastsAction, lib_idx: usize, detail: &
 pub fn LibraryPodcastsHero(props: LibraryPodcastsHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The Hero's facts, present exactly while the pane paints.
-    let Some(ref hero) = props.detail.hero else {
+    // The Podcasts part of the carried detail, narrowed from the handle in
+    // this body, and the Hero's facts, present exactly while the pane paints.
+    let Some(detail) = library_podcasts_detail(Some(&props.detail)) else {
+        return rsx! {};
+    };
+    let Some(ref hero) = detail.hero else {
         return rsx! {};
     };
 

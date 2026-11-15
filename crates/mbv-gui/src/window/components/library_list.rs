@@ -275,8 +275,8 @@ pub fn LibraryList() -> Element {
     // revision.
     let carried = library.sections.library_list.cloned();
     let detail_section = library.sections.library_detail.cloned();
-    let frame = library_music_list(carried.as_ref());
-    let detail = library_music_detail(detail_section.as_ref());
+    let frame = library_music_list(carried.as_deref());
+    let detail = library_music_detail(detail_section.as_deref());
 
     // The interaction state and the scroll store this list paints (design
     // D1, D9).
@@ -305,8 +305,8 @@ pub fn LibraryList() -> Element {
         let list_section = reveal_library.sections.library_list.cloned();
         let detail_section = reveal_library.sections.library_detail.cloned();
         let (Some(list), Some(detail)) = (
-            library_music_list(list_section.as_ref()),
-            library_music_detail(detail_section.as_ref()),
+            library_music_list(list_section.as_deref()),
+            library_music_detail(detail_section.as_deref()),
         ) else {
             return;
         };
