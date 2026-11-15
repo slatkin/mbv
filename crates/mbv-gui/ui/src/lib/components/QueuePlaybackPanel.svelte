@@ -378,20 +378,33 @@
 		{/if}
 	</div>
 	{#if $playback.nowPlayingTitle}
-		<!-- The still slot (`main` audit 6): a fixed 225 px box on the raised
-			control fill, the artwork inside it, and the canvas caption while no
-			image lands. The wrapper is the visual slot's painted region. The
-			season-and-episode badge is the canvas chip at the box's bottom
-			left (`main` audit 7); a non-episode item paints none. -->
+		<!-- The still slot (`main` audit 6): the artwork on the raised
+			control fill, and the canvas caption while no image lands. A loaded
+			image spans the panel's full width (the TUI's visual slot at full
+			column width) and its height follows the artwork's aspect, so the
+			rows below it move with the image — the art element's ResizeObserver
+			reports those moves. The placeholder keeps the canvas's fixed 225 px
+			box and hugs its image. The wrapper is the visual slot's painted
+			region. The season-and-episode badge is the canvas chip at the slot's
+			bottom left (`main` audit 7); a non-episode item paints none. -->
 		{#if art}
 			<div
-				class="relative flex w-fit max-w-full items-center justify-center overflow-hidden"
+				class="relative flex max-w-full items-center justify-center overflow-hidden {art.kind ===
+				'image'
+					? 'w-full'
+					: 'w-fit'}"
 				style:height={art.kind === 'image' ? undefined : '225px'}
 				style:background="var(--mbv-secondary)"
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
-				<ArtImage {art} alt="" class="block" bounds={{ height: 225 }}>
+				<ArtImage
+					{art}
+					alt=""
+					class="block"
+					style={art.kind === 'image' ? 'width: 100%; height: auto' : undefined}
+					bounds={art.kind === 'image' ? undefined : { height: 225 }}
+				>
 					{#snippet fallback()}
 						<!-- The canvas's source caption while no image lands
 							(design D4a's still slot): the frame's still-caption
