@@ -81,7 +81,7 @@ impl App {
     /// visualizer owns the slot), so enabling it there would blank the art with
     /// nothing in its place: a GUI Client's selection is a no-op.
     pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
-        if !self.visual_slot_controls {
+        if !self.visual_slot_controls() {
             return;
         }
         self.visualizer_enabled = enabled;
@@ -100,7 +100,7 @@ impl App {
     /// (`App::visual_slot_hide_in_effect`), so the state and the stored
     /// preference stay the TUI's.
     pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
-        if !self.visual_slot_controls {
+        if !self.visual_slot_controls() {
             return;
         }
         self.visual_slot_hidden = hidden;

@@ -156,10 +156,10 @@ impl App {
             visual_selection_active: leaf
                 .as_ref()
                 .is_some_and(|surface| surface.visual_selection_active()),
-            // This entry is the GUI Client's: the GUI-only key context's
-            // layers (add-tauri-gui-client row 6.2) route the canvas's `z`,
-            // `q`, and `c` here and never in the TUI Client.
-            gui_client: true,
+            // The GUI-only key context's layers (add-tauri-gui-client row
+            // 6.2) route the canvas's `z`, `q`, and `c` here and never in
+            // the TUI Client.
+            gui_client: self.gui_client,
         };
         // While the GUI's overlay is open it is the blocking overlay the
         // router arbitrates against: the chord's focused leaf is the overlay,

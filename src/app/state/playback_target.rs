@@ -68,7 +68,7 @@ impl App {
     /// rail) painting none of the item's art with no way to show it again.
     /// The GUI therefore neither acts on the hide nor writes it.
     pub(in crate::app) fn visual_slot_hide_in_effect(&self) -> bool {
-        self.visual_slot_controls && self.visual_slot_hidden
+        self.visual_slot_controls() && self.visual_slot_hidden
     }
 
     /// Whether the `QueueColumn`'s visual slot should be reserved and painted.

@@ -190,11 +190,9 @@ impl App {
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
-            // keeps the TUI's panel rules.
-            client_arranges_panels: false,
-            // The GUI Client clears this before its first step; a TUI Client
-            // paints the visualizer and the hide control.
-            visual_slot_controls: true,
+            // keeps the terminal-cell panel rules and the visual-slot
+            // controls.
+            gui_client: false,
             // The GUI Library panel's Client-core state starts empty:
             // the window content's first command selects a destination's
             // collections and an item's detail (add-gui-library-panel

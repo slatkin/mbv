@@ -32,7 +32,7 @@ impl App {
     /// contrast a focused palette against. The GUI Client arranges its own
     /// panels from its measured size, so its geometry fact keeps this false.
     pub(in crate::app) fn is_mini_view(&self) -> bool {
-        !self.client_arranges_panels
+        !self.client_arranges_panels()
             && self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
     }
 
@@ -45,7 +45,7 @@ impl App {
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
     pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
-        !self.client_arranges_panels
+        !self.client_arranges_panels()
             && !self.is_mini_view()
             && self.panel_mode == PanelMode::Both
             && self.displayed_queue().slots().is_empty()

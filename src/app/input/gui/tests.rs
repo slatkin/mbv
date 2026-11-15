@@ -92,6 +92,7 @@ fn queue_row_activate_plays_the_clicked_row_review_u17_2() {
 #[test]
 fn gui_context_z_toggles_the_panel_collapse() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
 
     assert!(!app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
@@ -111,6 +112,7 @@ fn gui_context_z_toggles_the_panel_collapse() {
 #[test]
 fn gui_context_q_toggles_the_queue_fold() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
 
     assert!(!app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Char('q'), KeyModifiers::NONE)),
@@ -126,6 +128,7 @@ fn gui_context_q_toggles_the_queue_fold() {
 #[test]
 fn gui_context_c_cycles_the_subtitle_track() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
     // The stub player starts active; the subtitle cycle's active path needs
     // tracks the stub does not carry, so the test drives the idle path the
     // mode cycle lives on.
@@ -157,6 +160,7 @@ fn gui_context_c_cycles_the_subtitle_track() {
 #[test]
 fn gui_queue_filter_opens_types_and_closes() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
     let key = |c: char| GuiInput::Key(KeyEvent::new(Key::Char(c), KeyModifiers::NONE));
 
     app.route_gui_input(key('/'), None);
@@ -398,6 +402,7 @@ fn track_popover_choose_sends_the_track_switch() {
 #[test]
 fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
     app.player.update_status(|status| {
         status.active = true;
         status.sub_tracks = vec![(2, "Forced".to_string(), true)];
@@ -430,6 +435,7 @@ fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
 #[test]
 fn seek_relative_request_matches_the_seek_chords() {
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    app.enable_gui_client();
 
     app.handle_playback_request(&PlaybackRequest::SeekRelative(-10.0));
     app.handle_playback_request(&PlaybackRequest::SeekRelative(30.0));
@@ -454,6 +460,7 @@ fn seek_relative_request_matches_the_seek_chords() {
 #[test]
 fn gui_context_popover_chords_toggle_the_matching_popover() {
     let mut app = make_app_stub();
+    app.enable_gui_client();
     app.player.update_status(|status| {
         status.active = true;
         status.audio_tracks = vec![(1, "Stereo".to_string())];

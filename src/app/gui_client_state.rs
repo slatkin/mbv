@@ -34,15 +34,31 @@ impl App {
     /// Adopt the GUI Client's `App` rules (add-gui-library-panel design D4,
     /// D9): the GUI arranges its own panels from its measured size and always
     /// paints the Queue panel, so the TUI's terminal-width Mini check and its
-    /// hidden empty queue column do not apply, and the GUI's own launch
-    /// location replaces the TUI's, so this `App` starts with
-    /// `LaunchRestore::Done` and no TUI launch state moves its tab or Panel
-    /// focus. The GUI Client calls it before its first step; the TUI Client
-    /// never does, so the TUI's values do not change.
+    /// hidden empty queue column do not apply, it paints no visualizer or
+    /// hide control for the visual slot, and the GUI's own launch location
+    /// replaces the TUI's, so this `App` starts with `LaunchRestore::Done`
+    /// and no TUI launch state moves its tab or Panel focus. The GUI Client
+    /// calls it before its first step; the TUI Client never does, so the
+    /// TUI's values do not change.
     pub fn enable_gui_client(&mut self) {
-        self.client_arranges_panels = true;
-        self.visual_slot_controls = false;
+        self.gui_client = true;
         self.launch_restore = LaunchRestore::Done;
+    }
+
+    /// Whether the Client arranges its own panels from its measured size and
+    /// always paints the Queue panel (design D4, D9): the GUI Client does, so
+    /// `terminal_width` has no meaning there and the terminal-cell rules do
+    /// not apply. The TUI Client keeps the terminal-cell rules.
+    pub(in crate::app) fn client_arranges_panels(&self) -> bool {
+        self.gui_client
+    }
+
+    /// Whether the Client paints the visualizer and a control for the visual
+    /// slot's hide: the TUI Client paints both, the GUI Client paints
+    /// neither, so the visualizer and hide setters and the persisted hide do
+    /// nothing for it. It is the inverse of `client_arranges_panels`.
+    pub(in crate::app) fn visual_slot_controls(&self) -> bool {
+        !self.gui_client
     }
 
     /// The canvas panel's collapse and queue-fold facts (design D10).

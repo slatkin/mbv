@@ -289,11 +289,10 @@ impl Model {
             panel_focus: self.app.effective_panel_focus(),
             prefix_armed: self.app.prefix_armed,
             visual_selection_active: self.visual_selection.is_some(),
-            // The TUI Client is not the GUI Client: the GUI-only key
-            // context's layers (add-tauri-gui-client row 6.2) stay inert
-            // here, so the TUI's default bindings on the canvas chords keep
-            // their own actions.
-            gui_client: false,
+            // The Client-kind fact keeps the GUI-only key context's layers
+            // (add-tauri-gui-client row 6.2) inert here, so the TUI's
+            // default bindings on the canvas chords keep their own actions.
+            gui_client: self.app.gui_client,
         };
 
         let outcome = resolve_router_outcome_with_focused(
