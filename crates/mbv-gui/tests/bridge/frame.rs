@@ -417,6 +417,7 @@ fn playing_queue_frame_carries_the_status_indicator_cluster() {
 #[test]
 fn queue_filter_narrows_projected_rows_only() {
     let mut app = stub_app_with_playing_queue(3);
+    app.enable_gui_client();
     // The stub titles are "Item 0", "Item 1", "Item 2": the query matches
     // one row.
     let frame = frame_after_keys(
@@ -629,6 +630,9 @@ fn a_drag_ghost_carries_its_rows_end_offset_review_u65_p2_3() {
         slot_item("Pending", 10 * minute, 0, false),
         slot_item("Later", 10 * minute, 0, false),
     ]);
+    // The GUI Client's keys route only once the core thread enables it
+    // (5545eaf9b, #1013).
+    app.enable_gui_client();
     let _ = app.route_gui_input(
         mbv::GuiInput::Key(mbv_ui_msg::KeyEvent::new(
             mbv_ui_msg::Key::Char('t'),
