@@ -273,19 +273,31 @@ fn enter_with_no_highlighted_row_sends_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// The list pane's own Down keeps the list cursor's job; the Search state
-// holds no highlight and stays unfocused.
+// The Library list's own movement keys keep their job; the Search state holds
+// no highlight and stays unfocused.
 #[test]
 fn no_search_key_acts_while_the_field_does_not_hold_the_keyboard() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         carry_search(state, results());
-        route_key(state, facts, "down", "ArrowDown", false, false);
+        route_on_row(
+            state,
+            facts,
+            "down",
+            "ArrowDown",
+            PointerList::Music,
+            "nothing",
+        );
+        let search = state.search.peek();
+        facts.lock().expect("facts").push(format!(
+            "focused={} mounted={} highlight={:?}",
+            search.focused, search.mounted, search.highlight
+        ));
     });
     assert_eq!(
         facts,
-        ["down=Handled focused=false mounted=false highlight=None"]
+        ["down=Handled", "focused=false mounted=false highlight=None"]
     );
     assert_eq!(commands(&rx), []);
 }

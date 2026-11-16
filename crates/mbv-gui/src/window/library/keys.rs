@@ -7,7 +7,7 @@
 //! open a destination, and the Library keys run while the pointer rests over
 //! the Library column. Every other key goes to the core.
 
-use crate::bridge::frame::library::{GuiDestinationList, GuiSearchFrame};
+use crate::bridge::frame::library::{GuiDestinationList, GuiHomeRowIdFrame, GuiSearchFrame};
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
@@ -15,7 +15,7 @@ use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 use dioxus_native::prelude::*;
 
-use super::keys_shared::{bare, core_target, cursor_move, is_list_and_hero_key};
+use super::keys_shared::{bare, core_target, cursor_move};
 use super::state::LibraryState;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::settings::keys::route_settings_key;
@@ -66,12 +66,13 @@ fn accept_active_filter(state: &LibraryState) {
     }
 }
 
-/// Route a key to the Home keys (design D12): the Home cursor owns the
-/// movement keys, Enter plays the row it rests on, and `n` and `a` enqueue from
-/// it. There is no filter and no pill row on Home, so `/` and Space are not
-/// taken: they pass to the core's router. The tree's Right and Left have no
-/// node to open, so they change nothing but still never reach the core.
-fn route_home_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
+/// Route a key to the Home keys (design D12, D2 of
+/// `gui-pointer-target-interaction`): `/` opens the list filter, the movement
+/// keys scroll the list under the pointer, and Enter, `n`, and `a` act on the
+/// hovered row. With no hovered row they are consumed and do nothing. There is
+/// no filter and no pill row on Home, so Space passes to the core's router.
+fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> KeyOutcome {
+    let target = core_target(pointer);
     if key.key == "/" && bare(key) {
         state.open_library_filter();
         return KeyOutcome::Handled;
@@ -85,36 +86,46 @@ fn route_home_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -
         return KeyOutcome::Core(target);
     }
     if let Some(mv) = cursor_move(&key.key) {
-        state.move_home_list_cursor(mv);
+        // The scroll keys scroll the destination's list under the pointer
+        // (design D2, step 3, D6). Anywhere else they are the core's keys.
+        if pointer.list != Some(PointerList::Home) {
+            return KeyOutcome::Core(target);
+        }
+        state.step_home_scroll(mv);
         return KeyOutcome::Handled;
     }
     match key.key.as_str() {
         "Enter" => {
-            if let Some(row) = state.home_cursor_row_id() {
+            if let Some(row) = hovered_home_row(state, pointer) {
                 state.play_home_row(row);
             }
             KeyOutcome::Handled
         }
         "n" => {
-            if let Some(row) = state.home_cursor_row_id() {
+            if let Some(row) = hovered_home_row(state, pointer) {
                 state.play_home_row_next(row);
             }
             KeyOutcome::Handled
         }
         "a" => {
-            if let Some(row) = state.home_cursor_row_id() {
+            if let Some(row) = hovered_home_row(state, pointer) {
                 state.queue_home_row(row);
             }
             KeyOutcome::Handled
         }
-        _ if is_list_and_hero_key(&key.key) => {
-            // Right and Left have no tree node to open on Home; the other
-            // keys are answered above. They still never reach the core
-            // (design D3, step 4).
-            KeyOutcome::Handled
-        }
         _ => KeyOutcome::Core(target),
     }
+}
+
+/// The Home row the pointer rests on (design D1, D2): the row its marker names,
+/// resolved against the painted rows. `None` while the pointer is over no Home
+/// row — over another list, over a heading, or over no row at all.
+#[must_use]
+fn hovered_home_row(state: &LibraryState, pointer: &PointerTarget) -> Option<GuiHomeRowIdFrame> {
+    if pointer.list != Some(PointerList::Home) {
+        return None;
+    }
+    state.home_row_id(pointer.row.as_deref()?)
 }
 
 /// Route a key while the filter field holds the keyboard (design D3, step 2).
@@ -134,16 +145,25 @@ fn route_filter_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
     }
 }
 
-/// The item the pointer's control names (design D2): the item of the row the
-/// pointer rests on — the Hero's tracklist track while the tracklist carries
-/// it, and the Music list's cursor row anywhere else. With no item the key that
-/// acts on it sends no command.
+/// The item the pointer's control names (design D2): the row the pointer rests
+/// on, resolved against the list that paints it — the Hero's tracklist track
+/// while the tracklist carries the marker, and the Music list's row anywhere
+/// else. The marker carries the row's id, so each list's own row model resolves
+/// it. With no row the key that acts on it sends no command.
 #[must_use]
 fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<String> {
-    if pointer.list == Some(PointerList::Tracklist) {
-        return state.tracklist_item_id();
+    let row = pointer.row.as_deref()?;
+    match pointer.list? {
+        PointerList::Music => state.music_row_item_id(row),
+        PointerList::Tracklist => Some(row.to_owned()),
+        PointerList::Home
+        | PointerList::Shows
+        | PointerList::Emby
+        | PointerList::Audiobooks
+        | PointerList::Podcasts
+        | PointerList::Feeds
+        | PointerList::Workspace => None,
     }
-    state.list_cursor_item_id()
 }
 
 /// Play the item the pointer's control names (design D2's Enter): the list row,
@@ -154,46 +174,6 @@ fn play_hovered_item(state: &LibraryState, pointer: &PointerTarget) {
     if let Some(item_id) = hovered_item_id(state, pointer) {
         state.link.library(GuiLibraryCommand::Play { item_id });
     }
-}
-
-/// Route a movement or open key to the Music list (design D2, D7): the arrows,
-/// Page Up, Page Down, Home, and End move the list, Right opens the cursor's
-/// node, Left closes it, and Enter plays the item under it.
-fn route_list_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> bool {
-    if let Some(mv) = cursor_move(&key.key) {
-        state.move_library_cursor(mv);
-        return true;
-    }
-    match key.key.as_str() {
-        "ArrowRight" => {
-            state.set_library_cursor_open(true);
-            true
-        }
-        "ArrowLeft" => {
-            state.set_library_cursor_open(false);
-            true
-        }
-        "Enter" => {
-            play_hovered_item(state, pointer);
-            true
-        }
-        _ => false,
-    }
-}
-
-/// Route a movement or Enter key to the Hero's tracklist (design D2): the
-/// movement keys move the tracklist's cursor, and Enter plays the track it
-/// rests on.
-fn route_tracklist_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> bool {
-    if let Some(mv) = cursor_move(&key.key) {
-        state.move_library_track_cursor(mv);
-        return true;
-    }
-    if key.key == "Enter" {
-        play_hovered_item(state, pointer);
-        return true;
-    }
-    false
 }
 
 /// Route `n` and `a` to the item the pointer's control names (design D2, D8):
@@ -296,7 +276,7 @@ fn route_panel_key(
 ) -> KeyOutcome {
     let list = sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
-        Some(GuiDestinationList::Home(_)) => route_home_panel_key(state, key, core_target(pointer)),
+        Some(GuiDestinationList::Home(_)) => route_home_panel_key(state, key, pointer),
         Some(GuiDestinationList::Emby(_)) => {
             super::emby_keys::route_emby_panel_key(state, key, pointer)
         }
@@ -319,8 +299,9 @@ fn route_panel_key(
     }
 }
 
-/// The Music destination's own keys (design D2, D12), over the carried Music
-/// content.
+/// The Music destination's own keys (design D2, D12): `/` opens the filter, the
+/// movement keys scroll the list under the pointer, and Enter, `n`, and `a` act
+/// on the hovered row of the list or the Hero's tracklist.
 fn route_music_panel_key(
     state: &LibraryState,
     key: &DomKey,
@@ -338,22 +319,28 @@ fn route_music_panel_key(
     if !bare(key) {
         return KeyOutcome::Core(core_target(pointer));
     }
-    if pointer.list == Some(PointerList::Tracklist) {
-        if route_tracklist_key(state, key, pointer) {
-            return KeyOutcome::Handled;
+    if let Some(mv) = cursor_move(&key.key) {
+        // The scroll keys scroll the destination's list under the pointer
+        // (design D2, step 3, D6). Anywhere else they are the core's keys.
+        if pointer.list != Some(PointerList::Music) {
+            return KeyOutcome::Core(core_target(pointer));
         }
-    } else if route_list_key(state, key, pointer) {
+        state.step_library_scroll(mv);
         return KeyOutcome::Handled;
     }
-    if key.key == "n" || key.key == "a" {
-        route_item_key(state, key, pointer);
-        return KeyOutcome::Handled;
+    match key.key.as_str() {
+        "Enter" => {
+            play_hovered_item(state, pointer);
+            KeyOutcome::Handled
+        }
+        "n" | "a" => {
+            route_item_key(state, key, pointer);
+            KeyOutcome::Handled
+        }
+        // Nothing else of the Library's answers this key: the core's router
+        // does (design D2, step 4).
+        _ => KeyOutcome::Core(core_target(pointer)),
     }
-    if is_list_and_hero_key(&key.key) {
-        return KeyOutcome::Handled;
-    }
-    // Nothing else of the Library's answers this key: the core's router does.
-    KeyOutcome::Core(core_target(pointer))
 }
 
 /// Route one keydown (design D2): the window does its part, and the answer is

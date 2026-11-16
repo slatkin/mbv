@@ -436,12 +436,6 @@ impl RowBuilder {
     }
 }
 
-/// The rows the cursor may rest on: every row but the letter headings.
-#[must_use]
-pub fn selectable_rows(rows: &[LibraryRow]) -> Vec<&LibraryRow> {
-    rows.iter().filter(|row| row.selectable()).collect()
-}
-
 /// The painted height of the whole list: the bottom edge of its last row.
 #[must_use]
 pub fn rows_height(rows: &[impl GeometryRow]) -> f32 {
@@ -584,18 +578,6 @@ pub fn move_cursor<Row: GeometryRow>(
         return Some(row.id().to_owned());
     };
     Some(rows[move_index(rows.len(), at, mv, page)].id().to_owned())
-}
-
-/// The canvas tree's cursor movement (design D7): the shared movement over the
-/// rows a letter heading does not occupy.
-#[must_use]
-pub fn move_list_cursor(
-    rows: &[LibraryRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&selectable_rows(rows), cursor, mv, page)
 }
 
 /// The half-open range of row indexes the viewport paints (design D7): the rows

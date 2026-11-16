@@ -253,23 +253,18 @@ fn a_letter_with_no_painted_rows_is_disabled_and_a_press_changes_nothing() {
     );
 
     fixture.compute(|state| state.jump_to_letter('C'));
-    assert_eq!(fixture.state.ui.peek().cursor, None);
     assert_eq!(fixture.state.music_scroll.peek().scroll_top, 0.0);
 }
 
 /// Contract (`LibraryLetterRail.test.ts`): a press on an enabled letter
-/// moves the cursor to its first row and shows that row.
+/// scrolls the list to its first row and picks and selects nothing.
 #[test]
-fn a_press_on_a_letter_moves_the_cursor_to_its_first_row_and_shows_that_row() {
+fn a_press_on_a_letter_scrolls_the_list_to_its_first_row() {
     let mut fixture = built(letters(), None);
     fixture.carry(music());
     fixture.compute(|state| state.measure_library_list(40.0));
 
     fixture.compute(|state| state.jump_to_letter('B'));
 
-    assert_eq!(
-        fixture.state.ui.peek().cursor,
-        Some("artist:service:a1".to_owned())
-    );
     assert_eq!(fixture.state.music_scroll.peek().scroll_top, 14.0);
 }

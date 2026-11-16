@@ -127,16 +127,6 @@ fn library_pointer() -> PointerTarget {
     }
 }
 
-/// The pointer target a Hero key routes under: the pointer over one of the
-/// Hero's own lists.
-fn hero_pointer(list: PointerList) -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: Some(list),
-        row: None,
-    }
-}
-
 /// Arm the Status bar's prefix (design D3, step 1).
 fn arm_prefix(state: &LibraryState) {
     let mut status = state.sections.status;
@@ -221,8 +211,14 @@ fn route_under(state: &LibraryState, facts: &Facts, name: &str, value: &str, zon
     );
 }
 
-/// Route one keydown with the pointer over the Hero's tracklist.
-fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str) {
+/// Route one keydown with the pointer over the Hero's tracklist, resting on the
+/// track `row`.
+fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    let pointer = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(PointerList::Tracklist),
+        row: Some(row.to_owned()),
+    };
     route_with(
         state,
         facts,
@@ -231,7 +227,34 @@ fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str) {
         false,
         &state.sections,
         GuiArrangement::Wide,
-        &hero_pointer(PointerList::Tracklist),
+        &pointer,
+    );
+}
+
+/// Route one keydown with the pointer over a Library list, resting on the row
+/// `row` of that list (design D1, D2).
+fn route_on_row(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    list: PointerList,
+    row: &str,
+) {
+    let pointer = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(list),
+        row: Some(row.to_owned()),
+    };
+    route_with(
+        state,
+        facts,
+        name,
+        value,
+        false,
+        &state.sections,
+        GuiArrangement::Wide,
+        &pointer,
     );
 }
 
@@ -414,14 +437,8 @@ fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     format!(
-        "filter_open={} filter={:?} pill_select={:?} cursor={:?} open={:?} track_cursor={:?} dismissed={}",
-        ui.filter_open,
-        ui.filter,
-        ui.pill_select,
-        ui.cursor,
-        ui.open_nodes,
-        ui.track_cursor,
-        ui.hero_dismissed,
+        "filter_open={} filter={:?} pill_select={:?} open={:?} dismissed={}",
+        ui.filter_open, ui.filter, ui.pill_select, ui.open_nodes, ui.hero_dismissed,
     )
 }
 

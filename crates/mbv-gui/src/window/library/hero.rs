@@ -1,30 +1,18 @@
 //! The Library Hero's facts and geometry (`add-gui-library-panel` design D5,
 //! D8, the port of `lib/library/hero.ts`): the picked album's lines as the
-//! canvas prints them, the artist's albums in the union that Shuffle artist
-//! plays, and the tracklist's cursor. The data is the core's, so this module
-//! only reads the carried Hero; keeping the lines and the cursor movement here
-//! lets the painters stay markup and the movement test without a layout.
+//! canvas prints them, and the artist's albums in the union that Shuffle artist
+//! plays. The data is the core's, so this module only reads the carried Hero;
+//! keeping the lines here lets the painters stay markup.
 //!
 //! A line that joins values of several data types is built as typed segments
 //! (`add-gui-settings-screen` design D14): colour carries the type, so a count
 //! and a time on one line each carry their own kind, and the painter paints the
 //! kinds through `TypedText`.
 
-use crate::bridge::frame::library::{
-    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame, GuiMusicTrackFrame,
-};
+use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicHeroFrame};
 
 /// One meta row as the frames carry it: a line of typed segments.
 pub type MetaRow = Vec<GuiMetaSegmentFrame>;
-
-/// The tracklist rows of the Hero's album (design D5): the picked album's
-/// cached tracklist, empty until the album node's open loads it.
-#[must_use]
-pub fn hero_tracks(hero: Option<&GuiMusicHeroFrame>) -> Vec<GuiMusicTrackFrame> {
-    hero.map_or_else(Vec::new, |hero| {
-        hero.album.tracks.as_deref().unwrap_or_default().to_vec()
-    })
-}
 
 /// One line's typed runs, in display order (design D14).
 pub type Segments = MetaRow;
@@ -173,52 +161,6 @@ pub fn artist_union_albums(
                 .collect()
         },
     )
-}
-
-/// The tracklist's cursor resolved against the tracks that paint (design D3):
-/// the stored track while the tracklist holds it, and the first track while it
-/// does not — a tracklist whose cache lands after the Hero pane took focus still
-/// paints a cursor, and Enter acts on it without waiting for a movement key.
-#[must_use]
-pub fn resolve_track_cursor(tracks: &[GuiMusicTrackFrame], cursor: Option<&str>) -> Option<String> {
-    if cursor.is_some_and(|cursor| tracks.iter().any(|track| track.track_id == cursor)) {
-        return cursor.map(str::to_owned);
-    }
-    tracks.first().map(|track| track.track_id.clone())
-}
-
-/// The rows a Page Up or Page Down spans in the tracklist: the tracklist is a
-/// short list inside the Hero, so a fixed page keeps the cursor a screenful
-/// away without measuring the Hero.
-const TRACK_PAGE: usize = 10;
-
-/// The tracklist's cursor row after one movement (design D3): row by row for
-/// Up and Down, a page for Page Up and Page Down, and the tracklist's ends for
-/// Home and End, clamped to the tracklist. The caller resolves the cursor
-/// against the painted tracks first (`resolve_track_cursor`), so a cursor the
-/// tracklist does not hold starts the movement from the first row.
-#[must_use]
-pub fn move_track_cursor(
-    tracks: &[GuiMusicTrackFrame],
-    cursor: Option<&str>,
-    mv: super::list::ListMove,
-) -> Option<String> {
-    if tracks.is_empty() {
-        return None;
-    }
-    let last = tracks.len().saturating_sub(1);
-    let at = cursor
-        .and_then(|cursor| tracks.iter().position(|track| track.track_id == cursor))
-        .unwrap_or(0);
-    let to = match mv {
-        super::list::ListMove::Up => at.saturating_sub(1),
-        super::list::ListMove::Down => at + 1,
-        super::list::ListMove::PageUp => at.saturating_sub(TRACK_PAGE),
-        super::list::ListMove::PageDown => at + TRACK_PAGE,
-        super::list::ListMove::Home => 0,
-        super::list::ListMove::End => last,
-    };
-    tracks.get(to.min(last)).map(|track| track.track_id.clone())
 }
 
 /// One meta row of a single-row Hero, with the role the frame paints it in.

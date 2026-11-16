@@ -219,17 +219,3 @@ fn the_step_stays_inside_the_lists_scrollable_range() {
     assert_eq!(scroll_step(&rows(), view(0.0), ListMove::Up), 0.0);
     assert_eq!(scroll_step(&rows(), view(194.0), ListMove::Down), 194.0);
 }
-
-// Movement steps over the letter headings.
-#[test]
-fn movement_steps_over_the_letter_headings() {
-    let painted = rows();
-    assert_eq!(
-        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::Down, 1),
-        Some("artist:service:a1".to_owned())
-    );
-    assert_eq!(
-        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::End, 1),
-        Some("artist:service:a2".to_owned())
-    );
-}

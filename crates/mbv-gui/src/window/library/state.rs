@@ -19,9 +19,6 @@ use crate::window::sections::Sections;
 
 use std::sync::Arc;
 
-use super::hero::{hero_tracks, move_track_cursor, resolve_track_cursor};
-use super::list::ListMove;
-use super::parts::library_music_detail;
 use super::row_memo::RowsMemo;
 use super::scroll::{ListScroll, initial_list_scroll};
 
@@ -51,10 +48,6 @@ pub struct LibraryUiState {
     /// The pill selection a press asked for (design D6). The pill row turns it
     /// into the select-collection command.
     pub pill_select: Option<String>,
-    /// The list's cursor row id, or `None` while no row carries the cursor
-    /// (design D7). The cursor and the picked item are different: the cursor
-    /// moves by keys, and the picked album is the core's.
-    pub cursor: Option<String>,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -63,9 +56,6 @@ pub struct LibraryUiState {
     /// override to stay shut (design D7's open and close). A new filter and a
     /// cleared one drop it.
     pub filter_closed: Vec<String>,
-    /// The tracklist's cursor track id (design D3): the Hero's tracklist row
-    /// the movement keys rest on.
-    pub track_cursor: Option<String>,
     /// Whether the Narrow arrangement's Hero overlay is dismissed (design D4,
     /// D3): a pick paints it again, and Esc or a press on its backdrop closes
     /// it.
@@ -87,10 +77,8 @@ impl LibraryUiState {
             filter_open: false,
             filter: String::new(),
             pill_select: None,
-            cursor: None,
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
-            track_cursor: None,
             // No pick has happened yet: the Narrow arrangement shows the list,
             // not an overlay Hero for the core's default row.
             hero_dismissed: true,
@@ -264,9 +252,9 @@ impl LibraryState {
     }
 
     /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor and the scroll follow the
-    /// widened rows, and the filter's own open and close over the nodes goes with
-    /// the text.
+    /// narrows nothing (design D3, step 2). The scroll follows the widened
+    /// rows, and the filter's own open and close over the nodes goes with the
+    /// text.
     pub fn close_library_filter(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
@@ -274,16 +262,13 @@ impl LibraryState {
             ui.filter.clear();
             ui.filter_closed.clear();
         });
-        self.settle_cursor();
     }
 
     /// Accept the filter with Enter: the field closes and the list keeps the text
-    /// (design D3, step 2). The cursor and the scroll follow the rows the same way
-    /// a text change moves them.
+    /// (design D3, step 2).
     pub fn accept_library_filter(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.filter_open = false);
-        self.settle_cursor();
     }
 
     /// Ask for a pill to be selected (design D6): the pill row turns the request
@@ -312,53 +297,6 @@ impl LibraryState {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.pill_select = None);
         self.select_library_pill(lib_idx, pill_select);
-    }
-
-    /// The active Music detail's Hero, `None` while another destination holds
-    /// the window or no album is picked.
-    #[must_use]
-    fn music_hero(&self) -> Option<crate::bridge::frame::library::GuiMusicHeroFrame> {
-        let detail = self.sections.library_detail.peek();
-        library_music_detail(detail.as_deref()).and_then(|detail| detail.hero.clone())
-    }
-
-    /// Move the Hero's tracklist cursor one movement along (design D3): the
-    /// movement keys move the tracklist's cursor, not the list's. The movement
-    /// starts from the cursor the painted tracklist shows, so the first key
-    /// lands beside it.
-    pub fn move_library_track_cursor(&self, mv: ListMove) {
-        let hero = self.music_hero();
-        let tracks = hero_tracks(hero.as_ref());
-        let mut ui = self.ui;
-        ui.with_mut(|ui| {
-            let cursor = move_track_cursor(
-                &tracks,
-                resolve_track_cursor(&tracks, ui.track_cursor.as_deref()).as_deref(),
-                mv,
-            );
-            if cursor != ui.track_cursor {
-                ui.track_cursor = cursor;
-            }
-        });
-    }
-
-    /// The item the Hero's tracklist cursor names (design D3, D8), the one the
-    /// painted tracklist shows, so Enter acts before any movement key has moved
-    /// the cursor. `None` while no track row carries it.
-    #[must_use]
-    pub fn tracklist_item_id(&self) -> Option<String> {
-        let hero = self.music_hero();
-        let tracks = hero_tracks(hero.as_ref());
-        resolve_track_cursor(&tracks, self.ui.peek().track_cursor.as_deref())
-    }
-
-    /// The item the Music list's cursor row names (design D3, D8), or `None`
-    /// while no painted row carries the cursor.
-    #[must_use]
-    pub fn list_cursor_item_id(&self) -> Option<String> {
-        let ui = self.ui.peek().clone();
-        let row = self.cursor_row(&ui);
-        row.as_ref().and_then(Self::action_item_id)
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
