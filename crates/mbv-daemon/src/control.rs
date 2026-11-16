@@ -526,7 +526,7 @@ fn dispatch_named_queue_command(cmd: CtrlCmd, ctx: &mut CtrlContext<'_>) {
         CtrlCmd::NamedQueuePlay { queue, slot, .. } => {
             named_queue::handle_play(ctx, queue, slot);
         }
-        cmd @ CtrlCmd::NamedQueueShow { .. } => log_ignored_named_queue_command(&cmd),
+        CtrlCmd::NamedQueueShow { queue } => named_queue::handle_show(ctx, queue),
         _ => {}
     }
 }
@@ -553,15 +553,6 @@ fn reject_stale_index_jump(ctx: &CtrlContext<'_>) {
                 .to_string(),
         ),
     );
-}
-
-/// Documented no-op for `NamedQueueShow`, whose behaviour has not landed: it
-/// subscribes one connection to a resting queue's snapshots (task 5.6) and
-/// carries no `op`, so nothing is left waiting. Create, rename, close, and play
-/// are answered in `control/named_queue`. Its own function keeps the `tracing`
-/// macro expansion out of the dispatcher's cognitive-complexity budget.
-fn log_ignored_named_queue_command(cmd: &CtrlCmd) {
-    tracing::warn!(name: "daemon.ctrl_command.unhandled", target: "daemon", command = ?cmd, "ignoring a named-queue command the Owner does not handle yet");
 }
 
 /// Documented no-op: the swap machine on the event loop takes `SwapPrepared`,

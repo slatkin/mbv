@@ -1,4 +1,6 @@
-use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broadcast};
+use super::core::{
+    DaemonEvent, NamedQueueListSeed, QueuePersistenceRequest, bind_ctrl_listener, broadcast,
+};
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LocalOutputHooks,
@@ -359,6 +361,8 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         // Owner saved is the start slot a Play of it begins at (gui-named-queues
         // design D4). A fresh queue has none, so a Play starts its first slot.
         start_slot: Arc::new(Mutex::new(initial_queue.active_slot_id())),
+        // The Named-queue list is published below, once the Owner exists.
+        named_queue_list: Arc::new(Mutex::new(None)),
     };
     let owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),
@@ -368,6 +372,13 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     // first Client (gui-named-queues design D1). A packaged `mbvd` holds none:
     // it advertises no `named-queues` and its store is never used.
     if role == DaemonRole::Local {
+        // The list a newly-attaching Client is seeded with (design D3, "sent on
+        // attach"): deposited before the control socket binds, and refreshed at
+        // every later list change.
+        shared_queue.note_named_queue_list(NamedQueueListSeed::new(
+            &owner.named_queues,
+            owner.core.queue.len(),
+        ));
         tracing::info!(
             name: "daemon.named_queues.ready",
             target: "queue",

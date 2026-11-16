@@ -596,5 +596,123 @@ fn the_last_queue_does_not_close() {
     );
 }
 
+/// Connects a Client that negotiated `named-queues` at Hello, as a Client that
+/// holds several queues does (design D3), and hands back its own event channel.
+fn connect_named_queue_client(
+    registry: &ClientRegistry,
+) -> (
+    u64,
+    mpsc::Sender<CtrlOutbound>,
+    mpsc::Receiver<CtrlOutbound>,
+) {
+    let (tx, rx) = mpsc::channel();
+    let id = registry.lock().unwrap().connect_with_role(
+        tx.clone(),
+        CtrlTransport::Local,
+        true,
+        true,
+        crate::ctrl::PeerHelloCapabilities {
+            named_queues: crate::ctrl::NamedQueues::Supported,
+            queue_transport: crate::ctrl::QueueTransport {
+                abs_episode: true,
+                abs_book: true,
+                twitch: true,
+            },
+            ..Default::default()
+        },
+        None,
+        crate::ctrl::CtrlConnectionRole::Client,
+    );
+    (id, tx, rx)
+}
+
+/// The item ids of a `NamedQueueSnapshot`.
+fn snapshot_item_ids(event: CtrlEvent) -> Vec<String> {
+    match event {
+        CtrlEvent::NamedQueueSnapshot { data, .. } => data
+            .slots
+            .iter()
+            .map(|slot| slot.item.id().to_string())
+            .collect(),
+        other => panic!("expected a named-queue snapshot, got {other:?}"),
+    }
+}
+
+/// Contract: design D3 (task 5.6) — a `NamedQueueShow` subscribes one connection
+/// to that resting queue: after a change of the queue that connection receives
+/// the queue's snapshot, another Named-queue-capable connection receives the
+/// list only, and a connection that negotiated no `named-queues` receives
+/// nothing at all.
+#[test]
+fn only_the_subscribed_connection_receives_the_resting_snapshot() {
+    let player = cold_player();
+    let client = queue_client();
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (editor_id, editor_rx) = connect_client(&mut registry.lock().unwrap());
+    let (subscriber_id, subscriber_tx, subscriber_rx) = connect_named_queue_client(&registry);
+    let (_bystander_id, _bystander_tx, bystander_rx) = connect_named_queue_client(&registry);
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_holding(&["Default"]);
+    let kids_id = add_resting_queue(&mut owner, "Kids");
+    if let Some(kids) = owner.named_queues.resting.last_mut() {
+        kids.queue.append(emby_qi("k1", "Video", "Movie"));
+    }
+
+    run_named_command(
+        CtrlCmd::NamedQueueShow { queue: kids_id },
+        subscriber_id,
+        &subscriber_tx,
+        &client,
+        &player,
+        &mut owner,
+        &shared_queue,
+        &registry,
+    );
+    assert_eq!(
+        snapshot_item_ids(recv_event(&subscriber_rx)),
+        vec!["k1"],
+        "a show sends the queue's own snapshot first"
+    );
+
+    let (editor_tx, _editor_reply_rx) = mpsc::channel();
+    run_named_command(
+        CtrlCmd::UnifiedQueueAppend {
+            queue: Some(kids_id),
+            items: vec![emby_qi("k2", "Video", "Movie")],
+            before: None,
+            op: Some(mbv_ctrl::QueueOpId(80)),
+        },
+        editor_id,
+        &editor_tx,
+        &client,
+        &player,
+        &mut owner,
+        &shared_queue,
+        &registry,
+    );
+
+    assert_eq!(
+        snapshot_item_ids(recv_event(&subscriber_rx)),
+        vec!["k1", "k2"],
+        "the subscribed connection receives the changed queue"
+    );
+    assert!(
+        matches!(recv_event(&subscriber_rx), CtrlEvent::NamedQueueList { .. }),
+        "the change also publishes the list"
+    );
+    assert!(
+        matches!(recv_event(&bystander_rx), CtrlEvent::NamedQueueList { .. }),
+        "a capable connection that shows no queue receives the list"
+    );
+    assert!(
+        bystander_rx.try_recv().is_err(),
+        "it receives no resting snapshot"
+    );
+    assert!(
+        editor_rx.try_recv().is_err(),
+        "a connection without the capability receives nothing new"
+    );
+}
+
 // The swap that plays or replaces a resting queue (design D2).
 mod swap;

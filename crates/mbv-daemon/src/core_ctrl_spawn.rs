@@ -67,6 +67,7 @@ fn ctrl_client_capabilities(
                     owner_queue_source_update: info.supports_owner_queue_source_update(),
                     playback_output: info.supports_playback_output(),
                     emby_session_output: info.supports_emby_session_output(),
+                    named_queues: crate::ctrl::NamedQueues::of(info.supports_named_queues()),
                     queue_transport: crate::ctrl::QueueTransport {
                         abs_episode: audiobookshelf.queue,
                         abs_book: audiobookshelf.book_queue,
@@ -287,6 +288,41 @@ fn seed_playback_output(
     }
 }
 
+/// A Client that negotiated `named-queues` receives the Owner's Named-queue
+/// list on connect, before any command (gui-named-queues design D3, "sent on
+/// attach"). The list is the one the Owner deposited in `SharedQueueState` at
+/// startup and at every change, so the accept thread needs no access to the
+/// Owner's store. A peer without the capability receives nothing, and a
+/// packaged Owner, which holds one queue and publishes no list, has nothing to
+/// send.
+fn seed_named_queue_list(
+    shared_queue: &SharedQueueState,
+    hello: &HelloClassification,
+    ev_tx: &mpsc::Sender<CtrlOutbound>,
+) {
+    if !hello.capabilities.named_queues.is_supported() {
+        return;
+    }
+    let Some(mut seed) = shared_queue.named_queue_list() else {
+        return;
+    };
+    // The current queue's slots live in this shared state, not in the seed, so
+    // its length is read here instead of carried over from the last publish. A
+    // resting queue's length can only change through a command that publishes
+    // the list, so every other entry is current.
+    let current_len = shared_queue.queue.lock().unwrap().len();
+    if let Some(entry) = seed
+        .queues
+        .iter_mut()
+        .find(|entry| entry.id == seed.current)
+    {
+        entry.len = current_len;
+    }
+    if let Ok(json) = serde_json::to_string(&seed.event()) {
+        let _ = ev_tx.send(CtrlOutbound::Event(json));
+    }
+}
+
 /// The peer identity for the ctrl connect line (design D5): the Unix peer's
 /// process id from `SO_PEERCRED`, or the TCP peer address. Read before `stream`
 /// moves into the reader thread.
@@ -379,6 +415,7 @@ impl CtrlClientSession {
             let _ = ev_tx.send(CtrlOutbound::Event(initial_state));
         }
         seed_playback_output(&shared_queue, &hello, &ev_tx);
+        seed_named_queue_list(&shared_queue, &hello, &ev_tx);
         let reply_tx = ev_tx.clone();
         let client_id = clients.connect_with_role(
             ev_tx,
@@ -541,224 +578,4 @@ pub(crate) fn spawn_ctrl_client(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ctrl::CtrlClients;
-
-    /// Contract: spec pin-swap "Attached pinned Client does not support Pin
-    /// swap" — a pinned-surface-only Hello (a pre-upgrade pinned Client) is
-    /// a Pinned swap target, so the shared state flips and Unpin targets it;
-    /// the swap then abandons at the deadline. A Terminal surface still
-    /// requires `pin-swap`, and a Client with neither capability has no
-    /// surface.
-    #[test]
-    fn a_pinned_surface_only_hello_is_a_pinned_swap_target() {
-        let pinned_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE]);
-        let pinned_and_swap = hello_with_caps(&[
-            mbv_ctrl::CTRL_CAP_PIN_SWAP,
-            mbv_ctrl::CTRL_CAP_PINNED_SURFACE,
-        ]);
-        let swap_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PIN_SWAP]);
-        let neither = hello_with_caps(&[]);
-
-        assert_eq!(
-            swap_surface_from_hello(&pinned_only),
-            Some(SwapSurface::Pinned)
-        );
-        assert_eq!(
-            swap_surface_from_hello(&pinned_and_swap),
-            Some(SwapSurface::Pinned)
-        );
-        assert_eq!(
-            swap_surface_from_hello(&swap_only),
-            Some(SwapSurface::Terminal)
-        );
-        assert_eq!(swap_surface_from_hello(&neither), None);
-    }
-
-    /// A pinned-surface-only Hello registered as a Client sets the shared
-    /// attached-Clients state to `Pinned`, so the Tray shows **Unpin** while
-    /// that pre-upgrade Client is attached.
-    #[test]
-    fn a_pinned_surface_only_client_sets_the_pinned_state() {
-        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let state = Arc::new(mbv_ctrl::AttachedClientsCell::default());
-        let mut clients = CtrlClients::new(
-            merged_tx,
-            Arc::clone(&state),
-            Arc::new(crate::PendingSwapToken::default()),
-        );
-        let (client_tx, _client_rx) = mpsc::channel::<CtrlOutbound>();
-        clients.connect_with_role(
-            client_tx,
-            CtrlTransport::Local,
-            false,
-            false,
-            crate::ctrl::PeerHelloCapabilities::default(),
-            swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
-            CtrlConnectionRole::Client,
-        );
-
-        assert_eq!(state.load(), mbv_ctrl::AttachedClients::Pinned);
-    }
-
-    fn hello_with_caps(caps: &[&str]) -> CtrlHello {
-        let mut hello = CtrlHello::current();
-        hello.capabilities = caps.iter().map(|cap| (*cap).to_string()).collect();
-        hello
-    }
-
-    /// Contract: spec `named-queues` "Named queues are local-Owner only" and
-    /// design D3 — only the local Owner advertises `named-queues`. A Client
-    /// that connects to a packaged `mbvd` sees one queue and no create, rename,
-    /// or close of peer queues.
-    #[test]
-    fn only_the_local_owner_advertises_named_queues() {
-        let packaged = daemon_hello(
-            DaemonHelloCaps::default(),
-            DaemonRole::Packaged,
-            Some("control-token"),
-        );
-        let local = daemon_hello(
-            DaemonHelloCaps::default(),
-            DaemonRole::Local,
-            Some("control-token"),
-        );
-
-        assert!(!packaged.supports_named_queues());
-        assert!(local.supports_named_queues());
-    }
-
-    /// A registry with one local Client attached, so `has_driver` is true and
-    /// the `ExclusiveOwner` refusal fires under Stay-alive off.
-    fn registry_with_driver() -> (CtrlClients, mpsc::Receiver<CtrlOutbound>) {
-        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let mut clients = CtrlClients::new(
-            merged_tx,
-            Arc::new(mbv_ctrl::AttachedClientsCell::default()),
-            Arc::new(crate::PendingSwapToken::default()),
-        );
-        let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();
-        clients.connect_with_role(
-            client_tx,
-            CtrlTransport::Local,
-            false,
-            false,
-            crate::ctrl::PeerHelloCapabilities::default(),
-            None,
-            CtrlConnectionRole::Client,
-        );
-        (clients, client_rx)
-    }
-
-    /// Contract: spec daemon-lifecycle "Pin swap with Stay Alive off" /
-    /// design D4 — a Hello carrying the pending one-shot swap token is the
-    /// replacement Client the Owner itself started, so it is admitted
-    /// despite `ExclusiveOwner`, and the refusal event is not sent.
-    #[test]
-    fn matching_swap_token_is_admitted_despite_exclusive_owner() {
-        let (clients, _client_rx) = registry_with_driver();
-        clients.pending_swap().publish("token-1".to_string());
-        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-        let outcome = send_admission_refusal(
-            &clients,
-            DaemonRole::Local,
-            CtrlTransport::Local,
-            false,
-            CtrlConnectionRole::Client,
-            Some("token-1"),
-            &ev_tx,
-        );
-
-        assert!(matches!(outcome, AdmissionOutcome::AdmittedReplacement(_)));
-        assert!(ev_rx.try_recv().is_err());
-    }
-
-    /// Contract: design D4 — the token is consumed at once, so it works for
-    /// one connection only; a second Hello presenting the same token is
-    /// refused with the exclusive-owner reason like any user-started Client.
-    #[test]
-    fn a_swap_token_is_spent_on_first_use() {
-        let (clients, _client_rx) = registry_with_driver();
-        clients.pending_swap().publish("token-1".to_string());
-        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-        let first = send_admission_refusal(
-            &clients,
-            DaemonRole::Local,
-            CtrlTransport::Local,
-            false,
-            CtrlConnectionRole::Client,
-            Some("token-1"),
-            &ev_tx,
-        );
-        let second = send_admission_refusal(
-            &clients,
-            DaemonRole::Local,
-            CtrlTransport::Local,
-            false,
-            CtrlConnectionRole::Client,
-            Some("token-1"),
-            &ev_tx,
-        );
-
-        assert!(matches!(first, AdmissionOutcome::AdmittedReplacement(_)));
-        assert!(matches!(second, AdmissionOutcome::Refused));
-        // The second Hello was refused with the exclusive-owner reason.
-        ev_rx.try_recv().unwrap();
-    }
-
-    /// Contract: design D4 — the token is consumed whatever the admission
-    /// outcome. Under Stay-alive on nothing refuses the replacement, but the
-    /// swap must still complete when it attaches (it guards against the
-    /// machine waiting out its deadline after a successful attach).
-    #[test]
-    fn the_swap_token_is_consumed_when_stay_alive_admits_normally() {
-        let (clients, _client_rx) = registry_with_driver();
-        clients.pending_swap().publish("token-1".to_string());
-        let (ev_tx, _ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-        let outcome = send_admission_refusal(
-            &clients,
-            DaemonRole::Local,
-            CtrlTransport::Local,
-            true,
-            CtrlConnectionRole::Client,
-            Some("token-1"),
-            &ev_tx,
-        );
-
-        assert!(matches!(outcome, AdmissionOutcome::AdmittedReplacement(_)));
-        assert!(
-            !clients.pending_swap().take_matching(Some("token-1")),
-            "the first Hello spent the token"
-        );
-    }
-
-    /// Contract: design D4 — the shutting-down refusal still wins, even for
-    /// a Hello that carries the pending swap token.
-    #[test]
-    fn shutting_down_refusal_wins_over_the_swap_token() {
-        let (mut clients, _client_rx) = registry_with_driver();
-        clients.shutting_down = true;
-        clients.pending_swap().publish("token-1".to_string());
-        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-        let outcome = send_admission_refusal(
-            &clients,
-            DaemonRole::Local,
-            CtrlTransport::Local,
-            false,
-            CtrlConnectionRole::Client,
-            Some("token-1"),
-            &ev_tx,
-        );
-
-        assert!(matches!(outcome, AdmissionOutcome::Refused));
-        // The shutting-down refusal event was sent to the Hello.
-        ev_rx.try_recv().unwrap();
-        // The token stays pending: a refused Hello does not spend it.
-        assert!(clients.pending_swap().take_matching(Some("token-1")));
-    }
-}
+mod tests;

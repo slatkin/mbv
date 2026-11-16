@@ -1,6 +1,7 @@
 //! The Owner's Named-queue commands (gui-named-queues design D3, D5, D6): the
-//! edits of a resting queue, the create/rename/close commands, and the queue
-//! list every Client receives when one of them changes the store.
+//! edits of a resting queue, the create/rename/close commands, the per-connection
+//! `NamedQueueShow` subscription, and the queue list every Client receives when
+//! one of them changes the store.
 //!
 //! The current queue is not handled here: its slots, source, lineage, and run
 //! stay on the Owner core, so an edit that names it (or names no queue) takes
@@ -12,13 +13,17 @@ use super::{
     QueueSlotId, RejectContext, SharedQueueState, broadcast_queue_state, dispatch_slot_jump,
     handle_stop, reject_command, send_to, unified_queue_state_for_peer,
 };
-use crate::broadcast;
-use crate::core::{JumpOrigin, NamedQueueTarget, RestingNamedQueue};
-use mbv_ctrl::{CtrlEvent, NamedQueueEntry, QueueOpOutcome, UnifiedQueueStateData};
+use crate::core::{JumpOrigin, NamedQueueListSeed, NamedQueueTarget, RestingNamedQueue};
+use crate::ctrl::{CtrlClientId, QueueTransport, serialize_ctrl_event};
+use mbv_ctrl::{CtrlEvent, QueueOpOutcome, UnifiedQueueStateData};
 use mbv_queue::{
     NamedQueueId, QueueItem, QueueMutationResult, QueueSource, RemoveSlotResult,
     StartSlotObservation,
 };
+
+mod show;
+pub(super) use show::handle_show;
+use show::{drop_current_shows, drop_shows, publish_snapshot, resting_snapshot};
 
 /// The reason an edit names a queue the Owner no longer holds (design D5, spec
 /// `named-queues` "Queue edits name their queue").
@@ -102,12 +107,16 @@ pub(super) fn apply_edit(
     }
 }
 
-/// Answers one applied resting-queue edit (design D3, D5) and marks the store
-/// for persistence.
+/// Answers one applied resting-queue edit (design D3, D5): the sending Client
+/// gets the queue's new snapshot as its `op` answer, every other connection
+/// that shows the queue gets the snapshot too, and the store is marked for
+/// persistence.
 fn finish_edit(ctx: &mut CtrlContext<'_>, index: usize) {
+    let except_op_client = ctx.except_op_client();
     if let Some((id, data)) = resting_snapshot(ctx, index) {
         answer(ctx, id, data);
     }
+    publish_snapshot(ctx, index, except_op_client);
     broadcast_list(ctx);
     persist(ctx);
 }
@@ -317,10 +326,17 @@ pub(super) fn handle_close(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
     match target {
         NamedQueueTarget::Resting(index) => {
             // Closing deletes the queue: its slots, source, and start slot go
-            // with it, and playback does not change.
+            // with it, and playback does not change. Whoever shows it reads the
+            // current queue from the list this publishes.
             drop(ctx.owner.named_queues.take_resting(index));
+            drop_shows(ctx, queue);
         }
-        NamedQueueTarget::Current => install_as_current(ctx),
+        NamedQueueTarget::Current => {
+            install_as_current(ctx);
+            // The installed queue is the current queue now, so every connection
+            // that showed it reads it through the current-queue snapshots.
+            drop_current_shows(ctx);
+        }
     }
     broadcast_list(ctx);
     if let Some((id, data)) = current_snapshot(ctx) {
@@ -514,6 +530,9 @@ pub(super) fn finish_swap(ctx: &mut CtrlContext<'_>) {
         &ctx.owner.core.queue,
         StartSlotObservation::Installed { start_slot },
     );
+    // The queue the swap installed is the current queue now: the connections
+    // that showed it read it through the current-queue snapshots from here on.
+    drop_current_shows(ctx);
     broadcast_list(ctx);
     persist(ctx);
 }
@@ -608,35 +627,6 @@ fn answer(ctx: &CtrlContext<'_>, queue: NamedQueueId, data: UnifiedQueueStateDat
     }
 }
 
-/// The snapshot one resting queue's Clients hold (design D3): its slots, its
-/// source, its lineage, and its start slot, with no playhead — a resting queue
-/// has no run, so nothing about the current queue's playback describes it.
-fn resting_snapshot(
-    ctx: &CtrlContext<'_>,
-    index: usize,
-) -> Option<(NamedQueueId, UnifiedQueueStateData)> {
-    let resting = ctx.owner.named_queues.resting.get(index)?;
-    let queue_transport = {
-        let clients = ctx.ctrl_clients.lock().unwrap();
-        clients.queue_transport(ctx.client_id)
-    };
-    let CtrlEvent::UnifiedQueueState(data) = unified_queue_state_for_peer(
-        Some(resting.id),
-        &mbv_ctrl::player::PlayerStatus::default(),
-        &resting.queue,
-        &resting.source,
-        resting.lineage,
-        None,
-        resting.start_slot,
-        None,
-        None,
-        queue_transport,
-    ) else {
-        return None;
-    };
-    Some((resting.id, data))
-}
-
 /// The snapshot of the current queue as its `op` answer carries it. Its `queue`
 /// field stays empty: a snapshot names a queue only when it is not the current
 /// one.
@@ -665,31 +655,22 @@ fn current_snapshot(ctx: &CtrlContext<'_>) -> Option<(NamedQueueId, UnifiedQueue
     Some((ctx.owner.named_queues.current, data))
 }
 
-/// Publishes the Named-queue list after a create, rename, close, or edit
+/// Publishes the Named-queue list after a create, rename, close, swap, or edit
 /// (design D3, spec `named-queues` "A Client creates and renames queues"): every
 /// Named queue in creation order, which is identity order because identities
-/// are minted in it, with the current queue named.
+/// are minted in it, with the current queue named. A Client that did not
+/// negotiate `named-queues` receives nothing, and the list also becomes the seed
+/// a newly-attaching Client is sent (design D3, "sent on attach").
 fn broadcast_list(ctx: &CtrlContext<'_>) {
-    let mut queues = vec![NamedQueueEntry {
-        id: ctx.owner.named_queues.current,
-        name: ctx.owner.named_queues.current_name.clone(),
-        len: ctx.owner.core.queue.len(),
-    }];
-    for resting in &ctx.owner.named_queues.resting {
-        queues.push(NamedQueueEntry {
-            id: resting.id,
-            name: resting.name.clone(),
-            len: resting.queue.len(),
-        });
-    }
-    queues.sort_by_key(|entry| entry.id);
-    broadcast(
-        ctx.ctrl_clients,
-        &CtrlEvent::NamedQueueList {
-            queues,
-            current: ctx.owner.named_queues.current,
-        },
-    );
+    let seed = NamedQueueListSeed::new(&ctx.owner.named_queues, ctx.owner.core.queue.len());
+    ctx.shared_queue.note_named_queue_list(seed.clone());
+    let Some(json) = serialize_ctrl_event(&seed.event()) else {
+        return;
+    };
+    ctx.ctrl_clients
+        .lock()
+        .unwrap()
+        .broadcast_named_queue_event(&json);
 }
 
 /// Sends the whole Named-queue state to the daemon's persistence worker

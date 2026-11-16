@@ -505,6 +505,58 @@ pub(crate) struct SharedQueueState {
     /// observed active slot because the run observations are what move it.
     /// [`SharedQueueState::note_start_slot`] is its single write site.
     pub(super) start_slot: Arc<Mutex<Option<QueueSlotId>>>,
+    /// The Named-queue list as last published, read by the ctrl accept path to
+    /// seed a newly-connecting Client that negotiated `named-queues`
+    /// (gui-named-queues design D3: the list is sent on attach). The accept
+    /// thread cannot reach the Owner's store, so the owner thread deposits the
+    /// list here at startup and at every list change
+    /// ([`SharedQueueState::note_named_queue_list`]). `None` on a packaged
+    /// Owner, which holds one queue and publishes no list.
+    pub(super) named_queue_list: Arc<Mutex<Option<NamedQueueListSeed>>>,
+}
+
+/// The Named-queue list a newly-attaching Client is seeded with
+/// (gui-named-queues design D3, "sent on attach"): the queues in queue order
+/// and the current queue.
+#[derive(Clone, Debug)]
+pub(crate) struct NamedQueueListSeed {
+    pub(crate) queues: Vec<mbv_ctrl::NamedQueueEntry>,
+    pub(crate) current: mbv_queue::NamedQueueId,
+}
+
+impl NamedQueueListSeed {
+    /// The list the store and the current queue's length make (design D3):
+    /// every Named queue in creation order, which is identity order because
+    /// identities are minted in it, with the current queue named.
+    #[must_use]
+    pub(crate) fn new(store: &NamedQueueStore, current_len: usize) -> Self {
+        let mut queues = vec![mbv_ctrl::NamedQueueEntry {
+            id: store.current,
+            name: store.current_name.clone(),
+            len: current_len,
+        }];
+        for resting in &store.resting {
+            queues.push(mbv_ctrl::NamedQueueEntry {
+                id: resting.id,
+                name: resting.name.clone(),
+                len: resting.queue.len(),
+            });
+        }
+        queues.sort_by_key(|entry| entry.id);
+        Self {
+            queues,
+            current: store.current,
+        }
+    }
+
+    /// The `NamedQueueList` event this seed carries (design D3).
+    #[must_use]
+    pub(crate) fn event(&self) -> mbv_ctrl::CtrlEvent {
+        mbv_ctrl::CtrlEvent::NamedQueueList {
+            queues: self.queues.clone(),
+            current: self.current,
+        }
+    }
 }
 
 impl SharedQueueState {
@@ -525,6 +577,20 @@ impl SharedQueueState {
     pub(crate) fn note_start_slot(&self, queue: &PlaybackQueue, observation: StartSlotObservation) {
         let mut start_slot = self.start_slot.lock().unwrap();
         *start_slot = mbv_queue::start_slot_after(queue, *start_slot, observation);
+    }
+
+    /// The Named-queue list as last published (gui-named-queues design D3), or
+    /// `None` before the Owner has published one.
+    pub(crate) fn named_queue_list(&self) -> Option<NamedQueueListSeed> {
+        self.named_queue_list.lock().unwrap().clone()
+    }
+
+    /// The one write site for the Named-queue list a newly-attaching Client is
+    /// seeded with (gui-named-queues design D3): the Owner deposits the list it
+    /// is about to broadcast, so the accept thread's seed is never older than
+    /// the last broadcast.
+    pub(crate) fn note_named_queue_list(&self, seed: NamedQueueListSeed) {
+        *self.named_queue_list.lock().unwrap() = Some(seed);
     }
 }
 
