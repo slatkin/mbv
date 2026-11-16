@@ -65,15 +65,15 @@ holds that change.
   one `#[case]` table test for "A new queue is made", "The first new queue", and "A freed number
   is used again", and tests for "An empty name is refused", "Close the playing queue", and "The
   last queue does not close".
-- [ ] 5.5 Handle `NamedQueuePlay` and a `UnifiedQueueReplace` or `UnifiedQueuePlaySlot` that names
+- [x] 5.5 Handle `NamedQueuePlay` and a `UnifiedQueueReplace` or `UnifiedQueuePlaySlot` that names
   a resting queue with the swap of design D2 (stop, park the current queue, install the resting
   queue through the replace path with its slot ids kept). Verify with tests for "Play a resting
   queue" and "Play a row of a resting queue while another queue plays", and one test that a
   Client without `named-queues` receives the new current queue as one whole-queue snapshot.
-- [ ] 5.6 Handle `NamedQueueShow` per connection: send that queue's snapshot on show and after
+- [x] 5.6 Handle `NamedQueueShow` per connection: send that queue's snapshot on show and after
   each change of it, and drop the subscription on close and on disconnect (design D3). Verify with
   one test that only the subscribed connection receives the resting snapshot.
-- [ ] 5.7 Persist the store and the current queue through `spawn_queue_persistence_worker` into
+- [x] 5.7 Persist the store and the current queue through `spawn_queue_persistence_worker` into
   the 3.1 file, and restore it (with the 3.2 migration) at startup before the first Client is
   served (design D6). Verify with a restart test for "Restart restores every named queue".
 
