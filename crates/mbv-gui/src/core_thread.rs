@@ -32,8 +32,7 @@ use crate::art::ArtRequest;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::{
-    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
-    RegionTarget, hit_map,
+    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, RegionTarget, hit_map,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::leaves::{
@@ -76,9 +75,8 @@ pub enum CoreInput {
     Layout(LayoutReport),
     /// One Library panel request (add-gui-library-panel design D2): the
     /// window content's `library` command. The core applies it through
-    /// [`App::apply_gui_library_command`], and the take-focus variant also
-    /// moves the core's `FocusStack` with the App's stored focus (design D4),
-    /// so the window paints the focus the App's key gates use.
+    /// [`App::apply_gui_library_command`], after the Panel-focus adapter sets
+    /// Library focus (design D3 of `gui-pointer-target-interaction`).
     Library(mbv::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
     /// window content's `settings` command. The core applies it through
@@ -549,30 +547,15 @@ impl CoreThread {
             return false;
         };
         match self.regions.resolve(point) {
-            Some(RegionTarget::Queue(target)) => {
-                // The TUI click's focus change (design D4): a click, double
-                // click, or right click on a queue row runs the TUI single
-                // click's effects, one of which focuses the Queue panel. The
-                // dispatched `QueueRowClick` and `QueueRowActivate` apply the
-                // App-side half; the core mirrors the panel focus on its own
-                // stack — whose derived focus the window paints and the next
-                // keys' routing reads — because the right click's
-                // `RowContextMenu` dispatch is the documented no-op. The pill
-                // and the wheel take no focus, exactly as the TUI's matching
-                // gestures do not.
-                if matches!(
-                    gesture,
-                    PointerGesture::Click { .. }
-                        | PointerGesture::DoubleClick(_)
-                        | PointerGesture::RightClick(_)
-                ) && matches!(
-                    target,
-                    QueueTargetId::Slot(_)
-                        | QueueTargetId::RowGrip(_)
-                        | QueueTargetId::RowActions(_)
-                ) {
-                    self.focus.set_panel_focus(PanelFocus::Queue);
-                }
+            Some(RegionTarget::Queue(_)) => {
+                // The TUI click's effects, run through the Queue leaf: a click,
+                // double click, or right click on a queue row dispatches the
+                // TUI's `QueueRowClick` and `QueueRowActivate`, which move the
+                // Queue's own cursor (the GUI's active row) and its marks. A
+                // press stores no focus (ADR 0040): the window has none, and
+                // the next key sets the core's Panel focus from its own
+                // target. The pill and the wheel take no focus, exactly as the
+                // TUI's matching gestures do not.
                 let Self {
                     app,
                     queue,
