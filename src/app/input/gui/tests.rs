@@ -684,4 +684,5 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     assert!(app.gui_overlay_is_open());
 }
 
+mod destination_tabs;
 mod target_chooser;

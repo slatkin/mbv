@@ -273,6 +273,20 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     let menu = library.sections.row_menu.cloned();
     let ui = library.ui.cloned();
 
+    // The destination reset (design D2 of `gui-pointer-target-interaction`):
+    // the core cannot reach the window state an open clears, so the panel
+    // runs the reset itself when the carried active tab changes — a press on a
+    // tab, a window digit, a router tab step, and the launch restore's open
+    // all change `current_tab`, so one check covers them all. The first value
+    // seen only sets the baseline.
+    let watched_list = library.sections.library_list;
+    let destination_reset = library.clone();
+    use_effect(move || {
+        let list = watched_list.cloned();
+        let current_tab = list.as_deref().and_then(|list| list.current_tab);
+        destination_reset.settle_destination_tab(current_tab);
+    });
+
     // The presented destination tabs and the active one (design D2): the
     // top bar paints them. The tabs are small and bounded by the tab count,
     // so they stay cloned (`share-gui-sections-by-rc` non-goal).

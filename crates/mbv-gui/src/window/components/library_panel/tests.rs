@@ -318,6 +318,7 @@ fn seed_idle_status(fixture: &mut Fixture) {
 
 pub(super) mod fixtures;
 
+mod destination_reset;
 mod destinations;
 mod overlay;
 mod press;

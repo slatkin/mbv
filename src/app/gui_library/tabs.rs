@@ -148,6 +148,44 @@ impl App {
         }
     }
 
+    /// The tab positions the GUI presents, Home first (design D2): Home's
+    /// position 0, then every presented destination's position in tab order.
+    /// The destination steps read this one list, so a step never lands on a
+    /// tab position that names no presented destination.
+    fn presented_tab_positions(&self) -> Vec<usize> {
+        let mut positions = vec![0];
+        positions.extend(
+            self.presented_destinations()
+                .into_iter()
+                .filter_map(|kind| self.gui_destination_position(kind)),
+        );
+        positions.sort_unstable();
+        positions.dedup();
+        positions
+    }
+
+    /// Step the active destination by `step` presented tabs, wrapping (design
+    /// D2): the GUI Client's `Tab` and `Shift+Tab`, which the window content
+    /// does not take. The step opens the destination it lands on through the
+    /// one open step, so a router step opens as a press on the tab does, and
+    /// it visits only the presented set — a destination the top bar does not
+    /// paint is never opened. A tab state outside that set (no catalog yet)
+    /// starts the step at Home.
+    pub(in crate::app) fn step_gui_library_tab(&mut self, step: isize) {
+        let positions = self.presented_tab_positions();
+        let current = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
+        let index = positions
+            .iter()
+            .position(|position| *position == current)
+            .unwrap_or(0);
+        let len = isize::try_from(positions.len()).unwrap_or(1);
+        let index = isize::try_from(index).unwrap_or(0);
+        let next = usize::try_from((index + step).rem_euclid(len)).unwrap_or(0);
+        self.open_gui_library_position(positions[next]);
+    }
+
     /// One presented destination's tab label (design D2): the library's
     /// display name, or the Feeds tab's fixed label, as the TUI's tab strip
     /// paints it. Every destination kind is named, so a new kind is a compile

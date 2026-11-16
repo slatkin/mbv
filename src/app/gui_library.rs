@@ -280,15 +280,7 @@ impl App {
         Self::log_library_command(&command);
         match command {
             GuiLibraryCommand::OpenDestination { position } => {
-                if self.presents_open_position(position) {
-                    self.set_library_tab(position);
-                    self.open_gui_active_destination();
-                } else {
-                    Self::log_ignored_library_command(
-                        "openDestination",
-                        format_args!("the position {position} names no presented destination"),
-                    );
-                }
+                self.open_gui_library_position(position);
             }
             GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
                 self.select_gui_library_collection(lib_idx, group_id);
@@ -473,6 +465,24 @@ impl App {
                 "search",
                 format_args!("{other:?} is no Search command"),
             ),
+        }
+    }
+
+    /// Open the destination a tab position names (design D2): the GUI's one
+    /// open step. The window's open-destination command and the keyboard
+    /// router's destination steps (the tab keys and a digit) all take it, so a
+    /// position resolves to the same destination state however it arrived. A
+    /// position that names no presented destination opens nothing — the top
+    /// bar paints no tab for it, so it is the absent digit key.
+    pub(in crate::app) fn open_gui_library_position(&mut self, position: usize) {
+        if self.presents_open_position(position) {
+            self.set_library_tab(position);
+            self.open_gui_active_destination();
+        } else {
+            Self::log_ignored_library_command(
+                "openDestination",
+                format_args!("the position {position} names no presented destination"),
+            );
         }
     }
 

@@ -245,6 +245,11 @@ pub struct LibraryState {
     /// The canvas tree's row memo (`state.ts`'s `musicRowsOf`, built over
     /// `row-memo.ts`).
     pub rows_memo: RowsMemo,
+    /// The active tab the carried Library list section last named (design D2
+    /// of `gui-pointer-target-interaction`), `None` before the first carried
+    /// section. The destination reset rides a change of this value, so the
+    /// reset does not depend on which surface opened the destination.
+    pub last_destination_tab: Signal<Option<Option<usize>>>,
 }
 
 impl std::fmt::Debug for LibraryState {
@@ -296,6 +301,7 @@ impl LibraryState {
             clock,
             pending_reveal_row: Signal::new(None),
             rows_memo: RowsMemo::default(),
+            last_destination_tab: Signal::new(None),
         }
     }
 
@@ -562,18 +568,47 @@ impl LibraryState {
             && self.library_detail_has_hero()
     }
 
-    /// Open the destination tab at `position`. The core's default row is not a
-    /// pick, so the Narrow arrangement shows the new destination's list and
-    /// paints no overlay Hero until the user picks a row.
+    /// Open the destination tab at `position`: the command goes to the core,
+    /// and the carried `current_tab` the core answers with runs the
+    /// destination reset ([`Self::settle_destination_tab`]), so this press and
+    /// every other way of opening a destination share one reset.
     pub fn open_destination(&self, position: usize) {
         self.link
             .library(GuiLibraryCommand::OpenDestination { position });
+    }
+
+    /// Reset the state an open leaves behind (design D2 of
+    /// `gui-pointer-target-interaction`): the core's default row is not a
+    /// pick, so the Narrow arrangement shows the new destination's list and
+    /// paints no overlay Hero, and an open row menu or item menu closes. The
+    /// core cannot reach this state, so the window runs this reset on the
+    /// carried `current_tab` change ([`Self::settle_destination_tab`]).
+    pub fn reset_for_destination(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.hero_dismissed = true;
             ui.item_menu_open = false;
             ui.row_menu = None;
         });
+    }
+
+    /// Run the destination reset when the carried active tab changes from the
+    /// last value the window saw (design D2 of
+    /// `gui-pointer-target-interaction`): a press on a tab, a window digit, a
+    /// router tab step, and the launch restore's open all change
+    /// `current_tab`, so they share this one reset. The first value seen only
+    /// sets the baseline, so a window start paints the restored destination as
+    /// the launch left it.
+    pub fn settle_destination_tab(&self, current_tab: Option<usize>) {
+        let mut last = self.last_destination_tab;
+        let previous = *last.peek();
+        if previous == Some(current_tab) {
+            return;
+        }
+        last.set(Some(current_tab));
+        if previous.is_some() {
+            self.reset_for_destination();
+        }
     }
 
     /// Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
