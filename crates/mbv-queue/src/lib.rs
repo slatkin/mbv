@@ -38,6 +38,9 @@ pub use state::{
 mod execution_sequence;
 #[doc(inline)]
 pub use execution_sequence::{ExecSlot, ExecutionSequence};
+mod start_slot;
+#[doc(inline)]
+pub use start_slot::{StartSlotObservation, start_slot_after};
 mod progress;
 pub(crate) use progress::apply_progress_to_queue_item;
 #[doc(inline)]
@@ -62,6 +65,36 @@ pub use progress::{ProgressObservation, SlotProgress};
 pub struct QueueSlotId(u64);
 
 impl QueueSlotId {
+    #[must_use]
+    pub fn raw(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_raw(raw: u64) -> Self {
+        Self(raw)
+    }
+}
+
+/// The identity of one Named queue, minted by the Owner and persisted with it.
+/// It is stable across renames and restarts and is never reused within one
+/// state file (design D3 of `gui-named-queues`).
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+pub struct NamedQueueId(u64);
+
+impl NamedQueueId {
     #[must_use]
     pub fn raw(self) -> u64 {
         self.0

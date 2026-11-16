@@ -171,18 +171,7 @@ impl QueueState {
     pub fn without_service_positions(&self) -> Self {
         let mut state = self.clone();
         for item in &mut state.items {
-            match item {
-                crate::QueueItem::Emby(emby) => emby.playback_position_ticks = 0,
-                crate::QueueItem::Audiobookshelf(crate::AudiobookshelfItem::Episode(episode)) => {
-                    episode.position_ticks = 0;
-                }
-                crate::QueueItem::Audiobookshelf(crate::AudiobookshelfItem::Book(book)) => {
-                    book.position_ticks = 0;
-                }
-                // Feed keeps its locally recorded position and a Twitch
-                // item keeps no playback state.
-                crate::QueueItem::Feed(_) | crate::QueueItem::Twitch(_) => {}
-            }
+            item.clear_service_positions();
         }
         state
     }
