@@ -48,18 +48,18 @@ holds that change.
 
 ## 5. Owner (`crates/mbv-daemon`)
 
-- [ ] 5.1 Add `NamedQueueStore` (ordered resting queues, current id, next queue id) to the Owner
+- [x] 5.1 Add `NamedQueueStore` (ordered resting queues, current id, next queue id) to the Owner
   core and advertise `named-queues` only for `DaemonRole::Local` (design D1, D3). Verify with one
   test that a packaged-role hello carries no `named-queues` capability.
-- [ ] 5.2 Track the current queue's start slot with the 2.2 rule at one write site, include it in
+- [x] 5.2 Track the current queue's start slot with the 2.2 rule at one write site, include it in
   `UnifiedQueueStateData.start_slot`, and make a Play with no items start the start slot or index
   0 (design D4). Write `docs/invariants/36-start-slot-follows-the-run.md`. Verify with tests for
   "A stop keeps the slot" and "A completion moves the start slot".
-- [ ] 5.3 Route queue edits by `queue`: `None` or the current id takes today's path; a resting id
+- [x] 5.3 Route queue edits by `queue`: `None` or the current id takes today's path; a resting id
   edits the store queue, persists, and answers the op with `NamedQueueSnapshot`; an unknown id is
   rejected (design D5). Verify with tests for "Append to a resting queue" and "An edit names a
   closed queue".
-- [ ] 5.4 Handle `NamedQueueCreate` (`Queue N` naming), `NamedQueueRename` (trim, refuse empty),
+- [x] 5.4 Handle `NamedQueueCreate` (`Queue N` naming), `NamedQueueRename` (trim, refuse empty),
   and `NamedQueueClose` (refuse the last queue; stop and delete the playing current queue and make
   the first remaining queue current without play), each broadcasting `NamedQueueList`. Verify with
   one `#[case]` table test for "A new queue is made", "The first new queue", and "A freed number
