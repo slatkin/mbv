@@ -17,9 +17,11 @@ use mbv_ctrl::{
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::Player;
-use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId};
+use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId, StartSlotObservation};
 use mbv_ws::WsEvent;
 
+mod named_queues;
+pub use named_queues::{NamedQueueStore, RestingNamedQueue};
 mod transition_dispatch;
 
 pub(super) use transition_dispatch::{
@@ -421,6 +423,10 @@ pub(super) struct DaemonPlayerOwner {
     /// Shuffle draws its permutation from the Owner's own rng, so a test seeds
     /// this field and drives the dispatch path deterministically.
     pub(super) rng: rand::rngs::SmallRng,
+    /// The Named queues that rest while another queue is current
+    /// (gui-named-queues design D1). The current queue's slots, source,
+    /// lineage, and run stay in `core`; this store holds the other queues.
+    pub(super) named_queues: NamedQueueStore,
 }
 
 impl Default for DaemonPlayerOwner {
@@ -434,6 +440,7 @@ impl Default for DaemonPlayerOwner {
             pending_emby_session_select: None,
             pending_cast_resolve: None,
             rng: rand::rngs::SmallRng::from_rng(&mut rand::rng()),
+            named_queues: NamedQueueStore::first_start(),
         }
     }
 }
@@ -485,11 +492,31 @@ pub(crate) struct SharedQueueState {
     /// authority. `cast/connect.rs` `broadcast_output_change` is the single
     /// write site: any new output transition must update it there.
     pub(super) playback_output: Arc<Mutex<mbv_ctrl::OutputState>>,
+    /// The current queue's start slot (gui-named-queues design D4): the slot a
+    /// Play of the queue starts, stored with no position. It sits beside the
+    /// observed active slot because the run observations are what move it.
+    /// [`SharedQueueState::note_start_slot`] is its single write site.
+    pub(super) start_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
 impl SharedQueueState {
     pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
         *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
+    }
+
+    /// The current queue's start slot as last observed (gui-named-queues design
+    /// D4). `None` when the queue has none, so a Play starts its first slot.
+    pub(crate) fn start_slot(&self) -> Option<QueueSlotId> {
+        *self.start_slot.lock().unwrap()
+    }
+
+    /// The one write site for the current queue's start slot (gui-named-queues
+    /// design D4): every run or queue-edit observation that moves it comes
+    /// through here, and `mbv_queue::start_slot_after` owns the rule. `queue`
+    /// is the queue as it stands after `observation`.
+    pub(crate) fn note_start_slot(&self, queue: &PlaybackQueue, observation: StartSlotObservation) {
+        let mut start_slot = self.start_slot.lock().unwrap();
+        *start_slot = mbv_queue::start_slot_after(queue, *start_slot, observation);
     }
 }
 

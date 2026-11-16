@@ -21,6 +21,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         None,
+        None,
         QueueTransport {
             abs_episode: true,
             abs_book: false,
@@ -39,6 +40,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         None,
+        None,
         QueueTransport {
             abs_episode: true,
             abs_book: false,
@@ -52,6 +54,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         &queue,
         &source,
         mbv_queue::QueueLineage::default(),
+        None,
         None,
         None,
         None,
@@ -101,6 +104,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
         &queue,
         &source,
         mbv_queue::QueueLineage::default(),
+        None,
         None,
         None,
         None,

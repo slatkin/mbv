@@ -257,6 +257,7 @@ fn initial_queue_state_json(
         &source,
         lineage,
         observed_active_slot,
+        shared_queue.start_slot(),
         None,
         None,
         hello.capabilities.queue_transport,
@@ -430,27 +431,20 @@ impl CtrlClientSession {
     }
 }
 
-pub(crate) fn spawn_ctrl_client(
-    stream: SocketStream,
-    transport: CtrlTransport,
-    merged_tx: mpsc::Sender<DaemonEvent>,
-    ctrl_clients: ClientRegistry,
-    control_credential: Option<String>,
-    player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
-    shared_queue: SharedQueueState,
+/// The daemon Hello this runtime advertises. Built from the runtime's
+/// startup-decided capabilities and its role, so one function decides what a
+/// Client can negotiate with the Owner it just found.
+///
+/// `named-queues` is advertised only by [`DaemonRole::Local`]: a packaged
+/// `mbvd` keeps one queue and offers no create, rename, or close of its queues
+/// (gui-named-queues design D3, spec `named-queues` "Named queues are
+/// local-Owner only").
+fn daemon_hello(
     caps: DaemonHelloCaps,
     role: DaemonRole,
-    owner_settings: OwnerSettingsReader,
-) {
-    let peer = ctrl_peer_identity(&stream);
-    let _ = stream.set_read_timeout(Some(CTRL_HELLO_DEADLINE));
-    let _ = stream.set_write_timeout(Some(CTRL_WRITE_TIMEOUT));
-    let Ok(writer_stream) = stream.try_clone() else {
-        return;
-    };
-    let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-    let mut daemon_hello = CtrlHello::current();
+    control_credential: Option<&str>,
+) -> mbv_ctrl::CtrlHello {
+    let mut daemon_hello = mbv_ctrl::CtrlHello::current();
     // The Owner runs Owner actions (tray-pin-swap design D7); a Client reads
     // this capability off the server Hello to report a restart requirement
     // instead of sending `RunOwnerAction` at an Owner that cannot run it.
@@ -480,6 +474,36 @@ pub(crate) fn spawn_ctrl_client(
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
     }
+    // Only the Local Owner holds Named queues.
+    if role == DaemonRole::Local {
+        daemon_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_NAMED_QUEUES.to_string());
+    }
+    daemon_hello
+}
+
+pub(crate) fn spawn_ctrl_client(
+    stream: SocketStream,
+    transport: CtrlTransport,
+    merged_tx: mpsc::Sender<DaemonEvent>,
+    ctrl_clients: ClientRegistry,
+    control_credential: Option<String>,
+    player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
+    shared_queue: SharedQueueState,
+    caps: DaemonHelloCaps,
+    role: DaemonRole,
+    owner_settings: OwnerSettingsReader,
+) {
+    let peer = ctrl_peer_identity(&stream);
+    let _ = stream.set_read_timeout(Some(CTRL_HELLO_DEADLINE));
+    let _ = stream.set_write_timeout(Some(CTRL_WRITE_TIMEOUT));
+    let Ok(writer_stream) = stream.try_clone() else {
+        return;
+    };
+    let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
+
+    let daemon_hello = daemon_hello(caps, role, control_credential.as_deref());
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         let _ = ev_tx.send(CtrlOutbound::Event(hello_json));
     }
@@ -581,6 +605,27 @@ mod tests {
         let mut hello = CtrlHello::current();
         hello.capabilities = caps.iter().map(|cap| (*cap).to_string()).collect();
         hello
+    }
+
+    /// Contract: spec `named-queues` "Named queues are local-Owner only" and
+    /// design D3 — only the local Owner advertises `named-queues`. A Client
+    /// that connects to a packaged `mbvd` sees one queue and no create, rename,
+    /// or close of peer queues.
+    #[test]
+    fn only_the_local_owner_advertises_named_queues() {
+        let packaged = daemon_hello(
+            DaemonHelloCaps::default(),
+            DaemonRole::Packaged,
+            Some("control-token"),
+        );
+        let local = daemon_hello(
+            DaemonHelloCaps::default(),
+            DaemonRole::Local,
+            Some("control-token"),
+        );
+
+        assert!(!packaged.supports_named_queues());
+        assert!(local.supports_named_queues());
     }
 
     /// A registry with one local Client attached, so `has_driver` is true and

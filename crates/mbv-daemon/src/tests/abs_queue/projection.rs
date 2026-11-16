@@ -24,6 +24,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
         Some(observed),
         None,
         None,
+        None,
         QueueTransport {
             abs_episode: true,
             abs_book: true,
@@ -63,6 +64,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         None,
         None,
         None,
+        None,
         QueueTransport {
             abs_episode: true,
             abs_book: true,
@@ -83,6 +85,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         &queue,
         &source,
         mbv_queue::QueueLineage::default(),
+        None,
         None,
         None,
         None,

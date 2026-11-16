@@ -105,6 +105,7 @@ impl CtrlContext<'_> {
             queue: &self.owner.core.queue,
             source: &self.owner.core.source,
             lineage,
+            start_slot: self.shared_queue.start_slot(),
             op: &self.op,
         }
     }
@@ -126,6 +127,7 @@ struct RejectContext<'a> {
     queue: &'a PlaybackQueue,
     source: &'a mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
+    start_slot: Option<QueueSlotId>,
     op: &'a std::cell::Cell<Option<QueueOpId>>,
 }
 
@@ -140,6 +142,7 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
         queue,
         source,
         lineage,
+        start_slot,
         op,
     } = *ctx;
     if let Some(op) = op.take() {
@@ -166,6 +169,7 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
             source,
             lineage,
             queue.active_slot_id(),
+            start_slot,
             None,
             None,
             queue_transport,
@@ -354,6 +358,7 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
         &ctx.owner.core.source,
         *ctx.shared_queue.lineage.lock().unwrap(),
         *ctx.shared_queue.observed_active_slot.lock().unwrap(),
+        ctx.shared_queue.start_slot(),
         in_flight,
         queued_latest,
         queue_transport,

@@ -73,3 +73,4 @@ mod emby_session_status;
 mod emby_session_support;
 mod emby_session_transport;
 mod r#loop;
+mod named_queues;

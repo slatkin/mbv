@@ -10,122 +10,23 @@ use crate::LocalStartupError;
 use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
-use mbv_ctrl::{AttachedClientsCell, CtrlEvent, PlaybackGeneration};
+use mbv_ctrl::{AttachedClientsCell, CtrlEvent};
 use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
-use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 use std::convert::Infallible;
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub(crate) fn playback_run_identity_is_current(
-    run_identity: PlaybackGeneration,
-    player: &Player,
-) -> bool {
-    run_identity == player.status.lock().unwrap().sequence_generation
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct ConsumePolicy {
-    pub videos: bool,
-    pub audio: bool,
-}
-
-pub(super) fn apply_track_completed_observation(
-    owner: &mut DaemonPlayerOwner,
-    player: &Player,
-    shared_queue: &SharedQueueState,
-    run_identity: PlaybackGeneration,
-    slot_id: QueueSlotId,
-    position_ticks: i64,
-    was_played: bool,
-    consume: bool,
-    consume_policy: ConsumePolicy,
-) -> bool {
-    if !playback_run_identity_is_current(run_identity, player) {
-        return false;
-    }
-    record_completed_slot(
-        owner,
-        shared_queue,
-        slot_id,
-        position_ticks,
-        was_played,
-        consume,
-        consume_policy,
-    )
-}
-
-/// The completion recording every natural end shares (cast-owner-output row
-/// 6.3, design D7's Finished row): progress into the slot's canonical state,
-/// the consume rules, and the shared snapshot publish. Local playback reaches it through
-/// [`apply_track_completed_observation`]'s run-identity guard; a Cast natural
-/// end records through it directly, because a receiver's end report carries no
-/// local run identity to guard.
-pub(super) fn record_completed_slot(
-    owner: &mut DaemonPlayerOwner,
-    shared_queue: &SharedQueueState,
-    slot_id: QueueSlotId,
-    position_ticks: i64,
-    was_played: bool,
-    consume: bool,
-    consume_policy: ConsumePolicy,
-) -> bool {
-    if let Some(slot) = owner.core.queue.slot(slot_id) {
-        let observation = ProgressObservation::Completed {
-            position_ticks,
-            played: was_played,
-        };
-        owner.core.apply_completion_progress(
-            slot_id,
-            observation.position_to_record(&slot.item),
-            observation.played(),
-        );
-    }
-    if owner.core.consume_completed_slot(
-        slot_id,
-        consume,
-        consume_policy.videos,
-        consume_policy.audio,
-    ) {
-        tracing::info!(name: "daemon.queue_slot.consumed", target: "consume", slot = ?slot_id, "completed track consumed");
-    }
-    shared_queue.publish_observed(&owner.core);
-    true
-}
-
-pub(super) fn apply_stopped_observation(
-    owner: &mut DaemonPlayerOwner,
-    player: &Player,
-    run_identity: PlaybackGeneration,
-    slot_id: Option<QueueSlotId>,
-    position_ticks: i64,
-    was_played: bool,
-) -> Option<bool> {
-    if !playback_run_identity_is_current(run_identity, player) {
-        return None;
-    }
-    let Some(slot_id) = slot_id else {
-        return Some(false);
-    };
-    let Some(slot) = owner.core.queue.slot(slot_id) else {
-        return Some(false);
-    };
-    let observation = ProgressObservation::Stopped {
-        position_ticks,
-        played: was_played,
-    };
-    owner.core.apply_completion_progress(
-        slot_id,
-        observation.position_to_record(&slot.item),
-        observation.played(),
-    );
-    Some(true)
-}
+mod observations;
+pub(super) use observations::{
+    ConsumePolicy, apply_stopped_observation, apply_track_completed_observation,
+    record_completed_slot,
+};
 
 pub(super) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
@@ -449,11 +350,29 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         // A new owner starts on local playback (cast-owner-output spec
         // "Owner starts").
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
+        // A restored queue resumes where it left off: the position its earlier
+        // Owner saved is the start slot a Play of it begins at (gui-named-queues
+        // design D4). A fresh queue has none, so a Play starts its first slot.
+        start_slot: Arc::new(Mutex::new(initial_queue.active_slot_id())),
     };
     let owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),
         ..Default::default()
     };
+    // The Named queues the Local Owner holds, stated once before it serves its
+    // first Client (gui-named-queues design D1). A packaged `mbvd` holds none:
+    // it advertises no `named-queues` and its store is never used.
+    if role == DaemonRole::Local {
+        tracing::info!(
+            name: "daemon.named_queues.ready",
+            target: "queue",
+            current = ?owner.named_queues.current,
+            current_name = %owner.named_queues.current_name,
+            next_queue_id = ?owner.named_queues.next_queue_id,
+            resting = owner.named_queues.resting.len(),
+            "the local Owner holds its Named queues"
+        );
+    }
     (owner, shared_queue)
 }
 

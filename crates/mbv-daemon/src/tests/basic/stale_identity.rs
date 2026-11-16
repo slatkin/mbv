@@ -111,6 +111,7 @@ fn stale_stopped_run_observation_is_rejected() {
     assert_eq!(
         apply_stopped_observation(
             &mut stopped_owner,
+            &shared_queue,
             &player,
             old_run,
             Some(stopped_slot),
@@ -131,6 +132,7 @@ fn stale_stopped_run_observation_is_rejected() {
     assert_eq!(
         apply_stopped_observation(
             &mut stopped_owner,
+            &shared_queue,
             &player,
             current_run,
             Some(stopped_slot),
