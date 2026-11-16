@@ -163,6 +163,11 @@ fn stylesheet_probe() -> Element {
                     class: "flex w-full items-center overflow-hidden text-left whitespace-nowrap",
                     "Ctrl K"
                 }
+                button { id: "probe-seek",
+                    "type": "button",
+                    "data-target": "seekBack",
+                    "−10"
+                }
             }
             div { id: "probe-hover",
                 class: "hover:bg-[var(--canvas-border)]",
@@ -282,5 +287,27 @@ fn a_hover_utility_paints_under_the_pointer() {
         sheet.hovered("#probe-hover", "background-color"),
         "rgb(61, 72, 77)",
         "the hovered element paints the canvas border"
+    );
+}
+
+/// Contract (2026-11-16): the transport's seek labels answer the pointer in
+/// the accent. The seek buttons rest in the role colour and turn
+/// `--canvas-accent` under the pointer, so a press target reads as live; the
+/// rule is the stylesheet's, not an inline style, so the hover cannot lose
+/// to the button's own paint. It fails when the rule drops from the sheet or
+/// stops matching — the inert label look the buttons must not go back to.
+#[test]
+fn the_transport_seek_labels_answer_the_pointer_in_the_accent() {
+    let mut sheet = Stylesheet::built();
+    let accent = "rgb(167, 192, 128)";
+    assert_ne!(
+        sheet.resolved("#probe-seek", "color"),
+        accent,
+        "the resting label keeps the role colour"
+    );
+    assert_eq!(
+        sheet.hovered("#probe-seek", "color"),
+        accent,
+        "the hovered label paints the canvas accent"
     );
 }

@@ -45,8 +45,7 @@ use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::art_image::{ArtEvents, ArtImage};
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{
-    Cast, Check, ChevronDown, Maximize2, Monitor, Pause, Play, RotateCcw, RotateCw, SkipBack,
-    SkipForward,
+    Cast, Check, ChevronDown, Maximize2, Monitor, Pause, Play, SkipBack, SkipForward,
 };
 use crate::window::layout::LayoutContribution;
 use crate::window::layout::{LayoutEpoch, LayoutKey, LayoutReporter, element_region};
@@ -295,9 +294,8 @@ pub fn QueuePlaybackPanel() -> Element {
                     // labels at 42 px. The block's own rect is the
                     // `seekbar` region; a press resolves there in the core.
                     Scrubber { seekbar_mounted }
-                    // The transport (`main` audits 13–14): previous, the
-                    // seek buttons around the 56 px round play/pause
-                    // control, and next, on the canvas gap and insets. The
+                    // The transport (`main` audits 13–14): previous, `−10`,
+                    // the 56 px round play/pause control, `+30`, and next, on the canvas gap and insets. The
                     // spec's list carries no
                     // stop control, so the canvas panel paints none.
                     TransportRow {
@@ -433,9 +431,8 @@ impl std::fmt::Debug for TransportRowProps {
     }
 }
 
-/// The transport row: previous, a back-10 seek button, the 56 px round
-/// play/pause control, a forward-30 seek button, and next, on the canvas gap
-/// and insets.
+/// The transport row: previous, `−10`, the 56 px round play/pause control,
+/// `+30`, and next, on the canvas gap and insets.
 #[component]
 fn TransportRow(mut props: TransportRowProps) -> Element {
     let glyph = glyph_color(props.availability.previous, GuiRole::TextPrimary);
@@ -455,24 +452,13 @@ fn TransportRow(mut props: TransportRowProps) -> Element {
             }
             button {
                 "type": "button",
-                class: "flex items-center justify-center",
-                style: "width: 44px; height: 44px; color: {role_var(GuiRole::TextPrimary)};",
+                class: "flex items-center justify-center font-mono",
+                style: "width: 44px; height: 44px; font-size: 11px;",
                 "data-target": "seekBack",
                 "aria-label": "Back 10 seconds",
                 title: "Back 10 s",
                 onmounted: move |event| props.seek_back_mounted.set(Some(event)),
-                // The seek glyph: the rotate arrow with the seconds inside,
-                // the skip pattern a player reads as seek (2026-11-16).
-                div {
-                    class: "relative flex items-center justify-center",
-                    style: "width: 22px; height: 22px;",
-                    RotateCcw { size: 22, color: "{role_var(GuiRole::TextPrimary)}" },
-                    span {
-                        class: "absolute inset-0 flex items-center justify-center font-mono",
-                        style: "font-size: 7px; font-weight: 700;",
-                        "10"
-                    }
-                }
+                "−10"
             }
             button {
                 "type": "button",
@@ -497,22 +483,13 @@ fn TransportRow(mut props: TransportRowProps) -> Element {
             }
             button {
                 "type": "button",
-                class: "flex items-center justify-center",
-                style: "width: 44px; height: 44px; color: {role_var(GuiRole::TextPrimary)};",
+                class: "flex items-center justify-center font-mono",
+                style: "width: 44px; height: 44px; font-size: 11px;",
                 "data-target": "seekForward",
                 "aria-label": "Forward 30 seconds",
                 title: "Forward 30 s",
                 onmounted: move |event| props.seek_forward_mounted.set(Some(event)),
-                div {
-                    class: "relative flex items-center justify-center",
-                    style: "width: 22px; height: 22px;",
-                    RotateCw { size: 22, color: "{role_var(GuiRole::TextPrimary)}" },
-                    span {
-                        class: "absolute inset-0 flex items-center justify-center font-mono",
-                        style: "font-size: 7px; font-weight: 700;",
-                        "30"
-                    }
-                }
+                "+30"
             }
             button {
                 "type": "button",
