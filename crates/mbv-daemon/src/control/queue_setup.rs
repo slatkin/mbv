@@ -269,8 +269,10 @@ pub(super) fn handle_queue_source_update(
 /// Installs the replacement queue on the owner core (design D2): the queue
 /// is rebuilt from the admitted slots with the start slot active, the new
 /// source is recorded, the shared lineage is minted, and any in-flight slot
-/// jump is reset.
-fn install_replaced_queue(
+/// jump is reset. A swap installs a Named queue's own slots through it
+/// (`gui-named-queues` design D2), so the resting queue's slot identities
+/// survive becoming current.
+pub(super) fn install_replaced_queue(
     ctx: &mut CtrlContext<'_>,
     slots: Vec<(QueueSlotId, QueueItem)>,
     next_cursor: usize,
@@ -362,20 +364,14 @@ pub(super) fn handle_queue_replace(
     new_source: mbv_queue::QueueSource,
     named: Option<NamedQueueId>,
 ) {
-    // Replacing a resting queue makes it current and plays it (task 5.5): until
-    // the swap lands, the command is refused rather than replacing the current
-    // queue the Client did not name.
-    match named_queue::edit_target(ctx, named) {
-        Some(NamedQueueTarget::Current) => {}
-        Some(NamedQueueTarget::Resting(_)) => {
-            named_queue::reject(
-                ctx,
-                "the named queue is not the current queue; replace skipped",
-            );
-            return;
-        }
+    // A replace that names a resting queue swaps that queue in and installs the
+    // command's slots in place of its own (gui-named-queues design D2), so the
+    // replace never lands on a queue the Client did not name.
+    let resting = match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => None,
+        Some(NamedQueueTarget::Resting(index)) => Some(index),
         None => return,
-    }
+    };
     let has_emby = ctx.has_emby();
     let (slots, next_cursor) =
         match prepare_replacement_slots(ctx, items, slots, start_idx, has_emby) {
@@ -386,7 +382,27 @@ pub(super) fn handle_queue_replace(
             }
         };
     let except_op_client = ctx.except_op_client();
+    // Nothing changes before every admission above passed, so a rejected replace
+    // leaves the current queue on its playhead.
+    if let Some(index) = resting {
+        named_queue::replace_with_resting(ctx, index);
+    }
     install_replaced_queue(ctx, slots, next_cursor, new_source);
+    if resting.is_some() {
+        named_queue::finish_swap(ctx);
+    }
+    start_replaced_queue(ctx, except_op_client, next_cursor, start_position_secs);
+}
+
+/// Starts the queue [`install_replaced_queue`] just installed on the output that
+/// plays it (design D2): the Cast receiver and the Emby Session load only the
+/// start slot, and the local run takes the whole queue from it.
+pub(super) fn start_replaced_queue(
+    ctx: &mut CtrlContext<'_>,
+    except_op_client: Option<CtrlClientId>,
+    next_cursor: usize,
+    start_position_secs: Option<f64>,
+) {
     // A new queue invalidates the previous playback observation (design
     // D2): clear it on both the shared snapshot and the owner core so
     // Next/Previous fall back to the new queue's active slot until the

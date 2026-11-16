@@ -6,13 +6,14 @@
 //! stay on the Owner core, so an edit that names it (or names no queue) takes
 //! the existing queue path (design D5).
 
+use super::queue_setup::{install_replaced_queue, start_replaced_queue};
 use super::{
-    CtrlContext, DaemonEvent, DaemonPlayerOwner, PlaybackQueue, PlayerCommand, QueueSlotId,
-    RejectContext, SharedQueueState, broadcast_queue_state, handle_stop, reject_command, send_to,
-    unified_queue_state_for_peer,
+    CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PlaybackQueue, PlayerCommand,
+    QueueSlotId, RejectContext, SharedQueueState, broadcast_queue_state, dispatch_slot_jump,
+    handle_stop, reject_command, send_to, unified_queue_state_for_peer,
 };
 use crate::broadcast;
-use crate::core::{NamedQueueTarget, RestingNamedQueue};
+use crate::core::{JumpOrigin, NamedQueueTarget, RestingNamedQueue};
 use mbv_ctrl::{CtrlEvent, NamedQueueEntry, QueueOpOutcome, UnifiedQueueStateData};
 use mbv_queue::{
     NamedQueueId, QueueItem, QueueMutationResult, QueueSource, RemoveSlotResult,
@@ -22,6 +23,14 @@ use mbv_queue::{
 /// The reason an edit names a queue the Owner no longer holds (design D5, spec
 /// `named-queues` "Queue edits name their queue").
 const UNKNOWN_QUEUE: &str = "named queue not found; edit skipped";
+
+/// The reason a play names a slot its queue does not hold.
+const MISSING_SLOT: &str = "slot not found; play skipped";
+
+/// The reason a play names a queue with no slot to start (spec `named-queues`
+/// "Play starts a queue at its start slot": a request to play an empty queue
+/// changes nothing).
+const EMPTY_QUEUE: &str = "the named queue is empty; play skipped";
 
 /// The reason a rename carries no name once its surrounding whitespace is
 /// trimmed (spec `named-queues` "An empty name is refused").
@@ -321,15 +330,192 @@ pub(super) fn handle_close(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
 }
 
 /// `CtrlCmd::NamedQueuePlay`: make one Named queue current and start it (spec
-/// `named-queues` "Play starts a queue at its start slot"). The swap that parks
-/// the queue that is current and installs the named one is task 5.5's; until it
-/// lands, the Owner refuses the request by name rather than leaving the sending
-/// Client without an answer or telling it a play it did not get applied.
-pub(super) fn handle_play(ctx: &CtrlContext<'_>) {
-    reject(
-        ctx,
-        "playing a named queue is not handled yet; play skipped",
+/// `named-queues` "Play starts a queue at its start slot"). Naming the current
+/// queue starts it in place; naming a resting queue swaps it in first (design
+/// D2). A request to play an empty queue changes nothing.
+pub(super) fn handle_play(ctx: &mut CtrlContext<'_>, queue: NamedQueueId, slot: Option<u64>) {
+    let Some(target) = edit_target(ctx, Some(queue)) else {
+        return;
+    };
+    match target {
+        NamedQueueTarget::Current => play_current(ctx, slot),
+        NamedQueueTarget::Resting(index) => play_named_resting(ctx, index, slot),
+    }
+}
+
+/// Starts the current queue at `slot`, or at its start slot, or at its first
+/// slot when it has neither (spec `named-queues` "Play starts a queue at its
+/// start slot").
+fn play_current(ctx: &mut CtrlContext<'_>, slot: Option<u64>) {
+    let start = if let Some(raw) = slot {
+        let requested = QueueSlotId::from_raw(raw);
+        if ctx.owner.core.queue.slot(requested).is_none() {
+            reject(ctx, MISSING_SLOT);
+            return;
+        }
+        requested
+    } else {
+        let start = start_slot_or_first(&ctx.owner.core.queue, ctx.shared_queue.start_slot());
+        let Some(start) = start else {
+            reject(ctx, EMPTY_QUEUE);
+            return;
+        };
+        start
+    };
+    start_current_queue(ctx, start);
+}
+
+/// Starts the resting queue at `index` at `slot`, or at its own start slot, or
+/// at its first slot when it has neither (design D2).
+fn play_named_resting(ctx: &mut CtrlContext<'_>, index: usize, slot: Option<u64>) {
+    if let Some(raw) = slot {
+        play_resting(ctx, index, QueueSlotId::from_raw(raw));
+        return;
+    }
+    let start = ctx
+        .owner
+        .named_queues
+        .resting
+        .get(index)
+        .and_then(|resting| start_slot_or_first(&resting.queue, resting.start_slot));
+    match start {
+        Some(start) => play_resting(ctx, index, start),
+        None => reject(ctx, EMPTY_QUEUE),
+    }
+}
+
+/// The slot a Play of `queue` starts when the Client names none (design D4):
+/// the start slot while the queue still holds it, else the first slot. `None`
+/// when the queue is empty.
+fn start_slot_or_first(
+    queue: &PlaybackQueue,
+    start_slot: Option<QueueSlotId>,
+) -> Option<QueueSlotId> {
+    start_slot
+        .filter(|slot_id| queue.slot(*slot_id).is_some())
+        .or_else(|| queue.slots().first().map(|slot| slot.slot_id))
+}
+
+/// Starts the current queue at `start`: its run already holds this queue's
+/// slots, so the slot is a jump, exactly as `UnifiedQueuePlaySlot` plays a slot
+/// of the current queue.
+fn start_current_queue(ctx: &mut CtrlContext<'_>, start: QueueSlotId) {
+    let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
+    let except_op_client = ctx.except_op_client();
+    dispatch_slot_jump(
+        &mut DaemonOwnerContext {
+            player: ctx.player,
+            client: ctx.client,
+            owner: &mut *ctx.owner,
+            shared_queue: ctx.shared_queue,
+            ctrl_clients: ctx.ctrl_clients,
+            merged_tx: ctx.merged_tx,
+            audiobookshelf: ctx.audiobookshelf,
+        },
+        JumpOrigin::Ctrl(ctx.client_id),
+        mbv_player::transition::Transition::new(request_id, generation, start),
+        except_op_client,
     );
+}
+
+/// The swap of design D2 for a play (spec `named-queues` "Play starts a queue
+/// at its start slot"): parks the current queue, installs the resting queue at
+/// `index` with its slot identities kept, and starts `start`. A `start` the
+/// queue does not hold is rejected and nothing changes.
+pub(super) fn play_resting(ctx: &mut CtrlContext<'_>, index: usize, start: QueueSlotId) {
+    let next_cursor = ctx
+        .owner
+        .named_queues
+        .resting
+        .get(index)
+        .and_then(|resting| resting.queue.slot_index(start));
+    let Some(next_cursor) = next_cursor else {
+        reject(ctx, MISSING_SLOT);
+        return;
+    };
+    let except_op_client = ctx.except_op_client();
+    let Some(taken) = swap_in(ctx, index) else {
+        reject(ctx, UNKNOWN_QUEUE);
+        return;
+    };
+    let RestingNamedQueue { queue, source, .. } = taken;
+    let slots: Vec<(QueueSlotId, QueueItem)> = queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.clone()))
+        .collect();
+    install_replaced_queue(ctx, slots, next_cursor, source);
+    finish_swap(ctx);
+    start_replaced_queue(ctx, except_op_client, next_cursor, None);
+}
+
+/// The swap of design D2 for a replace: parks the current queue and makes the
+/// resting queue at `index` the current queue, so the replace installs its own
+/// slots in place of that queue's (design D2).
+pub(super) fn replace_with_resting(ctx: &mut CtrlContext<'_>, index: usize) {
+    // The command's items replace the taken queue's slots, so only its identity
+    // and name are used: they are the current queue's from here on.
+    if swap_in(ctx, index).is_none() {
+        reject(ctx, UNKNOWN_QUEUE);
+    }
+}
+
+/// The swap of design D2, steps 1 to 3: stops the run, parks the current queue
+/// into the store, and makes the resting queue at `index` the current queue. Its
+/// content goes back to the caller, which installs the slots it wants as the
+/// current queue's. `None` when the store holds no queue at `index`: nothing
+/// changed then.
+fn swap_in(ctx: &mut CtrlContext<'_>, index: usize) -> Option<RestingNamedQueue> {
+    let taken = ctx.owner.named_queues.take_resting(index)?;
+    park_current(ctx);
+    ctx.owner.named_queues.current = taken.id;
+    ctx.owner.named_queues.current_name.clone_from(&taken.name);
+    Some(taken)
+}
+
+/// The swap of design D2, steps 1 and 2: stops the run, then moves the current
+/// queue's slots, source, lineage, and start slot into the store as a resting
+/// queue. The Owner core is left with an empty queue for the caller to replace.
+fn park_current(ctx: &mut CtrlContext<'_>) {
+    // Step 1: the run stops. A stop keeps the last observed active slot as the
+    // start slot, so the parked queue resumes where it stopped (design D4).
+    handle_stop(ctx);
+    ctx.shared_queue
+        .note_start_slot(&ctx.owner.core.queue, StartSlotObservation::Stopped);
+    // Step 2: the queue's state moves into the store, and the store's own
+    // current identity and name stay put until the caller installs the queue the
+    // swap took out of it.
+    let start_slot = ctx.shared_queue.start_slot();
+    let lineage = *ctx.shared_queue.lineage.lock().unwrap();
+    let mint = ctx.owner.core.queue.revision_mint();
+    let queue = std::mem::replace(
+        &mut ctx.owner.core.queue,
+        PlaybackQueue::from_queue_items(Vec::new(), None, mint),
+    );
+    let source = std::mem::replace(&mut ctx.owner.core.source, QueueSource::Unknown);
+    let parked = RestingNamedQueue {
+        id: ctx.owner.named_queues.current,
+        name: std::mem::take(&mut ctx.owner.named_queues.current_name),
+        queue,
+        source,
+        lineage,
+        start_slot,
+    };
+    ctx.owner.named_queues.resting.push(parked);
+}
+
+/// The swap of design D2 completes once the new current queue's content is on
+/// the Owner core: the install starts the queue at the slot it made active, so
+/// that slot is the queue's start slot while it plays (design D4). Every Client
+/// learns the new current queue, and the store is marked for persistence.
+pub(super) fn finish_swap(ctx: &mut CtrlContext<'_>) {
+    let start_slot = ctx.owner.core.queue.active_slot_id();
+    ctx.shared_queue.note_start_slot(
+        &ctx.owner.core.queue,
+        StartSlotObservation::Installed { start_slot },
+    );
+    broadcast_list(ctx);
+    persist(ctx);
 }
 
 /// The index of the resting queue holding the lowest identity: queue order is

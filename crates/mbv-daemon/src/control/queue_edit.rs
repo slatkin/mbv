@@ -357,16 +357,13 @@ pub(super) fn handle_queue_play_slot(
     slot_id: u64,
     named: Option<NamedQueueId>,
 ) {
-    // Playing a row of a resting queue makes that queue current (task 5.5):
-    // until the swap lands, the command is refused rather than playing a slot
-    // of the current queue the Client did not name.
+    // Playing a row of a resting queue swaps that queue in and starts the row
+    // (gui-named-queues design D2): the swap parks the queue that was current,
+    // so the row that plays is the one the Client named.
     match named_queue::edit_target(ctx, named) {
         Some(NamedQueueTarget::Current) => {}
-        Some(NamedQueueTarget::Resting(_)) => {
-            named_queue::reject(
-                ctx,
-                "the named queue is not the current queue; play skipped",
-            );
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::play_resting(ctx, index, QueueSlotId::from_raw(slot_id));
             return;
         }
         None => return,

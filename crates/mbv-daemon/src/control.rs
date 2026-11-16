@@ -523,7 +523,9 @@ fn dispatch_named_queue_command(cmd: CtrlCmd, ctx: &mut CtrlContext<'_>) {
             named_queue::handle_rename(ctx, queue, &name);
         }
         CtrlCmd::NamedQueueClose { queue, .. } => named_queue::handle_close(ctx, queue),
-        CtrlCmd::NamedQueuePlay { .. } => named_queue::handle_play(ctx),
+        CtrlCmd::NamedQueuePlay { queue, slot, .. } => {
+            named_queue::handle_play(ctx, queue, slot);
+        }
         cmd @ CtrlCmd::NamedQueueShow { .. } => log_ignored_named_queue_command(&cmd),
         _ => {}
     }

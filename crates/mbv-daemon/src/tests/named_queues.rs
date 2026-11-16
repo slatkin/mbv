@@ -261,7 +261,6 @@ fn persisted_named_queues(merged_rx: &mpsc::Receiver<DaemonEvent>) -> mbv_config
     }
 }
 
-/// Contract: spec `named-queues` "Queue edits name their queue" — an append that
 /// names a resting queue lands in that queue, playback does not change, and the
 /// edit is answered with the queue's own snapshot (design D5).
 #[test]
@@ -596,3 +595,6 @@ fn the_last_queue_does_not_close() {
         "a refused close persists nothing"
     );
 }
+
+// The swap that plays or replaces a resting queue (design D2).
+mod swap;
