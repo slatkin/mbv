@@ -29,6 +29,7 @@ use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_h
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Feeds Hero (the `LibraryFeedsHero` props, narrowed
@@ -194,6 +195,7 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                     label: "Entries",
                     hook: "feeds-entry",
                     noun: "Entry",
+                    pointer_list: PointerList::Workspace,
                     rows: entry_rows,
                     cursor: detail.selected.clone(),
                     actions: row_actions,

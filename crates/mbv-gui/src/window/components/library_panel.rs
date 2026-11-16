@@ -64,6 +64,7 @@ use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDi
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerZone;
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::SectionRef;
 
@@ -332,6 +333,11 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             style: "background: var(--canvas-library-column);",
             "data-library-panel": "",
             "data-library-arrangement": arrangement.name(),
+            // The Library zone (`gui-pointer-target-interaction` D1): every key
+            // whose pointer rests anywhere in this column is the Library's,
+            // and the row and list markers under it name what the key acts
+            // on.
+            "data-pointer-zone": PointerZone::Library.token(),
             onpointerdown: move |_| press_outside_menu(&press_library),
             LibraryTopBar {
                 tabs: tabs.clone(),

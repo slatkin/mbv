@@ -29,6 +29,7 @@ use crate::window::input::f32_from_f64;
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -235,6 +236,7 @@ pub fn LibraryHomeList() -> Element {
         rows.as_ref(),
         scroll,
         "home",
+        PointerList::Home,
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_home_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_home_list(top)),

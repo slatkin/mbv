@@ -34,6 +34,7 @@ use crate::window::library::audiobooks_workspace::{
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Audiobooks Hero (the `LibraryAudiobooksHero`
@@ -243,6 +244,7 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
                 label: "Chapters",
                 hook: "abs-chapter",
                 noun: "Chapter",
+                pointer_list: PointerList::Workspace,
                 rows,
                 cursor: cursor_chapter.map(|chapter| chapter.to_string()),
                 actions: Vec::new(),

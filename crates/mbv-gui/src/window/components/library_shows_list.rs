@@ -40,6 +40,7 @@ use crate::window::library::shows_list::{
 };
 use crate::window::library::shows_workspace::{is_played_episode, reset_shows_episode_cursor};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -478,6 +479,7 @@ pub fn LibraryShowsList() -> Element {
         rows.as_ref(),
         scroll,
         "shows",
+        PointerList::Shows,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),

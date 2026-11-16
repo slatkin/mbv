@@ -50,6 +50,7 @@ use dioxus_native::prelude::*;
 
 use crate::window::icons::{SaveCheck, SaveOff};
 use crate::window::layout::{LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter};
+use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::status::toast_color;
 use crate::window::theme::role_var;
@@ -124,6 +125,10 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
             class: "flex items-center overflow-hidden font-mono whitespace-nowrap",
             style: "height: 40px; padding-inline: 16px; font-size: 12px; border-top: 1px solid var(--canvas-border); background: var(--mbv-queueFooterBand);",
             "data-footer-line": "",
+            // The Queue zone (`gui-pointer-target-interaction` D1) reaches the
+            // footer band: it sits under the Queue list box, outside the box's
+            // own element, so it carries the marker too.
+            "data-pointer-zone": PointerZone::Queue.token(),
             // The left group: the prefix badge while armed (dropped while a
             // toast is live, the TUI's pill-drop rule), the autosave
             // indicator, then the queue's source text — no leading icon, as

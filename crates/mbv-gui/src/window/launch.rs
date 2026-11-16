@@ -3,8 +3,10 @@
 //! crate's window attributes, the `BlitzShellProxy` as a root context, the
 //! window event handler wrapped for `WindowEvent::Viewport` (D9) and
 //! `WindowEvent::Frame` (D10), the frame's change fact the drain's re-measure
-//! reads (D12), and the resolve that keeps hit testing off a removed node (gap
-//! `G-Hit`). The pinned crate source is the authority
+//! reads (D12), the resolve that keeps hit testing off a removed node (gap
+//! `G-Hit`), and — `This crate:` — the pointer target the window reads from
+//! Blitz's hover node after each event (`gui-pointer-target-interaction`
+//! design D1). The pinned crate source is the authority
 //! for the copy; the spike's launch copy at commit
 //! `2a0510d2a` is a reference.
 //!
@@ -48,6 +50,7 @@ use crate::window::layout::{
     viewport_layout_size,
 };
 use crate::window::net::{MbvNetProvider, NetLoads};
+use crate::window::pointer_target::{PointerTargetStore, hover_chain, pointer_target};
 
 /// The Wayland app id of the window (D5). It is the GUI's current id, so the
 /// desktop entry still matches.
@@ -151,7 +154,8 @@ fn resolve_before_hit_testing(
 /// and this window registers no winit event handler — nothing here calls
 /// `use_window_event` or `use_back_button`), `add_window` (this window opens
 /// exactly one, which `new` carries as the pending window), and the hooks the
-/// window half adds (D9 size application, gap `G-Hit` resolve, D10 frames).
+/// window half adds (D9 size application, gap `G-Hit` resolve, D10 frames, and
+/// the pointer target of `gui-pointer-target-interaction` D1).
 /// The window events the window half consumes report after the shell has
 /// handled them (D9, D10).
 struct MbvApplication {
@@ -192,6 +196,10 @@ struct MbvApplication {
     /// keeps the idle loop from redrawing again and again until the frame takes
     /// it.
     load_framed: bool,
+    /// `This crate:` the root's pointer-target signal
+    /// (`gui-pointer-target-interaction` D1), written after each window event
+    /// from the node Blitz resolved as hovered, and only when it changed.
+    pointer_target: PointerTargetStore,
 }
 
 impl MbvApplication {
@@ -206,6 +214,7 @@ impl MbvApplication {
         events: WindowEventSender,
         viewport_size: ViewportSize,
         loads: NetLoads,
+        pointer_target: PointerTargetStore,
     ) -> Self {
         Self {
             pending_window: Some(config),
@@ -219,6 +228,7 @@ impl MbvApplication {
             resolved_early: false,
             loads,
             load_framed: false,
+            pointer_target,
         }
     }
 
@@ -388,6 +398,12 @@ impl ApplicationHandler for MbvApplication {
         // removal of a focused node, would otherwise leave the window with no
         // keyboard at all (see [`restore_root_focus`]).
         restore_root_focus(&mut self.document.borrow_mut());
+        // `This crate:` `gui-pointer-target-interaction` D1. Blitz resolved the
+        // hovered node inside the shell's handler (a frame resolves and
+        // refreshes it, a scroll too), so the pointer target is read after it
+        // and written into the root's signal while the window still paints the
+        // node it names.
+        self.apply_pointer_target(window_id);
         if viewport {
             self.apply_viewport(window_id);
         }
@@ -459,6 +475,25 @@ fn focus_within(document: &BaseDocument, root: blitz_dom::NodeId) -> bool {
 }
 
 impl MbvApplication {
+    /// `This crate:` the pointer target (`gui-pointer-target-interaction` D1).
+    ///
+    /// The node under the pointer is Blitz's own: `BaseDocument::resolve`
+    /// refreshes the hovered node from the last pointer position, so the walk
+    /// below reads the row that shows the `:hover` look even after a scroll
+    /// under a still pointer. The chain is read from the document the shell
+    /// shares with this copy, and the value is written from the vdom's runtime
+    /// only when it changed, as a resize writes the viewport size (D9).
+    fn apply_pointer_target(&mut self, window_id: WindowId) {
+        let target = {
+            let document = self.document.borrow();
+            pointer_target(&hover_chain(&document))
+        };
+        if let Some(view) = self.inner.windows.get_mut(&window_id) {
+            let doc = view.downcast_doc_mut::<DioxusDocument>();
+            self.pointer_target.set(&doc.vdom, target);
+        }
+    }
+
     /// `This crate:` apply a resize to the window's tree (D9).
     ///
     /// The shell has already put the new size on the document's viewport
@@ -524,6 +559,11 @@ pub fn launch(
     // writes the new size into it before the frame that resolves at it (D9).
     let viewport_size = ViewportSize::new();
     vdom.provide_root_context(viewport_size.clone());
+    // The root hands its pointer-target signal back through this handle; the
+    // window writes the hovered node's target into it after each event
+    // (`gui-pointer-target-interaction` D1).
+    let pointer_target_store = PointerTargetStore::new();
+    vdom.provide_root_context(pointer_target_store.clone());
     vdom.provide_root_context(proxy.clone());
 
     let doc = DioxusDocument::new(
@@ -554,6 +594,7 @@ pub fn launch(
         events,
         viewport_size,
         loads,
+        pointer_target_store,
     );
     event_loop
         .run_app(application)

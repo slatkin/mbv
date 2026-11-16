@@ -127,6 +127,14 @@ pub trait GeometryRow {
     /// The row's stable id.
     fn id(&self) -> &str;
 
+    /// The id the row's pointer marker carries
+    /// (`gui-pointer-target-interaction` D1), or `None` for a structural row
+    /// that no key acts on: a letter heading names no item, so the pointer
+    /// over it names no row.
+    fn pointer_row(&self) -> Option<&str> {
+        Some(self.id())
+    }
+
     /// The row's top edge from the list's first row.
     fn top(&self) -> f32;
 
@@ -137,6 +145,10 @@ pub trait GeometryRow {
 impl<T: GeometryRow> GeometryRow for &T {
     fn id(&self) -> &str {
         T::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        T::pointer_row(self)
     }
 
     fn top(&self) -> f32 {
@@ -151,6 +163,10 @@ impl<T: GeometryRow> GeometryRow for &T {
 impl GeometryRow for LibraryRow {
     fn id(&self) -> &str {
         LibraryRow::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        self.selectable().then_some(LibraryRow::id(self))
     }
 
     fn top(&self) -> f32 {

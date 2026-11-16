@@ -217,6 +217,10 @@ impl GeometryRow for ShowsListRow {
         ShowsListRow::id(self)
     }
 
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, ShowsListRow::Heading(_))).then_some(ShowsListRow::id(self))
+    }
+
     fn top(&self) -> f32 {
         match self {
             ShowsListRow::Heading(row) => row.top,

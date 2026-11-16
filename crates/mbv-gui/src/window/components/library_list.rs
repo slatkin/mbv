@@ -36,6 +36,7 @@ use crate::window::library::list::{
 };
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -357,6 +358,7 @@ pub fn LibraryList() -> Element {
         rows.as_ref(),
         scroll,
         "",
+        PointerList::Music,
         "0 0 0 8px",
         Callback::new(move |height: f32| measure_library.measure_library_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),

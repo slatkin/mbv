@@ -21,6 +21,7 @@ use crate::window::components::library_attr::library_attr;
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::{ListEnd, Play, Plus};
 use crate::window::input::f32_from_f64;
+use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -140,6 +141,11 @@ pub struct LibraryWorkspaceTableProps {
     /// The word that names a row's press target: `Track`, `Episode`,
     /// `Chapter`.
     pub noun: &'static str,
+    /// The pointer list the table names (`gui-pointer-target-interaction`
+    /// D1): `tracklist` for the Music Hero, and `workspace` for a Hero whose
+    /// rows are the Shows episodes, the Audiobooks chapters, or the Feeds
+    /// entries.
+    pub pointer_list: PointerList,
     /// The rows in painted order.
     pub rows: Vec<WorkspaceRow>,
     /// The cursor's row id, or `None`.
@@ -168,6 +174,7 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
             .field("label", &self.label)
             .field("hook", &self.hook)
             .field("noun", &self.noun)
+            .field("pointer_list", &self.pointer_list)
             .field("rows", &self.rows)
             .field("cursor", &self.cursor)
             .field("actions", &self.actions)
@@ -226,15 +233,15 @@ struct RowPaint<'a> {
     on_context: Option<Callback<(f32, f32, String)>>,
 }
 
-/// One row's own hooks: the id always paints, the
-/// cursor, playing, and state marks only while they hold.
+/// One row's own hooks: the id always paints — and, with it, the row's pointer
+/// marker — the cursor, playing, and state marks only while they hold.
 fn row_attrs(row: &WorkspaceRow, hook: &str, cursor_row: bool) -> Vec<Attribute> {
-    let mut attrs = vec![Attribute::new(
-        library_attr(hook, ""),
-        row.id.clone(),
-        None,
-        false,
-    )];
+    let mut attrs = vec![
+        Attribute::new(library_attr(hook, ""), row.id.clone(), None, false),
+        // The row marker (`gui-pointer-target-interaction` D1): the row's own
+        // id, the value the destination's commands name.
+        Attribute::new(ROW_ATTRIBUTE, row.id.clone(), None, false),
+    ];
     if cursor_row {
         attrs.push(Attribute::new(
             library_attr(hook, "cursor"),
@@ -537,7 +544,13 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
         on_play: props.on_play,
         on_context: props.on_context,
     };
-    let root_attrs = vec![Attribute::new(props.root, "", None, false)];
+    let root_attrs = vec![
+        Attribute::new(props.root, "", None, false),
+        // The list marker (`gui-pointer-target-interaction` D1): the table
+        // names the list its rows belong to, so a key that acts on a hovered
+        // row knows whether it is the tracklist or a Workspace.
+        Attribute::new(LIST_ATTRIBUTE, props.pointer_list.token(), None, false),
+    ];
 
     rsx! {
         section {

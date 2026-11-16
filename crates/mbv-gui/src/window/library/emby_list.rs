@@ -89,6 +89,10 @@ impl GeometryRow for EmbyListRow {
         self.id()
     }
 
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, EmbyListRow::Heading { .. })).then_some(self.id())
+    }
+
     fn top(&self) -> f32 {
         match self {
             EmbyListRow::Heading { top, .. } => *top,

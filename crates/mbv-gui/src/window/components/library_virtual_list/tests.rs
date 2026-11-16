@@ -9,7 +9,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use blitz_dom::{Document as _, local_name};
+use blitz_dom::{Document as _, LocalName, local_name};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
@@ -18,6 +18,7 @@ use super::library_virtual_list;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::list::GeometryRow;
 use crate::window::library::scroll::ListScroll;
+use crate::window::pointer_target::PointerList;
 
 /// The context handles the root hands the test: the layout epoch, the scroll
 /// offset the root paints with, and the rows the shell painted last.
@@ -86,6 +87,7 @@ fn list_app(props: FixtureProps) -> Element {
             viewport_height: 100.0,
         },
         "",
+        PointerList::Music,
         "8px 8px 8px 8px",
         Callback::new(move |_| {}),
         Callback::new(move |_| {}),
@@ -247,4 +249,36 @@ fn the_scroller_mirrors_the_scroll_stores_offset() {
         .expect("the node is in the document")
         .scroll_offset();
     assert_eq!(offset.y, 100.0);
+}
+
+/// Contract (`gui-pointer-target-interaction` 3.3): the scroller names the
+/// list kind it rolls, and every painted row names its own id — the pair a
+/// key's pointer target reads.
+#[test]
+fn the_scroller_and_its_rows_carry_the_pointer_markers() {
+    let fixture = built();
+    let dom = fixture.doc.inner();
+    let list = dom
+        .query_selector("[data-pointer-list]")
+        .expect("the selector is valid")
+        .expect("the scroller carries the list marker");
+
+    assert_eq!(
+        dom.get_node(list)
+            .expect("the node is in the document")
+            .attr(LocalName::from("data-pointer-list")),
+        Some("music")
+    );
+    let rows: Vec<String> = dom
+        .query_selector_all("[data-pointer-row]")
+        .expect("the selector is valid")
+        .into_iter()
+        .filter_map(|id| {
+            dom.get_node(id)
+                .expect("the node is in the document")
+                .attr(LocalName::from("data-pointer-row"))
+                .map(str::to_owned)
+        })
+        .collect();
+    assert_eq!(rows, ["row-0", "row-1", "row-2", "row-3"]);
 }

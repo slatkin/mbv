@@ -27,6 +27,7 @@ use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFra
 use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail, emby_row_letter};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 
 /// The row kind word the item row's hook paints (`data-library-emby-row`).
@@ -161,6 +162,7 @@ pub fn LibraryEmbyList() -> Element {
         rows.as_ref(),
         scroll,
         "emby",
+        PointerList::Emby,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_emby_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_emby_list(top)),

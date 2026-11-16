@@ -37,6 +37,7 @@ use crate::window::library::audiobooks_list::{
 use crate::window::library::audiobooks_workspace::reset_abs_chapter_cursor;
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 
 /// One painted row of the list: the letter heading
@@ -163,6 +164,7 @@ pub fn LibraryAudiobooksList() -> Element {
         rows.as_ref(),
         scroll,
         "abs",
+        PointerList::Audiobooks,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_audiobooks_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_audiobooks_list(top)),

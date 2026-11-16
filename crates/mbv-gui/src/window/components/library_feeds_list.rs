@@ -21,6 +21,7 @@ use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFra
 use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 
 /// One painted row of the flat list: the entry row.
 /// A feed entry names no right-click menu — the former row paints none.
@@ -98,6 +99,7 @@ pub fn LibraryFeedsList() -> Element {
         rows.as_ref(),
         scroll,
         "feeds",
+        PointerList::Feeds,
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_feeds_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_feeds_list(top)),

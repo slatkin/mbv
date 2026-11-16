@@ -22,6 +22,7 @@ use crate::window::components::library_workspace_table::{
 };
 use crate::window::library::hero::resolve_track_cursor;
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 
 /// The props of the tracklist (the `LibraryTracklist` props, narrowed
 /// to what the tracklist reads): the album's cached tracks — the rows' own
@@ -117,6 +118,7 @@ pub fn LibraryTracklist(props: LibraryTracklistProps) -> Element {
             label: "Tracklist",
             hook: "track",
             noun: "Track",
+            pointer_list: PointerList::Tracklist,
             rows,
             cursor,
             actions,

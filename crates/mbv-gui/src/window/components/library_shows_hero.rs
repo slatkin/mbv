@@ -38,6 +38,7 @@ use crate::window::library::shows_workspace::{
     episode_progress, is_played_episode, press_shows_episode, resolve_shows_episode_cursor,
 };
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Shows Hero (the `LibraryShowsHero` props, narrowed
@@ -374,6 +375,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                     label: "Episodes",
                     hook: "shows-episode",
                     noun: "Episode",
+                    pointer_list: PointerList::Workspace,
                     rows,
                     cursor: cursor_episode,
                     actions: row_actions,

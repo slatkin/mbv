@@ -75,6 +75,10 @@ impl GeometryRow for AudiobooksListRow {
         AudiobooksListRow::id(self)
     }
 
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, AudiobooksListRow::Heading { .. })).then_some(AudiobooksListRow::id(self))
+    }
+
     fn top(&self) -> f32 {
         match self {
             AudiobooksListRow::Heading { top, .. } => *top,

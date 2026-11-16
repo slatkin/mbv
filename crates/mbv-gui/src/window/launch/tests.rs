@@ -2,6 +2,8 @@
 //! keeps hit testing off a removed node (gap `G-Hit`). No test opens a window,
 //! sleeps, or reaches the core.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use blitz_dom::Document as _;
@@ -16,12 +18,12 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::window::app::ROOT_ELEMENT_ID;
 use crate::window::input::f32_from_f64;
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerTargetStore, PointerZone};
 
 use super::{
     AnimationClock, carries_unresolved_change, focus_within, resolve_before_hit_testing,
     restore_root_focus, window_attributes,
 };
-
 /// Contract: the window keeps the earlier window's 400x200 logical floor, so a
 /// floating window cannot be dragged below the size at which the compact
 /// strip lays out.
@@ -390,5 +392,82 @@ fn the_restore_keeps_the_focus_a_text_input_took() {
         doc.inner().get_focussed_node_id(),
         Some(field),
         "the field keeps the keyboard"
+    );
+}
+
+/// The store test's props: the handle the root provides its signal through,
+/// and the render count that witnesses each signal write.
+#[derive(Clone)]
+struct StoreProps {
+    store: PointerTargetStore,
+    renders: Rc<Cell<usize>>,
+}
+
+/// The root: it provides its pointer-target signal through the store, as the
+/// app root does, and counts its renders — a render follows each signal write,
+/// an equal value included, so the count is the write witness.
+fn store_app(props: StoreProps) -> Element {
+    let store = props.store;
+    let target = use_signal(PointerTarget::default);
+    provide_context(target);
+    use_hook(move || store.provide(target));
+    props.renders.set(props.renders.get() + 1);
+    let zone = target.cloned().zone.map_or("none", PointerZone::token);
+    rsx! {
+        div { "data-zone": "{zone}" }
+    }
+}
+
+/// The document the store test writes into, built and idle.
+fn store_document(store: PointerTargetStore, renders: Rc<Cell<usize>>) -> DioxusDocument {
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new_with_props(store_app, StoreProps { store, renders }),
+        DocumentConfig {
+            viewport: Some(Viewport::new(400, 300, 1.0, ColorScheme::Light)),
+            ..DocumentConfig::default()
+        },
+    );
+    doc.initial_build();
+    poll_until_idle(&mut doc);
+    doc
+}
+
+/// Poll the document until its pending renders and effects have landed (a
+/// fixed poll count with a tripwire: never an unbounded wait).
+fn poll_until_idle(doc: &mut DioxusDocument) {
+    for _ in 0..8 {
+        if !doc.poll(None) {
+            return;
+        }
+    }
+    panic!("document did not become idle");
+}
+
+/// Contract (`gui-pointer-target-interaction` 3.2): the launch copy writes the
+/// pointer target from the vdom's runtime when it changed, and writes nothing
+/// when it did not — a signal write marks its subscribers, an equal value
+/// included, so an unchanged hover must cost no render.
+#[test]
+fn a_pointer_target_writes_only_when_it_changes() {
+    let store = PointerTargetStore::new();
+    let renders = Rc::new(Cell::new(0));
+    let mut doc = store_document(store.clone(), Rc::clone(&renders));
+    let settled = renders.get();
+
+    let target = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(PointerList::Music),
+        row: Some("artist-1".to_owned()),
+    };
+    store.set(&doc.vdom, target.clone());
+    poll_until_idle(&mut doc);
+    assert_eq!(renders.get(), settled + 1, "a changed target writes once");
+
+    store.set(&doc.vdom, target);
+    poll_until_idle(&mut doc);
+    assert_eq!(
+        renders.get(),
+        settled + 1,
+        "an unchanged target writes nothing"
     );
 }

@@ -44,6 +44,7 @@ use crate::window::library::keys::route_library_key;
 use crate::window::library::reset::reset_library_interaction;
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, SystemTimes, Times};
+use crate::window::pointer_target::{PointerTarget, PointerTargetStore};
 use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 use crate::window::settings::state::SettingsState;
@@ -273,6 +274,14 @@ pub fn App() -> Element {
     // context value, over the core link the commands go through.
     let settings_state = use_hook(|| SettingsState::new(CoreLink::clone(&link)));
     provide_context(settings_state.clone());
+    // The pointer target (gui-pointer-target-interaction design D1): the one
+    // value a GUI key's routing reads. The launch copy writes it after each
+    // window event from Blitz's hover node, and its readers peek only — no
+    // component subscribes, so a hover change re-renders nothing.
+    let pointer_target = use_signal(PointerTarget::default);
+    provide_context(pointer_target);
+    let pointer_target_store = consume_context::<PointerTargetStore>();
+    use_hook(move || pointer_target_store.provide(pointer_target));
 
     // The sync on mount (D6): the window asks for the full snapshot once its
     // section listener is subscribed. The drain above is that listener; both

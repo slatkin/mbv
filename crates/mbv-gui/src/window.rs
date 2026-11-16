@@ -19,6 +19,7 @@ pub mod natural_size;
 pub mod net;
 pub mod panel;
 pub mod playhead;
+pub mod pointer_target;
 pub mod resize;
 pub mod sections;
 pub mod settings;

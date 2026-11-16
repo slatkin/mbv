@@ -22,6 +22,7 @@ use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFra
 use crate::window::library::parts::{library_podcasts_detail, library_podcasts_list};
 use crate::window::library::podcasts_list::{PODCASTS_ROW_HEIGHT, PodcastsItemRow};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 
 /// One painted row of the flat list: the episode row. The row's press selects
 /// the episode the Hero shows, a double-click plays it, and a right-press
@@ -105,6 +106,7 @@ pub fn LibraryPodcastsList() -> Element {
         rows.as_ref(),
         scroll,
         "podcasts",
+        PointerList::Podcasts,
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_podcasts_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_podcasts_list(top)),

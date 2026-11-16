@@ -27,6 +27,12 @@ fn a_frame_with_slots_renders_its_rows() {
     assert!(text.contains("album"), "{text}");
     assert!(text.contains("Second track"), "{text}");
     assert_eq!(fixture.all("[data-slot]").len(), 2);
+    // The Queue zone (`gui-pointer-target-interaction` 3.3): the recessed box
+    // that holds the header, the filter, and these rows names the Queue.
+    assert!(
+        fixture.presents("[data-pointer-zone=\"queue\"]"),
+        "the list box carries the Queue zone marker"
+    );
 }
 
 /// Contract (`QueuePanel.test.ts`): an empty frame renders the empty-queue

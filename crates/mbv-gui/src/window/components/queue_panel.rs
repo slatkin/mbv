@@ -72,6 +72,7 @@ use crate::window::icons::{Ellipsis, GripVertical};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
+use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::{canvas_var, role_var};
 
@@ -404,6 +405,12 @@ pub fn QueuePanel() -> Element {
                 class: "relative flex min-h-0 flex-1 flex-col",
                 style: "margin-inline: calc(var(--mbv-cell-col) * 2); background: {box_background};",
                 "data-queue-box": "",
+                // The Queue zone (`gui-pointer-target-interaction` D1): the
+                // header, the filter, and the rows. The footer band under the
+                // box carries the same marker (`queue_footer.rs`), and the
+                // player block above it carries none — a key over the player
+                // block keeps only the global chords.
+                "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
                     right_column: right_column_handles,

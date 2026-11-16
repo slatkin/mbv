@@ -361,6 +361,17 @@ fn the_list_paints_letter_headings_its_rows_and_the_rail_a_press_moves_the_curso
         painted_rows(&fixture),
         ["b1".to_owned(), "b2".to_owned(), "b3".to_owned()]
     );
+    // The pointer markers (`gui-pointer-target-interaction` 3.3): the scroller
+    // names the Audiobooks list — not the `abs` hook prefix its library
+    // attributes carry — and a row names its own id.
+    assert_eq!(
+        fixture.attr_of("[data-pointer-list]", "data-pointer-list"),
+        Some("audiobooks".to_owned())
+    );
+    assert_eq!(
+        fixture.attr_of("[data-pointer-row]", "data-pointer-row"),
+        Some("b1".to_owned())
+    );
 
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.jump_audiobooks_to_letter('B'));
