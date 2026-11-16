@@ -165,6 +165,10 @@ fn stylesheet_probe() -> Element {
                 }
                 button { id: "probe-seek",
                     "type": "button",
+                    // The real transport button pins this box; a text-sized
+                    // probe collapses without fonts and the hover point
+                    // misses it.
+                    style: "width: 44px; height: 44px;",
                     "data-target": "seekBack",
                     "−10"
                 }
