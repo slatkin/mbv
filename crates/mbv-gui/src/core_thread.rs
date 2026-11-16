@@ -252,9 +252,11 @@ impl CoreThread {
         app.enable_gui_client();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
-        // and the Status bar (design D4), and the Queue side holds focus. The
-        // Library panel mounts beside the Queue (add-gui-library-panel task
-        // row 2.1) and takes Panel focus on the take-focus command.
+        // and the Status bar (design D4). The Library panel mounts beside the
+        // Queue (add-gui-library-panel task row 2.1). Panel focus is not
+        // window state (`gui-pointer-target-interaction` design D3): the
+        // core sets it per key, and the Library command path sets it before
+        // each Library command.
         focus.mount(ComponentId::Queue);
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
@@ -303,22 +305,17 @@ impl CoreThread {
             idle_cadence: CLIENT_IDLE_CADENCE,
             launch_restore,
         };
-        // The core sets its `FocusStack` and the App's stored Panel focus
-        // together (design D4), so the sections the window paints and the gates
-        // the keys meet agree from the first batch. The Queue side holds
-        // focus until the take-focus command moves it.
-        core.take_panel_focus(PanelFocus::Queue);
-        // The saved location applies over that default (design D9): a launch
-        // the attach brought a catalog for restores here, and a launch whose
-        // catalog lands through the startup worker restores on that drain.
+        // The saved location applies over the core's startup state (design
+        // D9): a launch the attach brought a catalog for restores here, and a
+        // launch whose catalog lands through the startup worker restores on
+        // that drain.
         core.restore_launch_location();
         core
     }
 
     /// Move Panel focus on both authorities together (add-gui-library-panel
     /// design D4): the App's stored Panel focus, which its key gates read,
-    /// through its public GUI entry, then the core's `FocusStack`, which
-    /// derives the window's focus.
+    /// through its public GUI entry, then the core's `FocusStack`.
     fn take_panel_focus(&mut self, focus: PanelFocus) {
         self.app.set_gui_panel_focus(focus);
         self.focus.set_panel_focus(focus);
@@ -751,7 +748,6 @@ impl CoreThread {
         self.app.fetch_playback_metadata();
         let batch = self.ledger.collect(SectionSources {
             app: &mut self.app,
-            focus: &self.focus,
             queue: &self.queue,
             playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,

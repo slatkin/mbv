@@ -31,7 +31,6 @@ use rstest::rstest;
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::GuiAttachState;
-use crate::bridge::frame::focus::{GuiFocus, GuiPanel, GuiSurface};
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
 };
@@ -384,10 +383,6 @@ impl Fixture {
                     sections.playback.set(playing(GuiArtRef::Image {
                         src: "mbv-art://localhost/card/1".to_owned(),
                     }));
-                    sections.focus.set(GuiFocus {
-                        surface: Some(GuiSurface::Queue),
-                        panel: GuiPanel::Queue,
-                    });
                 }
                 Screen::QueuePlaceholder | Screen::PanelCompactStrip | Screen::PanelRail => {
                     sections.queue.set(SectionRef::new(queue()));

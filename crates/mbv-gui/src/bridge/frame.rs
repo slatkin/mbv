@@ -6,7 +6,6 @@
 //! is gone: each section is built and sent on its own (`crate::sections`).
 
 pub mod chrome;
-pub mod focus;
 pub mod library;
 pub mod overlay;
 pub mod playback;

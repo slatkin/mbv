@@ -11,7 +11,6 @@
 use super::frame::GuiAttachState;
 use super::frame::GuiPanelToggles;
 use super::frame::chrome::{GuiQueueFooter, GuiStatusBar};
-use super::frame::focus::GuiFocus;
 use super::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -42,8 +41,6 @@ pub struct GuiSectionBatch {
     pub attach: Option<GuiSection<Option<GuiAttachState>>>,
     /// The role-to-colour map.
     pub theme: Option<GuiSection<GuiTheme>>,
-    /// The focused surface and the Panel that holds focus.
-    pub focus: Option<GuiSection<GuiFocus>>,
     /// The Queue rows inside the viewport, with the cursor, marks, and the
     /// active slot.
     pub queue: Option<GuiSection<GuiQueue>>,

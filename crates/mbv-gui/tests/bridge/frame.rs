@@ -19,7 +19,6 @@ use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::sections::{SectionLedger, SectionSources};
 use mbv_queue::{QueueItem, QueueSlotId};
-use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_ui_model::queue_rows::queue_media_rows;
@@ -98,7 +97,6 @@ fn built(app: &mut App, queue: &QueueSurface, playback: &QueuePlaybackSurface) -
     ledger.mark_all_gated();
     let batch = ledger.collect(SectionSources {
         app,
-        focus: &FocusStack::new(),
         queue,
         playback_surface: playback,
         viewport_rows: VIEWPORT_ROWS,

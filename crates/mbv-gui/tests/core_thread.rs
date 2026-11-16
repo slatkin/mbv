@@ -25,7 +25,6 @@ use mbv_config::{
 use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
-use mbv_gui::bridge::frame::focus::GuiFocus;
 use mbv_gui::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -179,7 +178,6 @@ impl Held {
         let held = &mut self.batch;
         held.attach = batch.attach.or(held.attach.take());
         held.theme = batch.theme.or(held.theme.take());
-        held.focus = batch.focus.or(held.focus.take());
         held.queue = batch.queue.or(held.queue.take());
         held.summary = batch.summary.or(held.summary.take());
         held.panel = batch.panel.or(held.panel.take());
@@ -209,11 +207,6 @@ impl Held {
     /// The queue summary section's value.
     pub(crate) fn summary(&self) -> &GuiQueueSummary {
         section_value(self.batch.summary.as_ref(), "summary")
-    }
-
-    /// The focus section's value.
-    pub(crate) fn focus(&self) -> &GuiFocus {
-        section_value(self.batch.focus.as_ref(), "focus")
     }
 
     /// The open overlay, `None` while none is open.

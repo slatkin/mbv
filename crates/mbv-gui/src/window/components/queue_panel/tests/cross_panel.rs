@@ -5,7 +5,6 @@
 use dioxus_native::prelude::*;
 
 use super::harness::*;
-use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
 use crate::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 use crate::window::sections::SectionRef;
 
@@ -45,10 +44,6 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
         sections.playback.set(playing());
         sections.queue.set(SectionRef::new(queue(vec![item(1)])));
         sections.summary.set(summary());
-        sections.focus.set(GuiFocus {
-            surface: None,
-            panel: GuiPanel::Queue,
-        });
         playhead.stamp(anchor);
     });
     let mut sections = fixture.sections.clone();
@@ -95,10 +90,6 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
         sections.playback.set(playing());
         sections.queue.set(SectionRef::new(queue(vec![item(1)])));
         sections.summary.set(summary());
-        sections.focus.set(GuiFocus {
-            surface: None,
-            panel: GuiPanel::Queue,
-        });
         playhead.stamp(anchor);
     });
     // The chooser stays closed: no chooser regions join the order.

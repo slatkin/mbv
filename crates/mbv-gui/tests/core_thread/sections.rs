@@ -364,7 +364,12 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
     core.seed_gui_music_library_for_test(test_emby_client(&http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     test.tx
-        .send(CoreInput::Library(GuiLibraryCommand::TakeFocus.into()))
+        .send(CoreInput::Library(
+            GuiLibraryCommand::ShowDetail {
+                item_id: "no-such-item".to_owned(),
+            }
+            .into(),
+        ))
         .unwrap();
     assert!(test.core.step());
     test.next_batch();

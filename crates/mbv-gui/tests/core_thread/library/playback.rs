@@ -88,7 +88,6 @@ fn the_add_to_queue_command_applies_the_autoload_policy_to_a_track() {
     );
     test.core.app_mut().set_autoload_for_test(true);
 
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
     send_library(
         &mut test,
         GuiLibraryCommand::AddToQueue {
@@ -123,7 +122,6 @@ fn the_add_to_queue_command_of_a_track_queues_only_it_while_autoload_is_off() {
     );
     test.core.app_mut().set_autoload_for_test(false);
 
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
     send_library(
         &mut test,
         GuiLibraryCommand::AddToQueue {
@@ -157,7 +155,6 @@ fn the_play_command_of_a_track_replaces_the_queue_from_it_under_autoload() {
     );
     test.core.app_mut().set_autoload_for_test(true);
 
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
     send_library(
         &mut test,
         GuiLibraryCommand::Play {
@@ -325,7 +322,6 @@ fn a_menu_entry_executes_for_its_named_item_not_the_cursor_item() {
     );
     test.core.app_mut().set_autoload_for_test(true);
 
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
     send_library(
         &mut test,
         GuiLibraryCommand::MenuEntry {

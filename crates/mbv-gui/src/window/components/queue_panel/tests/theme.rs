@@ -9,7 +9,6 @@
 use blitz_dom::Document as _;
 
 use super::harness::*;
-use crate::bridge::frame::focus::GuiPanel;
 
 /// The recessed box the panel insets inside the queue column.
 const BOX: &str = "[data-queue-box]";
@@ -31,16 +30,13 @@ fn background_of(fixture: &Fixture, selector: &str) -> String {
 }
 
 /// Contract (look parity with the Tauri build, `replace-tauri-with-blitz`):
-/// the recessed box paints no fill in either panel-focus state, because the
-/// theme defines no `--mbv-queuePanel` or `--mbv-queuePanelFocused`. A token
-/// writer that defines them repaints the `#374145` box the reference build
-/// never showed, hiding the queue column's backdrop.
+/// the recessed box paints no fill of its own, because the theme defines no
+/// `--mbv-queuePanel` or `--mbv-queuePanelFocused`. A token writer that
+/// defines them repaints the `#374145` box the reference build never showed,
+/// hiding the queue column's backdrop.
 #[test]
 fn the_recessed_box_paints_no_fill_of_its_own() {
     let mut fixture = built_sized(themed_queue_panel_app);
     fixture.show(queue(vec![item(1)]), summary(), None);
-    assert_eq!(background_of(&fixture, BOX), TRANSPARENT, "focused box");
-
-    fixture.focus_panel(GuiPanel::Library);
-    assert_eq!(background_of(&fixture, BOX), TRANSPARENT, "resting box");
+    assert_eq!(background_of(&fixture, BOX), TRANSPARENT);
 }

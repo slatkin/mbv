@@ -158,6 +158,19 @@ fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> Held {
     test.held()
 }
 
+/// Carry the seeded content in one Library batch: every Library input marks
+/// the gated sections, and a detail command for an item the Service data does
+/// not hold changes nothing, so the frame a test reads holds the seeded state
+/// alone.
+fn seeded_frame(test: &mut TestCore) -> Held {
+    send_library_frame(
+        test,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "no-such-item".to_owned(),
+        },
+    )
+}
+
 /// The Library list section a frame carries (design D8).
 fn list_of(frame: &Held) -> Option<GuiLibraryList> {
     frame.library_list().cloned()

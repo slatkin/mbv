@@ -12,7 +12,7 @@ use mbv_net::mock_http::MockHttp;
 use crate::{layout_report, test_core_with, test_emby_client};
 
 use super::{
-    assert_image, assert_placeholder, hero_art, list_of, music_detail, music_list,
+    assert_image, assert_placeholder, hero_art, list_of, music_detail, music_list, seeded_frame,
     seeded_music_core, send_library, send_library_frame,
 };
 
@@ -32,8 +32,7 @@ fn the_music_frame_carries_the_playing_track_id() {
     core.seed_gui_music_library_for_test(test_emby_client(&http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
 
-    let music = music_detail(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus))
-        .expect("the Music destination is active");
+    let music = music_detail(&seeded_frame(&mut test)).expect("the Music destination is active");
     assert_eq!(music.playing_track_id.as_deref(), Some("trk-1"));
 }
 
@@ -46,8 +45,7 @@ fn the_library_section_carries_the_destination_tabs_and_the_lib_idx() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
 
-    let list = list_of(&send_library_frame(&mut test, GuiLibraryCommand::TakeFocus))
-        .expect("the first batch carries the list");
+    let list = list_of(&seeded_frame(&mut test)).expect("the first batch carries the list");
     assert_eq!(
         list.tabs,
         [GuiLibraryTabFrame {

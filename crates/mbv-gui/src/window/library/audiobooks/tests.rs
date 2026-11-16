@@ -11,7 +11,6 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
@@ -161,8 +160,6 @@ fn carry(state: &LibraryState, selected: Option<&str>) {
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
     let mut ui = state.ui;
     ui.with_mut(|ui| {
         ui.hero_dismissed = true;

@@ -24,14 +24,12 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use mbv::{App, QueuePlaybackProjection};
-use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
 use crate::art::{GuiArtRef, art_url, trickplay_path};
 use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
-use crate::bridge::frame::focus::GuiFocus;
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -53,7 +51,6 @@ use self::deadlines::DeadlineMarks;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Section {
     Theme,
-    Focus,
     Queue,
     Summary,
     Panel,
@@ -89,14 +86,12 @@ pub struct SentRevisions {
 
 /// What one [`SectionLedger::collect`] reads: the `App` whose read-only
 /// projections the sections carry (and whose gated builds start their loads),
-/// the focus stack, the Queue Surface state, the Queue playback Surface state
+/// the Queue Surface state, the Queue playback Surface state
 /// (for the scrubber hover), and the Queue viewport's whole rows.
 #[derive(Debug)]
 pub struct SectionSources<'a> {
     /// The `App` the sections read.
     pub app: &'a mut App,
-    /// The focus stack: the focused surface and the Panel focus.
-    pub focus: &'a FocusStack,
     /// The Queue Surface state. The caller has already adopted the Queue
     /// projection into it for this tick.
     pub queue: &'a QueueSurface,
@@ -196,7 +191,6 @@ fn audit_clean<T: PartialEq>(section: Section, slot: &Slot<T>, built: &T) {
 pub struct SectionLedger {
     attach: Slot<Option<GuiAttachState>>,
     theme: Slot<GuiTheme>,
-    focus: Slot<GuiFocus>,
     queue: Slot<GuiQueue>,
     summary: Slot<GuiQueueSummary>,
     panel: Slot<GuiPanelToggles>,
@@ -240,7 +234,6 @@ impl Default for SectionLedger {
         let mut ledger = Self {
             attach: Slot::default(),
             theme: Slot::default(),
-            focus: Slot::default(),
             queue: Slot::default(),
             summary: Slot::default(),
             panel: Slot::default(),
@@ -312,7 +305,6 @@ impl SectionLedger {
     pub fn release_all(&mut self) {
         self.attach.release();
         self.theme.release();
-        self.focus.release();
         self.queue.release();
         self.summary.release();
         self.panel.release();
@@ -336,7 +328,6 @@ impl SectionLedger {
     pub fn collect(&mut self, sources: SectionSources<'_>) -> Option<GuiSectionBatch> {
         let SectionSources {
             app,
-            focus,
             queue,
             playback_surface,
             viewport_rows,
@@ -356,7 +347,6 @@ impl SectionLedger {
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
         self.attach.adopt(None);
-        self.focus.adopt(GuiFocus::from(focus));
         self.queue.adopt(GuiQueue::from_surface(
             queue,
             viewport_rows,
@@ -503,7 +493,6 @@ impl SectionLedger {
         let batch = GuiSectionBatch {
             attach: self.attach.take(),
             theme: self.theme.take(),
-            focus: self.focus.take(),
             queue: self.queue.take(),
             summary: self.summary.take(),
             panel: self.panel.take(),

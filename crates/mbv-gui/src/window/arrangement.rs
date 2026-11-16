@@ -21,8 +21,8 @@ pub const QUEUE_RAIL_WIDTH_PX: f32 = 72.0;
 /// window width (the `gui-settings-screen` design's width decisions).
 pub const SETTINGS_SIDEBAR_WIDTH_PX: f32 = 260.0;
 
-/// The Library column width below which only the panel with Panel focus
-/// shows: the 320 px list plus the pill row.
+/// The Library column width below which only the Queue panel shows: the
+/// 320 px list plus the pill row.
 pub const LIBRARY_MINI_MAX_WIDTH_PX: f32 = 480.0;
 
 /// The Library column width from which the Hero pane sits beside the list:
@@ -37,7 +37,7 @@ pub const LIBRARY_WIDE_MIN_HEIGHT_PX: f32 = 600.0;
 /// The arrangement of the Library column beside the Queue panel (D9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuiArrangement {
-    /// Only the panel with Panel focus shows.
+    /// Only the Queue panel shows.
     Mini,
     /// The Library column paints alone: no Hero pane beside it.
     Narrow,
@@ -80,10 +80,9 @@ pub fn library_column_width(container: LayoutSize, queue_width: f32) -> f32 {
 
 /// The arrangement the Library column paints (D9): Mini below 480 px, Wide
 /// from 880 px when the container is at least 600 px tall, Narrow between. A
-/// zero width reads as "not measured yet" and is Mini, which mounts the panel
-/// that holds Panel focus — the Queue panel on a fresh window. The caller
-/// passes the painted Queue column width, so the arrangement follows a
-/// divider drag.
+/// zero width reads as "not measured yet" and is Mini, which shows only the
+/// Queue panel. The caller passes the painted Queue column width, so the
+/// arrangement follows a divider drag.
 #[must_use]
 pub fn library_arrangement(container: LayoutSize, queue_width: f32) -> GuiArrangement {
     let width = library_column_width(container, queue_width);

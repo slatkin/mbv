@@ -19,7 +19,6 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     let http = MockHttp::new();
     http.respond(200, TRACKS);
     let (mut test, cmd_rx) = seeded_music_core(&http);
-    send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
     send_library_frame(
         &mut test,
         GuiLibraryCommand::SelectCollection {
@@ -78,7 +77,6 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
 fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
     let frame = send_library_frame(
         &mut test,
         GuiLibraryCommand::RowMenu {
@@ -106,7 +104,6 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
 fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
     let frame = send_library_frame(
         &mut test,
         GuiLibraryCommand::RowMenu {

@@ -23,11 +23,6 @@ pub enum GuiLibraryCommand {
     /// Open the album node: load its tracks when the cache does not hold
     /// them.
     OpenAlbum { album_id: String },
-    /// Take Panel focus for the Library panel.
-    TakeFocus,
-    /// Take Panel focus for the Queue panel: Tab across the panel boundary's
-    /// far end (design D3, D4). The mirror of [`GuiLibraryCommand::TakeFocus`].
-    TakeQueueFocus,
     /// Play the item.
     Play { item_id: String },
     /// Play the item next.
@@ -280,8 +275,6 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             }
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
-            GuiLibraryCommand::TakeFocus => Self::TakeFocus,
-            GuiLibraryCommand::TakeQueueFocus => Self::TakeQueueFocus,
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
             GuiLibraryCommand::PlayNext { item_id } => Self::PlayNext { item_id },
             GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },

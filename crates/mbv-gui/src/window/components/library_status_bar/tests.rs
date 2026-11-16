@@ -164,7 +164,7 @@ fn style_of(doc: &DioxusDocument, selector: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Contract (`LibraryStatusBar.test.ts`): the bar paints the canvas's six
+/// Contract (`LibraryStatusBar.test.ts`): the bar paints the canvas's five
 /// fixed key hints and the location line — the destination, the selected
 /// collection, and the picked album's artist, joined by the canvas's
 /// separator.
@@ -174,14 +174,7 @@ fn the_bar_paints_the_canvas_key_hints_and_the_location() {
 
     assert_eq!(
         hint_texts(&doc),
-        [
-            "/ filter",
-            "⏎ play",
-            "n next",
-            "a queue",
-            "tab pane",
-            "1–7 library",
-        ]
+        ["/ filter", "⏎ play", "n next", "a queue", "1–7 library",]
     );
     assert_eq!(
         text_of(&doc, "[data-library-status-location]"),
@@ -358,7 +351,7 @@ fn the_bar_paints_the_plain_emby_location_for_the_carried_content() {
         text_of(&doc, "[data-library-status-location]"),
         "Movies › Heat"
     );
-    assert_eq!(hint_texts(&doc).len(), 6);
+    assert_eq!(hint_texts(&doc).len(), 5);
 }
 
 /// Contract (`LibraryStatusBar.test.ts`): the bar's carried Audiobooks
@@ -372,7 +365,7 @@ fn the_bar_paints_the_audiobooks_location_for_the_carried_content() {
         text_of(&doc, "[data-library-status-location]"),
         "Audiobooks › Dune"
     );
-    assert_eq!(hint_texts(&doc).len(), 6);
+    assert_eq!(hint_texts(&doc).len(), 5);
 }
 
 /// Contract (`LibraryStatusBar.test.ts`): the bar's carried Podcasts content
@@ -385,5 +378,5 @@ fn the_bar_paints_the_podcasts_location_for_the_carried_content() {
         text_of(&doc, "[data-library-status-location]"),
         "Podcasts › Bits and Bites › Episode 12: The Long Road"
     );
-    assert_eq!(hint_texts(&doc).len(), 6);
+    assert_eq!(hint_texts(&doc).len(), 5);
 }
