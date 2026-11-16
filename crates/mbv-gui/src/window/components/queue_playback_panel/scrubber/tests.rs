@@ -1,6 +1,6 @@
 //! Headless tests of the scrubber (D16): the contracts of
 //! `QueuePlaybackPanel.test.ts` the scrubber owns — the elapsed and
-//! `−remaining · ends HH:MM` clocks, the hover preview's label chip and its
+//! `−remaining` clocks, the hover preview's label chip and its
 //! two tile forms, and the bar's hover chrome (track, played fill, thumb,
 //! position line). The presses are not ported: they are the root input
 //! layer's contract (`window/input.rs`), which the scrubber forwards to
@@ -295,11 +295,11 @@ fn the_slider_box_is_positioned_so_the_bar_paints_inside_it() {
 
 /// Contract (`QueuePlaybackPanel.test.ts`, the clocks): the scrubber's two
 /// labels paint the playhead's prediction — the elapsed time, and the
-/// remaining time joined with the finish clock behind the canvas minus
-/// (`main` audit 9). The wall clock at 20:57:40 puts a 200 s item at its
-/// 60th second's finish at exactly 21:00.
+/// remaining time behind the canvas minus, with no finish clock (the
+/// panel's `ends` hint is gone, 2026-11-16). The wall clock at 20:57:40
+/// puts a 200 s item at its 60th second's finish at exactly 21:00.
 #[test]
-fn the_scrubber_paints_the_elapsed_and_remaining_finish_clocks() {
+fn the_scrubber_paints_the_elapsed_and_remaining_clocks() {
     let mut fixture = built();
     fixture.set_playback(playing());
     fixture.stamp(GuiPlayhead {
@@ -312,7 +312,8 @@ fn the_scrubber_paints_the_elapsed_and_remaining_finish_clocks() {
 
     let text = fixture.text();
     assert!(text.contains("1:00"), "{text}");
-    assert!(text.contains("\u{2212}2:20 \u{b7} ends 21:00"), "{text}");
+    assert!(text.contains("\u{2212}2:20"), "{text}");
+    assert!(!text.contains("ends"), "{text}");
 }
 
 /// Contract (`QueuePlaybackPanel.test.ts`): the scrubber paints the hover

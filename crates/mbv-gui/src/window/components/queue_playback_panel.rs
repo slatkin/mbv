@@ -290,8 +290,8 @@ pub fn QueuePlaybackPanel() -> Element {
                     // The scrubber (`main` audits 9–12): the 60 px block with
                     // the track at 22 px, the intro and credits blocks, the
                     // played fill, the chapter ticks, the pointer's position
-                    // line, the thumb, and the elapsed and `−remaining · ends
-                    // HH:MM` labels at 42 px. The block's own rect is the
+                    // line, the thumb, and the elapsed and `−remaining`
+                    // labels at 42 px. The block's own rect is the
                     // `seekbar` region; a press resolves there in the core.
                     Scrubber { seekbar_mounted }
                     // The transport (`main` audits 13–14): previous, `−10`,

@@ -2,7 +2,7 @@
 //! scrubber block — the 6 px track, the intro and credits blocks, the played
 //! fill, the 2×14 chapter ticks, the 16 px thumb, the hover position line,
 //! the hover preview with the trickplay tile, and the elapsed and
-//! `−remaining · ends HH:MM` labels.
+//! `−remaining` labels.
 //!
 //! The scrubber paints the canvas geometry. Its hover preview paints from
 //! the `hover` section (the core resolves the pointer move against the
@@ -20,7 +20,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::window::playhead::{Playhead, ticks_f64};
 use crate::window::sections::Sections;
 use crate::window::theme::role_var;
-use crate::window::time::{clamp_ratio, format_wall_clock, minus};
+use crate::window::time::{clamp_ratio, minus};
 
 #[cfg(test)]
 mod tests;
@@ -94,7 +94,7 @@ fn tile_crop(hover: &GuiScrubberHover) -> Option<String> {
 /// The scrubber (`main` audits 9–12): the 60 px block with the track at
 /// 22 px, the intro and credits blocks, the played fill, the chapter ticks,
 /// the pointer's position line, the thumb, and the elapsed and
-/// `−remaining · ends HH:MM` labels at 42 px. The block's own rect is the
+/// `−remaining` labels at 42 px. The block's own rect is the
 /// `seekbar` region; a press resolves there in the core.
 ///
 /// The played fraction and the clocks are the playhead's prediction (design
@@ -111,7 +111,6 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let progress_pct = playhead.fraction.cloned() * 100.0;
     let elapsed = playhead.elapsed.cloned();
     let remaining = playhead.remaining.cloned();
-    let finish = playhead.finish.cloned();
     // The scrubber's hover preview, painted from the hover section: the
     // pointer's fraction, the time it names, the chapter covering it, and
     // the trickplay tile. `None` while the pointer is away from the bar.
@@ -121,11 +120,6 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let intro_left = mark_left(playback.intro_mark.as_ref(), runtime);
     let credits_left = mark_left(playback.credits_mark.as_ref(), runtime);
     let tile_crop = hover_preview.as_ref().and_then(tile_crop);
-    // The one right-hand line joins the remaining time and the finish clock
-    // behind the canvas minus (`main` audit 9).
-    let ends = finish
-        .map(|finish| format!(" \u{b7} ends {}", format_wall_clock(finish.finish_secs)))
-        .unwrap_or_default();
     let hover_pct = hover_preview.as_ref().map(|hover| hover.fraction * 100.0);
     let muted = role_var(GuiRole::TextMuted);
     let title_fg = role_var(GuiRole::PlaybackTitleFg);
@@ -210,7 +204,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                     }
                     span {
                         style: "color: var(--canvas-type-time); opacity: 0.75;",
-                        "{minus(&remaining)}{ends}"
+                        "{minus(&remaining)}"
                     }
                 }
             }
