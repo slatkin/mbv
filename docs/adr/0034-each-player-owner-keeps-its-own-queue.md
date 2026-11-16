@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+> **Amended (2026-11-16, Shown entry in the GUI):** In the GUI Client the shown entry, not the connection alone, picks the queue the queue panel shows. The Queue chooser lists one entry per Named queue of the local Owner and one per connected peer, and the connection decides which peers are listed. The TUI keeps the connection rule. See [ADR 0041](0041-gui-shows-one-entry-per-queue.md).
+
 # Each Player Owner Keeps Its Own Queue
 
 Each Player owner keeps its own Bound queue. Connect moves only control: a
