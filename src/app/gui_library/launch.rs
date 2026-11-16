@@ -1,38 +1,32 @@
 //! The GUI's launch location (add-gui-library-panel design D9): the
-//! destination, the selected collections of each destination, and Panel
-//! focus, saved at orderly exit and restored after the catalog lands.
+//! destination and the selected collections of each destination, saved at
+//! orderly exit and restored after the catalog lands.
 //!
 //! The GUI keeps its own file ([`mbv_config::save_gui_launch_state`]): the TUI
-//! launch state never moves this Client's tab or Panel focus, and this file
-//! never holds a TUI launch location. Identities are stable Service ids, so a
-//! resolution that finds no match opens nothing instead of a stale position
-//! or another destination the saved location did not name.
+//! launch state never moves this Client's tab, and this file never holds a TUI
+//! launch location. Identities are stable Service ids, so a resolution that
+//! finds no match opens nothing instead of a stale position or another
+//! destination the saved location did not name.
 
 use mbv_config::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState, TabIdentity,
 };
-use mbv_config::{LaunchPanelFocus, TabIdentity};
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
-use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
 impl App {
-    /// The GUI's launch location (design D9): the active destination, the
-    /// selected collections of each destination, and Panel focus. Read at
-    /// orderly exit only; nothing writes it while the window is open.
+    /// The GUI's launch location (design D9): the active destination and the
+    /// selected collections of each destination. Read at orderly exit only;
+    /// nothing writes it while the window is open.
     #[must_use]
     pub fn gui_launch_state(&self) -> GuiLaunchState {
         GuiLaunchState {
             version: GUI_LAUNCH_STATE_VERSION,
             destination: self.gui_launch_destination(),
-            panel_focus: match self.gui_panel_focus() {
-                PanelFocus::Library => LaunchPanelFocus::Library,
-                PanelFocus::Queue => LaunchPanelFocus::Queue,
-            },
             collections: self.gui_launch_collections(),
         }
     }
@@ -42,9 +36,8 @@ impl App {
     /// state [`mbv_config::first_launch`] carries, so a start with no saved
     /// location and one whose file failed to load — opens the first presented
     /// destination. [`GuiLaunchOpen::Opened`] carries the opened destination's
-    /// identity as the saved file carries it, and the caller applies the saved
-    /// Panel focus after the open, because opening a library takes Library
-    /// focus. [`GuiLaunchOpen::Retry`] means a catalog can still land, so the
+    /// identity as the saved file carries it. [`GuiLaunchOpen::Retry`] means a
+    /// catalog can still land, so the
     /// caller retries on the drain that delivers one. [`GuiLaunchOpen::Unmatched`]
     /// means a destination is presented and the saved identity's Service has
     /// settled without it: nothing opens, so a saved location never moves the
@@ -256,8 +249,7 @@ impl App {
     /// all. Once a destination is presented and the saved identity's Service
     /// has settled, an identity the presented set does not hold is gone, and
     /// the caller finishes the restore rather than waiting for it — a wait
-    /// that would leave the saved Panel focus unapplied and would move the tab
-    /// of a late-present destination under the user.
+    /// that would move the tab of a late-present destination under the user.
     fn launch_destination(&self, destination: &TabIdentity) -> LaunchDestination {
         let saved = match destination {
             TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),

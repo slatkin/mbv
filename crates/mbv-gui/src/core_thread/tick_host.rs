@@ -359,10 +359,6 @@ impl ClientTickHost for CoreThread {
                     let focus_target = focus_target(&command);
                     self.app.apply_gui_library_command(command);
                     if let Some(panel) = focus_target {
-                        // The take-focus may run in the pre-catalog window
-                        // (design D9): the restore then leaves the taken
-                        // focus alone.
-                        self.note_launch_focus_taken();
                         self.focus.set_panel_focus(panel);
                     }
                 }

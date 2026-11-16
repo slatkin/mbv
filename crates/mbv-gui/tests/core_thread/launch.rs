@@ -1,18 +1,16 @@
 //! The GUI launch location (add-gui-library-panel design D9): the exit save
-//! into the GUI's own state file, and the start restore of the destination,
-//! the saved collection sets, and Panel focus. The state directory is a
-//! `TestStateDirGuard` scratch path, and every Emby answer comes from the
-//! in-memory mock transport, so no request leaves the process and no live
-//! Owner, Service, or window runs (design D13).
+//! into the GUI's own state file, and the start restore of the destination and
+//! the saved collection sets. The state directory is a `TestStateDirGuard`
+//! scratch path, and every Emby answer comes from the in-memory mock transport,
+//! so no request leaves the process and no live Owner, Service, or window runs
+//! (design D13).
 
 use mbv::{ClientTickHost, stub_app_with_queue};
 use mbv_config::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, LaunchPanelFocus,
-    TabIdentity, TestStateDirGuard, gui_launch_state_path, load_gui_launch_state,
-    save_gui_launch_state,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, TabIdentity,
+    TestStateDirGuard, gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
 };
 use mbv_emby_model::EmbyItem;
-use mbv_gui::bridge::frame::focus::GuiPanel;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -70,16 +68,6 @@ fn core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> Tes
     test_core_with(app)
 }
 
-/// A core thread like [`core_with_seeded_catalog`] whose queue holds one slot,
-/// so the saved Panel focus stays observable: an empty queue hides the Queue
-/// column and reports Library focus whatever the restore applied.
-fn queued_core_with_seeded_catalog(build: impl FnOnce(&mut mbv::App, &MockHttp)) -> TestCore {
-    let http = MockHttp::new();
-    let mut app = stub_app_with_queue(1);
-    build(&mut app, &http);
-    test_core_with(app)
-}
-
 /// Seed the grouped Music library without a Service client.
 fn seed_music(app: &mut mbv::App, _http: &MockHttp) {
     app.seed_gui_music_library_tab_for_test();
@@ -127,8 +115,8 @@ fn send_library(test: &mut TestCore, command: GuiLibraryCommand) {
 }
 
 /// The exit save writes the GUI's own file and nothing writes it while the
-/// window is open: Music with two selected groups and Library focus lands in
-/// the location, and the file appears only at the run's exit boundary.
+/// window is open: Music with two selected groups lands in the location, and
+/// the file appears only at the run's exit boundary.
 #[test]
 fn the_window_close_saves_the_launch_location_once() {
     let _guard = TestStateDirGuard::new();
@@ -143,7 +131,6 @@ fn the_window_close_saves_the_launch_location_once() {
             group_id: "grp-soul".into(),
         },
     );
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
     assert!(
         !gui_launch_state_path().exists(),
         "no write happens while the window is open"
@@ -154,7 +141,6 @@ fn the_window_close_saves_the_launch_location_once() {
 
     let state = load_gui_launch_state().expect("the exit saved the GUI launch location");
     assert_eq!(state.destination, library_identity(MUSIC_LIBRARY.0));
-    assert_eq!(state.panel_focus, LaunchPanelFocus::Library);
     assert_eq!(
         state.collections,
         vec![GuiDestinationCollections {
@@ -174,7 +160,6 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(MUSIC_LIBRARY.0),
-        panel_focus: LaunchPanelFocus::Library,
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-hiphop".into(), "grp-gone".into()],
@@ -203,7 +188,6 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(MUSIC_LIBRARY.0),
-        panel_focus: LaunchPanelFocus::Library,
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-gone".into(), "grp-also-gone".into()],
@@ -251,7 +235,6 @@ fn a_location_saved_on_shows_opens_shows() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(SHOWS_LIBRARY.0),
-        panel_focus: LaunchPanelFocus::Queue,
         collections: Vec::new(),
     })
     .unwrap();
@@ -282,43 +265,27 @@ fn a_location_saved_on_shows_opens_shows() {
     );
 }
 
-/// A saved destination the settled catalog no longer holds opens nothing and
-/// still applies the saved Panel focus (add-gui-library-panel design D9, row
-/// 13.1): the presented set holds the Music and Shows libraries, so the saved
-/// identity matches none of them, the deleted fallback would have opened
-/// Music, and the restore still finishes instead of leaving the saved focus
-/// unapplied for the session.
+/// A saved destination the settled catalog no longer holds opens nothing
+/// (add-gui-library-panel design D9, row 13.1): the presented set holds the
+/// Music and Shows libraries, so the saved identity matches none of them, the
+/// deleted fallback would have opened Music, and the restore finishes instead
+/// of waiting for a destination that never lands.
 #[test]
-fn a_saved_destination_the_catalog_lost_applies_the_saved_focus_and_opens_nothing() {
+fn a_saved_destination_the_catalog_lost_opens_nothing() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity("lib-gone"),
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     })
     .unwrap();
 
-    let mut test = queued_core_with_seeded_catalog(seed_music_and_shows);
+    let mut test = core_with_seeded_catalog(seed_music_and_shows);
 
-    let app = test.core.app_mut();
-    let (tab, focus) = (app.tab_for_test(), app.gui_panel_focus());
     assert_eq!(
-        tab,
+        test.core.app_mut().tab_for_test(),
         TabSelection::Home,
         "the saved destination opens no destination the location did not name"
-    );
-    assert_eq!(
-        focus,
-        PanelFocus::Library,
-        "the saved Panel focus applies even though no destination opened"
-    );
-    test.tx.send(CoreInput::Wake).unwrap();
-    assert!(test.core.step());
-    assert_eq!(
-        test.held().focus().panel,
-        GuiPanel::Library,
-        "the saved focus reaches the frame too"
     );
 }
 
@@ -333,12 +300,11 @@ fn a_destination_presented_after_the_restore_finished_does_not_move_the_tab() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity("lib-gone"),
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     })
     .unwrap();
 
-    let mut test = queued_core_with_seeded_catalog(seed_music_and_shows);
+    let mut test = core_with_seeded_catalog(seed_music_and_shows);
     assert_eq!(
         test.core.app_mut().tab_for_test(),
         TabSelection::Home,
@@ -365,33 +331,26 @@ fn a_destination_presented_after_the_restore_finished_does_not_move_the_tab() {
 /// A saved Audiobookshelf destination waits while its catalog can still land
 /// (add-gui-library-panel design D9, row 9.1, row 13.1): the Audiobookshelf
 /// libraries are published and the startup is still running, so the restore
-/// neither opens the destination nor applies the saved Panel focus yet.
+/// does not open the destination yet.
 #[test]
 fn a_saved_audiobooks_destination_waits_while_the_catalog_is_pending() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: abs_identity("lib-abs-books"),
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     })
     .unwrap();
 
-    let mut test = queued_core_with_seeded_catalog(|app, _http| {
+    let mut test = core_with_seeded_catalog(|app, _http| {
         app.seed_gui_abs_libraries_for_test();
         app.mark_gui_abs_catalog_pending_for_test();
     });
 
-    let app = test.core.app_mut();
     assert_eq!(
-        app.tab_for_test(),
+        test.core.app_mut().tab_for_test(),
         TabSelection::Home,
         "a pending catalog is not a catalog the destination is gone from"
-    );
-    assert_eq!(
-        app.gui_panel_focus(),
-        PanelFocus::Queue,
-        "the restore applies no saved focus while it waits"
     );
 }
 
@@ -405,7 +364,6 @@ fn a_location_saved_on_a_movies_library_opens_it() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(MOVIES_LIBRARY.0),
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     })
     .unwrap();
@@ -455,7 +413,6 @@ fn a_location_saved_on_audiobooks_opens_it() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: abs_identity("lib-abs-books"),
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     })
     .unwrap();
@@ -479,7 +436,6 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(SECOND_MUSIC.0),
-        panel_focus: LaunchPanelFocus::Queue,
         collections: vec![
             GuiDestinationCollections {
                 destination: library_identity(MUSIC_LIBRARY.0),
@@ -522,58 +478,4 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
         None,
         "the opened destination's saved set is not applied after the switch"
     );
-}
-
-/// A take-focus in the pre-catalog window survives the restore (design D9):
-/// phase 1 still opens the saved destination, but it skips the saved
-/// Panel-focus re-apply once the user has moved focus.
-#[test]
-fn a_pre_catalog_take_focus_survives_the_restore() {
-    let _guard = TestStateDirGuard::new();
-    save_gui_launch_state(&GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: library_identity(MUSIC_LIBRARY.0),
-        panel_focus: LaunchPanelFocus::Queue,
-        collections: vec![GuiDestinationCollections {
-            destination: library_identity(MUSIC_LIBRARY.0),
-            group_ids: vec!["grp-hiphop".into()],
-            picks: Vec::new(),
-        }],
-    })
-    .unwrap();
-
-    // The catalog is absent at construction, so the window is interactive
-    // while the restore waits in the Destination phase.
-    let mut test = test_core_with(stub_app_with_queue(0));
-
-    // The user takes Panel focus for the Library panel before the catalog
-    // lands, and the frame carries it.
-    send_library(&mut test, GuiLibraryCommand::TakeFocus);
-    assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
-    assert_eq!(test.held().focus().panel, GuiPanel::Library);
-
-    // The catalog lands: the destination jump still runs, and the saved
-    // Queue focus does not replace the taken Library focus.
-    test.core.app_mut().seed_gui_music_library_tab_for_test();
-    // The startup drain marks every gated section when it lands a catalog
-    // (design D3 rule 2); this seed lands it between ticks, so it marks what that
-    // drain would.
-    test.core.mark_startup_landing_for_test();
-    assert!(test.core.step());
-
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::EmbyLibrary(0)
-    );
-    assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
-    // The saved collection set still applies: only the Panel-focus re-apply
-    // is conditional. The wake's step emits the frame the restore's state
-    // landed in.
-    assert_eq!(
-        test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-hiphop")
-    );
-    test.tx.send(CoreInput::Wake).unwrap();
-    assert!(test.core.step());
-    assert_eq!(test.held().focus().panel, GuiPanel::Library);
 }

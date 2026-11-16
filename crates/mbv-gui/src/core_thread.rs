@@ -234,10 +234,6 @@ pub struct CoreThread {
     idle_cadence: Duration,
     /// The saved GUI launch location and its restore phase (design D9).
     launch_restore: GuiLaunchRestore,
-    /// A take-focus ran while the restore was pending (design D9): the user
-    /// moved Panel focus in the pre-catalog window, so the first phase skips
-    /// the saved Panel-focus re-apply.
-    launch_focus_taken: bool,
 }
 
 impl CoreThread {
@@ -275,12 +271,11 @@ impl CoreThread {
             app.start_playback_target_discovery();
         }
         // The GUI's own launch location (design D9), read once before the
-        // first step: the TUI's launch state never moves this Client's tab or
-        // Panel focus, and this file is the only location it restores. A start
-        // with no saved location — or one that fails to load — restores the
-        // Client's first-choice rules through the same restore path: the first
-        // presented destination, Library Panel focus, and no saved collection
-        // sets, so the Library panel is reachable from the first launch.
+        // first step: the TUI's launch state never moves this Client's tab,
+        // and this file is the only location it restores. A start with no
+        // saved location — or one that fails to load — restores the Client's
+        // first-choice rules through the same restore path: the first presented
+        // destination, and no saved collection sets.
         let launch_restore = GuiLaunchRestore::Destination(
             mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
         );
@@ -303,7 +298,6 @@ impl CoreThread {
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
             launch_restore,
-            launch_focus_taken: false,
         };
         // The core sets its `FocusStack` and the App's stored Panel focus
         // together (design D4), so the sections the window paints and the gates

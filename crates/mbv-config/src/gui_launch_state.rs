@@ -1,6 +1,6 @@
-//! Versioned GUI launch location: the destination, the selected collections of
-//! each destination, and Panel focus a completed GUI Client session leaves for
-//! the next start (`add-gui-library-panel` design D9). Additive beside
+//! Versioned GUI launch location: the destination and the selected collections
+//! of each destination that a completed GUI Client session leaves for the next
+//! start (`add-gui-library-panel` design D9). Additive beside
 //! [`super::TuiLaunchState`]: the TUI never reads this file, and the GUI never
 //! writes the TUI's.
 //
@@ -13,7 +13,7 @@
 // holds) belongs to the Client, not to this file.
 
 use super::launch_state::{LaunchStateError, load_state_at, write_state_at};
-use super::{LaunchPanelFocus, TabIdentity, state_dir};
+use super::{TabIdentity, state_dir};
 use std::path::{Path, PathBuf};
 
 /// Current on-disk format version. The loader accepts only this version and
@@ -26,17 +26,18 @@ const fn default_gui_launch_state_version() -> u32 {
     GUI_LAUNCH_STATE_VERSION
 }
 
-/// One GUI launch location: the active destination, the selected collections
-/// of each destination, and the Panel that held focus. Written only at orderly
-/// GUI exit, and read once at start.
+/// One GUI launch location: the active destination and the selected
+/// collections of each destination. Written only at orderly GUI exit, and read
+/// once at start.
+///
+/// The struct does not deny unknown fields: a file that an earlier build wrote
+/// with a Panel focus still loads, and that field is ignored.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuiLaunchState {
     #[serde(default = "default_gui_launch_state_version")]
     pub version: u32,
     /// The destination that was active at exit.
     pub destination: TabIdentity,
-    #[serde(default)]
-    pub panel_focus: LaunchPanelFocus,
     /// One entry per destination whose selection the session changed, in the
     /// catalog's order. A destination with no entry had no selection: it opens
     /// with none.
@@ -81,16 +82,15 @@ pub fn save_gui_launch_state(state: &GuiLaunchState) -> Result<(), LaunchStateEr
 /// restore takes the same open path a saved location takes, and its Home
 /// destination opens the first presented destination, so a fresh launch
 /// lands on one. The identity is Home — no Service library, which resolves
-/// to the first presented destination — with Library Panel focus and no
-/// saved collection sets, so the restore selects nothing for any destination
-/// and each opens on its default first group (design D6's single-select
-/// pills; see `restore_gui_launch_collections`).
+/// to the first presented destination — with no saved collection sets, so the
+/// restore selects nothing for any destination and each opens on its default
+/// first group (design D6's single-select pills; see
+/// `restore_gui_launch_collections`).
 #[must_use]
 pub fn first_launch() -> GuiLaunchState {
     GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Home,
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     }
 }
