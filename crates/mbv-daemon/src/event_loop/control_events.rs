@@ -317,11 +317,22 @@ impl DaemonLoop {
                 let _ = ack_rx.recv();
             }
         }
-        if self.role == DaemonRole::Local
-            && let Err(error) = self.persist_owner_queue()
-        {
+        self.persist_on_shutdown();
+        EventOutcome::SHUTDOWN
+    }
+
+    /// Persists the owner queue and the Named queues as the process stops. The
+    /// worker is already flushed, so both writes happen here, before the
+    /// process exits.
+    fn persist_on_shutdown(&mut self) {
+        if self.role != DaemonRole::Local {
+            return;
+        }
+        if let Err(error) = self.persist_owner_queue() {
             tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue on shutdown");
         }
-        EventOutcome::SHUTDOWN
+        if let Err(error) = self.persist_named_queues() {
+            tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues on shutdown");
+        }
     }
 }

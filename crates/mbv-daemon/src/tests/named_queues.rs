@@ -716,3 +716,5 @@ fn only_the_subscribed_connection_receives_the_resting_snapshot() {
 
 // The swap that plays or replaces a resting queue (design D2).
 mod swap;
+// The state file a restart reloads, and the restore it makes (design D6).
+mod restore;

@@ -10,10 +10,12 @@
 use super::queue_setup::{install_replaced_queue, start_replaced_queue};
 use super::{
     CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PlaybackQueue, PlayerCommand,
-    QueueSlotId, RejectContext, SharedQueueState, broadcast_queue_state, dispatch_slot_jump,
-    handle_stop, reject_command, send_to, unified_queue_state_for_peer,
+    QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump, handle_stop,
+    reject_command, send_to, unified_queue_state_for_peer,
 };
-use crate::core::{JumpOrigin, NamedQueueListSeed, NamedQueueTarget, RestingNamedQueue};
+use crate::core::{
+    JumpOrigin, NamedQueueListSeed, NamedQueueTarget, RestingNamedQueue, named_queues_state,
+};
 use crate::ctrl::{CtrlClientId, QueueTransport, serialize_ctrl_event};
 use mbv_ctrl::{CtrlEvent, QueueOpOutcome, UnifiedQueueStateData};
 use mbv_queue::{
@@ -685,49 +687,4 @@ fn persist(ctx: &CtrlContext<'_>) {
     {
         tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "the daemon event loop is gone; the Named queues were not persisted");
     }
-}
-
-/// The Owner's whole Named-queue state as `named_queues_state.json` holds it
-/// (design D6): the current queue from the Owner core, the resting queues from
-/// the store, and the next identity to mint.
-fn named_queues_state(
-    owner: &DaemonPlayerOwner,
-    shared_queue: &SharedQueueState,
-) -> mbv_config::NamedQueuesState {
-    let mut queues = vec![mbv_config::NamedQueue {
-        id: owner.named_queues.current,
-        name: owner.named_queues.current_name.clone(),
-        source: owner.core.source.clone(),
-        lineage: *shared_queue.lineage.lock().unwrap(),
-        start_slot: shared_queue.start_slot(),
-        slots: slots_of(&owner.core.queue),
-    }];
-    for resting in &owner.named_queues.resting {
-        queues.push(mbv_config::NamedQueue {
-            id: resting.id,
-            name: resting.name.clone(),
-            source: resting.source.clone(),
-            lineage: resting.lineage,
-            start_slot: resting.start_slot,
-            slots: slots_of(&resting.queue),
-        });
-    }
-    queues.sort_by_key(|queue| queue.id);
-    mbv_config::NamedQueuesState {
-        current: owner.named_queues.current,
-        next_queue_id: owner.named_queues.next_queue_id,
-        queues,
-    }
-}
-
-/// The persisted slots of one queue, with their owner-assigned identities.
-fn slots_of(queue: &PlaybackQueue) -> Vec<mbv_config::NamedQueueSlot> {
-    queue
-        .slots()
-        .iter()
-        .map(|slot| mbv_config::NamedQueueSlot {
-            slot_id: slot.slot_id,
-            item: slot.item.clone(),
-        })
-        .collect()
 }

@@ -56,6 +56,11 @@ impl EventOutcome {
 pub(crate) type OwnerQueueStore =
     Box<dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), crate::DaemonLibError>>;
 
+/// Injected Named-queue persistence hook, the owner-queue hook's counterpart:
+/// tests record the state instead of writing the real state file.
+pub(crate) type NamedQueuesStore =
+    Box<dyn FnMut(&mbv_config::NamedQueuesState) -> Result<(), crate::DaemonLibError>>;
+
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).
 pub(crate) struct DaemonLoop {
@@ -80,6 +85,9 @@ pub(crate) struct DaemonLoop {
     /// Injected owner-queue persistence, so tests can record snapshots instead
     /// of writing real state files.
     pub(super) store: OwnerQueueStore,
+    /// Injected Named-queue persistence (gui-named-queues design D6), so tests
+    /// can record the state instead of writing a real state file.
+    pub(super) named_store: NamedQueuesStore,
     pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
     /// Tray ownership reconciled against the live owner settings (design D4).
     pub(super) tray: TrayState,
@@ -319,6 +327,9 @@ impl DaemonLoop {
         if self.role != DaemonRole::Local || !owner_queue_dirty {
             return;
         }
+        // The Named-queue file holds the current queue too (gui-named-queues
+        // design D6), so a change of the current queue is a change of the file.
+        self.save_named_queues(self.named_queues_snapshot());
         if let Some(tx) = &self.queue_persist_tx {
             let snapshot = super::stay_alive_owner_queue_snapshot(
                 &self.owner,
@@ -339,19 +350,28 @@ impl DaemonLoop {
     /// Persists the Named-queue state a ctrl handler changed (gui-named-queues
     /// design D6) through the same worker that writes the owner queue, so the
     /// write is atomic and off the event-loop thread.
-    fn save_named_queues(&self, state: mbv_config::NamedQueuesState) {
-        if let Some(tx) = &self.queue_persist_tx {
-            if tx
-                .send(super::QueuePersistenceRequest::SaveNamedQueues(Box::new(
-                    state,
-                )))
-                .is_err()
-            {
-                tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "queue persistence worker is unavailable");
+    fn save_named_queues(&mut self, state: mbv_config::NamedQueuesState) {
+        let Some(tx) = &self.queue_persist_tx else {
+            if let Err(error) = (self.named_store)(&state) {
+                tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
             }
-        } else if let Err(error) = mbv_config::save_named_queues_state(&state) {
-            tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
+            return;
+        };
+        if tx
+            .send(super::QueuePersistenceRequest::SaveNamedQueues(Box::new(
+                state,
+            )))
+            .is_err()
+        {
+            tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "queue persistence worker is unavailable");
         }
+    }
+
+    /// The Owner's whole Named-queue state as the state file holds it (design
+    /// D6): the current queue from the Owner core, the resting queues from the
+    /// store, and the next identity to mint.
+    pub(super) fn named_queues_snapshot(&self) -> mbv_config::NamedQueuesState {
+        super::named_queues_state(&self.owner, &self.shared_queue)
     }
 
     /// Persists the owner queue through the injected store, returning the
@@ -363,5 +383,13 @@ impl DaemonLoop {
             &self.shared_queue,
             &mut *self.store,
         )
+    }
+
+    /// Persists the Named queues through the injected store, for the shutdown
+    /// path: the worker has already been flushed there, so the write must
+    /// happen before the process exits.
+    pub(super) fn persist_named_queues(&mut self) -> Result<(), crate::DaemonLibError> {
+        let state = self.named_queues_snapshot();
+        (self.named_store)(&state)
     }
 }

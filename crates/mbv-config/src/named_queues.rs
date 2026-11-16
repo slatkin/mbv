@@ -18,7 +18,7 @@ pub const DEFAULT_NAMED_QUEUE_NAME: &str = "Default";
 
 /// The raw identity the converted `Default` queue takes. A fresh Owner mints
 /// the same first identity, so both paths name their first queue alike.
-const CONVERTED_QUEUE_RAW_ID: u64 = 1;
+pub const FIRST_QUEUE_RAW_ID: u64 = 1;
 
 /// One Named queue as it is persisted: its slots with their stable identities,
 /// its name, its source, its lineage, and its start slot.
@@ -127,7 +127,7 @@ pub fn load_or_migrate_named_queues_state_at(
     if named_queues_path.exists() {
         return load_named_queues_state_at(named_queues_path);
     }
-    load_stay_alive_queue_state_at(stay_alive_path).map(converted_state)
+    load_stay_alive_queue_state_at(stay_alive_path).map(converted_named_queues_state)
 }
 
 #[must_use]
@@ -138,10 +138,11 @@ pub fn load_or_migrate_named_queues_state() -> Option<NamedQueuesState> {
     )
 }
 
-/// The earlier single-queue file as one current queue named `Default`. Its
+/// An earlier single-queue state as one current queue named `Default`. Its
 /// slots take fresh identities in queue order, and the position it saved
 /// becomes the start slot, so Play resumes where the earlier Owner left off.
-fn converted_state(stay_alive: StayAliveQueueState) -> NamedQueuesState {
+#[must_use]
+pub fn converted_named_queues_state(stay_alive: StayAliveQueueState) -> NamedQueuesState {
     let StayAliveQueueState { queue, lineage } = stay_alive;
     let QueueState {
         source,
@@ -160,10 +161,10 @@ fn converted_state(stay_alive: StayAliveQueueState) -> NamedQueuesState {
     }
     let start_slot = slots.get(cursor).map(|slot| slot.slot_id);
     NamedQueuesState {
-        current: NamedQueueId::from_raw(CONVERTED_QUEUE_RAW_ID),
-        next_queue_id: NamedQueueId::from_raw(CONVERTED_QUEUE_RAW_ID.saturating_add(1)),
+        current: NamedQueueId::from_raw(FIRST_QUEUE_RAW_ID),
+        next_queue_id: NamedQueueId::from_raw(FIRST_QUEUE_RAW_ID.saturating_add(1)),
         queues: vec![NamedQueue {
-            id: NamedQueueId::from_raw(CONVERTED_QUEUE_RAW_ID),
+            id: NamedQueueId::from_raw(FIRST_QUEUE_RAW_ID),
             name: DEFAULT_NAMED_QUEUE_NAME.to_string(),
             source,
             lineage,

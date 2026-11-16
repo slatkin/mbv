@@ -17,7 +17,7 @@ use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
-use mbv_queue::{PlaybackQueue, QueueSlotId};
+use mbv_queue::QueueSlotId;
 use std::convert::Infallible;
 use std::net::TcpListener;
 use std::sync::mpsc;
@@ -29,6 +29,9 @@ pub(super) use observations::{
     ConsumePolicy, apply_stopped_observation, apply_track_completed_observation,
     record_completed_slot,
 };
+mod restore;
+#[cfg(test)]
+pub(crate) use restore::StartupQueues;
 
 pub(super) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
@@ -294,39 +297,13 @@ fn forward_merged_event_sources(
 }
 
 fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, SharedQueueState) {
-    // Shared state for ctrl socket initial-state snapshots — stores the
-    // canonical queue so all ctrl peers are seeded from one source.
-    let owner_state = if role == DaemonRole::Local {
-        let owner_path = mbv_config::stay_alive_queue_state_path();
-        mbv_config::load_stay_alive_queue_state().or_else(|| {
-            (!owner_path.exists())
-                .then(mbv_config::load_queue_state)
-                .flatten()
-                .and_then(|queue| {
-                    mbv_config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
-                })
-        })
-    } else {
-        None
-    };
-    let revision_mint = Arc::new(mbv_queue::QueueRevisionMint::default());
-    let (initial_queue, initial_source, initial_lineage) = owner_state.map_or_else(
-        || {
-            (
-                PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
-                mbv_queue::QueueSource::Unknown,
-                mbv_queue::QueueLineage::default(),
-            )
-        },
-        |state| {
-            let queue = PlaybackQueue::from_queue_items(
-                state.queue.items,
-                Some(state.queue.cursor),
-                Arc::clone(&revision_mint),
-            );
-            (queue, state.queue.source, state.lineage)
-        },
-    );
+    // The Named queues the Owner starts with (gui-named-queues design D6): a
+    // Local Owner restores them from their state file before it serves its
+    // first Client, and a packaged `mbvd` starts with one empty `Default`.
+    let startup = restore::startup_queues(role, &Arc::new(mbv_queue::QueueRevisionMint::default()));
+    let initial_queue = startup.queue;
+    let initial_source = startup.source;
+    let initial_lineage = startup.lineage;
     if role == DaemonRole::Local {
         if let Err(error) =
             mbv_config::save_stay_alive_queue_state(&mbv_config::StayAliveQueueState {
@@ -357,8 +334,9 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         // A new owner starts on local playback (cast-owner-output spec
         // "Owner starts").
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
-        // A restored queue resumes where it left off: the position its earlier
-        // Owner saved is the start slot a Play of it begins at (gui-named-queues
+        // A restored queue resumes where it left off: the start slot its
+        // earlier Owner saved becomes the queue's active slot, so the player
+        // seeds its playlist there and a Play begins at it (gui-named-queues
         // design D4). A fresh queue has none, so a Play starts its first slot.
         start_slot: Arc::new(Mutex::new(initial_queue.active_slot_id())),
         // The Named-queue list is published below, once the Owner exists.
@@ -366,6 +344,7 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     };
     let owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),
+        named_queues: startup.store,
         ..Default::default()
     };
     // The Named queues the Local Owner holds, stated once before it serves its
@@ -658,6 +637,7 @@ fn run_with_owner_outputs(
         last_capabilities: Instant::now(),
         last_queue_resync: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
+        named_store: Box::new(|state| Ok(mbv_config::save_named_queues_state(state)?)),
         queue_persist_tx: Some(queue_persist_tx),
         tray,
         pin_swap,

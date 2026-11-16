@@ -13,6 +13,8 @@ use mbv_queue::{
 };
 use std::sync::Arc;
 
+use super::{DaemonPlayerOwner, SharedQueueState};
+
 /// The name a fresh Owner gives its first queue (spec `named-queues` "A first
 /// start makes one queue"). The `mbv-config` conversion of an earlier
 /// single-queue state file gives its queue the same name.
@@ -22,7 +24,7 @@ pub(crate) const FIRST_QUEUE_NAME: &str = mbv_config::DEFAULT_NAMED_QUEUE_NAME;
 /// conversion of an earlier single-queue state file mints the same identity for
 /// the `Default` queue it produces, so both paths start the persisted identity
 /// sequence at the same value.
-pub(crate) const FIRST_QUEUE_RAW_ID: u64 = 1;
+pub(crate) const FIRST_QUEUE_RAW_ID: u64 = mbv_config::FIRST_QUEUE_RAW_ID;
 
 /// The lowest number a new queue's name draws from: the first new queue beside
 /// `Default` is `Queue 2` (design D6).
@@ -178,4 +180,49 @@ impl NamedQueueStore {
     pub fn queue_count(&self) -> usize {
         self.resting.len().saturating_add(1)
     }
+}
+
+/// The Owner's whole Named-queue state as `named_queues_state.json` holds it
+/// (design D6): the current queue from the Owner core, the resting queues from
+/// the store, and the next identity to mint.
+pub(crate) fn named_queues_state(
+    owner: &DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+) -> mbv_config::NamedQueuesState {
+    let mut queues = vec![mbv_config::NamedQueue {
+        id: owner.named_queues.current,
+        name: owner.named_queues.current_name.clone(),
+        source: owner.core.source.clone(),
+        lineage: *shared_queue.lineage.lock().unwrap(),
+        start_slot: shared_queue.start_slot(),
+        slots: slots_of(&owner.core.queue),
+    }];
+    for resting in &owner.named_queues.resting {
+        queues.push(mbv_config::NamedQueue {
+            id: resting.id,
+            name: resting.name.clone(),
+            source: resting.source.clone(),
+            lineage: resting.lineage,
+            start_slot: resting.start_slot,
+            slots: slots_of(&resting.queue),
+        });
+    }
+    queues.sort_by_key(|queue| queue.id);
+    mbv_config::NamedQueuesState {
+        current: owner.named_queues.current,
+        next_queue_id: owner.named_queues.next_queue_id,
+        queues,
+    }
+}
+
+/// The persisted slots of one queue, with their owner-assigned identities.
+fn slots_of(queue: &PlaybackQueue) -> Vec<mbv_config::NamedQueueSlot> {
+    queue
+        .slots()
+        .iter()
+        .map(|slot| mbv_config::NamedQueueSlot {
+            slot_id: slot.slot_id,
+            item: slot.item.clone(),
+        })
+        .collect()
 }
