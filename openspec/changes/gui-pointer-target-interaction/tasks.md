@@ -4,12 +4,12 @@ Rules for every task: run `cargo fmt` after each Rust change. Run tests in the f
 
 ## 1. The launch location saves no Panel focus
 
-- [ ] 1.1 In `crates/mbv-config/src/gui_launch_state.rs`, remove `GuiLaunchState.panel_focus` and its default value (design D5). Keep `GUI_LAUNCH_STATE_VERSION` at 1 and keep `LaunchPanelFocus` for the TUI. In `crates/mbv-config/src/tests/gui_launch_state.rs`, drop the field from the existing fixtures, and add one test beside the existing tests of the private loader: a file that holds `"panel_focus": "queue"` still loads its destination. Verify with `cargo nextest run -p mbv-config`.
+- [x] 1.1 In `crates/mbv-config/src/gui_launch_state.rs`, remove `GuiLaunchState.panel_focus` and its default value (design D5). Keep `GUI_LAUNCH_STATE_VERSION` at 1 and keep `LaunchPanelFocus` for the TUI. In `crates/mbv-config/src/tests/gui_launch_state.rs`, drop the field from the existing fixtures, and add one test beside the existing tests of the private loader: a file that holds `"panel_focus": "queue"` still loads its destination. Verify with `cargo nextest run -p mbv-config`.
 
 ## 2. The Client core restores no Panel focus
 
-- [ ] 2.1 Stop the Panel-focus mapping in `src/app/gui_library/launch.rs`, so the save writes no focus. Update the existing launch-save test in `src/app/tests/` that names the field. Verify with `cargo nextest run -p mbv`.
-- [ ] 2.2 In `core_thread/launch_restore.rs`, remove `apply_launch_panel_focus` and `note_launch_focus_taken`. Remove `launch_focus_taken` (`core_thread.rs`), its set in `tick_host.rs`, and its reset in `core_thread/settings.rs`. Delete the launch-restore tests that cover only the focus restore. Verify with `cargo nextest run -p mbv-gui`.
+- [x] 2.1 Stop the Panel-focus mapping in `src/app/gui_library/launch.rs`, so the save writes no focus. Update the existing launch-save test in `src/app/tests/` that names the field. Verify with `cargo nextest run -p mbv`.
+- [x] 2.2 In `core_thread/launch_restore.rs`, remove `apply_launch_panel_focus` and `note_launch_focus_taken`. Remove `launch_focus_taken` (`core_thread.rs`), its set in `tick_host.rs`, and its reset in `core_thread/settings.rs`. Delete the launch-restore tests that cover only the focus restore. Verify with `cargo nextest run -p mbv-gui`.
 
 ## 3. The pointer target resolver
 
