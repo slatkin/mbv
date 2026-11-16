@@ -377,6 +377,14 @@ fn the_sections_paint_their_headings_and_the_date_gutter_in_order() {
         !fixture.presents("[data-library-home-row=\"spacer\"]"),
         "the spacer paints no marker"
     );
+    // The pointer markers (`gui-pointer-target-interaction` 3.3): only the item
+    // rows name a row. A heading and a spacer name none, so a key over one
+    // resolves no item.
+    assert_eq!(
+        fixture.all_attrs("[data-pointer-row]", "data-pointer-row"),
+        painted_rows(&fixture),
+        "the pointer rows are the item rows"
+    );
 }
 
 /// Contract (`LibraryHomeList.test.ts`): the headings and the spacer paint

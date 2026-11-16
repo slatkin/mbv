@@ -104,6 +104,10 @@ impl GeometryRow for HomeListRow {
         self.id()
     }
 
+    fn pointer_row(&self) -> Option<&str> {
+        matches!(self, HomeListRow::Item { .. }).then_some(self.id())
+    }
+
     fn top(&self) -> f32 {
         match self {
             HomeListRow::Heading { top, .. }
