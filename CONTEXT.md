@@ -409,7 +409,7 @@ _Avoid_: active panel, focused panel, pane focus
 Panel mode:
 The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values are:
 
-1. Mini names a state where only one of Library or Queue is visible, set by Panel focus. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows.
+1. Mini names a state where only one of Library or Queue is visible. In the TUI Client, Panel focus sets it. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows. The GUI Client has no Panel focus: its Mini always shows the Queue panel (ADR 0040).
 2. Narrow names a state where both panels are visible. A hero-bearing Library panel uses the standard fixed-row browser. It opens a Library Hero overlay on demand.
 3. Wide names a state where both panels are visible. A hero-bearing Library panel uses Wide hero when the shared width and minimum-height conditions hold.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
