@@ -9,8 +9,12 @@ observation sites in `event_loop/player_events.rs`,
 `control/queue_edit.rs`; the resting-queue writer
 `RestingNamedQueue::note_start_slot` and its removal, clear, and install call
 sites in `crates/mbv-daemon/src/core/named_queues.rs` and
-`control/named_queue.rs`; the start-a-queue path `play_from_start_slot`
-(`control/playback.rs`); and the projection
+`control/named_queue.rs`; the swap sites `park_current` and `finish_swap`
+there, which set a parked record's start slot at construction and write the
+swap's `Installed` observation; the startup seed in `run.rs` and
+`run/restore.rs`, which writes the restored start slots at construction; the
+start-a-queue paths `play_from_start_slot` (`control/playback.rs`) and the
+swap play in `control/named_queue.rs`; and the projection
 `unified_queue_state_for_peer` (`control_queue.rs`).
 
 ## The invariant
@@ -20,7 +24,9 @@ sites in `crates/mbv-daemon/src/core/named_queues.rs` and
    resting queue's lives in its `NamedQueueStore` record.
 2. One function writes the current queue's start slot:
    `SharedQueueState::note_start_slot`. The rule it applies is
-   `mbv_queue::start_slot_after`, and no other code assigns the cell. Every
+   `mbv_queue::start_slot_after`, and no other code assigns the cell at run
+   time; the startup seed sets the restored start slot at construction instead
+   (`run.rs`, `run/restore.rs`). Every
    observation that can move the start slot is expressed as one
    `StartSlotObservation`, so the rule stays in one place and each caller names
    only what it saw.
@@ -29,8 +35,10 @@ sites in `crates/mbv-daemon/src/core/named_queues.rs` and
    the slot that followed the completed one the start slot, after any consume,
    and leaves the queue with none at the end of the queue; removing the start
    slot makes the slot now at its position the start slot, or none when no slot
-   remains there; an install takes the start slot the installed queue kept in
-   the store, or none when it had none.
+   remains there; an install takes the start slot the installed queue carried: a
+   close-install takes the stored start slot, or none when it had none, and a
+   swap takes the slot the swap makes active — the requested slot, or the
+   stored start slot while it still names a slot, else the first slot.
 4. A start slot names a slot and stores no position. The item that plays from it
    takes its position from its Resume source, so a completion or a progress
    update can never leave a stale position in it.
@@ -58,8 +66,9 @@ handler compiles and passes every functional test.
 ## How the code maintains it today
 
 - `SharedQueueState::note_start_slot` is the only writer of the current
-  queue's start slot. It reads the cell, applies `start_slot_after` to the
-  queue as it stands after the observation, and stores the result.
+  queue's start slot at run time, beside the startup seed. It reads the cell,
+  applies `start_slot_after` to the queue as it stands after the observation,
+  and stores the result.
 - The active-slot observation has three sources, one per output, each writing
   `StartSlotObservation::Active`: the local run's `TrackChanged`
   (`handle_track_changed`, which resolves the slot against the canonical queue
@@ -87,12 +96,26 @@ handler compiles and passes every functional test.
   `SharedQueueState::note_start_slot`: it applies the same rule to the resting
   queue. A resting queue sees no run, so the only observation it records is
   `StartSlotRemoved`, on a slot removal and on a clear of its slots
-  (`control/named_queue.rs`).
+  (`control/named_queue.rs`). A swap moves a start slot into and out of the
+  store outside this writer: `park_current` sets the parked record's start
+  slot at construction, from `SharedQueueState` after its `Stopped`
+  observation, and the record the swap takes out leaves the store, so its
+  stored start slot ends and the swap's `Installed` sets the new current
+  queue's slot.
 - Closing the current queue installs the first remaining resting queue as
   current without playing it. The install writes
   `StartSlotObservation::Installed { start_slot }` through
   `SharedQueueState::note_start_slot`, so the installed queue's stored start
-  slot becomes the current queue's (`control/named_queue.rs`).
+  slot becomes the current queue's (`control/named_queue.rs`). A swap installs
+  a resting queue the same way through `finish_swap`, with the slot the swap
+  makes active as its `Installed` start slot, so that slot is the new current
+  queue's while it plays.
+- The startup seed sets the restored start slots at construction, never
+  through the rule: `run/restore.rs` builds the current queue with its saved
+  start slot as its active slot, so a restored stopped queue carries that slot
+  as its `Active` slot in `PlaybackQueue`, and `run.rs` initializes
+  `SharedQueueState.start_slot` from it; each resting queue's record takes its
+  saved start slot while it still names a slot the queue holds.
 - `play_from_start_slot` reads the start slot, validates it against the queue,
   falls back to the first slot, and dispatches one slot-jump transition under
   the Play intent's own request identity. The run's observation of that
@@ -105,7 +128,12 @@ handler compiles and passes every functional test.
   receive it; `a_completion_moves_the_start_slot` completes the third slot of
   four and asserts the fourth becomes the start slot; and
   `a_play_with_no_items_starts_the_start_slot` drives the ctrl Play path and
-  asserts the dispatched jump targets the start slot.
+  asserts the dispatched jump targets the start slot. The swap and restart
+  tests in its submodules cover the newer writes: `swap.rs` holds
+  `play_a_resting_queue_starts_its_start_slot`,
+  `play_a_row_of_a_resting_queue_while_another_queue_plays`, and
+  `replace_of_a_resting_queue_installs_the_new_items`, and `restore.rs` holds
+  `a_restart_restores_every_named_queue`.
 
 ## Where it currently fails / how it could regress
 
@@ -122,10 +150,11 @@ handler compiles and passes every functional test.
   `TrackChanged`. `note_observed_active_slot` and `note_start_slot` are two
   calls at each site today; a site that makes only the first is silently
   inconsistent.
-- Resting queues record one observation today (`gui-named-queues` tasks
-  5.3-5.4): the removal of the slot they name. The swap that plays a resting
-  queue, the show, and the persistence restore of tasks 5.5-5.7 have no
-  start-slot rule yet, and a parked queue's start slot is still unwritten.
+- The startup seed bypasses the rule (`gui-named-queues` tasks 5.5-5.7): it
+  sets the current queue's and each resting queue's start slot at construction
+  from the saved state file, so a save that wrote a wrong slot would restore
+  it. The show is a reader: it forwards a resting queue's stored start slot
+  and adds no rule of its own.
 - The rule is a pure function over a queue and one observation, so a caller that
   passes the wrong queue state — the queue before a removal instead of after,
   or a queue the observation does not belong to — gets a plausible but wrong
