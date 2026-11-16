@@ -30,6 +30,13 @@ pub fn stay_alive_queue_state_path() -> PathBuf {
     state_dir().join("stay_alive_queue_state.json")
 }
 
+/// Every Named queue the local Owner holds, with each slot's stable identity,
+/// in one file (design D6 of `gui-named-queues`).
+#[must_use]
+pub fn named_queues_state_path() -> PathBuf {
+    state_dir().join("named_queues_state.json")
+}
+
 #[must_use]
 pub fn library_position_state_path() -> PathBuf {
     state_dir().join("library_position_state.json")
