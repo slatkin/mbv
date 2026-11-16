@@ -95,6 +95,11 @@ fn spawn_queue_persistence_worker(
                             merged_tx.send(DaemonEvent::QueuePersistenceFailed(error.to_string()));
                     }
                 }
+                QueuePersistenceRequest::SaveNamedQueues(state) => {
+                    if let Err(error) = mbv_config::save_named_queues_state(&state) {
+                        tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
+                    }
+                }
                 QueuePersistenceRequest::Flush(ack) => {
                     let _ = ack.send(());
                 }

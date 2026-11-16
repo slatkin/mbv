@@ -98,8 +98,11 @@ pub(crate) fn project_queue_state(
 /// receives an `active_slot` pointing at a slot missing from `slots`.
 /// `start_slot` is the current queue's start slot (gui-named-queues design D4)
 /// and is dropped on the same terms, so a start slot the Owner no longer holds
-/// never reaches a peer.
+/// never reaches a peer. `named_queue` names the queue this snapshot describes
+/// when it is a resting Named queue, and is `None` for the current queue
+/// (design D3).
 pub(crate) fn unified_queue_state_for_peer(
+    named_queue: Option<mbv_queue::NamedQueueId>,
     status: &mbv_ctrl::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
@@ -140,7 +143,7 @@ pub(crate) fn unified_queue_state_for_peer(
         .map(mbv_ctrl::slot_id_to_u64)
         .filter(|start_id| slots.iter().any(|s| s.slot_id == *start_id));
     CtrlEvent::UnifiedQueueState(mbv_ctrl::UnifiedQueueStateData {
-        queue: None,
+        queue: named_queue,
         start_slot,
         status: status.clone(),
         slots,
@@ -181,6 +184,7 @@ pub(crate) fn broadcast_queue_state(
                 .entry(queue_transport)
                 .or_insert_with(|| {
                     serialize_ctrl_event(&unified_queue_state_for_peer(
+                        None,
                         &status,
                         queue,
                         source,

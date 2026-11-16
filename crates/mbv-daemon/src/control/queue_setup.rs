@@ -2,13 +2,15 @@ use super::{
     CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, EmbyItem, ExecSlot,
     PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
-    broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
-    submit_queue_slots_for_replace, twitch_queue_transport_rejection,
+    broadcast_queue_state, daemon_admits, mint_queue_lineage, named_queue, reject_command,
+    reset_slot_jumps, submit_queue_slots_for_replace, twitch_queue_transport_rejection,
 };
 use crate::AudiobookshelfOwnerContext;
+use crate::core::NamedQueueTarget;
 use crate::ctrl::CtrlClientId;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
+use mbv_queue::NamedQueueId;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -202,7 +204,18 @@ pub(super) fn handle_queue_source_update(
     lineage: mbv_queue::QueueLineage,
     new_source: mbv_queue::QueueSource,
     cmd_lineage: mbv_queue::QueueLineage,
+    named: Option<NamedQueueId>,
 ) {
+    // A resting queue keeps its own source and has no lineage to check against
+    // the current queue's (gui-named-queues design D1, D5).
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::set_source(ctx, index, new_source);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let supports_operation = ctx
         .ctrl_clients
@@ -347,7 +360,22 @@ pub(super) fn handle_queue_replace(
     start_idx: Option<usize>,
     start_position_secs: Option<f64>,
     new_source: mbv_queue::QueueSource,
+    named: Option<NamedQueueId>,
 ) {
+    // Replacing a resting queue makes it current and plays it (task 5.5): until
+    // the swap lands, the command is refused rather than replacing the current
+    // queue the Client did not name.
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(_)) => {
+            named_queue::reject(
+                ctx,
+                "the named queue is not the current queue; replace skipped",
+            );
+            return;
+        }
+        None => return,
+    }
     let has_emby = ctx.has_emby();
     let (slots, next_cursor) =
         match prepare_replacement_slots(ctx, items, slots, start_idx, has_emby) {
@@ -595,7 +623,21 @@ pub(super) fn handle_queue_append(
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
     before: Option<u64>,
+    named: Option<NamedQueueId>,
 ) {
+    // An append to a resting queue is admitted on the same terms as one to the
+    // current queue and lands in the store, with no output projection
+    // (gui-named-queues design D5).
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            if let Some(items) = admit_append_items(ctx, items, lineage) {
+                named_queue::append(ctx, index, items, before);
+            }
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     if items.is_empty() {
         return;

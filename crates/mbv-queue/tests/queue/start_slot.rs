@@ -16,6 +16,9 @@ enum Case {
     Completed(Option<usize>),
     /// The start slot, which sits at this position, is removed.
     StartSlotRemoved(usize),
+    /// The queue itself becomes the current queue, with this start-slot
+    /// position, or none when it has no start slot.
+    Installed(Option<usize>),
 }
 
 /// One materialized table row: the queue as the observation leaves it, the
@@ -49,6 +52,9 @@ fn row(start_index: usize, case: Case) -> Row {
             queue.remove_slot(slot_at(&slot_ids, index));
             StartSlotObservation::StartSlotRemoved { index }
         }
+        Case::Installed(start) => StartSlotObservation::Installed {
+            start_slot: start.map(|index| slot_at(&slot_ids, index)),
+        },
     };
     Row {
         queue,
@@ -71,6 +77,8 @@ fn slot_at(slot_ids: &[QueueSlotId], index: usize) -> QueueSlotId {
 #[case::the_last_slot_completes(1, Case::Completed(None), None)]
 #[case::removing_the_start_slot_takes_the_slot_now_there(1, Case::StartSlotRemoved(1), Some(2))]
 #[case::removing_the_last_start_slot_leaves_none(3, Case::StartSlotRemoved(3), None)]
+#[case::an_installed_queue_brings_its_own_start_slot(0, Case::Installed(Some(2)), Some(2))]
+#[case::an_installed_queue_with_none_leaves_none(1, Case::Installed(None), None)]
 fn start_slot_rule_follows_the_observation(
     #[case] start_index: usize,
     #[case] case: Case,

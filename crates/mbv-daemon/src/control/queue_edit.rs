@@ -1,8 +1,10 @@
 use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlaybackQueue, PlayerCommand,
     PlayerOwnerState, QueueSlotId, RejectContext, SharedQueueState, broadcast_queue_state,
-    dispatch_slot_jump, mint_queue_lineage, reject_command, reset_slot_jumps,
+    dispatch_slot_jump, mint_queue_lineage, named_queue, reject_command, reset_slot_jumps,
 };
+use crate::core::NamedQueueTarget;
+use mbv_queue::NamedQueueId;
 
 /// Tracks the current queue's start slot through a removal (gui-named-queues
 /// design D4, spec `named-queues` "Each queue has a start slot"): when the
@@ -42,7 +44,18 @@ pub(super) fn handle_queue_remove_slot(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
+    named: Option<NamedQueueId>,
 ) {
+    // A resting queue's removal applies in the store, with no playhead to hand
+    // off (gui-named-queues design D5).
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::remove_slot(ctx, index, slot_id);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -120,7 +133,19 @@ pub(super) fn handle_queue_remove_slot(
 /// `CtrlCmd::UnifiedQueueRemoveSlots`: remove every listed slot as one queue
 /// edit, so a client that selected a range never observes the queue shrinking
 /// one row per round trip.
-pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec<u64>) {
+pub(super) fn handle_queue_remove_slots(
+    ctx: &mut CtrlContext<'_>,
+    slot_ids: Vec<u64>,
+    named: Option<NamedQueueId>,
+) {
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::remove_slots(ctx, index, slot_ids);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -196,7 +221,15 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
 /// permutation comes from the Owner's own rng (queue-content-shuffle design
 /// D1), so a test seeds `owner.rng` and drives this dispatch path
 /// deterministically.
-pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>) {
+pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, named: Option<NamedQueueId>) {
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::shuffle(ctx, index);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -263,7 +296,16 @@ pub(super) fn handle_queue_move_slot(
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
     to_index: usize,
+    named: Option<NamedQueueId>,
 ) {
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::move_slot(ctx, index, slot_id, to_index);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -313,7 +355,22 @@ pub(super) fn handle_queue_play_slot(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
+    named: Option<NamedQueueId>,
 ) {
+    // Playing a row of a resting queue makes that queue current (task 5.5):
+    // until the swap lands, the command is refused rather than playing a slot
+    // of the current queue the Client did not name.
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(_)) => {
+            named_queue::reject(
+                ctx,
+                "the named queue is not the current queue; play skipped",
+            );
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     let sid = QueueSlotId::from_raw(slot_id);
     // No client request id on this command, so the owner mints
@@ -386,7 +443,15 @@ pub(super) fn handle_queue_apply_progress(
 }
 
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
-pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
+pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>, named: Option<NamedQueueId>) {
+    match named_queue::edit_target(ctx, named) {
+        Some(NamedQueueTarget::Current) => {}
+        Some(NamedQueueTarget::Resting(index)) => {
+            named_queue::clear(ctx, index);
+            return;
+        }
+        None => return,
+    }
     let except_op_client = ctx.except_op_client();
     // Clearing removes every slot, the start slot among them: the removal rule
     // leaves the queue with none (gui-named-queues design D4).

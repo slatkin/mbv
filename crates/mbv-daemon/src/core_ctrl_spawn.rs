@@ -252,6 +252,7 @@ fn initial_queue_state_json(
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
     let lineage = *shared_queue.lineage.lock().unwrap();
     let init_event = unified_queue_state_for_peer(
+        None,
         &status,
         &q,
         &source,

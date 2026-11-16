@@ -35,8 +35,6 @@ pub(crate) use core::{
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, LocalOutputHooks, SwapDirection};
-#[doc(inline)]
-pub use core::{NamedQueueStore, RestingNamedQueue};
 mod cast;
 #[doc(inline)]
 pub use cast::{

@@ -157,6 +157,10 @@ impl DaemonLoop {
                 tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error, "failed to persist Stay-alive queue");
                 EventOutcome::CONTINUE
             }
+            DaemonEvent::SaveNamedQueues(state) => {
+                self.save_named_queues(*state);
+                EventOutcome::CONTINUE
+            }
             DaemonEvent::AudiobookshelfProgress(update) => {
                 self.handle_audiobookshelf_progress(&update)
             }
@@ -329,6 +333,24 @@ impl DaemonLoop {
             }
         } else if let Err(error) = self.persist_owner_queue() {
             tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue");
+        }
+    }
+
+    /// Persists the Named-queue state a ctrl handler changed (gui-named-queues
+    /// design D6) through the same worker that writes the owner queue, so the
+    /// write is atomic and off the event-loop thread.
+    fn save_named_queues(&self, state: mbv_config::NamedQueuesState) {
+        if let Some(tx) = &self.queue_persist_tx {
+            if tx
+                .send(super::QueuePersistenceRequest::SaveNamedQueues(Box::new(
+                    state,
+                )))
+                .is_err()
+            {
+                tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "queue persistence worker is unavailable");
+            }
+        } else if let Err(error) = mbv_config::save_named_queues_state(&state) {
+            tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
         }
     }
 

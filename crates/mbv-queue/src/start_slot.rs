@@ -20,6 +20,10 @@ pub enum StartSlotObservation {
     /// stands after the removal, so the slot now at that index becomes the
     /// start slot.
     StartSlotRemoved { index: usize },
+    /// `queue` is a Named queue that has just become the current queue. Its
+    /// own stored start slot becomes the current queue's start slot, or
+    /// `None` when it had none (gui-named-queues design D4).
+    Installed { start_slot: Option<QueueSlotId> },
 }
 
 /// The start slot `queue` holds after `observation`, given the start slot it
@@ -40,5 +44,6 @@ pub fn start_slot_after(
         StartSlotObservation::StartSlotRemoved { index } => {
             queue.slots().get(index).map(|slot| slot.slot_id)
         }
+        StartSlotObservation::Installed { start_slot } => start_slot,
     }
 }

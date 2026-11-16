@@ -14,6 +14,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(capable_data) = super::unified_queue_state_for_peer(
+        None,
         &status,
         &queue,
         &source,
@@ -33,6 +34,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     // twitch-url-playback task 4.2: a peer with the ABS transports but
     // without `twitch-queue` keeps the ABS slots and loses the Twitch slot.
     let CtrlEvent::UnifiedQueueState(no_twitch_data) = super::unified_queue_state_for_peer(
+        None,
         &status,
         &queue,
         &source,
@@ -50,6 +52,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         panic!("expected UnifiedQueueState");
     };
     let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
+        None,
         &status,
         &queue,
         &source,
@@ -100,6 +103,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
+        None,
         &status,
         &queue,
         &source,

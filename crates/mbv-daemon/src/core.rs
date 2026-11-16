@@ -21,7 +21,7 @@ use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId, StartSlotObserv
 use mbv_ws::WsEvent;
 
 mod named_queues;
-pub use named_queues::{NamedQueueStore, RestingNamedQueue};
+pub use named_queues::{NamedQueueStore, NamedQueueTarget, RestingNamedQueue};
 mod transition_dispatch;
 
 pub(super) use transition_dispatch::{
@@ -50,6 +50,10 @@ pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
 
 pub(super) enum QueuePersistenceRequest {
     Save(mbv_config::StayAliveQueueState),
+    /// The whole Named-queue state (gui-named-queues design D6): every queue's
+    /// name, source, lineage, start slot, and slots with their identities, and
+    /// the current queue's identity.
+    SaveNamedQueues(Box<mbv_config::NamedQueuesState>),
     Flush(mpsc::SyncSender<()>),
 }
 
@@ -79,6 +83,10 @@ pub(super) enum DaemonEvent {
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),
     QueuePersistenceFailed(String),
+    /// The Named-queue state a ctrl handler changed, for the persistence worker
+    /// to write to `named_queues_state.json` (gui-named-queues design D6). The
+    /// event loop owns the worker, so the write never happens on the ctrl path.
+    SaveNamedQueues(Box<mbv_config::NamedQueuesState>),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
