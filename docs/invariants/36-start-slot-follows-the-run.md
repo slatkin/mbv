@@ -6,7 +6,10 @@ and `SharedQueueState::start_slot()` (`crates/mbv-daemon/src/core.rs`); the rule
 observation sites in `event_loop/player_events.rs`,
 `core/transition_dispatch.rs`, `emby_session/adopt.rs`, `run.rs`
 (`record_completed_slot`, `apply_stopped_observation`), and
-`control/queue_edit.rs`; the start-a-queue path `play_from_start_slot`
+`control/queue_edit.rs`; the resting-queue writer
+`RestingNamedQueue::note_start_slot` and its removal, clear, and install call
+sites in `crates/mbv-daemon/src/core/named_queues.rs` and
+`control/named_queue.rs`; the start-a-queue path `play_from_start_slot`
 (`control/playback.rs`); and the projection
 `unified_queue_state_for_peer` (`control_queue.rs`).
 
@@ -26,7 +29,8 @@ observation sites in `event_loop/player_events.rs`,
    the slot that followed the completed one the start slot, after any consume,
    and leaves the queue with none at the end of the queue; removing the start
    slot makes the slot now at its position the start slot, or none when no slot
-   remains there.
+   remains there; an install takes the start slot the installed queue kept in
+   the store, or none when it had none.
 4. A start slot names a slot and stores no position. The item that plays from it
    takes its position from its Resume source, so a completion or a progress
    update can never leave a stale position in it.
@@ -53,9 +57,9 @@ handler compiles and passes every functional test.
 
 ## How the code maintains it today
 
-- `SharedQueueState::note_start_slot` is the only writer. It reads the cell,
-  applies `start_slot_after` to the queue as it stands after the observation,
-  and stores the result.
+- `SharedQueueState::note_start_slot` is the only writer of the current
+  queue's start slot. It reads the cell, applies `start_slot_after` to the
+  queue as it stands after the observation, and stores the result.
 - The active-slot observation has three sources, one per output, each writing
   `StartSlotObservation::Active`: the local run's `TrackChanged`
   (`handle_track_changed`, which resolves the slot against the canonical queue
@@ -78,6 +82,17 @@ handler compiles and passes every functional test.
   already carries the new slot. The batch removal reads each slot's position
   before removing it and applies the observation per removal; `QueueClear`
   applies it once, with the start slot's position, against the emptied queue.
+- A resting queue's start slot lives in its `RestingNamedQueue` record and is
+  written by `RestingNamedQueue::note_start_slot`, the mirror of
+  `SharedQueueState::note_start_slot`: it applies the same rule to the resting
+  queue. A resting queue sees no run, so the only observation it records is
+  `StartSlotRemoved`, on a slot removal and on a clear of its slots
+  (`control/named_queue.rs`).
+- Closing the current queue installs the first remaining resting queue as
+  current without playing it. The install writes
+  `StartSlotObservation::Installed { start_slot }` through
+  `SharedQueueState::note_start_slot`, so the installed queue's stored start
+  slot becomes the current queue's (`control/named_queue.rs`).
 - `play_from_start_slot` reads the start slot, validates it against the queue,
   falls back to the first slot, and dispatches one slot-jump transition under
   the Play intent's own request identity. The run's observation of that
@@ -107,9 +122,10 @@ handler compiles and passes every functional test.
   `TrackChanged`. `note_observed_active_slot` and `note_start_slot` are two
   calls at each site today; a site that makes only the first is silently
   inconsistent.
-- Resting queues keep a start slot in the store but nothing tracks it yet
-  (`gui-named-queues` tasks 5.3-5.7): a resting queue's start slot is set only
-  by the stop-or-park rule that has not landed.
+- Resting queues record one observation today (`gui-named-queues` tasks
+  5.3-5.4): the removal of the slot they name. The swap that plays a resting
+  queue, the show, and the persistence restore of tasks 5.5-5.7 have no
+  start-slot rule yet, and a parked queue's start slot is still unwritten.
 - The rule is a pure function over a queue and one observation, so a caller that
   passes the wrong queue state — the queue before a removal instead of after,
   or a queue the observation does not belong to — gets a plausible but wrong
