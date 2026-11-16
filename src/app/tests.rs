@@ -149,6 +149,8 @@ fn adopt_queue_view(
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus {
             current_idx: active_index.unwrap_or_default(),
             ..Default::default()
@@ -418,6 +420,8 @@ pub(crate) fn emby_unified_state(
         })
         .collect();
     mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,

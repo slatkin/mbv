@@ -124,6 +124,8 @@ fn queue_shuffle_capable_app() -> App {
 
 fn queue_state(items: Vec<mbv_queue::QueueItem>) -> mbv_ctrl::UnifiedQueueStateData {
     mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: Some(1),
         slots: items

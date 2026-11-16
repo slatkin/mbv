@@ -423,6 +423,7 @@ fn an_append_during_the_lookup_flight_keeps_the_queued_next_item() {
     t.event_loop.client.lock().unwrap().token = "test-token".to_string();
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![timed("b", RUNTIME_TICKS)],
             before: None,
             op: None,

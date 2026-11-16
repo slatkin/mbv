@@ -1,6 +1,7 @@
 {
   "UnifiedQueueRemoveSlot": {
     "op": 44,
+    "queue": null,
     "slot_id": 3
   }
 }

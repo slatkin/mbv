@@ -15,7 +15,8 @@ fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueRemoveSlot {
             slot_id: 17,
-            op: Some(id)
+            op: Some(id),
+            queue: None,
         }) if id == expected
     ));
 }
@@ -34,7 +35,8 @@ fn legacy_queue_op_sends_without_an_operation_id() {
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueRemoveSlot {
             slot_id: 17,
-            op: None
+            op: None,
+            queue: None,
         })
     ));
 }
@@ -60,6 +62,8 @@ fn inbound_queue_op_result_follows_prior_state_event() {
         },
     ];
     let mut state = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(2, 3),
         slots,
         active_slot: Some(30),
@@ -348,6 +352,8 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     let pending_playback = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     let reconnect_snapshot = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(0, 2),
         slots: vec![
             UnifiedQueueSlot {
@@ -427,6 +433,8 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     let f3 = make_feed_entry("f3");
 
     let unified = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(1, 4),
         slots: vec![
             UnifiedQueueSlot {

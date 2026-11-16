@@ -697,6 +697,7 @@ fn playing_an_audiobookshelf_slot_on_the_session_loads_nothing_and_reports() {
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

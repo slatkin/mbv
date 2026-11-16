@@ -85,8 +85,9 @@ fn unified_ctrl_behavior_is_capability_gated_and_additive() {
 }
 
 // A pre-transition peer's snapshot omits the transition fields (and
-// `lineage`) entirely; they decode to their defaults — a decode tolerance no
-// fixture row owns.
+// `lineage`) entirely, and a peer without `named-queues` omits `queue` and
+// `start_slot`; they decode to their defaults — a decode tolerance no fixture
+// row owns (gui-named-queues task 4.2).
 #[test]
 fn unified_queue_state_data_decodes_without_transition_fields() {
     let mut legacy = serde_json::to_value(UnifiedQueueStateData {
@@ -105,16 +106,22 @@ fn unified_queue_state_data_decodes_without_transition_fields() {
             target_slot: 2,
         }),
         queued_latest_transition: None,
+        queue: None,
+        start_slot: None,
     })
     .unwrap();
     let obj = legacy.as_object_mut().unwrap();
     obj.remove("in_flight_transition");
     obj.remove("queued_latest_transition");
     obj.remove("lineage");
+    obj.remove("queue");
+    obj.remove("start_slot");
     let decoded: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
     assert_eq!(decoded.in_flight_transition, None);
     assert_eq!(decoded.queued_latest_transition, None);
     assert_eq!(decoded.lineage, QueueLineage::default());
+    assert_eq!(decoded.queue, None);
+    assert_eq!(decoded.start_slot, None);
 }
 
 // A pre-slot-identity peer omitted the additive `slots` and `source` fields;
@@ -141,6 +148,7 @@ fn unified_queue_replace_decodes_without_slot_identity() {
         source: QueueSource::Album,
         start_position_secs: None,
         op: None,
+        queue: None,
     };
     let mut legacy: serde_json::Value =
         serde_json::from_str(&serde_json::to_string(&cmd).unwrap()).unwrap();
@@ -191,6 +199,7 @@ fn unified_queue_replace_round_trips_a_twitch_item() {
         source: QueueSource::Unknown,
         start_position_secs: None,
         op: None,
+        queue: None,
     };
 
     let wire = serde_json::to_string(&cmd).unwrap();
@@ -235,6 +244,7 @@ fn unified_queue_replace_start_position_round_trips_and_a_missing_field_decodes_
         source: QueueSource::Unknown,
         start_position_secs: Some(95.5),
         op: None,
+        queue: None,
     };
     let wire = serde_json::to_string(&cmd).unwrap();
     let CtrlCmd::UnifiedQueueReplace {

@@ -401,6 +401,7 @@ fn load_and_settle_first_slot(t: &mut TestLoop, client_id: u64) -> mbv_queue::Qu
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

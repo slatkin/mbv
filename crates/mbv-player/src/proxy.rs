@@ -52,7 +52,10 @@ impl PlayerProxy {
         if self.remote.supports_queue_shuffle() {
             let _ = self
                 .remote
-                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueShuffle { op: None });
+                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueShuffle {
+                    queue: None,
+                    op: None,
+                });
         }
     }
 

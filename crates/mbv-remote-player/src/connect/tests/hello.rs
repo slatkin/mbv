@@ -37,6 +37,8 @@ fn the_client_hello_pin_swap_advertisement_follows_the_connect_argument(
             writer,
             "{}",
             serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                queue: None,
+                start_slot: None,
                 status: PlayerStatus::default(),
                 slots: Vec::new(),
                 active_slot: None,

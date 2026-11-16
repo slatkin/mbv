@@ -175,6 +175,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     };
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: emby_slot_id,
             op: None,
         },

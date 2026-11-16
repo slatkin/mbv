@@ -175,6 +175,7 @@ fn a_stop_stops_the_receiver_media_and_forgets_the_loaded_item() {
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -228,6 +229,7 @@ fn a_queued_teardown_runs_after_the_media_stop_on_the_worker() {
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

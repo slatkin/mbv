@@ -67,6 +67,8 @@ fn snapshot_from_base(item_count: usize, base: u64) -> Box<mbv_ctrl::UnifiedQueu
         })
         .collect();
     Box::new(mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: slots.first().map(|s| s.slot_id),
         slots,
@@ -338,7 +340,10 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
 
     let _remove = cmd_rx.try_recv().unwrap();
     let undo = cmd_rx.try_recv().unwrap();
-    let mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, before, op } = undo else {
+    let mbv_ctrl::CtrlCmd::UnifiedQueueAppend {
+        items, before, op, ..
+    } = undo
+    else {
         panic!("the undo sends an Append, got {undo:?}");
     };
     assert_eq!(items.len(), 1, "the removed item is restored alone");

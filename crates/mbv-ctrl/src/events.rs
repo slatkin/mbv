@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::output::OutputState;
 use crate::player::{PlayerEvent, PlayerStatus};
 use crate::{CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueOpId, UnifiedQueueStateData};
-use mbv_queue::ServiceKind;
+use mbv_queue::{NamedQueueId, ServiceKind};
 
 #[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum CtrlEvent {
@@ -84,6 +84,34 @@ pub enum CtrlEvent {
     /// design D3). Slot, position, and pause state stay on
     /// `UnifiedQueueState` and `StatusOnly`.
     PlaybackOutput(OutputState),
+
+    // ── Named queue events (require `named-queues`) ─────────────────────
+    /// The local Owner's Named queues in queue order and the current queue.
+    /// Sent when a Client attaches and after every create, rename, close,
+    /// and swap (design D3 of `gui-named-queues`).
+    #[serde(rename = "NamedQueueList")]
+    NamedQueueList {
+        queues: Vec<NamedQueueEntry>,
+        /// The current queue: the one that holds the playhead.
+        current: NamedQueueId,
+    },
+    /// One resting Named queue, sent only to the connections whose
+    /// `CtrlCmd::NamedQueueShow` named it, on show and after each change of
+    /// that queue (design D3 of `gui-named-queues`).
+    #[serde(rename = "NamedQueueSnapshot")]
+    NamedQueueSnapshot {
+        queue: NamedQueueId,
+        data: UnifiedQueueStateData,
+    },
+}
+
+/// One Named queue as the queue list reports it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct NamedQueueEntry {
+    pub id: NamedQueueId,
+    pub name: String,
+    /// The number of slots the queue holds.
+    pub len: usize,
 }
 
 /// Redacted, provider-qualified Audiobookshelf progress: identity,

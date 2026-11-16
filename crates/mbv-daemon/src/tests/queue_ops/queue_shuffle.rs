@@ -67,6 +67,7 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueShuffle {
+            queue: None,
             op: Some(mbv_ctrl::QueueOpId(51)),
         },
         client_id,
@@ -176,6 +177,7 @@ fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueShuffle {
+            queue: None,
             op: Some(mbv_ctrl::QueueOpId(7)),
         },
         client_id,
@@ -322,6 +324,7 @@ fn a_shuffle_while_a_session_presents_foreign_content_does_not_pin_the_stale_act
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueShuffle {
+            queue: None,
             op: Some(mbv_ctrl::QueueOpId(11)),
         },
         client_id,
@@ -404,6 +407,7 @@ fn a_one_slot_shuffle_changes_nothing_and_still_answers_the_op() {
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueShuffle {
+            queue: None,
             op: Some(mbv_ctrl::QueueOpId(42)),
         },
         client_id,

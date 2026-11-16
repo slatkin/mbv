@@ -7,7 +7,7 @@ use crate::{
     CtrlHello, PlaybackGeneration, PlaybackRequestId, ProgressUpdate, QueueOpId, UnifiedQueueSlot,
 };
 use mbv_queue::QueueItem;
-use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
+use mbv_queue::{NamedQueueId, QueueLineage, QueueSource, ServiceKind};
 
 // ── CtrlCmd ──────────────────────────────────────────────────────────────
 
@@ -64,6 +64,10 @@ pub enum CtrlCmd {
         start_position_secs: Option<f64>,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Update only the source of the owner queue if its lineage still matches.
     #[serde(rename = "UnifiedQueueSourceUpdate")]
@@ -72,6 +76,10 @@ pub enum CtrlCmd {
         lineage: QueueLineage,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Append item-generic values before a slot, or to the tail when absent.
     UnifiedQueueAppend {
@@ -80,12 +88,20 @@ pub enum CtrlCmd {
         before: Option<u64>,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Remove the slot identified by `slot_id`.
     UnifiedQueueRemoveSlot {
         slot_id: u64,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Remove every listed slot as one queue edit. The owner applies all of
     /// them before publishing a single queue snapshot, so a bulk removal is
@@ -95,6 +111,10 @@ pub enum CtrlCmd {
         slot_ids: Vec<u64>,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Move the slot identified by `slot_id` to `to_index`.
     UnifiedQueueMoveSlot {
@@ -102,6 +122,10 @@ pub enum CtrlCmd {
         to_index: usize,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Reorder the queue contents at random as one queue edit, keeping the
     /// active slot first. Requires the `queue-shuffle` capability; additive —
@@ -109,18 +133,30 @@ pub enum CtrlCmd {
     UnifiedQueueShuffle {
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Begin playback of an existing slot identified by `slot_id`.
     UnifiedQueuePlaySlot {
         slot_id: u64,
         #[serde(default)]
         op: Option<QueueOpId>,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Clear all slots and stop playback.
     UnifiedQueueClear,
     /// Correlated form of queue clear for peers with `answered-queue-ops`.
     UnifiedQueueClearOp {
         op: QueueOpId,
+        /// The Named queue this edit addresses. `None` edits the current
+        /// queue (design D3 of `gui-named-queues`).
+        #[serde(default)]
+        queue: Option<NamedQueueId>,
     },
     /// Refresh the owner's queue enrichment.
     UnifiedQueueRefresh {
@@ -143,6 +179,44 @@ pub enum CtrlCmd {
     /// protocol-version bump. An output the Owner cannot host is rejected
     /// with `CtrlEvent::CommandRejected`.
     SelectPlaybackOutput(OutputSelection),
+
+    // ── Named queue commands (require `named-queues`) ───────────────────
+    /// Create one Named queue, resting and empty, and answer `op` with the
+    /// new `CtrlEvent::NamedQueueList` (design D3 of `gui-named-queues`).
+    #[serde(rename = "NamedQueueCreate")]
+    NamedQueueCreate {
+        op: QueueOpId,
+    },
+    /// Rename one Named queue after trimming surrounding whitespace.
+    #[serde(rename = "NamedQueueRename")]
+    NamedQueueRename {
+        queue: NamedQueueId,
+        name: String,
+        op: QueueOpId,
+    },
+    /// Close one Named queue. The Owner refuses to close its last queue.
+    #[serde(rename = "NamedQueueClose")]
+    NamedQueueClose {
+        queue: NamedQueueId,
+        op: QueueOpId,
+    },
+    /// Make one Named queue current and play it, from `slot` or from its
+    /// start slot when no slot is given.
+    #[serde(rename = "NamedQueuePlay")]
+    NamedQueuePlay {
+        queue: NamedQueueId,
+        /// The slot to start; `None` starts the queue's start slot, or its
+        /// first slot when it has none.
+        #[serde(default)]
+        slot: Option<u64>,
+        op: QueueOpId,
+    },
+    /// Ask to see one Named queue: the Owner answers with that queue's
+    /// `CtrlEvent::NamedQueueSnapshot` on show and after each change of it.
+    #[serde(rename = "NamedQueueShow")]
+    NamedQueueShow {
+        queue: NamedQueueId,
+    },
 }
 
 /// Reply a gated command's `OwnerGate` failure sends. Carried by
@@ -153,6 +227,9 @@ pub enum CtrlCmd {
 pub enum OwnerGateRejection {
     AdoptQueue,
     QueueSourceUpdate,
+    /// The `NamedQueue*` commands: named queues are a local-Owner feature, so
+    /// a packaged daemon refuses all of them with one reason.
+    NamedQueues,
 }
 
 /// Owner-role gate for a ctrl command: whether acceptance depends on the
@@ -180,6 +257,13 @@ impl CtrlCmd {
             CtrlCmd::UnifiedAdoptQueue { .. } => {
                 OwnerGate::NonOwnerOnly(OwnerGateRejection::AdoptQueue)
             }
+            CtrlCmd::NamedQueueCreate { .. }
+            | CtrlCmd::NamedQueueRename { .. }
+            | CtrlCmd::NamedQueueClose { .. }
+            | CtrlCmd::NamedQueuePlay { .. }
+            | CtrlCmd::NamedQueueShow { .. } => {
+                OwnerGate::OwnerOnly(OwnerGateRejection::NamedQueues)
+            }
             CtrlCmd::Hello(_)
             | CtrlCmd::PlayerCmd(_)
             | CtrlCmd::Stop
@@ -205,7 +289,8 @@ impl CtrlCmd {
 
     /// Whether the owner must persist its queue after handling this command.
     /// Exhaustive so a new queue-editing command cannot silently skip
-    /// persistence.
+    /// persistence. A Named queue command is treated as persisting before its
+    /// handler exists, so a later handler cannot land without it.
     #[must_use]
     pub fn mutates_owner_queue(&self) -> bool {
         match self {
@@ -219,7 +304,11 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueClear
             | CtrlCmd::UnifiedQueueClearOp { .. }
             | CtrlCmd::UnifiedQueueRefresh { .. }
-            | CtrlCmd::UnifiedQueueApplyProgress { .. } => true,
+            | CtrlCmd::UnifiedQueueApplyProgress { .. }
+            | CtrlCmd::NamedQueueCreate { .. }
+            | CtrlCmd::NamedQueueRename { .. }
+            | CtrlCmd::NamedQueueClose { .. }
+            | CtrlCmd::NamedQueuePlay { .. } => true,
             CtrlCmd::Hello(_)
             | CtrlCmd::PlayerCmd(_)
             | CtrlCmd::Stop
@@ -230,6 +319,9 @@ impl CtrlCmd {
             | CtrlCmd::RunOwnerAction(_)
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
             | CtrlCmd::UnifiedAdoptQueue { .. }
+            // Showing a queue changes no state; it only subscribes the
+            // connection to that queue's snapshots.
+            | CtrlCmd::NamedQueueShow { .. }
             // The output is not part of the persisted queue (design D3).
             | CtrlCmd::SelectPlaybackOutput(_) => false,
         }
@@ -250,6 +342,7 @@ impl CtrlCmd {
             source,
             start_position_secs: None,
             op: None,
+            queue: None,
         }
     }
 }

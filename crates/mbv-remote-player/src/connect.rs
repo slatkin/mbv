@@ -105,7 +105,20 @@ fn apply_ctrl_event(
             event_tx,
             PlayerEvent::AudiobookshelfBookProgress(event),
         ),
+        // Named-queue traffic needs the Client core's shown entry, which this
+        // read loop does not carry: the events are a documented no-op here
+        // until the core adopts them (gui-named-queues task 6.1).
+        CtrlEvent::NamedQueueList { .. } | CtrlEvent::NamedQueueSnapshot { .. } => {
+            log_ignored_named_queue_event();
+        }
     }
+}
+
+/// Documented no-op for `CtrlEvent::NamedQueueList`/`NamedQueueSnapshot`
+/// (gui-named-queues task 4.2): adopting the queue list and a resting queue's
+/// snapshot belongs to the Client core (task 6.1), not to the read loop.
+fn log_ignored_named_queue_event() {
+    tracing::debug!(name: "remote.named_queue_event.ignored", target: "remote", "ignoring named-queue event in the ctrl read loop");
 }
 
 fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: PlayerEvent) {
@@ -703,6 +716,8 @@ pub fn connect_stub_daemon_pair() -> Result<
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,

@@ -105,6 +105,8 @@ fn queue_view(n: usize) -> QueueView {
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: None,
         slots,
@@ -170,6 +172,8 @@ fn stub_app_with_items(items: Vec<mbv_queue::QueueItem>) -> App {
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: None,
         slots,

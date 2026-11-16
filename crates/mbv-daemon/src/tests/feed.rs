@@ -105,6 +105,7 @@ fn replace_queue_succeeds_unconditionally() {
     };
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![QueueItem::Emby(Box::new(item(
                 "replacement",
                 "Video",

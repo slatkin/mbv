@@ -1,0 +1,6 @@
+{
+  "NamedQueueClose": {
+    "op": 54,
+    "queue": 1
+  }
+}

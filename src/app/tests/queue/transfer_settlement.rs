@@ -30,6 +30,8 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
     // slot 1 is gone (admission dropped it) and the target started slot 2.
     let items = make_audio_items(2);
     let snapshot = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: PlayerStatus {
             active: true,
             paused: false,

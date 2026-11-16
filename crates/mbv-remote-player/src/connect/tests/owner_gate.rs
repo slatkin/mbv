@@ -98,6 +98,8 @@ fn local_handshake_accepts_an_owner_with_a_different_build_id() {
             writer,
             "{}",
             serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                queue: None,
+                start_slot: None,
                 status: PlayerStatus::default(),
                 slots: Vec::new(),
                 active_slot: None,

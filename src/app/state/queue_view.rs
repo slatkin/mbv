@@ -202,6 +202,8 @@ mod tests {
     fn snapshot(ids: &[u64], active: Option<u64>, lineage: u64) -> UnifiedQueueStateData {
         let items = crate::app::tests::make_items(ids.len());
         UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: mbv_ctrl::player::PlayerStatus::default(),
             slots: ids
                 .iter()

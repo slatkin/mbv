@@ -14,7 +14,8 @@ use strum::IntoEnumIterator;
 pub(crate) use super::builders::{
     ABS_BOOK_ITEM_ID, ABS_EPISODE_ID, ABS_LIBRARY_ITEM_ID, CAST_NAME, CAST_RECEIVER_ID,
     EMBY_DEVICE_ID, EMBY_DEVICE_NAME, EMBY_ITEM_ID, EMBY_ITEM_NAME, EMBY_SERIES_ID, GENERATION,
-    POSITION_TICKS, REQUEST_ID, REVISION, player_status, unified_queue_state,
+    POSITION_TICKS, REQUEST_ID, REVISION, named_queue_entries, named_queue_id, named_queue_state,
+    player_status, resting_queue_id, unified_queue_state,
 };
 use super::*;
 use player::PlayerShape;
@@ -66,6 +67,8 @@ enum EventShape {
     AudiobookshelfProgress,
     AudiobookshelfBookProgress,
     PlaybackOutput(commands::OutputChoice),
+    NamedQueueList,
+    NamedQueueSnapshot,
 }
 
 impl EventShape {
@@ -108,7 +111,9 @@ impl EventShape {
                 | EventShape::OwnerActionRefused
                 | EventShape::UnifiedQueueState
                 | EventShape::AudiobookshelfProgress
-                | EventShape::AudiobookshelfBookProgress => shapes.push(shape),
+                | EventShape::AudiobookshelfBookProgress
+                | EventShape::NamedQueueList
+                | EventShape::NamedQueueSnapshot => shapes.push(shape),
             }
         }
         shapes
@@ -140,6 +145,8 @@ impl EventShape {
             EventShape::AudiobookshelfProgress => "AudiobookshelfProgress".into(),
             EventShape::AudiobookshelfBookProgress => "AudiobookshelfBookProgress".into(),
             EventShape::PlaybackOutput(choice) => format!("PlaybackOutput.{}", choice.name()),
+            EventShape::NamedQueueList => "NamedQueueList".into(),
+            EventShape::NamedQueueSnapshot => "NamedQueueSnapshot".into(),
         }
     }
 
@@ -192,6 +199,14 @@ impl EventShape {
                 CtrlEvent::AudiobookshelfBookProgress(abs_book_progress_event())
             }
             EventShape::PlaybackOutput(choice) => CtrlEvent::PlaybackOutput(output_state(choice)),
+            EventShape::NamedQueueList => CtrlEvent::NamedQueueList {
+                queues: named_queue_entries(),
+                current: named_queue_id(),
+            },
+            EventShape::NamedQueueSnapshot => CtrlEvent::NamedQueueSnapshot {
+                queue: resting_queue_id(),
+                data: named_queue_state(),
+            },
         }
     }
 }
@@ -227,6 +242,8 @@ fn shape_of(event: &CtrlEvent) -> EventShape {
         CtrlEvent::AudiobookshelfProgress(_) => EventShape::AudiobookshelfProgress,
         CtrlEvent::AudiobookshelfBookProgress(_) => EventShape::AudiobookshelfBookProgress,
         CtrlEvent::PlaybackOutput(state) => EventShape::PlaybackOutput(output_state_of(state)),
+        CtrlEvent::NamedQueueList { .. } => EventShape::NamedQueueList,
+        CtrlEvent::NamedQueueSnapshot { .. } => EventShape::NamedQueueSnapshot,
     }
 }
 

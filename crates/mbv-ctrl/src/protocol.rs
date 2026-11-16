@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::player::PlayerStatus;
-use mbv_queue::{QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueSource};
+use mbv_queue::{
+    NamedQueueId, QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueSource,
+};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
 /// fail to understand. Compatibility is exact-match, so every bump kills
@@ -122,6 +124,11 @@ pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
 /// owner is eligible to bind or play the item. Additive — no protocol-version
 /// bump.
 pub const CTRL_CAP_TWITCH_QUEUE: &str = "twitch-queue";
+/// The Owner holds several Named queues and serves the `NamedQueue*` commands
+/// and events; with it, every queue edit names its queue in `queue`. Only the
+/// local Owner advertises it — a packaged `mbvd` keeps one queue (design D3 of
+/// `gui-named-queues`). Additive — no protocol-version bump.
+pub const CTRL_CAP_NAMED_QUEUES: &str = "named-queues";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -180,6 +187,15 @@ pub struct UnifiedQueueStateData {
     /// when nothing is queued.
     #[serde(default)]
     pub queued_latest_transition: Option<TransitionSummary>,
+    /// The Named queue this snapshot describes. `None` on a peer without
+    /// `named-queues`, which sees only the current queue (design D3 of
+    /// `gui-named-queues`).
+    #[serde(default)]
+    pub queue: Option<NamedQueueId>,
+    /// The queue's start slot: the slot a play of the queue starts, or `None`
+    /// when the queue has none. `None` on a peer without `named-queues`.
+    #[serde(default)]
+    pub start_slot: Option<u64>,
 }
 
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in

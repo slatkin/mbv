@@ -1,0 +1,100 @@
+{
+  "NamedQueueSnapshot": {
+    "data": {
+      "active_slot": null,
+      "in_flight_transition": null,
+      "lineage": 4,
+      "queue": 3,
+      "queued_latest_transition": null,
+      "revision": 12,
+      "slots": [
+        {
+          "item": {
+            "album": "",
+            "album_id": "",
+            "artist": "",
+            "artist_items": [],
+            "audio_info": "",
+            "child_count": null,
+            "collection_type": "",
+            "container": "",
+            "date_added": "2026-01-01T00:00:00Z",
+            "end_year": 0,
+            "external_urls": [],
+            "genres": [],
+            "id": "emby-conformance-item",
+            "image_tags": {
+              "backdrops": [],
+              "logo": "",
+              "primary": "",
+              "series_backdrops": [],
+              "series_thumb": "",
+              "thumb": ""
+            },
+            "index_number": 1,
+            "is_folder": false,
+            "item_type": "Episode",
+            "kind": "Emby",
+            "media_type": "Video",
+            "name": "Conformance Episode",
+            "overview": "",
+            "parent_id": "",
+            "parent_index_number": 1,
+            "path": "",
+            "people": [],
+            "playback_position_ticks": 0,
+            "played": false,
+            "playlist_item_id": "",
+            "premiere_date": "",
+            "production_year": 2026,
+            "runtime_ticks": 1800000000,
+            "series_id": "emby-series-1",
+            "series_name": "Conformance Series",
+            "sort_name": "conformance episode",
+            "studios": [],
+            "total_count": 0,
+            "track_artist": "",
+            "unplayed_item_count": 0,
+            "video_info": ""
+          },
+          "slot_id": 1
+        }
+      ],
+      "source": {
+        "id": "conformance-playlist",
+        "name": "Conformance Playlist",
+        "type": "playlist"
+      },
+      "start_slot": 1,
+      "status": {
+        "active": false,
+        "album": "",
+        "art_album_id": "",
+        "art_item_id": "",
+        "artist": "",
+        "audio_codec": "",
+        "audio_id": 0,
+        "audio_lang": "",
+        "audio_tracks": [],
+        "current_idx": 0,
+        "last_valid_pos": 0,
+        "muted": false,
+        "paused": false,
+        "position_ticks": 0,
+        "queue_len": 0,
+        "runtime_ticks": 0,
+        "sequence_generation": 0,
+        "sub_id": 0,
+        "sub_lang": "",
+        "sub_track_stream_indexes": [],
+        "sub_tracks": [],
+        "title": "",
+        "video_height": 0,
+        "video_is_image": false,
+        "volume": 100,
+        "volume_max": 130
+      }
+    },
+    "queue": 3
+  }
+}

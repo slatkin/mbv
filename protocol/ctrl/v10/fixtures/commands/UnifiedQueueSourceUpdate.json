@@ -2,6 +2,7 @@
   "UnifiedQueueSourceUpdate": {
     "lineage": 2,
     "op": 42,
+    "queue": null,
     "source": {
       "id": "conformance-playlist",
       "name": "Conformance Playlist",

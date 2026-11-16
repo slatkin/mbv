@@ -63,6 +63,7 @@ pub(super) fn session_output_with_queue(
 pub(super) fn play_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -126,6 +127,7 @@ pub(super) fn rejections(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<String> {
 pub(super) fn remove_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueRemoveSlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

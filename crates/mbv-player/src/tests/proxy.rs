@@ -96,6 +96,9 @@ fn shuffle_queue_sends_the_shuffle_command_only_to_a_capable_owner() {
     proxy.shuffle_queue();
     assert!(matches!(
         cmd_rx.recv().unwrap(),
-        CtrlCmd::UnifiedQueueShuffle { op: None }
+        CtrlCmd::UnifiedQueueShuffle {
+            op: None,
+            queue: None
+        }
     ));
 }

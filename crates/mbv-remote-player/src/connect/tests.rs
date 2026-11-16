@@ -87,6 +87,8 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,
@@ -159,6 +161,8 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
             writer,
             "{}",
             serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                queue: None,
+                start_slot: None,
                 status: PlayerStatus::default(),
                 slots: Vec::new(),
                 active_slot: None,
@@ -212,6 +216,8 @@ fn owner_action_refused_reply_surfaces_the_owner_reason() {
             writer,
             "{}",
             serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                queue: None,
+                start_slot: None,
                 status: PlayerStatus::default(),
                 slots: Vec::new(),
                 active_slot: None,
@@ -283,6 +289,8 @@ fn owner_action_command_rejected_reply_reports_a_restart_requirement() {
             writer,
             "{}",
             serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                queue: None,
+                start_slot: None,
                 status: PlayerStatus::default(),
                 slots: Vec::new(),
                 active_slot: None,
@@ -357,6 +365,8 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,
@@ -398,6 +408,8 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,
@@ -452,6 +464,8 @@ fn connect_with_advertised_hello(
             "live-test defect: a Client-role hello must claim emby-session-output — without it the Owner masks the selected Emby Session output to Local"
         );
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,
@@ -596,6 +610,8 @@ fn a_late_partial_seed_line_is_never_consumed() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,

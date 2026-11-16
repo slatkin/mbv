@@ -91,6 +91,7 @@ fn loaded_session_output(items: Vec<QueueItem>) -> (TestLoop, FakeSessionApi) {
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -340,6 +341,7 @@ fn loading_the_item_the_device_plays_withdraws_its_now_playing_state() {
     let slot = t.event_loop.owner.core.queue.slots()[1].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

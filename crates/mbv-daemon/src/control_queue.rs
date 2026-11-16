@@ -133,6 +133,8 @@ pub(crate) fn unified_queue_state_for_peer(
         .map(mbv_ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
     CtrlEvent::UnifiedQueueState(mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status.clone(),
         slots,
         active_slot,

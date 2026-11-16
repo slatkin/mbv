@@ -41,7 +41,9 @@ fn received_append(cmd_rx: &Receiver<CtrlCmd>) -> (Option<u64>, bool, Vec<String
     cmd_rx
         .try_iter()
         .find_map(|cmd| match cmd {
-            CtrlCmd::UnifiedQueueAppend { items, before, op } => Some((
+            CtrlCmd::UnifiedQueueAppend {
+                items, before, op, ..
+            } => Some((
                 before,
                 op.is_some(),
                 items.iter().map(|item| item.id().to_string()).collect(),

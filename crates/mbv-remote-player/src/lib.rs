@@ -579,6 +579,7 @@ impl RemotePlayer {
                 let start_position_secs =
                     start_position_secs.filter(|_| self.supports_queue_replace_start_position());
                 CtrlCmd::UnifiedQueueReplace {
+                    queue: None,
                     items: items.iter().map(|slot| slot.item.clone()).collect(),
                     slots: items,
                     start_idx,
@@ -587,17 +588,35 @@ impl RemotePlayer {
                     op,
                 }
             }
-            QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend { items, before, op },
-            QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op },
-            QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op },
+            QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend {
+                queue: None,
+                items,
+                before,
+                op,
+            },
+            QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot {
+                queue: None,
+                slot_id,
+                op,
+            },
+            QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots {
+                queue: None,
+                slot_ids,
+                op,
+            },
             QueueOp::MoveSlot { slot_id, to_index } => CtrlCmd::UnifiedQueueMoveSlot {
+                queue: None,
                 slot_id,
                 to_index,
                 op,
             },
-            QueueOp::PlaySlot { slot_id } => CtrlCmd::UnifiedQueuePlaySlot { slot_id, op },
+            QueueOp::PlaySlot { slot_id } => CtrlCmd::UnifiedQueuePlaySlot {
+                queue: None,
+                slot_id,
+                op,
+            },
             QueueOp::Clear => match op {
-                Some(op) => CtrlCmd::UnifiedQueueClearOp { op },
+                Some(op) => CtrlCmd::UnifiedQueueClearOp { queue: None, op },
                 None => CtrlCmd::UnifiedQueueClear,
             },
             QueueOp::SourceUpdate { source, lineage } => {
@@ -607,6 +626,7 @@ impl RemotePlayer {
                     ));
                 }
                 CtrlCmd::UnifiedQueueSourceUpdate {
+                    queue: None,
                     source,
                     lineage,
                     op,

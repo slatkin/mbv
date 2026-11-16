@@ -679,6 +679,35 @@
       "description": "Emby item identifier (movies, episodes, albums, tracks).",
       "type": "string"
     },
+    "NamedQueueEntry": {
+      "description": "One Named queue as the queue list reports it.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/NamedQueueId"
+        },
+        "len": {
+          "description": "The number of slots the queue holds.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "len"
+      ],
+      "type": "object"
+    },
+    "NamedQueueId": {
+      "description": "The identity of one Named queue, minted by the Owner and persisted with it.\nIt is stable across renames and restarts and is never reused within one\nstate file (design D3 of `gui-named-queues`).",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
     "OutputConnection": {
       "description": "Connection state of the Owner's remote playback output.",
       "enum": [
@@ -1904,6 +1933,18 @@
           "default": 0,
           "description": "Owner-minted identity for the current whole-queue replacement lineage."
         },
+        "queue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NamedQueueId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Named queue this snapshot describes. `None` on a peer without\n`named-queues`, which sees only the current queue (design D3 of\n`gui-named-queues`)."
+        },
         "queued_latest_transition": {
           "anyOf": [
             {
@@ -1933,6 +1974,16 @@
           "default": {
             "type": "unknown"
           }
+        },
+        "start_slot": {
+          "default": null,
+          "description": "The queue's start slot: the slot a play of the queue starts, or `None`\nwhen the queue has none. `None` on a peer without `named-queues`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "status": {
           "$ref": "#/$defs/PlayerStatus"
@@ -2235,6 +2286,60 @@
       },
       "required": [
         "PlaybackOutput"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The local Owner's Named queues in queue order and the current queue.\nSent when a Client attaches and after every create, rename, close,\nand swap (design D3 of `gui-named-queues`).",
+      "properties": {
+        "NamedQueueList": {
+          "properties": {
+            "current": {
+              "$ref": "#/$defs/NamedQueueId",
+              "description": "The current queue: the one that holds the playhead."
+            },
+            "queues": {
+              "items": {
+                "$ref": "#/$defs/NamedQueueEntry"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "queues",
+            "current"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueList"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "One resting Named queue, sent only to the connections whose\n`CtrlCmd::NamedQueueShow` named it, on show and after each change of\nthat queue (design D3 of `gui-named-queues`).",
+      "properties": {
+        "NamedQueueSnapshot": {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnifiedQueueStateData"
+            },
+            "queue": {
+              "$ref": "#/$defs/NamedQueueId"
+            }
+          },
+          "required": [
+            "queue",
+            "data"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueSnapshot"
       ],
       "type": "object"
     }

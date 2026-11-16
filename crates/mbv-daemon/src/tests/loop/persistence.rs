@@ -194,6 +194,7 @@ fn queue_replace_command_persists_once_through_injected_store() {
 
     let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![],
             slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,

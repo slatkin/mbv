@@ -187,6 +187,10 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
             ctx,
             "queue source updates are supported only by the Stay-alive owner",
         ),
+        mbv_ctrl::OwnerGateRejection::NamedQueues => reject_command(
+            ctx,
+            "named queues are supported only by the Stay-alive owner",
+        ),
     }
 }
 
@@ -327,10 +331,10 @@ fn queue_op_id(cmd: &CtrlCmd) -> Option<QueueOpId> {
         | CtrlCmd::UnifiedQueueRemoveSlot { op, .. }
         | CtrlCmd::UnifiedQueueRemoveSlots { op, .. }
         | CtrlCmd::UnifiedQueueMoveSlot { op, .. }
-        | CtrlCmd::UnifiedQueueShuffle { op }
+        | CtrlCmd::UnifiedQueueShuffle { op, .. }
         | CtrlCmd::UnifiedQueuePlaySlot { op, .. }
         | CtrlCmd::UnifiedQueueSourceUpdate { op, .. } => *op,
-        CtrlCmd::UnifiedQueueClearOp { op }
+        CtrlCmd::UnifiedQueueClearOp { op, .. }
         | CtrlCmd::UnifiedQueueRefresh { op }
         | CtrlCmd::UnifiedQueueApplyProgress { op, .. } => Some(*op),
         _ => None,
@@ -427,15 +431,14 @@ fn dispatch_ctrl_command(
         // and the Cast connector lives on the loop for `SelectPlaybackOutput`
         // (cast-owner-output task 3.2). Direct callers that bypass the loop
         // have no swap machine, owner-action path, or connector to consult.
-        CtrlCmd::SwapPrepared => {
-            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
-        }
-        CtrlCmd::RunOwnerAction(_) => {
-            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
-        }
-        CtrlCmd::SelectPlaybackOutput(_) => {
-            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
-        }
+        CtrlCmd::SwapPrepared => log_swap_prepared_outside_loop(),
+        CtrlCmd::RunOwnerAction(_) => log_owner_action_outside_loop(),
+        CtrlCmd::SelectPlaybackOutput(_) => log_select_output_outside_loop(),
+        cmd @ (CtrlCmd::NamedQueueCreate { .. }
+        | CtrlCmd::NamedQueueRename { .. }
+        | CtrlCmd::NamedQueueClose { .. }
+        | CtrlCmd::NamedQueuePlay { .. }
+        | CtrlCmd::NamedQueueShow { .. }) => log_ignored_named_queue_command(&cmd),
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: new_source,
             lineage: cmd_lineage,
@@ -486,6 +489,34 @@ fn dispatch_ctrl_command(
             queue_edit::handle_queue_apply_progress(ctx, updates);
         }
     }
+}
+
+/// Documented no-op for the Named queue family (gui-named-queues task 4.1):
+/// the Owner does not hold the Named queue store yet, so the commands are
+/// dropped until tasks 5.4-5.6 answer them. The Owner gate already refused them
+/// on a packaged daemon, and no peer sends them before the `named-queues`
+/// capability is advertised (5.1). Its own function keeps the `tracing` macro
+/// expansion out of the dispatcher's cognitive-complexity budget.
+fn log_ignored_named_queue_command(cmd: &CtrlCmd) {
+    tracing::warn!(name: "daemon.ctrl_command.unhandled", target: "daemon", command = ?cmd, "ignoring a named-queue command the Owner does not handle yet");
+}
+
+/// Documented no-op: the swap machine on the event loop takes `SwapPrepared`,
+/// so a direct caller that bypasses the loop has none to hand it to.
+fn log_swap_prepared_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
+}
+
+/// Documented no-op: the event loop's owner-action handler takes
+/// `RunOwnerAction`.
+fn log_owner_action_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
+}
+
+/// Documented no-op: the Cast connector lives on the event loop, which
+/// `CtrlContext` does not carry.
+fn log_select_output_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
 }
 
 fn log_unexpected_hello_after_negotiation() {

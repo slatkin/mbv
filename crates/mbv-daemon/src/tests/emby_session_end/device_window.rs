@@ -36,6 +36,7 @@ fn transport_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
 fn append_item(t: &mut TestLoop, client_id: u64, item: QueueItem) {
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![item],
             before: None,
             op: None,
@@ -388,7 +389,10 @@ fn shuffle_with_seeded_rng(t: &mut TestLoop, client_id: u64) {
     } = &mut t.event_loop;
     owner.rng = rand::rngs::SmallRng::seed_from_u64(1);
     handle_ctrl_for_role(
-        CtrlCmd::UnifiedQueueShuffle { op: None },
+        CtrlCmd::UnifiedQueueShuffle {
+            queue: None,
+            op: None,
+        },
         CtrlContext {
             reply_tx: &reply_tx,
             client_id,

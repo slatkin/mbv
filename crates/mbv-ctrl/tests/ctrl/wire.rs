@@ -34,10 +34,23 @@ fn local_only_command_is_refused_without_wire_encoding() {
 #[test]
 fn queue_shuffle_payload_without_op_decodes() {
     let decoded: CtrlCmd = serde_json::from_str(r#"{"UnifiedQueueShuffle":{}}"#).unwrap();
-    let CtrlCmd::UnifiedQueueShuffle { op } = decoded else {
+    let CtrlCmd::UnifiedQueueShuffle { op, .. } = decoded else {
         panic!("decoded to another command")
     };
     assert_eq!(op, None);
+}
+
+// gui-named-queues task 4.1: `queue` is additive on every queue edit — a
+// payload from a peer that predates the field decodes with `None`, which
+// means the current queue. The corpus pins the populated shape.
+#[test]
+fn queue_edit_payload_without_queue_decodes_as_the_current_queue() {
+    let decoded: CtrlCmd =
+        serde_json::from_str(r#"{"UnifiedQueueAppend":{"items":[],"before":null}}"#).unwrap();
+    let CtrlCmd::UnifiedQueueAppend { queue, .. } = decoded else {
+        panic!("decoded to another command")
+    };
+    assert_eq!(queue, None);
 }
 
 // The playback order left the wire (queue-content-shuffle task 5.2): a
@@ -57,12 +70,12 @@ fn player_status_with_legacy_play_order_field_still_decodes() {
 }
 
 #[rstest::rstest]
-#[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None }, true)]
-#[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None }, true)]
-#[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0, op: None }, true)]
-#[case::shuffle(CtrlCmd::UnifiedQueueShuffle { op: None }, true)]
+#[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None, queue: None }, true)]
+#[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None, queue: None }, true)]
+#[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0, op: None, queue: None }, true)]
+#[case::shuffle(CtrlCmd::UnifiedQueueShuffle { op: None, queue: None }, true)]
 #[case::clear(CtrlCmd::UnifiedQueueClear, true)]
-#[case::clear_op(CtrlCmd::UnifiedQueueClearOp { op: QueueOpId(1) }, true)]
+#[case::clear_op(CtrlCmd::UnifiedQueueClearOp { op: QueueOpId(1), queue: None }, true)]
 #[case::refresh(CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(1) }, true)]
 #[case::apply_progress(
     CtrlCmd::UnifiedQueueApplyProgress {
@@ -75,9 +88,15 @@ fn player_status_with_legacy_play_order_field_still_decodes() {
     },
     true
 )]
-#[case::play_slot(CtrlCmd::UnifiedQueuePlaySlot { slot_id: 1, op: None }, false)]
+#[case::play_slot(CtrlCmd::UnifiedQueuePlaySlot { slot_id: 1, op: None, queue: None }, false)]
 #[case::stop(CtrlCmd::Stop, false)]
 #[case::shutdown(CtrlCmd::RequestShutdown, false)]
+#[case::named_queue_show(
+    CtrlCmd::NamedQueueShow {
+        queue: mbv_queue::NamedQueueId::from_raw(2),
+    },
+    false
+)]
 fn owner_persists_only_after_queue_edits(#[case] cmd: CtrlCmd, #[case] persists: bool) {
     assert_eq!(cmd.mutates_owner_queue(), persists);
 }

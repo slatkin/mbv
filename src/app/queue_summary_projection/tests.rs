@@ -28,6 +28,8 @@ fn app_with_queue(items: Vec<QueueItem>, active_idx: usize) -> crate::app::App {
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: None,
         slots,

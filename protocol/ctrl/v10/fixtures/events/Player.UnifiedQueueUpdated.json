@@ -4,6 +4,7 @@
       "active_slot": 1,
       "in_flight_transition": null,
       "lineage": 2,
+      "queue": null,
       "queued_latest_transition": null,
       "revision": 12,
       "slots": [
@@ -113,6 +114,7 @@
         "name": "Conformance Playlist",
         "type": "playlist"
       },
+      "start_slot": null,
       "status": {
         "active": true,
         "album": "Conformance Album",

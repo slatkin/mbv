@@ -70,6 +70,8 @@ fn a_stop_intent_is_delivered_before_the_connection_closes() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: mbv_ctrl::player::PlayerStatus::default(),
             slots: Vec::new(),
             active_slot: None,
