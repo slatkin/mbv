@@ -16,33 +16,33 @@ holds that change.
 
 ## 2. Queue model (`crates/mbv-queue`)
 
-- [ ] 2.1 Add the `NamedQueueId` newtype (serde, `JsonSchema`, `raw`/`from_raw`) (design D3). Reuse
+- [x] 2.1 Add the `NamedQueueId` newtype (serde, `JsonSchema`, `raw`/`from_raw`) (design D3). Reuse
   the existing `PlaybackQueue::from_slot_items` for a queue with saved slot ids; write no second
   constructor (design D6). Verify with `cargo check -p mbv-queue`.
-- [ ] 2.2 Add the start-slot rule as a pure function over a queue and an observation (active slot,
+- [x] 2.2 Add the start-slot rule as a pure function over a queue and an observation (active slot,
   stop, completion with next slot, end of queue, removal of the start slot) (design D4). Verify
   with one `#[case]` table test that has one row per outcome in the `named-queues` spec "Each
   queue has a start slot".
 
 ## 3. State file (`crates/mbv-config`)
 
-- [ ] 3.1 Add `named_queues_state_path()` and the `NamedQueuesState` record with atomic save and
+- [x] 3.1 Add `named_queues_state_path()` and the `NamedQueuesState` record with atomic save and
   load, clearing Service positions as `save_stay_alive_queue_state_at` does (design D6). Verify
   with a round-trip test of two queues with names, sources, slot ids, and start slots.
-- [ ] 3.2 Add the migration load: with no new file and an existing single-queue file, return one
+- [x] 3.2 Add the migration load: with no new file and an existing single-queue file, return one
   current queue named `Default` and leave the old file unchanged (spec "An earlier single-queue
   state loads"). Verify with one test over a temporary directory.
 
 ## 4. Ctrl vocabulary (`crates/mbv-ctrl`)
 
-- [ ] 4.1 Add `CTRL_CAP_NAMED_QUEUES`, the `NamedQueueCreate`, `NamedQueueRename`,
+- [x] 4.1 Add `CTRL_CAP_NAMED_QUEUES`, the `NamedQueueCreate`, `NamedQueueRename`,
   `NamedQueueClose`, `NamedQueuePlay`, and `NamedQueueShow` commands as `OwnerOnly`, and the
   defaulted `queue` field on the edit commands that design D3 lists. Verify that `cargo check
   -p mbv-ctrl` passes and that a payload without `queue` still decodes (one decode test).
-- [ ] 4.2 Add the `NamedQueueList` and `NamedQueueSnapshot` events and the defaulted `queue` and
+- [x] 4.2 Add the `NamedQueueList` and `NamedQueueSnapshot` events and the defaulted `queue` and
   `start_slot` fields on `UnifiedQueueStateData` (design D3). Verify that a v10 payload without the
   new fields decodes.
-- [ ] 4.3 Add one golden fixture per new variant and case under `protocol/ctrl/v10/`, regenerate
+- [x] 4.3 Add one golden fixture per new variant and case under `protocol/ctrl/v10/`, regenerate
   the schemas, and update the wire identity. Verify with the existing ctrl conformance tests
   (`cargo nextest run -p mbv-ctrl`).
 
