@@ -1,8 +1,8 @@
 //! Headless tests of the Podcasts list (D16): the contracts of
 //! `LibraryPodcastsList.test.ts` — the flat episode list paints its date
 //! gutter with no letter heading and no rail, a press sends the select
-//! command with the row id while a double-click plays the episode, the
-//! cursor row and the core's selected episode carry their own fills, a
+//! command with the row id while a double-click plays the episode, the core's
+//! selected episode carries its fill and no row paints a cursor, a
 //! played episode dims its title while an active one paints its resume
 //! percent, the load and failure facts paint their own lines, and the header
 //! names the active pill. The IPC of the earlier tests is the mock core
@@ -426,27 +426,14 @@ fn a_double_click_plays_the_episode() {
     );
 }
 
-/// Contract (`LibraryPodcastsList.test.ts`): the cursor row and the core's
-/// selected episode carry their own fills.
+/// Contract (`LibraryPodcastsList.test.ts`): the core's selected episode
+/// carries its mark and its fill, and no row paints a cursor — the list keeps
+/// none (`gui-pointer-target-interaction` D6).
 #[test]
-fn the_cursor_row_and_the_cores_selected_episode_carry_their_own_fills() {
+fn the_cores_selected_episode_carries_its_fill_and_no_row_paints_a_cursor() {
     let mut fixture = built(frame(episodes(), false, false), detail(Some("e1:ep1")));
     fixture.measure(300.0);
 
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || {
-        let mut podcasts_ui = state.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.cursor = Some("e2:ep2".to_owned()));
-    });
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-podcasts-row-id=\"e2:ep2\"]",
-            "data-library-podcasts-cursor",
-        ),
-        Some(String::new()),
-        "the cursor row paints its mark"
-    );
     assert_eq!(
         fixture.attr_of(
             "[data-library-podcasts-row-id=\"e1:ep1\"]",
@@ -454,6 +441,16 @@ fn the_cursor_row_and_the_cores_selected_episode_carry_their_own_fills() {
         ),
         Some(String::new()),
         "the selected episode paints its mark"
+    );
+    assert!(
+        fixture
+            .attr_of("[data-library-podcasts-row-id=\"e1:ep1\"]", "style")
+            .is_some_and(|style| style.contains("background")),
+        "the selected episode paints its fill"
+    );
+    assert!(
+        !fixture.presents("[data-library-podcasts-cursor]"),
+        "no row paints a cursor"
     );
 }
 

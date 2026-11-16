@@ -2,9 +2,10 @@
 //! 11.1, the port of `lib/library/feeds-list.ts`): the active pill's flat
 //! entry rows — no letter headings, because the list is sorted by date, and
 //! so no letter rail. The list paints fixed-height rows over native scroll
-//! and only the rows in view, as the Shows and Home lists do, and the model
-//! is plain data over fixed heights, so the geometry is asserted without a
-//! layout, which jsdom does not have.
+//! and only the rows in view, as the Shows and Home lists do, and the keys act
+//! on the row the pointer marks (`gui-pointer-target-interaction` D2). The
+//! model is plain data over fixed heights, so the geometry is asserted without
+//! a layout, which jsdom does not have.
 //!
 //! The carried rows are the shared entry-list ones, so the [`FlatItem`] impl
 //! they read lives in [`super::podcasts_list`] and this module names no impl
@@ -15,7 +16,7 @@ use std::sync::Arc;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEntryRowFrame;
-use crate::window::library::list::{GeometryRow, ListMove, build_flat_rows, move_cursor};
+use crate::window::library::list::{GeometryRow, build_flat_rows};
 
 /// The entry row's height in logical pixels (design D12): the room a
 /// two-line entry title and the date gutter paint into, as a Shows flat row.
@@ -24,12 +25,12 @@ pub const FEEDS_ROW_HEIGHT: f32 = 48.0;
 /// One painted row of the Feeds list (design D12). The list is one flat
 /// entry list in core order — newest first with undated entries last — so
 /// every painted row is an item row: the `id` is the row's stable identity as
-/// one opaque string, the cursor's identity, the each-block's key, and the id
-/// the scroll geometry reads. There is no heading and no rail to step over.
+/// one opaque string, the pointer marker's value, the each-block's key, and the
+/// id the scroll geometry reads. There is no heading and no rail to step over.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeedsItemRow {
-    /// The row's stable key: the cursor's identity, the each-block's key, and
-    /// the id the scroll geometry reads.
+    /// The row's stable key: the pointer marker's value, the each-block's key,
+    /// and the id the scroll geometry reads.
     pub id: String,
     /// The row's top edge from the list's first row.
     pub top: f32,
@@ -70,22 +71,6 @@ pub fn build_feeds_rows(rows: &[GuiEntryRowFrame], filter: &str) -> Vec<FeedsIte
             height: flat.height,
         })
         .collect()
-}
-
-/// The cursor key a movement leaves (design D12): the next, the previous, or a
-/// page away entry row, clamped to the list's ends. With no cursor on a row,
-/// Up and End start from the last row and every other movement from the first,
-/// so one key press always lands the cursor. `page` is the rows a page spans:
-/// the rows in view. Every row is an item row, so no movement steps over a
-/// heading.
-#[must_use]
-pub fn move_feeds_cursor(
-    rows: &[FeedsItemRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(rows, cursor, mv, page)
 }
 
 /// The rows the memo handed back last, with the cheap key and the interaction
@@ -130,8 +115,8 @@ impl FeedsRowsMemo {
         filter: &str,
     ) -> Arc<[FeedsItemRow]> {
         // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a settle that moves the cursor) would re-queue itself on the
-        // write below otherwise.
+        // memo (a filter's scroll clamp) would re-queue itself on the write
+        // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
             && entry.filter == filter

@@ -1,8 +1,9 @@
 //! Headless tests of the Feeds keys (D16): the contracts of
-//! `feeds-keys.test.ts` — the list's cursor moves, Enter plays the entry it
-//! rests on, `a` queues it, `n` is consumed and does nothing, the pill row
-//! walks its views, and the pane walk skips the Hero a frame without one does
-//! not paint. The router under test is the panel's one routing site,
+//! `feeds-keys.test.ts` on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
+//! under the pointer, Enter plays the hovered entry, `a` queues it, `n` is
+//! consumed and does nothing, and Space stays the core's key. The router under
+//! test is the panel's one routing site,
 //! [`super::super::keys::route_library_key`], so these assertions cover the
 //! Feeds dispatch it hands to [`super::route_feeds_panel_key`]. The harness
 //! builds a `DioxusDocument` whose root creates the store and runs each
@@ -15,11 +16,10 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame,
-    GuiMetaSegmentFrame, GuiPillFrame,
+    GuiArtShapeFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame,
+    GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPillFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::library::GuiFeedPill;
@@ -29,7 +29,8 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::feeds::initial_feeds_ui;
-use crate::window::library::state::{LibraryPane, LibraryState};
+use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -118,21 +119,40 @@ fn key(value: &str, shift: bool) -> DomKey {
     }
 }
 
-/// Route one keydown against the given section stores and paint the outcome.
-fn route_on(
+/// The pointer target a list key routes under: the pointer over the Library
+/// column, not on a list or a Hero control.
+fn library_pointer() -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: None,
+        row: None,
+    }
+}
+
+/// The pointer target over `list`, resting on the row `row` when one is named.
+fn pointer_on(list: PointerList, row: Option<&str>) -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(list),
+        row: row.map(str::to_owned),
+    }
+}
+
+/// Route one keydown under one pointer target and paint the outcome.
+fn route_pointer(
     state: &LibraryState,
     facts: &Facts,
     name: &str,
     value: &str,
-    shift: bool,
-    sections: &Sections,
+    pointer: &PointerTarget,
 ) {
     let outcome = super::super::keys::route_library_key(
-        &key(value, shift),
-        Some(sections),
+        &key(value, false),
+        Some(&state.sections),
         state,
         None,
         GuiArrangement::Wide,
+        pointer,
     );
     facts
         .lock()
@@ -140,10 +160,49 @@ fn route_on(
         .push(format!("{name}={outcome:?}"));
 }
 
-/// Route one keydown against the window's own section stores and paint the
-/// outcome.
+/// Route one keydown with the pointer over the entry list, resting on `row`.
+fn route_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Feeds, Some(row)),
+    );
+}
+
+/// Route one keydown with the pointer over the Hero's entry Workspace,
+/// resting on `row` when one is named.
+fn route_workspace(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    row: Option<&str>,
+) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Workspace, row),
+    );
+}
+
+/// Route one keydown with the pointer over the Library column, on no list.
 fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    route_on(state, facts, name, value, shift, &state.sections);
+    let outcome = super::super::keys::route_library_key(
+        &key(value, shift),
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+        &library_pointer(),
+    );
+    facts
+        .lock()
+        .expect("facts")
+        .push(format!("{name}={outcome:?}"));
 }
 
 /// The entry rows the Latest pill merges, newest first.
@@ -208,32 +267,26 @@ fn pills(selected: PillSelection) -> Vec<GuiPillFrame<GuiFeedPill>> {
     ]
 }
 
+/// A Feeds Hero over the feed `parent`, with its entries in the list band.
+fn feeds_hero(parent: &str) -> GuiFeedsHeroFrame {
+    GuiFeedsHeroFrame {
+        title: "Entry A".to_owned(),
+        parent: Some(parent.to_owned()),
+        meta_rows: vec![vec![GuiMetaSegmentFrame {
+            text: "0 h 54 m".to_owned(),
+            kind: GuiMetaKindFrame::Time,
+        }]],
+        duration_row: Some(0),
+        progress_row: None,
+        art_shape: GuiArtShapeFrame::Square,
+    }
+}
+
 /// The pill selection the fixtures name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PillSelection {
     Latest,
     Subscription,
-}
-
-/// The entry Hero a selected entry paints (design D12, row 11.1).
-fn hero() -> GuiFeedsHeroFrame {
-    GuiFeedsHeroFrame {
-        title: "Entry A".to_owned(),
-        parent: Some("Sub One".to_owned()),
-        meta_rows: vec![
-            vec![GuiMetaSegmentFrame {
-                text: "Sub One".to_owned(),
-                kind: GuiMetaKindFrame::Plain,
-            }],
-            vec![GuiMetaSegmentFrame {
-                text: "12:30".to_owned(),
-                kind: GuiMetaKindFrame::Time,
-            }],
-        ],
-        duration_row: Some(1),
-        progress_row: None,
-        art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Square,
-    }
 }
 
 /// The carried content while the Feeds destination is active (design D12):
@@ -245,7 +298,23 @@ fn feeds_content(
     rows: &[GuiEntryRowFrame],
     hero: Option<GuiFeedsHeroFrame>,
 ) -> (GuiLibraryList, GuiLibraryDetail) {
-    let selected = rows.first().map(|row| row.id.clone());
+    feeds_content_selected(
+        rows.first().map(|row| row.id.as_str()),
+        pill_selection,
+        rows,
+        hero,
+    )
+}
+
+/// The carried content with `selected` as the core's selection, which the
+/// Hero's Workspace never reads — the keys act on the hovered row.
+fn feeds_content_selected(
+    selected: Option<&str>,
+    pill_selection: PillSelection,
+    rows: &[GuiEntryRowFrame],
+    hero: Option<GuiFeedsHeroFrame>,
+) -> (GuiLibraryList, GuiLibraryDetail) {
+    let selected = selected.map(str::to_owned);
     let list = GuiLibraryList {
         tabs: vec![
             GuiLibraryTabFrame {
@@ -269,39 +338,8 @@ fn feeds_content(
     (list, detail)
 }
 
-/// Apply one carried Feeds frame without touching the interaction state: a
-/// re-carried frame is a fresh deserialization, and the pill focus the walk
-/// keeps must survive it (row 10.1's P2).
-fn carry_feeds_batch(
-    state: &LibraryState,
-    revision: u64,
-    content: (GuiLibraryList, GuiLibraryDetail),
-) {
-    let (list, detail) = content;
-    let batch = GuiSectionBatch {
-        library_list: Some(GuiSection {
-            revision,
-            value: Some(list),
-        }),
-        library_detail: Some(GuiSection {
-            revision,
-            value: Some(detail),
-        }),
-        ..GuiSectionBatch::default()
-    };
-    let mut sections = state.sections.clone();
-    sections.apply_batch(&batch);
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
-}
-
-/// Carry the Feeds content and focus the pane the key acts on.
-fn carry_feeds(
-    state: &LibraryState,
-    content: (GuiLibraryList, GuiLibraryDetail),
-    pane: LibraryPane,
-    cursor: Option<&str>,
-) {
+/// Carry the Feeds content and start the list's interaction state over.
+fn carry_feeds(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail)) {
     let (list, detail) = content;
     let batch = GuiSectionBatch {
         library_list: Some(GuiSection {
@@ -316,47 +354,42 @@ fn carry_feeds(
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
     let mut ui = state.ui;
     ui.with_mut(|ui| {
         ui.hero_dismissed = true;
         ui.item_menu_open = true;
     });
-    let mut ui = state.ui;
-    ui.with_mut(|ui| ui.pane = Some(pane));
     let mut feeds_ui = state.feeds_ui;
-    feeds_ui.with_mut(|ui| {
-        *ui = initial_feeds_ui();
-        ui.cursor = cursor.map(str::to_owned);
-    });
+    feeds_ui.with_mut(|ui| *ui = initial_feeds_ui());
 }
 
-/// The pane focus and pill facts the assertions read.
-fn ui_facts(state: &LibraryState) -> String {
-    let ui = state.ui.peek().clone();
-    let feeds = state.feeds_ui.peek().clone();
-    let focused = feeds.focused_pill.clone();
+/// The list's scroll facts the assertions read.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.feeds.peek();
     format!(
-        "pane={:?} filter_open={} dismissed={} item_menu_open={} cursor={:?} filter={:?} focused_pill={focused:?} pill_select={:?}",
-        ui.pane,
-        ui.filter_open,
-        ui.hero_dismissed,
-        ui.item_menu_open,
-        feeds.cursor,
-        feeds.filter,
-        feeds.pill_select,
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
     )
 }
 
-// Enter on the cursor row plays the entry.
+/// The filter facts the assertions read.
+fn ui_facts(state: &LibraryState) -> String {
+    let ui = state.ui.peek().clone();
+    let feeds = state.feeds_ui.peek().clone();
+    format!(
+        "filter_open={} dismissed={} item_menu_open={} filter={:?} pill_select={:?}",
+        ui.filter_open, ui.hero_dismissed, ui.item_menu_open, feeds.filter, feeds.pill_select,
+    )
+}
+
+// Enter on the hovered row plays the entry.
 #[test]
-fn enter_on_the_cursor_row_plays_the_entry() {
+fn enter_on_the_hovered_row_plays_the_entry() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s2::e2"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "enter", "Enter", false);
+        route_row(state, facts, "enter", "Enter", "s2::e2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -367,29 +400,14 @@ fn enter_on_the_cursor_row_plays_the_entry() {
     );
 }
 
-// A movement key moves the cursor and sends no key.
+// `a` on the hovered row queues the entry.
 #[test]
-fn a_movement_key_moves_the_cursor_and_sends_no_key() {
+fn a_on_the_hovered_row_queues_the_entry() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "down=Handled");
-    assert!(facts[1].contains("cursor=Some(\"s2::e2\")"));
-    assert_eq!(commands(&rx), []);
-}
-
-// `a` on the cursor row queues the entry.
-#[test]
-fn a_on_the_cursor_row_queues_the_entry() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
-
-        route(state, facts, "a", "a", false);
+        route_row(state, facts, "a", "a", "s1::e1");
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -403,97 +421,66 @@ fn a_on_the_cursor_row_queues_the_entry() {
 // A feed entry has no play-next (row 11.1): `n` is consumed and sends
 // nothing, so it neither queues nor reaches the core's playback chords.
 #[test]
-fn n_on_the_cursor_row_sends_nothing_and_is_handled() {
+fn n_on_the_hovered_row_sends_nothing_and_is_handled() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "n", "n", false);
+        route_row(state, facts, "n", "n", "s1::e1");
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 
-// Right on the pill row focuses the first pill and sends no key.
+// Enter, `n`, and `a` with the pointer over no entry row do nothing (design
+// D2, step 3): the key is the window's, and it sends no command.
 #[test]
-fn right_on_the_pill_row_focuses_the_first_pill_and_sends_no_key() {
+fn enter_n_and_a_with_no_hovered_row_send_nothing() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, None);
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "right", "ArrowRight", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "right=Handled");
-    assert!(
-        facts[1].contains("focused_pill=Some(Latest)"),
-        "facts={facts:?}"
-    );
-    assert_eq!(commands(&rx), []);
-}
-
-// Space on a focused subscription pill asks for its selection.
-#[test]
-fn space_on_a_focused_subscription_pill_asks_for_its_selection() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, None);
-        let mut feeds_ui = state.feeds_ui;
-        feeds_ui.with_mut(|ui| {
-            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()));
-        });
-
-        route(state, facts, "space", " ", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "space=Handled");
-    assert!(facts[1].contains("pill_select=Some(Subscription(\"https://sub.one\"))"));
-    assert_eq!(commands(&rx), []);
-}
-
-// Review of row 10.1, finding P2: the pill walk finds the focused pill by
-// its key, not its object, because every carried frame is a fresh
-// deserialization. An object-identity find would lose the focus across
-// frames and the walk would restart from a row end.
-#[test]
-fn the_pill_walk_keeps_its_place_when_the_frame_re_carries_equal_pills() {
-    let first = feeds_content(PillSelection::Latest, &entries(), None);
-    let second = feeds_content(PillSelection::Subscription, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, first.clone(), LibraryPane::Pills, None);
-        let mut feeds_ui = state.feeds_ui;
-        feeds_ui.with_mut(|ui| {
-            ui.focused_pill = Some(GuiFeedPill::Subscription("https://sub.one".to_owned()));
-        });
-
-        // A new frame: structurally equal pills, all fresh objects.
-        // A new revision: the section store writes a frame it has not held.
-        carry_feeds_batch(state, 2, second.clone());
-
-        route(state, facts, "right", "ArrowRight", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "right=Handled");
-    assert!(
-        facts[1].contains("focused_pill=Some(Subscription(\"https://sub.two\"))"),
-        "facts={facts:?}"
-    );
-    assert_eq!(commands(&rx), []);
-}
-
-// Enter on a focused pill asks for its selection.
-#[test]
-fn enter_on_a_focused_pill_asks_for_its_selection() {
-    let content = feeds_content(PillSelection::Subscription, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, None);
-
-        route(state, facts, "right", "ArrowRight", false);
         route(state, facts, "enter", "Enter", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        route(state, facts, "n", "n", false);
+        route(state, facts, "a", "a", false);
     });
-    assert_eq!(&facts[0..2], ["right=Handled", "enter=Handled"]);
-    assert!(facts[2].contains("pill_select=Some(Latest)"));
+    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Down over the list scrolls it by the height of the row at the top edge
+// (design D6) and plays nothing.
+#[test]
+fn down_over_the_feeds_list_scrolls_it_by_one_row() {
+    let content = feeds_content(PillSelection::Latest, &entries(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+        state.measure_feeds_list(40.0);
+
+        route_row(state, facts, "down", "ArrowDown", "s1::e1");
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Handled");
+    // The first row is 48 px, and the 96 px of rows clamp the step at the
+    // list's end.
+    assert_eq!(facts[1], "top=48 viewport=40");
+    assert_eq!(commands(&rx), []);
+}
+
+// The movement keys are the core's while the pointer rests off the list
+// (design D2, step 4): nothing scrolls.
+#[test]
+fn down_off_the_feeds_list_is_the_cores_key() {
+    let content = feeds_content(PillSelection::Latest, &entries(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+        state.measure_feeds_list(40.0);
+
+        route(state, facts, "down", "ArrowDown", false);
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Core(None)");
+    assert_eq!(facts[1], "top=0 viewport=40");
     assert_eq!(commands(&rx), []);
 }
 
@@ -504,7 +491,7 @@ fn enter_on_a_focused_pill_asks_for_its_selection() {
 fn slash_opens_the_feeds_filter_and_sends_no_key() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
         route(state, facts, "slash", "/", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -521,7 +508,7 @@ fn slash_opens_the_feeds_filter_and_sends_no_key() {
 fn esc_closes_the_feeds_filter_and_drops_its_text() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
+        carry_feeds(state, content.clone());
         let mut feeds_ui = state.feeds_ui;
         feeds_ui.with_mut(|ui| ui.filter = "s1".to_owned());
         let mut ui = state.ui;
@@ -536,14 +523,45 @@ fn esc_closes_the_feeds_filter_and_drops_its_text() {
     assert_eq!(commands(&rx), []);
 }
 
-// `a` in the Hero pane queues the frame's selected entry.
+// Enter on the hovered Workspace entry plays that entry (design D2): the Hero's
+// list band carries the feed's entries, and their pointer marker is the entry's
+// stable id.
 #[test]
-fn a_in_the_hero_pane_queues_the_frames_selected_entry() {
-    let content = feeds_content(PillSelection::Latest, &entries(), Some(hero()));
+fn enter_on_the_hovered_workspace_entry_plays_it() {
+    let content = feeds_content_selected(
+        Some("s2::e2"),
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Hero, None);
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "a", "a", false);
+        route_workspace(state, facts, "enter", "Enter", Some("s1::e1"));
+    });
+    assert_eq!(facts, ["enter=Handled"]);
+    assert_eq!(
+        commands(&rx),
+        [mbv::GuiLibraryCommand::FeedsPlay {
+            item_id: "s1::e1".to_owned(),
+        }]
+    );
+}
+
+// `a` on the hovered Workspace entry queues that entry, not the core's
+// selected one (design D2).
+#[test]
+fn a_on_the_hovered_workspace_entry_queues_it_not_the_selected_one() {
+    let content = feeds_content_selected(
+        Some("s2::e2"),
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "a", "a", Some("s1::e1"));
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -554,118 +572,58 @@ fn a_in_the_hero_pane_queues_the_frames_selected_entry() {
     );
 }
 
-// A movement key in the Hero pane changes nothing and sends no key.
+// Enter on a marker that names no entry the Hero paints sends nothing: another
+// feed's entry, and no row at all.
 #[test]
-fn a_movement_key_in_the_hero_pane_changes_nothing_and_sends_no_key() {
-    let content = feeds_content(PillSelection::Latest, &entries(), Some(hero()));
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Hero, None);
-
-        route(state, facts, "down", "ArrowDown", false);
-    });
-    assert_eq!(facts, ["down=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// Review of row 7.1's P1 lesson, row 11.1: the Feeds panes keep the
-// Library's keys from the core's router (design D3, step 4). A pane that does
-// not act on a key still consumes it, so `n` and `a` never reach the core's
-// playback chords, which are not gated on Panel focus.
-#[test]
-fn a_movement_key_on_the_pills_pane_does_not_reach_the_core() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, None);
-
-        route(state, facts, "up", "ArrowUp", false);
-    });
-    assert_eq!(facts, ["up=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// `a` on the pills pane queues the list cursor entry and sends no key.
-#[test]
-fn a_on_the_pills_pane_queues_the_list_cursor_entry_and_sends_no_key() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, Some("s2::e2"));
-
-        route(state, facts, "a", "a", false);
-    });
-    assert_eq!(facts, ["a=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::FeedsQueue {
-            item_id: "s2::e2".to_owned(),
-        }]
+fn enter_on_no_painted_workspace_entry_sends_nothing() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
     );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "enter", "Enter", Some("s2::e2"));
+        route_workspace(state, facts, "enter", "Enter", None);
+    });
+    assert_eq!(facts, ["enter=Handled", "enter=Handled"]);
+    assert_eq!(commands(&rx), []);
 }
 
-// `n` on the pills pane is consumed and sends no key.
+// Feeds has no play-next: `n` on the Workspace is consumed and sends nothing.
 #[test]
-fn n_on_the_pills_pane_is_consumed_and_sends_no_key() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
+fn n_on_the_workspace_is_consumed_without_a_call() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Pills, Some("s2::e2"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "n", "n", false);
+        route_workspace(state, facts, "n", "n", Some("s1::e1"));
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(commands(&rx), []);
 }
 
-// `n` on the hero-less Hero pane is consumed and sends no key.
+// A movement key on the Workspace moves no row and sends no key: the Workspace
+// keeps no cursor (design D6).
 #[test]
-fn n_on_the_hero_less_hero_pane_is_consumed_and_sends_no_key() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
+fn a_movement_key_on_the_workspace_moves_no_row() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::Hero, Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "n", "n", false);
+        route_workspace(state, facts, "down", "ArrowDown", Some("s1::e1"));
+        facts.lock().expect("facts").push(scroll_facts(state));
     });
-    assert_eq!(facts, ["n=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// Space with no focused pill keeps its core effect.
-#[test]
-fn space_with_no_focused_pill_keeps_its_core_effect() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (_facts, _rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, Some("s1::e1"));
-
-        route(state, facts, "space", " ", false);
-    });
-    // The core's own router takes the key: the routing outcome is the fact,
-    // and the harness forwards no core key for the forwarder to record.
-}
-
-// The pane walk skips the Hero a frame without one does not paint (design
-// D12, row 11.1): the list is the walk's last pane there, so Tab past it
-// takes Queue Panel focus.
-#[test]
-fn tab_past_the_hero_less_list_takes_queue_panel_focus() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, None);
-
-        route(state, facts, "tab", "Tab", false);
-    });
-    assert_eq!(facts, ["tab=Handled"]);
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::TakeQueueFocus]);
-}
-
-// Tab walks from the list into the Hero a frame carries.
-#[test]
-fn tab_walks_from_the_list_into_the_hero_a_frame_carries() {
-    let content = feeds_content(PillSelection::Latest, &entries(), Some(hero()));
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), LibraryPane::List, None);
-
-        route(state, facts, "tab", "Tab", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "tab=Handled");
-    assert!(facts[1].contains("pane=Some(Hero)"));
+    assert_eq!(facts[0], "down=Handled");
+    assert_eq!(facts[1], "top=0 viewport=0");
     assert_eq!(commands(&rx), []);
 }

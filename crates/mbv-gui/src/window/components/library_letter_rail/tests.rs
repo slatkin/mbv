@@ -1,7 +1,7 @@
 //! Headless tests of the letter rail (D16): the contracts of
 //! `LibraryLetterRail.test.ts` — a letter with no painted rows is disabled
-//! and a press on it changes nothing, and a press on an enabled letter moves
-//! the cursor to its first row and shows that row. A headless document
+//! and a press on it changes nothing, and a press on an enabled letter scrolls
+//! the list to its first row. A headless document
 //! cannot fire a DOM click event, so the press contracts ride the state
 //! method the rail's press handler calls (the top bar's precedent); the
 //! disabled mark is the painted attribute, asserted on the built document.
@@ -37,7 +37,6 @@ type FixtureHandles = LibraryState;
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     letters: Vec<RailLetter>,
-    marked: Option<char>,
     handle: Rc<RefCell<Option<FixtureHandles>>>,
 }
 
@@ -47,7 +46,6 @@ fn rail_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
         letters,
-        marked,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -65,10 +63,7 @@ fn rail_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryLetterRail {
-            letters,
-            marked,
-        }
+        LibraryLetterRail { letters }
     }
 }
 
@@ -150,7 +145,7 @@ impl Fixture {
 
 /// Build the document over the rail's props and let its first render and
 /// effects land.
-fn built(letters: Vec<RailLetter>, marked: Option<char>) -> Fixture {
+fn built(letters: Vec<RailLetter>) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -159,7 +154,6 @@ fn built(letters: Vec<RailLetter>, marked: Option<char>) -> Fixture {
             FixtureProps {
                 sender,
                 letters,
-                marked,
                 handle: Rc::clone(&handle),
             },
         ),
@@ -240,7 +234,7 @@ fn letters() -> Vec<RailLetter> {
 /// disabled, and a press on it changes nothing.
 #[test]
 fn a_letter_with_no_painted_rows_is_disabled_and_a_press_changes_nothing() {
-    let mut fixture = built(letters(), None);
+    let mut fixture = built(letters());
     fixture.carry(music());
 
     assert!(
@@ -253,23 +247,18 @@ fn a_letter_with_no_painted_rows_is_disabled_and_a_press_changes_nothing() {
     );
 
     fixture.compute(|state| state.jump_to_letter('C'));
-    assert_eq!(fixture.state.ui.peek().cursor, None);
     assert_eq!(fixture.state.music_scroll.peek().scroll_top, 0.0);
 }
 
 /// Contract (`LibraryLetterRail.test.ts`): a press on an enabled letter
-/// moves the cursor to its first row and shows that row.
+/// scrolls the list to its first row and picks and selects nothing.
 #[test]
-fn a_press_on_a_letter_moves_the_cursor_to_its_first_row_and_shows_that_row() {
-    let mut fixture = built(letters(), None);
+fn a_press_on_a_letter_scrolls_the_list_to_its_first_row() {
+    let mut fixture = built(letters());
     fixture.carry(music());
     fixture.compute(|state| state.measure_library_list(40.0));
 
     fixture.compute(|state| state.jump_to_letter('B'));
 
-    assert_eq!(
-        fixture.state.ui.peek().cursor,
-        Some("artist:service:a1".to_owned())
-    );
     assert_eq!(fixture.state.music_scroll.peek().scroll_top, 14.0);
 }

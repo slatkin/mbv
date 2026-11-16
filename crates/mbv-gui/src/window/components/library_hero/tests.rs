@@ -550,26 +550,6 @@ fn an_empty_hero_menu_paints_no_more_actions_control() {
     );
 }
 
-/// Contract (`LibraryHero.test.ts`, the review-of-row-4.7 finding P2-b): the
-/// painted cursor derives from the tracks, so the tracklist paints the cursor
-/// on its first track before any key moves it.
-#[test]
-fn the_tracklist_paints_the_cursor_on_its_first_track_before_any_key_moves_it() {
-    let fixture = built_hero();
-
-    assert_eq!(
-        fixture.attr_of("[data-library-track=\"t1\"]", "data-library-track-cursor"),
-        Some(String::new()),
-        "the first track carries the cursor"
-    );
-    assert!(
-        fixture
-            .attr_of("[data-library-track=\"t2\"]", "data-library-track-cursor")
-            .is_none(),
-        "no other track carries it"
-    );
-}
-
 /// Contract (`LibraryHero.test.ts`): a double-click on a track name sends
 /// that track play, and so does the row's play control — the two gestures
 /// ride the same play path the tracklist's handlers call
@@ -656,8 +636,7 @@ fn the_album_facts_line_types_its_count_and_its_time() {
 }
 
 /// Contract (`LibraryHero.test.ts`, design D14): a duration repeats down the
-/// tracklist, so it paints the time token at the repeat opacity; the cursor
-/// row keeps its own ink.
+/// tracklist, so it paints the time token at the repeat opacity.
 #[test]
 fn a_tracklist_duration_carries_the_repeated_time_token() {
     let fixture = built_hero();
@@ -677,23 +656,5 @@ fn a_tracklist_duration_carries_the_repeated_time_token() {
             .as_ref()
             .is_some_and(|style| style.contains("var(--canvas-type-repeat-opacity)")),
         "the repeated duration paints at the repeat opacity, painted: {repeated:?}"
-    );
-
-    // The first track carries the cursor, so its duration keeps its ink.
-    let current = fixture.attr_of(
-        "[data-library-track=\"t1\"] [data-library-track-duration]",
-        "style",
-    );
-    assert!(
-        current
-            .as_ref()
-            .is_some_and(|style| style.contains("var(--canvas-muted)")),
-        "the cursor row's duration keeps its own ink, painted: {current:?}"
-    );
-    assert!(
-        current
-            .as_ref()
-            .is_some_and(|style| !style.contains("opacity")),
-        "the cursor row's duration paints no repeat opacity, painted: {current:?}"
     );
 }

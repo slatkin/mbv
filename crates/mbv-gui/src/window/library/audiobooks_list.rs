@@ -1,14 +1,13 @@
 //! The Audiobooks list's row model (`add-gui-library-panel` design D12, row
 //! 9.1, the port of `lib/library/audiobooks-list.ts`): the catalog's book rows
-//! under the letter headings of their author sort key, the rows in view, the
-//! cursor's movement, and the A–Z letter rail. There is no pill row and no
-//! second mode: the destination is one flat book list, and the letter rail
-//! replaces the TUI's surname buckets as it does for Shows and the plain Emby
-//! libraries. The list paints fixed-height rows over native scroll and only
-//! the rows in view, as the Music and Emby lists do, and the cursor moves over
-//! the item rows only — a heading is structural, the cursor never rests on it.
-//! The model is plain data over fixed heights, so the geometry is asserted
-//! without a layout.
+//! under the letter headings of their author sort key, the rows in view, and the
+//! A–Z letter rail. There is no pill row and no second mode: the destination is
+//! one flat book list, and the letter rail replaces the TUI's surname buckets as
+//! it does for Shows and the plain Emby libraries. The list paints fixed-height
+//! rows over native scroll and only the rows in view, as the Music and Emby
+//! lists do, and the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2). The model is plain data over fixed
+//! heights, so the geometry is asserted without a layout.
 
 use std::sync::Arc;
 
@@ -16,7 +15,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiAudiobooksRowFrame;
 use crate::window::library::list::{
-    GeometryRow, LETTER_ROW_HEIGHT, ListMove, RailLetter, filter_match, letter_rail_by, move_cursor,
+    GeometryRow, LETTER_ROW_HEIGHT, RailLetter, filter_match, letter_rail_by,
 };
 
 /// The letter heading row's height in logical pixels (design D12, row 9.1):
@@ -29,8 +28,8 @@ pub const AUIB_ROW_HEIGHT: f32 = 40.0;
 /// One painted item row: a book (row 9.1). A heading names no book.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudiobooksItemRow {
-    /// The row's stable key: the cursor's identity, the each-block's key, and
-    /// the id the scroll geometry reads.
+    /// The row's stable key: the pointer marker's value, the each-block's key,
+    /// and the id the scroll geometry reads.
     pub id: String,
     /// The row's top edge from the list's first row.
     pub top: f32,
@@ -73,6 +72,10 @@ impl AudiobooksListRow {
 impl GeometryRow for AudiobooksListRow {
     fn id(&self) -> &str {
         AudiobooksListRow::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, AudiobooksListRow::Heading { .. })).then_some(AudiobooksListRow::id(self))
     }
 
     fn top(&self) -> f32 {
@@ -131,43 +134,9 @@ pub fn build_audiobooks_rows(
     built
 }
 
-/// The rows the cursor may rest on: every item row, never a heading (row
-/// 9.1).
-#[must_use]
-pub fn audiobooks_selectable_rows(rows: &[AudiobooksListRow]) -> Vec<&AudiobooksListRow> {
-    rows.iter()
-        .filter(|row| matches!(row, AudiobooksListRow::Item(_)))
-        .collect()
-}
-
-/// The rail letter a painted row belongs to, or `None` on a heading (row
-/// 9.1). A book row always carries its sort letter.
-#[must_use]
-pub fn audiobooks_row_letter(row: &AudiobooksListRow) -> Option<char> {
-    match row {
-        AudiobooksListRow::Heading { letter, .. } => Some(*letter),
-        AudiobooksListRow::Item(item) => Some(item.row.sort_letter),
-    }
-}
-
-/// The cursor key a movement leaves (row 9.1): the next, the previous, or a
-/// page away book row, clamped to the list's ends, stepping over the letter
-/// headings. With no cursor on an item row, Up and End start from the last book
-/// and every other movement from the first, so one key press always lands the
-/// cursor. `page` is the rows a page spans: the rows in view.
-#[must_use]
-pub fn move_audiobooks_cursor(
-    rows: &[AudiobooksListRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&audiobooks_selectable_rows(rows), cursor, mv, page)
-}
-
 /// The A–Z rail over the painted rows (row 9.1, design D7): each letter with
-/// the first book under it, so a press moves the cursor there. A letter no
-/// painted row carries is disabled, as the Music rail's is.
+/// the first book under it, so a press scrolls there. A letter no painted row
+/// carries is disabled, as the Music rail's is.
 #[must_use]
 pub fn audiobooks_letter_rail(rows: &[AudiobooksListRow]) -> Vec<RailLetter> {
     letter_rail_by(rows, |row| match row {
@@ -218,8 +187,8 @@ impl AudiobooksRowsMemo {
         filter: &str,
     ) -> Arc<[AudiobooksListRow]> {
         // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a settle that moves the cursor) would re-queue itself on the
-        // write below otherwise.
+        // memo (a filter's scroll clamp) would re-queue itself on the write
+        // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
             && entry.filter == filter

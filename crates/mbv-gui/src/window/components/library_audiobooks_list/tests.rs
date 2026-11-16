@@ -1,15 +1,13 @@
 //! Headless tests of the Audiobooks book list (D16): the contracts of
 //! `LibraryAudiobooksList.test.ts` — the catalog paints its letter headings
-//! with the A–Z rail a press moves the cursor with, a rail letter no row
-//! carries is disabled, a press selects the book the Hero shows while a
-//! double-click plays it from its saved position, the cursor row and the
-//! core's selected book paint their fills, the load and failure facts paint
-//! their lines, and a selection change starts the Hero's chapter cursor
-//! over. The IPC of the earlier tests is the mock core link here; a
-//! headless document cannot fire a DOM click, so the press, play, and jump
-//! contracts ride the state methods the component's own handlers call one
-//! line each. The core channel is a mock pair; no test opens a window,
-//! sleeps, or reaches the core.
+//! with the A–Z rail a press scrolls with, a rail letter no row carries is
+//! disabled, a press selects the book the Hero shows while a double-click plays
+//! it from its saved position, the core's selected book paints its fill, and the
+//! load and failure facts paint their lines. The IPC of the earlier tests is the
+//! mock core link here; a headless document cannot fire a DOM click, so the
+//! press, play, and jump contracts ride the state methods the component's own
+//! handlers call one line each. The core channel is a mock pair; no test opens a
+//! window, sleeps, or reaches the core.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,7 +27,6 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::layout::LayoutEpoch;
-use crate::window::library::audiobooks_workspace::press_abs_chapter;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
 use crate::window::sections::Sections;
@@ -343,11 +340,10 @@ fn press_row(fixture: &mut Fixture, id: &str) {
 }
 
 /// Contract (`LibraryAudiobooksList.test.ts`): the list paints the letter
-/// headings, its rows, and the rail a press moves the cursor with. The rail
-/// press rides the jump handler (a headless document cannot fire a DOM
-/// click).
+/// headings, its rows, and the rail beside them. The rail press rides the jump
+/// handler (a headless document cannot fire a DOM click).
 #[test]
-fn the_list_paints_letter_headings_its_rows_and_the_rail_a_press_moves_the_cursor_with() {
+fn the_list_paints_letter_headings_its_rows_and_the_rail_beside_them() {
     let mut fixture = built(list_of(catalog()), detail_of(Some("b1")));
     fixture.measure(300.0);
 
@@ -361,22 +357,27 @@ fn the_list_paints_letter_headings_its_rows_and_the_rail_a_press_moves_the_curso
         painted_rows(&fixture),
         ["b1".to_owned(), "b2".to_owned(), "b3".to_owned()]
     );
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.jump_audiobooks_to_letter('B'));
+    // The pointer markers (`gui-pointer-target-interaction` 3.3): the scroller
+    // names the Audiobooks list — not the `abs` hook prefix its library
+    // attributes carry — and a row names its own id.
+    assert_eq!(
+        fixture.attr_of("[data-pointer-list]", "data-pointer-list"),
+        Some("audiobooks".to_owned())
+    );
+    assert_eq!(
+        fixture.attr_of("[data-pointer-row]", "data-pointer-row"),
+        Some("b1".to_owned())
+    );
 
     assert_eq!(
-        fixture.attr_of(
-            "[data-library-abs-row-id=\"b3\"]",
-            "data-library-abs-cursor",
-        ),
-        Some(String::new()),
-        "the rail press moved the cursor to the letter's first book"
+        fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
+        None,
+        "the rail's B is enabled by the book under it"
     );
 }
 
 /// Contract (`LibraryAudiobooksList.test.ts`): a rail letter no row carries
-/// is disabled, and its press moves no cursor.
+/// is disabled, and its press scrolls nothing.
 #[test]
 fn a_rail_letter_no_row_carries_is_disabled() {
     let mut fixture = built(list_of(catalog()), detail_of(Some("b1")));
@@ -391,9 +392,10 @@ fn a_rail_letter_no_row_carries_is_disabled() {
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.jump_audiobooks_to_letter('C'));
 
-    assert!(
-        !fixture.presents("[data-library-abs-cursor]"),
-        "the disabled letter's press moved no cursor"
+    assert_eq!(
+        fixture.state.scrolls.audiobooks.peek().scroll_top,
+        0.0,
+        "the disabled letter's press scrolls nothing"
     );
 }
 
@@ -437,27 +439,14 @@ fn a_double_click_plays_the_book_from_its_saved_position() {
     );
 }
 
-/// Contract (`LibraryAudiobooksList.test.ts`): the cursor row and the core's
-/// selected book paint their fills.
+/// Contract (`LibraryAudiobooksList.test.ts`): the core's selected book paints
+/// its mark and its fill, and no row paints a cursor — the list keeps none
+/// (`gui-pointer-target-interaction` D6).
 #[test]
-fn the_cursor_row_and_the_selected_book_paint_their_fills() {
+fn the_selected_book_paints_its_fill_and_no_row_paints_a_cursor() {
     let mut fixture = built(list_of(catalog()), detail_of(Some("b3")));
     fixture.measure(300.0);
 
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || {
-        let mut audiobooks_ui = state.audiobooks_ui;
-        audiobooks_ui.with_mut(|ui| ui.cursor = Some("b1".to_owned()));
-    });
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-abs-row-id=\"b1\"]",
-            "data-library-abs-cursor",
-        ),
-        Some(String::new()),
-        "the cursor row paints its mark"
-    );
     assert_eq!(
         fixture.attr_of(
             "[data-library-abs-row-id=\"b3\"]",
@@ -468,15 +457,13 @@ fn the_cursor_row_and_the_selected_book_paint_their_fills() {
     );
     assert!(
         fixture
-            .attr_of("[data-library-abs-row-id=\"b1\"]", "style")
-            .is_some_and(|style| style.contains("background")),
-        "the cursor row paints its fill"
-    );
-    assert!(
-        fixture
             .attr_of("[data-library-abs-row-id=\"b3\"]", "style")
             .is_some_and(|style| style.contains("background")),
         "the selected book paints its fill"
+    );
+    assert!(
+        !fixture.presents("[data-library-abs-cursor]"),
+        "no row paints a cursor"
     );
 }
 
@@ -496,32 +483,6 @@ fn loading_and_failed_paint_their_placeholder_lines() {
     assert!(
         fixture.presents("[data-library-abs-failed]"),
         "the failure line paints"
-    );
-}
-
-/// Contract (`LibraryAudiobooksList.test.ts`, the `audiobooks-workspace`
-/// contract): a selection change starts the Hero's chapter cursor over — the
-/// chapters it rested on belong to the previous book.
-#[test]
-fn a_selection_change_starts_the_heros_chapter_cursor_over() {
-    let mut fixture = built(list_of(catalog()), detail_of(Some("b2")));
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || press_abs_chapter(&state, 2));
-    assert_eq!(
-        fixture.state.audiobooks_workspace.peek().cursor,
-        Some(2),
-        "the chapter cursor rests on the pressed chapter"
-    );
-
-    // The next frame carries a different selected book: the list's effect
-    // starts the chapter cursor over.
-    fixture.carry(list_of(catalog()), detail_of(Some("b3")));
-
-    assert_eq!(
-        fixture.state.audiobooks_workspace.peek().cursor,
-        None,
-        "the selection change started the chapter cursor over"
     );
 }
 

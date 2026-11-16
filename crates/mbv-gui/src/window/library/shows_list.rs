@@ -1,13 +1,12 @@
 //! The Shows list's row model (`add-gui-library-panel` design D14, the port
 //! of `lib/library/shows-list.ts`): the Music tree over the TUI's TV node
 //! kinds — series → season → episode — with the 24 px letter headings above
-//! the first series of each letter, the rows in view, the cursor's movement,
-//! and the A–Z letter rail. The Latest and Upcoming modes keep their flat rows
-//! with the date gutter. The list paints fixed-height rows over native scroll
-//! and only the rows in view, as the Music list does, and the cursor moves
-//! over the nodes and the leaves only — a heading is structural, the cursor
-//! never rests on it. The model is plain data over fixed heights, so the
-//! geometry is asserted without a layout.
+//! the first series of each letter, the rows in view, and the A–Z letter rail.
+//! The Latest and Upcoming modes keep their flat rows with the date gutter. The
+//! list paints fixed-height rows over native scroll and only the rows in view,
+//! as the Music list does, and the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), which is never a heading. The model is
+//! plain data over fixed heights, so the geometry is asserted without a layout.
 
 use std::sync::Arc;
 
@@ -18,8 +17,8 @@ use crate::bridge::frame::library::{
     GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
-    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, ListMove, NODE_ROW_HEIGHT, RailLetter,
-    TRACK_ROW_HEIGHT, build_flat_rows, letter_rail_by, move_cursor,
+    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT,
+    build_flat_rows, letter_rail_by,
 };
 
 /// The fields of a carried flat Shows row the flat list reads (design D14):
@@ -60,7 +59,7 @@ pub struct ShowsTreeState<'a> {
     pub closed: &'a [String],
 }
 
-/// A painted heading row (structural: the cursor never rests on it).
+/// A painted heading row (structural: no key acts on it).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowsHeadingRow {
     /// The row's stable key.
@@ -158,8 +157,8 @@ pub struct ShowsFlatRow {
 }
 
 /// One painted row of the Shows list (design D14). The `id` is the row's
-/// stable key: the cursor's identity and the each-block's key. A heading is
-/// structural; the cursor moves over the other four kinds only.
+/// stable key: the pointer marker's value and the each-block's key. A heading
+/// is structural; the keys act on the other four kinds only.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowsListRow {
     /// A letter heading above the first series of the letter.
@@ -197,24 +196,15 @@ impl ShowsListRow {
             _ => None,
         }
     }
-
-    /// The rail letter the row belongs to, or `None` on the letterless flat
-    /// rows (the rail's keyboard path reads it).
-    #[must_use]
-    pub fn rail_letter(&self) -> Option<char> {
-        match self {
-            ShowsListRow::Heading(row) => Some(row.letter),
-            ShowsListRow::Series(row) => Some(row.letter),
-            ShowsListRow::Season(row) => Some(row.letter),
-            ShowsListRow::Episode(row) => Some(row.letter),
-            ShowsListRow::Flat(row) => row.row.sort_letter,
-        }
-    }
 }
 
 impl GeometryRow for ShowsListRow {
     fn id(&self) -> &str {
         ShowsListRow::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, ShowsListRow::Heading(_))).then_some(ShowsListRow::id(self))
     }
 
     fn top(&self) -> f32 {
@@ -429,32 +419,9 @@ fn flat_shows_rows(rows: &[GuiShowsRowFrame], filter: &str) -> Vec<ShowsListRow>
         .collect()
 }
 
-/// The rows the cursor may rest on: every row but a heading.
-#[must_use]
-pub fn shows_selectable_rows(rows: &[ShowsListRow]) -> Vec<&ShowsListRow> {
-    rows.iter()
-        .filter(|row| !matches!(row, ShowsListRow::Heading(_)))
-        .collect()
-}
-
-/// The cursor key a movement leaves (design D14): the next, the previous, or a
-/// page away item row, clamped to the list's ends, stepping over the letter
-/// headings. With no cursor on an item row, Up and End start from the last item
-/// row and every other movement from the first, so one key press always lands
-/// the cursor. `page` is the rows a page spans: the rows in view.
-#[must_use]
-pub fn move_shows_cursor(
-    rows: &[ShowsListRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&shows_selectable_rows(rows), cursor, mv, page)
-}
-
 /// The A–Z rail over the painted rows (design D7, D14): each letter with the
-/// first series row under it, so a press moves the cursor there. A letter no
-/// painted row carries is disabled, as the Music rail's is.
+/// first series row under it, so a press scrolls there. A letter no painted row
+/// carries is disabled, as the Music rail's is.
 #[must_use]
 pub fn shows_letter_rail(rows: &[ShowsListRow]) -> Vec<RailLetter> {
     letter_rail_by(rows, |row| match row {
@@ -513,8 +480,8 @@ impl ShowsRowsMemo {
         closed: &[String],
     ) -> Arc<[ShowsListRow]> {
         // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a settle that moves the cursor) would re-queue itself on the
-        // write below otherwise.
+        // memo (a filter's scroll clamp) would re-queue itself on the write
+        // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
             && entry.mode == mode

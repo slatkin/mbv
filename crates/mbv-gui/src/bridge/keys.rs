@@ -3,9 +3,28 @@
 //! The window prevents the default action of every key while the window has
 //! focus, then sends the event as a [`DomKey`]. The mapping follows the TUI's
 //! crossterm edge (`mbv_components::root::neutral_key`), so both Clients report
-//! one chord for one physical press.
+//! one chord for one physical press. The window also sends the [`KeyTarget`]
+//! that the key's pointer resolved (design D2 of `gui-pointer-target-interaction`),
+//! so the core knows which panel's keys act without a stored Panel focus.
 
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+
+/// The panel whose keys a GUI key names (design D2, D3): the Queue list box
+/// under the pointer, or no Queue target — the Library column is under the
+/// pointer, or nothing is.
+///
+/// The window resolves it from the pointer target ([`crate::window::pointer_target`])
+/// at every point where it sends a key to the core, and the core sets its
+/// Panel focus from it per key: `Queue` routes the key with the Queue leaf,
+/// and `None` leaves only the leafless global and transport chords.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyTarget {
+    /// The Queue list box is under the pointer: the Queue's keys act.
+    Queue,
+    /// No Queue target: the pointer is over the Library column, over neither
+    /// panel, or outside the window.
+    None,
+}
 
 /// The DOM `KeyboardEvent` fields that the window sends with the `key`
 /// command (design D4). The field names follow the DOM and are spelled as the DOM spells them,

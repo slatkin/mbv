@@ -30,6 +30,12 @@ fn the_panel_paints_the_top_bar_the_pill_row_and_the_hero_above_the_list_region(
         fixture.presents("[data-library-list-column]"),
         "the Music list's painter mounts"
     );
+    // The Library zone (`gui-pointer-target-interaction` 3.3): every key whose
+    // pointer rests in this column is the Library's.
+    assert!(
+        fixture.presents("[data-pointer-zone=\"library\"]"),
+        "the panel root carries the Library zone marker"
+    );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 6.2): while
 /// the Home content is present (design D12, the destinations are exclusive),

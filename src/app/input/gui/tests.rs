@@ -107,6 +107,24 @@ fn gui_context_z_toggles_the_panel_collapse() {
     assert!(!app.panel_collapsed);
 }
 
+// The GUI has no Panel focus (ADR 0040, design D3 of
+// `gui-pointer-target-interaction`): Ctrl+Right, the TUI's chord that hands
+// Panel focus to the Library, changes nothing here. A key names its target
+// instead, and the core sets the stack's Panel focus from it per key.
+#[test]
+fn the_gui_panel_focus_chord_changes_no_panel_focus() {
+    let mut app = make_app_stub();
+    app.enable_gui_client();
+    app.set_panel_focus(PanelFocus::Queue);
+
+    assert!(!app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Right, KeyModifiers::CONTROL)),
+        None
+    ));
+
+    assert_eq!(app.effective_panel_focus(), PanelFocus::Queue);
+}
+
 // The GUI-only key context's `q` folds the queue; the TUI's `quit` on the
 // same chord is untouched there (the routing matrix pins it).
 #[test]
@@ -666,4 +684,5 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
     assert!(app.gui_overlay_is_open());
 }
 
+mod destination_tabs;
 mod target_chooser;

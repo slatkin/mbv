@@ -1,11 +1,10 @@
-//! Headless tests of the Shows Hero's Workspace interaction state (D16): the
-//! contracts of `shows-workspace.test.ts` — the episode cursor's movement and
-//! clamping, its re-resolution to the first episode when its id leaves the
-//! frame, the season step that sends the select-season command and stops at
-//! the pills' ends, and the cursor episode the Hero's actions name. The
-//! harness builds a `DioxusDocument` whose root creates the store and runs
-//! each scenario in one effect over a recording core link, so no test opens a
-//! window or sleeps, and no IPC runs.
+//! Headless tests of the Shows Hero's Workspace (D16): the contracts of
+//! `shows-workspace.test.ts` — the pointer's episode resolving against the
+//! frame, the season step that sends the select-season command and stops at the
+//! pills' ends, and the episode the Hero's play, play-next, and queue commands
+//! name. The harness builds a `DioxusDocument` whose root creates the store and
+//! runs each scenario in one effect over a recording core link, so no test opens
+//! a window or sleeps, and no IPC runs.
 
 use std::sync::{Arc, Mutex, mpsc};
 
@@ -20,11 +19,11 @@ use crate::bridge::frame::library::{
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::list::ListMove;
 use crate::window::sections::Sections;
 
 use super::{
-    move_shows_episode_cursor, play_shows_episode, reset_shows_episode_cursor, step_shows_season,
+    play_next_shows_episode, play_shows_episode, queue_shows_episode, shows_episode_at,
+    step_shows_season,
 };
 use crate::window::library::state::LibraryState;
 
@@ -168,74 +167,17 @@ fn shows_detail(episodes: Vec<GuiShowsEpisodeRowFrame>, selected_season: &str) -
     }
 }
 
-/// Put the cursor on `episode_id`.
-fn cursor_at(state: &LibraryState, episode_id: &str) {
-    let mut shows_workspace = state.shows_workspace;
-    shows_workspace.with_mut(|held| held.cursor = Some(episode_id.to_owned()));
-}
-
-/// The Workspace's cursor the assertions read.
-fn cursor_fact(state: &LibraryState, facts: &Facts) {
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("cursor={:?}", state.shows_workspace.peek().cursor));
-}
-
-// A cursor move steps to the next episode.
+// The pointer's marker resolves against the frame's episodes (design D1): a
+// painted episode's id names it, and any other id names none.
 #[test]
-fn a_cursor_move_steps_to_the_next_episode() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, "ep1");
+fn the_pointer_marker_resolves_against_the_painted_episodes() {
+    let detail = shows_detail(episodes(), "s1");
 
-        move_shows_episode_cursor(state, ListMove::Down, &shows_detail(episodes(), "s1"));
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(\"ep2\")"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// A cursor move past the last episode stays there.
-#[test]
-fn a_cursor_move_past_the_last_episode_stays_there() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, "ep2");
-
-        move_shows_episode_cursor(state, ListMove::Down, &shows_detail(episodes(), "s1"));
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(\"ep2\")"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// A cursor whose episode left the frame re-resolves to the first episode.
-#[test]
-fn a_cursor_whose_episode_left_the_frame_re_resolves_to_the_first_episode() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, "gone");
-
-        move_shows_episode_cursor(state, ListMove::Home, &shows_detail(episodes(), "s1"));
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(\"ep1\")"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// A cursor reset starts the Workspace over.
-#[test]
-fn a_cursor_reset_starts_the_workspace_over() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, "ep2");
-
-        reset_shows_episode_cursor(state);
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=None"]);
-    assert_eq!(commands(&rx), []);
+    assert_eq!(
+        shows_episode_at(&detail, "ep2").map(|episode| episode.episode_id.as_str()),
+        Some("ep2")
+    );
+    assert!(shows_episode_at(&detail, "gone").is_none());
 }
 
 // A season step sends the neighbouring season.
@@ -265,13 +207,11 @@ fn a_season_step_past_the_end_sends_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// The play command names the cursor episode.
+// The play command names the episode it is given.
 #[test]
-fn the_play_command_names_the_cursor_episode() {
+fn the_play_command_names_the_episode_it_is_given() {
     let (_facts, rx) = run(|state, _facts| {
-        cursor_at(state, "ep2");
-
-        play_shows_episode(state, LIB_IDX, &shows_detail(episodes(), "s1"));
+        play_shows_episode(state, LIB_IDX, "ep2");
     });
 
     assert_eq!(
@@ -283,14 +223,25 @@ fn the_play_command_names_the_cursor_episode() {
     );
 }
 
-// An action sends nothing while the Workspace holds no episode.
+// `n` and `a` play the episode next and queue it.
 #[test]
-fn an_action_sends_nothing_while_the_workspace_holds_no_episode() {
+fn play_next_and_queue_name_the_episode_they_are_given() {
     let (_facts, rx) = run(|state, _facts| {
-        cursor_at(state, "ep1");
-
-        play_shows_episode(state, LIB_IDX, &shows_detail(Vec::new(), "s1"));
+        play_next_shows_episode(state, LIB_IDX, "ep1");
+        queue_shows_episode(state, LIB_IDX, "ep1");
     });
 
-    assert_eq!(commands(&rx), []);
+    assert_eq!(
+        commands(&rx),
+        [
+            mbv::GuiLibraryCommand::ShowsPlayNext {
+                lib_idx: 2,
+                item_id: "ep1".to_owned(),
+            },
+            mbv::GuiLibraryCommand::ShowsQueue {
+                lib_idx: 2,
+                item_id: "ep1".to_owned(),
+            },
+        ]
+    );
 }

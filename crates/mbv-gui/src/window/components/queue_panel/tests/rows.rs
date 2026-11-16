@@ -1,7 +1,7 @@
 //! The Queue panel's row-paint contracts (`QueuePanel.test.ts`): the frame's
 //! viewport rows, the empty-queue state, the rows' right column under the
 //! summary's mode, the watched, active, and partial-progress states, the
-//! canvas one-liner, the picked fills, and the hovered row's chrome.
+//! canvas one-liner, the four row looks, and the hovered row's chrome.
 
 use blitz_dom::local_name;
 
@@ -27,6 +27,12 @@ fn a_frame_with_slots_renders_its_rows() {
     assert!(text.contains("album"), "{text}");
     assert!(text.contains("Second track"), "{text}");
     assert_eq!(fixture.all("[data-slot]").len(), 2);
+    // The Queue zone (`gui-pointer-target-interaction` 3.3): the recessed box
+    // that holds the header, the filter, and these rows names the Queue.
+    assert!(
+        fixture.presents("[data-pointer-zone=\"queue\"]"),
+        "the list box carries the Queue zone marker"
+    );
 }
 
 /// Contract (`QueuePanel.test.ts`): an empty frame renders the empty-queue
@@ -153,10 +159,12 @@ fn the_row_paints_the_canvas_one_liner() {
     assert!(!fixture.presents("[data-slot=\"1\"] svg"));
 }
 
-/// Contract (`QueuePanel.test.ts`): the cursor and marked rows paint the
-/// canvas picked fill, playing or not.
+/// Contract (`QueuePanel.test.ts`, design D7): the active row paints the
+/// canvas picked fill and its 4 px leading accent edge with no focus fact —
+/// the window holds none — and a marked row paints the same fill with no
+/// edge, playing or not.
 #[test]
-fn the_cursor_and_marked_rows_paint_the_canvas_picked_fill() {
+fn the_active_and_marked_rows_paint_the_canvas_picked_fill() {
     let rows = vec![item(1), in_state(item(2), GuiSemanticState::NowPlaying)];
     let mut rows_frame = queue(rows);
     rows_frame.active = Some(2);
@@ -169,11 +177,40 @@ fn the_cursor_and_marked_rows_paint_the_canvas_picked_fill() {
             .style_of("[data-slot=\"1\"]")
             .contains("background: var(--canvas-selected)")
     );
+    let edge = fixture.style_of("[data-active-edge=\"1\"]");
+    assert!(edge.contains("width: 4px"), "{edge}");
+    assert!(edge.contains("background: var(--canvas-accent)"), "{edge}");
     assert!(
         fixture
             .style_of("[data-slot=\"2\"]")
             .contains("background: var(--canvas-selected)")
     );
+    assert!(!fixture.presents("[data-active-edge=\"2\"]"));
+}
+
+/// Contract (`QueuePanel.test.ts`, design D7): a hovered row that is not the
+/// active row paints no picked fill and no edge, so the active row keeps its
+/// treatment while the pointer rests on its neighbour.
+#[test]
+fn the_hovered_row_paints_no_active_treatment() {
+    let mut rows_frame = queue(vec![item(1), item(2)]);
+    rows_frame.cursor = Some(1);
+    rows_frame.hover = Some(2);
+    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
+
+    let hovered = fixture.style_of("[data-slot=\"2\"]");
+    assert!(
+        !hovered.contains("background: var(--canvas-selected)"),
+        "{hovered}"
+    );
+    assert!(!fixture.presents("[data-active-edge=\"2\"]"));
+    assert!(
+        fixture
+            .style_of("[data-slot=\"1\"]")
+            .contains("background: var(--canvas-selected)"),
+        "the active row keeps its fill"
+    );
+    assert!(fixture.presents("[data-active-edge=\"1\"]"));
 }
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
@@ -209,11 +246,11 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
         "{actions_style}"
     );
 
+    // The hovered row paints no fill of its own (design D7): the veil every
+    // hovered `button` paints (`assets/app.css`) is its hover look, and the
+    // picked fill stays with the active and marked rows.
     let row_style = fixture.style_of("[data-slot=\"2\"]");
-    assert!(
-        row_style.contains("background: var(--canvas-selected)"),
-        "{row_style}"
-    );
+    assert!(!row_style.contains("background"), "{row_style}");
     assert!(row_style.contains("border-radius: 4px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(title.contains("color: var(--canvas-heading)"), "{title}");

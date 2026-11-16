@@ -15,6 +15,7 @@ use mbv::{App, OwnerState, exclusive_owner_refusal_text, stub_app_with_queue};
 use mbv_daemon::SignalOwnerError;
 use mbv_gui::attach::{AttachCampaign, CampaignEnd, OwnerSteps, OwnerWait};
 use mbv_gui::bridge::frame::GuiAttachState;
+use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::layout::{
     AttachTargetId, LayoutRect, LayoutRegion, LayoutReport, LayoutSize, RegionTarget,
 };
@@ -282,7 +283,10 @@ fn campaign<'a>(
 /// A plain letter press with no modifier held, as the translated `key`
 /// command carries it.
 fn key_press(letter: char) -> CoreInput {
-    CoreInput::Key(KeyEvent::new(Key::Char(letter), KeyModifiers::NONE))
+    CoreInput::Key {
+        key: KeyEvent::new(Key::Char(letter), KeyModifiers::NONE),
+        target: KeyTarget::None,
+    }
 }
 
 /// The window's close, as the `main` window's `Destroyed` event delivers it

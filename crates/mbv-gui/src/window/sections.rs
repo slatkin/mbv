@@ -16,7 +16,6 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar};
-use crate::bridge::frame::focus::{GuiFocus, GuiPanel};
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -47,8 +46,6 @@ pub struct Sections {
     /// before the first batch. The colours the window paints live in the CSS
     /// custom properties the theme element (`window/theme.rs`) writes.
     pub theme: Signal<Option<GuiTheme>>,
-    /// The focused surface and the Panel that holds focus.
-    pub focus: Signal<GuiFocus>,
     /// The Queue rows inside the viewport, with the cursor, marks, and the
     /// active slot, as the one handle every reader clones.
     pub queue: Signal<SectionRef<GuiQueue>>,
@@ -112,7 +109,6 @@ impl std::fmt::Debug for Sections {
 struct Held {
     attach: Option<u64>,
     theme: Option<u64>,
-    focus: Option<u64>,
     queue: Option<u64>,
     summary: Option<u64>,
     panel: Option<u64>,
@@ -146,7 +142,6 @@ impl Sections {
         Self {
             attach: Signal::new(None),
             theme: Signal::new(None),
-            focus: Signal::new(fresh_focus()),
             queue: Signal::new(SectionRef::new(fresh_queue())),
             summary: Signal::new(fresh_summary()),
             panel: Signal::new(fresh_panel()),
@@ -185,7 +180,6 @@ impl Sections {
         let mut held = self.held.write();
         write(batch.attach.as_ref(), &mut held.attach, self.attach);
         write(batch.theme.as_ref(), &mut held.theme, self.theme);
-        write(batch.focus.as_ref(), &mut held.focus, self.focus);
         write_shared(
             batch.queue.as_ref(),
             &mut held.queue,
@@ -252,14 +246,6 @@ fn write_shared<T: Clone + 'static, S: 'static>(
     }
     *held = Some(section.revision);
     signal.set(share(section.value.clone()));
-}
-
-/// The fresh focus: no surface holds focus, and the Queue panel does.
-fn fresh_focus() -> GuiFocus {
-    GuiFocus {
-        surface: None,
-        panel: GuiPanel::Queue,
-    }
 }
 
 /// The fresh queue: an empty viewport.

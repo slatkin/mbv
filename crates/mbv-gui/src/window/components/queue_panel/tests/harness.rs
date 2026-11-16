@@ -18,7 +18,6 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::super::QueuePanel;
 use crate::art::GuiArtRef;
-use crate::bridge::frame::focus::{GuiFocus, GuiPanel, GuiSurface};
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiRowMenuEntry};
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey,
@@ -439,22 +438,6 @@ impl Fixture {
             .expect("the node is laid out")
     }
 
-    /// Repaint the queue column with `panel` as the appearance-focused panel
-    /// (the sections' `focus` fact the fills pick from).
-    pub(super) fn focus_panel(&mut self, panel: GuiPanel) {
-        let mut sections = self.sections.clone();
-        let anchor = anchor();
-        let mut playhead = self.playhead.clone();
-        self.doc.vdom.in_runtime(move || {
-            sections.focus.set(GuiFocus {
-                surface: Some(GuiSurface::Queue),
-                panel,
-            });
-            playhead.stamp(anchor);
-        });
-        self.poll_until_idle();
-    }
-
     /// Poll the document until the effects have run and their re-renders
     /// landed (a fixed poll count with a tripwire: never an unbounded wait).
     pub(super) fn poll_until_idle(&mut self) {
@@ -508,8 +491,7 @@ impl Fixture {
     }
 
     /// Paint the frame's queue and summary (and `overlay` when one is up),
-    /// with the queue surface and panel focused as the TypeScript fixture
-    /// sets, and let the re-render land.
+    /// the frame the TypeScript fixture sets, and let the re-render land.
     pub(super) fn show(
         &mut self,
         rows: GuiQueue,
@@ -523,10 +505,6 @@ impl Fixture {
             sections.queue.set(SectionRef::new(rows));
             sections.summary.set(summary);
             sections.overlay.set(overlay);
-            sections.focus.set(GuiFocus {
-                surface: Some(GuiSurface::Queue),
-                panel: GuiPanel::Queue,
-            });
             playhead.stamp(anchor);
         });
         self.poll_until_idle();

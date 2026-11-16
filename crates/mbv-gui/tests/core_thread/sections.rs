@@ -17,7 +17,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 use rstest::rstest;
 
-use crate::{TestCore, test_core, test_core_with, test_emby_client};
+use crate::{TestCore, queue_key, test_core, test_core_with, test_emby_client};
 
 /// The attached core's first batch carries `attach: null` (design D4): the
 /// window's pre-attach state clears.
@@ -92,7 +92,7 @@ fn a_queue_cursor_move_sends_only_the_queue_section() {
         .expect("the first batch carries the queue");
 
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
+        .send(queue_key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     let batch = test.next_batch();
@@ -364,7 +364,12 @@ fn a_playing_track_change_with_no_input_sends_the_library_section() {
     core.seed_gui_music_library_for_test(test_emby_client(&http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     test.tx
-        .send(CoreInput::Library(GuiLibraryCommand::TakeFocus.into()))
+        .send(CoreInput::Library(
+            GuiLibraryCommand::ShowDetail {
+                item_id: "no-such-item".to_owned(),
+            }
+            .into(),
+        ))
         .unwrap();
     assert!(test.core.step());
     test.next_batch();

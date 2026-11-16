@@ -7,12 +7,13 @@
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::home_list`]
 //! over native scroll, and only the rows in view paint, so a long list stays
-//! fast. The cursor is the window content's own in
+//! fast. The interaction state is the window content's own in
 //! [`crate::window::library::home`] (design D1), the scroll offset and the
-//! viewport are the Home list's scroll store (design D9); this component
-//! paints that state and reports the two facts only the DOM holds. A press
-//! selects the row, and a double-click plays it (design D12): the keys'
-//! Enter plays the cursor row, and the press is the selection's half.
+//! viewport are the Home list's scroll store (design D9); this component paints
+//! that state and reports the two facts only the DOM holds. A press selects the
+//! row, and a double-click plays it (design D12). The list keeps no cursor: the
+//! keys act on the row the pointer marks (`gui-pointer-target-interaction`
+//! D2).
 
 use std::fmt::Write as _;
 
@@ -29,6 +30,7 @@ use crate::window::input::f32_from_f64;
 use crate::window::library::home_list::{HomeItemRow, HomeListRow, home_row_key};
 use crate::window::library::parts::{library_home_detail, library_home_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -57,7 +59,6 @@ fn art_kind(art: &GuiArtRef) -> &'static str {
 fn paint_home_row(
     row: &HomeListRow,
     library: &LibraryState,
-    cursor: Option<&str>,
     selected: Option<&GuiHomeRowIdFrame>,
 ) -> Element {
     match row {
@@ -78,7 +79,7 @@ fn paint_home_row(
             height,
             row: item,
             ..
-        } => paint_home_item_row(id, *height, item, row, library, cursor, selected),
+        } => paint_home_item_row(id, *height, item, row, library, selected),
     }
 }
 
@@ -90,21 +91,16 @@ fn paint_home_item_row(
     item: &HomeItemRow,
     row: &HomeListRow,
     library: &LibraryState,
-    cursor: Option<&str>,
     selected: Option<&GuiHomeRowIdFrame>,
 ) -> Element {
-    // The cursor row's focus fill, and the core's selected row the
-    // raised fill while the cursor sits elsewhere — the selection is
-    // what the Hero shows, so its row stays marked, as every Library
-    // list's selected row is.
-    let cursor_row = cursor == Some(id);
+    // The core's selected row paints the raised fill: the selection is what the
+    // Hero shows, so its row stays marked, as every Library list's selected row
+    // is.
     let selected_row = selected.is_some_and(|picked| home_row_key(picked) == id);
     let mut style = format!(
         "height: {height}px; padding: 0 10px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;"
     );
-    if cursor_row {
-        let _ = write!(style, " background: {};", canvas_var("selected"));
-    } else if selected_row {
+    if selected_row {
         let _ = write!(style, " background: {};", canvas_var("library-raise"));
     }
     // The resume percent an active item row paints, or `None`.
@@ -140,7 +136,6 @@ fn paint_home_item_row(
                     f32_from_f64(coordinates.y),
                 );
             },
-            ..mark("data-library-home-cursor", cursor_row),
             ..mark("data-library-home-selected", selected_row),
             if let Some(art) = art {
                 // The row's card art (design D12): the frame's image
@@ -229,23 +224,16 @@ pub fn LibraryHomeList() -> Element {
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let paint_library = library.clone();
-    let paint_cursor = home_ui.cursor.clone();
     let paint_selected = detail.and_then(|detail| detail.selected.clone());
     let virtual_list = library_virtual_list(
         rows.as_ref(),
         scroll,
         "home",
+        PointerList::Home,
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_home_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_home_list(top)),
-        move |row: &HomeListRow| {
-            paint_home_row(
-                row,
-                &paint_library,
-                paint_cursor.as_deref(),
-                paint_selected.as_ref(),
-            )
-        },
+        move |row: &HomeListRow| paint_home_row(row, &paint_library, paint_selected.as_ref()),
     );
 
     let filter_library = library.clone();

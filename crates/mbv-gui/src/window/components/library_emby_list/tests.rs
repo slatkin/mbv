@@ -1,6 +1,6 @@
 //! Headless tests of the plain Emby-library list (D16): the contracts of
 //! `LibraryEmbyList.test.ts` — the plain mode paints its name-sorted rows
-//! under their letter headings with the A–Z rail a press moves the cursor
+//! under their letter headings with the A–Z rail beside them
 //! with, the feed-group mode paints its flat date-ordered rows with their
 //! date gutter and no rail; a press sends the select command with the row's
 //! stable id and a double-click the play command, a collection row included;
@@ -364,11 +364,10 @@ fn press_row(fixture: &mut Fixture, id: &str) {
 }
 
 /// Contract (`LibraryEmbyList.test.ts`): the plain mode paints the letter
-/// headings with the rail beside the list, and a press on an enabled letter
-/// moves the cursor to that letter's first row. The rail press rides the
-/// jump handler (a headless document cannot fire a DOM click).
+/// headings with the rail beside the list, and the rail's B is enabled because
+/// a painted row carries it.
 #[test]
-fn the_plain_mode_paints_letter_headings_its_rows_and_the_rail_a_press_moves_the_cursor_with() {
+fn the_plain_mode_paints_letter_headings_its_rows_and_the_rail_beside_them() {
     let mut fixture = built(emby_frame(false, movies()), emby_detail(&movies()));
     fixture.measure(300.0);
 
@@ -382,17 +381,10 @@ fn the_plain_mode_paints_letter_headings_its_rows_and_the_rail_a_press_moves_the
         painted_rows(&fixture),
         ["m1".to_owned(), "m2".to_owned(), "m3".to_owned()]
     );
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.jump_emby_to_letter('B'));
-
     assert_eq!(
-        fixture.attr_of(
-            "[data-library-emby-row-id=\"m3\"]",
-            "data-library-emby-cursor",
-        ),
-        Some(String::new()),
-        "the rail press moved the cursor to the letter's first row"
+        fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
+        None,
+        "the rail's B is enabled by the row under it"
     );
 }
 

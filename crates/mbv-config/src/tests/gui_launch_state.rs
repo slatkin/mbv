@@ -1,7 +1,6 @@
 use crate::gui_launch_state::{load_gui_launch_state_at, save_gui_launch_state_at};
 use crate::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, LaunchPanelFocus,
-    TabIdentity, TestTempDir,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, TabIdentity, TestTempDir,
 };
 use mbv_queue::ServiceKind;
 
@@ -24,7 +23,6 @@ fn two_group_location() -> GuiLaunchState {
     GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: music_destination(),
-        panel_focus: LaunchPanelFocus::Library,
         collections: vec![GuiDestinationCollections {
             destination: music_destination(),
             group_ids: vec!["grp-hiphop".to_string(), "grp-soul".to_string()],
@@ -50,11 +48,7 @@ fn gui_launch_state_round_trips_a_two_group_location() {
 fn gui_launch_state_wrong_version_loads_none() {
     let scratch = TestTempDir::new();
     let path = scratch.join("gui_launch_state.json");
-    std::fs::write(
-        &path,
-        r#"{"version":999,"destination":{"type":"home"},"panel_focus":"library"}"#,
-    )
-    .unwrap();
+    std::fs::write(&path, r#"{"version":999,"destination":{"type":"home"}}"#).unwrap();
 
     assert_eq!(load_gui_launch_state_at(&path), None);
 }
@@ -79,6 +73,23 @@ fn gui_launch_state_without_picks_loads_with_none() {
         loaded.collections[0].group_ids,
         two_group_location().collections[0].group_ids
     );
+}
+
+/// A file that holds the Panel focus an earlier build saved still loads: the
+/// field is ignored, and its destination restores (design D5).
+#[test]
+fn gui_launch_state_with_a_saved_panel_focus_still_loads_its_destination() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("gui_launch_state.json");
+    std::fs::write(
+        &path,
+        r#"{"version":1,"destination":{"type":"home"},"panel_focus":"queue"}"#,
+    )
+    .unwrap();
+
+    let loaded = load_gui_launch_state_at(&path).expect("the older file loads");
+
+    assert_eq!(loaded.destination, TabIdentity::Home);
 }
 
 /// The GUI's Reset UI State clears the launch location (D10): after a save

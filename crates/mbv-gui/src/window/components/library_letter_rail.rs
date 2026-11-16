@@ -1,11 +1,11 @@
 //! The Library list's letter rail (`replace-tauri-with-blitz` task 7.2, the
 //! port of `LibraryLetterRail`; add-gui-library-panel design D7): A
 //! to Z beside the list, one 22 px letter a row. A letter no painted row
-//! carries is disabled, so it cannot move the cursor; a press scrolls to the
-//! first row under the letter and moves the cursor there. The rail marks the
-//! letter of the row under the cursor, as the canvas marks B. The canvas
-//! gives the rail no key (design D7): its keyboard path is the `/` filter,
-//! and the rail's letters are pointer targets only.
+//! carries is disabled, so it cannot scroll; a press scrolls to the first row
+//! under the letter. The rail marks no letter: the lists that paint it keep no
+//! cursor (`gui-pointer-target-interaction` D6). The canvas gives the rail no
+//! key (design D7): its keyboard path is the `/` filter, and the rail's letters
+//! are pointer targets only.
 
 use dioxus_native::prelude::*;
 
@@ -20,10 +20,6 @@ pub struct LibraryLetterRailProps {
     /// The A–Z letters and the first row under each, from the painted rows
     /// (design D7).
     pub letters: Vec<RailLetter>,
-    /// The letter the cursor row belongs to, or `None` while no row holds
-    /// the cursor.
-    #[props(default)]
-    pub marked: Option<char>,
     /// What a press on an enabled letter does: the Music list's jump by
     /// default, and the Shows list's own while it paints the rail (design
     /// D12).
@@ -31,12 +27,9 @@ pub struct LibraryLetterRailProps {
     pub jump: Option<Callback<char>>,
 }
 
-/// A letter's text colour: the marked letter is the canvas's green, an
-/// enabled one the muted text, and a disabled one the canvas's dimmest.
-fn letter_color(entry: &RailLetter, marked: Option<char>) -> String {
-    if Some(entry.letter) == marked {
-        return canvas_var("accent");
-    }
+/// A letter's text colour: the muted text of an enabled letter, and the
+/// canvas's dimmest for a disabled one.
+fn letter_color(entry: &RailLetter) -> String {
     if entry.row_id.is_none() {
         return "#4f5b58".to_owned();
     }
@@ -58,23 +51,13 @@ pub fn LibraryLetterRail(props: LibraryLetterRailProps) -> Element {
                 {
                     let letter = entry.letter;
                     let disabled = entry.row_id.is_none();
-                    let marked_here = props.marked == Some(letter);
                     let cursor = if disabled { "default" } else { "pointer" };
-                    let background = if marked_here {
-                        canvas_var("selected")
-                    } else {
-                        "transparent".to_owned()
-                    };
-                    let color = letter_color(entry, props.marked);
-                    // A disabled letter paints `disabled`, and the marked one
-                    // `aria-current`; an enabled unmarked letter paints
-                    // neither, as the former client `undefined` values did not.
+                    let color = letter_color(entry);
+                    // A disabled letter paints `disabled`; an enabled one paints
+                    // no mark, as the former client `undefined` values did not.
                     let mut marks = Vec::new();
                     if disabled {
                         marks.push(Attribute::new("disabled", "true", None, false));
-                    }
-                    if marked_here {
-                        marks.push(Attribute::new("aria-current", "true", None, false));
                     }
                     let jump = props.jump;
                     let jump_library = library.clone();
@@ -82,7 +65,7 @@ pub fn LibraryLetterRail(props: LibraryLetterRailProps) -> Element {
                         button {
                             "type": "button",
                             class: "flex items-center justify-center font-mono",
-                            style: "width: 24px; height: 22px; padding: 0; border: 0; border-radius: 3px; font-size: 11px; cursor: {cursor}; background: {background}; color: {color};",
+                            style: "width: 24px; height: 22px; padding: 0; border: 0; border-radius: 3px; font-size: 11px; cursor: {cursor}; color: {color};",
                             "data-library-rail-letter": "{letter}",
                             onclick: move |_| match jump {
                                 Some(jump) => jump.call(letter),

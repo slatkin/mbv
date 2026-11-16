@@ -7,18 +7,17 @@
 //! native scroll, and only the rows in view paint, so a long artist list
 //! stays fast.
 //!
-//! The cursor, the open nodes, and the filter text are window-content state
-//! in [`crate::window::library::state`] (design D1), the scroll offset and
-//! the measured viewport are the list's own store (design D9), and the row
-//! model is [`crate::window::library::list`]'s. This component paints that
-//! state and reports the two facts only the DOM holds — its measured
-//! viewport height and its native scroll offset. A press picks and opens: an
-//! artist or album row opens or closes and picks, an album without a cached
-//! tracklist asks the core to load it, and a track picks its album. A press
-//! moves no cursor; the design's keys do that.
+//! The open nodes and the filter text are window-content state in
+//! [`crate::window::library::state`] (design D1), the scroll offset and the
+//! measured viewport are the list's own store (design D9), and the row model is
+//! [`crate::window::library::list`]'s. This component paints that state and
+//! reports the two facts only the DOM holds — its measured viewport height and
+//! its native scroll offset. A press picks and opens: an artist or album row
+//! opens or closes and picks, an album without a cached tracklist asks the core
+//! to load it, and a track picks its album. The list keeps no cursor: the keys
+//! act on the row the pointer marks (`gui-pointer-target-interaction` D2).
 
 use std::cell::RefCell;
-use std::fmt::Write as _;
 use std::rc::Rc;
 
 use dioxus_native::prelude::*;
@@ -36,6 +35,7 @@ use crate::window::library::list::{
 };
 use crate::window::library::parts::{library_music_detail, library_music_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -73,12 +73,7 @@ fn paint_letter_row(letter: char) -> Element {
 
 /// The track row under an open album: the number,
 /// the muted name, and the runtime.
-fn paint_track_row(
-    row: &LibraryRow,
-    library: &LibraryState,
-    cursor_row: bool,
-    picked_row: bool,
-) -> Element {
+fn paint_track_row(row: &LibraryRow, library: &LibraryState, picked_row: bool) -> Element {
     let LibraryRow::Track {
         base,
         track_id,
@@ -90,14 +85,11 @@ fn paint_track_row(
     else {
         return rsx! {};
     };
-    let mut style = format!(
+    let style = format!(
         "height: {TRACK_ROW_HEIGHT}px; padding: {}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14px; cursor: pointer;",
         row_padding(row),
         if picked_row { "4px" } else { "0" }
     );
-    if cursor_row {
-        let _ = write!(style, " background: {};", canvas_var("selected"));
-    }
     let press_row = row.clone();
     let press_library = library.clone();
     let menu_library = library.clone();
@@ -122,7 +114,6 @@ fn paint_track_row(
                 );
             },
             ondoubleclick: move |_| play_library.play_library_track(track_id.clone()),
-            ..cursor_mark(cursor_row),
             span {
                 class: "flex flex-none items-center justify-end font-mono tabular-nums",
                 style: "width: 18px; font-size: 12px; color: var(--canvas-ordinal);",
@@ -143,27 +134,13 @@ fn paint_track_row(
     }
 }
 
-/// The cursor mark a row paints, only while the cursor rests on it.
-fn cursor_mark(cursor_row: bool) -> Vec<Attribute> {
-    cursor_row
-        .then(|| Attribute::new("data-library-cursor", "", None, false))
-        .into_iter()
-        .collect()
-}
-
 /// One painted row of the canvas tree: the letter
 /// heading, the track row, or the artist and album node row.
-fn paint_library_row(
-    row: &LibraryRow,
-    library: &LibraryState,
-    picked: Option<&str>,
-    cursor: Option<&str>,
-) -> Element {
-    let cursor_row = cursor == Some(row.id());
+fn paint_library_row(row: &LibraryRow, library: &LibraryState, picked: Option<&str>) -> Element {
     let picked_row = is_picked(row, picked);
     match row {
         LibraryRow::Letter(base) => paint_letter_row(base.letter),
-        LibraryRow::Track { .. } => paint_track_row(row, library, cursor_row, picked_row),
+        LibraryRow::Track { .. } => paint_track_row(row, library, picked_row),
         LibraryRow::Artist {
             base, name, open, ..
         }
@@ -187,14 +164,11 @@ fn paint_library_row(
                 LibraryRow::Album { year, .. } if !year.is_empty() => Some(year.clone()),
                 _ => None,
             };
-            let mut style = format!(
+            let style = format!(
                 "height: {NODE_ROW_HEIGHT}px; padding: {}; gap: 8px; border: 0; border-radius: {}; text-align: left; font-size: 14.5px; cursor: pointer;",
                 row_padding(row),
                 if picked_row { "4px" } else { "0" }
             );
-            if cursor_row {
-                let _ = write!(style, " background: {};", canvas_var("selected"));
-            }
             let press_row = row.clone();
             let press_library = library.clone();
             let menu_library = library.clone();
@@ -218,7 +192,6 @@ fn paint_library_row(
                             f32_from_f64(coordinates.y),
                         );
                     },
-                    ..cursor_mark(cursor_row),
                     span {
                         class: "flex flex-none items-center justify-center",
                         style: "width: 18px; color: {color};",
@@ -341,13 +314,6 @@ pub fn LibraryList() -> Element {
     // The rail's A–Z letters over the painted rows.
     let rail = letter_rail(&rows);
 
-    // The letter the rail marks: the one the cursor row belongs to.
-    let marked = ui
-        .cursor
-        .as_deref()
-        .and_then(|cursor| rows.iter().find(|row| row.id() == cursor))
-        .map(|row| row.base().letter);
-
     // The list's two DOM facts report to the scroll store (design D9), and
     // the rows paint over the interaction state this render read.
     let measure_library = library.clone();
@@ -357,12 +323,11 @@ pub fn LibraryList() -> Element {
         rows.as_ref(),
         scroll,
         "",
+        PointerList::Music,
         "0 0 0 8px",
         Callback::new(move |height: f32| measure_library.measure_library_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_library_list(top)),
-        |row: &LibraryRow| {
-            paint_library_row(row, &paint_library, picked.as_deref(), ui.cursor.as_deref())
-        },
+        |row: &LibraryRow| paint_library_row(row, &paint_library, picked.as_deref()),
     );
 
     let filter_library = library.clone();
@@ -405,10 +370,7 @@ pub fn LibraryList() -> Element {
                 class: "flex min-h-0 flex-1",
                 style: "overflow: hidden;",
                 {virtual_list}
-                LibraryLetterRail {
-                    letters: rail,
-                    marked,
-                }
+                LibraryLetterRail { letters: rail }
             }
         }
     }

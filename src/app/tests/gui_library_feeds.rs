@@ -7,7 +7,7 @@
 //! entry it asserts and no request leaves the process.
 
 use super::*;
-use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, LaunchPanelFocus, TabIdentity};
+use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, TabIdentity};
 use mbv_ui_model::media_list::MediaSemanticState;
 
 /// The two subscriptions the tests configure: the feed identity is the URL,
@@ -114,7 +114,6 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_pill() {
     let saved = GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Feeds,
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     };
 

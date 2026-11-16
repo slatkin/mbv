@@ -553,10 +553,11 @@ fn a_double_click_on_a_track_row_sends_that_track_play() {
     );
 }
 
-/// The user's live finding (`LibraryList.test.ts`): a track press moves the
-/// cursor onto the row, as the Queue panel's click moves the queue cursor.
+/// Contract (`LibraryList.test.ts`, design D6 of
+/// `gui-pointer-target-interaction`): a track press picks the track's album and
+/// marks no row — the list keeps no cursor.
 #[test]
-fn a_press_on_a_track_row_moves_the_cursor_onto_it() {
+fn a_press_on_a_track_row_picks_its_album_and_marks_no_row() {
     let mut fixture = built(&music(&["Hip-Hop"]), &no_hero());
     open_beastie(&mut fixture);
     open_licensed_to_ill(&mut fixture);
@@ -565,11 +566,13 @@ fn a_press_on_a_track_row_moves_the_cursor_onto_it() {
     press_row(&mut fixture, "track:t1");
 
     assert_eq!(
-        fixture.attr_of(
-            "[data-library-row-id=\"track:t1\"]",
-            blitz_dom::LocalName::from("data-library-cursor"),
-        ),
-        Some(String::new()),
-        "the pressed track paints the cursor mark"
+        fixture.library_commands(),
+        [mbv::GuiLibraryCommand::ShowDetail {
+            item_id: "al1".to_owned(),
+        }]
+    );
+    assert!(
+        !fixture.presents("[data-library-row-id=\"track:t1\"] [data-library-cursor]"),
+        "no row paints a cursor mark"
     );
 }

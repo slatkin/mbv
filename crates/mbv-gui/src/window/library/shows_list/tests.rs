@@ -2,9 +2,8 @@
 //! `shows-list.test.ts` — the All series mode's Music tree over the TUI's TV
 //! node kinds with the letter headings, the closed nodes, the flat modes'
 //! date-gutter rows with no heading, the filter's auto-open, the active mode's
-//! resolution, the cursor's movement over the nodes and leaves, and the A–Z
-//! rail. The model is plain data, so the geometry is asserted without a
-//! layout.
+//! resolution, and the A–Z rail. The model is plain data, so the geometry is
+//! asserted without a layout.
 
 use super::*;
 use crate::bridge::frame::library::{GuiHomeRowStateFrame, GuiShowsPillFrame};
@@ -297,44 +296,6 @@ fn the_active_mode_is_the_pill_the_core_marked_selected() {
         ..shows_frame(GuiShowsModeFrame::All, tree(), episodes())
     };
     assert_eq!(active_shows_mode(&tree_unmarked), GuiShowsModeFrame::All);
-}
-
-// Movement steps over the letter headings.
-#[test]
-fn movement_steps_over_the_letter_headings() {
-    let open = vec![series_row_id("s1")];
-    let closed: Vec<String> = Vec::new();
-    let painted = build_shows_rows(
-        &shows_frame(GuiShowsModeFrame::All, tree(), episodes()),
-        GuiShowsModeFrame::All,
-        "",
-        ShowsTreeState {
-            open: &open,
-            closed: &closed,
-        },
-    );
-
-    assert_eq!(
-        move_shows_cursor(&painted, Some(&series_row_id("s1")), ListMove::Down, 1),
-        Some(season_row_id("s1", "se1"))
-    );
-    assert_eq!(
-        move_shows_cursor(
-            &painted,
-            Some(&season_row_id("s1", "se2")),
-            ListMove::Down,
-            1
-        ),
-        Some(series_row_id("s2"))
-    );
-    assert_eq!(
-        move_shows_cursor(&painted, None, ListMove::Down, 1),
-        Some(series_row_id("s1"))
-    );
-    assert_eq!(
-        move_shows_cursor(&painted, Some(&series_row_id("s1")), ListMove::End, 1),
-        Some(series_row_id("s4"))
-    );
 }
 
 // The rail holds the first series row under each letter and disables the

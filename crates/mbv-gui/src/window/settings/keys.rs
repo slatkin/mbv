@@ -17,7 +17,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::settings::GuiSettingsFrame;
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::library::keys_shared::{bare, cursor_move};
 use crate::window::library::list::ListMove;
@@ -30,12 +30,14 @@ use super::state::{
 /// Route one keydown while the Settings screen shows (`keys.ts`'s
 /// `routeSettingsKey`, design D11): the window's overlay and prefix step ran
 /// first, so a key that reaches this point is the screen's or the core
-/// router's.
+/// router's. A core answer names `target`, the panel the key's pointer
+/// resolved (design D2 of `gui-pointer-target-interaction`).
 #[must_use]
 pub fn route_settings_key(
     key: &DomKey,
     settings: &GuiSettingsFrame,
     state: &SettingsState,
+    target: KeyTarget,
 ) -> KeyOutcome {
     let ui = state.ui.peek().clone();
     // (2) An active capture takes every key: Esc cancels, and any other key
@@ -156,10 +158,10 @@ pub fn route_settings_key(
                 return KeyOutcome::Handled;
             }
         }
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     // (7) Every other key goes to the core's keyboard router.
-    KeyOutcome::Core
+    KeyOutcome::Core(target)
 }
 
 /// The feed form's open kind menu's step: Esc

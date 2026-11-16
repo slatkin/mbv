@@ -7,36 +7,29 @@
 //!
 //! The rows paint at the fixed heights of
 //! [`crate::window::library::audiobooks_list`] over native scroll, and only
-//! the rows in view paint, so a long catalog stays fast. The cursor is the
-//! window content's own in [`crate::window::library::audiobooks`] (design
-//! D1); the scroll offset and the viewport are the Audiobooks list's scroll
-//! store (design D9). A press selects the book the Hero shows, and a
-//! double-click plays it from its saved position — the same play command the
-//! keys' Enter sends. A book has no play-next: `n` is consumed and does
-//! nothing.
+//! the rows in view paint, so a long catalog stays fast. The list keeps no
+//! cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2); the scroll offset and the viewport are
+//! the Audiobooks list's scroll store (design D9). A press selects the book the
+//! Hero shows, and a double-click plays it from its saved position — the same
+//! play command the keys' Enter sends. A book has no play-next: `n` is consumed
+//! and does nothing.
 //!
-//! The Hero's chapter cursor belongs to the selected book (the
-//! `audiobooks-workspace` contract): a selection change starts it over,
-//! because the chapters it rested on belong to the previous book.
-
-use std::cell::RefCell;
+//! The Hero's chapter Workspace keeps no cursor either: the keys act on the
+//! chapter the pointer marks, so a selection change needs no reset.
 
 use dioxus_native::prelude::*;
 
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryTrailPart, row_background,
-};
+use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::audiobooks_list::{
-    AudiobooksListRow, audiobooks_letter_rail, audiobooks_row_letter,
-};
-use crate::window::library::audiobooks_workspace::reset_abs_chapter_cursor;
+use crate::window::library::audiobooks_list::{AudiobooksListRow, audiobooks_letter_rail};
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 
 /// One painted row of the list: the letter heading
@@ -44,7 +37,6 @@ use crate::window::theme::canvas_var;
 fn paint_audiobooks_row(
     row: &AudiobooksListRow,
     library: &LibraryState,
-    cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
     match row {
@@ -56,7 +48,6 @@ fn paint_audiobooks_row(
             }
         },
         AudiobooksListRow::Item(item) => {
-            let cursor_row = cursor == Some(item.id.as_str());
             let selected_row = selected == Some(item.id.as_str());
             let press_row = row.clone();
             let press_library = library.clone();
@@ -75,8 +66,7 @@ fn paint_audiobooks_row(
                     trail: Some(item.row.duration.clone()),
                     trail_part: LibraryTrailPart::Duration,
                     title_color: canvas_var("text"),
-                    background: row_background(cursor_row, selected_row),
-                    cursor: cursor_row,
+                    background: selected_row.then(|| canvas_var("library-raise")),
                     selected: selected_row,
                     progress: None,
                     on_press: Callback::new(move |()| {
@@ -124,59 +114,28 @@ pub fn LibraryAudiobooksList() -> Element {
     // The rail's A–Z letters over the painted rows (row 9.1).
     let rail = audiobooks_letter_rail(&rows);
 
-    // The row the cursor rests on, and the letter the rail marks: the one
-    // the cursor row belongs to.
-    let cursor = audiobooks_ui.cursor.clone();
-    let marked = rows
-        .iter()
-        .find(|row| Some(row.id()) == cursor.as_deref())
-        .and_then(audiobooks_row_letter);
     let selected = detail.and_then(|detail| detail.selected.clone());
 
-    // The Hero's chapter cursor belongs to the selected book (row 9.1): a
-    // selection change starts it over. The effect reads the detail section
-    // and writes the Workspace's cursor — a signal it never reads — so it
-    // never re-runs itself.
-    let reset_library = library.clone();
-    let last_selected = use_hook(|| RefCell::new(None::<String>));
-    use_effect(move || {
-        let detail_section = reset_library.sections.library_detail.cloned();
-        let selected = library_audiobooks_detail(detail_section.as_deref())
-            .and_then(|detail| detail.selected.clone());
-        let mut last = last_selected.borrow_mut();
-        if *last == selected {
-            return;
-        }
-        *last = selected;
-        drop(last);
-        reset_abs_chapter_cursor(&reset_library);
-    });
-
     // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the interaction state this render read.
+    // the rows paint over the section this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let paint_library = library.clone();
-    let paint_cursor = cursor.clone();
     let paint_selected = selected.clone();
     let virtual_list = library_virtual_list(
         rows.as_ref(),
         scroll,
         "abs",
+        PointerList::Audiobooks,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_audiobooks_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_audiobooks_list(top)),
         move |row: &AudiobooksListRow| {
-            paint_audiobooks_row(
-                row,
-                &paint_library,
-                paint_cursor.as_deref(),
-                paint_selected.as_deref(),
-            )
+            paint_audiobooks_row(row, &paint_library, paint_selected.as_deref())
         },
     );
 
-    // The rail's press moves the cursor to the letter's first book (design
+    // The rail's press scrolls the list to the letter's first book (design
     // D7).
     let jump_library = library.clone();
     let filter_library = library.clone();
@@ -225,7 +184,6 @@ pub fn LibraryAudiobooksList() -> Element {
                 {virtual_list}
                 LibraryLetterRail {
                     letters: rail,
-                    marked,
                     jump: Some(Callback::new(move |letter: char| {
                         jump_library.jump_audiobooks_to_letter(letter);
                     })),

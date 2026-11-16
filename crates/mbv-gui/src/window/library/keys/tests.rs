@@ -13,11 +13,10 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::route_library_key;
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
     GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame,
-    GuiMusicTrackFrame, GuiShowsDetail, GuiShowsList,
+    GuiMusicTrackFrame,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -27,7 +26,8 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::state::{LibraryPane, LibraryState};
+use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -116,19 +116,15 @@ fn key(value: &str, shift: bool) -> DomKey {
     }
 }
 
-/// Library Panel focus, as the routed keys read it: the Section's focus store
-/// starts on the Queue panel, so the harness carries it first. A test that
-/// needs the Queue panel's focus writes it back over this.
-fn carry_panel_focus(sections: &Sections) {
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
-}
-
-/// The Library Panel focus the tests route under, written back to the Queue
-/// panel (design D3, step 3).
-fn queue_panel_focus(state: &LibraryState) {
-    let mut focus = state.sections.focus;
-    focus.write().panel = GuiPanel::Queue;
+/// The pointer target a Library key routes under (design D2 of
+/// `gui-pointer-target-interaction`): the pointer over the Library column and
+/// no Hero list, so the destination's list keys act.
+fn library_pointer() -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: None,
+        row: None,
+    }
 }
 
 /// Arm the Status bar's prefix (design D3, step 1).
@@ -157,11 +153,109 @@ fn route_on(
     sections: &Sections,
     arrangement: GuiArrangement,
 ) {
-    let outcome = route_library_key(&key(value, shift), Some(sections), state, None, arrangement);
+    route_with(
+        state,
+        facts,
+        name,
+        value,
+        shift,
+        sections,
+        arrangement,
+        &library_pointer(),
+    );
+}
+
+/// Route one keydown under a named pointer target and paint the outcome.
+fn route_with(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    shift: bool,
+    sections: &Sections,
+    arrangement: GuiArrangement,
+    pointer: &PointerTarget,
+) {
+    let outcome = route_library_key(
+        &key(value, shift),
+        Some(sections),
+        state,
+        None,
+        arrangement,
+        pointer,
+    );
     facts
         .lock()
         .expect("facts")
         .push(format!("{name}={outcome:?}"));
+}
+
+/// Route one keydown with the pointer over `zone`, against the window's own
+/// section stores, and paint the outcome: the pointer target decides the panel
+/// a core answer names (design D2 of `gui-pointer-target-interaction`).
+fn route_under(state: &LibraryState, facts: &Facts, name: &str, value: &str, zone: PointerZone) {
+    let pointer = PointerTarget {
+        zone: Some(zone),
+        list: None,
+        row: None,
+    };
+    route_with(
+        state,
+        facts,
+        name,
+        value,
+        false,
+        &state.sections,
+        GuiArrangement::Wide,
+        &pointer,
+    );
+}
+
+/// Route one keydown with the pointer over the Hero's tracklist, resting on the
+/// track `row`.
+fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    let pointer = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(PointerList::Tracklist),
+        row: Some(row.to_owned()),
+    };
+    route_with(
+        state,
+        facts,
+        name,
+        value,
+        false,
+        &state.sections,
+        GuiArrangement::Wide,
+        &pointer,
+    );
+}
+
+/// Route one keydown with the pointer over a Library list, resting on the row
+/// `row` of that list (design D1, D2).
+fn route_on_row(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    list: PointerList,
+    row: &str,
+) {
+    let pointer = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(list),
+        row: Some(row.to_owned()),
+    };
+    route_with(
+        state,
+        facts,
+        name,
+        value,
+        false,
+        &state.sections,
+        GuiArrangement::Wide,
+        &pointer,
+    );
 }
 
 /// Route one keydown against the window's own section stores and paint the
@@ -322,24 +416,7 @@ fn music_detail(hero: Option<GuiMusicHeroFrame>) -> GuiLibraryDetail {
     })
 }
 
-/// The Home content the pane-walk contracts read (design D12): no Music
-/// content, the flat list's rows.
-fn home_list() -> GuiLibraryList {
-    GuiLibraryList {
-        tabs: vec![GuiLibraryTabFrame {
-            position: 1,
-            label: "Music".to_owned(),
-        }],
-        current_tab: None,
-        destination: GuiDestinationList::Home(crate::bridge::frame::library::GuiHomeList {
-            loading: false,
-            rows: Vec::new(),
-        }),
-    }
-}
-
-/// Carry the given content into the store's sections, under the Library
-/// Panel focus the routed keys read.
+/// Carry the given content into the store's sections.
 fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
     let batch = GuiSectionBatch {
         library_list: Some(crate::bridge::sections::GuiSection {
@@ -354,46 +431,18 @@ fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
-    carry_panel_focus(&sections);
 }
 
-/// Switch the active destination after a carry: a second batch whose Library
-/// sections carry the next revision, so the window holds them.
-fn switch_destination(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
-    let batch = GuiSectionBatch {
-        library_list: Some(crate::bridge::sections::GuiSection {
-            revision: 2,
-            value: Some(list),
-        }),
-        library_detail: Some(crate::bridge::sections::GuiSection {
-            revision: 2,
-            value: Some(detail),
-        }),
-        ..GuiSectionBatch::default()
-    };
-    let mut sections = state.sections.clone();
-    sections.apply_batch(&batch);
-}
-
-/// The pane focus, filter, and open facts the assertions read.
+/// The filter and open facts the assertions read.
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     format!(
-        "pane={:?} filter_open={} filter={:?} focused_pill={:?} pill_select={:?} cursor={:?} open={:?} track_cursor={:?} dismissed={}",
-        ui.pane,
-        ui.filter_open,
-        ui.filter,
-        ui.focused_pill,
-        ui.pill_select,
-        ui.cursor,
-        ui.open_nodes,
-        ui.track_cursor,
-        ui.hero_dismissed,
+        "filter_open={} filter={:?} pill_select={:?} open={:?} dismissed={}",
+        ui.filter_open, ui.filter, ui.pill_select, ui.open_nodes, ui.hero_dismissed,
     )
 }
 
-/// Carry the union the list keys move through, with the list pane focused and
-/// the list measured at 40 px.
+/// Carry the union the list keys move through, the list measured at 40 px.
 fn carry_list(state: &LibraryState, open: &[&str]) {
     carry(
         state,
@@ -402,7 +451,6 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
     );
     let mut ui = state.ui;
     ui.with_mut(|ui| {
-        ui.pane = Some(LibraryPane::List);
         ui.open_nodes = open.iter().map(|id| (*id).to_owned()).collect();
     });
     state.measure_library_list(40.0);
@@ -413,6 +461,6 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
 mod gating;
 mod home;
 mod list;
-mod panes;
 mod pills;
 mod search_keys;
+mod window_keys;

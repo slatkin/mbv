@@ -30,9 +30,9 @@ use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
 use crate::art::ArtRequest;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
+use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::{
-    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
-    RegionTarget, hit_map,
+    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, RegionTarget, hit_map,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::leaves::{
@@ -60,9 +60,12 @@ const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
 /// `ClientWaker` sends, or the window's close.
 #[derive(Debug)]
 pub enum CoreInput {
-    /// A key chord, translated on the Rust side (design D6) and routed
-    /// through `App::route_gui_input` with the focused surface.
-    Key(KeyEvent),
+    /// A key chord, translated on the Rust side (design D6), with the panel
+    /// the window's pointer resolved for it (design D2 of
+    /// `gui-pointer-target-interaction`). The core sets its Panel focus from
+    /// the target, then routes the key through `App::route_gui_input` with the
+    /// focused surface as its leaf.
+    Key { key: KeyEvent, target: KeyTarget },
     /// A pointer event, translated on the Rust side (design D4) and resolved
     /// against the slice hit map.
     Pointer(PointerEvent),
@@ -72,9 +75,8 @@ pub enum CoreInput {
     Layout(LayoutReport),
     /// One Library panel request (add-gui-library-panel design D2): the
     /// window content's `library` command. The core applies it through
-    /// [`App::apply_gui_library_command`], and the take-focus variant also
-    /// moves the core's `FocusStack` with the App's stored focus (design D4),
-    /// so the window paints the focus the App's key gates use.
+    /// [`App::apply_gui_library_command`], after the Panel-focus adapter sets
+    /// Library focus (design D3 of `gui-pointer-target-interaction`).
     Library(mbv::GuiLibraryCommand),
     /// One Settings screen request (`add-gui-settings-screen` design D5): the
     /// window content's `settings` command. The core applies it through
@@ -234,10 +236,6 @@ pub struct CoreThread {
     idle_cadence: Duration,
     /// The saved GUI launch location and its restore phase (design D9).
     launch_restore: GuiLaunchRestore,
-    /// A take-focus ran while the restore was pending (design D9): the user
-    /// moved Panel focus in the pre-catalog window, so the first phase skips
-    /// the saved Panel-focus re-apply.
-    launch_focus_taken: bool,
 }
 
 impl CoreThread {
@@ -252,9 +250,11 @@ impl CoreThread {
         app.enable_gui_client();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
-        // and the Status bar (design D4), and the Queue side holds focus. The
-        // Library panel mounts beside the Queue (add-gui-library-panel task
-        // row 2.1) and takes Panel focus on the take-focus command.
+        // and the Status bar (design D4). The Library panel mounts beside the
+        // Queue (add-gui-library-panel task row 2.1). Panel focus is not
+        // window state (`gui-pointer-target-interaction` design D3): the
+        // core sets it per key, and the Library command path sets it before
+        // each Library command.
         focus.mount(ComponentId::Queue);
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
@@ -275,12 +275,11 @@ impl CoreThread {
             app.start_playback_target_discovery();
         }
         // The GUI's own launch location (design D9), read once before the
-        // first step: the TUI's launch state never moves this Client's tab or
-        // Panel focus, and this file is the only location it restores. A start
-        // with no saved location — or one that fails to load — restores the
-        // Client's first-choice rules through the same restore path: the first
-        // presented destination, Library Panel focus, and no saved collection
-        // sets, so the Library panel is reachable from the first launch.
+        // first step: the TUI's launch state never moves this Client's tab,
+        // and this file is the only location it restores. A start with no
+        // saved location — or one that fails to load — restores the Client's
+        // first-choice rules through the same restore path: the first presented
+        // destination, and no saved collection sets.
         let launch_restore = GuiLaunchRestore::Destination(
             mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
         );
@@ -303,27 +302,32 @@ impl CoreThread {
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
             launch_restore,
-            launch_focus_taken: false,
         };
-        // The core sets its `FocusStack` and the App's stored Panel focus
-        // together (design D4), so the sections the window paints and the gates
-        // the keys meet agree from the first batch. The Queue side holds
-        // focus until the take-focus command moves it.
-        core.take_panel_focus(PanelFocus::Queue);
-        // The saved location applies over that default (design D9): a launch
-        // the attach brought a catalog for restores here, and a launch whose
-        // catalog lands through the startup worker restores on that drain.
+        // The saved location applies over the core's startup state (design
+        // D9): a launch the attach brought a catalog for restores here, and a
+        // launch whose catalog lands through the startup worker restores on
+        // that drain.
         core.restore_launch_location();
         core
     }
 
     /// Move Panel focus on both authorities together (add-gui-library-panel
     /// design D4): the App's stored Panel focus, which its key gates read,
-    /// through its public GUI entry, then the core's `FocusStack`, which
-    /// derives the window's focus.
+    /// through its public GUI entry, then the core's `FocusStack`.
     fn take_panel_focus(&mut self, focus: PanelFocus) {
         self.app.set_gui_panel_focus(focus);
         self.focus.set_panel_focus(focus);
+    }
+
+    /// Set Panel focus on both authorities, skipped when the two already hold
+    /// it (design D3 of `gui-pointer-target-interaction`): the GUI keeps no
+    /// Panel focus, so the core sets it per key from the key's [`KeyTarget`],
+    /// and before each Library command the window asked for.
+    fn apply_panel_focus(&mut self, focus: PanelFocus) {
+        if self.focus.panel_focus() == focus && self.app.gui_panel_focus() == focus {
+            return;
+        }
+        self.take_panel_focus(focus);
     }
 
     /// Install the wake the App's relays invoke (design D3): every wake feeds
@@ -437,7 +441,19 @@ impl CoreThread {
     /// slice's only focusable surface is the Queue; with no focused surface
     /// no leaf can consume anything. Returns whether the `App` asked to
     /// quit, which the GUI Client answers by closing its window.
-    fn route_key(&mut self, key: KeyEvent) -> bool {
+    ///
+    /// The Panel-focus adapter runs first (design D3 of
+    /// `gui-pointer-target-interaction`): the key's [`KeyTarget`] sets the
+    /// stack's Panel focus — `Queue` for a Queue target, `Library` for none —
+    /// so the Queue leaf is built only while the stack's focus is the Queue.
+    /// `ComponentId::Library` stays mounted, so a key with no Queue target
+    /// meets only the leafless global and transport chords.
+    fn route_key(&mut self, key: KeyEvent, target: KeyTarget) -> bool {
+        let focus = match target {
+            KeyTarget::Queue => PanelFocus::Queue,
+            KeyTarget::None => PanelFocus::Library,
+        };
+        self.apply_panel_focus(focus);
         if self.focus.focused().as_ref() != Some(&ComponentId::Queue) {
             return self.app.route_gui_input(GuiInput::Key(key), None);
         }
@@ -531,30 +547,15 @@ impl CoreThread {
             return false;
         };
         match self.regions.resolve(point) {
-            Some(RegionTarget::Queue(target)) => {
-                // The TUI click's focus change (design D4): a click, double
-                // click, or right click on a queue row runs the TUI single
-                // click's effects, one of which focuses the Queue panel. The
-                // dispatched `QueueRowClick` and `QueueRowActivate` apply the
-                // App-side half; the core mirrors the panel focus on its own
-                // stack — whose derived focus the window paints and the next
-                // keys' routing reads — because the right click's
-                // `RowContextMenu` dispatch is the documented no-op. The pill
-                // and the wheel take no focus, exactly as the TUI's matching
-                // gestures do not.
-                if matches!(
-                    gesture,
-                    PointerGesture::Click { .. }
-                        | PointerGesture::DoubleClick(_)
-                        | PointerGesture::RightClick(_)
-                ) && matches!(
-                    target,
-                    QueueTargetId::Slot(_)
-                        | QueueTargetId::RowGrip(_)
-                        | QueueTargetId::RowActions(_)
-                ) {
-                    self.focus.set_panel_focus(PanelFocus::Queue);
-                }
+            Some(RegionTarget::Queue(_)) => {
+                // The TUI click's effects, run through the Queue leaf: a click,
+                // double click, or right click on a queue row dispatches the
+                // TUI's `QueueRowClick` and `QueueRowActivate`, which move the
+                // Queue's own cursor (the GUI's active row) and its marks. A
+                // press stores no focus (ADR 0040): the window has none, and
+                // the next key sets the core's Panel focus from its own
+                // target. The pill and the wheel take no focus, exactly as the
+                // TUI's matching gestures do not.
                 let Self {
                     app,
                     queue,
@@ -730,7 +731,6 @@ impl CoreThread {
         self.app.fetch_playback_metadata();
         let batch = self.ledger.collect(SectionSources {
             app: &mut self.app,
-            focus: &self.focus,
             queue: &self.queue,
             playback_surface: &self.playback,
             viewport_rows: self.viewport_rows,

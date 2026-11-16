@@ -1,8 +1,7 @@
 //! Headless tests of the Home list's row model (D16): the contracts of
 //! `home-list.test.ts` — the sections' heading rows and item rows at fixed
-//! heights over the spacer, the opaque row identity as a key, and the cursor's
-//! movement over the item rows only. The model is plain data, so the geometry
-//! is asserted without a layout.
+//! heights over the spacer, and the opaque row identity as a key. The model is
+//! plain data, so the geometry is asserted without a layout.
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeItemRowFrame;
@@ -132,40 +131,6 @@ fn the_row_key_is_the_opaque_identity_distinct_per_section() {
             "f1".to_owned()
         ))),
         recent_key
-    );
-}
-
-// Movement steps over the headings and the spacer.
-#[test]
-fn movement_steps_over_the_headings_and_the_spacer() {
-    let painted = build_home_rows(&rows(), "");
-    let added_key = home_row_key(&added().id);
-    let watched_key = home_row_key(&watched().id);
-
-    assert_eq!(
-        move_home_cursor(&painted, Some(&added_key), ListMove::Up, 1),
-        Some(watched_key)
-    );
-    assert_eq!(
-        move_home_cursor(&painted, Some(&added_key), ListMove::End, 1),
-        Some(added_key)
-    );
-}
-
-// A first key movement lands the cursor on an item row.
-#[test]
-fn a_first_key_movement_lands_the_cursor_on_an_item_row() {
-    let painted = build_home_rows(&rows(), "");
-    let continued_key = home_row_key(&continued().id);
-    let added_key = home_row_key(&added().id);
-
-    assert_eq!(
-        move_home_cursor(&painted, None, ListMove::Down, 1),
-        Some(continued_key)
-    );
-    assert_eq!(
-        move_home_cursor(&painted, None, ListMove::Up, 1),
-        Some(added_key)
     );
 }
 

@@ -1,31 +1,33 @@
 //! The Podcasts destination's interaction state (`add-gui-library-panel`
 //! design D12, row 10.1, the port of `lib/library/podcasts.ts`): what the
-//! window content owns and the core never reads — the cursor and the pill
-//! row's focus. The scroll offset and the measured viewport live in the
+//! window content owns and the core never reads — the `/` filter's text and the
+//! pill row's request. The scroll offset and the measured viewport live in the
 //! Podcasts list's scroll store ([`super::scroll`], design D9). The core owns
 //! the pill selection and the selected episode (the frame's `pills` and
-//! `selected`), so nothing here mirrors them: a press sends the select
-//! command, and the frame carries the choice back. The row model is
-//! [`super::podcasts_list`]'s; the panel's pane focus and the Hero overlay
-//! stay in [`super::state`]'s shared store. There is no play-next: `n` is
-//! consumed and does nothing.
+//! `selected`), so nothing here mirrors them: a press sends the select command,
+//! and the frame carries the choice back. The row model is
+//! [`super::podcasts_list`]'s; the Hero overlay stays in [`super::state`]'s
+//! shared store. There is no play-next: `n` is consumed and does nothing.
 //!
-//! The state, the filter, the cursor, the scroll store, and the pill focus are
-//! the pill-list controller's ([`super::pill_list`], row 7C.1); this module
-//! keeps the Podcasts frame, the Podcasts rows, the Podcasts command shapes,
-//! and the Podcasts names.
+//! The list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
+//! list (design D6).
+//!
+//! The state, the filter, and the scroll store are the pill-list controller's
+//! ([`super::pill_list`], row 7C.1); this module keeps the Podcasts frame, the
+//! Podcasts rows, the Podcasts command shapes, and the Podcasts names.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiPodcastsList;
 use crate::bridge::library::{GuiLibraryCommand, GuiPodcastPill, GuiPodcastState};
-use crate::window::library::list::ListMove;
+use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_podcasts_list;
-use crate::window::library::podcasts_list::{PodcastsItemRow, move_podcasts_cursor};
+use crate::window::library::podcasts_list::PodcastsItemRow;
 
-use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
+use super::pill_list::PillListUiState;
+use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Podcasts list's interaction state: the shared pill-list state over the
@@ -85,40 +87,34 @@ impl LibraryState {
             .rows(revision, &podcasts.rows, &filter)
     }
 
-    /// The row the Podcasts cursor rests on, or `None`: the keys read it to
-    /// play the episode or queue it. Every row is an item row, so no heading
-    /// stands in the find.
+    /// The row the pointer's marker names (design D1, D2): the marker carries
+    /// the row's own id, so the painted rows resolve it and a stale or foreign
+    /// id names no episode. `None` while no painted row carries the id.
     #[must_use]
-    pub fn podcasts_cursor_row(&self) -> Option<PodcastsItemRow> {
-        let rows = self.podcasts_rows();
-        let cursor = self.podcasts_ui.peek().cursor.clone();
-        rows.iter()
-            .find(|row| Some(row.id.as_str()) == cursor.as_deref())
+    pub fn podcasts_row_at(&self, row_id: &str) -> Option<PodcastsItemRow> {
+        self.podcasts_rows()
+            .iter()
+            .find(|row| row.id == row_id)
             .cloned()
     }
 
-    /// The Podcasts list under the shared list controller (design D12).
-    fn podcasts_list(
-        &self,
-    ) -> ListControl<PodcastsUiState, PodcastsItemRow, impl Fn() -> Arc<[PodcastsItemRow]> + '_>
-    {
-        ListControl {
-            ui: self.podcasts_ui,
-            scroll: self.scrolls.podcasts,
-            rows: || self.podcasts_rows(),
-            move_over: move_podcasts_cursor,
-        }
-    }
-
     /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
+    /// (design D7's filter rule). The filter narrows the rows and selects
+    /// nothing, and the scroll stays inside the narrower list.
     pub fn set_podcasts_filter(&self, filter: String) {
-        self.podcasts_list().set_filter(filter);
+        let mut podcasts_ui = self.podcasts_ui;
+        podcasts_ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_podcasts_scroll();
     }
 
-    /// Close the filter with Esc (design D3, step 2): the text goes with it.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
+    /// a closed filter narrows nothing. The scroll follows the widened rows.
     pub fn close_podcasts_filter(&self) {
-        self.podcasts_list().close_filter(self.ui);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut podcasts_ui = self.podcasts_ui;
+        podcasts_ui.with_mut(|ui| ui.filter.clear());
+        self.clamp_podcasts_scroll();
     }
 
     /// Select the row (design D12): the select command the core stores, whose
@@ -147,7 +143,7 @@ impl LibraryState {
         self.select_podcasts_row(row);
     }
 
-    /// Play an episode (design D12): Enter on the cursor row, and a
+    /// Play an episode (design D12): Enter on the hovered row, and a
     /// double-click's play. The queue is replaced under the Audiobookshelf
     /// admission rule, through the shared play path. The row id is the
     /// episode's stable identity the frame carried.
@@ -161,7 +157,7 @@ impl LibraryState {
         });
     }
 
-    /// Add an episode to the queue's tail (design D12): `a` on the cursor
+    /// Add an episode to the queue's tail (design D12): `a` on the hovered
     /// row. There is no play-next on the destination, so `n` is consumed and
     /// does nothing here.
     pub fn queue_podcasts_row(&self, item_id: &str) {
@@ -174,69 +170,41 @@ impl LibraryState {
         });
     }
 
-    /// Move the list's cursor one movement along (design D12): Up and Down
-    /// move a row, Page Up and Page Down move the rows in view, and Home and
-    /// End take the list's ends. The scroll offset follows, so the cursor row
-    /// stays fully visible.
-    pub fn move_podcasts_list_cursor(&self, mv: ListMove) {
-        self.podcasts_list().move_cursor(mv);
+    /// Move the list by one movement key's scroll (design D6): Up and Down move
+    /// by the height of the row at the top edge, Page Up and Page Down by the
+    /// viewport height, and Home and End go to the list's ends, inside the
+    /// list's range.
+    pub fn step_podcasts_scroll(&self, mv: ListMove) {
+        let rows = self.podcasts_rows();
+        let held = *self.scrolls.podcasts.peek();
+        set_scroll_top(self.scrolls.podcasts, &rows, scroll_step(&rows, held, mv));
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_podcasts_list(&self, viewport_height: f32) {
-        self.podcasts_list().measure(viewport_height);
+        let mut podcasts = self.scrolls.podcasts;
+        podcasts.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_podcasts_scroll();
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_podcasts_list(&self, scroll_top: f32) {
-        self.podcasts_list().scroll_to(scroll_top);
+        let rows = self.podcasts_rows();
+        set_scroll_top(self.scrolls.podcasts, &rows, scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried
-    /// pills so a stale pill focuses nothing: the pill the keys' Space and
-    /// Enter select, and the pill the row paints the accent outline on
-    /// (design D6, D12).
-    #[must_use]
-    pub fn focused_podcasts_pill<'a>(
-        &self,
-        podcasts: &'a GuiPodcastsList,
-    ) -> Option<&'a GuiPodcastPill> {
-        let focused = self.podcasts_ui.peek().focused_pill.clone()?;
-        let focused_key = podcast_pill_key(&focused);
-        podcasts
-            .pills
-            .iter()
-            .map(|frame| &frame.pill)
-            .find(|pill| podcast_pill_key(pill) == focused_key)
+    /// Hold the Podcasts list's scroll offset inside the rows the filter
+    /// leaves.
+    fn clamp_podcasts_scroll(&self) {
+        let rows = self.podcasts_rows();
+        let held = *self.scrolls.podcasts.peek();
+        set_scroll_top(self.scrolls.podcasts, &rows, held.scroll_top);
     }
 
-    /// Move the focused pill one pill along the row (design D12): Right and
-    /// Left walk the pills, and the first of them with no pill focused takes
-    /// the end it walks from.
-    pub fn move_podcasts_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(podcasts) = library_podcasts_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiPodcastPill> = podcasts
-            .pills
-            .iter()
-            .map(|frame| frame.pill.clone())
-            .collect();
-        move_pill_focus(
-            self.podcasts_ui,
-            &pills,
-            podcast_pill_key,
-            Clone::clone,
-            podcast_pill_key,
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (design D6, D12).
+    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
+    /// request into the set-pill command.
     pub fn request_podcasts_pill_select(&self, pill: GuiPodcastPill) {
         let mut podcasts_ui = self.podcasts_ui;
         podcasts_ui.with_mut(|ui| ui.pill_select = Some(pill));

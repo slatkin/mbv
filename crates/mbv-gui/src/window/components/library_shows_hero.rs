@@ -10,8 +10,8 @@
 //! and carries no Workspace, and the Upcoming mode carries no Hero at all, so
 //! the pane paints nothing there.
 //!
-//! The Workspace's cursor and hover are the window content's own
-//! (`window/library/shows_workspace`, design D1): a press moves the cursor, a
+//! The Workspace keeps no cursor (`gui-pointer-target-interaction` D6): the keys
+//! act on the row the pointer marks, a press on a row does nothing, a
 //! double-click plays the row, and the hovered row paints its play-next and
 //! add-to-queue controls. Every action sends the episode's stable Service id
 //! with the library index the frame carries; no control names a row position.
@@ -34,10 +34,9 @@ use crate::window::library::hero::{
     HeroLayoutFacts, hero_layout, join_meta_rows, label_segments, plain_segments,
 };
 use crate::window::library::parts::library_shows_detail;
-use crate::window::library::shows_workspace::{
-    episode_progress, is_played_episode, press_shows_episode, resolve_shows_episode_cursor,
-};
+use crate::window::library::shows_workspace::{episode_progress, is_played_episode};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Shows Hero (the `LibraryShowsHero` props, narrowed
@@ -248,12 +247,6 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         ),
     };
 
-    // The episode the cursor rests on (design D12): the state's id while the
-    // carried Workspace paints it, and the first episode otherwise.
-    let shows_cursor = library.shows_workspace.cloned();
-    let cursor_episode = resolve_shows_episode_cursor(workspace, shows_cursor.cursor.as_deref())
-        .map(|episode| episode.episode_id.clone());
-
     // The Workspace table's rows: each episode with its played state and its
     // resume percent.
     let rows: Vec<WorkspaceRow> = workspace.map_or_else(Vec::new, |workspace| {
@@ -314,12 +307,10 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
         }
     };
 
-    // The Workspace's press and play (design D12): a press moves the cursor,
-    // and the row's play gestures send that episode.
-    let press_library = library.clone();
-    let on_press = Callback::new(move |episode_id: String| {
-        press_shows_episode(&press_library, &episode_id);
-    });
+    // The Workspace's press and play (design D12, D6): a press on a row does
+    // nothing — the Workspace keeps no cursor — and the row's play gestures send
+    // that episode.
+    let on_press = Callback::new(|_: String| {});
     let play_library = library.clone();
     let on_play = Callback::new(move |episode_id: String| {
         play_episode(&play_library, lib_idx, &episode_id);
@@ -374,8 +365,8 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
                     label: "Episodes",
                     hook: "shows-episode",
                     noun: "Episode",
+                    pointer_list: PointerList::Workspace,
                     rows,
-                    cursor: cursor_episode,
                     actions: row_actions,
                     on_press,
                     on_play,

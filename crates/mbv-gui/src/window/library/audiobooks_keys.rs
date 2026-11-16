@@ -3,25 +3,26 @@
 //! Library keys while an Audiobooks library is active. [`super::keys`] stays
 //! the panel's one routing site and hands an Audiobooks key here after the
 //! window keys and the open-field checks, so this module never installs a
-//! router. The pane focus decides the control a key acts on: the book list, or
-//! the Hero's chapter Workspace.
+//! router. The pointer decides the control a key acts on: the book list, or the
+//! Hero's chapter Workspace.
 //!
 //! The routing itself is the shared panel key handler's ([`super::keys_shared`],
 //! row 7C.2): the movements and Enter never reach the core, Esc's overlay and
 //! menu handling runs before this, `/` opens the list's filter, and Space
 //! stays the core's play and pause — Audiobooks paints no pill row. This
-//! module keeps only the Audiobooks facts it routes over: the Hero's own
-//! chapter-Workspace router, and `a`'s queue command. A book has no
-//! play-next: `n` is consumed and does nothing.
+//! module keeps only the Audiobooks facts it routes over: Enter on the hovered
+//! chapter, and `a`'s queue command. A book has no play-next: `n` is consumed
+//! and does nothing.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::{PointerList, PointerTarget};
 
-use super::audiobooks_list::{AudiobooksItemRow, AudiobooksListRow};
-use super::audiobooks_workspace::{move_abs_chapter_cursor, play_abs_chapter, queue_abs_book};
-use super::keys_shared::{PanelKeys, cursor_move, is_list_and_hero_key, route_panel_list_key};
+use super::audiobooks_list::AudiobooksItemRow;
+use super::audiobooks_workspace::{abs_chapter_at, play_abs_chapter, queue_abs_book};
+use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
 use super::list::ListMove;
 use super::parts::{library_audiobooks_detail, library_audiobooks_list};
 use super::state::LibraryState;
@@ -45,9 +46,8 @@ impl AudiobooksFrame {
 }
 
 /// The Audiobooks facts the shared panel key handler routes over (row 7C.2):
-/// no pill row rides on the destination, the item the play and queue commands
-/// name is the book the cursor row carries, the Hero routes its own chapter
-/// Workspace, and there is no play-next.
+/// the item the play and queue commands name is the book the pointer marks, the
+/// Hero routes its own chapter Workspace, and there is no play-next.
 struct AudiobooksKeys<'a> {
     state: &'a LibraryState,
 }
@@ -55,7 +55,6 @@ struct AudiobooksKeys<'a> {
 impl PanelKeys for AudiobooksKeys<'_> {
     type Frame = AudiobooksFrame;
     type Item = AudiobooksItemRow;
-    type Pill = ();
 
     fn frame(&self) -> Option<AudiobooksFrame> {
         AudiobooksFrame::carry(self.state)
@@ -71,21 +70,23 @@ impl PanelKeys for AudiobooksKeys<'_> {
         library_audiobooks_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn cursor_row(&self) -> Option<AudiobooksItemRow> {
-        self.state
-            .audiobooks_cursor_row()
-            .and_then(|row| match row {
-                AudiobooksListRow::Item(item) => Some(item),
-                AudiobooksListRow::Heading { .. } => None,
-            })
+    fn row(&self, pointer: &PointerTarget) -> Option<AudiobooksItemRow> {
+        if pointer.list != Some(PointerList::Audiobooks) {
+            return None;
+        }
+        self.state.audiobooks_row_at(pointer.row.as_deref()?)
     }
 
     fn item_id(&self, item: &AudiobooksItemRow) -> Option<String> {
         Some(item.row.id.clone())
     }
 
-    fn move_list_cursor(&self, mv: ListMove) {
-        self.state.move_audiobooks_list_cursor(mv);
+    fn move_list(&self, mv: ListMove, pointer: &PointerTarget) -> bool {
+        if pointer.list != Some(PointerList::Audiobooks) {
+            return false;
+        }
+        self.state.step_audiobooks_scroll(mv);
+        true
     }
 
     fn play_item(&self, item_id: &str) {
@@ -96,27 +97,48 @@ impl PanelKeys for AudiobooksKeys<'_> {
         self.state.queue_audiobooks_row(item_id);
     }
 
-    fn route_hero(&self, key: &DomKey, frame: &AudiobooksFrame) -> Option<KeyOutcome> {
-        Some(route_workspace_key(self.state, key, frame.lib_idx))
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        frame: &AudiobooksFrame,
+        pointer: &PointerTarget,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        Some(route_workspace_key(
+            self.state,
+            key,
+            frame.lib_idx,
+            pointer,
+            target,
+        ))
     }
 }
 
-/// Route a key to the Hero's chapter Workspace (row 9.1): the movement keys
-/// move the chapter cursor, Enter plays or seeks from the chapter, and `a`
-/// queues the selected book. `n` is consumed and does nothing, because books
-/// have no play-next.
-fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> KeyOutcome {
+/// Route a key to the Hero's chapter Workspace (row 9.1): Enter plays or seeks
+/// from the chapter the pointer marks, and `a` queues the selected book. No
+/// movement key moves a row, because the Workspace keeps no cursor; `n` is
+/// consumed and does nothing, because books have no play-next.
+fn route_workspace_key(
+    state: &LibraryState,
+    key: &DomKey,
+    lib_idx: usize,
+    pointer: &PointerTarget,
+    target: KeyTarget,
+) -> KeyOutcome {
     let detail_section = state.sections.library_detail.peek();
     let Some(detail) = library_audiobooks_detail(detail_section.as_deref()) else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
-    if let Some(mv) = cursor_move(&key.key) {
-        move_abs_chapter_cursor(state, mv, detail);
-        return KeyOutcome::Handled;
-    }
     match key.key.as_str() {
         "Enter" => {
-            play_abs_chapter(state, lib_idx, detail);
+            let chapter = pointer
+                .row
+                .as_deref()
+                .and_then(|row| abs_chapter_at(detail, row))
+                .map(|row| row.chapter);
+            if let Some(chapter) = chapter {
+                play_abs_chapter(state, lib_idx, detail, chapter);
+            }
             KeyOutcome::Handled
         }
         "a" => {
@@ -125,17 +147,20 @@ fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> Ke
         }
         "n" => KeyOutcome::Handled,
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 
 /// Route a key to the Audiobooks keys (row 9.1): the shared handler over the
-/// Audiobooks facts. Enter on the book list's cursor plays the book it rests
-/// on — which the Owner replaces the queue with at the book's saved
-/// position.
+/// Audiobooks facts. Enter on the book list's hovered book plays it — which the
+/// Owner replaces the queue with at the book's saved position.
 #[must_use]
-pub fn route_audiobooks_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &AudiobooksKeys { state })
+pub fn route_audiobooks_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+) -> KeyOutcome {
+    route_panel_list_key(key, state, &AudiobooksKeys { state }, pointer)
 }
 
 #[cfg(test)]

@@ -50,14 +50,6 @@ pub fn LibraryPodcastsPills(props: LibraryPodcastsPillsProps) -> Element {
         })
         .collect();
 
-    // The key of the pill the keys' focus holds, or `None` while no pill has
-    // it (design D6): the pill's paint key over the state's pill object.
-    let focused = library
-        .podcasts_ui
-        .cloned()
-        .focused_pill
-        .map(|pill| podcast_pill_key(&pill));
-
     // Press a pill: select its view (row 10.1).
     let press_library = library.clone();
     let carried_pills = props.pills.clone();
@@ -78,7 +70,6 @@ pub fn LibraryPodcastsPills(props: LibraryPodcastsPillsProps) -> Element {
 
     library_pills_bound(
         pills,
-        focused,
         "Podcasts views",
         Some("podcasts"),
         on_press,

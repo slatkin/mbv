@@ -1,7 +1,8 @@
 //! Headless tests of the Home list's interaction state (D16): the contracts
-//! of `home.test.ts` — the cursor's settle selects the row it rests on
-//! through the select command with the row's opaque identity, and the scroll
-//! and measure reports keep the offset inside the list's range. The harness
+//! of `home.test.ts` — a press selects the row it rests on through the select
+//! command with the row's opaque identity, the keys scroll the list, and the
+//! scroll and measure reports keep the offset inside the list's range. The
+//! harness
 //! builds a `DioxusDocument` whose root creates the store and runs the
 //! scenario in one effect over a recording core link, so no test opens a
 //! window or sleeps, and the carried content is mock data: no IPC runs.
@@ -23,7 +24,7 @@ use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::home_list::{HOME_ITEM_ROW_HEIGHT, build_home_rows, home_row_key};
+use crate::window::library::home_list::{HOME_ITEM_ROW_HEIGHT, build_home_rows};
 use crate::window::library::list::{GeometryRow, ListMove};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
@@ -167,54 +168,36 @@ fn carry_home(state: &LibraryState) {
     sections.apply_batch(&batch);
 }
 
-/// The cursor key of the carried `Continue watching` row.
-fn continued_key() -> String {
-    home_row_key(&continued().id)
-}
-
-/// The cursor key of the carried `Recently added` row.
-fn added_key() -> String {
-    home_row_key(&added().id)
-}
-
 /// The Home interaction state's facts, as the assertions read them.
 fn home_facts(state: &LibraryState) -> String {
-    let ui = state.home_ui.peek().clone();
     let scroll = *state.scrolls.home.peek();
-    format!("cursor={:?} top={}", ui.cursor, scroll.scroll_top)
+    format!("top={}", scroll.scroll_top)
 }
 
-// A cursor move that settles on a row selects it by its opaque id.
+// The movement keys scroll the list by one row (design D6): the step is the
+// height of the row at the top edge, and no row is selected.
 #[test]
-fn a_cursor_move_that_settles_on_a_row_selects_it_by_its_opaque_id() {
-    let (facts, rx) = run(|state, facts| {
-        carry_home(state);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(continued_key()));
-
-        state.move_home_list_cursor(ListMove::Down);
-
-        facts.lock().expect("facts").push(home_facts(state));
-    });
-    assert_eq!(facts, [format!("cursor=Some(\"{}\") top=0", added_key())]);
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::HomeSelect {
-            row: mbv::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned())),
-        }]
-    );
-}
-
-// A cursor move past a section scrolls the row into view.
-#[test]
-fn a_cursor_move_past_a_section_scrolls_the_row_into_view() {
+fn down_scrolls_the_list_by_the_height_of_the_top_row() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
         state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 3.0);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(continued_key()));
 
-        state.move_home_list_cursor(ListMove::End);
+        state.step_home_scroll(ListMove::Down);
+
+        facts.lock().expect("facts").push(home_facts(state));
+    });
+    assert_eq!(facts, ["top=28"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// End scrolls to the list's last screenful (design D6), inside the range.
+#[test]
+fn end_scrolls_to_the_lists_last_screenful() {
+    let (facts, rx) = run(|state, facts| {
+        carry_home(state);
+        state.measure_home_list(HOME_ITEM_ROW_HEIGHT * 3.0);
+
+        state.step_home_scroll(ListMove::End);
 
         facts.lock().expect("facts").push(home_facts(state));
     });
@@ -232,21 +215,15 @@ fn a_cursor_move_past_a_section_scrolls_the_row_into_view() {
         ],
         "",
     );
-    let added_row = painted
+    let bottom = painted
         .iter()
-        .find(|row| row.id() == added_key())
-        .expect("the carried row paints");
-    let expected = added_row.top() + added_row.height() - HOME_ITEM_ROW_HEIGHT * 3.0;
+        .map(|row| GeometryRow::top(row) + GeometryRow::height(row))
+        .fold(0.0_f32, f32::max);
     assert_eq!(
         facts,
-        [format!("cursor=Some(\"{}\") top={}", added_key(), expected)]
+        [format!("top={}", bottom - HOME_ITEM_ROW_HEIGHT * 3.0)]
     );
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::HomeSelect {
-            row: mbv::GuiHomeRowId::Recent(QueueItemContentId::Feed("f1".to_owned())),
-        }]
-    );
+    assert_eq!(commands(&rx), []);
 }
 
 // The press is the selection's half only (design D12): it selects, and Enter
@@ -264,6 +241,6 @@ fn a_press_on_a_heading_selects_nothing() {
 
         facts.lock().expect("facts").push(home_facts(state));
     });
-    assert_eq!(facts, ["cursor=None top=0"]);
+    assert_eq!(facts, ["top=0"]);
     assert_eq!(commands(&rx), []);
 }

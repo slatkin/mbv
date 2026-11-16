@@ -38,7 +38,6 @@ impl CoreThread {
     pub(super) fn reset_gui_ui_state(&mut self) {
         // Step 1: abandon the saved launch restore, then Home.
         self.launch_restore = GuiLaunchRestore::Done;
-        self.launch_focus_taken = false;
         self.app.reset_gui_ui_state();
         // Step 3's core half: the Queue Surface's cursor, marks, and viewport.
         // The queue's contents and the viewed link stay.

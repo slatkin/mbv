@@ -41,10 +41,6 @@ pub struct LibraryPillRowProps {
     pub aria_label: &'static str,
     /// The pills in painted order.
     pub pills: Vec<LibraryPill>,
-    /// The pill the keys' focus holds, which paints the accent outline
-    /// (design D6), or `None` while no pill has it.
-    #[props(default)]
-    pub focused: Option<String>,
     /// The destination's own pill attribute suffix, or `None` where the
     /// shared `data-library-pill` is enough.
     #[props(default)]
@@ -58,20 +54,14 @@ impl std::fmt::Debug for LibraryPillRowProps {
         f.debug_struct("LibraryPillRowProps")
             .field("aria_label", &self.aria_label)
             .field("pills", &self.pills)
-            .field("focused", &self.focused)
             .field("pill_attr", &self.pill_attr)
             .finish_non_exhaustive()
     }
 }
 
-/// The destination's own pill attributes for one pill: the per-tab hook beside the shared pill hook, and the focused
-/// mark only while the keys' focus holds the pill.
-fn pill_attrs(
-    pill_attr: Option<&'static str>,
-    pill: &LibraryPill,
-    focused: Option<&str>,
-) -> Vec<Attribute> {
-    let is_focused = focused == Some(pill.key.as_str());
+/// The destination's own pill attributes for one pill: the per-tab hook beside
+/// the shared pill hook.
+fn pill_attrs(pill_attr: Option<&'static str>, pill: &LibraryPill) -> Vec<Attribute> {
     let mut attrs = Vec::new();
     if let Some(attr) = pill_attr {
         attrs.push(Attribute::new(
@@ -87,29 +77,20 @@ fn pill_attrs(
         None,
         false,
     ));
-    if is_focused {
-        attrs.push(Attribute::new(
-            library_attr("", "pill-focused"),
-            "",
-            None,
-            false,
-        ));
-    }
     attrs
 }
 
 /// One destination's pill row, bound to that destination's commands (design D6, D12): the pills it
-/// paints, the key its keys' focus holds, the row's accessible name and its own attribute, the press
-/// its command answers, and the keys' pill request its apply step consumes. A destination's
-/// component narrows its own carried pills and names its own command; this function owns the row and
-/// the request's effect, so the five pill rows cannot drift.
+/// paints, the row's accessible name and its own attribute, the press its command answers, and the
+/// pill request its apply step consumes. A destination's component narrows its own carried pills and
+/// names its own command; this function owns the row and the request's effect, so the five pill rows
+/// cannot drift.
 ///
 /// The effect attaches to the calling destination's scope, as
 /// [`library_virtual_list`](crate::window::components::library_virtual_list::library_virtual_list)'s
 /// effects do, so a destination calls this exactly once per render.
 pub fn library_pills_bound<T, A>(
     pills: Vec<LibraryPill>,
-    focused: Option<String>,
     aria_label: &'static str,
     pill_attr: Option<&'static str>,
     onpress: Callback<String>,
@@ -133,7 +114,6 @@ where
         LibraryPillRow {
             aria_label,
             pills,
-            focused,
             pill_attr,
             onpress,
         }
@@ -145,7 +125,6 @@ where
 #[component]
 pub fn LibraryPillRow(props: LibraryPillRowProps) -> Element {
     let pill_attr = props.pill_attr;
-    let focused = props.focused.clone();
     let on_press = props.onpress;
 
     rsx! {
@@ -158,14 +137,13 @@ pub fn LibraryPillRow(props: LibraryPillRowProps) -> Element {
             for pill in props.pills.iter() {
                 {
                     let key = pill.key.clone();
-                    let attrs = pill_attrs(pill_attr, pill, focused.as_deref());
+                    let attrs = pill_attrs(pill_attr, pill);
                     let selected = pill.selected;
                     let name = pill.name.clone();
                     rsx! {
                         LibraryPillButton {
                             name: name,
                             selected: selected,
-                            focused: focused.as_deref() == Some(key.as_str()),
                             attrs: attrs,
                             onpress: move |()| on_press.call(key.clone()),
                         }

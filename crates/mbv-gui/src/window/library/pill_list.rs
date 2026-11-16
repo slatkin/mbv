@@ -1,279 +1,44 @@
-//! The list controller every Library destination shares (`add-gui-library-panel`
-//! row 7C.1, the port of `lib/library/pill-list.ts`, issue #1009): the
-//! interaction state the window content owns and the core never reads — the
-//! cursor, the pill row's focus, and the `/` filter's text — plus the actions
-//! over it. The scroll offset and the measured viewport live in the list's
-//! scroll store ([`super::scroll`], design D9), which the caller names. The
-//! core owns the pill selection and the selected row (the frame's `pills` and
-//! `selected`), so nothing here mirrors them: a press sends the select
-//! command, and the frame carries the choice back. The panel's pane focus and
-//! the Hero overlay stay in [`super::state`]'s shared store.
+//! The state every pill-list Library destination shares (`add-gui-library-panel`
+//! row 7C.1, the port of `lib/library/pill-list.ts`, issue #1009): what the
+//! window content owns and the core never reads — the `/` filter's text and the
+//! pill selection a press asked for. The scroll offset and the measured viewport
+//! live in the list's scroll store ([`super::scroll`], design D9), which the
+//! caller names. The core owns the pill selection and the selected row (the
+//! frame's `pills` and `selected`), so nothing here mirrors them: a press sends
+//! the select command, and the frame carries the choice back. The Hero overlay
+//! stays in [`super::state`]'s shared store.
 //!
-//! Each destination's module keeps its own doc, its own command shapes, its
-//! own names, and its own extras — Emby's letter rail and play-next, Home's
-//! select-on-settle — over this one controller, so a filter change, a cursor
-//! move, a measure, a scroll, and a pill walk resolve the same way on every
-//! one of them and the destinations cannot drift. A destination names its UI
-//! signal, its scroll store, its painted rows, and its cursor movement in a
-//! [`ListControl`]; the command shapes stay in its module.
-
-use std::sync::Arc;
+//! The destinations keep no keyboard cursor: their keys act on the row the
+//! pointer marks (`gui-pointer-target-interaction` D2, D6), so this state holds
+//! no cursor either. Each destination's module keeps its own doc, its own
+//! command shapes, its own names, and its own extras — Emby's letter rail and
+//! play-next, the Podcasts and Feeds pill rows — over this one state, so a
+//! filter change lands the same way on every one of them.
 
 use dioxus_native::prelude::*;
 
-use crate::window::library::list::{
-    GeometryRow, ListMove, clamp_scroll_top, list_window, scroll_top_to_show_cursor,
-    step_pill_focus,
-};
-use crate::window::library::scroll::ListScroll;
-
-use super::state::{LibraryState, LibraryUiState};
-
-/// A destination list's interaction state that the shared controller reads
-/// and writes: the cursor and the `/` filter's text (design D12).
-pub trait ListUi: Clone + 'static {
-    /// The cursor's row id, or `None` while no row carries the cursor.
-    fn cursor(&self) -> Option<&str>;
-    /// Set the cursor's row id.
-    fn set_cursor(&mut self, cursor: Option<String>);
-    /// Set the `/` filter's text.
-    fn set_filter(&mut self, filter: String);
-}
-
-/// An interaction state with a pill row whose focus the shared pill walk
-/// moves (design D6, D12): the pill itself or its stable key — the
-/// destination picks.
-pub trait PillFocusUi: Clone + 'static {
-    /// The focus value the pill row holds.
-    type Focus: Clone;
-    /// The focused pill, or `None` while no pill has the focus.
-    fn focused_pill(&self) -> Option<&Self::Focus>;
-    /// Set the focused pill.
-    fn set_focused_pill(&mut self, focus: Self::Focus);
-}
+use super::state::LibraryState;
 
 /// A pill-list destination's interaction state (design D12): what the window
 /// content owns and the core never reads.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PillListUiState<Pill, Focus = Pill> {
-    /// The cursor's row id, or `None` while no row carries the cursor
-    /// (design D12). The cursor moves over the item rows only.
-    pub cursor: Option<String>,
-    /// The pill the pill row's Left and Right move the focus to, or `None`
-    /// while no pill has it (design D6, D12): the pill itself, or its stable
-    /// key — the destination picks.
-    pub focused_pill: Option<Focus>,
-    /// The pill selection the keys asked for: Space and Enter select the
-    /// focused pill, and the pill row turns it into the set-pill command.
+pub struct PillListUiState<Pill> {
+    /// The pill selection a press asked for, and the pill row turns it into
+    /// the set-pill command.
     pub pill_select: Option<Pill>,
     /// The `/` filter's text: the list paints only the rows whose title
     /// contains it, without case (design D7's filter rule).
     pub filter: String,
 }
 
-impl<Pill, Focus> PillListUiState<Pill, Focus> {
+impl<Pill> PillListUiState<Pill> {
     /// The state a freshly mounted pill list starts with.
     #[must_use]
     pub fn initial() -> Self {
         Self {
-            cursor: None,
-            focused_pill: None,
             pill_select: None,
             filter: String::new(),
         }
-    }
-}
-
-impl<Pill: Clone + 'static, Focus: Clone + 'static> ListUi for PillListUiState<Pill, Focus> {
-    fn cursor(&self) -> Option<&str> {
-        self.cursor.as_deref()
-    }
-
-    fn set_cursor(&mut self, cursor: Option<String>) {
-        self.cursor = cursor;
-    }
-
-    fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
-    }
-}
-
-impl<Pill: Clone + 'static, Focus: Clone + 'static> PillFocusUi for PillListUiState<Pill, Focus> {
-    type Focus = Focus;
-
-    fn focused_pill(&self) -> Option<&Focus> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: Focus) {
-        self.focused_pill = Some(focus);
-    }
-}
-
-impl PillFocusUi for LibraryUiState {
-    type Focus = String;
-
-    fn focused_pill(&self) -> Option<&String> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: String) {
-        self.focused_pill = Some(focus);
-    }
-}
-
-/// A destination's cursor movement over its own rows: the rows, the cursor,
-/// the movement, and the rows in view give the cursor's new row id.
-pub(super) type CursorMove<Row> = fn(&[Row], Option<&str>, ListMove, usize) -> Option<String>;
-
-/// One destination list under the shared controller: its interaction state,
-/// its scroll store, its painted rows (read fresh, because a filter change
-/// narrows them), and its cursor movement.
-pub(super) struct ListControl<Ui: 'static, Row, Rows> {
-    /// The destination's interaction state.
-    pub ui: Signal<Ui>,
-    /// The destination's scroll store.
-    pub scroll: Signal<ListScroll>,
-    /// The destination's painted rows under the current interaction state.
-    pub rows: Rows,
-    /// The destination's cursor movement.
-    pub move_over: CursorMove<Row>,
-}
-
-impl<Ui, Row, Rows> ListControl<Ui, Row, Rows>
-where
-    Ui: ListUi,
-    Row: GeometryRow,
-    Rows: Fn() -> Arc<[Row]>,
-{
-    /// Scroll the list so the cursor's row paints fully, in the scroll store
-    /// (design D12, D9).
-    fn follow_cursor(&self, rows: &[Row], cursor: Option<&str>) {
-        let held = *self.scroll.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                held.scroll_top,
-                held.viewport_height,
-            ),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut scroll = self.scroll;
-            scroll.set(shown);
-        }
-    }
-
-    /// Settle the cursor once the painted rows may have narrowed (design
-    /// D12): the cursor keeps its row while that row still paints, and falls
-    /// to the first painted row otherwise. The scroll store then shows the
-    /// cursor — the Music filter's own resolve (design D7).
-    pub fn settle_cursor(&self) {
-        let held = self.ui.peek().cursor().map(str::to_owned);
-        let rows = (self.rows)();
-        let kept = held
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id() == cursor));
-        let cursor = if kept {
-            held.clone()
-        } else {
-            (self.move_over)(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != held {
-            let mut ui = self.ui;
-            ui.with_mut(|current| current.set_cursor(cursor.clone()));
-        }
-        self.follow_cursor(&rows, cursor.as_deref());
-    }
-
-    /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
-    pub fn set_filter(&self, filter: String) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.set_filter(filter));
-        self.settle_cursor();
-    }
-
-    /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows. `panel` is the panel's shared store, which holds the field's
-    /// open flag.
-    pub fn close_filter(&self, panel: Signal<LibraryUiState>) {
-        let mut panel = panel;
-        panel.with_mut(|ui| ui.filter_open = false);
-        self.set_filter(String::new());
-    }
-
-    /// Move the list's cursor one movement along (design D12): Up and Down
-    /// move a row, Page Up and Page Down move the rows in view, and Home and
-    /// End take the list's ends. The scroll offset follows, so the cursor row
-    /// stays fully visible. Returns whether the cursor moved.
-    pub fn move_cursor(&self, mv: ListMove) -> bool {
-        let held = self.ui.peek().cursor().map(str::to_owned);
-        let rows = (self.rows)();
-        let scroll = *self.scroll.peek();
-        let view = list_window(&rows, scroll.scroll_top, scroll.viewport_height);
-        let cursor = (self.move_over)(&rows, held.as_deref(), mv, view.end - view.start);
-        if cursor == held {
-            return false;
-        }
-        let mut ui = self.ui;
-        ui.with_mut(|current| current.set_cursor(cursor.clone()));
-        self.follow_cursor(&rows, cursor.as_deref());
-        true
-    }
-
-    /// Report the list's measured viewport height (design D12): the rows in
-    /// view follow it, and the scroll offset stays inside the narrower range.
-    pub fn measure(&self, viewport_height: f32) {
-        let rows = (self.rows)();
-        let held = *self.scroll.peek();
-        let shown = ListScroll {
-            viewport_height,
-            scroll_top: clamp_scroll_top(&rows, held.scroll_top, viewport_height),
-        };
-        if shown != held {
-            let mut scroll = self.scroll;
-            scroll.set(shown);
-        }
-    }
-
-    /// Report the list's native scroll offset (design D12): a user scroll
-    /// moves the rows in view, and the offset stays inside the list's range.
-    pub fn scroll_to(&self, scroll_top: f32) {
-        let rows = (self.rows)();
-        let held = *self.scroll.peek();
-        let shown = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if shown != held {
-            let mut scroll = self.scroll;
-            scroll.set(shown);
-        }
-    }
-}
-
-/// Move the focused pill one pill along the row (design D12): Right and Left
-/// walk the pills, and the first of them with no pill focused takes the end it
-/// walks from. `key_of` names a pill's stable key, `focus_key` the stored
-/// focus's key — every carried frame is a fresh deserialization, so the walk
-/// runs over the keys, never an object identity (row 10.1 review P2).
-/// `focus_of` is the focus value a pill leaves in the state.
-pub fn move_pill_focus<Ui: PillFocusUi, Pill: Clone>(
-    ui: Signal<Ui>,
-    pills: &[Pill],
-    key_of: impl Fn(&Pill) -> String,
-    focus_of: impl Fn(&Pill) -> Ui::Focus,
-    focus_key: impl Fn(&Ui::Focus) -> String,
-    step: i32,
-) {
-    let focused_key = ui.peek().focused_pill().map(focus_key);
-    let moved = step_pill_focus(pills, focused_key.as_deref(), key_of, step);
-    if let Some(pill) = moved {
-        let mut ui = ui;
-        ui.with_mut(|state| state.set_focused_pill(focus_of(&pill)));
     }
 }
 

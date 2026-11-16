@@ -1,8 +1,7 @@
 //! Headless tests of the book list's interaction state (D16): the contracts
 //! of `audiobooks.test.ts` — a press selects the book the Hero shows, the
 //! play path and a queue send their commands with the book's stable
-//! `library_item_id`, and a rail jump puts the cursor on the letter's first
-//! book. The harness builds a `DioxusDocument` whose root creates the store
+//! `library_item_id`, and a rail jump scrolls to the letter's first book. The harness builds a `DioxusDocument` whose root creates the store
 //! and runs each scenario in one effect over a recording core link, so no
 //! test opens a window or sleeps, and no IPC runs.
 
@@ -12,7 +11,6 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
@@ -146,8 +144,8 @@ fn audiobooks_content(selected: Option<&str>) -> (GuiLibraryList, GuiLibraryDeta
     (list, detail)
 }
 
-/// Carry the content and paint the list's cursor at `cursor`.
-fn carry(state: &LibraryState, selected: Option<&str>, cursor: Option<&str>) {
+/// Carry the content with `selected` picked.
+fn carry(state: &LibraryState, selected: Option<&str>) {
     let (list, detail) = audiobooks_content(selected);
     let batch = GuiSectionBatch {
         library_list: Some(GuiSection {
@@ -162,18 +160,13 @@ fn carry(state: &LibraryState, selected: Option<&str>, cursor: Option<&str>) {
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
     let mut ui = state.ui;
     ui.with_mut(|ui| {
         ui.hero_dismissed = true;
         ui.item_menu_open = true;
     });
     let mut audiobooks_ui = state.audiobooks_ui;
-    audiobooks_ui.with_mut(|ui| {
-        ui.cursor = cursor.map(str::to_owned);
-        ui.filter.clear();
-    });
+    audiobooks_ui.with_mut(|ui| ui.filter.clear());
 }
 
 /// The interaction facts the assertions read.
@@ -181,8 +174,17 @@ fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let audiobooks = state.audiobooks_ui.peek().clone();
     format!(
-        "cursor={:?} dismissed={} item_menu_open={} filter={:?}",
-        audiobooks.cursor, ui.hero_dismissed, ui.item_menu_open, audiobooks.filter,
+        "dismissed={} item_menu_open={} filter={:?}",
+        ui.hero_dismissed, ui.item_menu_open, audiobooks.filter,
+    )
+}
+
+/// The list's scroll facts the assertions read.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.audiobooks.peek();
+    format!(
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
     )
 }
 
@@ -196,7 +198,7 @@ fn painted_rows(state: &LibraryState) -> Arc<[AudiobooksListRow]> {
 #[test]
 fn a_press_selects_the_book_and_repaints_the_hero_overlay() {
     let (_facts, rx) = run(|state, _facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
         let row = painted_rows(state)
             .iter()
             .find(|row| matches!(row, AudiobooksListRow::Item(item) if item.row.id == "b3"))
@@ -218,7 +220,7 @@ fn a_press_selects_the_book_and_repaints_the_hero_overlay() {
 #[test]
 fn a_press_on_a_heading_selects_nothing() {
     let (_facts, rx) = run(|state, _facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
         let heading = painted_rows(state)[0].clone();
 
         state.press_audiobooks_row(&heading);
@@ -230,7 +232,7 @@ fn a_press_on_a_heading_selects_nothing() {
 #[test]
 fn a_press_repaints_the_hero_overlay_and_closes_an_open_item_menu() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
         let row = painted_rows(state)[1].clone();
 
         state.press_audiobooks_row(&row);
@@ -251,7 +253,7 @@ fn a_press_repaints_the_hero_overlay_and_closes_an_open_item_menu() {
 #[test]
 fn playing_a_book_sends_abs_play_with_its_id() {
     let (_facts, rx) = run(|state, _facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
 
         state.play_audiobooks_row("b2");
     });
@@ -268,7 +270,7 @@ fn playing_a_book_sends_abs_play_with_its_id() {
 #[test]
 fn queueing_a_book_sends_abs_queue_with_its_id() {
     let (_facts, rx) = run(|state, _facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
 
         state.queue_audiobooks_row("b3");
     });
@@ -281,15 +283,18 @@ fn queueing_a_book_sends_abs_queue_with_its_id() {
     );
 }
 
-// A rail jump puts the cursor on the letter's first book.
+// A rail jump scrolls the list to the letter's first book (design D7).
 #[test]
-fn a_rail_jump_puts_the_cursor_on_the_letter_first_book() {
+fn a_rail_jump_scrolls_to_the_letter_first_book() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b1"), None);
+        carry(state, Some("b1"));
+        state.measure_audiobooks_list(40.0);
 
         state.jump_audiobooks_to_letter('B');
-        facts.lock().expect("facts").push(ui_facts(state));
+        facts.lock().expect("facts").push(scroll_facts(state));
     });
-    assert!(facts[0].contains("cursor=Some(\"b3\")"));
+    // `B`'s heading and the `A` heading with its two books cover 128 px
+    // before `B`'s first book.
+    assert_eq!(facts[0], "top=128 viewport=40");
     assert_eq!(commands(&rx), []);
 }

@@ -17,6 +17,7 @@ use super::{
     KeyOutcome, KeyRoute, dom_cancel, dom_pointer, dom_wheel, forward_every_key, on_blur,
     on_keydown, on_pointer, on_pointer_cancel,
 };
+use crate::bridge::keys::KeyTarget;
 use crate::bridge::pointer::DomPointerKind;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -269,9 +270,10 @@ fn a_keydown_forwards_the_dom_fields_to_the_core() {
         &link,
     );
 
-    let CoreInput::Key(event) = one_input(&receiver) else {
+    let CoreInput::Key { key: event, target } = one_input(&receiver) else {
         panic!("the key reached the core as a key")
     };
+    assert_eq!(target, KeyTarget::None, "no Queue target was resolved");
     assert_eq!(event.code, NeutralKey::Char('n'));
     assert!(event.modifiers.contains(KeyModifiers::SHIFT));
     assert!(event.modifiers.contains(KeyModifiers::ALT));

@@ -321,6 +321,10 @@ fn the_line_paints_the_canvas_footer_band() {
     let mut fixture = built();
     fixture.show(footer_frame(), idle_status());
 
+    assert!(
+        fixture.presents("[data-pointer-zone=\"queue\"]"),
+        "the band carries the Queue zone marker (`gui-pointer-target-interaction` 3.3)"
+    );
     let line = fixture.style_of("[data-footer-line]");
     assert!(line.contains("height: 40px"), "{line}");
     assert!(line.contains("padding-inline: 16px"), "{line}");

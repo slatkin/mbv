@@ -25,18 +25,6 @@ use crate::sections::{DrainHook, marks_for_hook};
 /// cache holds the server's sheet bytes unchanged.
 const TRICKPLAY_SHEET_MIME: &str = "image/jpeg";
 
-/// The Panel a Library command moves focus to (design D4): the two take-focus
-/// commands move it on the core's `FocusStack` too, so the window's focus and
-/// the App's key gates agree. Every other command moves no focus — a
-/// documented no-op, not a hidden one.
-fn focus_target(command: &mbv::GuiLibraryCommand) -> Option<PanelFocus> {
-    match command {
-        mbv::GuiLibraryCommand::TakeFocus => Some(PanelFocus::Library),
-        mbv::GuiLibraryCommand::TakeQueueFocus => Some(PanelFocus::Queue),
-        _ => None,
-    }
-}
-
 /// Whether a pointer event marks the gated sections (design D3 rule 1): a
 /// press or a right press. A gesture resolves on its press, and an outside
 /// press dismisses an open overlay whether or not it lands on a region, so
@@ -324,13 +312,15 @@ impl ClientTickHost for CoreThread {
         for input in routed {
             match input {
                 CoreInput::Wake => outcome.input_received = true,
-                CoreInput::Key(key) => {
+                CoreInput::Key { key, target } => {
                     // The chord routes through `App::route_gui_input` with
-                    // the focused surface as the leaf (design D4); a routed
-                    // quit ends the run.
+                    // the focused surface as the leaf (design D4), after the
+                    // Panel-focus adapter sets that surface from the key's
+                    // target (design D3 of `gui-pointer-target-interaction`);
+                    // a routed quit ends the run.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    if self.route_key(key) {
+                    if self.route_key(key, target) {
                         outcome.quit_requested = true;
                     }
                 }
@@ -350,21 +340,15 @@ impl ClientTickHost for CoreThread {
                 }
                 CoreInput::Library(command) => {
                     // The Library panel's request (add-gui-library-panel design
-                    // D2): the App applies the semantic intent, and the
-                    // take-focus variants then move the core's `FocusStack`
-                    // with the App's stored focus (design D4), so the window
-                    // and the App's key gates agree.
+                    // D2): the App applies the semantic intent. The Panel-focus
+                    // adapter sets the Library focus first (design D3 of
+                    // `gui-pointer-target-interaction`): only the Library
+                    // column can ask for these commands, and the item menu's
+                    // Library gate then holds for the menu it asks for.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    let focus_target = focus_target(&command);
+                    self.apply_panel_focus(PanelFocus::Library);
                     self.app.apply_gui_library_command(command);
-                    if let Some(panel) = focus_target {
-                        // The take-focus may run in the pre-catalog window
-                        // (design D9): the restore then leaves the taken
-                        // focus alone.
-                        self.note_launch_focus_taken();
-                        self.focus.set_panel_focus(panel);
-                    }
                 }
                 CoreInput::Settings(command) => {
                     // The Settings screen's request (`add-gui-settings-screen`

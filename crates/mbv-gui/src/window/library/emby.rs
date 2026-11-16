@@ -1,39 +1,41 @@
 //! The plain Emby-library destination's interaction state
 //! (`add-gui-library-panel` design D12, row 8.1, the port of
 //! `lib/library/emby.ts`): what the window content owns and the core never
-//! reads — the cursor and the feed-group pill row's focus. The scroll offset
-//! and the measured viewport live in the Emby list's scroll store
-//! ([`super::scroll`], design D9). The core owns the selected row and the
-//! feed-group selection (the frame's `selected` and `pills`), so nothing here
-//! mirrors them: a press and an Enter send the command, and the frame carries
-//! the choice back. The row model is [`super::emby_list`]'s; the panel's pane
-//! focus and the Hero overlay stay in [`super::state`]'s shared store, and the
-//! Hero carries no Workspace and no cursor of its own.
+//! reads — the `/` filter's text. The scroll offset and the measured viewport
+//! live in the Emby list's scroll store ([`super::scroll`], design D9). The core
+//! owns the selected row and the feed-group selection (the frame's `selected`
+//! and `pills`), so nothing here mirrors them: a press and an Enter send the
+//! command, and the frame carries the choice back. The row model is
+//! [`super::emby_list`]'s; the Hero overlay stays in [`super::state`]'s shared
+//! store, and the Hero carries no Workspace and no cursor of its own.
 //!
-//! The state, the filter, the cursor, the scroll store, and the pill focus are
-//! the pill-list controller's ([`super::pill_list`], row 7C.1); this module
-//! keeps the Emby frame, the Emby rows and their letter headings, the letter
-//! rail, the play-next command, the Emby command shapes, and the Emby names.
+//! The list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
+//! list (design D6).
+//!
+//! The state, the filter, and the scroll store are the pill-list controller's
+//! ([`super::pill_list`], row 7C.1); this module keeps the Emby frame, the Emby
+//! rows and their letter headings, the letter rail, the play-next command, the
+//! Emby command shapes, and the Emby names.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiEmbyFeedGroupFrame, GuiEmbyList};
+use crate::bridge::frame::library::GuiEmbyFeedGroupFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::emby_list::{
-    EmbyItemRow, EmbyListRow, emby_group_key, emby_letter_rail, move_emby_cursor,
-};
-use crate::window::library::list::{ListMove, jump_to_letter};
+use crate::window::library::emby_list::{EmbyItemRow, EmbyListRow, emby_letter_rail};
+use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_emby_list;
 
-use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
+use super::pill_list::PillListUiState;
+use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Emby list's interaction state: the shared pill-list state over the
 /// feed-group pill, whose focus the pill row keeps as the group's stable key
 /// (`embyGroupKey`) rather than the group itself (design D6, row 8.1).
-pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame, String>;
+pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame>;
 
 /// The state a freshly mounted Emby list starts with.
 #[must_use]
@@ -66,41 +68,36 @@ impl LibraryState {
             .rows(revision, frame.feed_group, &frame.rows, &filter)
     }
 
-    /// The row the Emby cursor rests on, or `None` (row 8.1): the keys read it
-    /// to play the row, play it next, or queue it.
+    /// The row the pointer's marker names (design D1, D2): the marker carries
+    /// the row's own id, so the painted rows resolve it and a stale or foreign
+    /// id names no item. `None` while no painted item row carries the id — a
+    /// letter heading carries none at all.
     #[must_use]
-    pub fn emby_cursor_row(&self) -> Option<EmbyItemRow> {
+    pub fn emby_row_at(&self, row_id: &str) -> Option<EmbyItemRow> {
         let rows = self.emby_rows();
-        let cursor = self.emby_ui.peek().cursor.clone();
         rows.iter().find_map(|row| match row {
-            EmbyListRow::Item(item) if Some(item.id.as_str()) == cursor.as_deref() => {
-                Some(item.clone())
-            }
+            EmbyListRow::Item(item) if item.id == row_id => Some(item.clone()),
             _ => None,
         })
     }
 
-    /// The Emby list under the shared list controller (row 8.1).
-    fn emby_list(
-        &self,
-    ) -> ListControl<EmbyUiState, EmbyListRow, impl Fn() -> Arc<[EmbyListRow]> + '_> {
-        ListControl {
-            ui: self.emby_ui,
-            scroll: self.scrolls.emby,
-            rows: || self.emby_rows(),
-            move_over: move_emby_cursor,
-        }
-    }
-
     /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
+    /// (design D7's filter rule). The filter narrows the rows and selects
+    /// nothing, and the scroll stays inside the narrower list.
     pub fn set_emby_filter(&self, filter: String) {
-        self.emby_list().set_filter(filter);
+        let mut emby_ui = self.emby_ui;
+        emby_ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_emby_scroll();
     }
 
-    /// Close the filter with Esc (design D3, step 2): the text goes with it.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
+    /// a closed filter narrows nothing. The scroll follows the widened rows.
     pub fn close_emby_filter(&self) {
-        self.emby_list().close_filter(self.ui);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut emby_ui = self.emby_ui;
+        emby_ui.with_mut(|ui| ui.filter.clear());
+        self.clamp_emby_scroll();
     }
 
     /// Select the row (row 8.1): the select command the core stores, whose
@@ -133,7 +130,7 @@ impl LibraryState {
         self.select_emby_row(row);
     }
 
-    /// Play a row (row 8.1): Enter on the cursor row, and a double-click's
+    /// Play a row (row 8.1): Enter on the hovered row, and a double-click's
     /// play. Every row is playable, a folder and a boxset included, because
     /// the core's folder-play rule expands a collection row. The row id is the
     /// item's stable Service id.
@@ -147,7 +144,7 @@ impl LibraryState {
         });
     }
 
-    /// Play a row next (row 8.1): `n` on the cursor row.
+    /// Play a row next (row 8.1): `n` on the hovered row.
     pub fn play_emby_row_next(&self, row_id: &str) {
         let Some(lib_idx) = self.emby_lib_idx() else {
             return;
@@ -158,7 +155,7 @@ impl LibraryState {
         });
     }
 
-    /// Add a row to the queue's tail (row 8.1): `a` on the cursor row.
+    /// Add a row to the queue's tail (row 8.1): `a` on the hovered row.
     pub fn queue_emby_row(&self, row_id: &str) {
         let Some(lib_idx) = self.emby_lib_idx() else {
             return;
@@ -169,79 +166,52 @@ impl LibraryState {
         });
     }
 
-    /// Move the list's cursor one movement along (row 8.1): Up and Down move a
-    /// row, Page Up and Page Down move the rows in view, and Home and End take
-    /// the list's ends, stepping over the letter headings. The scroll offset
-    /// follows, so the cursor row stays fully visible.
-    pub fn move_emby_list_cursor(&self, mv: ListMove) {
-        self.emby_list().move_cursor(mv);
+    /// Scroll the list by one movement key (design D6): Up and Down move by the
+    /// height of the row at the top edge, Page Up and Page Down by the viewport
+    /// height, and Home and End go to the list's ends, inside the list's range.
+    pub fn step_emby_scroll(&self, mv: ListMove) {
+        let rows = self.emby_rows();
+        let held = *self.scrolls.emby.peek();
+        set_scroll_top(self.scrolls.emby, &rows, scroll_step(&rows, held, mv));
     }
 
-    /// Jump to a letter of the rail (row 8.1, design D7): the cursor moves to
-    /// the first row under the letter and that row scrolls into view. A letter
-    /// without rows changes nothing.
+    /// Jump to a letter of the rail (row 8.1, design D7): the list scrolls so
+    /// the first row under the letter paints fully. A letter without rows
+    /// changes nothing.
     pub fn jump_emby_to_letter(&self, letter: char) {
         let rows = self.emby_rows();
         let view = *self.scrolls.emby.peek();
-        let Some((cursor, scroll_top)) =
-            jump_to_letter(&emby_letter_rail(&rows), &rows, letter, view)
+        let Some((_, scroll_top)) = jump_to_letter(&emby_letter_rail(&rows), &rows, letter, view)
         else {
             return;
         };
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.cursor = Some(cursor));
-        let mut emby_scroll = self.scrolls.emby;
-        emby_scroll.with_mut(|scroll| scroll.scroll_top = scroll_top);
+        set_scroll_top(self.scrolls.emby, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (row 8.1): the rows in view
     /// follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_emby_list(&self, viewport_height: f32) {
-        self.emby_list().measure(viewport_height);
+        let mut emby = self.scrolls.emby;
+        emby.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_emby_scroll();
     }
 
     /// Report the list's native scroll offset (row 8.1): a user scroll moves
     /// the rows in view, and the offset stays inside the list's range.
     pub fn scroll_emby_list(&self, scroll_top: f32) {
-        self.emby_list().scroll_to(scroll_top);
+        let rows = self.emby_rows();
+        set_scroll_top(self.scrolls.emby, &rows, scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried pills
-    /// so a stale group focuses nothing (row 8.1).
-    #[must_use]
-    pub fn focused_emby_pill<'a>(
-        &self,
-        emby: &'a GuiEmbyList,
-    ) -> Option<&'a GuiEmbyFeedGroupFrame> {
-        let focused = self.emby_ui.peek().focused_pill.clone()?;
-        emby.pills
-            .iter()
-            .map(|pill| &pill.group)
-            .find(|group| emby_group_key(group) == focused)
+    /// Hold the Emby list's scroll offset inside the rows the filter leaves.
+    fn clamp_emby_scroll(&self) {
+        let rows = self.emby_rows();
+        let held = *self.scrolls.emby.peek();
+        set_scroll_top(self.scrolls.emby, &rows, held.scroll_top);
     }
 
-    /// Move the focused pill one pill along the row (row 8.1): Right and Left
-    /// walk the pills, and the first of them with no pill focused takes the end
-    /// it walks from.
-    pub fn move_emby_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(emby) = library_emby_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiEmbyFeedGroupFrame> =
-            emby.pills.iter().map(|pill| pill.group.clone()).collect();
-        move_pill_focus(
-            self.emby_ui,
-            &pills,
-            emby_group_key,
-            emby_group_key,
-            String::clone,
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (row 8.1).
+    /// Ask for a pill to be selected (row 8.1): the pill row turns the request
+    /// into the set-feed-group command.
     pub fn request_emby_pill_select(&self, group: GuiEmbyFeedGroupFrame) {
         let mut emby_ui = self.emby_ui;
         emby_ui.with_mut(|ui| ui.pill_select = Some(group));

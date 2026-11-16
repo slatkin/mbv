@@ -1,14 +1,16 @@
 //! The Shows destination's interaction state (`add-gui-library-panel` design
 //! D14, the port of `lib/library/shows.ts`): what the window content owns and
-//! the core never reads — the cursor, the tree's open and closed nodes, and
-//! the pill row's focus. The scroll offset and the measured viewport live in
-//! the Shows list's scroll store ([`super::scroll`], design D9). The core owns
-//! the view mode and the selection (the frame's `pills` and `selected`), so
-//! nothing here mirrors them: a press and an Enter send the select command,
-//! and the frame carries the selection back. The row model is
-//! [`super::shows_list`]'s; the Hero's episode cursor belongs to the Hero
-//! ([`super::shows_workspace`]), and the panel's pane focus and the Hero
-//! overlay stay in [`super::state`]'s shared store.
+//! the core never reads — the tree's open and closed nodes and the `/` filter's
+//! text. The scroll offset and the measured viewport live in the Shows list's
+//! scroll store ([`super::scroll`], design D9). The core owns the view mode and
+//! the selection (the frame's `pills` and `selected`), so nothing here mirrors
+//! them: a press and an Enter send the select command, and the frame carries the
+//! selection back. The row model is [`super::shows_list`]'s, and the Hero
+//! overlay stays in [`super::state`]'s shared store.
+//!
+//! The list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
+//! list (design D6).
 
 use std::sync::Arc;
 
@@ -16,26 +18,18 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::list::{ListMove, jump_to_letter};
+use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_shows_list;
-use crate::window::library::shows_list::{
-    ShowsListRow, active_shows_mode, move_shows_cursor, shows_letter_rail,
-};
+use crate::window::library::scroll::set_scroll_top;
+use crate::window::library::shows_list::{ShowsListRow, active_shows_mode, shows_letter_rail};
 
-use super::pill_list::{ListControl, ListUi, PillFocusUi, move_pill_focus};
 use super::state::LibraryState;
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShowsUiState {
-    /// The cursor's row id, or `None` while no row carries the cursor
-    /// (design D12). The cursor moves over the item rows only.
-    pub cursor: Option<String>,
-    /// The mode pill the pill row's Left and Right move the focus to, or
-    /// `None` while no pill has it (design D6, D12).
-    pub focused_pill: Option<GuiShowsModeFrame>,
-    /// The mode selection the keys asked for: Space and Enter select the
-    /// focused pill, and the pill row turns it into the set-mode command.
+    /// The mode selection a press asked for, and the pill row turns it into the
+    /// set-mode command.
     pub pill_select: Option<GuiShowsModeFrame>,
     /// The `/` filter's text: the list paints only the rows whose title
     /// contains it, without case (design D7's filter rule, the rail's
@@ -48,32 +42,6 @@ pub struct ShowsUiState {
     /// override the filter's auto-open, so a press still closes a node under a
     /// filter (the Music tree's `closed` rule).
     pub closed: Vec<String>,
-}
-
-impl ListUi for ShowsUiState {
-    fn cursor(&self) -> Option<&str> {
-        self.cursor.as_deref()
-    }
-
-    fn set_cursor(&mut self, cursor: Option<String>) {
-        self.cursor = cursor;
-    }
-
-    fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
-    }
-}
-
-impl PillFocusUi for ShowsUiState {
-    type Focus = GuiShowsModeFrame;
-
-    fn focused_pill(&self) -> Option<&GuiShowsModeFrame> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: GuiShowsModeFrame) {
-        self.focused_pill = Some(focus);
-    }
 }
 
 impl ShowsUiState {
@@ -139,48 +107,41 @@ impl LibraryState {
         )
     }
 
-    /// The row the Shows cursor rests on, or `None`: the keys read the row's
-    /// kind to decide whether Enter selects it or plays it. A heading never
-    /// carries the cursor.
+    /// The row the pointer's marker names (design D1, D2): the marker carries
+    /// the row's own id, so the painted rows resolve it and a stale or foreign
+    /// id names no row. The keys read the row's kind to decide whether Enter
+    /// selects it or plays it. `None` while no painted row carries the id — a
+    /// letter heading carries none at all.
     #[must_use]
-    pub fn shows_cursor_row(&self) -> Option<ShowsListRow> {
+    pub fn shows_row_at(&self, row_id: &str) -> Option<ShowsListRow> {
         let rows = self.shows_rows();
-        let cursor = self.shows_ui.peek().cursor.clone();
-        rows.iter()
-            .find(|row| {
-                !matches!(row, ShowsListRow::Heading(_)) && Some(row.id()) == cursor.as_deref()
-            })
-            .cloned()
-    }
-
-    /// The Shows list under the shared list controller (design D12).
-    fn shows_list(
-        &self,
-    ) -> ListControl<ShowsUiState, ShowsListRow, impl Fn() -> Arc<[ShowsListRow]> + '_> {
-        ListControl {
-            ui: self.shows_ui,
-            scroll: self.scrolls.shows,
-            rows: || self.shows_rows(),
-            move_over: move_shows_cursor,
-        }
+        rows.iter().find(|row| row.id() == row_id).cloned()
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
+    /// (design D7's filter rule). The filter narrows the rows and selects
+    /// nothing, and the scroll stays inside the narrower list.
     pub fn set_shows_filter(&self, filter: String) {
-        self.shows_list().set_filter(filter);
+        let mut shows_ui = self.shows_ui;
+        shows_ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_shows_scroll();
     }
 
-    /// Close the filter with Esc (design D3, step 2): the text goes with it.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
+    /// a closed filter narrows nothing. The scroll follows the widened rows.
     pub fn close_shows_filter(&self) {
-        self.shows_list().close_filter(self.ui);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut shows_ui = self.shows_ui;
+        shows_ui.with_mut(|ui| ui.filter.clear());
+        self.clamp_shows_scroll();
     }
 
     /// Select the row (design D14): a series sends the series select (the core
     /// loads its detail), a season sends the season select (the core loads its
     /// episodes), and a flat row sends the flat select — the command whose
     /// stored value the Hero paints. An episode leaf changes nothing in the
-    /// core: the series Hero owns the Workspace's cursor. A select repaints
+    /// core: the series Hero owns its episode Workspace. A select repaints
     /// the Narrow arrangement's Hero overlay and closes an open menu, because
     /// the facts they paint belong to the previous row, as a Music pick's do.
     /// A heading names no row, so its select changes nothing.
@@ -256,8 +217,8 @@ impl LibraryState {
     }
 
     /// Press a Shows row (design D14): a node toggles and selects, a flat row
-    /// selects, and an episode leaf only moves the cursor. A heading names no
-    /// row, so its press changes nothing.
+    /// selects, and an episode leaf changes nothing. A heading names no row, so
+    /// its press changes nothing.
     pub fn press_shows_row(&self, row: &ShowsListRow) {
         if let Some(node_id) = row.as_node() {
             self.toggle_shows_node(node_id);
@@ -300,74 +261,52 @@ impl LibraryState {
         });
     }
 
-    /// Move the Shows cursor one movement along (design D12): Up and Down move
-    /// a row, Page Up and Page Down move the rows in view, and Home and End
-    /// take the list's ends, stepping over the letter headings. The scroll
-    /// offset follows, so the cursor row stays fully visible.
-    pub fn move_shows_list_cursor(&self, mv: ListMove) {
-        self.shows_list().move_cursor(mv);
+    /// Scroll the list by one movement key (design D6): Up and Down move by the
+    /// height of the row at the top edge, Page Up and Page Down by the viewport
+    /// height, and Home and End go to the list's ends, inside the list's range.
+    pub fn step_shows_scroll(&self, mv: ListMove) {
+        let rows = self.shows_rows();
+        let held = *self.scrolls.shows.peek();
+        set_scroll_top(self.scrolls.shows, &rows, scroll_step(&rows, held, mv));
     }
 
-    /// Jump to a letter of the rail (design D12): the cursor moves to the
-    /// first series row under the letter and that row scrolls into view. A
-    /// letter without rows changes nothing.
+    /// Jump to a letter of the rail (design D12): the list scrolls so the first
+    /// series row under the letter paints fully. A letter without rows changes
+    /// nothing.
     pub fn jump_shows_to_letter(&self, letter: char) {
         let rows = self.shows_rows();
         let view = *self.scrolls.shows.peek();
-        let Some((cursor, scroll_top)) =
-            jump_to_letter(&shows_letter_rail(&rows), &rows, letter, view)
+        let Some((_, scroll_top)) = jump_to_letter(&shows_letter_rail(&rows), &rows, letter, view)
         else {
             return;
         };
-        let mut shows_ui = self.shows_ui;
-        shows_ui.with_mut(|ui| ui.cursor = Some(cursor));
-        let mut shows_scroll = self.scrolls.shows;
-        shows_scroll.with_mut(|scroll| scroll.scroll_top = scroll_top);
+        set_scroll_top(self.scrolls.shows, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_shows_list(&self, viewport_height: f32) {
-        self.shows_list().measure(viewport_height);
+        let mut shows = self.scrolls.shows;
+        shows.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_shows_scroll();
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_shows_list(&self, scroll_top: f32) {
-        self.shows_list().scroll_to(scroll_top);
+        let rows = self.shows_rows();
+        set_scroll_top(self.scrolls.shows, &rows, scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried
-    /// pills so a stale mode focuses nothing: the mode the keys' Space and
-    /// Enter select, and the pill the row paints the accent outline on
-    /// (design D6, D12).
-    #[must_use]
-    pub fn focused_shows_pill(&self, modes: &[GuiShowsModeFrame]) -> Option<GuiShowsModeFrame> {
-        let focused = self.shows_ui.peek().focused_pill?;
-        modes.iter().copied().find(|mode| *mode == focused)
+    /// Hold the Shows list's scroll offset inside the rows the filter leaves.
+    fn clamp_shows_scroll(&self) {
+        let rows = self.shows_rows();
+        let held = *self.scrolls.shows.peek();
+        set_scroll_top(self.scrolls.shows, &rows, held.scroll_top);
     }
 
-    /// Move the focused pill one pill along the row (design D12): Right and
-    /// Left walk the pills, and the first of them with no pill focused takes
-    /// the end it walks from.
-    pub fn move_shows_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(shows) = library_shows_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiShowsModeFrame> = shows.pills.iter().map(|pill| pill.mode).collect();
-        move_pill_focus(
-            self.shows_ui,
-            &pills,
-            |mode| shows_mode_key(*mode).to_owned(),
-            |mode| *mode,
-            |mode| shows_mode_key(*mode).to_owned(),
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (design D6, D12).
+    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
+    /// request into the set-mode command.
     pub fn request_shows_pill_select(&self, mode: GuiShowsModeFrame) {
         let mut shows_ui = self.shows_ui;
         shows_ui.with_mut(|ui| ui.pill_select = Some(mode));

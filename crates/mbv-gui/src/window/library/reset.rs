@@ -1,7 +1,7 @@
 //! The front-end half of Reset UI State (`add-gui-settings-screen` design
 //! D10, the port of `lib/library/reset.ts`): a new `uiResetEpoch` drops every
-//! Library interaction store — the pane focus, the cursors, the filters, the
-//! open nodes, the pill focus, the menus, the Hero dismissals, and the scroll —
+//! Library interaction store — the filters, the pill requests, the open nodes,
+//! the menus, the Hero dismissals, and the scroll —
 //! while the core clears the kept collections and picks and the panel widths
 //! reset beside these. The content itself is the frame's carry, so nothing here
 //! mirrors or resets it; the next frame re-carries it.
@@ -21,9 +21,8 @@ use super::state::{LibraryState, LibraryUiState};
 /// stores included (`reset.ts`'s `resetLibraryInteraction`). The Search store
 /// resets with its port (row 6.8); the stores this build holds are the Music,
 /// Home, Emby, Shows, Audiobooks, Podcasts, and Feeds interaction states and
-/// their lists' scroll stores. The two Workspaces' cursors reset with the Hero
-/// components' selection changes, as `resetShowsEpisodeCursor` and
-/// `resetAbsChapterCursor` do.
+/// their lists' scroll stores. The lists and the Workspaces keep no cursor, so
+/// no cursor resets here.
 pub fn reset_library_interaction(state: &LibraryState) {
     let mut ui = state.ui;
     ui.set(LibraryUiState::initial());

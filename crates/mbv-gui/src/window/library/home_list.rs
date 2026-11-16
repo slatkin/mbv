@@ -16,7 +16,7 @@ use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
     GuiHomeRowFrame, GuiHomeRowIdFrame, GuiHomeRowKindFrame, GuiHomeRowStateFrame,
 };
-use crate::window::library::list::{GeometryRow, ListMove, filter_match, move_cursor};
+use crate::window::library::list::{GeometryRow, filter_match};
 
 /// The section heading row's height in logical pixels: the letter heading
 /// height's look, scaled to the section name.
@@ -102,6 +102,10 @@ impl HomeListRow {
 impl GeometryRow for HomeListRow {
     fn id(&self) -> &str {
         self.id()
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        matches!(self, HomeListRow::Item { .. }).then_some(self.id())
     }
 
     fn top(&self) -> f32 {
@@ -222,29 +226,6 @@ pub fn build_home_rows(rows: &[GuiHomeRowFrame], filter: &str) -> Vec<HomeListRo
         }
     }
     built
-}
-
-/// The rows the cursor may rest on: the item rows only (design D12).
-#[must_use]
-pub fn home_selectable_rows(rows: &[HomeListRow]) -> Vec<&HomeListRow> {
-    rows.iter()
-        .filter(|row| matches!(row, HomeListRow::Item { .. }))
-        .collect()
-}
-
-/// The cursor key a movement leaves (design D12): the next, the previous, or a
-/// page away item row, clamped to the list's ends, stepping over the headings
-/// and spacers. With no cursor on an item row, Up and End start from the last
-/// item row and every other movement from the first, so one key press always
-/// lands the cursor. `page` is the rows a page spans: the rows in view.
-#[must_use]
-pub fn move_home_cursor(
-    rows: &[HomeListRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&home_selectable_rows(rows), cursor, mv, page)
 }
 
 /// The rows the memo handed back last, with the cheap key and the filter they

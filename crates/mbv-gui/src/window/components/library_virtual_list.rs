@@ -25,15 +25,19 @@ use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::list::{GeometryRow, list_window, rows_height};
 use crate::window::library::scroll::ListScroll;
+use crate::window::pointer_target::{LIST_ATTRIBUTE, PointerList, ROW_ATTRIBUTE};
 
 /// The Library list's scroll shell over `rows`. `view` is the destination's scroll store's two values
-/// (design D9); `on_measure` reports the measured viewport height back to
+/// (design D9); `list` is the destination's own list kind, which the scroller
+/// carries as its pointer marker (`gui-pointer-target-interaction` D1);
+/// `on_measure` reports the measured viewport height back to
 /// it, `on_scroll` its native scroll offset, and `paint_row` paints one row
 /// under the shell's own list item.
 pub fn library_virtual_list<R: GeometryRow>(
     rows: &[R],
     view: ListScroll,
     attr: &'static str,
+    list: PointerList,
     padding: &str,
     on_measure: Callback<f32>,
     on_scroll: Callback<f32>,
@@ -100,7 +104,13 @@ pub fn library_virtual_list<R: GeometryRow>(
 
     // The destination's own hook attribute: `data-library-list` for Music,
     // `data-library-<attr>-list` for the other destinations.
-    let list_attrs = vec![Attribute::new(library_attr(attr, "list"), "", None, false)];
+    let list_attrs = vec![
+        Attribute::new(library_attr(attr, "list"), "", None, false),
+        // The list marker (`gui-pointer-target-interaction` D1): the scroller
+        // names its list kind, so a key that acts on the hovered row knows
+        // which list the row belongs to.
+        Attribute::new(LIST_ATTRIBUTE, list.token(), None, false),
+    ];
 
     rsx! {
         ol {
@@ -117,9 +127,17 @@ pub fn library_virtual_list<R: GeometryRow>(
                 {
                     let id = row.id().to_owned();
                     let painted_row = paint_row(row);
+                    // The row marker (`gui-pointer-target-interaction` D1):
+                    // the row's own id. A structural row — a letter heading —
+                    // names no item, so it carries no marker.
+                    let row_attrs: Vec<Attribute> = row
+                        .pointer_row()
+                        .map(|row_id| vec![Attribute::new(ROW_ATTRIBUTE, row_id, None, false)])
+                        .unwrap_or_default();
                     rsx! {
                         li {
                             key: "{id}",
+                            ..row_attrs,
                             {painted_row}
                         }
                     }

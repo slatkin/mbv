@@ -1,14 +1,16 @@
 //! The Audiobooks destination's interaction state (`add-gui-library-panel`
 //! design D12, row 9.1, the port of `lib/library/audiobooks.ts`): what the
-//! window content owns and the core never reads — the cursor. The scroll
-//! offset and the measured viewport live in the Audiobooks list's scroll store
-//! ([`super::scroll`], design D9). The core owns the selected book (the
+//! window content owns and the core never reads — the `/` filter's text. The
+//! scroll offset and the measured viewport live in the Audiobooks list's scroll
+//! store ([`super::scroll`], design D9). The core owns the selected book (the
 //! frame's `selected` and its Hero), so nothing here mirrors it: a press sends
 //! the select command, and the frame carries the choice back. The row model is
-//! [`super::audiobooks_list`]'s; the Hero's chapter cursor belongs to the Hero
-//! ([`super::audiobooks_workspace`]), and the panel's pane focus and the Hero
-//! overlay stay in [`super::state`]'s shared store. There is no pill row on
-//! the destination.
+//! [`super::audiobooks_list`]'s, and the Hero's chapter Workspace is
+//! [`super::audiobooks_workspace`]'s. There is no pill row on the destination.
+//!
+//! The list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
+//! list (design D6).
 
 use std::sync::Arc;
 
@@ -16,38 +18,21 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::audiobooks_list::{
-    AudiobooksListRow, audiobooks_letter_rail, move_audiobooks_cursor,
+    AudiobooksItemRow, AudiobooksListRow, audiobooks_letter_rail,
 };
-use crate::window::library::list::{ListMove, jump_to_letter};
+use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_audiobooks_list;
 
-use super::pill_list::{ListControl, ListUi};
+use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The book list's interaction state (`audiobooks.ts`'s `AudiobooksUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AudiobooksUiState {
-    /// The cursor's row id, or `None` while no row carries the cursor (row
-    /// 9.1). The cursor moves over the book rows only.
-    pub cursor: Option<String>,
     /// The `/` filter's text: the list paints only the books whose title
     /// contains it, without case (design D7's filter rule, the rail's
     /// keyboard path).
     pub filter: String,
-}
-
-impl ListUi for AudiobooksUiState {
-    fn cursor(&self) -> Option<&str> {
-        self.cursor.as_deref()
-    }
-
-    fn set_cursor(&mut self, cursor: Option<String>) {
-        self.cursor = cursor;
-    }
-
-    fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
-    }
 }
 
 impl AudiobooksUiState {
@@ -82,42 +67,42 @@ impl LibraryState {
             .rows(revision, &audiobooks.rows, filter)
     }
 
-    /// The row the book cursor rests on, or `None` (row 9.1): the keys read it
-    /// to play the book or queue it. A heading never carries the cursor.
-    #[must_use]
-    pub fn audiobooks_cursor_row(&self) -> Option<AudiobooksListRow> {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
-        rows.iter()
-            .find(|row| {
-                !matches!(row, AudiobooksListRow::Heading { .. })
-                    && Some(row.id()) == ui.cursor.as_deref()
-            })
-            .cloned()
+    /// The painted rows under the filter's current text.
+    fn audiobooks_painted_rows(&self) -> Arc<[AudiobooksListRow]> {
+        let filter = self.audiobooks_ui.peek().filter.clone();
+        self.audiobooks_rows(&filter)
     }
 
-    /// The Audiobooks list under the shared list controller (design D12).
-    fn audiobooks_list(
-        &self,
-    ) -> ListControl<AudiobooksUiState, AudiobooksListRow, impl Fn() -> Arc<[AudiobooksListRow]> + '_>
-    {
-        ListControl {
-            ui: self.audiobooks_ui,
-            scroll: self.scrolls.audiobooks,
-            rows: || self.audiobooks_rows(&self.audiobooks_ui.peek().filter),
-            move_over: move_audiobooks_cursor,
-        }
+    /// The book row the pointer's marker names (design D1, D2): the marker
+    /// carries the row's own id, so the painted rows resolve it and a stale or
+    /// foreign id names no book. `None` while no painted item row carries the
+    /// id — a letter heading carries none at all.
+    #[must_use]
+    pub fn audiobooks_row_at(&self, row_id: &str) -> Option<AudiobooksItemRow> {
+        let rows = self.audiobooks_painted_rows();
+        rows.iter().find_map(|row| match row {
+            AudiobooksListRow::Item(item) if item.id == row_id => Some(item.clone()),
+            _ => None,
+        })
     }
 
     /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
+    /// (design D7's filter rule). The filter narrows the rows and selects
+    /// nothing, and the scroll stays inside the narrower list.
     pub fn set_audiobooks_filter(&self, filter: String) {
-        self.audiobooks_list().set_filter(filter);
+        let mut audiobooks_ui = self.audiobooks_ui;
+        audiobooks_ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_audiobooks_scroll();
     }
 
-    /// Close the filter with Esc (design D3, step 2): the text goes with it.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
+    /// a closed filter narrows nothing. The scroll follows the widened rows.
     pub fn close_audiobooks_filter(&self) {
-        self.audiobooks_list().close_filter(self.ui);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut audiobooks_ui = self.audiobooks_ui;
+        audiobooks_ui.with_mut(|ui| ui.filter.clear());
+        self.clamp_audiobooks_scroll();
     }
 
     /// Select the book (row 9.1): the select command the core stores, whose
@@ -150,7 +135,7 @@ impl LibraryState {
         self.select_audiobooks_row(row);
     }
 
-    /// Play a book (row 9.1): Enter on the cursor book, and a double-click's
+    /// Play a book (row 9.1): Enter on the hovered book, and a double-click's
     /// play. The Owner replaces the queue with the book at its saved position,
     /// through the shared play path's admission. The book id is the row's
     /// stable `library_item_id`.
@@ -164,7 +149,7 @@ impl LibraryState {
         });
     }
 
-    /// Add a book to the queue's tail (row 9.1): `a` on the cursor book. Books
+    /// Add a book to the queue's tail (row 9.1): `a` on the hovered book. Books
     /// have no play-next, so `n` is consumed and does nothing here.
     pub fn queue_audiobooks_row(&self, book_id: &str) {
         let Some(lib_idx) = self.audiobooks_lib_idx() else {
@@ -176,42 +161,50 @@ impl LibraryState {
         });
     }
 
-    /// Move the book list's cursor one movement along (row 9.1): Up and Down
-    /// move a row, Page Up and Page Down move the rows in view, and Home and
-    /// End take the list's ends, stepping over the letter headings. The scroll
-    /// offset follows, so the cursor row stays fully visible.
-    pub fn move_audiobooks_list_cursor(&self, mv: ListMove) {
-        self.audiobooks_list().move_cursor(mv);
+    /// Scroll the list by one movement key (design D6): Up and Down move by the
+    /// height of the row at the top edge, Page Up and Page Down by the viewport
+    /// height, and Home and End go to the list's ends, inside the list's range.
+    pub fn step_audiobooks_scroll(&self, mv: ListMove) {
+        let rows = self.audiobooks_painted_rows();
+        let held = *self.scrolls.audiobooks.peek();
+        set_scroll_top(self.scrolls.audiobooks, &rows, scroll_step(&rows, held, mv));
     }
 
-    /// Jump to a letter of the rail (row 9.1, design D7): the cursor moves to
-    /// the first book under the letter and that book scrolls into view. A
-    /// letter without books changes nothing.
+    /// Jump to a letter of the rail (row 9.1, design D7): the list scrolls so
+    /// the first book under the letter paints fully. A letter without books
+    /// changes nothing.
     pub fn jump_audiobooks_to_letter(&self, letter: char) {
-        let ui = self.audiobooks_ui.peek().clone();
-        let rows = self.audiobooks_rows(&ui.filter);
+        let rows = self.audiobooks_painted_rows();
         let view = *self.scrolls.audiobooks.peek();
-        let Some((cursor, scroll_top)) =
+        let Some((_, scroll_top)) =
             jump_to_letter(&audiobooks_letter_rail(&rows), &rows, letter, view)
         else {
             return;
         };
-        let mut audiobooks_ui = self.audiobooks_ui;
-        audiobooks_ui.with_mut(|held| held.cursor = Some(cursor));
-        let mut audiobooks_scroll = self.scrolls.audiobooks;
-        audiobooks_scroll.with_mut(|scroll| scroll.scroll_top = scroll_top);
+        set_scroll_top(self.scrolls.audiobooks, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (row 9.1): the rows in view
     /// follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_audiobooks_list(&self, viewport_height: f32) {
-        self.audiobooks_list().measure(viewport_height);
+        let mut audiobooks = self.scrolls.audiobooks;
+        audiobooks.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_audiobooks_scroll();
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_audiobooks_list(&self, scroll_top: f32) {
-        self.audiobooks_list().scroll_to(scroll_top);
+        let rows = self.audiobooks_painted_rows();
+        set_scroll_top(self.scrolls.audiobooks, &rows, scroll_top);
+    }
+
+    /// Hold the Audiobooks list's scroll offset inside the rows the filter
+    /// leaves.
+    fn clamp_audiobooks_scroll(&self) {
+        let rows = self.audiobooks_painted_rows();
+        let held = *self.scrolls.audiobooks.peek();
+        set_scroll_top(self.scrolls.audiobooks, &rows, held.scroll_top);
     }
 }
 

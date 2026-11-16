@@ -26,7 +26,7 @@ use mbv_ui_msg::{
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
-use crate::app::dispatch::action::{AppCommand, Command, PanelIntent};
+use crate::app::dispatch::action::{AppCommand, Command, NavigationIntent, PanelIntent};
 use crate::app::{App, RemoteControlTarget};
 
 /// One translated GUI Client input event: the neutral shape the shared
@@ -395,12 +395,56 @@ impl App {
         command: &Command,
         leaf: Option<&mut dyn GuiSurfaceLeaf>,
     ) -> bool {
+        // The destination steps (ADR 0040, design D2 of
+        // `gui-pointer-target-interaction`): the window content takes neither
+        // Tab nor Shift+Tab, so they arrive here as the core's tab
+        // navigation, and a digit arrives as a numbered destination. Each
+        // opens through the window's one open step, so a step acts as a press
+        // on the tab the top bar paints and never opens a destination the GUI
+        // does not present. The other navigation intents keep their own
+        // dispatch.
+        if let Command::App(AppCommand::Navigation(intent)) = command {
+            match intent {
+                NavigationIntent::NextLibraryTab => {
+                    self.step_gui_library_tab(1);
+                    return false;
+                }
+                NavigationIntent::PreviousLibraryTab => {
+                    self.step_gui_library_tab(-1);
+                    return false;
+                }
+                NavigationIntent::SetLibraryTab(position) => {
+                    self.open_gui_library_position(*position);
+                    return false;
+                }
+                // Not destination steps: each of these keeps its own dispatch
+                // below, as it does in the TUI Client.
+                NavigationIntent::ForceClear
+                | NavigationIntent::RequestClearQueue
+                | NavigationIntent::ToggleSettings
+                | NavigationIntent::OpenSessions
+                | NavigationIntent::OpenPlaylists
+                | NavigationIntent::OpenSearch => {}
+            }
+        }
         if let Command::App(AppCommand::Panel(PanelIntent::MoveQueueRow(direction))) = command {
             if let Some(surface) = leaf
                 && let Some(msg) = surface.move_selected_row(*direction)
             {
                 self.handle_gui_surface_msg(msg);
             }
+            return false;
+        }
+        // The Panel-focus chord is a documented no-op in the GUI Client
+        // (design D3 of `gui-pointer-target-interaction`): the GUI has no
+        // Panel focus, so `panel_right` and `panel_left` are TUI-only in the
+        // keybind registry and the core sets the stack's Panel focus per key
+        // from the key's target instead. A stale binding that still resolves
+        // here changes nothing.
+        if matches!(
+            command,
+            Command::App(AppCommand::Panel(PanelIntent::FocusPanel(_)))
+        ) {
             return false;
         }
         self.apply_router_command(command)

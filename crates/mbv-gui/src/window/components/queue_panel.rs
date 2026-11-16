@@ -12,10 +12,14 @@
 //! row (and the playing row) draws a thin progress track on the title's
 //! line. Every row leads with its padded queue ordinal and carries one
 //! title line and the right-column value — no second line and no date
-//! gutter, as the canvas's row draws. The cursor row and the marked rows
-//! paint the canvas's picked fill (the TUI's `focused || multi_selected`
-//! rule), and the active row's fill wins over it. The right column paints
-//! the value the summary's mode names: "Length" or "Ends at".
+//! gutter, as the canvas's row draws. The rows paint four looks (design D7):
+//! a hovered row paints the window's hover veil and no fill of its own, the
+//! active row (the cursor slot) paints the canvas's picked fill with a 4 px
+//! leading accent edge, a marked row paints the picked fill with no edge,
+//! and every other row paints the zebra stripe or nothing. The active row's
+//! look needs no focus fact: the window holds no focus, and the pointer
+//! resting on the active row leaves its fill and edge in place. The right
+//! column paints the value the summary's mode names: "Length" or "Ends at".
 //!
 //! The row hover and the drag paint from the frame too — the window holds
 //! neither (the `gui-client` spec): `queue.hover` names the row that shows
@@ -49,8 +53,8 @@
 //! roles and the chrome fills, not surface fills (design D7): the recessed
 //! box names the chrome's `queuePanel` resting fill — `Surface::QueuePanel`
 //! — and the zebra stripe the `queueColumn` resting fill. Neither follows
-//! the panel's focus: the GUI holds one fill for the queue at every focus
-//! state (user decision 2026-11-15), unlike the TUI's focus-reactive
+//! any focus fact: the GUI holds one fill for the queue at every state (user
+//! decision 2026-11-15), unlike the TUI's focus-reactive
 //! `queue_row_background(focused)`. Their names are not part of the
 //! window's `--mbv-*` token set, so each `var()` is invalid at
 //! computed-value time and the fill stays transparent, as it painted in the
@@ -61,7 +65,6 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::focus::GuiSurface;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiRightColumn};
 use crate::bridge::frame::theme::GuiRole;
@@ -72,6 +75,7 @@ use crate::window::icons::{Ellipsis, GripVertical};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
+use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::{canvas_var, role_var};
 
@@ -106,19 +110,28 @@ const GRIP_TOP_PX: f32 = (ROW_HEIGHT - GRIP_SIZE_PX as f32) / 2.0;
 /// canvas's type — a display-sized medium weight in the `emptyQueueFg` role
 /// — as a missing visual does.
 const EMPTY_QUEUE_TEXT: &str = "¯\\_(ツ)_/¯";
-/// Whether one item row paints the selection bar: a marked row bars always;
-/// the cursor row bars only while the panel holds focus, as the TUI's
-/// `focused || multi_selected` rule paints.
-fn bars(queue: &GuiQueue, focused: bool, slot: u64) -> bool {
-    queue.marks.contains(&slot) || (focused && queue.cursor == Some(slot))
+
+/// The active row's leading edge: its width in logical pixels, and the radius
+/// that follows the row's own leading corners.
+const ACTIVE_EDGE_PX: u16 = 4;
+
+/// Whether one item row paints the picked fill: the cursor slot — the GUI's
+/// active row, which bars at all times now that the window holds no focus
+/// fact — and every marked row do (design D7).
+fn picked(queue: &GuiQueue, slot: u64) -> bool {
+    queue.marks.contains(&slot) || queue.cursor == Some(slot)
 }
 
-/// The row's painted background: the hovered or picked row's fill, then the
-/// zebra stripe. The playing row keeps its own fill, because a highlight
-/// marks focus only.
-fn row_background(row: &ItemRow, queue: &GuiQueue, focused: bool) -> Option<String> {
-    if queue.hover == Some(row.slot) || bars(queue, focused, row.slot) {
+/// The row's painted background: the active or marked row's fill, then the
+/// zebra stripe. A hovered row paints no fill of its own — the veil every
+/// hovered `button` paints (`assets/app.css`) is its whole hover look, so the
+/// active row keeps its fill and edge under the pointer (design D7).
+fn row_background(row: &ItemRow, queue: &GuiQueue) -> Option<String> {
+    if picked(queue, row.slot) {
         return Some(canvas_var("selected"));
+    }
+    if queue.hover == Some(row.slot) {
+        return None;
     }
     if row.striped {
         return Some("var(--mbv-queueColumn)".to_owned());
@@ -184,7 +197,7 @@ fn whole_rows(height: f32) -> usize {
 }
 
 /// The Queue panel (task 5.5). The panel reads the `queue`, `summary`,
-/// `overlay`, and `focus` sections and the playhead's prediction; each paint
+/// and `overlay` sections and the playhead's prediction; each paint
 /// that moved a region reports, and the layout epoch — the `ResizeObserver`
 /// the former effect watched (D9) — re-reports on every layout change.
 #[component]
@@ -224,11 +237,6 @@ pub fn QueuePanel() -> Element {
     let queue = sections.queue.cloned();
     let summary = sections.summary.cloned();
     let overlay = sections.overlay.cloned();
-    let focus = sections.focus.cloned();
-
-    // Whether the queue surface holds interaction focus (`GuiFocus::surface`):
-    // the selection bar's rule, the TUI's `focused || multi_selected`.
-    let focused = focus.surface == Some(GuiSurface::Queue);
 
     // The open row menu, or `None` while another overlay (or none) is up.
     let menu = match overlay.as_ref() {
@@ -254,7 +262,7 @@ pub fn QueuePanel() -> Element {
         _ => String::new(),
     });
     // The recessed box's fill: the chrome's `queuePanel` resting fill at
-    // every focus state (user decision 2026-11-15). The property is undefined
+    // every state (user decision 2026-11-15). The property is undefined
     // on purpose (`window/theme.rs::write_chrome`), so the box paints no fill
     // of its own and the backdrops behind it show.
     let box_background = "var(--mbv-queuePanel)";
@@ -404,6 +412,12 @@ pub fn QueuePanel() -> Element {
                 class: "relative flex min-h-0 flex-1 flex-col",
                 style: "margin-inline: calc(var(--mbv-cell-col) * 2); background: {box_background};",
                 "data-queue-box": "",
+                // The Queue zone (`gui-pointer-target-interaction` D1): the
+                // header, the filter, and the rows. The footer band under the
+                // box carries the same marker (`queue_footer.rs`), and the
+                // player block above it carries none — a key over the player
+                // block keeps only the global chords.
+                "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
                     right_column: right_column_handles,
@@ -433,16 +447,17 @@ pub fn QueuePanel() -> Element {
                             { match ItemRow::of(row) {
                                 Some(item) => {
                                     let hovered = queue.hover == Some(item.slot);
+                                    let slot = item.slot;
+                                    // The active row (design D7): the cursor slot,
+                                    // which carries the leading edge at all times.
+                                    let active_row = queue.cursor == Some(slot);
                                     let mut button_style = format!(
                                         "height: 30px; padding-inline: {}; gap: 10px; border-radius: 4px;",
                                         if hovered { "4px 2px" } else { "8px" }
                                     );
-                                    if let Some(background) =
-                                        row_background(&item, &queue, focused)
-                                    {
+                                    if let Some(background) = row_background(&item, &queue) {
                                         let _ = write!(button_style, " background: {background};");
                                     }
-                                    let slot = item.slot;
                                     let line = insertion
                                         .as_ref()
                                         .filter(|line| line.slot == slot)
@@ -485,6 +500,18 @@ pub fn QueuePanel() -> Element {
                                                     cell_tone: tone(&item, queue.hover),
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
                                                     right_mode: summary.right_column,
+                                                }
+                                            }
+                                            if active_row {
+                                                // The active row's leading accent edge (design
+                                                // D7): 4 px inside the row's leading edge,
+                                                // following its rounded corners. It paints over
+                                                // the row's fill, so the active row reads as
+                                                // active under the pointer too.
+                                                span {
+                                                    class: "pointer-events-none absolute",
+                                                    style: "top: 0; bottom: 0; left: 0; width: {ACTIVE_EDGE_PX}px; border-radius: 4px 0 0 4px; background: var(--canvas-accent);",
+                                                    "data-active-edge": "{slot}",
                                                 }
                                             }
                                             if let Some((line_position, line_at)) = line {

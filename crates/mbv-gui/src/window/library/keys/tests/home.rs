@@ -1,7 +1,8 @@
 //! The `home` contracts of `keys.test.ts` (D16), over the shared harness: the
-//! Home cursor owns the movement keys wherever the pane focus sits, Enter
-//! plays the row it rests on, `n` and `a` enqueue from it, and `/` and Esc run
-//! the Home filter's own resolve (design D12, row 6.2).
+//! Home keys act on the row the pointer marks (`gui-pointer-target-interaction`
+//! D2) — Enter plays it, and `n` and `a` enqueue it. The movement keys scroll
+//! the Home list under the pointer, `/` and Esc run the Home filter's own
+//! resolve, and the list keeps no cursor.
 
 use super::*;
 use mbv_queue::QueueItemContentId;
@@ -25,7 +26,7 @@ fn continued_row() -> GuiHomeItemRowFrame {
     }
 }
 
-/// The `Recently added` row the movement steps to.
+/// The `Recently added` row the pointer also rests on.
 fn added_row() -> GuiHomeItemRowFrame {
     GuiHomeItemRowFrame {
         id: GuiHomeRowIdFrame::Recent(QueueItemContentId::Feed("f1".to_owned())),
@@ -79,7 +80,7 @@ fn carry_home(state: &LibraryState) {
 /// The Home interaction state's facts, as the assertions read them.
 fn home_facts(state: &LibraryState) -> String {
     let home = state.home_ui.peek().clone();
-    format!("cursor={:?} filter={:?}", home.cursor, home.filter)
+    format!("filter={:?}", home.filter)
 }
 
 /// The Home commands the core's row ids ride in.
@@ -92,15 +93,29 @@ fn continued_row_id() -> mbv::GuiHomeRowId {
     mbv::GuiHomeRowId::Continue("e1".to_owned())
 }
 
-// Enter on Home plays the cursor row by its opaque id.
+/// The row key the `Continue watching` row paints.
+fn continued_key() -> String {
+    home_row_key(&continued_row().id)
+}
+
+/// The row key the `Recently added` row paints.
+fn added_row_key() -> String {
+    home_row_key(&added_row().id)
+}
+
+// Enter on Home plays the hovered row by its opaque id.
 #[test]
-fn enter_on_home_plays_the_cursor_row_by_its_opaque_id() {
+fn enter_on_home_plays_the_hovered_row_by_its_opaque_id() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(home_row_key(&continued_row().id)));
-
-        route(state, facts, "enter", "Enter", false);
+        route_on_row(
+            state,
+            facts,
+            "enter",
+            "Enter",
+            PointerList::Home,
+            &continued_key(),
+        );
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -111,15 +126,12 @@ fn enter_on_home_plays_the_cursor_row_by_its_opaque_id() {
     );
 }
 
-// `n` on Home sends play next for the cursor row.
+// `n` on Home sends play next for the hovered row.
 #[test]
-fn n_on_home_sends_play_next_for_the_cursor_row() {
+fn n_on_home_sends_play_next_for_the_hovered_row() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(home_row_key(&continued_row().id)));
-
-        route(state, facts, "n", "n", false);
+        route_on_row(state, facts, "n", "n", PointerList::Home, &continued_key());
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(
@@ -130,15 +142,12 @@ fn n_on_home_sends_play_next_for_the_cursor_row() {
     );
 }
 
-// `a` on Home adds the cursor row to the queue.
+// `a` on Home adds the hovered row to the queue.
 #[test]
-fn a_on_home_adds_the_cursor_row_to_the_queue() {
+fn a_on_home_adds_the_hovered_row_to_the_queue() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(home_row_key(&continued_row().id)));
-
-        route(state, facts, "a", "a", false);
+        route_on_row(state, facts, "a", "a", PointerList::Home, &continued_key());
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -149,34 +158,58 @@ fn a_on_home_adds_the_cursor_row_to_the_queue() {
     );
 }
 
-// The cursor's settle selects (design D12): the Hero follows the cursor,
-// named by the opaque id and never a position.
+// Enter and `a` act on the hovered row, never on the core's selected one: the
+// second section's row is the pointer's, not the selection's.
 #[test]
-fn down_on_home_moves_the_cursor_and_selects_the_row_it_settles_on() {
+fn enter_on_home_plays_the_hovered_row_not_the_selected_one() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
-        let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| ui.cursor = Some(home_row_key(&continued_row().id)));
-
-        route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(home_facts(state));
+        route_on_row(
+            state,
+            facts,
+            "enter",
+            "Enter",
+            PointerList::Home,
+            &added_row_key(),
+        );
     });
-    assert_eq!(facts[0], "down=Handled");
-    assert_eq!(
-        facts[1],
-        format!(
-            "cursor=Some(\"{}\") filter=\"\"",
-            home_row_key(&added_row().id)
-        )
-    );
+    assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
         commands(&rx),
-        [mbv::GuiLibraryCommand::HomeSelect { row: recent_row() }]
+        [mbv::GuiLibraryCommand::HomePlay { row: recent_row() }]
     );
 }
 
-// `/` opens the Home list's filter under Library focus (design D3, D7):
-// the rail's keyboard path, and the Queue filter never sees the key.
+// The movement keys scroll the Home list under the pointer (design D2, step 3,
+// D6) and select nothing: the Hero keeps the core's selection.
+#[test]
+fn down_over_the_home_list_scrolls_the_list_and_selects_nothing() {
+    let (facts, rx) = run(|state, facts| {
+        carry_home(state);
+        state.measure_home_list(60.0);
+        route_on_row(
+            state,
+            facts,
+            "down",
+            "ArrowDown",
+            PointerList::Home,
+            &continued_key(),
+        );
+        let scroll = *state.scrolls.home.peek();
+        facts
+            .lock()
+            .expect("facts")
+            .push(format!("top={}", scroll.scroll_top));
+    });
+    assert_eq!(facts[0], "down=Handled");
+    // The heading covers the list's top edge, so the step is its 28 px.
+    assert_eq!(facts[1], "top=28");
+    assert_eq!(commands(&rx), []);
+}
+
+// `/` opens the Home list's filter while the pointer is over the Library
+// column (design D3, D7): the rail's keyboard path, and the Queue filter never
+// sees the key.
 #[test]
 fn slash_opens_the_home_filter_and_sends_no_key() {
     let (facts, rx) = run(|state, facts| {
@@ -186,21 +219,21 @@ fn slash_opens_the_home_filter_and_sends_no_key() {
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(facts[0], "slash=Handled");
-    assert!(facts[1].contains("filter_open=true"));
+    assert!(
+        facts[1].contains("filter_open=true"),
+        "the Library filter opened"
+    );
     assert_eq!(commands(&rx), []);
 }
 
-// Esc closes the open filter (design D3, step 2): its text goes with it,
-// and the close runs the Home list's own resolve.
+// Esc closes the open filter (design D3, step 2): its text goes with it, and
+// the close runs the Home list's own resolve.
 #[test]
 fn esc_closes_the_home_filter_and_drops_its_text() {
     let (facts, rx) = run(|state, facts| {
         carry_home(state);
         let mut home_ui = state.home_ui;
-        home_ui.with_mut(|ui| {
-            ui.filter = "row".to_owned();
-            ui.cursor = Some(home_row_key(&continued_row().id));
-        });
+        home_ui.with_mut(|ui| ui.filter = "row".to_owned());
         let mut ui = state.ui;
         ui.with_mut(|ui| ui.filter_open = true);
 
@@ -209,7 +242,10 @@ fn esc_closes_the_home_filter_and_drops_its_text() {
         facts.lock().expect("facts").push(home_facts(state));
     });
     assert_eq!(facts[0], "esc=Handled");
-    assert!(facts[1].contains("filter_open=false"));
-    assert_eq!(facts[2], "cursor=Some(\"home-continue:e1\") filter=\"\"");
+    assert!(
+        facts[1].contains("filter_open=false"),
+        "the Esc closed the filter"
+    );
+    assert_eq!(facts[2], "filter=\"\"");
     assert_eq!(commands(&rx), []);
 }

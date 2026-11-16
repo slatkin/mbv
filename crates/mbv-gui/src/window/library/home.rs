@@ -1,11 +1,12 @@
 //! The Home destination's interaction state (`add-gui-library-panel` design
 //! D1, D12, the port of `lib/library/home.ts`): what the window content owns
-//! and the core never reads — the cursor. The scroll offset and the measured
-//! viewport live in the Home list's scroll store ([`super::scroll`], design
-//! D9). The core owns the selection (the frame's `selected` row), so nothing
-//! here mirrors it: a press and the cursor's settle send the select command,
-//! and the frame carries the selection back. The row model is
-//! [`super::home_list`]'s; the panel's pane focus and the Hero overlay stay in
+//! and the core never reads — the `/` filter's text. The scroll offset and the
+//! measured viewport live in the Home list's scroll store ([`super::scroll`],
+//! design D9). The core owns the selection (the frame's `selected` row), so
+//! nothing here mirrors it: a press sends the select command, and the frame
+//! carries the selection back. The keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), so the list keeps no cursor. The row
+//! model is [`super::home_list`]'s; the Hero overlay stays in
 //! [`super::state`]'s shared store.
 
 use std::sync::Arc;
@@ -14,36 +15,19 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiHomeRowIdFrame;
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::home_list::{HomeListRow, move_home_cursor};
-use crate::window::library::list::ListMove;
+use crate::window::library::home_list::HomeListRow;
+use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_home_list;
+use crate::window::library::scroll::set_scroll_top;
 
-use super::pill_list::{ListControl, ListUi};
 use super::state::LibraryState;
 
 /// The Home list's interaction state (`home.ts`'s `HomeUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HomeUiState {
-    /// The cursor's row key, or `None` while no row carries the cursor
-    /// (design D12). The cursor moves over the item rows only.
-    pub cursor: Option<String>,
     /// The `/` filter's text: the list paints only the item rows whose title
     /// contains it, without case (design D7's filter rule).
     pub filter: String,
-}
-
-impl ListUi for HomeUiState {
-    fn cursor(&self) -> Option<&str> {
-        self.cursor.as_deref()
-    }
-
-    fn set_cursor(&mut self, cursor: Option<String>) {
-        self.cursor = cursor;
-    }
-
-    fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
-    }
 }
 
 impl HomeUiState {
@@ -67,36 +51,17 @@ impl LibraryState {
         self.home_rows_memo.rows(revision, &home.rows, filter)
     }
 
-    /// The row the cursor rests on, or `None` while no painted row carries it.
-    fn home_cursor_row<'a>(
-        rows: &'a [HomeListRow],
-        cursor: Option<&str>,
-    ) -> Option<&'a HomeListRow> {
-        rows.iter().find(|row| Some(row.id()) == cursor)
-    }
-
-    /// The item row id the Home cursor rests on (design D12): the opaque
-    /// identity the play, play-next, and add-to-queue keys carry. `None` while
-    /// the cursor rests on no item row.
+    /// The item row the pointer's marker names (design D1, D2): the marker
+    /// carries the row's own key, so the painted rows resolve it and a stale or
+    /// foreign key names no row. `None` while the pointer rests on no item row —
+    /// a heading, a spacer, or no row at all.
     #[must_use]
-    pub fn home_cursor_row_id(&self) -> Option<GuiHomeRowIdFrame> {
-        let ui = self.home_ui.peek().clone();
-        let rows = self.home_rows(&ui.filter);
-        match Self::home_cursor_row(&rows, ui.cursor.as_deref())? {
+    pub fn home_row_id(&self, row_key: &str) -> Option<GuiHomeRowIdFrame> {
+        let filter = self.home_ui.peek().filter.clone();
+        let rows = self.home_rows(&filter);
+        match rows.iter().find(|row| row.id() == row_key)? {
             HomeListRow::Item { row, .. } => Some(row.row_id.clone()),
-            _ => None,
-        }
-    }
-
-    /// The Home list under the shared list controller (design D12).
-    fn home_list(
-        &self,
-    ) -> ListControl<HomeUiState, HomeListRow, impl Fn() -> Arc<[HomeListRow]> + '_> {
-        ListControl {
-            ui: self.home_ui,
-            scroll: self.scrolls.home,
-            rows: || self.home_rows(&self.home_ui.peek().filter),
-            move_over: move_home_cursor,
+            HomeListRow::Heading { .. } | HomeListRow::Spacer { .. } => None,
         }
     }
 
@@ -119,41 +84,29 @@ impl LibraryState {
         });
     }
 
-    /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows, and its settle
-    /// selects the row it rests on, as a cursor move does.
+    /// Narrow the list to the titles that contain `filter`, without case (design
+    /// D7's filter rule). The filter narrows the rows and selects nothing, and
+    /// the scroll stays inside the narrower list.
     pub fn set_home_filter(&self, filter: String) {
-        let before = self.home_ui.peek().cursor.clone();
-        self.home_list().set_filter(filter);
-        self.settle_home_selection_after(before.as_deref());
+        let mut ui = self.home_ui;
+        ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_home_scroll();
     }
 
     /// Close the filter with Esc: the text goes with it, so a closed filter
-    /// narrows nothing (design D3, step 2). The cursor follows the widened
-    /// rows, and its settle selects the row it rests on.
+    /// narrows nothing (design D3, step 2). The scroll follows the widened rows.
     pub fn close_home_filter(&self) {
-        let before = self.home_ui.peek().cursor.clone();
-        self.home_list().close_filter(self.ui);
-        self.settle_home_selection_after(before.as_deref());
-    }
-
-    /// Select the row the cursor settled on, when the settle moved it (design
-    /// D12): the Hero follows the cursor, named by the opaque id and never a
-    /// position.
-    fn settle_home_selection_after(&self, before: Option<&str>) {
-        let after = self.home_ui.peek().cursor.clone();
-        if after.as_deref() == before {
-            return;
-        }
-        let ui = self.home_ui.peek().clone();
-        let rows = self.home_rows(&ui.filter);
-        let row = Self::home_cursor_row(&rows, after.as_deref());
-        self.settle_home_selection(row);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut home = self.home_ui;
+        home.with_mut(|ui| ui.filter.clear());
+        self.clamp_home_scroll();
     }
 
     /// Press a Home row (design D12): the press selects, and Enter or a press
-    /// on an already-selected row plays it — the press never plays on its own.
-    /// A heading or spacer names no item, so its press changes nothing.
+    /// on an already-selected row never plays it — the press is the selection's
+    /// half, and the double-click is the play's. A heading or spacer names no
+    /// item, so its press changes nothing.
     pub fn press_home_row(&self, row: &HomeListRow) {
         self.settle_home_selection(Some(row));
     }
@@ -178,33 +131,43 @@ impl LibraryState {
             .library(GuiLibraryCommand::HomeQueue { row: row_id.into() });
     }
 
-    /// Move the Home cursor one movement along (design D12): Up and Down move
-    /// an item row, Page Up and Page Down move the rows in view, and Home and
-    /// End take the list's ends, stepping over the headings and spacers. The
-    /// scroll offset follows, so the cursor row stays fully visible, and the
-    /// cursor's settle selects the row it rests on — the Hero follows the
-    /// cursor.
-    pub fn move_home_list_cursor(&self, mv: ListMove) {
-        if !self.home_list().move_cursor(mv) {
-            return;
-        }
-        let ui = self.home_ui.peek().clone();
-        let rows = self.home_rows(&ui.filter);
-        let row = Self::home_cursor_row(&rows, ui.cursor.as_deref());
-        self.settle_home_selection(row);
+    /// Scroll the Home list by one movement key (design D6): Up and Down move
+    /// by the height of the row at the top edge, Page Up and Page Down by the
+    /// viewport height, and Home and End go to the list's ends, inside the
+    /// list's range.
+    pub fn step_home_scroll(&self, mv: ListMove) {
+        let filter = self.home_ui.peek().filter.clone();
+        let rows = self.home_rows(&filter);
+        let held = *self.scrolls.home.peek();
+        set_scroll_top(self.scrolls.home, &rows, scroll_step(&rows, held, mv));
     }
 
     /// Report the Home list's measured viewport height (design D12): the rows
     /// in view follow it, and the scroll offset stays inside the narrower
     /// range.
     pub fn measure_home_list(&self, viewport_height: f32) {
-        self.home_list().measure(viewport_height);
+        let mut home = self.scrolls.home;
+        home.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        let filter = self.home_ui.peek().filter.clone();
+        let rows = self.home_rows(&filter);
+        let held = *home.peek();
+        set_scroll_top(home, &rows, held.scroll_top);
     }
 
     /// Report the Home list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_home_list(&self, scroll_top: f32) {
-        self.home_list().scroll_to(scroll_top);
+        let filter = self.home_ui.peek().filter.clone();
+        let rows = self.home_rows(&filter);
+        set_scroll_top(self.scrolls.home, &rows, scroll_top);
+    }
+
+    /// Hold the Home list's scroll offset inside the rows the filter leaves.
+    fn clamp_home_scroll(&self) {
+        let filter = self.home_ui.peek().filter.clone();
+        let rows = self.home_rows(&filter);
+        let held = *self.scrolls.home.peek();
+        set_scroll_top(self.scrolls.home, &rows, held.scroll_top);
     }
 }
 

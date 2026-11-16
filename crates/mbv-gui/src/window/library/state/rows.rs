@@ -1,8 +1,7 @@
 //! The Library list's row model and scroll geometry over the interaction
 //! state (`replace-tauri-with-blitz` D15, the seam of `state.ts`'s row-model
-//! half): the memoized painted rows, the cursor's settle, the press and
-//! movement rules, the reveal, the filter, and the scroll reports. The
-//! interaction state and the pane walk live in [`super`].
+//! half): the memoized painted rows, the press rules, the reveal, the filter,
+//! and the scroll reports. The interaction state lives in [`super`].
 
 use std::sync::Arc;
 
@@ -11,11 +10,11 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiMusicDetail, GuiMusicList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{
-    LibraryRow, ListMove, album_row_id, artist_row_id, clamp_scroll_top, jump_to_letter,
-    letter_rail, list_window, move_list_cursor, scroll_top_to_show_cursor,
+    LibraryRow, ListMove, album_row_id, artist_row_id, jump_to_letter, letter_rail, scroll_step,
+    scroll_top_to_show_cursor,
 };
 use crate::window::library::parts::library_music_list;
-use crate::window::library::scroll::ListScroll;
+use crate::window::library::scroll::set_scroll_top;
 
 use super::{LibraryState, LibraryUiState};
 
@@ -31,9 +30,9 @@ fn with_id(ids: &mut Vec<String>, id: &str, present: bool) {
 impl LibraryState {
     /// The row model under one interaction state (design D7): the carried
     /// union, the open nodes, and the filter text. The union borrows from the
-    /// section store's own storage — a cursor or scroll step copies none of it
-    /// — and the memo keys it on the section's revision, so its hit test never
-    /// compares the union (design D6).
+    /// section store's own storage — a scroll step copies none of it — and the
+    /// memo keys it on the section's revision, so its hit test never compares
+    /// the union (design D6).
     #[must_use]
     pub fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
         let list = self.sections.library_list.peek();
@@ -48,56 +47,17 @@ impl LibraryState {
         )
     }
 
-    /// Settle the cursor and the scroll once the painted rows may have changed
-    /// (design D7): the cursor keeps its row while that row still paints, and falls
-    /// to the first painted row otherwise. The scroll store then shows the cursor. A
-    /// filter's text change and its clear both run this, so the cursor never rests on
-    /// a row that no longer paints.
-    pub(super) fn settle_cursor(&self) {
+    /// The row the pointer's marker names, resolved against the painted rows
+    /// (design D1, D2): the marker carries the row's own id, so the row model
+    /// resolves it and a stale or foreign id names no item. `None` while no
+    /// painted row carries the id.
+    #[must_use]
+    pub fn music_row_item_id(&self, row_id: &str) -> Option<String> {
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
-        let kept = ui
-            .cursor
-            .as_deref()
-            .is_some_and(|cursor| rows.iter().any(|row| row.id() == cursor));
-        let cursor = if kept {
-            ui.cursor.clone()
-        } else {
-            move_list_cursor(&rows, None, ListMove::Home, 1)
-        };
-        if cursor != ui.cursor {
-            let mut current = self.ui;
-            current.with_mut(|current| current.cursor.clone_from(&cursor));
-        }
-        self.follow_cursor(&rows, cursor.as_deref());
-    }
-
-    /// Scroll the list so the cursor's row paints fully, in the scroll store (design
-    /// D7, D9).
-    fn follow_cursor(&self, rows: &[LibraryRow], cursor: Option<&str>) {
-        let scroll = *self.music_scroll.peek();
-        let shown = ListScroll {
-            scroll_top: scroll_top_to_show_cursor(
-                rows,
-                cursor,
-                scroll.scroll_top,
-                scroll.viewport_height,
-            ),
-            viewport_height: scroll.viewport_height,
-        };
-        if shown != scroll {
-            let mut music_scroll = self.music_scroll;
-            music_scroll.set(shown);
-        }
-    }
-
-    /// The cursor's row, or `None` while no painted row carries the cursor.
-    #[must_use]
-    pub(super) fn cursor_row(&self, ui: &LibraryUiState) -> Option<LibraryRow> {
-        let rows = self.rows_of(ui);
         rows.iter()
-            .find(|row| Some(row.id()) == ui.cursor.as_deref())
-            .cloned()
+            .find(|row| row.id() == row_id)
+            .and_then(Self::action_item_id)
     }
 
     /// The item a row picks (design D7, D5): an album's own id, and a track's album
@@ -113,9 +73,9 @@ impl LibraryState {
         }
     }
 
-    /// The item an action on the cursor names (design D3, D8): an artist row's
-    /// Service item, an album's own id, and a track's id, so the play-next and
-    /// add-to-queue keys act on what the cursor rests on.
+    /// The item an action on the hovered row names (design D3, D8): an artist
+    /// row's Service item, an album's own id, and a track's id, so the
+    /// play-next and add-to-queue keys act on what the pointer marks.
     #[must_use]
     pub fn action_item_id(row: &LibraryRow) -> Option<String> {
         match row {
@@ -128,9 +88,8 @@ impl LibraryState {
 
     /// Send the detail of the item a row picks (design D7): the core stores it and
     /// the next frame carries the Hero. No command for a row that names no item. A
-    /// pick paints the Narrow arrangement's Hero overlay again (design D4), closes
-    /// the item menu the previous item opened, and starts the tracklist's cursor
-    /// over, because the tracks it rested on belong to the previous album.
+    /// pick paints the Narrow arrangement's Hero overlay again (design D4) and closes
+    /// the item menu the previous item opened.
     fn show_detail(&self, item_id: Option<String>) {
         let Some(item_id) = item_id else {
             return;
@@ -141,7 +100,6 @@ impl LibraryState {
             ui.hero_dismissed = false;
             ui.item_menu_open = false;
             ui.row_menu = None;
-            ui.track_cursor = None;
         });
     }
 
@@ -178,10 +136,10 @@ impl LibraryState {
     }
 
     /// Reveal the Hero's picked album in the list (`state.ts`'s
-    /// `revealPickedAlbum`). The cursor takes the album's row and its artist
-    /// opens, so the row shows. An album whose tracks are not loaded is opened
-    /// through the same command a press sends, which is what loads them. A
-    /// restored pick and a pill's last pick reach the Hero this way.
+    /// `revealPickedAlbum`). The album's artist opens and the list scrolls so the
+    /// album's row paints, so a restored pick and a pill's last pick reach the
+    /// Hero on a row in view. An album whose tracks are not loaded is opened
+    /// through the same command a press sends, which is what loads them.
     pub fn reveal_picked_album(&self, list: &GuiMusicList, detail: &GuiMusicDetail) {
         let Some(album) = detail.hero.as_ref().map(|hero| &hero.album) else {
             return;
@@ -197,10 +155,7 @@ impl LibraryState {
         let album_row = album_row_id(&album.album_id);
         let artist_row = artist_row_id(artist);
         let mut ui = self.ui;
-        ui.with_mut(|ui| {
-            with_id(&mut ui.open_nodes, &artist_row, true);
-            ui.cursor = Some(album_row.clone());
-        });
+        ui.with_mut(|ui| with_id(&mut ui.open_nodes, &artist_row, true));
         if self.music_scroll.peek().viewport_height <= 0.0 {
             // The list is not measured yet, so the row cannot scroll into view.
             // The first measurement takes the scroll.
@@ -209,7 +164,14 @@ impl LibraryState {
         } else {
             let ui = self.ui.peek().clone();
             let rows = self.rows_of(&ui);
-            self.follow_cursor(&rows, Some(&album_row));
+            let held = *self.music_scroll.peek();
+            let top = scroll_top_to_show_cursor(
+                &rows,
+                Some(&album_row),
+                held.scroll_top,
+                held.viewport_height,
+            );
+            set_scroll_top(self.music_scroll, &rows, top);
         }
         if album.tracks.is_none() {
             self.link.library(GuiLibraryCommand::OpenAlbum {
@@ -229,33 +191,14 @@ impl LibraryState {
             .library(GuiLibraryCommand::Play { item_id: track_id });
     }
 
-    /// Press a track row in the Hero's tracklist: the cursor moves onto it, as the
-    /// list's track press does.
-    pub fn press_library_track(&self, track_id: String) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| {
-            if ui.track_cursor.as_deref() != Some(track_id.as_str()) {
-                ui.track_cursor = Some(track_id);
-            }
-        });
-    }
-
     /// Press a row (design D7): an artist or album row opens or closes and is
-    /// picked; a track row moves the cursor onto itself and is picked — the pick's
-    /// album shows in the Hero, and the cursor is the press's visible half, as the
-    /// Queue panel's click moves the queue cursor. The row's painted open state is
-    /// the half to flip, so a press under a filter closes the node the filter
-    /// opened. A press on an artist or album row moves no cursor — that is the
-    /// keys' work.
+    /// picked; a track row picks its album — the pick's album shows in the Hero,
+    /// and the press is the pick's half only. The row's painted open state is the
+    /// half to flip, so a press under a filter closes the node the filter opened.
     pub fn press_library_row(&self, row: &LibraryRow) {
         match row {
             LibraryRow::Letter(_) => {}
             LibraryRow::Track { .. } => {
-                let mut ui = self.ui;
-                ui.with_mut(|ui| ui.cursor = Some(row.id().to_owned()));
-                let ui = self.ui.peek().clone();
-                let rows = self.rows_of(&ui);
-                self.follow_cursor(&rows, Some(row.id()));
                 self.show_detail(Self::picked_item_id(row));
             }
             LibraryRow::Artist { open, .. } | LibraryRow::Album { open, .. } => {
@@ -265,37 +208,20 @@ impl LibraryState {
         }
     }
 
-    /// Move the list's cursor one movement along (design D3, D7): Up and Down
-    /// move a row, Page Up and Page Down move the rows in view, and Home and End
-    /// take the list's ends. The scroll offset follows, so the cursor row stays
-    /// fully visible.
-    pub fn move_library_cursor(&self, mv: ListMove) {
+    /// Scroll the list by one movement key (design D6): Up and Down move by the
+    /// height of the row at the top edge, Page Up and Page Down by the viewport
+    /// height, and Home and End go to the list's ends, inside the list's range.
+    pub fn step_library_scroll(&self, mv: ListMove) {
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
-        let scroll = *self.music_scroll.peek();
-        let view = list_window(&rows, scroll.scroll_top, scroll.viewport_height);
-        let cursor = move_list_cursor(&rows, ui.cursor.as_deref(), mv, view.end - view.start);
-        let mut current = self.ui;
-        current.with_mut(|current| current.cursor.clone_from(&cursor));
-        self.follow_cursor(&rows, cursor.as_deref());
-    }
-
-    /// Open or close the cursor's node (design D7's Right and Left).
-    pub fn set_library_cursor_open(&self, open: bool) {
-        let ui = self.ui.peek().clone();
-        let row = self.cursor_row(&ui);
-        if let Some(row) = row
-            && matches!(row, LibraryRow::Artist { .. } | LibraryRow::Album { .. })
-        {
-            self.set_node_open(&row, open);
-        }
+        let held = *self.music_scroll.peek();
+        set_scroll_top(self.music_scroll, &rows, scroll_step(&rows, held, mv));
     }
 
     /// Narrow the list to the names that contain `filter`, without case (design
-    /// D7). The cursor keeps its row while that row stays painted, and otherwise
-    /// falls to the first painted row; the scroll offset follows the narrower list.
-    /// New text starts the filter's own open and close over: the nodes the user
-    /// closed under the old text open again.
+    /// D7): the scroll stays inside the narrower list, so no offset outlives the
+    /// rows it scrolled. New text starts the filter's own open and close over: the
+    /// nodes the user closed under the old text open again.
     pub fn set_library_filter(&self, filter: String) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
@@ -304,24 +230,23 @@ impl LibraryState {
             }
             ui.filter = filter;
         });
-        self.settle_cursor();
+        let held = *self.music_scroll.peek();
+        let state = self.ui.peek().clone();
+        let rows = self.rows_of(&state);
+        set_scroll_top(self.music_scroll, &rows, held.scroll_top);
     }
 
-    /// Jump to a letter of the rail (design D7): the cursor moves to the first row
-    /// under the letter and that row scrolls into view. A letter without rows
+    /// Jump the list to a letter of the rail (design D7, D6): the list scrolls to
+    /// the first row under the letter and picks nothing. A letter without rows
     /// changes nothing.
     pub fn jump_to_letter(&self, letter: char) {
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
         let view = *self.music_scroll.peek();
-        let Some((cursor, scroll_top)) = jump_to_letter(&letter_rail(&rows), &rows, letter, view)
-        else {
+        let Some((_, scroll_top)) = jump_to_letter(&letter_rail(&rows), &rows, letter, view) else {
             return;
         };
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.cursor = Some(cursor));
-        let mut music_scroll = self.music_scroll;
-        music_scroll.with_mut(|scroll| scroll.scroll_top = scroll_top);
+        set_scroll_top(self.music_scroll, &rows, scroll_top);
     }
 
     /// Report the list's measured viewport height (design D7): the rows in view
@@ -332,16 +257,15 @@ impl LibraryState {
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
         let pending = self.pending_reveal_row.peek().clone();
-        if let Some(row) = pending.filter(|_| viewport_height > 0.0) {
-            let mut pending = self.pending_reveal_row;
-            pending.set(None);
-            self.follow_cursor(&rows, Some(&row));
+        let held = *music_scroll.peek();
+        let Some(row) = pending.filter(|_| viewport_height > 0.0) else {
+            set_scroll_top(music_scroll, &rows, held.scroll_top);
             return;
-        }
-        let mut music_scroll = self.music_scroll;
-        music_scroll.with_mut(|scroll| {
-            scroll.scroll_top = clamp_scroll_top(&rows, scroll.scroll_top, scroll.viewport_height);
-        });
+        };
+        let mut pending = self.pending_reveal_row;
+        pending.set(None);
+        let top = scroll_top_to_show_cursor(&rows, Some(&row), held.scroll_top, viewport_height);
+        set_scroll_top(music_scroll, &rows, top);
     }
 
     /// Report the list's native scroll offset (design D7): a user scroll moves the
@@ -349,14 +273,6 @@ impl LibraryState {
     pub fn scroll_library_list(&self, scroll_top: f32) {
         let ui = self.ui.peek().clone();
         let rows = self.rows_of(&ui);
-        let mut music_scroll = self.music_scroll;
-        let held = *music_scroll.peek();
-        let clamped = ListScroll {
-            scroll_top: clamp_scroll_top(&rows, scroll_top, held.viewport_height),
-            viewport_height: held.viewport_height,
-        };
-        if clamped != held {
-            music_scroll.set(clamped);
-        }
+        set_scroll_top(self.music_scroll, &rows, scroll_top);
     }
 }

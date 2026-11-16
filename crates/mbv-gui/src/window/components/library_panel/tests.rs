@@ -3,8 +3,8 @@
 //! rows since 7.2–7.4, the Heroes since 7.5–7.6, the destination lists since
 //! 7.7), so the mount contracts assert each painter's own root hook, and the
 //! rails' own region contracts ride those rows' tests. The presses are not
-//! fireable headlessly: the take-focus and outside-press rules are the
-//! panel's handler functions, tested against the mock core link, and the
+//! fireable headlessly: the outside-press rule is the panel's handler
+//! function, tested against the mock core link, and the
 //! backdrop's close is the interaction state's own contract
 //! (`window/library/state/tests.rs`) driven through the painted overlay's
 //! reaction. The core channel is a mock pair; no test opens a window,
@@ -21,7 +21,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_config::GuiPanelWidths;
 
 use super::LibraryPanel;
-pub(super) use super::{press_outside_menu, press_takes_focus};
+pub(super) use super::press_outside_menu;
 
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame};
 use crate::core_thread::CoreInput;
@@ -318,6 +318,7 @@ fn seed_idle_status(fixture: &mut Fixture) {
 
 pub(super) mod fixtures;
 
+mod destination_reset;
 mod destinations;
 mod overlay;
 mod press;

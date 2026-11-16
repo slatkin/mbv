@@ -13,19 +13,20 @@
 use dioxus_html::geometry::WheelDelta;
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::{DomKey, DomModifiers, neutral_key};
+use crate::bridge::keys::{DomKey, DomModifiers, KeyTarget, neutral_key};
 use crate::bridge::pointer::{DomPointer, DomPointerKind, neutral_pointer};
 use crate::window::channel::CoreLink;
 
 /// What the key router did with one keydown (D8): `Core` forwards the key to
-/// the core's keyboard router; `Handled` means the window content took it, so
-/// the core receives no key and no default runs; `Text` means an open text
-/// field takes it, so the core receives no key and the field's own default
-/// types it.
+/// the core's keyboard router with the panel its pointer named; `Handled`
+/// means the window content took it, so the core receives no key and no
+/// default runs; `Text` means an open text field takes it, so the core
+/// receives no key and the field's own default types it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyOutcome {
-    /// The core's keyboard router answers the key.
-    Core,
+    /// The core's keyboard router answers the key, for the panel the pointer
+    /// resolved (design D2 of `gui-pointer-target-interaction`).
+    Core(KeyTarget),
     /// The window content took the key.
     Handled,
     /// An open text field takes the key.
@@ -42,10 +43,11 @@ pub enum KeyOutcome {
 /// route carries no thread bound.
 pub type KeyRoute = dyn Fn(&DomKey) -> KeyOutcome;
 
-/// The router that takes nothing: every key goes to the core.
+/// The router that takes nothing: every key goes to the core, with no Queue
+/// target.
 #[must_use]
 pub fn forward_every_key(_key: &DomKey) -> KeyOutcome {
-    KeyOutcome::Core
+    KeyOutcome::Core(KeyTarget::None)
 }
 
 /// The DOM `KeyboardEvent` fields the key path carries (D8): the same fields
@@ -165,9 +167,9 @@ pub fn dom_cancel(event: Option<&(impl PointerInteraction + InteractionLocation)
 pub fn on_keydown(event: &KeyboardEvent, route: &KeyRoute, link: &CoreLink) {
     let key = dom_key(&event.data);
     match route(&key) {
-        KeyOutcome::Core => {
+        KeyOutcome::Core(target) => {
             event.prevent_default();
-            link.key(neutral_key(key));
+            link.key(neutral_key(key), target);
         }
         KeyOutcome::Handled => {
             // The window content took the key: no default runs for it either.

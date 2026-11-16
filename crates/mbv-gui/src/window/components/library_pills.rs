@@ -4,8 +4,7 @@
 //! TUI's Grouped Music pill is, so a press selects its pill and the others
 //! deselect. The pills paint the core's carried choice, so the row and the
 //! list cannot disagree; a press sends the select-collection command (design
-//! D1). The keys' Space and Enter intent (design D3) becomes the same
-//! command.
+//! D1). A pill request (design D3) becomes the same command.
 //!
 //! The row itself is the shared `LibraryPillRow` the other destinations
 //! paint too (design D15), so the canvas's pill form has one owner.
@@ -46,12 +45,6 @@ pub fn LibraryPills(props: LibraryPillsProps) -> Element {
         })
         .collect();
 
-    // The pill the keys' focus holds, or `None` while no pill has it.
-    let ui = library.ui.cloned();
-    let focused = library
-        .focused_library_pill(&props.pills, &ui)
-        .map(|pill| pill.group_id.clone());
-
     // Press a pill: select it (design D6).
     let press_library = library.clone();
     let lib_idx = props.lib_idx;
@@ -63,15 +56,9 @@ pub fn LibraryPills(props: LibraryPillsProps) -> Element {
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
 
-    library_pills_bound(
-        pills,
-        focused,
-        "Collections",
-        None,
-        on_press,
-        intent,
-        move || apply_library.apply_library_pill_select(lib_idx),
-    )
+    library_pills_bound(pills, "Collections", None, on_press, intent, move || {
+        apply_library.apply_library_pill_select(lib_idx);
+    })
 }
 
 #[cfg(test)]

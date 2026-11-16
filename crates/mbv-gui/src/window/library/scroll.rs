@@ -8,6 +8,8 @@
 
 use dioxus_native::prelude::*;
 
+use super::list::{GeometryRow, clamp_scroll_top};
+
 /// One list's scroll position: the native offset in pixels, and the viewport
 /// height the list measured (`0` until it measures).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -22,6 +24,22 @@ pub struct ListScroll {
 #[must_use]
 pub fn initial_list_scroll() -> ListScroll {
     ListScroll::default()
+}
+
+/// Write a scroll offset into a list's store, held inside the list's range
+/// (`gui-pointer-target-interaction` D6): the one settle a scroll key, a
+/// measurement, and a native scroll report share, so the store never holds an
+/// offset its rows cannot paint. An unchanged offset marks no subscriber.
+pub fn set_scroll_top(store: Signal<ListScroll>, rows: &[impl GeometryRow], scroll_top: f32) {
+    let held = *store.peek();
+    let clamped = ListScroll {
+        scroll_top: clamp_scroll_top(rows, scroll_top, held.viewport_height),
+        viewport_height: held.viewport_height,
+    };
+    if clamped != held {
+        let mut store = store;
+        store.set(clamped);
+    }
 }
 
 /// The six lists' scroll stores (`scroll.ts`'s module-level stores): one

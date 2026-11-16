@@ -49,10 +49,6 @@ pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
         })
         .collect();
 
-    // The pill the keys' focus holds, as the group's stable key; it paints
-    // the accent outline (design D6).
-    let focused = library.emby_ui.cloned().focused_pill;
-
     // Press a pill: select its group (row 8.1).
     let press_library = library.clone();
     let carried_pills = props.pills.clone();
@@ -73,7 +69,6 @@ pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
 
     library_pills_bound(
         pills,
-        focused,
         "Emby library folders",
         Some("emby"),
         on_press,

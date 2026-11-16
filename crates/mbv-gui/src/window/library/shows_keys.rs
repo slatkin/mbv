@@ -2,45 +2,43 @@
 //! D14, the port of `lib/library/shows-keys.ts`): the Library keys while a
 //! Shows library is active. [`super::keys`] stays the panel's one routing site
 //! and hands a Shows key here after the window keys and the open-field checks,
-//! so this module never installs a router. The pane focus decides the control
-//! a key acts on: the mode pills, the tree list, or the Hero's Workspace.
+//! so this module never installs a router. The pointer decides the control a key
+//! acts on: the row it marks in the tree list, or the Hero's Workspace.
 //!
 //! The routing is the shared panel key handler's ([`super::keys_shared`]): the movements and Enter never
 //! reach the core, Right and Left open and close the tree node under the
-//! cursor (the tree meaning design D3 gives them), Esc's overlay and menu
-//! handling runs before this, `/` opens the list's filter, and Space with no
-//! focused pill stays the core's play and pause.
+//! pointer (the tree meaning design D3 gives them), Esc's overlay and menu
+//! handling runs before this, `/` opens the list's filter, and Space stays the
+//! core's play and pause.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiShowsDetail, GuiShowsModeFrame};
-use crate::bridge::keys::DomKey;
+use crate::bridge::frame::library::GuiShowsDetail;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::{PointerList, PointerTarget};
 
-use super::keys_shared::{
-    PanelKeys, PillKeys, cursor_move, is_list_and_hero_key, route_panel_list_key,
-};
+use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
 use super::list::ListMove;
 use super::parts::{library_shows_detail, library_shows_list};
 use super::shows_list::ShowsListRow;
 use super::shows_workspace::{
-    move_shows_episode_cursor, play_next_shows_episode, play_shows_episode, queue_shows_episode,
+    play_next_shows_episode, play_shows_episode, queue_shows_episode, shows_episode_at,
     step_shows_season,
 };
 use super::state::LibraryState;
 
 /// The Shows facts a routed key reads (row 7C.2), copied off the carried
-/// frame: the library index the Workspace commands name and the mode pills.
+/// frame: the library index the Workspace commands name.
 #[derive(Debug, Clone)]
 struct ShowsFrame {
     lib_idx: usize,
-    pills: Vec<GuiShowsModeFrame>,
 }
 
 impl ShowsFrame {
     /// The facts of the carried Shows content, or `None` while another
     /// destination holds the window or the detail part has not landed. A
-    /// keydown copies the pill modes — never the rows.
+    /// keydown copies none of the rows.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
         let shows = library_shows_list(list.as_deref())?;
@@ -48,69 +46,31 @@ impl ShowsFrame {
         library_shows_detail(detail.as_deref())?;
         Some(Self {
             lib_idx: shows.lib_idx,
-            pills: shows.pills.iter().map(|pill| pill.mode).collect(),
         })
     }
 }
 
-/// The mode pill row's facts (row 7C.2): the pills are always painted, and
-/// the focus is the mode itself.
-struct ShowsPillKeys<'a> {
-    state: &'a LibraryState,
-}
-
-impl PillKeys for ShowsPillKeys<'_> {
-    type Frame = ShowsFrame;
-    type Pill = GuiShowsModeFrame;
-
-    fn available(&self, _frame: &ShowsFrame) -> bool {
-        true
-    }
-
-    fn focused(&self, frame: &ShowsFrame) -> Option<GuiShowsModeFrame> {
-        self.state.focused_shows_pill(&frame.pills)
-    }
-
-    fn request(&self, pill: GuiShowsModeFrame) {
-        self.state.request_shows_pill_select(pill);
-    }
-
-    fn move_focus(&self, step: i32) {
-        self.state.move_shows_pill_focus(step);
-    }
-}
-
 /// The Shows facts the shared panel key handler routes over (row 7C.2): the
-/// mode pills are always painted, the list is a tree whose Right, Left, and
-/// Enter act on the node under the cursor (design D14), the Hero routes its
-/// own episode Workspace, and the item the play and queue commands name is a
-/// flat row or an episode — a series, a season, and a heading are not
-/// playable.
+/// list is a tree whose Right, Left, and Enter act on the node the pointer marks
+/// (design D14), the Hero routes its own episode Workspace, and the item the
+/// play and queue commands name is a flat row or an episode — a series, a
+/// season, and a heading are not playable.
 struct ShowsKeys<'a> {
     state: &'a LibraryState,
-    pills: ShowsPillKeys<'a>,
 }
 
 impl<'a> ShowsKeys<'a> {
     fn new(state: &'a LibraryState) -> Self {
-        Self {
-            state,
-            pills: ShowsPillKeys { state },
-        }
+        Self { state }
     }
 }
 
 impl PanelKeys for ShowsKeys<'_> {
     type Frame = ShowsFrame;
     type Item = ShowsListRow;
-    type Pill = GuiShowsModeFrame;
 
     fn frame(&self) -> Option<ShowsFrame> {
         ShowsFrame::carry(self.state)
-    }
-
-    fn pills(&self) -> Option<&dyn PillKeys<Frame = ShowsFrame, Pill = GuiShowsModeFrame>> {
-        Some(&self.pills)
     }
 
     fn has_hero(&self, _frame: &ShowsFrame) -> bool {
@@ -124,8 +84,11 @@ impl PanelKeys for ShowsKeys<'_> {
         None
     }
 
-    fn cursor_row(&self) -> Option<ShowsListRow> {
-        self.state.shows_cursor_row()
+    fn row(&self, pointer: &PointerTarget) -> Option<ShowsListRow> {
+        if pointer.list != Some(PointerList::Shows) {
+            return None;
+        }
+        self.state.shows_row_at(pointer.row.as_deref()?)
     }
 
     fn item_id(&self, item: &ShowsListRow) -> Option<String> {
@@ -136,8 +99,12 @@ impl PanelKeys for ShowsKeys<'_> {
         }
     }
 
-    fn move_list_cursor(&self, mv: ListMove) {
-        self.state.move_shows_list_cursor(mv);
+    fn move_list(&self, mv: ListMove, pointer: &PointerTarget) -> bool {
+        if pointer.list != Some(PointerList::Shows) {
+            return false;
+        }
+        self.state.step_shows_scroll(mv);
+        true
     }
 
     fn play_item(&self, item_id: &str) {
@@ -153,73 +120,85 @@ impl PanelKeys for ShowsKeys<'_> {
         true
     }
 
-    /// Right on the cursor row (design D14): a node opens. A leaf has no
-    /// children, so the key changes nothing.
-    fn open_cursor_row(&self) {
-        if let Some(row) = self.state.shows_cursor_row()
-            && let Some(node_id) = row.as_node()
-        {
+    /// Right on `row` (design D14): a node opens. A leaf has no children, so the
+    /// key changes nothing.
+    fn open_row(&self, row: &ShowsListRow) {
+        if let Some(node_id) = row.as_node() {
             self.state.open_shows_node(node_id);
         }
     }
 
-    /// Left on the cursor row (design D14): an open node closes. A closed
-    /// node and a leaf change nothing.
-    fn close_cursor_row(&self) {
-        if let Some(row) = self.state.shows_cursor_row()
-            && let Some(node_id) = row.as_node()
+    /// Left on `row` (design D14): an open node closes. A closed node and a leaf
+    /// change nothing.
+    fn close_row(&self, row: &ShowsListRow) {
+        if let Some(node_id) = row.as_node()
             && self.state.shows_node_open(node_id)
         {
             self.state.close_shows_node(node_id);
         }
     }
 
-    /// Enter on the cursor row (design D14): a series or season node toggles
-    /// and selects, and an episode leaf or a flat row plays. A cursor on no
-    /// row sends nothing.
-    fn enter_cursor_row(&self) {
-        let Some(row) = self.state.shows_cursor_row() else {
-            return;
-        };
+    /// Enter on `row` (design D14): a series or season node toggles and selects,
+    /// and an episode leaf or a flat row plays.
+    fn enter_row(&self, row: &ShowsListRow) {
         if let Some(node_id) = row.as_node() {
             self.state.toggle_shows_node(node_id);
-            self.state.select_shows_row(&row);
+            self.state.select_shows_row(row);
             return;
         }
-        if let Some(item_id) = self.item_id(&row) {
+        if let Some(item_id) = self.item_id(row) {
             self.play_item(&item_id);
         }
     }
 
-    fn route_hero(&self, key: &DomKey, frame: &ShowsFrame) -> Option<KeyOutcome> {
-        Some(route_workspace_key(self.state, key, frame.lib_idx))
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        frame: &ShowsFrame,
+        pointer: &PointerTarget,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        Some(route_workspace_key(
+            self.state,
+            key,
+            frame.lib_idx,
+            pointer,
+            target,
+        ))
     }
 }
 
 /// Route a key to the Shows keys (design D12): the shared handler over the
-/// Shows facts. The pill row walks its modes and selects the focused one, the
-/// list's cursor moves and Enter selects a series or plays a flat row, and
-/// the Hero's Workspace cursor moves over the season's episodes. `n` and `a`
-/// act on the item the focused pane names — a flat row in the list, an
-/// episode in the Workspace — and a series row is not playable, so its `n` and
-/// `a` change nothing.
+/// Shows facts. The pill row walks its modes and selects the pressed one, the
+/// movement keys scroll the list under the pointer, and Enter selects a series
+/// or plays a flat row. `n` and `a` act on the item the pointer's control names
+/// — a flat row in the list, an episode in the Workspace — and a series row is
+/// not playable, so its `n` and `a` change nothing.
 #[must_use]
-pub fn route_shows_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &ShowsKeys::new(state))
+pub fn route_shows_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+) -> KeyOutcome {
+    route_panel_list_key(key, state, &ShowsKeys::new(state), pointer)
 }
 
-/// Route a key to the Hero's Workspace (design D12): the movement keys move
-/// the episode cursor, Left and Right step the season, Enter plays the
-/// episode, and `n` and `a` play it next or queue it.
-fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> KeyOutcome {
+/// Route a key to the Hero's Workspace (design D12, D2 of
+/// `gui-pointer-target-interaction`): Left and Right step the season, Enter,
+/// `n`, and `a` act on the episode the pointer marks, and the other list keys
+/// change nothing but are consumed. The Workspace keeps no cursor, so a
+/// movement key moves no row.
+fn route_workspace_key(
+    state: &LibraryState,
+    key: &DomKey,
+    lib_idx: usize,
+    pointer: &PointerTarget,
+    target: KeyTarget,
+) -> KeyOutcome {
     let detail_section = state.sections.library_detail.peek();
     let Some(detail) = library_shows_detail(detail_section.as_deref()) else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
-    if let Some(mv) = cursor_move(&key.key) {
-        move_shows_episode_cursor(state, mv, detail);
-        return KeyOutcome::Handled;
-    }
     match key.key.as_str() {
         "ArrowLeft" => {
             step_shows_season(state, -1, lib_idx, detail);
@@ -230,31 +209,41 @@ fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> Ke
             KeyOutcome::Handled
         }
         "Enter" | "n" | "a" => {
-            route_workspace_item_key(state, key, lib_idx, detail);
+            route_workspace_item_key(state, key, lib_idx, detail, pointer);
             KeyOutcome::Handled
         }
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 
-/// Run Enter, `n`, or `a` against the Workspace's selected episode (design
-/// D12): the Hero owns the episode cursor, so the key names no episode id.
+/// Run Enter, `n`, or `a` against the Workspace episode the pointer marks
+/// (design D2): the marker carries the episode's stable Service id, and a
+/// marker that names no painted episode sends nothing.
 fn route_workspace_item_key(
     state: &LibraryState,
     key: &DomKey,
     lib_idx: usize,
     detail: &GuiShowsDetail,
+    pointer: &PointerTarget,
 ) {
+    let Some(episode) = pointer
+        .row
+        .as_deref()
+        .and_then(|row_id| shows_episode_at(detail, row_id))
+    else {
+        return;
+    };
+    let episode_id = episode.episode_id.as_str();
     if key.key == "n" {
-        play_next_shows_episode(state, lib_idx, detail);
+        play_next_shows_episode(state, lib_idx, episode_id);
         return;
     }
     if key.key == "a" {
-        queue_shows_episode(state, lib_idx, detail);
+        queue_shows_episode(state, lib_idx, episode_id);
         return;
     }
-    play_shows_episode(state, lib_idx, detail);
+    play_shows_episode(state, lib_idx, episode_id);
 }
 
 #[cfg(test)]

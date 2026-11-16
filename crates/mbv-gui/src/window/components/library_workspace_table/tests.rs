@@ -11,6 +11,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::{LibraryWorkspaceTable, WorkspaceRow, hover_styles};
+use crate::window::pointer_target::PointerList;
 
 /// The harness's props: the rows the table paints.
 #[derive(Clone)]
@@ -26,6 +27,7 @@ fn table_app(props: FixtureProps) -> Element {
             label: "Tracklist",
             hook: "track",
             noun: "Track",
+            pointer_list: PointerList::Tracklist,
             rows: props.rows,
             on_press: Callback::new(|_: String| {}),
             on_play: Callback::new(|_: String| {}),
@@ -109,5 +111,43 @@ fn the_hover_swaps_the_number_for_the_play_control() {
         hover_styles(true),
         ("display: none;", "display: flex;"),
         "the hovered row hides the number and shows the control"
+    );
+}
+
+/// Contract (`gui-pointer-target-interaction` 3.3): the table names its list —
+/// the tracklist or a Workspace — and every row names its own id, the pair a
+/// key's pointer target reads.
+#[test]
+fn the_table_and_its_rows_carry_the_pointer_markers() {
+    let fixture = built(vec![WorkspaceRow {
+        id: "t1".to_owned(),
+        number: "1".to_owned(),
+        name: "Rhymin & Stealin".to_owned(),
+        duration: "3:27".to_owned(),
+        playing: false,
+        state: None,
+        progress: None,
+    }]);
+    let dom = fixture.doc.inner();
+    let list = dom
+        .query_selector("[data-pointer-list]")
+        .expect("the selector is valid")
+        .expect("the table carries the list marker");
+
+    assert_eq!(
+        dom.get_node(list)
+            .expect("the node is in the document")
+            .attr(LocalName::from("data-pointer-list")),
+        Some("tracklist")
+    );
+    let row = dom
+        .query_selector("[data-pointer-row]")
+        .expect("the selector is valid")
+        .expect("the row carries its marker");
+    assert_eq!(
+        dom.get_node(row)
+            .expect("the node is in the document")
+            .attr(LocalName::from("data-pointer-row")),
+        Some("t1")
     );
 }

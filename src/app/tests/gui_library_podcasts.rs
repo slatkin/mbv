@@ -13,7 +13,7 @@ use super::*;
 use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfShow, AudiobookshelfShowPage,
 };
-use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, LaunchPanelFocus, TabIdentity};
+use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, TabIdentity};
 use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
@@ -336,7 +336,6 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
             kind: ServiceKind::Audiobookshelf,
             library_id: "lib-abs-podcasts".into(),
         },
-        panel_focus: LaunchPanelFocus::Library,
         collections: Vec::new(),
     };
     let opened = match app.open_gui_launch_destination(&saved) {

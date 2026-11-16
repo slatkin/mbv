@@ -403,13 +403,13 @@ The class a Client derives from its own width alone: `Mini`, `Narrow`, or `Wide`
 _Avoid_: breakpoint mode, layout mode
 
 Panel:
-A root-composed region with its own placement, surface fill, layout, and Interactive Component. Panels are Tab, Library, Library playback, Queue, Queue playback, Status bar, and the pane boundaries. Panel focus still means which of Library or Queue receives navigation keys. It is independent of Panel mode.
+A root-composed region with its own placement, surface fill, layout, and Interactive Component. Panels are Tab, Library, Library playback, Queue, Queue playback, Status bar, and the pane boundaries. Panel focus means which of Library or Queue receives navigation keys in the TUI Client. The GUI Client has no Panel focus; its keys go to the *Pointer target*. It is independent of Panel mode.
 _Avoid_: active panel, focused panel, pane focus
 
 Panel mode:
 The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values are:
 
-1. Mini names a state where only one of Library or Queue is visible, set by Panel focus. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows.
+1. Mini names a state where only one of Library or Queue is visible. In the TUI Client, Panel focus sets it. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows. The GUI Client has no Panel focus: its Mini always shows the Queue panel (ADR 0040).
 2. Narrow names a state where both panels are visible. A hero-bearing Library panel uses the standard fixed-row browser. It opens a Library Hero overlay on demand.
 3. Wide names a state where both panels are visible. A hero-bearing Library panel uses Wide hero when the shared width and minimum-height conditions hold.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
@@ -421,6 +421,10 @@ _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, do
 Pinned panel width:
 The active saved width of the Pinned panel. Collapsed (`width`) and expanded (`width_expanded`) are the two values, in logical pixels. Every pinned launch starts at the collapsed width. The active width is never stored. The running panel switches between the two values on `x`, the F2 Panel width rows, and the collapse after a user play from the expanded width. `x` sets the Panel mode with the width it requests. Expanded is Library-only. Collapsed is Queue-only. A resize that mbv did not request changes neither value. The F2 Panel page edits the two saved values.
 _Avoid_: panel mode, expand mode, panel size
+
+Pointer target:
+The thing under the pointer that receives a GUI key. It is one of a Library row, the Library column, or the Queue list box. The GUI window resolves it from the hovered DOM node after each window event and each frame, so a scroll under a still pointer moves it. Every GUI key goes to its pointer target. A press, a Tab key, and a pointer crossing store no focus. With no pointer target, only the global chords act. Keys over the Queue list box act on the Queue's active row, not on the hovered row. It is a GUI concept. The TUI Client keeps Panel focus.
+_Avoid_: focus, hover focus
 
 Focus accent:
 A stroke around the Pinned panel window while it holds keyboard focus. It draws in the `[panel]` `accent_color` at `accent_width` pixels unless `accent` is false. It is fixed at launch because pinwin has no runtime accent API.
@@ -471,7 +475,7 @@ The root-composed Panel that owns the shared Wide and Narrow library skeleton. D
 _Avoid_: destination panel, library screen
 
 GUI Library panel:
-The GUI Client's Library panel, beside its Queue panel. The design canvas specifies it, not the TUI's *Library panel*. The GUI front end holds its interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter text) and handles its keys while it has Panel focus. The Client core holds its data selection (destination, selected collections, the Hero's item), its Service data, and its actions (ADR 0036).
+The GUI Client's Library panel, beside its Queue panel. The design canvas specifies it, not the TUI's *Library panel*. The GUI front end holds its interaction state (hover, scroll, open tree nodes, filter text). It holds no cursor and no focus inside the panel. Its keys go to the *Pointer target*, not by Panel focus (ADR 0040). The Client core holds its data selection (destination, selected collections, the Hero's item), its Service data, and its actions (ADR 0036).
 _Avoid_: GUI library screen, Library panel (bare, for the GUI's)
 
 Settings screen:

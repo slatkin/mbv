@@ -66,6 +66,11 @@ fn route_key(
         state,
         None,
         GuiArrangement::Wide,
+        &PointerTarget {
+            zone: Some(PointerZone::Library),
+            list: None,
+            row: None,
+        },
     );
     let search = state.search.peek();
     facts.lock().expect("facts").push(format!(
@@ -110,7 +115,10 @@ fn ctrl_k_out_of_a_queue_panel_frame_sends_the_key_to_the_core() {
     let (facts, rx) = run(move |state, facts| {
         route_key(state, facts, "k", "k", false, true);
     });
-    assert_eq!(facts, ["k=Core focused=false mounted=false highlight=None"]);
+    assert_eq!(
+        facts,
+        ["k=Core(None) focused=false mounted=false highlight=None"]
+    );
     assert_eq!(commands(&rx), []);
 }
 
@@ -125,7 +133,10 @@ fn ctrl_k_answers_the_core_while_no_top_bar_mounts_the_search_field() {
         carry(state, list.clone(), music_detail(None));
         route_key(state, facts, "k", "k", false, true);
     });
-    assert_eq!(facts, ["k=Core focused=false mounted=false highlight=None"]);
+    assert_eq!(
+        facts,
+        ["k=Core(None) focused=false mounted=false highlight=None"]
+    );
     assert_eq!(commands(&rx), []);
 }
 
@@ -142,7 +153,10 @@ fn a_key_meets_the_core_after_the_top_bar_unmounts_under_the_armed_field() {
         carry(state, list.clone(), music_detail(None));
         route_key(state, facts, "b", "b", false, false);
     });
-    assert_eq!(facts, ["b=Core focused=false mounted=false highlight=None"]);
+    assert_eq!(
+        facts,
+        ["b=Core(None) focused=false mounted=false highlight=None"]
+    );
     assert_eq!(commands(&rx), []);
 }
 
@@ -259,19 +273,31 @@ fn enter_with_no_highlighted_row_sends_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// The list pane's own Down keeps the list cursor's job; the Search state
-// holds no highlight and stays unfocused.
+// The Library list's own movement keys keep their job; the Search state holds
+// no highlight and stays unfocused.
 #[test]
 fn no_search_key_acts_while_the_field_does_not_hold_the_keyboard() {
     let list = music_list(Vec::new());
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         carry_search(state, results());
-        route_key(state, facts, "down", "ArrowDown", false, false);
+        route_on_row(
+            state,
+            facts,
+            "down",
+            "ArrowDown",
+            PointerList::Music,
+            "nothing",
+        );
+        let search = state.search.peek();
+        facts.lock().expect("facts").push(format!(
+            "focused={} mounted={} highlight={:?}",
+            search.focused, search.mounted, search.highlight
+        ));
     });
     assert_eq!(
         facts,
-        ["down=Handled focused=false mounted=false highlight=None"]
+        ["down=Handled", "focused=false mounted=false highlight=None"]
     );
     assert_eq!(commands(&rx), []);
 }
@@ -309,7 +335,7 @@ fn a_core_overlay_keeps_the_keyboard_even_from_the_focused_search_field() {
     });
     assert_eq!(
         facts,
-        ["escape=Core focused=true mounted=true highlight=None"]
+        ["escape=Core(None) focused=true mounted=true highlight=None"]
     );
     assert_eq!(commands(&rx), []);
 }

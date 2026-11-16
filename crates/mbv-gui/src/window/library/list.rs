@@ -1,10 +1,10 @@
 //! The Library list's row model (`add-gui-library-panel` design D7, the port
 //! of `lib/library/list.ts`): the canvas tree of artists, albums, and tracks,
 //! the 24 px letter headings above the first artist of each letter, the rows
-//! in view, the cursor's movement, and the A–Z letter rail. The list paints
-//! fixed-height rows over native scroll, and the window content owns the
-//! cursor, the open nodes, and the filter (design D1), while the scroll store
-//! owns the scroll (design D9). This module is plain data:
+//! in view, the scroll geometry, and the A–Z letter rail. The list paints
+//! fixed-height rows over native scroll, and the window content owns the open
+//! nodes and the filter (design D1), while the scroll store owns the scroll
+//! (design D9). This module is plain data:
 //! [`super::state`] applies it and the components paint it. Keeping it apart
 //! from both keeps the geometry testable without a layout.
 
@@ -25,10 +25,10 @@ pub const RAIL_LETTERS: &[char] = &[
     'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 
-/// The fields every painted row carries: its stable id (the cursor's identity
-/// and the each-block's key), its top edge from the list's first row, its
+/// The fields every painted row carries: its stable id (the pointer marker's
+/// value and the each-block's key), its top edge from the list's first row, its
 /// painted height, and the sort letter of the artist it belongs to — the rail
-/// marks the letter of the row under the cursor.
+/// jumps to the letter's first row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowBase {
     /// The row's stable id.
@@ -42,7 +42,7 @@ pub struct RowBase {
 }
 
 /// One painted row of the canvas tree (design D7). A letter heading is
-/// structural: the cursor never rests on it.
+/// structural: the pointer marker never names it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LibraryRow {
     /// A letter heading above the first artist of the letter.
@@ -111,8 +111,8 @@ impl LibraryRow {
         }
     }
 
-    /// Whether the cursor may rest on the row: a letter heading is
-    /// structural and never carries it.
+    /// Whether a key may act on the row: a letter heading is structural and
+    /// never carries the pointer marker.
     #[must_use]
     pub fn selectable(&self) -> bool {
         !matches!(self, LibraryRow::Letter(_))
@@ -127,6 +127,14 @@ pub trait GeometryRow {
     /// The row's stable id.
     fn id(&self) -> &str;
 
+    /// The id the row's pointer marker carries
+    /// (`gui-pointer-target-interaction` D1), or `None` for a structural row
+    /// that no key acts on: a letter heading names no item, so the pointer
+    /// over it names no row.
+    fn pointer_row(&self) -> Option<&str> {
+        Some(self.id())
+    }
+
     /// The row's top edge from the list's first row.
     fn top(&self) -> f32;
 
@@ -137,6 +145,10 @@ pub trait GeometryRow {
 impl<T: GeometryRow> GeometryRow for &T {
     fn id(&self) -> &str {
         T::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        T::pointer_row(self)
     }
 
     fn top(&self) -> f32 {
@@ -151,6 +163,10 @@ impl<T: GeometryRow> GeometryRow for &T {
 impl GeometryRow for LibraryRow {
     fn id(&self) -> &str {
         LibraryRow::id(self)
+    }
+
+    fn pointer_row(&self) -> Option<&str> {
+        self.selectable().then_some(LibraryRow::id(self))
     }
 
     fn top(&self) -> f32 {
@@ -420,12 +436,6 @@ impl RowBuilder {
     }
 }
 
-/// The rows the cursor may rest on: every row but the letter headings.
-#[must_use]
-pub fn selectable_rows(rows: &[LibraryRow]) -> Vec<&LibraryRow> {
-    rows.iter().filter(|row| row.selectable()).collect()
-}
-
 /// The painted height of the whole list: the bottom edge of its last row.
 #[must_use]
 pub fn rows_height(rows: &[impl GeometryRow]) -> f32 {
@@ -503,7 +513,7 @@ pub fn build_flat_rows_with_kind<'a, Item: FlatItem, Kind: Clone>(
         .collect()
 }
 
-/// A cursor movement the design's keys name (design D3): row by row for Up and
+/// A list movement the design's keys name (design D3): row by row for Up and
 /// Down, one viewport for Page Up and Page Down, and the list's ends for Home
 /// and End.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -537,49 +547,6 @@ pub fn move_index(count: usize, at: usize, mv: ListMove, page: usize) -> usize {
         ListMove::End => count.saturating_sub(1),
     };
     to.min(count.saturating_sub(1))
-}
-
-/// The cursor row a movement leaves (design D7), over the rows the destination
-/// lets the cursor rest on: the next, the previous, or a page away row, clamped
-/// to the list's ends. With no cursor on a row, Up and End start from the last
-/// row and every other movement from the first, so one key press always lands
-/// the cursor. `page` is the rows a page spans: the rows in view.
-///
-/// Every destination's list moves its cursor by this one rule (design D12), so
-/// the caller passes the rows it accepts and names nothing else: a tree's
-/// selectable rows, a flat list's whole model, a workspace's rows.
-#[must_use]
-pub fn move_cursor<Row: GeometryRow>(
-    rows: &[Row],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    let last = rows.last()?;
-    let at = rows
-        .iter()
-        .position(|row| row.id() == cursor.unwrap_or_default())
-        .filter(|_| cursor.is_some());
-    let Some(at) = at else {
-        let row = match mv {
-            ListMove::Up | ListMove::End => last,
-            _ => &rows[0],
-        };
-        return Some(row.id().to_owned());
-    };
-    Some(rows[move_index(rows.len(), at, mv, page)].id().to_owned())
-}
-
-/// The canvas tree's cursor movement (design D7): the shared movement over the
-/// rows a letter heading does not occupy.
-#[must_use]
-pub fn move_list_cursor(
-    rows: &[LibraryRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&selectable_rows(rows), cursor, mv, page)
 }
 
 /// The half-open range of row indexes the viewport paints (design D7): the rows
@@ -720,40 +687,42 @@ pub fn jump_to_letter(
     ))
 }
 
-/// The pill the pill row's focus steps to (design D6, D12): one pill along in
-/// `step`'s direction, clamped to the row's ends — and the end `step` walks
-/// from while no pill is focused or the stored focus names no carried pill,
-/// so the first Left or Right always lands a focus. `key_of` names the pill's
-/// stable focus key, the value the interaction state stores; `focused` is
-/// that stored key, or `None`. An empty row focuses nothing.
+/// The scroll offset a movement key leaves (design D6 of
+/// `gui-pointer-target-interaction`): Up and Down move by the height of the row
+/// at the top edge, Page Up and Page Down by the viewport height, and Home and
+/// End go to the list's ends. The value stays inside `[0, total − viewport]`,
+/// so a key at an end moves nothing. `view` is the list's scroll offset and
+/// measured viewport height, the fields every destination's scroll store
+/// carries.
 #[must_use]
-pub fn step_pill_focus<Pill: Clone>(
-    pills: &[Pill],
-    focused: Option<&str>,
-    key_of: impl Fn(&Pill) -> String,
-    step: i32,
-) -> Option<Pill> {
-    if pills.is_empty() {
-        return None;
-    }
-    let last = pills.len().saturating_sub(1);
-    let next =
-        match focused.and_then(|focused| pills.iter().position(|pill| key_of(pill) == focused)) {
-            None => {
-                if step > 0 {
-                    0
-                } else {
-                    last
-                }
-            }
-            Some(at) => if step >= 0 {
-                at.saturating_add(step.unsigned_abs() as usize)
-            } else {
-                at.saturating_sub(step.unsigned_abs() as usize)
-            }
-            .min(last),
-        };
-    pills.get(next).cloned()
+pub fn scroll_step(
+    rows: &[impl GeometryRow],
+    view: super::scroll::ListScroll,
+    mv: ListMove,
+) -> f32 {
+    let step = match mv {
+        ListMove::Up => -top_row_height(rows, view.scroll_top),
+        ListMove::Down => top_row_height(rows, view.scroll_top),
+        ListMove::PageUp => -view.viewport_height,
+        ListMove::PageDown => view.viewport_height,
+        ListMove::Home => return clamp_scroll_top(rows, 0.0, view.viewport_height),
+        ListMove::End => {
+            return clamp_scroll_top(rows, rows_height(rows), view.viewport_height);
+        }
+    };
+    clamp_scroll_top(rows, view.scroll_top + step, view.viewport_height)
+}
+
+/// The height of the row that covers the list's top edge: the row the first
+/// visible pixel belongs to, the last row's height while the offset lies past
+/// them, and no step while the list paints nothing.
+#[must_use]
+fn top_row_height(rows: &[impl GeometryRow], scroll_top: f32) -> f32 {
+    let top = scroll_top.max(0.0);
+    rows.iter()
+        .find(|row| row.top() + row.height() > top)
+        .or_else(|| rows.last())
+        .map_or(0.0, GeometryRow::height)
 }
 
 #[cfg(test)]

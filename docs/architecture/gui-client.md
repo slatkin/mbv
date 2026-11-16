@@ -95,10 +95,9 @@ for each window section; a present field is a `GuiSection { revision, value }`,
 and an absent field means the window already holds that section's revision.
 A section whose content can be absent has an `Option` value, so a `null`
 clears it. The sections are: the pre-attach state (`attach`, `null` once the
-attach succeeds), the theme (`theme`, `GuiTheme`), the focused surface and
-Panel (`focus`, `GuiFocus`, mirroring `ComponentId` and `PanelFocus`), the
-Queue viewport rows with their stable `QueueSlotId` raw numbers, cursor,
-marks, active slot, row hover, row drag, and each item row's zebra parity
+attach succeeds), the theme (`theme`, `GuiTheme`), the
+Queue viewport rows with their stable `QueueSlotId` raw numbers, the active
+row, marks, active slot, row hover, row drag, and each item row's zebra parity
 (`queue`, `GuiQueue`), the queue header's remaining count, next item title,
 queue finish's tail offset, right-column mode, and filter text with its
 caret fact (`summary`, `GuiQueueSummary`), the collapse and queue-fold
@@ -174,7 +173,8 @@ the time and the chapter without a tile.
 The window reaches the core through six methods on `CoreLink`
 (`src/window/channel.rs`). Each only pushes into the core channel:
 
-- `key(KeyEvent)`: a neutral key. `src/window/input.rs` builds a `DomKey` from
+- `key(key, target)`: a neutral key with the panel target the pointer
+  resolved for it (ADR 0040). `src/window/input.rs` builds a `DomKey` from
   the Dioxus keyboard event, and `src/bridge/keys.rs` translates it to a
   neutral `KeyEvent`, following the TUI's crossterm
   edge: SHIFT folds an uppercase letter to lowercase, Shift+Tab is `BackTab`,
@@ -216,8 +216,7 @@ router leaves to the core reaches the `key` method. A lost gesture — a `pointe
 `pointerleave` with a button held, or the window's blur — forwards the
 `cancel` kind. The core's `PointerGestureState` recognizes
 the gesture; a recognized gesture's point resolves against the combined hit
-map of the last `LayoutReport`; the core applies the focus change the
-matching TUI click applies; and `App::route_gui_pointer` receives the
+map of the last `LayoutReport`, and `App::route_gui_pointer` receives the
 surface that owns the region as its leaf. A point in no reported region
 resolves to nothing. The leaf adapters (`src/leaves.rs`: `QueueLeaf`,
 `PlaybackLeaf`, `StatusBarLeaf`) are built per routing call over the core's
@@ -242,7 +241,8 @@ surface registers a contribution of list capacities and painted regions
 under a `Symbol` key; the reporter merges all contributions into one
 `LayoutReport` and sends it through `LayoutReporter::report_layout`. Reports coalesce to one
 send per turn of the event loop, and a contribution identical to its last
-value sends nothing — a batch that moves only the cursor moves no region.
+value sends nothing — a batch that moves only the active row moves no
+region.
 A report marks no section and forces no batch (design D4): a layout change
 that moves a section's content moves it through the section's own compare,
 and a report that moves nothing sends nothing. The core rebuilds its whole
@@ -273,8 +273,8 @@ press itself (`App::execute_gui_confirm_button`,
 A GUI list paints only the viewport: fixed-height rows, no native DOM
 scroll. The core's viewport decides which rows the `queue` section carries;
 wheel
-input goes to the core like any pointer event, so scroll follows the cursor
-through the same Surface state rules as the TUI. The list's rows are 30
+input goes to the core like any pointer event, so scroll follows the active
+row through the same Surface state rules as the TUI. The list's rows are 30
 logical pixels tall (`src/window/components/queue_panel.rs`), and the window measures the
 list's height and reports whole rows as capacity. `track_container_size`
 (`src/window/layout.rs`) measures the panel container after each layout epoch
@@ -345,19 +345,16 @@ carry it (`GuiRole::ALL` is the one unchecked list; add the role there too).
 The `chrome` section carries the eight fill values the shadcn
 chrome variables point at (`background`, `card`, `popover`, `muted`,
 `secondary`, `sidebar`, `border`, `input`) plus the queue column's own
-surfaces: `queueColumn` and `queueColumnFocused`
-(`Surface::QueueColumn`'s resting and focused fills, the gutter the
-column paints), `queuePanel` and `queuePanelFocused`
-(`Surface::QueuePanel`, the recessed box), `queuePlaybackBand`
-(`Surface::QueueOnlyPlaybackPanel`, the fill of the compact strip and the
-collapsed rail), and `queueFooterBand` (`Surface::QueuePanelBand`, behind
-the footer pills). Each chrome fill resolves the `Surface` the TUI paints
-the same concept with through `surface_colors` — the focus-reactive
-pairs carry both slots, and the window picks between them on the
-`focus` section's Panel-focus fact — so the `mbv-theme` surface table stays
-the
-one fill authority and a palette edit recolours the chrome together with
-the roles.
+surfaces: `queueColumn` (`Surface::QueueColumn`, the gutter the column
+paints), `queuePanel` (`Surface::QueuePanel`, the recessed box),
+`queuePlaybackBand` (`Surface::QueueOnlyPlaybackPanel`, the fill of the
+compact strip and the collapsed rail), and `queueFooterBand`
+(`Surface::QueuePanelBand`, behind the footer pills). Each chrome fill
+resolves the `Surface` the TUI paints the same concept with through
+`surface_colors`, at its resting fill — the queue column paints one fill at
+every focus state, and the TUI keeps its focus-reactive pick — so the
+`mbv-theme` surface table stays the one fill authority and a palette edit
+recolours the chrome together with the roles.
 
 The queue's canvas paint also uses colours that name no `mbv-theme` slot.
 `assets/app.css` carries them as GUI-local `--canvas-*` custom properties — the
@@ -491,8 +488,7 @@ and the change's gap audits, copied into that change's directory under
 the exact values; this file records what the paint changed, not every
 canvas value.
 
-The queue column's backdrop — the `queueColumn` pair, picked on the frame's
-Panel-focus fact — owns the window. The player header row paints the
+The queue column's backdrop (`queueColumn`) owns the window. The player header row paints the
 playback target (its icon, the host label, and the collapse and queue-fold
 controls) and the right-aligned status word. A press on the target opens the
 `targetChooser` overlay, whose rows carry the choices with the attached
@@ -557,7 +553,7 @@ with the choices and the chosen one marked. Both rows are absent while the
 local player is inactive.
 
 The Queue panel's recessed box sits below the player block on the
-`queuePanel` pair, with its header row, its rows, and its bottom spacer. The
+`queuePanel` fill, with its header row, its rows, and its bottom spacer. The
 header paints the remaining count, the queue's derived finish clock (the
 ` +1d` rule above), the Length /
 Ends-at switch, and the filter control; the switch, the filter, and each row
@@ -567,10 +563,19 @@ a grouped list alternates within each group from its first member, an
 ungrouped list throughout — and a striped row takes the `queueColumn` fill
 inside the box. Each row paints the canvas row: its padded mono ordinal in
 place of the date gutter, one title line over a 2 px progress track, and
-the right-column value — no second text line. The rows paint at the
-canvas's fixed 30 logical pixel height. The list paints no scrollbar column
-yet — the TUI reserves one only
-while the list is focused and overflows.
+the right-column value — no second text line. At the canvas's fixed 30
+logical pixel height, the rows paint four looks (ADR 0040), and the four
+are distinct. The active row — the frame's `cursor`
+slot, the row the Queue's Surface state names — always paints the
+`selected` fill and a 4 px leading accent edge, and the hover veil leaves
+them in place. A hovered row that is neither the active row nor a marked
+row paints no fill of its own: the shared hover veil is its whole hover
+look, the inset shadow the stylesheet paints on every hovered `button`
+(`assets/app.css`). A marked row paints the `selected` fill with no edge.
+The now-playing row keeps its own look: the play glyph beside its title,
+as *Text and icons* describes. The looks need no focus fact, because the
+window holds none. The list paints no scrollbar column yet — the TUI
+reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
@@ -604,7 +609,7 @@ and the insertion line's stable-slot anchor; the ghost floats at that line
 row keeps its in-place paint (the canvas keeps it lit). The core owns the
 gesture and the drop index, and it sends
 one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
-for the same move on the keyboard-selected row. A `cancel` pointer kind
+for the same move on the active row. A `cancel` pointer kind
 drops the drag, the row hover, and the scrubber hover without a move.
 
 The shared confirmation modal (`src/window/components/confirm_overlay.rs`) paints window-modal
@@ -673,15 +678,17 @@ Client core holds the data selection and the actions (design D1).
 
 | Window content (`src/window/library/`) | Client core (`App`) |
 | --- | --- |
-| Cursor, hover, scroll, open tree nodes | The active destination (`App::tab`) |
-| Focus inside the panel (pill row, list, Hero, tracklist) | The selected collections of each destination |
-| Filter text and Search query text | The album each collection last showed in the Hero (`App::gui_library_picks`) |
-| The open Hero overlay and the item menu | Service data, its loading, and the artwork |
-| The Library's keys while it has Panel focus | Panel focus (`FocusStack`) and the actions |
+| Hover (the pointer target), scroll, open tree nodes | The active destination (`App::tab`) |
+| Filter text and Search query text | The selected collections of each destination |
+| The open Hero overlay, item menu, and row menu | The album each collection last showed in the Hero (`App::gui_library_picks`) |
+| The Library's keys, sent to their pointer target | Service data, its loading, and the artwork |
+| No cursor and no focus inside the panel | Panel focus (`FocusStack`) and the actions |
 
 The data selection is core state because the core decides what to load and
 what to save at exit. The window content changes it only by a command, and the
-frame carries it back, so the pill row paints the core's set. The panel uses
+frame carries it back, so the pill row paints the core's set. The panel holds
+no cursor and no focus inside it: its keys go to the *Pointer target*, not by
+Panel focus (ADR 0040). The panel uses
 no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
 recogniser or hit map. `src/window/components/library_panel.rs` paints `LibraryTopBar` (the
@@ -1031,7 +1038,7 @@ do. `src/bridge/library.rs` translates the wire variants and
 `App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
 through the existing `App` action, so the TUI's own paths do not change. The
 variants are `openDestination` (`position`), `selectCollection` (`libIdx`,
-`groupId`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
+`groupId`), `showDetail` (`itemId`), `openAlbum` (`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
 (`itemId`), and the Home commands — `homeSelect`, `homePlay`,
@@ -1142,8 +1149,7 @@ of its no-op, and the frame carries the store that drain fills; the TUI's own
 drain and its component do not change. A row the store no longer holds logs
 and changes nothing.
 
-The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
-the focus the `App`'s key gates read (design D4). The `play` and
+The `play` and
 `addToQueue` variants apply the library playback policy's autoload rule to
 the Library's routes: with autoload on, a track whose album the track cache
 holds replaces the queue with that album's cached tracks starting at the
@@ -1164,7 +1170,8 @@ the TUI's library cursor.
 
 `src/window/input.rs` forwards a keydown only after the window's key router, and it
 never interprets the key itself. The router answers one of three outcomes
-(`KeyOutcome`): `core` sends the key to the `key` method with its default
+(`KeyOutcome`): `core` sends the key to the `key` method with the panel
+target the pointer resolved and its default
 action prevented, `handled` means the window content took the key so the core
 receives none, and `text` means an open text field takes it, so the browser's
 own default types it. `src/window/app.rs` installs `routeLibraryKey`
@@ -1197,35 +1204,41 @@ With no Settings frame, the Library chain runs. The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
    playback-target chooser, the confirmation modal, the daemon-lost recovery
-   dialog) or prefix mode is armed, the key goes to the core.
-   Both facts are in the frame. The Queue filter's text entry is the core's
-   too, so every key is the core's while it holds the keyboard.
+   dialog) or prefix mode is armed, the key goes to the core with the target
+   the pointer resolved. Both facts are in the frame. The Queue filter's text
+   entry is the core's too, so every key is the core's while it holds the
+   keyboard, with the `Queue` target wherever the pointer is — the keys the
+   filter does not consume still reach the Queue leaf.
 2. The `Ctrl+K` chord arms the Search field: wherever the Library panel
    shows and its top bar mounts the field, the field takes the keyboard;
-   in Mini with Queue focus no top bar paints the field, so the chord
-   keeps its core effect there.
+   in Mini the Library panel does not show, so no top bar mounts the field
+   and the chord keeps its core effect there.
 3. While a text field of the panel holds the keyboard, the field takes the
    key: the Search field first — its hold is DOM focus, Esc closes its
    results, the arrow keys move the highlight, and Enter activates the
    marked one — then the `/` filter, whose Esc closes it and Enter
    accepts it.
-4. While the Library panel shows, the window keys run: Tab and Shift+Tab move
-   the pane focus (the pill row, the list, the Hero, and across the panel
-   boundary to the Queue panel), and `1` to `7` open the first to seventh
-   destination tab after Home.
-5. While the Library panel has Panel focus, the Library keys run in the window
-   content: `/` opens the list filter, Enter plays the item under the cursor
-   or presses the focused control, `n` plays it next, `a` adds it to the
-   queue, Space and Alt+Space toggle and solo a focused pill, the arrow, Page
-   Up, Page Down, Home, and End keys move the cursor, Right and Left open or
-   close a tree node or walk the pill row, and Esc closes the open filter,
-   overlay, or menu.
-6. Every other key goes to the core's keyboard router. So Space plays or
-   pauses while no pill has focus, `[` and `]` seek, and the GUI-only chords
-   `z`, `q`, and `c` and every `[keys]` binding keep their effect.
+4. Esc closes what the window opened, wherever the pointer is: the
+   right-click row menu, the picked item's menu, the Narrow arrangement's
+   Hero overlay, then the Search results dropdown. With nothing open, Esc
+   stays the core's key.
+5. A digit `1` to `7` opens the destination tab at its place after Home.
+6. While the pointer rests over the Library column, the Library keys run on
+   the pointer target (ADR 0040): `/` opens the list filter, Right and Left
+   open or close the hovered tree node, Enter plays the hovered row's item,
+   `n` plays it next, `a` adds it to the queue, and the arrow, Page Up, Page
+   Down, Home, and End keys scroll the list the pointer rests on. With no
+   hovered row, the keys that act on one are consumed and do nothing. Space
+   keeps its core effect: no pill holds a keyboard focus, so the pills
+   answer a press only.
+7. Every other key goes to the core's keyboard router with the target the
+   pointer resolved: a key over the Queue list box names the `Queue`
+   target, and every other key names none. So `[` and `]` seek, and the
+   GUI-only chords `z`, `q`, and `c` and every `[keys]` binding keep their
+   effect.
 
-With Queue Panel focus the Library takes no key, so `/` opens the Queue filter
-and `a` opens the audio popover as before (design D3).
+With the pointer over the Queue list box, no Library key runs, so `/` opens
+the Queue filter and `a` opens the audio popover as before.
 
 ### The arrangement
 
@@ -1236,12 +1249,13 @@ or the width a drag gave it — with the canvas sizes as thresholds. Below
 480 px is Mini, from 880 px with at least 600 px of height is Wide, and
 between them is Narrow. The thresholds are window constants beside the
 Queue panel's state constants, and the core does not classify the size. Mini
-mounts only the panel that holds Panel focus. Narrow mounts both panels, and
+mounts only the Queue panel; a later tabbed Mini view can widen that (ADR
+0040). Narrow mounts both panels, and
 a picked item opens the Hero as an overlay over the list. Wide mounts both
 panels with the Hero beside the list. The Queue panel keeps its four states
-inside every arrangement, and a resize across a threshold moves no cursor,
-pill selection, or picked item, because those live in the window content and
-the core.
+inside every arrangement, and a resize across a threshold moves no active
+row, pill selection, or picked item, because those live in the window
+content and the core.
 
 Both columns are resizable (`src/window/resize.rs`). A drag on either
 divider (`src/window/components/panel_divider.rs`) reports the sized column's new width in
@@ -1276,21 +1290,21 @@ column — only the pane that holds the keyboard shows: the sidebar until a
 section opens, then its content. A resize across the threshold keeps the
 open section, which the core owns.
 
-Panel focus stays in the core's `FocusStack`, and the frame's `GuiFocus`
-carries it. `CoreThread::new` mounts `ComponentId::Library`; a press inside the
-Library panel sends `takeFocus`, and the core sets the stack and
-`App::panel_focus` together. The GUI's `App` applies neither the TUI's
-terminal-width Mini check nor its hidden empty queue column, so the core's key
-gates see the stored Panel focus.
+Panel focus stays in the core's `FocusStack`. The window carries no copy of
+it: `CoreThread::route_key` sets it per key from the key's target — a
+`Queue` target sets `Queue`, no target sets `Library` — and each
+`GuiLibraryCommand` the core applies sets Library Panel focus first (ADR
+0040). The GUI's `App` applies neither the TUI's terminal-width Mini check
+nor its hidden empty queue column.
 
 ### The launch location
 
 The GUI keeps its own launch location (design D9). Its `App` starts with
-`LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab or
-Panel focus, and the GUI never writes the TUI file. The GUI file
+`LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab,
+and the GUI never writes the TUI file. The GUI file
 (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
-destination, the selected collections of each destination with the album each
-collection last showed, and Panel focus as stable Service identities. The core reads it once before the first step, saves
+destination and the selected collections of each destination with the album
+each collection last showed, as stable Service identities. The core reads it once before the first step, saves
 it at orderly exit before `client_exit_teardown`, and never while the window
 is open.
 
@@ -1299,12 +1313,11 @@ The restore runs in two phases (`GuiLaunchRestore`,
 destination once a presented one holds its identity — no destination takes
 its place: one the presented set does not hold opens nothing, and the
 phase keeps waiting while its parts can land, the Audiobookshelf catalog
-and the feed subscriptions — and applies the saved Panel focus over the
-Library focus the open takes, unless the user already took focus while the
-restore was pending. A start with no saved location — or one that fails
+and the feed subscriptions. A start with no saved location — or one that
+fails
 to load — restores through the same path (`mbv_config::first_launch`):
-its Home destination resolves to the first presented one, with Library
-Panel focus and no saved collection choice, so the Library panel is
+its Home destination resolves to the first presented one, with no saved
+collection choice, so the Library panel is
 reachable from the first launch. The
 second phase applies the saved
 collection choice once the destination's group list lands: the first saved

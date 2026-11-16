@@ -1,12 +1,11 @@
 //! The plain Emby-library list's row model (`add-gui-library-panel` design
 //! D12, row 8.1, the port of `lib/library/emby-list.ts`): the plain mode's
 //! letter headings over its name-sorted rows, the feed-group mode's flat rows
-//! with their date gutter, the rows in view, the cursor's movement, and the
-//! A–Z rail. The list paints fixed-height rows over native scroll and only the
-//! rows in view, as the Music and Shows lists do, and the cursor moves over
-//! the item rows only — a heading is structural, the cursor never rests on it.
-//! The model is plain data over fixed heights, so the geometry is asserted
-//! without a layout.
+//! with their date gutter, the rows in view, and the A–Z rail. The list paints
+//! fixed-height rows over native scroll and only the rows in view, as the Music
+//! and Shows lists do, and the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2). The model is plain data over fixed
+//! heights, so the geometry is asserted without a layout.
 
 use std::sync::Arc;
 
@@ -14,8 +13,8 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiEmbyFeedGroupFrame, GuiEmbyRowFrame};
 use crate::window::library::list::{
-    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, ListMove, RailLetter, build_flat_rows, filter_match,
-    letter_rail_by, move_cursor,
+    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, RailLetter, build_flat_rows, filter_match,
+    letter_rail_by,
 };
 
 /// The fields of a carried Emby row the flat feed-group list reads (design
@@ -39,13 +38,13 @@ pub const EMBY_HEADING_ROW_HEIGHT: f32 = LETTER_ROW_HEIGHT;
 /// their geometry.
 pub const EMBY_ROW_HEIGHT: f32 = 40.0;
 
-/// One painted row the cursor may rest on and the keys act on (row 8.1):
-/// every item row, a folder and a boxset included, because the folder-play
-/// rule plays a collection row. A heading is structural.
+/// One painted row the keys may act on (row 8.1): every item row, a folder and
+/// a boxset included, because the folder-play rule plays a collection row. A
+/// heading is structural.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmbyItemRow {
-    /// The row's stable key: the cursor's identity, the each-block's key, and
-    /// the id the scroll geometry reads.
+    /// The row's stable key: the pointer marker's value, the each-block's key,
+    /// and the id the scroll geometry reads.
     pub id: String,
     /// The row's top edge from the list's first row.
     pub top: f32,
@@ -89,6 +88,10 @@ impl GeometryRow for EmbyListRow {
         self.id()
     }
 
+    fn pointer_row(&self) -> Option<&str> {
+        (!matches!(self, EmbyListRow::Heading { .. })).then_some(self.id())
+    }
+
     fn top(&self) -> f32 {
         match self {
             EmbyListRow::Heading { top, .. } => *top,
@@ -102,15 +105,6 @@ impl GeometryRow for EmbyListRow {
             EmbyListRow::Item(item) => item.height,
         }
     }
-}
-
-/// The rows the cursor may rest on: every item row, never a heading (row
-/// 8.1).
-#[must_use]
-pub fn emby_selectable_rows(rows: &[EmbyListRow]) -> Vec<&EmbyListRow> {
-    rows.iter()
-        .filter(|row| matches!(row, EmbyListRow::Item(_)))
-        .collect()
 }
 
 /// The plain mode's rows: each row under the letter heading of its rail
@@ -178,35 +172,10 @@ pub fn build_emby_rows(
     }
 }
 
-/// The rail letter a painted row belongs to, or `None` on a heading and on the
-/// letterless feed-group rows.
-#[must_use]
-pub fn emby_row_letter(row: &EmbyListRow) -> Option<char> {
-    match row {
-        EmbyListRow::Heading { letter, .. } => Some(*letter),
-        EmbyListRow::Item(item) => item.row.sort_letter,
-    }
-}
-
-/// The cursor key a movement leaves (row 8.1): the next, the previous, or a
-/// page away item row, clamped to the list's ends, stepping over the letter
-/// headings. With no cursor on an item row, Up and End start from the last item
-/// row and every other movement from the first, so one key press always lands
-/// the cursor. `page` is the rows a page spans: the rows in view.
-#[must_use]
-pub fn move_emby_cursor(
-    rows: &[EmbyListRow],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    move_cursor(&emby_selectable_rows(rows), cursor, mv, page)
-}
-
 /// The A–Z rail over the painted rows (row 8.1, design D7): each letter with
-/// the first row under it, so a press moves the cursor there. A letter no
-/// painted row carries is disabled, as the Music rail's is. The feed-group mode
-/// paints no rail, so its rows carry no letter and the rail stays disabled.
+/// the first row under it, so a press scrolls there. A letter no painted row
+/// carries is disabled, as the Music rail's is. The feed-group mode paints no
+/// rail, so its rows carry no letter and the rail stays disabled.
 #[must_use]
 pub fn emby_letter_rail(rows: &[EmbyListRow]) -> Vec<RailLetter> {
     letter_rail_by(rows, |row| match row {
@@ -271,8 +240,8 @@ impl EmbyRowsMemo {
         filter: &str,
     ) -> Arc<[EmbyListRow]> {
         // `peek`, never `read`: a caller inside an effect that writes the
-        // memo (a settle that moves the cursor) would re-queue itself on the
-        // write below otherwise.
+        // memo (a filter's scroll clamp) would re-queue itself on the write
+        // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
             && entry.feed_group == feed_group

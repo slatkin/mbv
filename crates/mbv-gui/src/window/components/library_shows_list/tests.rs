@@ -1,6 +1,6 @@
 //! Headless tests of the Shows list (D16): the contracts of
 //! `LibraryShowsList.test.ts` — the All series mode paints its letter
-//! headings and series tree with the A–Z rail a press moves the cursor with,
+//! headings and series tree with the A–Z rail beside them,
 //! a press on a series node opens it and selects it, the flat modes paint
 //! their date-ordered rows with their date gutter and no rail, a press sends
 //! the select command with the row's stable id, and a double-click on a flat
@@ -389,13 +389,10 @@ fn press_row(fixture: &mut Fixture, id: &str) {
 }
 
 /// Contract (`LibraryShowsList.test.ts`): the All series mode paints the
-/// letter headings and the A–Z rail beside the list, and a press on an
-/// enabled letter moves the cursor to that letter's first series row. The
-/// rail press rides the jump handler (a headless document cannot fire a DOM
-/// click).
+/// letter headings and the A–Z rail beside the list, and the rail's B is
+/// enabled because a painted series row carries it.
 #[test]
-fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_a_press_moves_the_cursor_with()
-{
+fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them() {
     let mut fixture = built(
         shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
         shows_detail(&[]),
@@ -412,17 +409,10 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_a_press_move
         painted_rows(&fixture),
         ["shows-series:s1".to_owned(), "shows-series:s3".to_owned()]
     );
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.jump_shows_to_letter('B'));
-
     assert_eq!(
-        fixture.attr_of(
-            "[data-library-shows-row-id=\"shows-series:s3\"]",
-            "data-library-shows-cursor",
-        ),
-        Some(String::new()),
-        "the rail press moved the cursor to the letter's first series row"
+        fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
+        None,
+        "the rail's B is enabled by the series row under it"
     );
 }
 

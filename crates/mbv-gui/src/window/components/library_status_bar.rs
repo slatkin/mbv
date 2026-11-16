@@ -26,13 +26,12 @@ use crate::window::sections::SectionRef;
 use crate::window::status::toast_color;
 
 /// The canvas's key hints, key glyph then what the key does (design D3,
-/// D10).
+/// D10, D6). The GUI has no Panel focus, so no hint names a pane walk.
 const HINTS: &[(&str, &str)] = &[
     ("/", "filter"),
     ("⏎", "play"),
     ("n", "next"),
     ("a", "queue"),
-    ("tab", "pane"),
     ("1–7", "library"),
 ];
 

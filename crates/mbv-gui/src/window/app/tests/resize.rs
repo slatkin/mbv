@@ -59,8 +59,8 @@ struct Props {
 
 /// The root, shaped like the window's: one layout size the drain and the
 /// measurement both write, and the arrangement, panel visibility, and column
-/// widths derived from it the way `App` derives them. The Library panel is the
-/// active destination and holds focus, so Mini shows it alone.
+/// widths derived from it the way `App` derives them. Mini shows the Queue
+/// panel alone (`gui-pointer-target-interaction` design D5).
 fn resize_app(props: Props) -> Element {
     let Props { viewport, epoch } = props;
     let (core, _inputs) = channel::<CoreInput>();
@@ -77,7 +77,10 @@ fn resize_app(props: Props) -> Element {
     let size = container.cloned();
     let widths = panel_widths(size, &expanded(), &DraggedWidths::default());
     let arrangement = library_arrangement(size, widths.queue);
-    let queue_visible = arrangement != GuiArrangement::Mini;
+    let queue_visible =
+        arrangement != GuiArrangement::Mini || super::super::mini_shows_queue(arrangement);
+    let library_visible =
+        arrangement != GuiArrangement::Mini || !super::super::mini_shows_queue(arrangement);
 
     let stylesheet = ROOT_STYLE.as_str();
     rsx! {
@@ -94,9 +97,11 @@ fn resize_app(props: Props) -> Element {
                         style: "width: {widths.queue}px;",
                     }
                 }
-                div {
-                    class: "flex h-full min-h-0 flex-col flex-1",
-                    "data-library-column": "",
+                if library_visible {
+                    div {
+                        class: "flex h-full min-h-0 flex-col flex-1",
+                        "data-library-column": "",
+                    }
                 }
             }
         }
@@ -240,6 +245,14 @@ impl Window {
         )
     }
 
+    /// Whether the Library column paints.
+    fn paints_the_library_column(&self) -> bool {
+        matches!(
+            self.doc.inner().query_selector("[data-library-column]"),
+            Ok(Some(_))
+        )
+    }
+
     /// The arrangement of every frame presented so far, in order.
     fn presented_arrangements(&self) -> Vec<String> {
         self.arrangements.borrow().clone()
@@ -253,20 +266,23 @@ impl Window {
 
 /// Contract (the live resize jerk of `e978b31aa`, D9): the first frame at the new
 /// size already lays out the arrangement that size picks. A resize from the Wide
-/// arrangement to Mini crosses the Library column's threshold and drops the Queue
-/// column, and the frame the resize asked for presents that arrangement — no
-/// frame resolves at the new size with the old one.
+/// arrangement to Mini crosses the Library column's threshold, and Mini shows the
+/// Queue panel alone (`gui-pointer-target-interaction` design D5): the frame the
+/// resize asked for presents that arrangement — no frame resolves at the new size
+/// with the old one.
 #[test]
 fn the_first_frame_at_a_new_size_paints_its_arrangement() {
     let mut window = Window::built(1600, 900);
     assert_eq!(window.arrangement(), "wide");
     assert!(window.paints_the_queue_column());
+    assert!(window.paints_the_library_column());
 
     window.resize(800, 900);
     window.redraw();
 
     assert_eq!(window.arrangement(), "mini");
-    assert!(!window.paints_the_queue_column());
+    assert!(window.paints_the_queue_column());
+    assert!(!window.paints_the_library_column());
     assert_eq!(window.presented_arrangements(), vec!["wide", "mini"]);
 }
 

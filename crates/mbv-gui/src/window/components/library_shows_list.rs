@@ -9,19 +9,15 @@
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::shows_list`]
 //! over native scroll, and only the rows in view paint, so a long series
-//! list stays fast. The cursor, the open and closed nodes, and the filter
-//! text are the window content's own in [`crate::window::library::shows`]
-//! (design D1); the scroll offset and the viewport are the Shows list's
-//! scroll store (design D9). A press on a node opens or closes it and
-//! selects it for the Hero, a press on a leaf or a flat row selects it, a
-//! double-click on an episode plays it, and a right-click opens the item
-//! menu, as the Music list's rows do.
-//!
-//! The Hero's episode cursor belongs to the selected row: a selection change
-//! starts it over, because the episodes it rested on belong to the previous
-//! series (the `shows-workspace` contract).
+//! list stays fast. The open and closed nodes and the filter text are the
+//! window content's own in [`crate::window::library::shows`] (design D1); the
+//! scroll offset and the viewport are the Shows list's scroll store (design
+//! D9). A press on a node opens or closes it and selects it for the Hero, a
+//! press on a leaf or a flat row selects it, a double-click on an episode plays
+//! it, and a right-click opens the item menu, as the Music list's rows do. The
+//! list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2).
 
-use std::cell::RefCell;
 use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
@@ -38,8 +34,9 @@ use crate::window::library::parts::{library_shows_detail, library_shows_list};
 use crate::window::library::shows_list::{
     ShowsListRow, active_shows_mode, shows_letter_rail, shows_series_mode,
 };
-use crate::window::library::shows_workspace::{is_played_episode, reset_shows_episode_cursor};
+use crate::window::library::shows_workspace::is_played_episode;
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -100,19 +97,11 @@ fn row_name_color(shows: Option<&GuiShowsList>, row: &ShowsListRow) -> String {
     }
 }
 
-/// A row's painted fill (design D14): the cursor row's focus fill, and the
-/// core's selected row the raised fill while the cursor sits elsewhere — the
-/// selection is what the Hero shows, so its row stays marked.
-fn row_background(
-    row: &ShowsListRow,
-    cursor: Option<&str>,
-    selected: Option<&str>,
-) -> Option<String> {
+/// A row's painted fill (design D14): the core's selected row paints the raised
+/// fill — the selection is what the Hero shows, so its row stays marked.
+fn row_background(row: &ShowsListRow, selected: Option<&str>) -> Option<String> {
     if matches!(row, ShowsListRow::Heading(_)) {
         return None;
-    }
-    if Some(row.id()) == cursor {
-        return Some(canvas_var("selected"));
     }
     is_selected_row(row, selected).then(|| canvas_var("library-raise"))
 }
@@ -149,7 +138,6 @@ fn paint_shows_node(
     row: &ShowsListRow,
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
-    cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
     let (kind, title, open, expandable, height) = match row {
@@ -169,13 +157,12 @@ fn paint_shows_node(
         ),
         _ => return rsx! {},
     };
-    let cursor_row = Some(row.id()) == cursor;
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
         "height: {height}px; padding: 0 8px; padding-left: {}; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
         row_inset(row)
     );
-    if let Some(background) = row_background(row, cursor, selected) {
+    if let Some(background) = row_background(row, selected) {
         let _ = write!(style, " background: {background};");
     }
     let weight = if matches!(row, ShowsListRow::Series(_)) || selected_row {
@@ -192,9 +179,6 @@ fn paint_shows_node(
     // `undefined` painted none); the marks beyond it paint only while they
     // hold.
     let mut row_marks = Vec::new();
-    if cursor_row {
-        row_marks.push(Attribute::new("data-library-shows-cursor", "", None, false));
-    }
     if selected_row {
         row_marks.push(Attribute::new(
             "data-library-shows-selected",
@@ -257,20 +241,18 @@ fn paint_shows_episode(
     row: &ShowsListRow,
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
-    cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
     let ShowsListRow::Episode(episode) = row else {
         return rsx! {};
     };
-    let cursor_row = Some(row.id()) == cursor;
     let selected_row = is_selected_row(row, selected);
     let mut style = format!(
         "height: {}px; padding: 0 8px; padding-left: {}; gap: 8px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
         episode.height,
         row_inset(row)
     );
-    if let Some(background) = row_background(row, cursor, selected) {
+    if let Some(background) = row_background(row, selected) {
         let _ = write!(style, " background: {background};");
     }
     let name_color = row_name_color(shows, row);
@@ -298,7 +280,6 @@ fn paint_shows_episode(
                     f32_from_f64(coordinates.y),
                 );
             },
-            ..mark("data-library-shows-cursor", cursor_row),
             ..mark("data-library-shows-selected", selected_row),
             span {
                 class: "flex-none font-mono tabular-nums",
@@ -331,7 +312,6 @@ fn paint_shows_row(
     row: &ShowsListRow,
     library: &LibraryState,
     shows: Option<&GuiShowsList>,
-    cursor: Option<&str>,
     selected: Option<&str>,
 ) -> Element {
     match row {
@@ -343,11 +323,10 @@ fn paint_shows_row(
             }
         },
         ShowsListRow::Series(_) | ShowsListRow::Season(_) => {
-            paint_shows_node(row, library, shows, cursor, selected)
+            paint_shows_node(row, library, shows, selected)
         }
-        ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, cursor, selected),
+        ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
         ShowsListRow::Flat(flat) => {
-            let cursor_row = Some(row.id()) == cursor;
             let selected_row = is_selected_row(row, selected);
             let press_row = row.clone();
             let press_library = library.clone();
@@ -366,8 +345,7 @@ fn paint_shows_row(
                     trail: flat.row.date.clone(),
                     trail_part: LibraryTrailPart::Date,
                     title_color: canvas_var("text"),
-                    background: row_background(row, cursor, selected),
-                    cursor: cursor_row,
+                    background: row_background(row, selected),
                     selected: selected_row,
                     progress: None,
                     on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
@@ -402,7 +380,7 @@ pub fn LibraryShowsList() -> Element {
     let detail = library_shows_detail(detail_section.as_deref());
 
     // The interaction state and the scroll store this list paints (design
-    // D1, D9).
+    // D9).
     let shows_ui = library.shows_ui.cloned();
     let scroll = library.scrolls.shows.cloned();
 
@@ -417,13 +395,6 @@ pub fn LibraryShowsList() -> Element {
     // paints it, and the flat modes paint none.
     let rail = shows_letter_rail(&rows);
 
-    // The row the cursor rests on, and the letter the rail marks: the one
-    // the cursor row belongs to.
-    let cursor = shows_ui.cursor.clone();
-    let marked = rows
-        .iter()
-        .find(|row| Some(row.id()) == cursor.as_deref())
-        .and_then(ShowsListRow::rail_letter);
     let selected = detail.and_then(|detail| detail.selected.clone());
 
     // The header's right line, in the Music list's shape: the active mode
@@ -447,48 +418,23 @@ pub fn LibraryShowsList() -> Element {
             .unwrap_or_else(|| "shows".to_owned())
     );
 
-    // The Hero's episode cursor belongs to the selected row (the
-    // `shows-workspace` contract): a selection change starts it over. The
-    // effect reads the detail section and writes the Workspace's cursor — a
-    // signal it never reads — so it never re-runs itself.
-    let reset_library = library.clone();
-    let last_selected = use_hook(|| RefCell::new(None::<String>));
-    use_effect(move || {
-        let detail_section = reset_library.sections.library_detail.cloned();
-        let selected = library_shows_detail(detail_section.as_deref())
-            .and_then(|detail| detail.selected.clone());
-        let mut last = last_selected.borrow_mut();
-        if *last == selected {
-            return;
-        }
-        *last = selected;
-        drop(last);
-        reset_shows_episode_cursor(&reset_library);
-    });
-
     // The list's two DOM facts report to the scroll store (design D9), and
     // the rows paint over the interaction state this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let paint_library = library.clone();
-    let paint_cursor = cursor.clone();
     let paint_selected = selected.clone();
     let paint_shows = frame;
     let virtual_list = library_virtual_list(
         rows.as_ref(),
         scroll,
         "shows",
+        PointerList::Shows,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_shows_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_shows_list(top)),
         move |row: &ShowsListRow| {
-            paint_shows_row(
-                row,
-                &paint_library,
-                paint_shows,
-                paint_cursor.as_deref(),
-                paint_selected.as_deref(),
-            )
+            paint_shows_row(row, &paint_library, paint_shows, paint_selected.as_deref())
         },
     );
 
@@ -496,8 +442,7 @@ pub fn LibraryShowsList() -> Element {
     // none.
     let paints_rail = mode.is_some_and(shows_series_mode);
 
-    // The rail's press moves the cursor to the letter's first row (design
-    // D7).
+    // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();
     let filter_library = library.clone();
     let accept_library = library.clone();
@@ -546,7 +491,6 @@ pub fn LibraryShowsList() -> Element {
                 if paints_rail {
                     LibraryLetterRail {
                         letters: rail,
-                        marked,
                         jump: Some(Callback::new(move |letter: char| {
                             jump_library.jump_shows_to_letter(letter);
                         })),

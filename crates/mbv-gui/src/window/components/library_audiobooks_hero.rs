@@ -7,11 +7,11 @@
 //!
 //! The book's chapters are the Hero's Workspace (the `GuiAudiobooksWorkspaceFrame`
 //! rows): title and duration, with the chapter the book plays at marked with
-//! the tracklist's play glyph. The Workspace's cursor and hover are the
-//! window content's own (`window/library/audiobooks_workspace`, design D1): a
-//! press moves the cursor, a double-click plays or seeks from the chapter,
-//! and the hovered row paints its play control. Books have no play next, and
-//! a chapter enqueues nothing: only the play control paints.
+//! the tracklist's play glyph. The Workspace keeps no cursor
+//! (`gui-pointer-target-interaction` D6): the keys act on the chapter the
+//! pointer marks, a press on a row does nothing, a double-click plays or seeks
+//! from the chapter, and the hovered row paints its play control. Books have no
+//! play next, and a chapter enqueues nothing: only the play control paints.
 //!
 //! Play, and Add to queue (`a`), send the Audiobooks commands with the
 //! frame's selected book — the core owns the selection, so the actions name
@@ -28,12 +28,11 @@ use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, Libra
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
-use crate::window::library::audiobooks_workspace::{
-    marked_chapter_of, press_abs_chapter, resolve_abs_chapter_cursor, workspace_of,
-};
+use crate::window::library::audiobooks_workspace::{marked_chapter_of, workspace_of};
 use crate::window::library::hero::{HeroLayoutFacts, hero_layout, selected_with_hero};
 use crate::window::library::parts::library_audiobooks_detail;
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Audiobooks Hero (the `LibraryAudiobooksHero`
@@ -157,13 +156,6 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
     // Workspace only when the mark moves.
     let marked = marked_chapter_of(detail, Some(position));
 
-    // The chapter the cursor rests on (design D12): the state's chapter while
-    // the carried Workspace paints it, the marked chapter, or the first
-    // chapter otherwise.
-    let abs_cursor = library.audiobooks_workspace.cloned();
-    let cursor_chapter =
-        resolve_abs_chapter_cursor(workspace, abs_cursor.cursor, marked).map(|row| row.chapter);
-
     // The frame's header and block for the Hero (invariant 30).
     let facts = HeroLayoutFacts {
         title: &hero.title,
@@ -215,14 +207,10 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
         }
     };
 
-    // The Workspace's press and play (design D12): a press moves the cursor
-    // onto the chapter, and the row's play gestures send that chapter.
-    let press_library = library.clone();
-    let on_press = Callback::new(move |chapter_id: String| {
-        if let Ok(chapter) = chapter_id.parse::<usize>() {
-            press_abs_chapter(&press_library, chapter);
-        }
-    });
+    // The Workspace's press and play (design D12, D6): a press on a row does
+    // nothing — the Workspace keeps no cursor — and the row's play gestures send
+    // that chapter.
+    let on_press = Callback::new(|_: String| {});
     let play_library = library.clone();
     let play_detail = props.detail.clone();
     let on_play = Callback::new(move |chapter_id: String| {
@@ -243,8 +231,8 @@ pub fn LibraryAudiobooksHero(props: LibraryAudiobooksHeroProps) -> Element {
                 label: "Chapters",
                 hook: "abs-chapter",
                 noun: "Chapter",
+                pointer_list: PointerList::Workspace,
                 rows,
-                cursor: cursor_chapter.map(|chapter| chapter.to_string()),
                 actions: Vec::new(),
                 on_press,
                 on_play,

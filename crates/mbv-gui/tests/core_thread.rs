@@ -25,7 +25,6 @@ use mbv_config::{
 use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiStatusBar;
-use mbv_gui::bridge::frame::focus::GuiFocus;
 use mbv_gui::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -33,6 +32,7 @@ use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
 use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
+use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows, RegionTarget,
 };
@@ -44,6 +44,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Positio
 mod core_thread {
     mod art;
     mod home;
+    mod keys;
     mod launch;
     mod library;
     mod overlay;
@@ -61,7 +62,17 @@ pub(crate) const TEST_URL: &str = "http://127.0.0.1:1";
 /// A key press with no modifier held, as the translated `key` command
 /// carries it.
 fn key_press() -> CoreInput {
-    CoreInput::Key(KeyEvent::new(Key::Char('n'), KeyModifiers::NONE))
+    queue_key(KeyEvent::new(Key::Char('n'), KeyModifiers::NONE))
+}
+
+/// One key chord with the Queue target, as the window sends it while the
+/// pointer is over the Queue list box (design D2 of
+/// `gui-pointer-target-interaction`).
+pub(crate) fn queue_key(key: KeyEvent) -> CoreInput {
+    CoreInput::Key {
+        key,
+        target: KeyTarget::Queue,
+    }
 }
 
 /// A layout report for a window the window has not measured into regions
@@ -167,7 +178,6 @@ impl Held {
         let held = &mut self.batch;
         held.attach = batch.attach.or(held.attach.take());
         held.theme = batch.theme.or(held.theme.take());
-        held.focus = batch.focus.or(held.focus.take());
         held.queue = batch.queue.or(held.queue.take());
         held.summary = batch.summary.or(held.summary.take());
         held.panel = batch.panel.or(held.panel.take());
@@ -197,11 +207,6 @@ impl Held {
     /// The queue summary section's value.
     pub(crate) fn summary(&self) -> &GuiQueueSummary {
         section_value(self.batch.summary.as_ref(), "summary")
-    }
-
-    /// The focus section's value.
-    pub(crate) fn focus(&self) -> &GuiFocus {
-        section_value(self.batch.focus.as_ref(), "focus")
     }
 
     /// The open overlay, `None` while none is open.
@@ -405,10 +410,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
     test.held();
 
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(
-            Key::PageDown,
-            KeyModifiers::NONE,
-        )))
+        .send(queue_key(KeyEvent::new(Key::PageDown, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     let held = test.held();
@@ -426,7 +428,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
 fn a_routed_quit_key_fires_the_quit_edge_and_ends_the_run() {
     let mut test = test_core_with(mbv::stub_app_with_rebound_quit("Shift+Q"));
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(
+        .send(queue_key(KeyEvent::new(
             Key::Char('Q'),
             KeyModifiers::SHIFT,
         )))

@@ -1,46 +1,24 @@
-//! The Audiobooks Hero's Workspace interaction state (`add-gui-library-panel`
-//! design D1, D12, row 9.1, the port of `lib/library/audiobooks-workspace.ts`):
-//! the cursor over the selected book's chapters. It is the window content's own
-//! — the core never reads it, and the hover is the Workspace table's own paint
-//! — and the chapters themselves are the core's, carried by the frame. The
+//! The Audiobooks Hero's Workspace (`add-gui-library-panel` design D1, D12,
+//! row 9.1, the port of `lib/library/audiobooks-workspace.ts`): the selected
+//! book's chapters. The chapters themselves are the core's, carried by the
+//! frame, and the Workspace keeps no cursor — the row a key or a control acts on
+//! is the row the pointer marks (`gui-pointer-target-interaction` D2, D6). The
 //! chapter whose span holds the predicted position (design D5) is the window's
 //! derivation, read from the playhead's position while the Hero's book is the
 //! playing book.
 //!
-//! The cursor is a chapter number, never a row position: the frame carries the
-//! stable Service discriminator the TUI's chapter activation addresses, so a
-//! cursor whose chapter left the frame (a different book's detail, or the
-//! detail landing) resolves to the book's current chapter when one plays, and
-//! to the first chapter otherwise. The pure cursor model is
-//! [`move_chapter_cursor`]; the store functions below send the commands the
-//! Hero's keys and controls name.
-
-use dioxus_native::prelude::*;
+//! A chapter row's pointer marker is the chapter number, never a row position:
+//! the frame carries the stable Service discriminator the TUI's chapter
+//! activation addresses, so [`abs_chapter_at`] parses the marker back and a
+//! marker that names no painted chapter sends nothing. The functions below send
+//! the commands the Hero's keys and controls name.
 
 use crate::bridge::frame::library::{
     GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksWorkspaceFrame,
 };
 use crate::bridge::library::GuiLibraryCommand;
-use crate::window::library::list::ListMove;
 
 use super::state::LibraryState;
-
-/// The Workspace's interaction state (`audiobooks-workspace.ts`'s
-/// `AudiobooksWorkspaceState`).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct AudiobooksWorkspaceState {
-    /// The cursor's chapter number, or `None` while no chapter carries the
-    /// cursor (a fresh book, and a book whose chapters have not landed).
-    pub cursor: Option<usize>,
-}
-
-impl AudiobooksWorkspaceState {
-    /// The state a freshly mounted Workspace starts with.
-    #[must_use]
-    pub fn initial() -> Self {
-        Self::default()
-    }
-}
 
 /// The selected book's Workspace, or `None` while the book's detail has not
 /// landed.
@@ -90,84 +68,20 @@ pub fn marked_chapter_of(
     current_chapter_row(rows, position_ticks.unwrap_or(0.0))
 }
 
-/// The chapter the cursor rests on (design D12): the chapter the state's number
-/// names while the Workspace still paints it, the marked chapter while the
-/// Hero's book plays, and the Workspace's first chapter otherwise — the cursor
-/// re-resolves when its chapter leaves the frame, so a book change never leaves
-/// it resting on nothing.
+/// The Workspace chapter the pointer's marker names (design D1, D2): the
+/// marker carries the chapter number, so the frame's chapters resolve it and a
+/// stale or foreign marker names no chapter. `None` while the Workspace paints
+/// no such chapter.
 #[must_use]
-pub fn resolve_abs_chapter_cursor<'a>(
-    workspace: Option<&'a GuiAudiobooksWorkspaceFrame>,
-    cursor: Option<usize>,
-    marked: Option<&'a GuiAudiobooksChapterRowFrame>,
-) -> Option<&'a GuiAudiobooksChapterRowFrame> {
-    let rows: &[GuiAudiobooksChapterRowFrame] = workspace.map_or(&[], |workspace| &workspace.rows);
-    rows.iter()
-        .find(|row| Some(row.chapter) == cursor)
-        .or(marked)
-        .or_else(|| rows.first())
-}
-
-/// The chapter the cursor rests on in the carried frame, or `None` while the
-/// Workspace holds no chapter. Enter on the Workspace acts on this chapter.
-#[must_use]
-pub fn abs_cursor_chapter<'a>(
-    state: &LibraryState,
+pub fn abs_chapter_at<'a>(
     detail: &'a GuiAudiobooksDetail,
+    row: &str,
 ) -> Option<&'a GuiAudiobooksChapterRowFrame> {
-    resolve_abs_chapter_cursor(
-        workspace_of(detail),
-        state.audiobooks_workspace.peek().cursor,
-        marked_chapter_of(detail, Some(state.playhead_position.cloned())),
-    )
-}
-
-/// The chapter number a movement leaves (design D12): the next, the previous,
-/// or a page away chapter, clamped to the book's ends. With no cursor on a
-/// painted chapter, Up and End start from the last chapter and every other
-/// movement from the first, so one key press always lands the cursor. The
-/// Workspace carries no measured viewport in this unit, so a page move spans
-/// one row.
-#[must_use]
-pub fn move_chapter_cursor(
-    rows: &[GuiAudiobooksChapterRowFrame],
-    cursor: Option<usize>,
-    mv: ListMove,
-) -> Option<usize> {
-    let last = rows.len().checked_sub(1)?;
-    let at = rows.iter().position(|row| Some(row.chapter) == cursor);
-    let Some(at) = at else {
-        let row = match mv {
-            ListMove::Up | ListMove::End => &rows[last],
-            _ => &rows[0],
-        };
-        return Some(row.chapter);
-    };
-    let to = match mv {
-        ListMove::Up | ListMove::PageUp => at.saturating_sub(1),
-        ListMove::Down | ListMove::PageDown => at.saturating_add(1),
-        ListMove::Home => 0,
-        ListMove::End => last,
-    };
-    Some(rows[to.min(last)].chapter)
-}
-
-/// Move the Workspace's cursor one movement along (design D12): the movement
-/// keys while the Hero pane has the pane focus.
-pub fn move_abs_chapter_cursor(state: &LibraryState, mv: ListMove, detail: &GuiAudiobooksDetail) {
-    let workspace = workspace_of(detail);
-    let current = abs_cursor_chapter(state, detail);
-    let cursor = move_chapter_cursor(
-        workspace.map_or(&[], |workspace| &workspace.rows),
-        current.map(|row| row.chapter),
-        mv,
-    );
-    let mut audiobooks_workspace = state.audiobooks_workspace;
-    audiobooks_workspace.with_mut(|held| {
-        if held.cursor != cursor {
-            held.cursor = cursor;
-        }
-    });
+    let chapter = row.parse::<usize>().ok()?;
+    workspace_of(detail)?
+        .rows
+        .iter()
+        .find(|candidate| candidate.chapter == chapter)
 }
 
 /// Play the book the frame selected from its saved position (design D12): the
@@ -201,39 +115,23 @@ fn act_on_book(
     state.link.library(command_of(item_id));
 }
 
-/// Play or seek from the cursor's chapter (design D12): Enter on the
-/// Workspace, the row's double-click, and the row's hover play control. A
-/// Workspace with no chapter, or a frame that selects no book, sends nothing.
-pub fn play_abs_chapter(state: &LibraryState, lib_idx: usize, detail: &GuiAudiobooksDetail) {
+/// Play or seek from one chapter (design D12): Enter on the hovered chapter,
+/// the row's double-click, and the row's hover play control. A frame that
+/// selects no book sends nothing. The chapter number is the stable Service
+/// discriminator the TUI's chapter activation addresses.
+pub fn play_abs_chapter(
+    state: &LibraryState,
+    lib_idx: usize,
+    detail: &GuiAudiobooksDetail,
+    chapter: usize,
+) {
     let Some(book_id) = detail.selected.as_deref() else {
-        return;
-    };
-    let Some(chapter) = abs_cursor_chapter(state, detail) else {
         return;
     };
     state.link.library(GuiLibraryCommand::AbsPlayChapter {
         lib_idx,
         book_id: book_id.to_owned(),
-        chapter: chapter.chapter,
-    });
-}
-
-/// Start the cursor over when the selected book changes (design D12): the
-/// grooves are the new book's chapters, so the previous book's cursor names
-/// nothing.
-pub fn reset_abs_chapter_cursor(state: &LibraryState) {
-    let mut audiobooks_workspace = state.audiobooks_workspace;
-    audiobooks_workspace.set(AudiobooksWorkspaceState::initial());
-}
-
-/// Settle the cursor on the row a press names (design D12): a press moves the
-/// cursor onto the row it hit, as the Music list's track press does.
-pub fn press_abs_chapter(state: &LibraryState, chapter: usize) {
-    let mut audiobooks_workspace = state.audiobooks_workspace;
-    audiobooks_workspace.with_mut(|held| {
-        if held.cursor != Some(chapter) {
-            held.cursor = Some(chapter);
-        }
+        chapter,
     });
 }
 

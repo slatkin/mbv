@@ -98,12 +98,6 @@ pub enum GuiLibraryCommand {
     /// Open an album node: load its tracks when the cache does not hold them
     /// (design D5).
     OpenAlbum { album_id: String },
-    /// Take Panel focus for the Library panel (design D4).
-    TakeFocus,
-    /// Take Panel focus for the Queue panel (design D4): Tab across the panel
-    /// boundary's far end. The mirror of [`GuiLibraryCommand::TakeFocus`],
-    /// whose press path moves focus back the other way.
-    TakeQueueFocus,
     /// Play the item (design D8).
     Play { item_id: String },
     /// Play the item next (design D8): the shared play-next admission, so the
@@ -280,23 +274,13 @@ impl App {
         Self::log_library_command(&command);
         match command {
             GuiLibraryCommand::OpenDestination { position } => {
-                if self.presents_open_position(position) {
-                    self.set_library_tab(position);
-                    self.open_gui_active_destination();
-                } else {
-                    Self::log_ignored_library_command(
-                        "openDestination",
-                        format_args!("the position {position} names no presented destination"),
-                    );
-                }
+                self.open_gui_library_position(position);
             }
             GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
                 self.select_gui_library_collection(lib_idx, group_id);
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
-            GuiLibraryCommand::TakeFocus => self.set_gui_panel_focus(PanelFocus::Library),
-            GuiLibraryCommand::TakeQueueFocus => self.set_gui_panel_focus(PanelFocus::Queue),
             GuiLibraryCommand::Play { item_id } => match self.gui_library_item(&item_id) {
                 Some((lib_idx, item)) => self.play_gui_library_item(lib_idx, item),
                 None => Self::log_stale_library_item("play", &item_id),
@@ -476,6 +460,24 @@ impl App {
         }
     }
 
+    /// Open the destination a tab position names (design D2): the GUI's one
+    /// open step. The window's open-destination command and the keyboard
+    /// router's destination steps (the tab keys and a digit) all take it, so a
+    /// position resolves to the same destination state however it arrived. A
+    /// position that names no presented destination opens nothing — the top
+    /// bar paints no tab for it, so it is the absent digit key.
+    pub(in crate::app) fn open_gui_library_position(&mut self, position: usize) {
+        if self.presents_open_position(position) {
+            self.set_library_tab(position);
+            self.open_gui_active_destination();
+        } else {
+            Self::log_ignored_library_command(
+                "openDestination",
+                format_args!("the position {position} names no presented destination"),
+            );
+        }
+    }
+
     /// The open step the active destination's kind needs (design D12): the
     /// Shows destination seeds its mode selection with the TUI default
     /// rule's resolution and starts its root load when the stack holds no
@@ -577,10 +579,10 @@ impl App {
         );
     }
 
-    /// Set Panel focus for the GUI Library panel (design D4): the take-focus
-    /// effect, sent by a press inside the panel and by a Tab across the panel
-    /// boundary. The core thread sets its `FocusStack` with the same value, so
-    /// the frame's focus and the App's key gates cannot disagree.
+    /// Set Panel focus for the GUI Library panel (design D4): the core
+    /// thread's per-key Panel-focus adapter sets the App's stored focus
+    /// through this entry, so the gates the App's key paths read agree with
+    /// the core's `FocusStack`.
     pub fn set_gui_panel_focus(&mut self, focus: PanelFocus) {
         self.set_panel_focus(focus);
     }

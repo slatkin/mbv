@@ -6,11 +6,11 @@
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::feeds_list`]
 //! over native scroll, and only the rows in view paint, so a long Latest
-//! merge stays fast. The cursor is the window content's own in
-//! [`crate::window::library::feeds`] (design D1); the scroll offset and the
-//! viewport are the Feeds list's scroll store (design D9). A press selects
+//! merge stays fast. The list keeps no cursor: the keys act on the row the
+//! pointer marks (`gui-pointer-target-interaction` D2); the scroll offset and
+//! the viewport are the Feeds list's scroll store (design D9). A press selects
 //! the entry the Hero shows, and a double-click plays it (design D12): the
-//! keys' Enter plays the cursor row, and the press is the selection's half.
+//! keys' Enter plays the hovered row, and the press is the selection's half.
 
 use dioxus_native::prelude::*;
 
@@ -21,15 +21,11 @@ use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFra
 use crate::window::library::feeds_list::{FEEDS_ROW_HEIGHT, FeedsItemRow};
 use crate::window::library::parts::{library_feeds_detail, library_feeds_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 
 /// One painted row of the flat list: the entry row.
 /// A feed entry names no right-click menu — the former row paints none.
-fn paint_feeds_row(
-    row: &FeedsItemRow,
-    library: &LibraryState,
-    cursor: Option<&str>,
-    selected: Option<&str>,
-) -> Element {
+fn paint_feeds_row(row: &FeedsItemRow, library: &LibraryState, selected: Option<&str>) -> Element {
     let press_row = row.clone();
     let press_library = library.clone();
     let play_id = row.row.id.clone();
@@ -41,7 +37,6 @@ fn paint_feeds_row(
             height: FEEDS_ROW_HEIGHT,
             id: &row.id,
             entry: &row.row,
-            cursor: Some(row.id.as_str()) == cursor,
             selected: Some(row.id.as_str()) == selected,
         },
         Callback::new(move |()| press_library.press_feeds_row(&press_row)),
@@ -88,27 +83,20 @@ pub fn LibraryFeedsList() -> Element {
     let rows = library.feeds_rows();
 
     // The list's two DOM facts report to the scroll store (design D9), and
-    // the rows paint over the interaction state this render read.
+    // the rows paint over the section this render read.
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let paint_library = library.clone();
-    let paint_cursor = feeds_ui.cursor.clone();
     let paint_selected = detail.and_then(|detail| detail.selected.clone());
     let virtual_list = library_virtual_list(
         rows.as_ref(),
         scroll,
         "feeds",
+        PointerList::Feeds,
         "8px 8px 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_feeds_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_feeds_list(top)),
-        move |row: &FeedsItemRow| {
-            paint_feeds_row(
-                row,
-                &paint_library,
-                paint_cursor.as_deref(),
-                paint_selected.as_deref(),
-            )
-        },
+        move |row: &FeedsItemRow| paint_feeds_row(row, &paint_library, paint_selected.as_deref()),
     );
 
     let filter_library = library.clone();

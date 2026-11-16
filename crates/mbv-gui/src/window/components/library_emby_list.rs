@@ -6,27 +6,26 @@
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::emby_list`]
 //! over native scroll, and only the rows in view paint, so a long library
-//! stays fast. The cursor is the window content's own in
-//! [`crate::window::library::emby`] (design D1); the scroll offset and the
+//! stays fast. The list keeps no cursor: the keys act on the row the pointer
+//! marks (`gui-pointer-target-interaction` D2); the scroll offset and the
 //! viewport are the Emby list's scroll store (design D9). A press selects
-//! the row the Hero shows, a double-click plays it, and the keys' Enter
-//! plays the row under the cursor — every row is playable, because the
-//! core's folder-play rule expands a folder or a boxset row.
+//! the row the Hero shows, a double-click plays it, and the keys' Enter plays
+//! the hovered row — every row is playable, because the core's folder-play rule
+//! expands a folder or a boxset row.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEmbyRowKindFrame;
-use crate::window::components::library_item_row::{
-    LibraryItemRow, LibraryTrailPart, row_background,
-};
+use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart};
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail, emby_row_letter};
+use crate::window::library::emby_list::{EmbyListRow, emby_letter_rail};
 use crate::window::library::parts::{library_emby_detail, library_emby_list};
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerList;
 use crate::window::theme::canvas_var;
 
 /// The row kind word the item row's hook paints (`data-library-emby-row`).
@@ -39,12 +38,7 @@ fn kind_word(kind: GuiEmbyRowKindFrame) -> &'static str {
 
 /// One painted row of the list: the letter heading
 /// or the item row.
-fn paint_emby_row(
-    row: &EmbyListRow,
-    library: &LibraryState,
-    cursor: Option<&str>,
-    selected: Option<&str>,
-) -> Element {
+fn paint_emby_row(row: &EmbyListRow, library: &LibraryState, selected: Option<&str>) -> Element {
     match row {
         EmbyListRow::Heading { letter, height, .. } => rsx! {
             LibraryLetterHeading {
@@ -54,9 +48,8 @@ fn paint_emby_row(
             }
         },
         EmbyListRow::Item(item) => {
-            let cursor_row = cursor == Some(item.id.as_str());
             let selected_row = selected == Some(item.id.as_str());
-            let background = row_background(cursor_row, selected_row);
+            let background = selected_row.then(|| canvas_var("library-raise"));
             let press_row = row.clone();
             let press_library = library.clone();
             let play_id = item.row.id.clone();
@@ -75,7 +68,6 @@ fn paint_emby_row(
                     trail_part: LibraryTrailPart::Date,
                     title_color: canvas_var("text"),
                     background,
-                    cursor: cursor_row,
                     selected: selected_row,
                     progress: None,
                     on_press: Callback::new(move |()| press_library.press_emby_row(&press_row)),
@@ -141,13 +133,6 @@ pub fn LibraryEmbyList() -> Element {
     // paints it, and the date-ordered feed-group mode paints none.
     let rail = emby_letter_rail(&rows);
 
-    // The row the cursor rests on, and the letter the rail marks: the one
-    // the cursor row belongs to.
-    let cursor = emby_ui.cursor.clone();
-    let marked = rows
-        .iter()
-        .find(|row| Some(row.id()) == cursor.as_deref())
-        .and_then(emby_row_letter);
     let selected = detail.and_then(|detail| detail.selected.clone());
 
     // The list's two DOM facts report to the scroll store (design D9), and
@@ -155,30 +140,23 @@ pub fn LibraryEmbyList() -> Element {
     let measure_library = library.clone();
     let scroll_library = library.clone();
     let paint_library = library.clone();
-    let paint_cursor = cursor.clone();
     let paint_selected = selected.clone();
     let virtual_list = library_virtual_list(
         rows.as_ref(),
         scroll,
         "emby",
+        PointerList::Emby,
         "8px 0 8px 8px",
         Callback::new(move |height: f32| measure_library.measure_emby_list(height)),
         Callback::new(move |top: f32| scroll_library.scroll_emby_list(top)),
-        move |row: &EmbyListRow| {
-            paint_emby_row(
-                row,
-                &paint_library,
-                paint_cursor.as_deref(),
-                paint_selected.as_deref(),
-            )
-        },
+        move |row: &EmbyListRow| paint_emby_row(row, &paint_library, paint_selected.as_deref()),
     );
 
     // The plain mode paints the rail (row 8.1); the feed-group mode's
     // date-ordered rows paint none.
     let paints_rail = frame.is_some_and(|frame| !frame.feed_group);
 
-    // The rail's press moves the cursor to the letter's first row (design
+    // The rail's press scrolls the list to the letter's first row (design
     // D7): the rail's keyboard path is the `/` filter.
     let jump_library = library.clone();
     let filter_library = library.clone();
@@ -229,7 +207,6 @@ pub fn LibraryEmbyList() -> Element {
                 if paints_rail {
                     LibraryLetterRail {
                         letters: rail,
-                        marked,
                         jump: Some(Callback::new(move |letter: char| {
                             jump_library.jump_emby_to_letter(letter);
                         })),

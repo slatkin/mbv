@@ -1,9 +1,11 @@
 //! The flat Library list's item row (`replace-tauri-with-blitz` task 7.2,
 //! the port of `LibraryItemRow`; add-gui-library-panel design D15,
 //! invariant 30): the title over its subtitle, the date or duration at the
-//! right, the cursor and selection fills, and the resume run under the row.
-//! Every flat destination list — Emby, Audiobooks, Podcasts, Feeds — paints
-//! its rows here, so a fix to one row look lands in every list.
+//! right, the selection fill, and the resume run under the row. Every flat
+//! destination list — Emby, Audiobooks, Podcasts, Feeds — paints its rows here,
+//! so a fix to one row look lands in every list. A row keeps no keyboard
+//! cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2, D6).
 //!
 //! A destination supplies its own hook prefix (`attr`), the row's text, and
 //! the press, double-click, and context handlers; it never restates the
@@ -65,10 +67,8 @@ pub struct LibraryItemRowProps {
     pub trail_part: LibraryTrailPart,
     /// The title's colour: the text tone, or the muted tone on a played row.
     pub title_color: String,
-    /// The row's painted fill, when the cursor or the selection marks it.
+    /// The row's painted fill, when the selection marks it.
     pub background: Option<String>,
-    /// Whether the cursor rests on the row.
-    pub cursor: bool,
     /// Whether the selection marks the row.
     pub selected: bool,
     /// The resume percent of a partly played row, or `None`.
@@ -89,7 +89,7 @@ pub struct LibraryItemRowProps {
 #[component]
 pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     // The row's own hooks: the kind and the id
-    // always paint, the cursor and selection marks only while they hold.
+    // always paint, the selection mark only while it holds.
     let mut row_attrs = vec![
         Attribute::new(
             library_attr(props.attr, "row"),
@@ -104,14 +104,6 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
             false,
         ),
     ];
-    if props.cursor {
-        row_attrs.push(Attribute::new(
-            library_attr(props.attr, "cursor"),
-            "",
-            None,
-            false,
-        ));
-    }
     if props.selected {
         row_attrs.push(Attribute::new(
             library_attr(props.attr, "selected"),
@@ -214,8 +206,8 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
 }
 
 /// One flat entry row's painted facts: the destination's hook prefix and kind,
-/// the row's height, the carried entry, and whether the cursor and the
-/// selection mark the row.
+/// the row's height, the carried entry, and whether the selection marks the
+/// row.
 #[derive(Debug, Clone, Copy)]
 pub struct ItemRowPaint<'a> {
     /// The destination's hook prefix, as in `podcasts` or `feeds`.
@@ -228,23 +220,21 @@ pub struct ItemRowPaint<'a> {
     pub id: &'a str,
     /// The carried entry the row paints.
     pub entry: &'a GuiEntryRowFrame,
-    /// Whether the cursor rests on the row.
-    pub cursor: bool,
     /// Whether the selection marks the row.
     pub selected: bool,
 }
 
 /// Paint one flat entry row (Podcasts, Feeds): the entry's text at the row's
-/// height with the cursor and selection fills, and the destination's press,
-/// play, and context handlers. A destination that names no right-press menu
-/// passes no context handler.
+/// height with the selection fill, and the destination's press, play, and
+/// context handlers. A destination that names no right-press menu passes no
+/// context handler.
 pub fn paint_item_row(
     paint: ItemRowPaint<'_>,
     on_press: Callback<()>,
     on_play: Callback<()>,
     on_context: Option<Callback<(f32, f32)>>,
 ) -> Element {
-    let background = row_background(paint.cursor, paint.selected);
+    let background = paint.selected.then(|| canvas_var("library-raise"));
     rsx! {
         LibraryItemRow {
             attr: paint.attr,
@@ -257,27 +247,12 @@ pub fn paint_item_row(
             trail_part: LibraryTrailPart::Date,
             title_color: name_color(&paint.entry.state),
             background,
-            cursor: paint.cursor,
             selected: paint.selected,
             progress: episode_progress(&paint.entry.state).map(f32::from),
             on_press,
             on_play,
             on_context,
         }
-    }
-}
-
-/// A row's painted fill: the cursor row's focus fill, and the core's selected
-/// row the raised fill while the cursor sits elsewhere — the selection is what
-/// the Hero shows, so its row stays marked.
-#[must_use]
-pub fn row_background(cursor_row: bool, selected_row: bool) -> Option<String> {
-    if cursor_row {
-        Some(canvas_var("selected"))
-    } else if selected_row {
-        Some(canvas_var("library-raise"))
-    } else {
-        None
     }
 }
 

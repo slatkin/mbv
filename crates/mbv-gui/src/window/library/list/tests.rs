@@ -184,16 +184,38 @@ fn the_scroll_offset_that_shows_a_cursor_below_the_viewport_puts_its_bottom_edge
     );
 }
 
-// Movement steps over the letter headings.
+/// A view of the fixture list at `scroll_top`, 60 px of rows in view.
+fn view(scroll_top: f32) -> crate::window::library::scroll::ListScroll {
+    crate::window::library::scroll::ListScroll {
+        scroll_top,
+        viewport_height: 60.0,
+    }
+}
+
+// The row step moves by the height of the row at the top edge.
 #[test]
-fn movement_steps_over_the_letter_headings() {
-    let painted = rows();
-    assert_eq!(
-        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::Down, 1),
-        Some("artist:service:a1".to_owned())
-    );
-    assert_eq!(
-        move_list_cursor(&painted, Some("artist:service:a3"), ListMove::End, 1),
-        Some("artist:service:a2".to_owned())
-    );
+fn the_row_step_moves_by_the_height_of_the_top_row() {
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::Down), 24.0);
+    assert_eq!(scroll_step(&rows(), view(24.0), ListMove::Up), 0.0);
+}
+
+// The page step moves by one viewport height.
+#[test]
+fn the_page_step_moves_by_the_viewport_height() {
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::PageDown), 60.0);
+    assert_eq!(scroll_step(&rows(), view(100.0), ListMove::PageUp), 40.0);
+}
+
+// Home and End go to the list's ends.
+#[test]
+fn home_and_end_go_to_the_lists_ends() {
+    assert_eq!(scroll_step(&rows(), view(100.0), ListMove::Home), 0.0);
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::End), 194.0);
+}
+
+// The step stays inside the list's scrollable range.
+#[test]
+fn the_step_stays_inside_the_lists_scrollable_range() {
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::Up), 0.0);
+    assert_eq!(scroll_step(&rows(), view(194.0), ListMove::Down), 194.0);
 }
