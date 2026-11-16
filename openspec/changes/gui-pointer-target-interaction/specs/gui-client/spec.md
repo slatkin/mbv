@@ -85,28 +85,6 @@ While the Queue holds slots, it SHALL have one active row, and the active row SH
 - **WHEN** the second row plays and the fourth row is the active row
 - **THEN** each of the two rows shows its own state, and neither hides the other
 
-### Requirement: Mini switches its view with a segmented switch
-
-In the Mini arrangement, the panel that shows SHALL offer a two-segment switch, one segment for the Library and one for the Queue, at the top of the panel. A press on a segment SHALL show that panel. The Client core SHALL hold the Mini view. Outside Mini the switch SHALL NOT show, and the Mini view SHALL NOT change which panels show.
-
-#### Scenario: The user switches to the Queue in Mini
-
-- **GIVEN** the window is Mini and the Library shows
-- **WHEN** the user presses the Queue segment of the switch
-- **THEN** only the Queue panel shows, and its switch marks the Queue segment
-
-#### Scenario: The window widens past Mini
-
-- **GIVEN** the window is Mini with the Queue view
-- **WHEN** the Library column width reaches Narrow
-- **THEN** both panels show and no switch shows
-
-#### Scenario: The pointer does not switch the view
-
-- **GIVEN** the window is Mini with the Library view
-- **WHEN** the pointer moves anywhere in the window
-- **THEN** the Library view stays
-
 ### Requirement: The window content takes the destination and Search keys
 
 While the Library panel shows, the window content SHALL take the digits `1` to `7`, which open the first to seventh destination tab after Home, wherever the pointer is. Once Search is presented, it SHALL also take `Ctrl+K`, which focuses the Search field. The window content SHALL NOT take Tab or Shift+Tab: they SHALL go to the Client core's keyboard router. While a core overlay is open or prefix mode is armed, every key SHALL go to the Client core.
@@ -121,6 +99,21 @@ While the Library panel shows, the window content SHALL take the digits `1` to `
 
 - **WHEN** the user presses `2` while the Library panel shows
 - **THEN** the second destination tab after Home becomes active
+
+### Requirement: A router destination step opens a presented destination
+
+When the Client core's keyboard router resolves a destination step in the GUI Client (the next or previous destination, or a destination by number), the Client core SHALL open that destination as a press on its tab opens it. It SHALL NOT open a destination that the GUI Client does not present.
+
+#### Scenario: Tab opens the next destination
+
+- **WHEN** the user presses Tab while the Library panel shows
+- **THEN** the next presented destination opens and loads its content, as a press on its tab does
+
+#### Scenario: Tab skips a destination that the GUI does not present
+
+- **GIVEN** the next TUI tab is a destination that the GUI Client does not present
+- **WHEN** the user presses Tab
+- **THEN** the next presented destination opens
 
 ### Requirement: The Library keys act on the hovered row
 
@@ -344,12 +337,18 @@ The GUI Client SHALL present the Library panel and the Queue panel in one window
 
 ### Requirement: The window arrangement follows the Library column width
 
-The GUI Client SHALL arrange the panels from the measured Library column width (the window width minus the Queue panel's current width), with thresholds from the canvas sizes: Mini below 480 px, Narrow from 480 px, and Wide from 880 px with at least 600 px of height. The Queue panel SHALL keep its own four states inside each arrangement. In Mini only the panel that the Mini view names SHALL show.
+The GUI Client SHALL arrange the panels from the measured Library column width (the window width minus the Queue panel's current width), with thresholds from the canvas sizes: Mini below 480 px, Narrow from 480 px, and Wide from 880 px with at least 600 px of height. The Queue panel SHALL keep its own four states inside each arrangement. In Mini only the Queue panel SHALL show, and no key or press SHALL change that.
 
 #### Scenario: The window is Mini
 
 - **WHEN** the Library column width is below 480 px
-- **THEN** only the panel that the Mini view names shows
+- **THEN** only the Queue panel shows
+
+#### Scenario: A key in Mini does not show the Library
+
+- **GIVEN** the window is Mini
+- **WHEN** the user presses any key or presses anywhere in the window
+- **THEN** only the Queue panel shows
 
 #### Scenario: The window is Narrow
 
@@ -369,19 +368,19 @@ The GUI Client SHALL arrange the panels from the measured Library column width (
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each Grouped Music destination, and the Mini view. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. A launch location saved before this change SHALL still load, and its saved Panel focus SHALL become the Mini view. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination and the selected collection of each Grouped Music destination. It SHALL save no Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. A launch location saved before this change SHALL still load, and its saved Panel focus SHALL change nothing. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL open no other destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 
-- **GIVEN** the TUI exits on Shows, and the GUI Client later exits on Music with the Queue Mini view
+- **GIVEN** the TUI exits on Shows, and the GUI Client later exits on Music
 - **WHEN** the TUI and the GUI Client each start again
-- **THEN** the TUI starts on Shows and the GUI Client starts on Music with the Queue Mini view
+- **THEN** the TUI starts on Shows and the GUI Client starts on Music
 
 #### Scenario: An older launch location loads
 
-- **GIVEN** a launch location that an earlier GUI Client saved with Library focus
+- **GIVEN** a launch location that an earlier GUI Client saved on Music with Queue focus
 - **WHEN** the GUI Client starts
-- **THEN** it restores that location with the Library Mini view
+- **THEN** it restores Music, and no panel shows as focused
 
 ### Requirement: The letter rail jumps a name-sorted list
 
@@ -420,7 +419,7 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 
 ### Requirement: The Client core holds the player panel's interaction state
 
-The interaction state of the player panel and the Status bar (the Queue's active row, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the Mini view, the drag, and the open menu or popover) SHALL live in the Client core, not in the window content. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it, each key with its pointer target. The GUI Client SHALL have no Panel focus.
+The interaction state of the player panel and the Status bar (the Queue's active row, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the drag, and the open menu or popover) SHALL live in the Client core, not in the window content. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it, each key with its pointer target. The GUI Client SHALL have no Panel focus.
 
 #### Scenario: A key arrives in the window content
 

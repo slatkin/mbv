@@ -2,13 +2,13 @@
 
 ### Requirement: The core focus stack is the one focus authority
 
-The Client core SHALL own which surfaces are mounted, which surface has focus, and the overlay stack. Each Client SHALL present focus from this stack. A Client's own framework SHALL follow the stack and SHALL NOT decide focus by itself. The GUI Client SHALL present no Panel focus: for each key it routes, the Client core SHALL set the stack's Panel focus from the key's pointer target before the keyboard router resolves the key.
+The Client core SHALL own which surfaces are mounted, which surface has focus, and the overlay stack. The TUI Client SHALL present focus from this stack. A Client's own framework SHALL follow the stack and SHALL NOT decide focus by itself. The GUI Client SHALL present no Panel focus: for each key it routes, the Client core SHALL set the stack's Panel focus from the key's pointer target before the keyboard router resolves the key.
 
 #### Scenario: An overlay closes
 
 - **WHEN** a blocking overlay is dismissed in either Client
 - **THEN** the core focus stack returns focus to the surface that held it before the overlay opened
-- **AND** the Client presents that surface as focused on the next frame
+- **AND** the TUI Client presents that surface as focused on the next frame, and the GUI Client presents no Panel focus
 
 #### Scenario: Panel focus moves
 
