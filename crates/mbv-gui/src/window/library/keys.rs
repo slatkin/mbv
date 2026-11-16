@@ -70,7 +70,8 @@ fn accept_active_filter(state: &LibraryState) {
 /// `gui-pointer-target-interaction`): `/` opens the list filter, the movement
 /// keys scroll the list under the pointer, and Enter, `n`, and `a` act on the
 /// hovered row. With no hovered row they are consumed and do nothing. There is
-/// no filter and no pill row on Home, so Space passes to the core's router.
+/// no destination filter and no pill row on Home, so Space passes to the
+/// core's router.
 fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> KeyOutcome {
     let target = core_target(pointer);
     if key.key == "/" && bare(key) {
