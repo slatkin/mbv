@@ -19,7 +19,6 @@ categories = ["command-line-utilities", "multimedia::audio", "multimedia::video"
 
 [workspace.dependencies]
 ureq = { version = "3", default-features = false }
-native-tls = "0.2"
 # Force the vendored (statically built) OpenSSL for every binary in the
 # workspace. The .deb must not depend on the host's libssl soname: OpenSSL 4
 # (libssl.so.4) broke Debian 13, which ships libssl.so.3. The feature unifies
