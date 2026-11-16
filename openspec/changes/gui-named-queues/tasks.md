@@ -5,11 +5,11 @@ holds that change.
 
 ## 1. Domain records
 
-- [ ] 1.1 Add *Named queue*, *Current queue*, *Start slot*, and *Queue chooser* to `CONTEXT.md`
+- [x] 1.1 Add *Named queue*, *Current queue*, *Start slot*, and *Queue chooser* to `CONTEXT.md`
   under `## Queue`, each with an `_Avoid_` line, and add one sentence each to *Owner-held queue and
   source*, *Queue scope*, and *Tab selection* that tells them apart (design D10). Verify that
   `rg -n "Named queue|Current queue|Start slot|Queue chooser" CONTEXT.md` finds the four entries.
-- [ ] 1.2 Write `docs/adr/0041-gui-shows-one-entry-per-queue.md` per `docs/adr/README.md`: the GUI's
+- [x] 1.2 Write `docs/adr/0041-gui-shows-one-entry-per-queue.md` per `docs/adr/README.md`: the GUI's
   shown entry picks the shown queue and the connection decides which peers are listed; it amends
   ADR 0034 and names the rejected "N live queues" option (design D1, D7). Add an amendment line
   to ADR 0034 that names ADR 0041. Verify that both files render and that the ADR index lists 0041.
