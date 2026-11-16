@@ -50,7 +50,7 @@ Rules for every task: run `cargo fmt` after each Rust change. Run tests in the f
 
 ## 8. Integration checks
 
-- [ ] 8.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv-gui`, `cargo nextest run -p mbv -p mbv-config -p mbv-keybinds`, and `make check-code-file-lines`. Every command must pass. Split a file that is over 800 lines along its responsibility seam.
+- [x] 8.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv-gui`, `cargo nextest run -p mbv -p mbv-config -p mbv-keybinds`, and `make check-code-file-lines`. Every command must pass. Split a file that is over 800 lines along its responsibility seam.
 
 ## Workflow follow-up
 
