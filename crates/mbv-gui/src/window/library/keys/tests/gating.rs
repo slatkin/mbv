@@ -14,7 +14,7 @@ fn slash_opens_the_filter_and_sends_no_key() {
         facts,
         vec![
             "slash=Handled",
-            "pane=Some(Pills) filter_open=true filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=true filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -34,7 +34,7 @@ fn queue_panel_focus_sends_slash_to_the_core() {
         facts,
         vec![
             "slash=Core",
-            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     // The key command itself is the forwarder's; the router sends none.
@@ -67,7 +67,7 @@ fn an_open_core_overlay_sends_a_library_key_to_the_core() {
         facts,
         vec![
             "slash=Core",
-            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
 }
@@ -98,7 +98,7 @@ fn sections_without_the_library_list_leave_every_library_key_to_the_core() {
         facts,
         vec![
             "slash=Core",
-            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -119,7 +119,7 @@ fn the_open_filter_takes_a_typed_key() {
         facts,
         vec![
             "r=Text",
-            "pane=Some(Pills) filter_open=true filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=true filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -143,7 +143,7 @@ fn esc_closes_the_filter_clears_its_text() {
         facts,
         vec![
             "escape=Handled",
-            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);

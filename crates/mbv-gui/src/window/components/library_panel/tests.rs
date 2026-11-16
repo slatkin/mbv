@@ -159,6 +159,13 @@ impl Fixture {
         self.poll_until_idle();
     }
 
+    /// Pick a row, as a press or a cursor move does: the Narrow overlay
+    /// paints again.
+    fn pick(&mut self) {
+        let mut ui = self.state.ui;
+        self.in_runtime(move || ui.with_mut(|ui| ui.hero_dismissed = false));
+    }
+
     /// Resolve the document's style and layout, as the renderer's frame
     /// would, so the `Truncate` measures read laid-out widths, and let the
     /// re-measures the epoch bump drives land.

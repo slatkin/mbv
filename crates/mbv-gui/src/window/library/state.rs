@@ -166,7 +166,9 @@ impl LibraryUiState {
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
             track_cursor: None,
-            hero_dismissed: false,
+            // No pick has happened yet: the Narrow arrangement shows the list,
+            // not an overlay Hero for the core's default row.
+            hero_dismissed: true,
             item_menu_open: false,
             row_menu: None,
         }
@@ -558,6 +560,20 @@ impl LibraryState {
         arrangement == GuiArrangement::Narrow
             && !ui.hero_dismissed
             && self.library_detail_has_hero()
+    }
+
+    /// Open the destination tab at `position`. The core's default row is not a
+    /// pick, so the Narrow arrangement shows the new destination's list and
+    /// paints no overlay Hero until the user picks a row.
+    pub fn open_destination(&self, position: usize) {
+        self.link
+            .library(GuiLibraryCommand::OpenDestination { position });
+        let mut ui = self.ui;
+        ui.with_mut(|ui| {
+            ui.hero_dismissed = true;
+            ui.item_menu_open = false;
+            ui.row_menu = None;
+        });
     }
 
     /// Close the Narrow Hero overlay (design D3): Esc while it paints, and a press

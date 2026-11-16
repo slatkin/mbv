@@ -25,7 +25,6 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame, GuiSearchRowFrame};
 use crate::bridge::frame::theme::GuiRole;
-use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::window::icons::Settings;
 use crate::window::library::state::LibraryState;
@@ -55,9 +54,7 @@ pub struct LibraryTopBarProps {
 /// Open the destination tab at `position` (design D2): Home's own position
 /// is 0, and the Home icon opens it.
 fn open_destination(library: &LibraryState, position: usize) {
-    library
-        .link
-        .library(GuiLibraryCommand::OpenDestination { position });
+    library.open_destination(position);
 }
 
 /// Open the Settings screen at Services (design D11 *Mouse-centric*), as the

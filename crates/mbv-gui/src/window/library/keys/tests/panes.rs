@@ -168,7 +168,10 @@ fn esc_with_the_hero_pane_focused_returns_the_pane_focus_to_the_list() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.pane = Some(LibraryPane::Hero));
+        ui.with_mut(|ui| {
+            ui.pane = Some(LibraryPane::Hero);
+            ui.hero_dismissed = false;
+        });
         route_in(
             state,
             facts,
@@ -205,6 +208,8 @@ fn esc_closes_the_narrow_hero_overlay() {
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.hero_dismissed = false);
         route_in(
             state,
             facts,
@@ -248,7 +253,7 @@ fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
         facts,
         vec![
             "escape=Core",
-            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=false"
+            "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);

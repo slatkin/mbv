@@ -29,6 +29,7 @@ fn the_narrow_overlay_paints_the_hero_and_closes_on_its_backdrop_press() {
     let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
+    fixture.pick();
 
     assert!(
         fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-hero]"),
@@ -41,6 +42,26 @@ fn the_narrow_overlay_paints_the_hero_and_closes_on_its_backdrop_press() {
     assert!(
         !fixture.presents("[data-library-region=\"heroOverlay\"]"),
         "the overlay closed"
+    );
+}
+
+/// Contract: a Narrow Library with no pick paints the list, not the overlay
+/// Hero for the core's default row (a hero is not forced on switching to a
+/// library; the Hero overlay needs a pick).
+#[test]
+fn the_narrow_library_paints_no_overlay_hero_before_a_pick() {
+    let mut fixture = built(GuiArrangement::Narrow);
+    let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+
+    assert!(
+        !fixture.presents("[data-library-region=\"heroOverlay\"]"),
+        "no overlay before a pick"
+    );
+    assert!(
+        fixture.presents("[data-library-region=\"list\"]"),
+        "the list paints"
     );
 }
 
@@ -91,6 +112,8 @@ fn a_click_on_the_narrow_overlays_backdrop_closes_it_and_the_list_paints() {
     let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
+    fixture.pick();
+    fixture.lay_out();
 
     let backdrop = fixture.rect_of("[data-library-hero-backdrop]");
     let (x, y) = (
@@ -137,6 +160,7 @@ fn the_narrow_overlay_paints_the_home_hero_and_closes_on_its_backdrop_press() {
     let (list, detail) = fixtures::home_sections(true);
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
+    fixture.pick();
 
     assert!(
         fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-home-hero]"),
@@ -171,6 +195,7 @@ fn the_narrow_overlay_paints_the_audiobooks_hero_and_closes_on_its_backdrop_pres
     ))));
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
+    fixture.pick();
 
     assert!(
         fixture.presents("[data-library-region=\"heroOverlay\"] [data-library-abs-hero]"),

@@ -536,9 +536,7 @@ pub fn route_library_key(
             .as_ref()
             .and_then(|list| list.tabs.get(place.wrapping_sub(1)))
         {
-            state.link.library(GuiLibraryCommand::OpenDestination {
-                position: tab.position,
-            });
+            state.open_destination(tab.position);
         }
         return KeyOutcome::Handled;
     }

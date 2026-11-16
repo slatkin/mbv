@@ -172,7 +172,7 @@ fn down_with_the_hero_pane_focused_moves_the_tracklist_cursor() {
         facts,
         vec![
             "down=Handled",
-            "pane=Some(Hero) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=Some(\"t2\") dismissed=false"
+            "pane=Some(Hero) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=Some(\"t2\") dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
