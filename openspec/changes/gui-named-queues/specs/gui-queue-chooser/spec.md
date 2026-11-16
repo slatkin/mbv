@@ -77,13 +77,19 @@ While the local Owner plays nothing and a local Named queue is shown, Play SHALL
 
 ### Requirement: Edits and enqueue reach the shown queue
 
-Every queue edit, enqueue, play-next, and whole-queue replacement from the GUI Client SHALL reach the shown entry: the shown local Named queue, or the shown peer's queue. A replacement of a resting local queue SHALL make it current and play it, as a replacement does today. The confirmation before a populated queue is replaced SHALL apply to the shown queue.
+Every queue edit, enqueue, play-next, and whole-queue replacement from the GUI Client SHALL reach the shown entry: the shown local Named queue, or the shown peer's queue. A replacement of a resting local queue SHALL make it current and play it, as a replacement does today. The confirmation before a populated queue is replaced SHALL apply to the shown queue. An undo SHALL send its inverse edit to the queue that the undone edit reached, whichever entry is shown.
 
 #### Scenario: Enqueue to a resting queue
 
 - **GIVEN** `Default` plays and the GUI Client shows `Kids`
 - **WHEN** the user adds an album from the Library panel
 - **THEN** the album's tracks are appended to `Kids` and `Default` keeps playing
+
+#### Scenario: Undo reaches the queue it edited
+
+- **GIVEN** the user removed a row from `Kids` and then showed `Default`
+- **WHEN** the user undoes the removal
+- **THEN** the row returns to `Kids` and `Default` does not change
 
 ### Requirement: The new-queue control makes and shows a queue
 
@@ -96,13 +102,19 @@ The new-queue control SHALL ask the local Owner for a new Named queue, SHALL sho
 
 ### Requirement: The close control closes the shown entry
 
-The close control SHALL act on the shown entry. On a resting local queue it SHALL close the queue with no confirmation. On the current queue while it plays it SHALL ask for confirmation that names the queue and says that playback stops, and SHALL close it only on confirm. On a peer entry it SHALL disconnect with no confirmation. The control SHALL be disabled while the shown entry is the only local queue. After a close the Queue panel SHALL show the current local queue.
+The close control SHALL act on the shown entry. It SHALL ask for confirmation only on the current queue while it plays, naming the queue and saying that playback stops. Every other local queue SHALL close with no confirmation, and a peer entry SHALL disconnect. The control SHALL be disabled on the only local queue. After a close the Queue panel SHALL show the current local queue.
 
 #### Scenario: Close the playing queue
 
 - **GIVEN** `Kids` is current and plays
 - **WHEN** the user presses the close control and confirms
 - **THEN** playback stops, `Kids` is gone, and the Queue panel shows the new current queue
+
+#### Scenario: Close the stopped current queue
+
+- **GIVEN** `Kids` is current and stopped, and `Default` rests
+- **WHEN** the user presses the close control
+- **THEN** `Kids` is gone with no confirmation and `Default` becomes current without playing
 
 #### Scenario: Cancel the close
 

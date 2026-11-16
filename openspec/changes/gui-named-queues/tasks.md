@@ -16,10 +16,9 @@ holds that change.
 
 ## 2. Queue model (`crates/mbv-queue`)
 
-- [ ] 2.1 Add the `NamedQueueId` newtype (serde, `JsonSchema`, `raw`/`from_raw`) and a
-  `PlaybackQueue` constructor that keeps given slot ids and sets `next_slot_id` above the largest
-  (design D3, D6). Verify with one test in `crates/mbv-queue/tests/queue.rs` that a queue built
-  from saved ids keeps them and mints the next id above the largest.
+- [ ] 2.1 Add the `NamedQueueId` newtype (serde, `JsonSchema`, `raw`/`from_raw`) (design D3). Reuse
+  the existing `PlaybackQueue::from_slot_items` for a queue with saved slot ids; write no second
+  constructor (design D6). Verify with `cargo check -p mbv-queue`.
 - [ ] 2.2 Add the start-slot rule as a pure function over a queue and an observation (active slot,
   stop, completion with next slot, end of queue, removal of the start slot) (design D4). Verify
   with one `#[case]` table test that has one row per outcome in the `named-queues` spec "Each
@@ -63,7 +62,8 @@ holds that change.
 - [ ] 5.4 Handle `NamedQueueCreate` (`Queue N` naming), `NamedQueueRename` (trim, refuse empty),
   and `NamedQueueClose` (refuse the last queue; stop and delete the playing current queue and make
   the first remaining queue current without play), each broadcasting `NamedQueueList`. Verify with
-  tests for "A new queue is made", "An empty name is refused", "Close the playing queue", and "The
+  one `#[case]` table test for "A new queue is made", "The first new queue", and "A freed number
+  is used again", and tests for "An empty name is refused", "Close the playing queue", and "The
   last queue does not close".
 - [ ] 5.5 Handle `NamedQueuePlay` and a `UnifiedQueueReplace` or `UnifiedQueuePlaySlot` that names
   a resting queue with the swap of design D2 (stop, park the current queue, install the resting
@@ -90,7 +90,9 @@ holds that change.
 - [ ] 6.3 Make every GUI queue edit, enqueue, play-next, replace, and row play to the local Owner
   carry the shown queue id, and make Play with nothing playing send `NamedQueuePlay` for the shown
   queue (spec "Edits and enqueue reach the shown queue", "Play with nothing playing starts the
-  shown queue"). Verify with tests for "Enqueue to a resting queue" and "Play a stopped queue".
+  shown queue"). Record the edited Named queue on each local undo entry and make
+  `undo_last_queue_edit` send the inverse edit to that queue (design D7). Verify with tests for
+  "Enqueue to a resting queue", "Play a stopped queue", and "Undo reaches the queue it edited".
 - [ ] 6.4 Set the shown entry on connect (`Peer`), on disconnect and lost link (`Local(current)`),
   and on a close of the shown queue; on each change clear the Queue filter and the marks and put
   the active row on the start slot (spec "A connect adds a peer entry", "Showing an entry resets
@@ -111,16 +113,17 @@ holds that change.
 - [ ] 7.3 Make the new-queue control send `NamedQueueCreate` and, on the answering
   `NamedQueueList`, show the new queue with its rename draft open (spec "Make a queue"). Verify with
   one core test.
-- [ ] 7.4 Make the close control act on the shown entry: close a resting queue at once, ask
-  through the core confirm prompt before closing the playing current queue, disconnect a peer,
-  and do nothing while the shown queue is the only local queue (spec "The close control closes the
-  shown entry"). Verify with tests for "Close the playing queue", "Cancel the close", and "Close a
-  peer entry".
+- [ ] 7.4 Make the close control act on the shown entry: close a resting queue and a stopped
+  current queue at once, ask through the core confirm prompt before closing the playing current
+  queue, disconnect a peer, and do nothing while the shown queue is the only local queue (spec "The
+  close control closes the shown entry"). Verify with tests for "Close the playing queue", "Close
+  the stopped current queue", "Cancel the close", and "Close a peer entry".
 - [ ] 7.5 Add `total_secs`, `total_partial`, `marked_secs`, and `marked_partial` to
   `GuiQueueSummary` from `runtime_ticks` over the whole shown queue and its marks, and add `start`
-  and `playing` to the queue projection (design D9). Verify with one `#[case]` table test for the
+  and `playing` to the queue projection, with `start` falling back to the observed active slot when
+  the snapshot carries no start slot (design D9). Verify with one `#[case]` table test for the
   footer scenarios ("The footer totals the marked rows", "No row is marked", "A runtime is unknown",
-  "The filter narrows the rows").
+  "The filter narrows the rows") and one test for "A peer queue marks its playing row".
 
 ## 8. GUI window (`crates/mbv-gui`)
 
