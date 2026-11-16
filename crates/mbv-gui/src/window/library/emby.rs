@@ -1,16 +1,16 @@
 //! The plain Emby-library destination's interaction state
 //! (`add-gui-library-panel` design D12, row 8.1, the port of
 //! `lib/library/emby.ts`): what the window content owns and the core never
-//! reads — the cursor and the feed-group pill row's focus. The scroll offset
+//! reads — the cursor. The scroll offset
 //! and the measured viewport live in the Emby list's scroll store
 //! ([`super::scroll`], design D9). The core owns the selected row and the
 //! feed-group selection (the frame's `selected` and `pills`), so nothing here
 //! mirrors them: a press and an Enter send the command, and the frame carries
-//! the choice back. The row model is [`super::emby_list`]'s; the panel's pane
-//! focus and the Hero overlay stay in [`super::state`]'s shared store, and the
-//! Hero carries no Workspace and no cursor of its own.
+//! the choice back. The row model is [`super::emby_list`]'s; the Hero overlay
+//! stays in [`super::state`]'s shared store, and the Hero carries no Workspace
+//! and no cursor of its own.
 //!
-//! The state, the filter, the cursor, the scroll store, and the pill focus are
+//! The state, the filter, the cursor, and the scroll store are
 //! the pill-list controller's ([`super::pill_list`], row 7C.1); this module
 //! keeps the Emby frame, the Emby rows and their letter headings, the letter
 //! rail, the play-next command, the Emby command shapes, and the Emby names.
@@ -19,21 +19,21 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiEmbyFeedGroupFrame, GuiEmbyList};
+use crate::bridge::frame::library::GuiEmbyFeedGroupFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::emby_list::{
-    EmbyItemRow, EmbyListRow, emby_group_key, emby_letter_rail, move_emby_cursor,
+    EmbyItemRow, EmbyListRow, emby_letter_rail, move_emby_cursor,
 };
 use crate::window::library::list::{ListMove, jump_to_letter};
 use crate::window::library::parts::library_emby_list;
 
-use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
+use super::pill_list::{ListControl, PillListUiState};
 use super::state::LibraryState;
 
 /// The Emby list's interaction state: the shared pill-list state over the
 /// feed-group pill, whose focus the pill row keeps as the group's stable key
 /// (`embyGroupKey`) rather than the group itself (design D6, row 8.1).
-pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame, String>;
+pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame>;
 
 /// The state a freshly mounted Emby list starts with.
 #[must_use]
@@ -206,42 +206,8 @@ impl LibraryState {
         self.emby_list().scroll_to(scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried pills
-    /// so a stale group focuses nothing (row 8.1).
-    #[must_use]
-    pub fn focused_emby_pill<'a>(
-        &self,
-        emby: &'a GuiEmbyList,
-    ) -> Option<&'a GuiEmbyFeedGroupFrame> {
-        let focused = self.emby_ui.peek().focused_pill.clone()?;
-        emby.pills
-            .iter()
-            .map(|pill| &pill.group)
-            .find(|group| emby_group_key(group) == focused)
-    }
-
-    /// Move the focused pill one pill along the row (row 8.1): Right and Left
-    /// walk the pills, and the first of them with no pill focused takes the end
-    /// it walks from.
-    pub fn move_emby_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(emby) = library_emby_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiEmbyFeedGroupFrame> =
-            emby.pills.iter().map(|pill| pill.group.clone()).collect();
-        move_pill_focus(
-            self.emby_ui,
-            &pills,
-            emby_group_key,
-            emby_group_key,
-            String::clone,
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (row 8.1).
+    /// Ask for a pill to be selected (row 8.1): the pill row turns the request
+    /// into the set-feed-group command.
     pub fn request_emby_pill_select(&self, group: GuiEmbyFeedGroupFrame) {
         let mut emby_ui = self.emby_ui;
         emby_ui.with_mut(|ui| ui.pill_select = Some(group));

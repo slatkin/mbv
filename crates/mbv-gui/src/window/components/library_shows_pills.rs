@@ -47,10 +47,6 @@ pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
         })
         .collect();
 
-    // The pill the keys' focus holds; it paints the accent outline, and only
-    // while the pill row has the pane focus (design D6).
-    let focused = library.shows_ui.cloned().focused_pill;
-
     // Press a pill: select its mode (design D12).
     let press_library = library.clone();
     let carried_pills = props.pills.clone();
@@ -69,15 +65,9 @@ pub fn LibraryShowsPills(props: LibraryShowsPillsProps) -> Element {
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
 
-    library_pills_bound(
-        pills,
-        focused.map(|mode| shows_mode_key(mode).to_owned()),
-        "Shows modes",
-        None,
-        on_press,
-        intent,
-        move || apply_library.apply_shows_pill_select(lib_idx),
-    )
+    library_pills_bound(pills, "Shows modes", None, on_press, intent, move || {
+        apply_library.apply_shows_pill_select(lib_idx);
+    })
 }
 
 #[cfg(test)]

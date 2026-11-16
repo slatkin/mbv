@@ -2,14 +2,10 @@
 //! (`replace-tauri-with-blitz` task 7.4, the port of
 //! `LibraryPillButton`; add-gui-library-panel design D6, D15): the
 //! top pill rows and the Shows Hero's season pills. A destination supplies
-//! the pill's name, its selected and focused state, its own attributes, and
-//! the press; it never restates the pill's look, so the two selectors cannot
-//! drift.
+//! the pill's name, its selected state, its own attributes, and the press; it
+//! never restates the pill's look, so the two selectors cannot drift.
 
 use dioxus_native::prelude::*;
-
-use crate::bridge::frame::theme::GuiRole;
-use crate::window::theme::role_var;
 
 /// The props of the pill button (the `LibraryPillButton` props, in
 /// order).
@@ -19,10 +15,6 @@ pub struct LibraryPillButtonProps {
     pub name: String,
     /// Whether the core carries the pill as the selected one.
     pub selected: bool,
-    /// Whether the keys' focus holds the pill, which paints the accent
-    /// outline (design D6).
-    #[props(default)]
-    pub focused: bool,
     /// The destination's own hook attributes for this pill.
     #[props(default)]
     pub attrs: Vec<Attribute>,
@@ -35,15 +27,12 @@ impl std::fmt::Debug for LibraryPillButtonProps {
         f.debug_struct("LibraryPillButtonProps")
             .field("name", &self.name)
             .field("selected", &self.selected)
-            .field("focused", &self.focused)
             .field("attrs", &self.attrs.len())
             .finish_non_exhaustive()
     }
 }
 
-/// The one pill button: the
-/// selected pill fills in the source tone, the focused one paints the accent
-/// outline.
+/// The one pill button: the selected pill fills in the source tone.
 #[component]
 pub fn LibraryPillButton(props: LibraryPillButtonProps) -> Element {
     let (border, background, color, weight) = if props.selected {
@@ -61,11 +50,6 @@ pub fn LibraryPillButton(props: LibraryPillButtonProps) -> Element {
             400,
         )
     };
-    let outline = if props.focused {
-        format!("2px solid {}", role_var(GuiRole::AccentActive))
-    } else {
-        "none".to_owned()
-    };
     let onpress = props.onpress;
     let selected = props.selected;
 
@@ -73,7 +57,7 @@ pub fn LibraryPillButton(props: LibraryPillButtonProps) -> Element {
         button {
             "type": "button",
             class: "flex flex-none items-center whitespace-nowrap",
-            style: "height: 32px; gap: 5px; padding: 0 12px; border-radius: 16px; font-size: 14px; font-weight: {weight}; border: {border}; background: {background}; color: {color}; outline: {outline}; outline-offset: 1px;",
+            style: "height: 32px; gap: 5px; padding: 0 12px; border-radius: 16px; font-size: 14px; font-weight: {weight}; border: {border}; background: {background}; color: {color};",
             "aria-pressed": "{selected}",
             onclick: move |_| onpress.call(()),
             ..props.attrs,

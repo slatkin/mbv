@@ -1,19 +1,18 @@
 //! The list controller every Library destination shares (`add-gui-library-panel`
 //! row 7C.1, the port of `lib/library/pill-list.ts`, issue #1009): the
 //! interaction state the window content owns and the core never reads — the
-//! cursor, the pill row's focus, and the `/` filter's text — plus the actions
-//! over it. The scroll offset and the measured viewport live in the list's
-//! scroll store ([`super::scroll`], design D9), which the caller names. The
+//! cursor and the `/` filter's text — plus the actions over it. The scroll
+//! offset and the measured viewport live in the list's scroll store ([`super::scroll`], design D9), which the caller names. The
 //! core owns the pill selection and the selected row (the frame's `pills` and
 //! `selected`), so nothing here mirrors them: a press sends the select
-//! command, and the frame carries the choice back. The panel's pane focus and
-//! the Hero overlay stay in [`super::state`]'s shared store.
+//! command, and the frame carries the choice back. The Hero overlay stays in
+//! [`super::state`]'s shared store.
 //!
 //! Each destination's module keeps its own doc, its own command shapes, its
 //! own names, and its own extras — Emby's letter rail and play-next, Home's
 //! select-on-settle — over this one controller, so a filter change, a cursor
-//! move, a measure, a scroll, and a pill walk resolve the same way on every
-//! one of them and the destinations cannot drift. A destination names its UI
+//! move, a measure, and a scroll resolve the same way on every one of them and
+//! the destinations cannot drift. A destination names its UI
 //! signal, its scroll store, its painted rows, and its cursor movement in a
 //! [`ListControl`]; the command shapes stay in its module.
 
@@ -23,7 +22,6 @@ use dioxus_native::prelude::*;
 
 use crate::window::library::list::{
     GeometryRow, ListMove, clamp_scroll_top, list_window, scroll_top_to_show_cursor,
-    step_pill_focus,
 };
 use crate::window::library::scroll::ListScroll;
 
@@ -40,51 +38,34 @@ pub trait ListUi: Clone + 'static {
     fn set_filter(&mut self, filter: String);
 }
 
-/// An interaction state with a pill row whose focus the shared pill walk
-/// moves (design D6, D12): the pill itself or its stable key — the
-/// destination picks.
-pub trait PillFocusUi: Clone + 'static {
-    /// The focus value the pill row holds.
-    type Focus: Clone;
-    /// The focused pill, or `None` while no pill has the focus.
-    fn focused_pill(&self) -> Option<&Self::Focus>;
-    /// Set the focused pill.
-    fn set_focused_pill(&mut self, focus: Self::Focus);
-}
-
 /// A pill-list destination's interaction state (design D12): what the window
 /// content owns and the core never reads.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PillListUiState<Pill, Focus = Pill> {
+pub struct PillListUiState<Pill> {
     /// The cursor's row id, or `None` while no row carries the cursor
     /// (design D12). The cursor moves over the item rows only.
     pub cursor: Option<String>,
-    /// The pill the pill row's Left and Right move the focus to, or `None`
-    /// while no pill has it (design D6, D12): the pill itself, or its stable
-    /// key — the destination picks.
-    pub focused_pill: Option<Focus>,
-    /// The pill selection the keys asked for: Space and Enter select the
-    /// focused pill, and the pill row turns it into the set-pill command.
+    /// The pill selection a press asked for, and the pill row turns it into
+    /// the set-pill command.
     pub pill_select: Option<Pill>,
     /// The `/` filter's text: the list paints only the rows whose title
     /// contains it, without case (design D7's filter rule).
     pub filter: String,
 }
 
-impl<Pill, Focus> PillListUiState<Pill, Focus> {
+impl<Pill> PillListUiState<Pill> {
     /// The state a freshly mounted pill list starts with.
     #[must_use]
     pub fn initial() -> Self {
         Self {
             cursor: None,
-            focused_pill: None,
             pill_select: None,
             filter: String::new(),
         }
     }
 }
 
-impl<Pill: Clone + 'static, Focus: Clone + 'static> ListUi for PillListUiState<Pill, Focus> {
+impl<Pill: Clone + 'static> ListUi for PillListUiState<Pill> {
     fn cursor(&self) -> Option<&str> {
         self.cursor.as_deref()
     }
@@ -95,30 +76,6 @@ impl<Pill: Clone + 'static, Focus: Clone + 'static> ListUi for PillListUiState<P
 
     fn set_filter(&mut self, filter: String) {
         self.filter = filter;
-    }
-}
-
-impl<Pill: Clone + 'static, Focus: Clone + 'static> PillFocusUi for PillListUiState<Pill, Focus> {
-    type Focus = Focus;
-
-    fn focused_pill(&self) -> Option<&Focus> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: Focus) {
-        self.focused_pill = Some(focus);
-    }
-}
-
-impl PillFocusUi for LibraryUiState {
-    type Focus = String;
-
-    fn focused_pill(&self) -> Option<&String> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: String) {
-        self.focused_pill = Some(focus);
     }
 }
 
@@ -252,28 +209,6 @@ where
             let mut scroll = self.scroll;
             scroll.set(shown);
         }
-    }
-}
-
-/// Move the focused pill one pill along the row (design D12): Right and Left
-/// walk the pills, and the first of them with no pill focused takes the end it
-/// walks from. `key_of` names a pill's stable key, `focus_key` the stored
-/// focus's key — every carried frame is a fresh deserialization, so the walk
-/// runs over the keys, never an object identity (row 10.1 review P2).
-/// `focus_of` is the focus value a pill leaves in the state.
-pub fn move_pill_focus<Ui: PillFocusUi, Pill: Clone>(
-    ui: Signal<Ui>,
-    pills: &[Pill],
-    key_of: impl Fn(&Pill) -> String,
-    focus_of: impl Fn(&Pill) -> Ui::Focus,
-    focus_key: impl Fn(&Ui::Focus) -> String,
-    step: i32,
-) {
-    let focused_key = ui.peek().focused_pill().map(focus_key);
-    let moved = step_pill_focus(pills, focused_key.as_deref(), key_of, step);
-    if let Some(pill) = moved {
-        let mut ui = ui;
-        ui.with_mut(|state| state.set_focused_pill(focus_of(&pill)));
     }
 }
 

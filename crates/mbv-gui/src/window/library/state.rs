@@ -10,9 +10,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiMusicPillFrame,
-};
+use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
@@ -26,71 +24,6 @@ use super::list::ListMove;
 use super::parts::library_music_detail;
 use super::row_memo::RowsMemo;
 use super::scroll::{ListScroll, initial_list_scroll};
-
-/// The panes Tab moves focus across (design D3, step 3). The Queue panel is
-/// the pane past the Hero, but it takes Panel focus through the core's focus
-/// stack, which no key command reaches (design D4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LibraryPane {
-    /// The destination's pill row.
-    Pills,
-    /// The list.
-    List,
-    /// The Hero.
-    Hero,
-}
-
-/// The order Tab and Shift+Tab walk the panes in (design D3, step 3).
-const PANES: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List, LibraryPane::Hero];
-
-/// The Library panel's panes on Home (design D12): the flat list and the
-/// Hero. Home paints no pill row and no letter rail, so the pane walk skips
-/// them.
-pub const HOME_PANES: &[LibraryPane] = &[LibraryPane::List, LibraryPane::Hero];
-
-/// The Library panel's panes on Shows (design D12, row 7.1): the mode pills,
-/// the list, and the Hero. The Upcoming mode paints no Hero, so the walk skips
-/// it there.
-pub const SHOWS_PANES: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List, LibraryPane::Hero];
-/// The Shows walk while the detail paints no Hero.
-pub const SHOWS_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List];
-
-/// The Library panel's panes on the Audiobooks destination (design D12, row
-/// 9.1): the book list and the Hero. No pill row rides on the destination — the
-/// letter rail replaces the TUI's surname buckets — and the Hero's chapter
-/// Workspace belongs to the Hero pane.
-pub const AUIB_PANES: &[LibraryPane] = &[LibraryPane::List, LibraryPane::Hero];
-/// The Audiobooks walk while the detail paints no Hero.
-pub const AUIB_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::List];
-
-/// The Library panel's panes on a plain Emby library (design D12, row 8.1):
-/// the list and the Hero, because a plain library paints no pills — its letter
-/// rail replaces the TUI's letter-range pill row.
-pub const EMBY_PANES: &[LibraryPane] = &[LibraryPane::List, LibraryPane::Hero];
-/// The plain Emby walk while the detail paints no Hero.
-pub const EMBY_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::List];
-
-/// The Library panel's panes on a feed-group Emby library (design D12, row
-/// 8.1): the feed-group pills, the list, and the Hero.
-pub const EMBY_FEED_PANES: &[LibraryPane] =
-    &[LibraryPane::Pills, LibraryPane::List, LibraryPane::Hero];
-/// The feed-group Emby walk while the detail paints no Hero.
-pub const EMBY_FEED_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List];
-
-/// The Library panel's panes on the Podcasts destination (design D12, row
-/// 10.1): the episode pills, the date-gutter list, and the Hero. A frame
-/// without a Hero leaves the walk on the pills and the list.
-pub const PODCASTS_PANES: &[LibraryPane] =
-    &[LibraryPane::Pills, LibraryPane::List, LibraryPane::Hero];
-/// The Podcasts walk while the detail paints no Hero.
-pub const PODCASTS_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List];
-
-/// The Library panel's panes on the Feeds destination (design D12, row
-/// 11.1): the view pills, the date-gutter list, and the Hero. A frame
-/// without a Hero leaves the walk on the pills and the list.
-pub const FEEDS_PANES: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List, LibraryPane::Hero];
-/// The Feeds walk while the detail paints no Hero.
-pub const FEEDS_PANES_NO_HERO: &[LibraryPane] = &[LibraryPane::Pills, LibraryPane::List];
 
 /// The right-click item menu's facts (`state.ts`'s `rowMenu`): the item a row
 /// right-press named, with the pointer position it opened at. The menu paints
@@ -109,20 +42,14 @@ pub struct RowMenu {
 /// The Library panel's interaction state (`state.ts`'s `LibraryUiState`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LibraryUiState {
-    /// The pane the window content focuses, `None` before the first walk.
-    pub pane: Option<LibraryPane>,
     /// Whether a text field of the panel holds the keyboard (design D3,
     /// step 2).
     pub filter_open: bool,
     /// The filter's text: the `/` field types it, and it narrows the list
     /// without case (design D7).
     pub filter: String,
-    /// The pill Left and Right move the focus to, or `None` while no pill has
-    /// it (design D6).
-    pub focused_pill: Option<String>,
-    /// The pill selection the keys asked for: Space and Enter select the
-    /// focused pill (design D6). The pill row turns it into the
-    /// select-collection command.
+    /// The pill selection a press asked for (design D6). The pill row turns it
+    /// into the select-collection command.
     pub pill_select: Option<String>,
     /// The list's cursor row id, or `None` while no row carries the cursor
     /// (design D7). The cursor and the picked item are different: the cursor
@@ -137,7 +64,7 @@ pub struct LibraryUiState {
     /// cleared one drop it.
     pub filter_closed: Vec<String>,
     /// The tracklist's cursor track id (design D3): the Hero's tracklist row
-    /// the movement keys rest on while the Hero pane has the pane focus.
+    /// the movement keys rest on.
     pub track_cursor: Option<String>,
     /// Whether the Narrow arrangement's Hero overlay is dismissed (design D4,
     /// D3): a pick paints it again, and Esc or a press on its backdrop closes
@@ -157,10 +84,8 @@ impl LibraryUiState {
     #[must_use]
     pub fn initial() -> Self {
         Self {
-            pane: Some(LibraryPane::Pills),
             filter_open: false,
             filter: String::new(),
-            focused_pill: None,
             pill_select: None,
             cursor: None,
             open_nodes: Vec::new(),
@@ -314,63 +239,6 @@ impl LibraryState {
         list.is_some()
     }
 
-    /// The panes the active destination paints (design D12): the one walk on
-    /// Home skips the panes it does not paint, on Shows it skips the Hero the
-    /// Upcoming mode does not paint, and on an Emby library it skips the pill
-    /// row a plain library does not paint and the Hero a frame without one
-    /// does not.
-    #[must_use]
-    pub fn active_library_panes(&self) -> &'static [LibraryPane] {
-        let list = self.sections.library_list.peek();
-        match list.as_deref().map(|list| &list.destination) {
-            Some(GuiDestinationList::Home(_)) => HOME_PANES,
-            Some(GuiDestinationList::Shows(_)) => {
-                if self.library_detail_has_hero() {
-                    SHOWS_PANES
-                } else {
-                    SHOWS_PANES_NO_HERO
-                }
-            }
-            Some(GuiDestinationList::Emby(emby)) => {
-                Self::emby_panes(emby.feed_group, self.library_detail_has_hero())
-            }
-            Some(GuiDestinationList::Audiobooks(_)) => {
-                if self.library_detail_has_hero() {
-                    AUIB_PANES
-                } else {
-                    AUIB_PANES_NO_HERO
-                }
-            }
-            Some(GuiDestinationList::Podcasts(_)) => {
-                if self.library_detail_has_hero() {
-                    PODCASTS_PANES
-                } else {
-                    PODCASTS_PANES_NO_HERO
-                }
-            }
-            Some(GuiDestinationList::Feeds(_)) => {
-                if self.library_detail_has_hero() {
-                    FEEDS_PANES
-                } else {
-                    FEEDS_PANES_NO_HERO
-                }
-            }
-            _ => PANES,
-        }
-    }
-
-    /// The Emby walk's panes: the feed-group mode's pill row and the Hero ride
-    /// only where the frame paints them (row 8.1).
-    #[must_use]
-    fn emby_panes(feed_group: bool, has_hero: bool) -> &'static [LibraryPane] {
-        match (feed_group, has_hero) {
-            (true, true) => EMBY_FEED_PANES,
-            (true, false) => EMBY_FEED_PANES_NO_HERO,
-            (false, true) => EMBY_PANES,
-            (false, false) => EMBY_PANES_NO_HERO,
-        }
-    }
-
     /// Whether the active destination's detail part paints a Hero: every
     /// destination's detail carries a `hero`, `None` while none is picked.
     #[must_use]
@@ -388,7 +256,8 @@ impl LibraryState {
         }
     }
 
-    /// Open the list's filter: `/` with Library Panel focus (design D3, step 4).
+    /// Open the list's filter: `/` while the pointer rests over the Library
+    /// column (design D2, step 3 of `gui-pointer-target-interaction`).
     pub fn open_library_filter(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.filter_open = true);
@@ -417,52 +286,8 @@ impl LibraryState {
         self.settle_cursor();
     }
 
-    /// Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3).
-    /// Taking the Hero's pane paints the Hero again where the arrangement overlays
-    /// it, so the keys never act on a pane that paints nothing.
-    pub fn focus_library_pane(&self, pane: LibraryPane) {
-        let mut ui = self.ui;
-        ui.with_mut(|current| {
-            *current = with_hero_pane(LibraryUiState {
-                pane: Some(pane),
-                ..current.clone()
-            });
-        });
-    }
-
-    /// Move the pane focus `step` panes along, wrapping at the ends. The walk
-    /// skips the panes the active destination does not paint (design D12): Home
-    /// walks the list and the Hero only.
-    pub fn move_library_pane(&self, step: i32) {
-        let panes = self.active_library_panes();
-        let current = self.ui.peek().clone();
-        let at = panes
-            .iter()
-            .position(|pane| Some(*pane) == active_library_pane(&current, panes))
-            .unwrap_or(0);
-        let next = if step >= 0 {
-            at.saturating_add(step.unsigned_abs() as usize) % panes.len()
-        } else {
-            (at + panes.len()).saturating_sub(step.unsigned_abs() as usize) % panes.len()
-        };
-        let pane = panes[next];
-        let mut ui = self.ui;
-        ui.with_mut(|current| {
-            *current = with_hero_pane(LibraryUiState {
-                pane: Some(pane),
-                ..current.clone()
-            });
-        });
-    }
-
-    /// Focus a pill, or no pill while `group_id` is `None`.
-    pub fn focus_library_pill(&self, group_id: Option<String>) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.focused_pill = group_id);
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it (design
-    /// D6).
+    /// Ask for a pill to be selected (design D6): the pill row turns the request
+    /// into the select-collection command.
     pub fn request_library_pill_select(&self, group_id: String) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.pill_select = Some(group_id));
@@ -489,21 +314,6 @@ impl LibraryState {
         self.select_library_pill(lib_idx, pill_select);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried content
-    /// so a stale id focuses nothing.
-    #[must_use]
-    pub fn focused_library_pill<'a>(
-        &self,
-        pills: &'a [GuiMusicPillFrame],
-        ui: &LibraryUiState,
-    ) -> Option<&'a GuiMusicPillFrame> {
-        if ui.pane != Some(LibraryPane::Pills) {
-            return None;
-        }
-        let focused = ui.focused_pill.as_deref()?;
-        pills.iter().find(|pill| pill.group_id == focused)
-    }
-
     /// The active Music detail's Hero, `None` while another destination holds
     /// the window or no album is picked.
     #[must_use]
@@ -513,9 +323,9 @@ impl LibraryState {
     }
 
     /// Move the Hero's tracklist cursor one movement along (design D3): the
-    /// movement keys move the tracklist's cursor, not the list's, while the Hero
-    /// pane has the pane focus. The movement starts from the cursor the painted
-    /// tracklist shows, so the first key lands beside it.
+    /// movement keys move the tracklist's cursor, not the list's. The movement
+    /// starts from the cursor the painted tracklist shows, so the first key
+    /// lands beside it.
     pub fn move_library_track_cursor(&self, mv: ListMove) {
         let hero = self.music_hero();
         let tracks = hero_tracks(hero.as_ref());
@@ -532,25 +342,23 @@ impl LibraryState {
         });
     }
 
-    /// The item the focused pane's cursor names (design D3, D8): the tracklist's
-    /// track while the Hero pane has the pane focus, and the list's row while the
-    /// list has it. `None` while no cursor rests on an item, so the key that acts
-    /// on it sends no command. The Hero pane's track is the one the painted
-    /// tracklist shows, so Enter acts before any movement key has moved the
-    /// cursor.
+    /// The item the Hero's tracklist cursor names (design D3, D8), the one the
+    /// painted tracklist shows, so Enter acts before any movement key has moved
+    /// the cursor. `None` while no track row carries it.
     #[must_use]
-    pub fn focused_item_id(&self) -> Option<String> {
+    pub fn tracklist_item_id(&self) -> Option<String> {
+        let hero = self.music_hero();
+        let tracks = hero_tracks(hero.as_ref());
+        resolve_track_cursor(&tracks, self.ui.peek().track_cursor.as_deref())
+    }
+
+    /// The item the Music list's cursor row names (design D3, D8), or `None`
+    /// while no painted row carries the cursor.
+    #[must_use]
+    pub fn list_cursor_item_id(&self) -> Option<String> {
         let ui = self.ui.peek().clone();
-        if ui.pane == Some(LibraryPane::Hero) {
-            let hero = self.music_hero();
-            let tracks = hero_tracks(hero.as_ref());
-            return resolve_track_cursor(&tracks, ui.track_cursor.as_deref());
-        }
-        if ui.pane == Some(LibraryPane::List) {
-            let row = self.cursor_row(&ui);
-            return row.as_ref().and_then(Self::action_item_id);
-        }
-        None
+        let row = self.cursor_row(&ui);
+        row.as_ref().and_then(Self::action_item_id)
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
@@ -612,15 +420,10 @@ impl LibraryState {
     }
 
     /// Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
-    /// on its backdrop. A later pick, or a Tab onto the Hero's pane, paints it
-    /// again. While the Hero pane held the pane focus, the focus falls back to the
-    /// list, so the keys never rest on a pane that paints nothing.
+    /// on its backdrop. A later pick paints it again.
     pub fn close_library_hero(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
-            if ui.pane == Some(LibraryPane::Hero) {
-                ui.pane = Some(LibraryPane::List);
-            }
             ui.hero_dismissed = true;
             ui.item_menu_open = false;
         });
@@ -692,30 +495,6 @@ impl LibraryState {
             });
         }
     }
-}
-
-/// The pane of `ui` the walk starts from: the pane itself while the active
-/// destination paints it, and the walk's first pane otherwise — a destination
-/// switch that leaves the last destination's pane never walks from a pane
-/// that paints nothing.
-#[must_use]
-fn active_library_pane(ui: &LibraryUiState, panes: &[LibraryPane]) -> Option<LibraryPane> {
-    match ui.pane {
-        Some(pane) if panes.contains(&pane) => Some(pane),
-        _ => panes.first().copied(),
-    }
-}
-
-/// The state with the Hero pane ready while it takes the pane focus (design
-/// D3, D4): the Narrow arrangement paints the Hero again, so the keys never act
-/// on a pane that paints nothing, and the tracklist's cursor is derived from the
-/// tracks that paint rather than seeded here.
-#[must_use]
-fn with_hero_pane(mut ui: LibraryUiState) -> LibraryUiState {
-    if ui.pane == Some(LibraryPane::Hero) {
-        ui.hero_dismissed = false;
-    }
-    ui
 }
 
 mod rows;

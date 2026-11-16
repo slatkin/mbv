@@ -6,7 +6,7 @@
 //! frame's `selected` and its Hero), so nothing here mirrors it: a press sends
 //! the select command, and the frame carries the choice back. The row model is
 //! [`super::audiobooks_list`]'s; the Hero's chapter cursor belongs to the Hero
-//! ([`super::audiobooks_workspace`]), and the panel's pane focus and the Hero
+//! ([`super::audiobooks_workspace`]), and the Hero
 //! overlay stay in [`super::state`]'s shared store. There is no pill row on
 //! the destination.
 

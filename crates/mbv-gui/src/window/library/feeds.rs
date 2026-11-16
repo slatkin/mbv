@@ -6,11 +6,11 @@
 //! selection and the selected entry (the frame's `pills` and `selected`), so
 //! nothing here mirrors them: a press sends the select command, and the frame
 //! carries the choice back. The row model is [`super::feeds_list`]'s; the
-//! panel's pane focus and the Hero overlay stay in [`super::state`]'s shared
+//! Hero overlay stays in [`super::state`]'s shared
 //! store. There is no play-next: `n` is consumed and does nothing. A Client
 //! holds one feed tab, so no library index rides the commands.
 //!
-//! The state, the filter, the cursor, the scroll store, and the pill focus are
+//! The state, the filter, the cursor, and the scroll store are
 //! the pill-list controller's ([`super::pill_list`], row 7C.1); this module
 //! keeps the Feeds frame, the Feeds rows, the Feeds command shapes, and the
 //! Feeds names.
@@ -19,13 +19,12 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiFeedsList;
 use crate::bridge::library::{GuiFeedPill, GuiLibraryCommand};
 use crate::window::library::feeds_list::{FeedsItemRow, move_feeds_cursor};
 use crate::window::library::list::ListMove;
 use crate::window::library::parts::library_feeds_list;
 
-use super::pill_list::{ListControl, PillListUiState, move_pill_focus};
+use super::pill_list::{ListControl, PillListUiState};
 use super::state::LibraryState;
 
 /// The Feeds list's interaction state: the shared pill-list state over the
@@ -38,8 +37,8 @@ pub fn initial_feeds_ui() -> FeedsUiState {
     PillListUiState::initial()
 }
 
-/// The pill's stable key: the each-block's identity and the pill row's focus
-/// key, over the pill object the frame carries (design D12).
+/// The pill's stable key: the each-block's identity, over the pill object the
+/// frame carries (design D12).
 #[must_use]
 pub fn feed_pill_key(pill: &GuiFeedPill) -> String {
     match pill {
@@ -167,42 +166,8 @@ impl LibraryState {
         self.feeds_list().scroll_to(scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried
-    /// pills so a stale pill focuses nothing: the pill the keys' Space and
-    /// Enter select, and the pill the row paints the accent outline on
-    /// (design D6, D12).
-    #[must_use]
-    pub fn focused_feeds_pill<'a>(&self, feeds: &'a GuiFeedsList) -> Option<&'a GuiFeedPill> {
-        let focused = self.feeds_ui.peek().focused_pill.clone()?;
-        let focused_key = feed_pill_key(&focused);
-        feeds
-            .pills
-            .iter()
-            .map(|frame| &frame.pill)
-            .find(|pill| feed_pill_key(pill) == focused_key)
-    }
-
-    /// Move the focused pill one pill along the row (design D12): Right and
-    /// Left walk the pills, and the first of them with no pill focused takes
-    /// the end it walks from.
-    pub fn move_feeds_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(feeds) = library_feeds_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiFeedPill> = feeds.pills.iter().map(|frame| frame.pill.clone()).collect();
-        move_pill_focus(
-            self.feeds_ui,
-            &pills,
-            feed_pill_key,
-            Clone::clone,
-            feed_pill_key,
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (design D6, D12).
+    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
+    /// request into the set-pill command.
     pub fn request_feeds_pill_select(&self, pill: GuiFeedPill) {
         let mut feeds_ui = self.feeds_ui;
         feeds_ui.with_mut(|ui| ui.pill_select = Some(pill));

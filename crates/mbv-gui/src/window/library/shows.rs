@@ -7,7 +7,7 @@
 //! nothing here mirrors them: a press and an Enter send the select command,
 //! and the frame carries the selection back. The row model is
 //! [`super::shows_list`]'s; the Hero's episode cursor belongs to the Hero
-//! ([`super::shows_workspace`]), and the panel's pane focus and the Hero
+//! ([`super::shows_workspace`]), and the Hero
 //! overlay stay in [`super::state`]'s shared store.
 
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use crate::window::library::shows_list::{
     ShowsListRow, active_shows_mode, move_shows_cursor, shows_letter_rail,
 };
 
-use super::pill_list::{ListControl, ListUi, PillFocusUi, move_pill_focus};
+use super::pill_list::{ListControl, ListUi};
 use super::state::LibraryState;
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
@@ -31,11 +31,8 @@ pub struct ShowsUiState {
     /// The cursor's row id, or `None` while no row carries the cursor
     /// (design D12). The cursor moves over the item rows only.
     pub cursor: Option<String>,
-    /// The mode pill the pill row's Left and Right move the focus to, or
-    /// `None` while no pill has it (design D6, D12).
-    pub focused_pill: Option<GuiShowsModeFrame>,
-    /// The mode selection the keys asked for: Space and Enter select the
-    /// focused pill, and the pill row turns it into the set-mode command.
+    /// The mode selection a press asked for, and the pill row turns it into the
+    /// set-mode command.
     pub pill_select: Option<GuiShowsModeFrame>,
     /// The `/` filter's text: the list paints only the rows whose title
     /// contains it, without case (design D7's filter rule, the rail's
@@ -61,18 +58,6 @@ impl ListUi for ShowsUiState {
 
     fn set_filter(&mut self, filter: String) {
         self.filter = filter;
-    }
-}
-
-impl PillFocusUi for ShowsUiState {
-    type Focus = GuiShowsModeFrame;
-
-    fn focused_pill(&self) -> Option<&GuiShowsModeFrame> {
-        self.focused_pill.as_ref()
-    }
-
-    fn set_focused_pill(&mut self, focus: GuiShowsModeFrame) {
-        self.focused_pill = Some(focus);
     }
 }
 
@@ -337,37 +322,8 @@ impl LibraryState {
         self.shows_list().scroll_to(scroll_top);
     }
 
-    /// The pill the pill row's focus holds, resolved against the carried
-    /// pills so a stale mode focuses nothing: the mode the keys' Space and
-    /// Enter select, and the pill the row paints the accent outline on
-    /// (design D6, D12).
-    #[must_use]
-    pub fn focused_shows_pill(&self, modes: &[GuiShowsModeFrame]) -> Option<GuiShowsModeFrame> {
-        let focused = self.shows_ui.peek().focused_pill?;
-        modes.iter().copied().find(|mode| *mode == focused)
-    }
-
-    /// Move the focused pill one pill along the row (design D12): Right and
-    /// Left walk the pills, and the first of them with no pill focused takes
-    /// the end it walks from.
-    pub fn move_shows_pill_focus(&self, step: i32) {
-        let list = self.sections.library_list.peek();
-        let Some(shows) = library_shows_list(list.as_deref()) else {
-            return;
-        };
-        let pills: Vec<GuiShowsModeFrame> = shows.pills.iter().map(|pill| pill.mode).collect();
-        move_pill_focus(
-            self.shows_ui,
-            &pills,
-            |mode| shows_mode_key(*mode).to_owned(),
-            |mode| *mode,
-            |mode| shows_mode_key(*mode).to_owned(),
-            step,
-        );
-    }
-
-    /// Ask for the focused pill to be selected: Space and Enter request it
-    /// (design D6, D12).
+    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
+    /// request into the set-mode command.
     pub fn request_shows_pill_select(&self, mode: GuiShowsModeFrame) {
         let mut shows_ui = self.shows_ui;
         shows_ui.with_mut(|ui| ui.pill_select = Some(mode));

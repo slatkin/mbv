@@ -21,7 +21,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use mbv_config::GuiPanelWidths;
 
 use super::LibraryPanel;
-pub(super) use super::{press_outside_menu, press_takes_focus};
+pub(super) use super::press_outside_menu;
 
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame};
 use crate::core_thread::CoreInput;

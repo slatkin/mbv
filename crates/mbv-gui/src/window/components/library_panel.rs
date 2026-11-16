@@ -22,11 +22,11 @@
 //! repaint never deep-clones a list's rows for them.
 //! The pill rows mount for real (rows 7.2–7.4).
 //!
-//! A press inside the panel sends the take-focus command (design D4): the
-//! core sets the focus stack and Panel focus together, and the press that
-//! follows acts on the row. The press that lands while the right-click item
-//! menu is up closes the menu too — the outside-press rule — unless it landed
-//! on the menu itself, whose handler stops this one.
+//! A press inside the panel stores no focus (design D2 of
+//! `gui-pointer-target-interaction`): the pointer names the key target, so the
+//! press acts on the row it lands on. The press that lands while the
+//! right-click item menu is up closes the menu — the outside-press rule —
+//! unless it landed on the menu itself, whose handler stops this one.
 //!
 //! The Narrow Hero overlay covers the list, so it must be dismissible: its
 //! backdrop press closes it, and Esc closes it in the key router (design
@@ -37,7 +37,6 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiMusicMenuEntryFrame};
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
-use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
 use crate::window::components::library_audiobooks_list::LibraryAudiobooksList;
@@ -81,20 +80,12 @@ pub struct LibraryPanelProps {
     pub library_column: f32,
 }
 
-/// The press that gives the panel Panel focus (design D4): the core sets the
-/// focus stack and Panel focus together, and the press that follows acts on
-/// the row.
-fn press_takes_focus(library: &LibraryState) {
-    library.link.library(GuiLibraryCommand::TakeFocus);
-}
-
 /// A press inside the panel while the right-click item menu is up (design
-/// D8, D15): the press takes focus and closes the menu — the outside-press
-/// rule. The menu's own press handler stops this one from running, so a
-/// press on the menu's entries runs the entry instead of closing, including
-/// the right-press that opens the menu over another row.
+/// D8, D15): the press closes the menu — the outside-press rule. The menu's
+/// own press handler stops this one from running, so a press on the menu's
+/// entries runs the entry instead of closing, including the right-press that
+/// opens the menu over another row.
 fn press_outside_menu(library: &LibraryState) {
-    press_takes_focus(library);
     if library.ui.peek().row_menu.is_some() {
         library.close_library_row_menu();
     }
@@ -333,7 +324,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // its own clone.
     let press_library = library.clone();
     let backdrop_library = library.clone();
-    let menu_press_library = library.clone();
     // The list column's divider drag (design D4, D14): the store the drag's
     // width clamps and saves through. It needs no layout bump: the drag writes
     // the width the tree paints, so the frame that resolves the new inline
@@ -486,12 +476,9 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                             class: "fixed",
                             style: "left: 0; top: 0; width: 0; height: 0;",
                             onpointerdown: move |event: PointerEvent| {
-                                // A press on the menu takes focus — the
-                                // panel's listener would have — but does not
-                                // close it: the outside-press rule skips the
-                                // menu, and the stop keeps the panel's close
-                                // from running.
-                                press_takes_focus(&menu_press_library);
+                                // A press on the menu does not close it: the
+                                // outside-press rule skips the menu, and the
+                                // stop keeps the panel's close from running.
                                 event.stop_propagation();
                             },
                             QueueRowMenu {

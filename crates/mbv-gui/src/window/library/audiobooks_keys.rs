@@ -3,8 +3,8 @@
 //! Library keys while an Audiobooks library is active. [`super::keys`] stays
 //! the panel's one routing site and hands an Audiobooks key here after the
 //! window keys and the open-field checks, so this module never installs a
-//! router. The pane focus decides the control a key acts on: the book list, or
-//! the Hero's chapter Workspace.
+//! router. The pointer decides the control a key acts on: the book list, or the
+//! Hero's chapter Workspace.
 //!
 //! The routing itself is the shared panel key handler's ([`super::keys_shared`],
 //! row 7C.2): the movements and Enter never reach the core, Esc's overlay and
@@ -18,6 +18,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::PointerTarget;
 
 use super::audiobooks_list::{AudiobooksItemRow, AudiobooksListRow};
 use super::audiobooks_workspace::{move_abs_chapter_cursor, play_abs_chapter, queue_abs_book};
@@ -45,9 +46,9 @@ impl AudiobooksFrame {
 }
 
 /// The Audiobooks facts the shared panel key handler routes over (row 7C.2):
-/// no pill row rides on the destination, the item the play and queue commands
-/// name is the book the cursor row carries, the Hero routes its own chapter
-/// Workspace, and there is no play-next.
+/// the item the play and queue commands name is the book the cursor row
+/// carries, the Hero routes its own chapter Workspace, and there is no
+/// play-next.
 struct AudiobooksKeys<'a> {
     state: &'a LibraryState,
 }
@@ -55,7 +56,6 @@ struct AudiobooksKeys<'a> {
 impl PanelKeys for AudiobooksKeys<'_> {
     type Frame = AudiobooksFrame;
     type Item = AudiobooksItemRow;
-    type Pill = ();
 
     fn frame(&self) -> Option<AudiobooksFrame> {
         AudiobooksFrame::carry(self.state)
@@ -147,9 +147,9 @@ fn route_workspace_key(
 pub fn route_audiobooks_panel_key(
     state: &LibraryState,
     key: &DomKey,
-    target: KeyTarget,
+    pointer: &PointerTarget,
 ) -> KeyOutcome {
-    route_panel_list_key(key, state, &AudiobooksKeys { state }, target)
+    route_panel_list_key(key, state, &AudiobooksKeys { state }, pointer)
 }
 
 #[cfg(test)]

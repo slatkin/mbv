@@ -110,9 +110,9 @@ fn esc_that_clears_the_filter_moves_a_stranded_cursor_to_a_painted_row() {
     assert!(facts[4].contains("cursor=Some(\"artist:service:a1\")"));
 }
 
-// Review of row 4.7: the focused pane's cursor decides what `n`, `a`, Enter,
-// and the movement keys act on (design D3, step 4), and Esc closes the front
-// end's own menu and overlay.
+// Review of row 4.7: the pointer's control decides what `n`, `a`, Enter, and
+// the movement keys act on (design D2, step 3), and Esc closes the front end's
+// own menu and overlay.
 #[test]
 fn n_with_the_list_cursor_on_an_album_sends_play_next_for_that_album() {
     let (facts, rx) = run(|state, facts| {
@@ -131,18 +131,15 @@ fn n_with_the_list_cursor_on_an_album_sends_play_next_for_that_album() {
     assert_eq!(facts, ["n=Handled"]);
 }
 #[test]
-fn a_with_the_hero_pane_focused_sends_add_to_queue_for_the_tracklist_cursor_track() {
+fn a_with_the_pointer_on_the_tracklist_sends_add_to_queue_for_the_cursor_track() {
     let artists = vec![beastie()];
     let list = music_list(artists);
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
         let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            ui.pane = Some(LibraryPane::Hero);
-            ui.track_cursor = Some("t1".to_owned());
-        });
-        route(state, facts, "a", "a", false);
+        ui.with_mut(|ui| ui.track_cursor = Some("t1".to_owned()));
+        route_hero(state, facts, "a", "a");
     });
     assert_eq!(
         commands(&rx),
@@ -154,47 +151,37 @@ fn a_with_the_hero_pane_focused_sends_add_to_queue_for_the_tracklist_cursor_trac
     assert_eq!(facts, ["a=Handled"]);
 }
 #[test]
-fn down_with_the_hero_pane_focused_moves_the_tracklist_cursor() {
+fn down_with_the_pointer_on_the_tracklist_moves_the_tracklist_cursor() {
     let artists = vec![beastie()];
     let list = music_list(artists);
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
         let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            ui.pane = Some(LibraryPane::Hero);
-            ui.track_cursor = Some("t1".to_owned());
-        });
-        route(state, facts, "down", "ArrowDown", false);
+        ui.with_mut(|ui| ui.track_cursor = Some("t1".to_owned()));
+        route_hero(state, facts, "down", "ArrowDown");
         facts.lock().expect("facts").push(ui_facts(state));
     });
     assert_eq!(
         facts,
         vec![
             "down=Handled",
-            "pane=Some(Hero) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=Some(\"t2\") dismissed=true"
+            "filter_open=false filter=\"\" pill_select=None cursor=None open=[] track_cursor=Some(\"t2\") dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
 }
 
-// Review of row 4.7, finding P2-a: the pane walk reached the Hero in Narrow
-// while its overlay was dismissed, so the movement keys, `n`/`a`, and Enter
-// acted on a pane that painted nothing. Taking the Hero's pane paints it
-// again.
+// Review of row 4.7, finding P2-a: the tracklist's cursor derives from the
+// tracks that paint, so Enter acts on the first track before any movement key.
 #[test]
-fn enter_in_the_hero_pane_plays_the_track_the_painted_tracklist_shows() {
+fn enter_on_the_tracklist_plays_the_track_the_painted_tracklist_shows() {
     let artists = vec![beastie()];
     let list = music_list(artists);
     let detail = music_detail(Some(hero()));
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), detail.clone());
-        let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            ui.pane = Some(LibraryPane::Hero);
-            ui.track_cursor = None;
-        });
-        route(state, facts, "enter", "Enter", false);
+        route_hero(state, facts, "enter", "Enter");
     });
     assert_eq!(
         commands(&rx),

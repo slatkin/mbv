@@ -111,7 +111,7 @@ pub fn move_episode_cursor(
 }
 
 /// Move the Workspace's cursor one movement along (design D12): the movement
-/// keys while the Hero pane has the pane focus.
+/// keys while the pointer rests on the Workspace.
 pub fn move_shows_episode_cursor(state: &LibraryState, mv: ListMove, detail: &GuiShowsDetail) {
     let workspace = workspace_of(detail);
     let current =

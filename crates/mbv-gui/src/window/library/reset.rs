@@ -1,7 +1,7 @@
 //! The front-end half of Reset UI State (`add-gui-settings-screen` design
 //! D10, the port of `lib/library/reset.ts`): a new `uiResetEpoch` drops every
-//! Library interaction store — the pane focus, the cursors, the filters, the
-//! open nodes, the pill focus, the menus, the Hero dismissals, and the scroll —
+//! Library interaction store — the cursors, the filters, the open nodes, the
+//! menus, the Hero dismissals, and the scroll —
 //! while the core clears the kept collections and picks and the panel widths
 //! reset beside these. The content itself is the frame's carry, so nothing here
 //! mirrors or resets it; the next frame re-carries it.

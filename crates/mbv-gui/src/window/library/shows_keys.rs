@@ -2,24 +2,23 @@
 //! D14, the port of `lib/library/shows-keys.ts`): the Library keys while a
 //! Shows library is active. [`super::keys`] stays the panel's one routing site
 //! and hands a Shows key here after the window keys and the open-field checks,
-//! so this module never installs a router. The pane focus decides the control
-//! a key acts on: the mode pills, the tree list, or the Hero's Workspace.
+//! so this module never installs a router. The pointer decides the control a key
+//! acts on: the tree list, or the Hero's Workspace.
 //!
 //! The routing is the shared panel key handler's ([`super::keys_shared`]): the movements and Enter never
 //! reach the core, Right and Left open and close the tree node under the
 //! cursor (the tree meaning design D3 gives them), Esc's overlay and menu
-//! handling runs before this, `/` opens the list's filter, and Space with no
-//! focused pill stays the core's play and pause.
+//! handling runs before this, `/` opens the list's filter, and Space stays the
+//! core's play and pause.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiShowsDetail, GuiShowsModeFrame};
+use crate::bridge::frame::library::GuiShowsDetail;
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::PointerTarget;
 
-use super::keys_shared::{
-    PanelKeys, PillKeys, cursor_move, is_list_and_hero_key, route_panel_list_key,
-};
+use super::keys_shared::{PanelKeys, cursor_move, is_list_and_hero_key, route_panel_list_key};
 use super::list::ListMove;
 use super::parts::{library_shows_detail, library_shows_list};
 use super::shows_list::ShowsListRow;
@@ -30,17 +29,16 @@ use super::shows_workspace::{
 use super::state::LibraryState;
 
 /// The Shows facts a routed key reads (row 7C.2), copied off the carried
-/// frame: the library index the Workspace commands name and the mode pills.
+/// frame: the library index the Workspace commands name.
 #[derive(Debug, Clone)]
 struct ShowsFrame {
     lib_idx: usize,
-    pills: Vec<GuiShowsModeFrame>,
 }
 
 impl ShowsFrame {
     /// The facts of the carried Shows content, or `None` while another
     /// destination holds the window or the detail part has not landed. A
-    /// keydown copies the pill modes — never the rows.
+    /// keydown copies none of the rows.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
         let shows = library_shows_list(list.as_deref())?;
@@ -48,69 +46,31 @@ impl ShowsFrame {
         library_shows_detail(detail.as_deref())?;
         Some(Self {
             lib_idx: shows.lib_idx,
-            pills: shows.pills.iter().map(|pill| pill.mode).collect(),
         })
     }
 }
 
-/// The mode pill row's facts (row 7C.2): the pills are always painted, and
-/// the focus is the mode itself.
-struct ShowsPillKeys<'a> {
-    state: &'a LibraryState,
-}
-
-impl PillKeys for ShowsPillKeys<'_> {
-    type Frame = ShowsFrame;
-    type Pill = GuiShowsModeFrame;
-
-    fn available(&self, _frame: &ShowsFrame) -> bool {
-        true
-    }
-
-    fn focused(&self, frame: &ShowsFrame) -> Option<GuiShowsModeFrame> {
-        self.state.focused_shows_pill(&frame.pills)
-    }
-
-    fn request(&self, pill: GuiShowsModeFrame) {
-        self.state.request_shows_pill_select(pill);
-    }
-
-    fn move_focus(&self, step: i32) {
-        self.state.move_shows_pill_focus(step);
-    }
-}
-
 /// The Shows facts the shared panel key handler routes over (row 7C.2): the
-/// mode pills are always painted, the list is a tree whose Right, Left, and
-/// Enter act on the node under the cursor (design D14), the Hero routes its
-/// own episode Workspace, and the item the play and queue commands name is a
-/// flat row or an episode — a series, a season, and a heading are not
-/// playable.
+/// list is a tree whose Right, Left, and Enter act on the node under the cursor
+/// (design D14), the Hero routes its own episode Workspace, and the item the
+/// play and queue commands name is a flat row or an episode — a series, a
+/// season, and a heading are not playable.
 struct ShowsKeys<'a> {
     state: &'a LibraryState,
-    pills: ShowsPillKeys<'a>,
 }
 
 impl<'a> ShowsKeys<'a> {
     fn new(state: &'a LibraryState) -> Self {
-        Self {
-            state,
-            pills: ShowsPillKeys { state },
-        }
+        Self { state }
     }
 }
 
 impl PanelKeys for ShowsKeys<'_> {
     type Frame = ShowsFrame;
     type Item = ShowsListRow;
-    type Pill = GuiShowsModeFrame;
 
     fn frame(&self) -> Option<ShowsFrame> {
         ShowsFrame::carry(self.state)
-    }
-
-    fn pills(&self) -> Option<&dyn PillKeys<Frame = ShowsFrame, Pill = GuiShowsModeFrame>> {
-        Some(&self.pills)
     }
 
     fn has_hero(&self, _frame: &ShowsFrame) -> bool {
@@ -205,12 +165,16 @@ impl PanelKeys for ShowsKeys<'_> {
 /// Shows facts. The pill row walks its modes and selects the focused one, the
 /// list's cursor moves and Enter selects a series or plays a flat row, and
 /// the Hero's Workspace cursor moves over the season's episodes. `n` and `a`
-/// act on the item the focused pane names — a flat row in the list, an
+/// act on the item the pointer's control names — a flat row in the list, an
 /// episode in the Workspace — and a series row is not playable, so its `n` and
 /// `a` change nothing.
 #[must_use]
-pub fn route_shows_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
-    route_panel_list_key(key, state, &ShowsKeys::new(state), target)
+pub fn route_shows_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+) -> KeyOutcome {
+    route_panel_list_key(key, state, &ShowsKeys::new(state), pointer)
 }
 
 /// Route a key to the Hero's Workspace (design D12): the movement keys move

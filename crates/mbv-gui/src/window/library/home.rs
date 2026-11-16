@@ -5,7 +5,7 @@
 //! D9). The core owns the selection (the frame's `selected` row), so nothing
 //! here mirrors it: a press and the cursor's settle send the select command,
 //! and the frame carries the selection back. The row model is
-//! [`super::home_list`]'s; the panel's pane focus and the Hero overlay stay in
+//! [`super::home_list`]'s; the Hero overlay stays in
 //! [`super::state`]'s shared store.
 
 use std::sync::Arc;

@@ -153,7 +153,7 @@ pub fn move_chapter_cursor(
 }
 
 /// Move the Workspace's cursor one movement along (design D12): the movement
-/// keys while the Hero pane has the pane focus.
+/// keys while the pointer rests on the Workspace.
 pub fn move_abs_chapter_cursor(state: &LibraryState, mv: ListMove, detail: &GuiAudiobooksDetail) {
     let workspace = workspace_of(detail);
     let current = abs_cursor_chapter(state, detail);

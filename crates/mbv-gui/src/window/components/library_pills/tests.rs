@@ -247,11 +247,11 @@ fn a_press_selects_the_pressed_pill() {
     );
 }
 
-/// Contract (`LibraryPills.test.ts`): the keys' Space request selects the
-/// focused pill — the mounted effect turns the request into the same
-/// command, and the consumed request sends nothing again.
+/// Contract (`LibraryPills.test.ts`): a pill request selects that pill — the
+/// mounted effect turns the request into the same command, and the consumed
+/// request sends nothing again.
 #[test]
-fn space_selects_the_focused_pill() {
+fn a_pill_request_selects_that_pill() {
     let mut fixture = built(&music());
     let state = fixture.state.clone();
     fixture.in_runtime(move || state.request_library_pill_select("g2".to_owned()));
@@ -262,48 +262,5 @@ fn space_selects_the_focused_pill() {
             lib_idx: 2,
             group_id: "g2".to_owned(),
         }]
-    );
-}
-
-/// Contract (`LibraryPills.test.ts`): the keys' focus marks its pill and
-/// moves between pills, and a focus move sends no command.
-#[test]
-fn marks_the_pill_the_keys_focus_hold_and_sends_nothing_for_it() {
-    let mut fixture = built(&music());
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.focus_library_pill(Some("g2".to_owned())));
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-pill=\"g2\"]",
-            LocalName::from("data-library-pill-focused")
-        ),
-        Some(String::new()),
-        "the focused pill carries the mark"
-    );
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.focus_library_pill(Some("g3".to_owned())));
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-pill=\"g3\"]",
-            LocalName::from("data-library-pill-focused")
-        ),
-        Some(String::new()),
-        "the moved focus marks its pill"
-    );
-    assert!(
-        fixture
-            .attr_of(
-                "[data-library-pill=\"g2\"]",
-                LocalName::from("data-library-pill-focused")
-            )
-            .is_none(),
-        "the vacated pill loses the mark"
-    );
-    assert!(
-        fixture.library_commands().is_empty(),
-        "a focus move sends no command"
     );
 }

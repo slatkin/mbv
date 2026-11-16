@@ -1,28 +1,53 @@
-//! The movement vocabulary and the pane routing the Library's key routers share
+//! The movement vocabulary and the list routing the Library's key routers share
 //! (`add-gui-library-panel` design D3, row 7C.2, the port of
 //! `lib/library/keys-shared.ts`): the keys the Library keeps from the core's
 //! router, the list movement each cursor key names, and the one key handler the
 //! Feeds, Podcasts, Emby, Audiobooks, and Shows destinations run over their own
-//! facts — the frame, the rows, the pill row, and the item commands.
+//! facts — the frame, the rows, and the item commands.
 //! [`super::keys`] routes the vocabulary for Music and Home;
 //! [`route_panel_list_key`] serves the other five destinations, which copy
 //! nothing but their own extras — Emby's play-next, the Audiobooks chapter
 //! Workspace, and the Shows tree's open, close, and toggle hooks and episode
-//! Workspace.
+//! Workspace. The Hero's own controls — the tracklist and the Workspaces — are
+//! the lists the pointer marks, so the key under the pointer is the control the
+//! key acts on (design D2 of `gui-pointer-target-interaction`).
 
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
-use dioxus_native::prelude::*;
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 
 use super::list::ListMove;
-use super::state::{LibraryPane, LibraryState};
+use super::state::LibraryState;
+
+/// The panel a key's core answer names (design D2 of
+/// `gui-pointer-target-interaction`): the Queue list box when the pointer is
+/// over it, and no Queue target otherwise — the Library column, neither panel,
+/// or outside the window.
+#[must_use]
+pub fn core_target(pointer: &PointerTarget) -> KeyTarget {
+    match pointer.zone {
+        Some(PointerZone::Queue) => KeyTarget::Queue,
+        Some(PointerZone::Library) | None => KeyTarget::None,
+    }
+}
+
+/// Whether the pointer rests on a Hero control rather than the destination's
+/// list (design D2): the Hero's tracklist and its Workspaces carry list
+/// markers of their own, so the pointer on one of them names the Hero's keys.
+#[must_use]
+pub fn pointer_on_hero(pointer: &PointerTarget) -> bool {
+    matches!(
+        pointer.list,
+        Some(PointerList::Tracklist | PointerList::Workspace)
+    )
+}
 
 /// The keys the Library keeps from the core's router (design D3, step 4): the
-/// movements, Right and Left's open and close, and Enter. Each pane acts on the
-/// ones it owns — the list's cursor, the Hero's tracklist or Workspace, or the
-/// series list — and the others change nothing but still never reach the core.
-/// `n` and `a` are the Library's too, and each destination's item key answers
-/// them for every pane.
+/// movements, Right and Left's open and close, and Enter. Each list acts on the
+/// ones it owns — the destination's list cursor, the Hero's tracklist or
+/// Workspace, or the series list — and the others change nothing but still never
+/// reach the core. `n` and `a` are the Library's too, and each destination's
+/// item key answers them.
 #[must_use]
 pub fn is_list_and_hero_key(key: &str) -> bool {
     matches!(
@@ -59,29 +84,6 @@ pub fn bare(key: &DomKey) -> bool {
     !key.modifiers.ctrl_key && !key.meta_key && !key.modifiers.alt_key && !key.modifiers.shift_key
 }
 
-/// The pill-row facts a destination's keys read (design D6, D12): the pill
-/// walk and the pill select the keys ask for. A destination with no pill row
-/// leaves [`PanelKeys::pills`] unset on its [`PanelKeys`].
-pub trait PillKeys {
-    /// The carried content slice the pill row paints over.
-    type Frame;
-    /// The pill the row paints.
-    type Pill: Clone;
-
-    /// Whether the frame paints the pill row: the Feeds and Podcasts rows
-    /// always, the Emby one in feed-group mode only.
-    fn available(&self, frame: &Self::Frame) -> bool;
-
-    /// The pill the pill row's focus holds, or `None` while no pill has it.
-    fn focused(&self, frame: &Self::Frame) -> Option<Self::Pill>;
-
-    /// Ask for a pill to be selected: Space and Enter request it.
-    fn request(&self, pill: Self::Pill);
-
-    /// Move the focused pill one pill along the row.
-    fn move_focus(&self, step: i32);
-}
-
 /// The destination facts the shared panel key handler routes over (row 7C.2):
 /// the carried frame, the list's cursor row, the item the play and queue
 /// commands name, and the Hero a destination paints. Each destination's keys
@@ -92,17 +94,10 @@ pub trait PanelKeys {
     type Frame;
     /// The row the list's cursor rests on.
     type Item: Clone;
-    /// The pill the row paints, `()` on a destination that paints none.
-    type Pill: Clone;
 
     /// The carried content slice, or `None` while another destination holds
     /// the window: a key routed then answers `core`.
     fn frame(&self) -> Option<Self::Frame>;
-
-    /// The pill row's facts; `None` on a destination that paints none.
-    fn pills(&self) -> Option<&dyn PillKeys<Frame = Self::Frame, Pill = Self::Pill>> {
-        None
-    }
 
     /// Whether the frame paints a Hero pane.
     fn has_hero(&self, frame: &Self::Frame) -> bool;
@@ -153,12 +148,11 @@ pub trait PanelKeys {
         false
     }
 
-    /// The Hero pane's own router, on a destination whose Hero carries a
-    /// control — the Audiobooks chapter Workspace. `None` routes the Hero's
-    /// default: the movements and Enter change nothing but are consumed, and
-    /// `n` and `a` act on the selected item. A `Core` answer names `target`:
-    /// the panel the key's pointer resolved (design D2 of
-    /// `gui-pointer-target-interaction`).
+    /// The Hero's own router, on a destination whose Hero carries a control —
+    /// the Audiobooks chapter Workspace. `None` routes the Hero's default: the
+    /// movements and Enter change nothing but are consumed, and `n` and `a` act
+    /// on the selected item. A `Core` answer names `target`: the panel the
+    /// key's pointer resolved (design D2 of `gui-pointer-target-interaction`).
     fn route_hero(
         &self,
         key: &DomKey,
@@ -171,21 +165,22 @@ pub trait PanelKeys {
 }
 
 /// Route a key to a flat destination's keys (design D3, D12, row 7C.2): `/`
-/// opens the list's filter, Space selects the focused pill and with no pill
-/// focused stays the core's play and pause, the view pills walk and select,
-/// the list's cursor moves and Enter plays the item it rests on, and the Hero
-/// consumes the movements it has no cursor for — or routes them to the
-/// destination's own Workspace. `a` queues the item the focused pane names,
-/// and `n` plays it next where the destination has a play-next and is consumed
-/// and does nothing where it has none. Every one of them is consumed, so no
-/// Library key reaches the core's playback chords from any pane.
+/// opens the list's filter, Space stays the core's play and pause, and the
+/// control the pointer marks takes the key. On a Hero control — the tracklist
+/// or a Workspace — the destination's own Hero router runs, or the Hero's
+/// default: the movements and Enter change nothing but are consumed, and `n`
+/// and `a` act on the item the core selected. Anywhere else the list's cursor
+/// moves and Enter plays the item it rests on, Right and Left act on the row
+/// under it through the destination's hooks, and `n` and `a` play it next or
+/// queue it. Every one of them is consumed, so no Library key reaches the
+/// core's playback chords from the list.
 pub fn route_panel_list_key<K: PanelKeys>(
     key: &DomKey,
     state: &LibraryState,
     keys: &K,
-    target: KeyTarget,
+    pointer: &PointerTarget,
 ) -> KeyOutcome {
-    let ui = state.ui.peek().clone();
+    let target = core_target(pointer);
     let Some(frame) = keys.frame() else {
         return KeyOutcome::Core(target);
     };
@@ -195,47 +190,26 @@ pub fn route_panel_list_key<K: PanelKeys>(
         state.open_library_filter();
         return KeyOutcome::Handled;
     }
-    // Space selects the focused pill (design D6). With no pill focused — and
-    // on a destination with no pill row — it is the core's: Space plays and
-    // pauses.
-    if key.key == " " && !key.modifiers.ctrl_key && !key.meta_key {
-        let pill = keys.pills().and_then(|pills| pills.focused(&frame));
-        let Some(pill) = pill else {
-            return KeyOutcome::Core(target);
-        };
-        if let Some(pills) = keys.pills() {
-            pills.request(pill);
-        }
-        return KeyOutcome::Handled;
+    // Space stays the core's play and pause (design D2, step 4): the pill rows
+    // hold no keyboard focus, so the window never takes it.
+    if key.key == " " {
+        return KeyOutcome::Core(target);
     }
     if !bare(key) {
         return KeyOutcome::Core(target);
     }
-    if ui.pane == Some(LibraryPane::Pills)
-        && keys.pills().is_some_and(|pills| pills.available(&frame))
-    {
-        let outcome = route_pill_key(key, &frame, keys, target);
-        return or_remaining(outcome, key, keys, target);
-    }
-    if ui.pane == Some(LibraryPane::List) {
-        return route_list_key(key, keys, target);
-    }
-    if ui.pane == Some(LibraryPane::Hero) && keys.has_hero(&frame) {
+    if pointer_on_hero(pointer) && keys.has_hero(&frame) {
         let outcome = keys
             .route_hero(key, &frame, target)
             .unwrap_or_else(|| route_hero_key(key, &frame, keys, target));
         return or_remaining(outcome, key, keys, target);
     }
-    // The Hero pane a frame without a Hero does not paint, and any pane that
-    // left a key unclaimed, still keep the Library's keys from the core: the
-    // movements and Enter change nothing, and `n` and `a` act on the list's
-    // cursor row.
-    route_remaining_key(key, keys, target)
+    route_list_key(key, keys, target)
 }
 
-/// The key's answer, or the remaining Library keys' answer when the pane left
-/// it unclaimed: a pane that does not act on a key never passes it to the
-/// core's playback chords (design D3, step 4).
+/// The key's answer, or the remaining Library keys' answer when the control
+/// left it unclaimed: a control that does not act on a key never passes it to
+/// the core's playback chords (design D3, step 4).
 fn or_remaining<K: PanelKeys>(
     outcome: KeyOutcome,
     key: &DomKey,
@@ -248,10 +222,10 @@ fn or_remaining<K: PanelKeys>(
     }
 }
 
-/// The Library's own keys no pane claims (design D3, step 4): `n` and `a` act
-/// on the list's cursor row, as the Music router's item key acts from every
-/// pane, and the movements and Enter change nothing at all. Every one of them
-/// is consumed, so a playback chord never runs.
+/// The Library's own keys no control claims (design D3, step 4): `n` and `a`
+/// act on the list's cursor row, as the Music router's item key acts, and the
+/// movements and Enter change nothing at all. Every one of them is consumed, so
+/// a playback chord never runs.
 fn route_remaining_key<K: PanelKeys>(key: &DomKey, keys: &K, target: KeyTarget) -> KeyOutcome {
     if key.key == "n" || key.key == "a" {
         let item = keys.cursor_row().and_then(|row| keys.item_id(&row));
@@ -262,38 +236,6 @@ fn route_remaining_key<K: PanelKeys>(key: &DomKey, keys: &K, target: KeyTarget) 
         KeyOutcome::Handled
     } else {
         KeyOutcome::Core(target)
-    }
-}
-
-/// Route a key to the pill row (design D12): Right and Left walk the pills,
-/// the first of them with no pill focused taking the end it walks from, and
-/// Enter selects the focused pill as Space does.
-fn route_pill_key<K: PanelKeys>(
-    key: &DomKey,
-    frame: &K::Frame,
-    keys: &K,
-    target: KeyTarget,
-) -> KeyOutcome {
-    let pills = keys.pills();
-    let Some(pills) = pills else {
-        return KeyOutcome::Core(target);
-    };
-    match key.key.as_str() {
-        "ArrowRight" => {
-            pills.move_focus(1);
-            KeyOutcome::Handled
-        }
-        "ArrowLeft" => {
-            pills.move_focus(-1);
-            KeyOutcome::Handled
-        }
-        "Enter" => {
-            if let Some(pill) = pills.focused(frame) {
-                pills.request(pill);
-            }
-            KeyOutcome::Handled
-        }
-        _ => KeyOutcome::Core(target),
     }
 }
 

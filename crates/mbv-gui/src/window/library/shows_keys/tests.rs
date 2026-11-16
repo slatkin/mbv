@@ -1,8 +1,7 @@
 //! Headless tests of the Shows keys (D16): the contracts of
 //! `shows-keys.test.ts` — the list's cursor moves, Enter selects a series row
-//! and plays a flat row, `n` and `a` act on a flat row only, the pill row
-//! walks its modes, `/` is taken, and the pane walk skips the Hero the
-//! Upcoming mode does not paint. The router under test is the panel's one
+//! and plays a flat row, `n` and `a` act on a flat row only, and `/` is taken.
+//! The router under test is the panel's one
 //! routing site, [`super::super::keys::route_library_key`], so these
 //! assertions cover the Shows dispatch it hands to
 //! [`super::route_shows_panel_key`]. The harness builds a `DioxusDocument`
@@ -15,13 +14,11 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::GuiShowsModeFrame as Mode;
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiDestinationList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiShowsDetail,
-    GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsPillFrame, GuiShowsRowFrame,
-    GuiShowsSeasonFrame, GuiShowsSeasonPillFrame, GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
+    GuiDestinationList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsPillFrame,
+    GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -29,8 +26,8 @@ use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::state::{LibraryPane, LibraryState};
-use crate::window::pointer_target::PointerTarget;
+use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::{PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -132,12 +129,22 @@ fn route_on(
         state,
         None,
         GuiArrangement::Wide,
-        &PointerTarget::default(),
+        &library_pointer(),
     );
     facts
         .lock()
         .expect("facts")
         .push(format!("{name}={outcome:?}"));
+}
+
+/// The pointer target a list key routes under: the pointer over the Library
+/// column, not on a Hero list.
+fn library_pointer() -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: None,
+        row: None,
+    }
 }
 
 /// Route one keydown against the window's own section stores and paint the
@@ -239,35 +246,6 @@ fn shows_pills(mode: Mode) -> Vec<GuiShowsPillFrame> {
     .collect()
 }
 
-/// The All series mode's Hero: a series whose Workspace the Hero pane walks.
-fn shows_hero() -> GuiShowsHeroFrame {
-    GuiShowsHeroFrame {
-        title: "Atlanta".to_owned(),
-        parent: None,
-        meta_rows: vec![vec![GuiMetaSegmentFrame {
-            text: "4 seasons".to_owned(),
-            kind: GuiMetaKindFrame::Count,
-        }]],
-        duration_row: None,
-        progress_row: None,
-        overview: None,
-        art_shape: GuiArtShapeFrame::Landscape,
-        art: None,
-        workspace: Some(GuiShowsWorkspaceFrame {
-            seasons: vec![GuiShowsSeasonPillFrame {
-                season_id: "se1".to_owned(),
-                name: "Season 1".to_owned(),
-                selected: true,
-            }],
-            selected_season: Some("se1".to_owned()),
-            episodes: vec![
-                episode("ep1", "The Big Bang"),
-                episode("ep2", "Streets on Fire"),
-            ],
-        }),
-    }
-}
-
 /// The carried content while Shows is active (design D12): no Music and no
 /// Home content, the mode's rows, and the Hero the mode paints.
 fn shows_content(
@@ -310,18 +288,10 @@ fn shows_content(
     (list, detail)
 }
 
-/// The Library Panel focus, as the routed keys read it: the Section's focus
-/// store starts on the Queue panel, so the harness carries it first.
-fn carry_panel_focus(sections: &Sections) {
-    let mut focus = sections.focus;
-    focus.write().panel = GuiPanel::Library;
-}
-
-/// Carry the Shows content and focus the pane the key acts on.
+/// Carry the Shows content and paint the list's cursor.
 fn carry_shows(
     state: &LibraryState,
     content: (GuiLibraryList, GuiLibraryDetail),
-    pane: LibraryPane,
     cursor: Option<&str>,
 ) {
     let (list, detail) = content;
@@ -338,25 +308,21 @@ fn carry_shows(
     };
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
-    carry_panel_focus(&sections);
-    let mut ui = state.ui;
-    ui.with_mut(|ui| ui.pane = Some(pane));
     let mut shows_ui = state.shows_ui;
     shows_ui.with_mut(|ui| {
         ui.cursor = cursor.map(str::to_owned);
-        ui.focused_pill = None;
         ui.pill_select = None;
         ui.filter.clear();
     });
 }
 
-/// The pane focus and filter facts the assertions read.
+/// The filter and cursor facts the assertions read.
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let shows = state.shows_ui.peek().clone();
     format!(
-        "pane={:?} filter_open={} shows_filter={:?} focused_pill={:?} pill_select={:?} cursor={:?}",
-        ui.pane, ui.filter_open, shows.filter, shows.focused_pill, shows.pill_select, shows.cursor,
+        "filter_open={} shows_filter={:?} pill_select={:?} cursor={:?}",
+        ui.filter_open, shows.filter, shows.pill_select, shows.cursor,
     )
 }
 
@@ -365,12 +331,7 @@ fn ui_facts(state: &LibraryState) -> String {
 fn enter_on_a_series_row_selects_it_for_the_hero() {
     let content = shows_content(Mode::All, series_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(
-            state,
-            content.clone(),
-            LibraryPane::List,
-            Some("shows-series:s1"),
-        );
+        carry_shows(state, content.clone(), Some("shows-series:s1"));
 
         route(state, facts, "enter", "Enter", false);
     });
@@ -389,7 +350,7 @@ fn enter_on_a_series_row_selects_it_for_the_hero() {
 fn enter_on_a_flat_row_plays_the_episode() {
     let content = shows_content(Mode::Latest, episode_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, Some("e2"));
+        carry_shows(state, content.clone(), Some("e2"));
 
         route(state, facts, "enter", "Enter", false);
     });
@@ -409,12 +370,7 @@ fn enter_on_a_flat_row_plays_the_episode() {
 fn n_and_a_on_a_series_row_send_nothing() {
     let content = shows_content(Mode::All, series_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(
-            state,
-            content.clone(),
-            LibraryPane::List,
-            Some("shows-series:s1"),
-        );
+        carry_shows(state, content.clone(), Some("shows-series:s1"));
 
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
@@ -428,7 +384,7 @@ fn n_and_a_on_a_series_row_send_nothing() {
 fn n_and_a_on_a_flat_row_play_the_episode_next_and_queue_it() {
     let content = shows_content(Mode::Latest, episode_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, Some("e1"));
+        carry_shows(state, content.clone(), Some("e1"));
 
         route(state, facts, "n", "n", false);
         route(state, facts, "a", "a", false);
@@ -454,7 +410,7 @@ fn n_and_a_on_a_flat_row_play_the_episode_next_and_queue_it() {
 fn a_movement_key_moves_the_shows_cursor_and_sends_no_key() {
     let content = shows_content(Mode::Latest, episode_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, Some("e1"));
+        carry_shows(state, content.clone(), Some("e1"));
 
         route(state, facts, "down", "ArrowDown", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -464,45 +420,13 @@ fn a_movement_key_moves_the_shows_cursor_and_sends_no_key() {
     assert_eq!(commands(&rx), []);
 }
 
-// Right on the Shows pill row focuses the first mode pill and sends no key.
-#[test]
-fn right_on_the_shows_pill_row_focuses_the_first_mode_pill_and_sends_no_key() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::Pills, None);
-
-        route(state, facts, "right", "ArrowRight", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "right=Handled");
-    assert!(facts[1].contains("focused_pill=Some(Latest)"));
-    assert_eq!(commands(&rx), []);
-}
-
-// Space on a focused Shows pill asks for its mode and sends no key.
-#[test]
-fn space_on_a_focused_shows_pill_asks_for_its_mode_and_sends_no_key() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::Pills, None);
-        let mut shows_ui = state.shows_ui;
-        shows_ui.with_mut(|ui| ui.focused_pill = Some(Mode::Upcoming));
-
-        route(state, facts, "space", " ", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "space=Handled");
-    assert!(facts[1].contains("pill_select=Some(Upcoming)"));
-    assert_eq!(commands(&rx), []);
-}
-
 // `/` opens the list's filter under Library focus (design D3, D7): the
 // rail's keyboard path, and the Queue filter never sees the key.
 #[test]
 fn slash_opens_the_shows_filter_and_sends_no_key() {
     let content = shows_content(Mode::Latest, episode_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, Some("e1"));
+        carry_shows(state, content.clone(), Some("e1"));
 
         route(state, facts, "slash", "/", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -519,7 +443,7 @@ fn slash_opens_the_shows_filter_and_sends_no_key() {
 fn esc_closes_the_shows_filter_and_drops_its_text() {
     let content = shows_content(Mode::Latest, episode_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, Some("e1"));
+        carry_shows(state, content.clone(), Some("e1"));
         let mut shows_ui = state.shows_ui;
         shows_ui.with_mut(|ui| ui.filter = "e1".to_owned());
         let mut ui = state.ui;
@@ -532,107 +456,4 @@ fn esc_closes_the_shows_filter_and_drops_its_text() {
     assert!(facts[1].contains("filter_open=false"));
     assert!(facts[1].contains("shows_filter=\"\""));
     assert_eq!(commands(&rx), []);
-}
-
-// The pane walk skips the Hero the Upcoming mode does not paint (design
-// D12): the list is the walk's last pane there, so Tab past it takes Queue
-// Panel focus.
-#[test]
-fn tab_past_the_upcoming_list_takes_queue_panel_focus() {
-    let content = shows_content(Mode::Upcoming, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, None);
-
-        route(state, facts, "tab", "Tab", false);
-    });
-    assert_eq!(facts, ["tab=Handled"]);
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::TakeQueueFocus]);
-}
-
-// Tab walks from the All series list into the series Hero.
-#[test]
-fn tab_walks_from_the_all_series_list_into_the_series_hero() {
-    let content = shows_content(Mode::All, series_rows(), Some(shows_hero()));
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, None);
-
-        route(state, facts, "tab", "Tab", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "tab=Handled");
-    assert!(facts[1].contains("pane=Some(Hero)"));
-    assert_eq!(commands(&rx), []);
-}
-
-// Tab from the Queue panel focuses the Shows pill row.
-#[test]
-fn tab_from_the_queue_panel_focuses_the_shows_pill_row() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::List, None);
-        let mut focus = state.sections.focus;
-        focus.write().panel = GuiPanel::Queue;
-
-        route(state, facts, "tab", "Tab", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "tab=Handled");
-    assert!(facts[1].contains("pane=Some(Pills)"));
-    assert_eq!(commands(&rx), [mbv::GuiLibraryCommand::TakeFocus]);
-}
-
-// Review of row 7.1, finding P1: the Shows panes keep the Library's keys
-// from the core's router (design D3, step 4). A pane that does not act on a
-// key still consumes it, so `a` and `n` never reach the core's playback
-// chords, which are not gated on Panel focus.
-#[test]
-fn a_movement_key_on_the_pills_pane_does_not_reach_the_core() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::Pills, None);
-
-        route(state, facts, "down", "ArrowDown", false);
-    });
-    assert_eq!(facts, ["down=Handled"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// `a` on the pills pane queues the list cursor's flat row and sends no key.
-#[test]
-fn a_on_the_pills_pane_queues_the_list_cursor_flat_row_and_sends_no_key() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::Pills, Some("e1"));
-
-        route(state, facts, "a", "a", false);
-    });
-    assert_eq!(facts, ["a=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsQueue {
-            lib_idx: 0,
-            item_id: "e1".to_owned(),
-        }]
-    );
-}
-
-// `n` on the hero-less Hero pane never reaches the core's playback chords
-// (design D3, step 4): the pane does not act on the key, but the Library's
-// remaining keys still take it, so `n` plays the list cursor's flat row next.
-#[test]
-fn n_on_the_hero_less_hero_pane_does_not_reach_the_core() {
-    let content = shows_content(Mode::Upcoming, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone(), LibraryPane::Hero, Some("e2"));
-
-        route(state, facts, "n", "n", false);
-    });
-    assert_eq!(facts, ["n=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsPlayNext {
-            lib_idx: 0,
-            item_id: "e2".to_owned(),
-        }]
-    );
 }

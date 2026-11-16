@@ -2,111 +2,63 @@
 //! D12, row 11.1, the port of `lib/library/feeds-keys.ts`): the Library keys
 //! while the Feeds destination is active. [`super::keys`] stays the panel's
 //! one routing site and hands a Feeds key here after the window keys and the
-//! open-field checks, so this module never installs a router. The pane focus
-//! decides the control a key acts on: the view pills, the list, or the Hero —
-//! which carries no Workspace and no cursor.
+//! open-field checks, so this module never installs a router. The pointer
+//! decides the control a key acts on: the list, or the Hero — which carries no
+//! Workspace and no cursor.
 //!
 //! The routing itself is the shared panel key handler's
 //! ([`super::keys_shared`], row 7C.2): the movements and Enter never reach
 //! the core, Esc's overlay and menu handling runs before this, `/` opens the
-//! list's filter, and Space with no focused pill stays the core's play and
-//! pause. This module keeps only the Feeds facts it routes over. There is no
+//! list's filter, and Space stays the core's play and pause. This module keeps only the Feeds facts it routes over. There is no
 //! play-next on the destination: `n` is consumed and does nothing, and `a`
 //! sends the queue command. A Client holds one feed tab, so no library index
 //! rides the commands.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::{DomKey, KeyTarget};
-use crate::bridge::library::GuiFeedPill;
+use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::PointerTarget;
 
 use super::feeds_list::FeedsItemRow;
-use super::keys_shared::{PanelKeys, PillKeys, route_panel_list_key};
+use super::keys_shared::{PanelKeys, route_panel_list_key};
 use super::list::ListMove;
 use super::parts::{library_feeds_detail, library_feeds_list};
 use super::state::LibraryState;
 
-/// The Feeds facts a routed key reads (row 7C.2): the pill row's pills.
+/// The Feeds facts a routed key reads (row 7C.2): the destination is active.
 #[derive(Debug, Clone)]
-struct FeedsFrame {
-    pills: Vec<GuiFeedPill>,
-}
+struct FeedsFrame;
 
 impl FeedsFrame {
     /// The facts of the carried Feeds content, or `None` while another
-    /// destination holds the window. A keydown copies the pills — never the
-    /// rows.
+    /// destination holds the window. A keydown copies none of the rows.
     fn carry(state: &LibraryState) -> Option<Self> {
         let list = state.sections.library_list.peek();
-        let feeds = library_feeds_list(list.as_deref())?;
-        Some(Self {
-            pills: feeds.pills.iter().map(|frame| frame.pill.clone()).collect(),
-        })
-    }
-}
-
-/// The pill row's facts (row 7C.2): the pills are always painted, and the
-/// focus is the pill itself ([`super::feeds`]'s `feed_pill_key`).
-struct FeedsPillKeys<'a> {
-    state: &'a LibraryState,
-}
-
-impl PillKeys for FeedsPillKeys<'_> {
-    type Frame = FeedsFrame;
-    type Pill = GuiFeedPill;
-
-    fn available(&self, _frame: &FeedsFrame) -> bool {
-        true
-    }
-
-    fn focused(&self, frame: &FeedsFrame) -> Option<GuiFeedPill> {
-        let focused = self.state.feeds_ui.peek().focused_pill.clone()?;
-        let focused_key = super::feeds::feed_pill_key(&focused);
-        frame
-            .pills
-            .iter()
-            .find(|pill| super::feeds::feed_pill_key(pill) == focused_key)
-            .cloned()
-    }
-
-    fn request(&self, pill: GuiFeedPill) {
-        self.state.request_feeds_pill_select(pill);
-    }
-
-    fn move_focus(&self, step: i32) {
-        self.state.move_feeds_pill_focus(step);
+        library_feeds_list(list.as_deref())?;
+        Some(Self)
     }
 }
 
 /// The Feeds facts the shared panel key handler routes over (row 7C.2): the
-/// view pills are always painted, the item the play and queue commands name
-/// is the entry row itself, and there is no play-next.
+/// item the play and queue commands name is the entry row itself, and there is
+/// no play-next.
 struct FeedsKeys<'a> {
     state: &'a LibraryState,
-    pills: FeedsPillKeys<'a>,
 }
 
 impl<'a> FeedsKeys<'a> {
     fn new(state: &'a LibraryState) -> Self {
-        Self {
-            state,
-            pills: FeedsPillKeys { state },
-        }
+        Self { state }
     }
 }
 
 impl PanelKeys for FeedsKeys<'_> {
     type Frame = FeedsFrame;
     type Item = FeedsItemRow;
-    type Pill = GuiFeedPill;
 
     fn frame(&self) -> Option<FeedsFrame> {
         FeedsFrame::carry(self.state)
-    }
-
-    fn pills(&self) -> Option<&dyn PillKeys<Frame = FeedsFrame, Pill = GuiFeedPill>> {
-        Some(&self.pills)
     }
 
     fn has_hero(&self, _frame: &FeedsFrame) -> bool {
@@ -147,8 +99,12 @@ impl PanelKeys for FeedsKeys<'_> {
 /// Feeds facts. Enter on the cursor row plays the entry it rests on — which
 /// the Owner replaces the queue with — and `a` queues it.
 #[must_use]
-pub fn route_feeds_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
-    route_panel_list_key(key, state, &FeedsKeys::new(state), target)
+pub fn route_feeds_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+) -> KeyOutcome {
+    route_panel_list_key(key, state, &FeedsKeys::new(state), pointer)
 }
 
 #[cfg(test)]

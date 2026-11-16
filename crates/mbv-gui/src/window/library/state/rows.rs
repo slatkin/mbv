@@ -2,7 +2,7 @@
 //! state (`replace-tauri-with-blitz` D15, the seam of `state.ts`'s row-model
 //! half): the memoized painted rows, the cursor's settle, the press and
 //! movement rules, the reveal, the filter, and the scroll reports. The
-//! interaction state and the pane walk live in [`super`].
+//! interaction state lives in [`super`].
 
 use std::sync::Arc;
 

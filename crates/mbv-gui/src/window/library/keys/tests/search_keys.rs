@@ -66,7 +66,11 @@ fn route_key(
         state,
         None,
         GuiArrangement::Wide,
-        &PointerTarget::default(),
+        &PointerTarget {
+            zone: Some(PointerZone::Library),
+            list: None,
+            row: None,
+        },
     );
     let search = state.search.peek();
     facts.lock().expect("facts").push(format!(
