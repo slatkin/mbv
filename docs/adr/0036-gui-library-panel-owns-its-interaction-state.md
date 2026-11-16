@@ -89,3 +89,15 @@ shared rule first, then consumes it.
 This amendment does not change the original decision: interaction state —
 cursor, hover, scroll, focus, filters, overlays — stays in the GUI front
 end, and the Client core still owns the data selection and the actions.
+
+## Amendment (2026-11-16, pointer target)
+
+The row Service facts amendment left cursor and focus inside the panel
+among the interaction state that the GUI front end holds.
+[ADR 0040](0040-gui-key-target-follows-the-pointer.md) removes both from
+the GUI Library panel. The front end no longer holds a Library cursor or
+a focus inside the panel. Its keys go to the pointer target — the thing
+under the pointer that receives a GUI key — and the Client core sets the
+focus stack's Panel focus per key as an internal adapter. Hover, scroll,
+open tree nodes, and filter text stay front-end state, and the Client
+core still owns the data selection and the actions.
