@@ -10,7 +10,7 @@
 //! Workspace, and the Shows tree's open, close, and toggle hooks and episode
 //! Workspace.
 
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use dioxus_native::prelude::*;
 
@@ -156,9 +156,16 @@ pub trait PanelKeys {
     /// The Hero pane's own router, on a destination whose Hero carries a
     /// control — the Audiobooks chapter Workspace. `None` routes the Hero's
     /// default: the movements and Enter change nothing but are consumed, and
-    /// `n` and `a` act on the selected item.
-    fn route_hero(&self, key: &DomKey, frame: &Self::Frame) -> Option<KeyOutcome> {
-        let _ = (key, frame);
+    /// `n` and `a` act on the selected item. A `Core` answer names `target`:
+    /// the panel the key's pointer resolved (design D2 of
+    /// `gui-pointer-target-interaction`).
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        frame: &Self::Frame,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        let _ = (key, frame, target);
         None
     }
 }
@@ -176,10 +183,11 @@ pub fn route_panel_list_key<K: PanelKeys>(
     key: &DomKey,
     state: &LibraryState,
     keys: &K,
+    target: KeyTarget,
 ) -> KeyOutcome {
     let ui = state.ui.peek().clone();
     let Some(frame) = keys.frame() else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
     // `/` opens the list's filter (design D3, D7): the list narrows to the
     // titles that contain the text.
@@ -193,7 +201,7 @@ pub fn route_panel_list_key<K: PanelKeys>(
     if key.key == " " && !key.modifiers.ctrl_key && !key.meta_key {
         let pill = keys.pills().and_then(|pills| pills.focused(&frame));
         let Some(pill) = pill else {
-            return KeyOutcome::Core;
+            return KeyOutcome::Core(target);
         };
         if let Some(pills) = keys.pills() {
             pills.request(pill);
@@ -201,36 +209,41 @@ pub fn route_panel_list_key<K: PanelKeys>(
         return KeyOutcome::Handled;
     }
     if !bare(key) {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     if ui.pane == Some(LibraryPane::Pills)
         && keys.pills().is_some_and(|pills| pills.available(&frame))
     {
-        let outcome = route_pill_key(key, &frame, keys);
-        return or_remaining(outcome, key, keys);
+        let outcome = route_pill_key(key, &frame, keys, target);
+        return or_remaining(outcome, key, keys, target);
     }
     if ui.pane == Some(LibraryPane::List) {
-        return route_list_key(key, keys);
+        return route_list_key(key, keys, target);
     }
     if ui.pane == Some(LibraryPane::Hero) && keys.has_hero(&frame) {
         let outcome = keys
-            .route_hero(key, &frame)
-            .unwrap_or_else(|| route_hero_key(key, &frame, keys));
-        return or_remaining(outcome, key, keys);
+            .route_hero(key, &frame, target)
+            .unwrap_or_else(|| route_hero_key(key, &frame, keys, target));
+        return or_remaining(outcome, key, keys, target);
     }
     // The Hero pane a frame without a Hero does not paint, and any pane that
     // left a key unclaimed, still keep the Library's keys from the core: the
     // movements and Enter change nothing, and `n` and `a` act on the list's
     // cursor row.
-    route_remaining_key(key, keys)
+    route_remaining_key(key, keys, target)
 }
 
 /// The key's answer, or the remaining Library keys' answer when the pane left
 /// it unclaimed: a pane that does not act on a key never passes it to the
 /// core's playback chords (design D3, step 4).
-fn or_remaining<K: PanelKeys>(outcome: KeyOutcome, key: &DomKey, keys: &K) -> KeyOutcome {
+fn or_remaining<K: PanelKeys>(
+    outcome: KeyOutcome,
+    key: &DomKey,
+    keys: &K,
+    target: KeyTarget,
+) -> KeyOutcome {
     match outcome {
-        KeyOutcome::Core => route_remaining_key(key, keys),
+        KeyOutcome::Core(_) => route_remaining_key(key, keys, target),
         taken => taken,
     }
 }
@@ -239,7 +252,7 @@ fn or_remaining<K: PanelKeys>(outcome: KeyOutcome, key: &DomKey, keys: &K) -> Ke
 /// on the list's cursor row, as the Music router's item key acts from every
 /// pane, and the movements and Enter change nothing at all. Every one of them
 /// is consumed, so a playback chord never runs.
-fn route_remaining_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
+fn route_remaining_key<K: PanelKeys>(key: &DomKey, keys: &K, target: KeyTarget) -> KeyOutcome {
     if key.key == "n" || key.key == "a" {
         let item = keys.cursor_row().and_then(|row| keys.item_id(&row));
         route_item_key(key, item.as_deref(), keys);
@@ -248,17 +261,22 @@ fn route_remaining_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
     if is_list_and_hero_key(&key.key) {
         KeyOutcome::Handled
     } else {
-        KeyOutcome::Core
+        KeyOutcome::Core(target)
     }
 }
 
 /// Route a key to the pill row (design D12): Right and Left walk the pills,
 /// the first of them with no pill focused taking the end it walks from, and
 /// Enter selects the focused pill as Space does.
-fn route_pill_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> KeyOutcome {
+fn route_pill_key<K: PanelKeys>(
+    key: &DomKey,
+    frame: &K::Frame,
+    keys: &K,
+    target: KeyTarget,
+) -> KeyOutcome {
     let pills = keys.pills();
     let Some(pills) = pills else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
     match key.key.as_str() {
         "ArrowRight" => {
@@ -275,7 +293,7 @@ fn route_pill_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> Key
             }
             KeyOutcome::Handled
         }
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 
@@ -284,7 +302,7 @@ fn route_pill_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> Key
 /// under it through the destination's hooks (a tree opens, closes, or toggles
 /// a node; a flat list plays the item), and `n` and `a` play it next or queue
 /// it.
-fn route_list_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
+fn route_list_key<K: PanelKeys>(key: &DomKey, keys: &K, target: KeyTarget) -> KeyOutcome {
     if let Some(mv) = cursor_move(&key.key) {
         keys.move_list_cursor(mv);
         return KeyOutcome::Handled;
@@ -312,7 +330,7 @@ fn route_list_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
     if is_list_and_hero_key(&key.key) {
         KeyOutcome::Handled
     } else {
-        KeyOutcome::Core
+        KeyOutcome::Core(target)
     }
 }
 
@@ -320,7 +338,12 @@ fn route_list_key<K: PanelKeys>(key: &DomKey, keys: &K) -> KeyOutcome {
 /// the movements and Enter change nothing but are consumed, and `n` and `a`
 /// act on the item the core selected — the one the Hero paints. A destination
 /// whose Hero holds a control names its own router on [`PanelKeys::route_hero`].
-fn route_hero_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> KeyOutcome {
+fn route_hero_key<K: PanelKeys>(
+    key: &DomKey,
+    frame: &K::Frame,
+    keys: &K,
+    target: KeyTarget,
+) -> KeyOutcome {
     if key.key == "n" || key.key == "a" {
         route_item_key(key, keys.selected_item_id(frame).as_deref(), keys);
         return KeyOutcome::Handled;
@@ -328,7 +351,7 @@ fn route_hero_key<K: PanelKeys>(key: &DomKey, frame: &K::Frame, keys: &K) -> Key
     if is_list_and_hero_key(&key.key) {
         KeyOutcome::Handled
     } else {
-        KeyOutcome::Core
+        KeyOutcome::Core(target)
     }
 }
 

@@ -252,7 +252,7 @@ fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
     assert_eq!(
         facts,
         vec![
-            "escape=Core",
+            "escape=Core(None)",
             "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );

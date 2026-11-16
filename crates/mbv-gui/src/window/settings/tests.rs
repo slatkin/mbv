@@ -15,7 +15,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::settings::rows::{GuiSettingChoice, GuiSettingRow, GuiSettingRowKind};
 use crate::bridge::frame::settings::{GuiSettingsContent, GuiSettingsFrame, GuiSettingsSection};
-use crate::bridge::keys::{DomKey, DomModifiers};
+use crate::bridge::keys::{DomKey, DomModifiers, KeyTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::settings::state::SettingsState;
@@ -107,7 +107,7 @@ fn dom(value: &str) -> DomKey {
 
 /// Route one keydown against the frame and record the outcome.
 fn press(state: &SettingsState, facts: &Facts, name: &str, value: &str, frame: &GuiSettingsFrame) {
-    let outcome = super::keys::route_settings_key(&dom(value), frame, state);
+    let outcome = super::keys::route_settings_key(&dom(value), frame, state, KeyTarget::None);
     facts
         .lock()
         .expect("facts")

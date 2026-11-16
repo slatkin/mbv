@@ -11,9 +11,10 @@ use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiMusicList, GuiMusicPillFrame, GuiSearchFrame,
 };
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::input::KeyOutcome;
+use crate::window::pointer_target::{PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 use dioxus_native::prelude::*;
 
@@ -33,6 +34,19 @@ fn destination_place(key: &DomKey) -> Option<usize> {
     }
     let place: usize = key.key.parse().ok()?;
     (1..=7).contains(&place).then_some(place)
+}
+
+/// The panel a key's core answer names (design D2 of
+/// `gui-pointer-target-interaction`): the Queue list box when the pointer is
+/// over it, and no Queue target otherwise — the Library column, neither panel,
+/// or outside the window. Until the Library acts on the hovered row (group 5),
+/// the window resolves it here alone.
+#[must_use]
+fn core_target(pointer: &PointerTarget) -> KeyTarget {
+    match pointer.zone {
+        Some(PointerZone::Queue) => KeyTarget::Queue,
+        Some(PointerZone::Library) | None => KeyTarget::None,
+    }
 }
 
 /// Move the pane focus (design D3, step 3, D12): Tab and Shift+Tab walk the
@@ -125,7 +139,7 @@ fn accept_active_filter(state: &LibraryState) {
 /// Home, so `/` and Space are not taken: they pass to the core's router. The
 /// tree's Right and Left have no node to open, so they change nothing but
 /// still never reach the core.
-fn route_home_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
+fn route_home_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
     if key.key == "/" && bare(key) {
         state.open_library_filter();
         return KeyOutcome::Handled;
@@ -133,10 +147,10 @@ fn route_home_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
     if key.key == " " {
         // No pill row on Home (row 6.2): Space keeps its core effect, as it
         // does under Queue focus.
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     if !bare(key) {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     if let Some(mv) = cursor_move(&key.key) {
         state.move_home_list_cursor(mv);
@@ -167,7 +181,7 @@ fn route_home_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
             // (design D3, step 4).
             KeyOutcome::Handled
         }
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 
@@ -265,6 +279,7 @@ fn route_escape_key(
     ui: &super::state::LibraryUiState,
     search: Option<&GuiSearchFrame>,
     arrangement: GuiArrangement,
+    target: KeyTarget,
 ) -> KeyOutcome {
     if ui.row_menu.is_some() {
         state.close_library_row_menu();
@@ -285,7 +300,7 @@ fn route_escape_key(
         state.close_library_search();
         return KeyOutcome::Handled;
     }
-    KeyOutcome::Core
+    KeyOutcome::Core(target)
 }
 
 /// Route a key while the Search field holds the keyboard (design D3, step 2,
@@ -344,37 +359,38 @@ fn route_panel_key(
     sections: &Sections,
     search: Option<&GuiSearchFrame>,
     arrangement: GuiArrangement,
+    target: KeyTarget,
 ) -> KeyOutcome {
     if key.key == "Escape" && bare(key) {
-        return route_escape_key(state, ui, search, arrangement);
+        return route_escape_key(state, ui, search, arrangement, target);
     }
     let list = sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
-        Some(GuiDestinationList::Home(_)) => return route_home_panel_key(state, key),
+        Some(GuiDestinationList::Home(_)) => return route_home_panel_key(state, key, target),
         Some(GuiDestinationList::Emby(_)) => {
-            return super::emby_keys::route_emby_panel_key(state, key);
+            return super::emby_keys::route_emby_panel_key(state, key, target);
         }
         Some(GuiDestinationList::Shows(_)) => {
-            return super::shows_keys::route_shows_panel_key(state, key);
+            return super::shows_keys::route_shows_panel_key(state, key, target);
         }
         Some(GuiDestinationList::Audiobooks(_)) => {
-            return super::audiobooks_keys::route_audiobooks_panel_key(state, key);
+            return super::audiobooks_keys::route_audiobooks_panel_key(state, key, target);
         }
         Some(GuiDestinationList::Podcasts(_)) => {
-            return super::podcasts_keys::route_podcasts_panel_key(state, key);
+            return super::podcasts_keys::route_podcasts_panel_key(state, key, target);
         }
         Some(GuiDestinationList::Feeds(_)) => {
-            return super::feeds_keys::route_feeds_panel_key(state, key);
+            return super::feeds_keys::route_feeds_panel_key(state, key, target);
         }
         Some(GuiDestinationList::Music(_)) => {}
         // No carried Library list paints no Library keys: the core takes
         // every one of them (design D2, D10).
-        None => return KeyOutcome::Core,
+        None => return KeyOutcome::Core(target),
     }
     let Some(music) = super::parts::library_music_list(list.as_deref()) else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
-    route_music_panel_key(state, key, ui, music)
+    route_music_panel_key(state, key, ui, music, target)
 }
 
 /// The Music destination's own keys (design D3, D12), over the carried Music
@@ -384,6 +400,7 @@ fn route_music_panel_key(
     key: &DomKey,
     ui: &super::state::LibraryUiState,
     music: &GuiMusicList,
+    target: KeyTarget,
 ) -> KeyOutcome {
     if key.key == "/" && bare(key) {
         state.open_library_filter();
@@ -395,7 +412,7 @@ fn route_music_panel_key(
     if key.key == " " && !key.modifiers.ctrl_key && !key.meta_key {
         let pill = state.focused_library_pill(&music.pills, ui);
         let Some(pill) = pill else {
-            return KeyOutcome::Core;
+            return KeyOutcome::Core(target);
         };
         state.request_library_pill_select(pill.group_id.clone());
         return KeyOutcome::Handled;
@@ -436,7 +453,7 @@ fn route_music_panel_key(
         return KeyOutcome::Handled;
     }
     // Nothing else of the Library's answers this key: the core's router does.
-    KeyOutcome::Core
+    KeyOutcome::Core(target)
 }
 
 /// Route one keydown (design D3): the window does its part, and the answer is
@@ -446,6 +463,11 @@ fn route_music_panel_key(
 /// `arrangement` is the window's own value, the same one the Library panel
 /// paints (design D4): the keys close the Narrow Hero overlay on the fact the
 /// panel paints, never on a report that may not have landed yet.
+///
+/// `pointer` is the pointer target the launch copy resolved (design D1 of
+/// `gui-pointer-target-interaction`), read at key time: every core answer names
+/// the panel the pointer is over, so the core needs no stored Panel focus of
+/// its own (design D2).
 #[must_use]
 pub fn route_library_key(
     key: &DomKey,
@@ -453,20 +475,23 @@ pub fn route_library_key(
     state: &LibraryState,
     settings: Option<&SettingsState>,
     arrangement: GuiArrangement,
+    pointer: &PointerTarget,
 ) -> KeyOutcome {
+    let target = core_target(pointer);
     let Some(sections) = sections else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
     // (1) An open core overlay or an armed prefix keeps the keyboard with the
     // core: both are section facts, and the core's own router answers them.
     if sections.overlay.peek().is_some() || sections.status.peek().prefix_armed {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     // The Queue filter's text entry is the core's, so while it holds the
     // keyboard every key is the core's to type (`text_entry_focused` in
-    // `src/app/input/gui.rs`).
+    // `src/app/input/gui.rs`). It is the Queue's wherever the pointer is: the
+    // keys the filter does not consume reach the Queue leaf (design D2).
     if sections.summary.peek().filter_active {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(KeyTarget::Queue);
     }
     // The Settings screen takes every key the overlay step leaves while its
     // frame section is present (add-gui-settings-screen design D11): the
@@ -475,8 +500,8 @@ pub fn route_library_key(
     // 8.1); a harness that carries no Settings store answers the core.
     if let Some(frame) = sections.settings.peek().as_ref() {
         return match settings {
-            Some(settings) => route_settings_key(key, frame, settings),
-            None => KeyOutcome::Core,
+            Some(settings) => route_settings_key(key, frame, settings, target),
+            None => KeyOutcome::Core(target),
         };
     }
     // The attach states carry no slice, and no Library panel means no Library
@@ -488,7 +513,7 @@ pub fn route_library_key(
     // even while the window still holds the content of an earlier frame. The
     // content names the active destination's section (design D12).
     if !LibraryState::library_shown(sections.library_list.peek().as_deref()) {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     }
     // The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
     // the keyboard wherever the Library panel shows, before the open-field
@@ -550,10 +575,11 @@ pub fn route_library_key(
             sections,
             sections.search.peek().as_ref(),
             arrangement,
+            target,
         );
     }
     // (5) Every other key goes to the core's keyboard router.
-    KeyOutcome::Core
+    KeyOutcome::Core(target)
 }
 
 #[cfg(test)]

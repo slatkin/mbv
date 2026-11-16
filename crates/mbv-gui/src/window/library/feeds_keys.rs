@@ -17,7 +17,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::bridge::library::GuiFeedPill;
 use crate::window::input::KeyOutcome;
 
@@ -147,8 +147,8 @@ impl PanelKeys for FeedsKeys<'_> {
 /// Feeds facts. Enter on the cursor row plays the entry it rests on — which
 /// the Owner replaces the queue with — and `a` queues it.
 #[must_use]
-pub fn route_feeds_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &FeedsKeys::new(state))
+pub fn route_feeds_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
+    route_panel_list_key(key, state, &FeedsKeys::new(state), target)
 }
 
 #[cfg(test)]

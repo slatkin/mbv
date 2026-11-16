@@ -28,6 +28,7 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::{LibraryPane, LibraryState};
+use crate::window::pointer_target::{PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -157,7 +158,37 @@ fn route_on(
     sections: &Sections,
     arrangement: GuiArrangement,
 ) {
-    let outcome = route_library_key(&key(value, shift), Some(sections), state, None, arrangement);
+    let outcome = route_library_key(
+        &key(value, shift),
+        Some(sections),
+        state,
+        None,
+        arrangement,
+        &PointerTarget::default(),
+    );
+    facts
+        .lock()
+        .expect("facts")
+        .push(format!("{name}={outcome:?}"));
+}
+
+/// Route one keydown with the pointer over `zone`, against the window's own
+/// section stores, and paint the outcome: the pointer target decides the panel
+/// a core answer names (design D2 of `gui-pointer-target-interaction`).
+fn route_under(state: &LibraryState, facts: &Facts, name: &str, value: &str, zone: PointerZone) {
+    let pointer = PointerTarget {
+        zone: Some(zone),
+        list: None,
+        row: None,
+    };
+    let outcome = route_library_key(
+        &key(value, false),
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+        &pointer,
+    );
     facts
         .lock()
         .expect("facts")

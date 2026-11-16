@@ -26,7 +26,7 @@ fn space_with_no_focused_pill_is_sent_to_the_core() {
         route(state, facts, "space", " ", false);
         facts.lock().expect("facts").push(ui_facts(state));
     });
-    assert_eq!(facts[0], "space=Core");
+    assert_eq!(facts[0], "space=Core(None)");
     assert!(facts[1].contains("pill_select=None"));
 }
 

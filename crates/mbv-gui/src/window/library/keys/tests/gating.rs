@@ -33,7 +33,7 @@ fn queue_panel_focus_sends_slash_to_the_core() {
     assert_eq!(
         facts,
         vec![
-            "slash=Core",
+            "slash=Core(None)",
             "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
@@ -50,7 +50,7 @@ fn an_armed_prefix_sends_a_library_key_to_the_core() {
         arm_prefix(state);
         route(state, facts, "n", "n", false);
     });
-    assert_eq!(facts, ["n=Core"]);
+    assert_eq!(facts, ["n=Core(None)"]);
 }
 
 // An open core overlay sends a Library key to the core.
@@ -66,7 +66,7 @@ fn an_open_core_overlay_sends_a_library_key_to_the_core() {
     assert_eq!(
         facts,
         vec![
-            "slash=Core",
+            "slash=Core(None)",
             "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
@@ -97,7 +97,7 @@ fn sections_without_the_library_list_leave_every_library_key_to_the_core() {
     assert_eq!(
         facts,
         vec![
-            "slash=Core",
+            "slash=Core(None)",
             "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
@@ -146,5 +146,21 @@ fn esc_closes_the_filter_clears_its_text() {
             "pane=Some(Pills) filter_open=false filter=\"\" focused_pill=None pill_select=None cursor=None open=[] track_cursor=None dismissed=true"
         ]
     );
+    assert_eq!(commands(&rx), []);
+}
+
+// The Queue filter's text entry is the Queue's wherever the pointer is
+// (design D2): the keys it does not consume still reach the Queue leaf, so
+// Down answers the Queue target with the pointer over the Library column.
+#[test]
+fn the_open_queue_filter_answers_the_queue_target_from_the_library() {
+    let list = music_list(Vec::new());
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), music_detail(None));
+        let mut summary = state.sections.summary;
+        summary.write().filter_active = true;
+        route_under(state, facts, "down", "ArrowDown", PointerZone::Library);
+    });
+    assert_eq!(facts, ["down=Core(Queue)"]);
     assert_eq!(commands(&rx), []);
 }

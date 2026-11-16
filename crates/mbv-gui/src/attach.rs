@@ -277,7 +277,7 @@ impl<'a> AttachCampaign<'a> {
             Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
             Ok(
                 CoreInput::Layout(_)
-                | CoreInput::Key(_)
+                | CoreInput::Key { .. }
                 | CoreInput::Pointer(_)
                 | CoreInput::Wake
                 | CoreInput::Library(_)
@@ -317,7 +317,7 @@ impl<'a> AttachCampaign<'a> {
                     self.regions = hit_map(&report.regions);
                 }
                 Ok(CoreInput::Sync) => self.send(&mismatch),
-                Ok(CoreInput::Key(key)) => {
+                Ok(CoreInput::Key { key, .. }) => {
                     if let Some(outcome) = mismatch_key(key) {
                         return self.prompt_outcome(outcome, restart_requested);
                     }
@@ -415,7 +415,7 @@ impl<'a> AttachCampaign<'a> {
                 Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
                 Ok(
                     CoreInput::Layout(_)
-                    | CoreInput::Key(_)
+                    | CoreInput::Key { .. }
                     | CoreInput::Pointer(_)
                     | CoreInput::Wake
                     | CoreInput::Library(_)

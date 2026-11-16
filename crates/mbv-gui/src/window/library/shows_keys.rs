@@ -14,7 +14,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiShowsDetail, GuiShowsModeFrame};
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 
 use super::keys_shared::{
@@ -191,8 +191,13 @@ impl PanelKeys for ShowsKeys<'_> {
         }
     }
 
-    fn route_hero(&self, key: &DomKey, frame: &ShowsFrame) -> Option<KeyOutcome> {
-        Some(route_workspace_key(self.state, key, frame.lib_idx))
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        frame: &ShowsFrame,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        Some(route_workspace_key(self.state, key, frame.lib_idx, target))
     }
 }
 
@@ -204,17 +209,22 @@ impl PanelKeys for ShowsKeys<'_> {
 /// episode in the Workspace — and a series row is not playable, so its `n` and
 /// `a` change nothing.
 #[must_use]
-pub fn route_shows_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &ShowsKeys::new(state))
+pub fn route_shows_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
+    route_panel_list_key(key, state, &ShowsKeys::new(state), target)
 }
 
 /// Route a key to the Hero's Workspace (design D12): the movement keys move
 /// the episode cursor, Left and Right step the season, Enter plays the
 /// episode, and `n` and `a` play it next or queue it.
-fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> KeyOutcome {
+fn route_workspace_key(
+    state: &LibraryState,
+    key: &DomKey,
+    lib_idx: usize,
+    target: KeyTarget,
+) -> KeyOutcome {
     let detail_section = state.sections.library_detail.peek();
     let Some(detail) = library_shows_detail(detail_section.as_deref()) else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
     if let Some(mv) = cursor_move(&key.key) {
         move_shows_episode_cursor(state, mv, detail);
@@ -234,7 +244,7 @@ fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> Ke
             KeyOutcome::Handled
         }
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 

@@ -16,7 +16,7 @@ use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use crate::{
-    TestCore, measured_layout, move_at, press_at, region_at, test_core, test_core_with,
+    TestCore, measured_layout, move_at, press_at, queue_key, region_at, test_core, test_core_with,
     wheel_down_at,
 };
 
@@ -296,11 +296,11 @@ fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
     step_input(&mut test, press_at(10.0, 40.0));
     step_input(
         &mut test,
-        CoreInput::Key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
+        queue_key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
     );
     step_input(
         &mut test,
-        CoreInput::Key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
+        queue_key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
     );
 
     let seeks: Vec<f64> = cmd_rx

@@ -11,6 +11,7 @@
 
 use mbv::ClientTickHost;
 use mbv::{stub_app_with_playing_queue, stub_app_with_queue};
+use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
@@ -21,9 +22,13 @@ use crate::{
     test_core_with,
 };
 
-/// A key press with no modifier held.
+/// A key press with no modifier held, with no Queue target: the Settings
+/// screen replaces both panels, so the pointer resolves no panel zone.
 fn press(key: Key, modifiers: KeyModifiers) -> CoreInput {
-    CoreInput::Key(KeyEvent::new(key, modifiers))
+    CoreInput::Key {
+        key: KeyEvent::new(key, modifiers),
+        target: KeyTarget::None,
+    }
 }
 
 /// The open action each function key carries: F2 opens the Settings screen's

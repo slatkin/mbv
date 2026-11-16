@@ -16,7 +16,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::GuiEmbyFeedGroupFrame;
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 
 use super::emby_list::EmbyItemRow;
@@ -154,8 +154,8 @@ impl PanelKeys for EmbyKeys<'_> {
 /// too, through the core's folder-play rule — and `n` and `a` act on the item
 /// the focused pane names.
 #[must_use]
-pub fn route_emby_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &EmbyKeys::new(state))
+pub fn route_emby_panel_key(state: &LibraryState, key: &DomKey, target: KeyTarget) -> KeyOutcome {
+    route_panel_list_key(key, state, &EmbyKeys::new(state), target)
 }
 
 #[cfg(test)]

@@ -30,6 +30,7 @@ use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
 use crate::art::ArtRequest;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
+use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::{
     ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
     RegionTarget, hit_map,
@@ -60,9 +61,12 @@ const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
 /// `ClientWaker` sends, or the window's close.
 #[derive(Debug)]
 pub enum CoreInput {
-    /// A key chord, translated on the Rust side (design D6) and routed
-    /// through `App::route_gui_input` with the focused surface.
-    Key(KeyEvent),
+    /// A key chord, translated on the Rust side (design D6), with the panel
+    /// the window's pointer resolved for it (design D2 of
+    /// `gui-pointer-target-interaction`). The core sets its Panel focus from
+    /// the target, then routes the key through `App::route_gui_input` with the
+    /// focused surface as its leaf.
+    Key { key: KeyEvent, target: KeyTarget },
     /// A pointer event, translated on the Rust side (design D4) and resolved
     /// against the slice hit map.
     Pointer(PointerEvent),
@@ -320,6 +324,17 @@ impl CoreThread {
         self.focus.set_panel_focus(focus);
     }
 
+    /// Set Panel focus on both authorities, skipped when the two already hold
+    /// it (design D3 of `gui-pointer-target-interaction`): the GUI keeps no
+    /// Panel focus, so the core sets it per key from the key's [`KeyTarget`],
+    /// and before each Library command the window asked for.
+    fn apply_panel_focus(&mut self, focus: PanelFocus) {
+        if self.focus.panel_focus() == focus && self.app.gui_panel_focus() == focus {
+            return;
+        }
+        self.take_panel_focus(focus);
+    }
+
     /// Install the wake the App's relays invoke (design D3): every wake feeds
     /// a [`CoreInput::Wake`] into the core's own channel, so Owner events and
     /// timers wake the core as they wake the TUI.
@@ -431,7 +446,19 @@ impl CoreThread {
     /// slice's only focusable surface is the Queue; with no focused surface
     /// no leaf can consume anything. Returns whether the `App` asked to
     /// quit, which the GUI Client answers by closing its window.
-    fn route_key(&mut self, key: KeyEvent) -> bool {
+    ///
+    /// The Panel-focus adapter runs first (design D3 of
+    /// `gui-pointer-target-interaction`): the key's [`KeyTarget`] sets the
+    /// stack's Panel focus — `Queue` for a Queue target, `Library` for none —
+    /// so the Queue leaf is built only while the stack's focus is the Queue.
+    /// `ComponentId::Library` stays mounted, so a key with no Queue target
+    /// meets only the leafless global and transport chords.
+    fn route_key(&mut self, key: KeyEvent, target: KeyTarget) -> bool {
+        let focus = match target {
+            KeyTarget::Queue => PanelFocus::Queue,
+            KeyTarget::None => PanelFocus::Library,
+        };
+        self.apply_panel_focus(focus);
         if self.focus.focused().as_ref() != Some(&ComponentId::Queue) {
             return self.app.route_gui_input(GuiInput::Key(key), None);
         }

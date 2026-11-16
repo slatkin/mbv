@@ -16,7 +16,6 @@ use dioxus_native::winit::window::{Window, WindowId};
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
-use crate::bridge::frame::focus::GuiPanel;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::pointer::DomPointerKind;
@@ -185,15 +184,37 @@ fn note_panel_ui_reset(store: &mut PanelWidthsStore, sections: &Sections) -> boo
 /// read the sections through `peek`, so a keydown copies none of their
 /// values. The arrangement is the frame's own value — the one the Library
 /// panel paints (design D4) — so the keys close the Narrow Hero overlay on
-/// the fact the panel shows.
+/// the fact the panel shows. The pointer target (design D1 of
+/// `gui-pointer-target-interaction`) is read at key time through `peek`: no
+/// component subscribes to it, so a hover change re-renders nothing.
 fn window_key_router(
     library: LibraryState,
     settings: SettingsState,
     sections: Sections,
     arrangement: GuiArrangement,
+    pointer_target: Signal<PointerTarget>,
 ) -> impl Fn(&DomKey) -> KeyOutcome + 'static {
-    move |key| route_library_key(key, Some(&sections), &library, Some(&settings), arrangement)
+    move |key| {
+        route_library_key(
+            key,
+            Some(&sections),
+            &library,
+            Some(&settings),
+            arrangement,
+            &pointer_target.peek(),
+        )
+    }
 }
+
+/// Whether the Queue panel alone shows in Mini (design D5 of
+/// `gui-pointer-target-interaction`): the GUI Client has no Panel focus, so
+/// Mini is always the Queue. A later change adds a tabbed Mini view and
+/// replaces only this pick.
+#[must_use]
+pub(crate) fn mini_shows_queue(arrangement: GuiArrangement) -> bool {
+    arrangement == GuiArrangement::Mini
+}
+
 /// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
 /// port of `reset.ts`): a changed value resets the panel widths, the Library
 /// interaction stores, and the Settings interaction state on the same fact.
@@ -367,7 +388,6 @@ pub fn App() -> Element {
     let attach = sections.attach.cloned();
     let settings_open = sections.settings.read().is_some();
     let overlay = sections.overlay.cloned();
-    let focus = sections.focus.cloned();
     let panel = sections.panel.cloned();
     let has_library_list = sections.library_list.read().is_some();
     let container_size = container.cloned();
@@ -379,14 +399,18 @@ pub fn App() -> Element {
     // (design D11; `App`'s
     // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
     let settings_screen_arrangement = settings_arrangement(container_size);
-    let queue_focused = focus.panel == GuiPanel::Queue;
     // The Library panel's one presence fact (design D2, D10, D12): the
     // window holds the active destination's content, whose painters the
     // panel mounts. The key router gates on the same fact. (`libraryShown`
     // of `lib/library/state.ts`; its port lands with task 6.1.)
     let panel_shows = has_library_list;
-    let queue_visible = !panel_shows || arrangement != GuiArrangement::Mini || queue_focused;
-    let library_visible = panel_shows && (arrangement != GuiArrangement::Mini || !queue_focused);
+    // Mini shows the Queue alone (design D5 of
+    // `gui-pointer-target-interaction`): no key and no press changes which
+    // panel it shows, because the GUI has no Panel focus.
+    let queue_visible =
+        !panel_shows || arrangement != GuiArrangement::Mini || mini_shows_queue(arrangement);
+    let library_visible =
+        panel_shows && (arrangement != GuiArrangement::Mini || !mini_shows_queue(arrangement));
     let two_columns = queue_visible && library_visible;
     // The container's backdrop holds one fill at every focus state (user
     // decision 2026-11-15), unlike the TUI's focus-reactive
@@ -432,6 +456,7 @@ pub fn App() -> Element {
                     settings_state.clone(),
                     sections.clone(),
                     arrangement,
+                    pointer_target,
                 );
                 input::on_keydown(&event, &router, &key_link);
             },

@@ -11,7 +11,7 @@ use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
-use crate::{measured_layout, move_at, press_at, region_at, test_core, test_core_with};
+use crate::{measured_layout, move_at, press_at, queue_key, region_at, test_core, test_core_with};
 
 /// A pointer move with the primary button held (the neutral drag), as the
 /// translated `pointer` command carries it.
@@ -187,7 +187,7 @@ fn a_cancelled_drag_sends_no_move_request() {
     test.held();
 
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
+        .send(queue_key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     assert!(test.held().queue().drag.is_none());
@@ -342,10 +342,7 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
 
     // The context-menu chord opens the menu over the cursor row, slot 1.
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(
-            Key::Char('.'),
-            KeyModifiers::NONE,
-        )))
+        .send(queue_key(KeyEvent::new(Key::Char('.'), KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     let frame = test.held();
@@ -356,7 +353,7 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
 
     // Esc dismisses it; the actions button then opens it over its own row.
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
+        .send(queue_key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     assert!(test.held().overlay().is_none());
@@ -386,7 +383,7 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
     test.held();
 
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
+        .send(queue_key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
         .unwrap();
     assert!(test.core.step());
     assert_eq!(
@@ -396,10 +393,7 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
     );
 
     test.tx
-        .send(CoreInput::Key(KeyEvent::new(
-            Key::Char('j'),
-            KeyModifiers::ALT,
-        )))
+        .send(queue_key(KeyEvent::new(Key::Char('j'), KeyModifiers::ALT)))
         .unwrap();
     assert!(test.core.step());
     test.held();

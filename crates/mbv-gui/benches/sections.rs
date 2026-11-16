@@ -23,6 +23,7 @@ use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
+use mbv_gui::bridge::keys::KeyTarget;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::sections::GuiSectionBatch;
 use mbv_gui::core_thread::{CoreInput, CoreThread, QuitSink, SectionSink};
@@ -111,7 +112,10 @@ impl Harness {
 
     /// One input, then one step, then the batch that step sent: the timed unit.
     fn input_then_step(&mut self) -> GuiSectionBatch {
-        self.send(CoreInput::Key(KeyEvent::new(TIMED_KEY, KeyModifiers::NONE)));
+        self.send(CoreInput::Key {
+            key: KeyEvent::new(TIMED_KEY, KeyModifiers::NONE),
+            target: KeyTarget::Queue,
+        });
         self.step()
     }
 }
@@ -299,10 +303,10 @@ fn search_open() -> Harness {
 /// Fixture 7: the Settings screen open on its F2 section.
 fn settings_f2() -> Harness {
     let mut harness = Harness::new(stub_app_with_queue(0), None);
-    harness.send(CoreInput::Key(KeyEvent::new(
-        Key::Function(2),
-        KeyModifiers::NONE,
-    )));
+    harness.send(CoreInput::Key {
+        key: KeyEvent::new(Key::Function(2), KeyModifiers::NONE),
+        target: KeyTarget::None,
+    });
     harness.step();
     harness
 }

@@ -128,7 +128,7 @@ fn space_on_the_sidebar_goes_to_the_core() {
         });
         press(state, facts, "space", " ", &settings());
     });
-    assert_eq!(facts, vec!["space=Core"]);
+    assert_eq!(facts, vec!["space=Core(None)"]);
     assert_eq!(settings_commands(&rx), [] as [mbv::GuiSettingsCommand; 0]);
 }
 

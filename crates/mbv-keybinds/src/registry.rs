@@ -562,6 +562,9 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         prefix_addressable: true,
         scope: ActionScope::TuiOnly,
     },
+    // The GUI Client has no Panel focus (ADR 0040): its keys follow the
+    // pointer, so the Panel-focus chords are the TUI's alone and the GUI
+    // Settings key list does not show them.
     KeybindAction {
         id: "panel_right",
         section: KeySection::Display,
@@ -570,7 +573,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "panel_right",
         rebindable: true,
         prefix_addressable: true,
-        scope: ActionScope::AllClients,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "panel_left",
@@ -580,7 +583,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         policy: "panel_left",
         rebindable: true,
         prefix_addressable: true,
-        scope: ActionScope::AllClients,
+        scope: ActionScope::TuiOnly,
     },
     KeybindAction {
         id: "ctrl_l_force_clear",

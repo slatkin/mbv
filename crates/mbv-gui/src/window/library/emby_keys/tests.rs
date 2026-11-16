@@ -29,6 +29,7 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::{LibraryPane, LibraryState};
+use crate::window::pointer_target::PointerTarget;
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -132,6 +133,7 @@ fn route_on(
         state,
         None,
         GuiArrangement::Wide,
+        &PointerTarget::default(),
     );
     facts
         .lock()

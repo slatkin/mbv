@@ -403,6 +403,18 @@ impl App {
             }
             return false;
         }
+        // The Panel-focus chord is a documented no-op in the GUI Client
+        // (design D3 of `gui-pointer-target-interaction`): the GUI has no
+        // Panel focus, so `panel_right` and `panel_left` are TUI-only in the
+        // keybind registry and the core sets the stack's Panel focus per key
+        // from the key's target instead. A stale binding that still resolves
+        // here changes nothing.
+        if matches!(
+            command,
+            Command::App(AppCommand::Panel(PanelIntent::FocusPanel(_)))
+        ) {
+            return false;
+        }
         self.apply_router_command(command)
     }
 

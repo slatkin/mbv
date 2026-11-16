@@ -324,13 +324,15 @@ impl ClientTickHost for CoreThread {
         for input in routed {
             match input {
                 CoreInput::Wake => outcome.input_received = true,
-                CoreInput::Key(key) => {
+                CoreInput::Key { key, target } => {
                     // The chord routes through `App::route_gui_input` with
-                    // the focused surface as the leaf (design D4); a routed
-                    // quit ends the run.
+                    // the focused surface as the leaf (design D4), after the
+                    // Panel-focus adapter sets that surface from the key's
+                    // target (design D3 of `gui-pointer-target-interaction`);
+                    // a routed quit ends the run.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
-                    if self.route_key(key) {
+                    if self.route_key(key, target) {
                         outcome.quit_requested = true;
                     }
                 }
@@ -353,9 +355,14 @@ impl ClientTickHost for CoreThread {
                     // D2): the App applies the semantic intent, and the
                     // take-focus variants then move the core's `FocusStack`
                     // with the App's stored focus (design D4), so the window
-                    // and the App's key gates agree.
+                    // and the App's key gates agree. The Panel-focus adapter
+                    // sets the Library focus first (design D3 of
+                    // `gui-pointer-target-interaction`): only the Library
+                    // column can ask for these commands, and the item menu's
+                    // Library gate then holds for the menu it asks for.
                     outcome.input_received = true;
                     self.ledger.mark_all_gated();
+                    self.apply_panel_focus(PanelFocus::Library);
                     let focus_target = focus_target(&command);
                     self.app.apply_gui_library_command(command);
                     if let Some(panel) = focus_target {

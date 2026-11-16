@@ -16,7 +16,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 
 use super::audiobooks_list::{AudiobooksItemRow, AudiobooksListRow};
@@ -96,8 +96,13 @@ impl PanelKeys for AudiobooksKeys<'_> {
         self.state.queue_audiobooks_row(item_id);
     }
 
-    fn route_hero(&self, key: &DomKey, frame: &AudiobooksFrame) -> Option<KeyOutcome> {
-        Some(route_workspace_key(self.state, key, frame.lib_idx))
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        frame: &AudiobooksFrame,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        Some(route_workspace_key(self.state, key, frame.lib_idx, target))
     }
 }
 
@@ -105,10 +110,15 @@ impl PanelKeys for AudiobooksKeys<'_> {
 /// move the chapter cursor, Enter plays or seeks from the chapter, and `a`
 /// queues the selected book. `n` is consumed and does nothing, because books
 /// have no play-next.
-fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> KeyOutcome {
+fn route_workspace_key(
+    state: &LibraryState,
+    key: &DomKey,
+    lib_idx: usize,
+    target: KeyTarget,
+) -> KeyOutcome {
     let detail_section = state.sections.library_detail.peek();
     let Some(detail) = library_audiobooks_detail(detail_section.as_deref()) else {
-        return KeyOutcome::Core;
+        return KeyOutcome::Core(target);
     };
     if let Some(mv) = cursor_move(&key.key) {
         move_abs_chapter_cursor(state, mv, detail);
@@ -125,7 +135,7 @@ fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> Ke
         }
         "n" => KeyOutcome::Handled,
         _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
-        _ => KeyOutcome::Core,
+        _ => KeyOutcome::Core(target),
     }
 }
 
@@ -134,8 +144,12 @@ fn route_workspace_key(state: &LibraryState, key: &DomKey, lib_idx: usize) -> Ke
 /// on — which the Owner replaces the queue with at the book's saved
 /// position.
 #[must_use]
-pub fn route_audiobooks_panel_key(state: &LibraryState, key: &DomKey) -> KeyOutcome {
-    route_panel_list_key(key, state, &AudiobooksKeys { state })
+pub fn route_audiobooks_panel_key(
+    state: &LibraryState,
+    key: &DomKey,
+    target: KeyTarget,
+) -> KeyOutcome {
+    route_panel_list_key(key, state, &AudiobooksKeys { state }, target)
 }
 
 #[cfg(test)]

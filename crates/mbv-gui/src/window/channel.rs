@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use mbv_ui_msg::{KeyEvent, PointerEvent};
 
+use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::LayoutReport;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::bridge::sections::GuiSectionBatch;
@@ -93,10 +94,12 @@ impl CoreLink {
         Self { core }
     }
 
-    /// The `key` command (D4): the already-translated neutral chord. The
-    /// input layer (D8) builds it from the Dioxus key event.
-    pub fn key(&self, key: KeyEvent) {
-        self.push(CoreInput::Key(key), "key");
+    /// The `key` command (D4): the already-translated neutral chord, with the
+    /// panel the window's pointer resolved for it (design D2 of
+    /// `gui-pointer-target-interaction`). The input layer (D8) builds both from
+    /// the Dioxus key event and the key router's answer.
+    pub fn key(&self, key: KeyEvent, target: KeyTarget) {
+        self.push(CoreInput::Key { key, target }, "key");
     }
 
     /// The `pointer` command (D4): the already-translated neutral event. The
