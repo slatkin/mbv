@@ -1,30 +1,34 @@
 //! The Feeds destination's interaction state (`add-gui-library-panel` design
-//! D12, row 11.1, the port of `lib/library/feeds.ts`): what the window
-//! content owns and the core never reads — the cursor and the pill row's
-//! focus. The scroll offset and the measured viewport live in the Feeds
+//! D12, row 11.1, the port of `lib/library/feeds.ts`): what the window content
+//! owns and the core never reads — the `/` filter's text and the pill row's
+//! request. The scroll offset and the measured viewport live in the Feeds
 //! list's scroll store ([`super::scroll`], design D9). The core owns the pill
 //! selection and the selected entry (the frame's `pills` and `selected`), so
 //! nothing here mirrors them: a press sends the select command, and the frame
-//! carries the choice back. The row model is [`super::feeds_list`]'s; the
-//! Hero overlay stays in [`super::state`]'s shared
-//! store. There is no play-next: `n` is consumed and does nothing. A Client
-//! holds one feed tab, so no library index rides the commands.
+//! carries the choice back. The row model is [`super::feeds_list`]'s; the Hero
+//! overlay stays in [`super::state`]'s shared store. There is no play-next: `n`
+//! is consumed and does nothing. A Client holds one feed tab, so no library
+//! index rides the commands.
 //!
-//! The state, the filter, the cursor, and the scroll store are
-//! the pill-list controller's ([`super::pill_list`], row 7C.1); this module
-//! keeps the Feeds frame, the Feeds rows, the Feeds command shapes, and the
-//! Feeds names.
+//! The list keeps no cursor: the keys act on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
+//! list (design D6).
+//!
+//! The state, the filter, and the scroll store are the pill-list controller's
+//! ([`super::pill_list`], row 7C.1); this module keeps the Feeds frame, the
+//! Feeds rows, the Feeds command shapes, and the Feeds names.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::library::{GuiFeedPill, GuiLibraryCommand};
-use crate::window::library::feeds_list::{FeedsItemRow, move_feeds_cursor};
-use crate::window::library::list::ListMove;
+use crate::window::library::feeds_list::FeedsItemRow;
+use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_feeds_list;
 
-use super::pill_list::{ListControl, PillListUiState};
+use super::pill_list::PillListUiState;
+use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Feeds list's interaction state: the shared pill-list state over the
@@ -63,39 +67,34 @@ impl LibraryState {
         self.feeds_rows_memo.rows(revision, &feeds.rows, &filter)
     }
 
-    /// The row the Feeds cursor rests on, or `None`: the keys read it to play
-    /// the entry or queue it. Every row is an item row, so no heading stands
-    /// in the find.
+    /// The row the pointer's marker names (design D1, D2): the marker carries
+    /// the row's own id, so the painted rows resolve it and a stale or foreign
+    /// id names no entry. `None` while no painted row carries the id.
     #[must_use]
-    pub fn feeds_cursor_row(&self) -> Option<FeedsItemRow> {
-        let rows = self.feeds_rows();
-        let cursor = self.feeds_ui.peek().cursor.clone();
-        rows.iter()
-            .find(|row| Some(row.id.as_str()) == cursor.as_deref())
+    pub fn feeds_row_at(&self, row_id: &str) -> Option<FeedsItemRow> {
+        self.feeds_rows()
+            .iter()
+            .find(|row| row.id == row_id)
             .cloned()
     }
 
-    /// The Feeds list under the shared list controller (design D12).
-    fn feeds_list(
-        &self,
-    ) -> ListControl<FeedsUiState, FeedsItemRow, impl Fn() -> Arc<[FeedsItemRow]> + '_> {
-        ListControl {
-            ui: self.feeds_ui,
-            scroll: self.scrolls.feeds,
-            rows: || self.feeds_rows(),
-            move_over: move_feeds_cursor,
-        }
-    }
-
     /// Narrow the list to the titles that contain `filter`, without case
-    /// (design D7's filter rule): the cursor follows the rows.
+    /// (design D7's filter rule). The filter narrows the rows and selects
+    /// nothing, and the scroll stays inside the narrower list.
     pub fn set_feeds_filter(&self, filter: String) {
-        self.feeds_list().set_filter(filter);
+        let mut feeds_ui = self.feeds_ui;
+        feeds_ui.with_mut(|ui| ui.filter = filter);
+        self.clamp_feeds_scroll();
     }
 
-    /// Close the filter with Esc (design D3, step 2): the text goes with it.
+    /// Close the filter with Esc (design D3, step 2): the text goes with it, so
+    /// a closed filter narrows nothing. The scroll follows the widened rows.
     pub fn close_feeds_filter(&self) {
-        self.feeds_list().close_filter(self.ui);
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.filter_open = false);
+        let mut feeds_ui = self.feeds_ui;
+        feeds_ui.with_mut(|ui| ui.filter.clear());
+        self.clamp_feeds_scroll();
     }
 
     /// Select the row (design D12): the select command the core stores, whose
@@ -127,7 +126,7 @@ impl LibraryState {
         self.select_feeds_row(row);
     }
 
-    /// Play an entry (design D12): Enter on the cursor row, and a
+    /// Play an entry (design D12): Enter on the hovered entry, and a
     /// double-click's play. The queue is replaced, as the TUI's feeds play
     /// replaces it. The row id is the entry's stable identity the frame
     /// carried.
@@ -137,7 +136,7 @@ impl LibraryState {
         });
     }
 
-    /// Add an entry to the queue's tail (design D12): `a` on the cursor row.
+    /// Add an entry to the queue's tail (design D12): `a` on the hovered row.
     /// There is no play-next on the destination, so `n` is consumed and does
     /// nothing here.
     pub fn queue_feeds_row(&self, item_id: &str) {
@@ -146,24 +145,35 @@ impl LibraryState {
         });
     }
 
-    /// Move the list's cursor one movement along (design D12): Up and Down
-    /// move a row, Page Up and Page Down move the rows in view, and Home and
-    /// End take the list's ends. The scroll offset follows, so the cursor row
-    /// stays fully visible.
-    pub fn move_feeds_list_cursor(&self, mv: ListMove) {
-        self.feeds_list().move_cursor(mv);
+    /// Scroll the list by one movement key (design D6): Up and Down move by the
+    /// height of the row at the top edge, Page Up and Page Down by the viewport
+    /// height, and Home and End go to the list's ends, inside the list's range.
+    pub fn step_feeds_scroll(&self, mv: ListMove) {
+        let rows = self.feeds_rows();
+        let held = *self.scrolls.feeds.peek();
+        set_scroll_top(self.scrolls.feeds, &rows, scroll_step(&rows, held, mv));
     }
 
     /// Report the list's measured viewport height (design D12): the rows in
     /// view follow it, and the scroll offset stays inside the narrower range.
     pub fn measure_feeds_list(&self, viewport_height: f32) {
-        self.feeds_list().measure(viewport_height);
+        let mut feeds = self.scrolls.feeds;
+        feeds.with_mut(|scroll| scroll.viewport_height = viewport_height);
+        self.clamp_feeds_scroll();
     }
 
     /// Report the list's native scroll offset (design D12): a user scroll
     /// moves the rows in view, and the offset stays inside the list's range.
     pub fn scroll_feeds_list(&self, scroll_top: f32) {
-        self.feeds_list().scroll_to(scroll_top);
+        let rows = self.feeds_rows();
+        set_scroll_top(self.scrolls.feeds, &rows, scroll_top);
+    }
+
+    /// Hold the Feeds list's scroll offset inside the rows the filter leaves.
+    fn clamp_feeds_scroll(&self) {
+        let rows = self.feeds_rows();
+        let held = *self.scrolls.feeds.peek();
+        set_scroll_top(self.scrolls.feeds, &rows, held.scroll_top);
     }
 
     /// Ask for a pill to be selected (design D6, D12): the pill row turns the

@@ -1,10 +1,10 @@
 //! The Library list's row model (`add-gui-library-panel` design D7, the port
 //! of `lib/library/list.ts`): the canvas tree of artists, albums, and tracks,
 //! the 24 px letter headings above the first artist of each letter, the rows
-//! in view, the cursor's movement, and the A–Z letter rail. The list paints
-//! fixed-height rows over native scroll, and the window content owns the
-//! cursor, the open nodes, and the filter (design D1), while the scroll store
-//! owns the scroll (design D9). This module is plain data:
+//! in view, the scroll geometry, and the A–Z letter rail. The list paints
+//! fixed-height rows over native scroll, and the window content owns the open
+//! nodes and the filter (design D1), while the scroll store owns the scroll
+//! (design D9). This module is plain data:
 //! [`super::state`] applies it and the components paint it. Keeping it apart
 //! from both keeps the geometry testable without a layout.
 
@@ -25,10 +25,10 @@ pub const RAIL_LETTERS: &[char] = &[
     'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 
-/// The fields every painted row carries: its stable id (the cursor's identity
-/// and the each-block's key), its top edge from the list's first row, its
+/// The fields every painted row carries: its stable id (the pointer marker's
+/// value and the each-block's key), its top edge from the list's first row, its
 /// painted height, and the sort letter of the artist it belongs to — the rail
-/// marks the letter of the row under the cursor.
+/// jumps to the letter's first row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowBase {
     /// The row's stable id.
@@ -547,37 +547,6 @@ pub fn move_index(count: usize, at: usize, mv: ListMove, page: usize) -> usize {
         ListMove::End => count.saturating_sub(1),
     };
     to.min(count.saturating_sub(1))
-}
-
-/// The cursor row a movement leaves (design D7), over the rows the destination
-/// lets the cursor rest on: the next, the previous, or a page away row, clamped
-/// to the list's ends. With no cursor on a row, Up and End start from the last
-/// row and every other movement from the first, so one key press always lands
-/// the cursor. `page` is the rows a page spans: the rows in view.
-///
-/// Every destination's list moves its cursor by this one rule (design D12), so
-/// the caller passes the rows it accepts and names nothing else: a tree's
-/// selectable rows, a flat list's whole model, a workspace's rows.
-#[must_use]
-pub fn move_cursor<Row: GeometryRow>(
-    rows: &[Row],
-    cursor: Option<&str>,
-    mv: ListMove,
-    page: usize,
-) -> Option<String> {
-    let last = rows.last()?;
-    let at = rows
-        .iter()
-        .position(|row| row.id() == cursor.unwrap_or_default())
-        .filter(|_| cursor.is_some());
-    let Some(at) = at else {
-        let row = match mv {
-            ListMove::Up | ListMove::End => last,
-            _ => &rows[0],
-        };
-        return Some(row.id().to_owned());
-    };
-    Some(rows[move_index(rows.len(), at, mv, page)].id().to_owned())
 }
 
 /// The half-open range of row indexes the viewport paints (design D7): the rows

@@ -5,8 +5,8 @@
 //! overview paints, no Workspace and no tracklist paint, no play-next control
 //! paints (there is no Feeds play-next command), the actions send the Feeds
 //! commands for the frame's selected entry with no library index, and the
-//! list band holds the selected feed's entries with the selected one carrying
-//! the cursor. The IPC of the earlier tests is the mock core link here;
+//! list band holds the Hero's feed's entries alone. The IPC of the earlier
+//! tests is the mock core link here;
 //! the asserted commands are the same neutral shapes. A headless document
 //! cannot fire a DOM click, so the press contracts ride the handler functions
 //! the component's own handlers call one line each. The core channel is a
@@ -470,10 +470,11 @@ fn the_hero_paints_the_frame_header_above_its_artwork() {
 }
 
 /// Contract (`LibraryFeedsHero.test.ts`, invariant 30): a feed is a
-/// collection — the list band holds the selected feed's entries, with the
-/// selected one carrying the cursor, and no other feed's entry.
+/// collection — the list band holds the feed's entries alone, and no entry
+/// carries a cursor: the Workspace keeps none
+/// (`gui-pointer-target-interaction` D6).
 #[test]
-fn the_list_band_holds_the_selected_feed_entries_and_marks_the_selected_one() {
+fn the_list_band_holds_the_feed_entries_alone() {
     let extra = vec![
         GuiEntryRowFrame {
             id: "sub1:guid11".to_owned(),
@@ -497,21 +498,13 @@ fn the_list_band_holds_the_selected_feed_entries_and_marks_the_selected_one() {
         vec!["sub1:guid12".to_owned(), "sub1:guid11".to_owned()],
         "the list band holds the Hero's feed's entries alone"
     );
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-feeds-entry=\"sub1:guid12\"]",
-            "data-library-feeds-entry-cursor"
-        ),
-        Some(String::new()),
-        "the selected entry carries the cursor"
-    );
     assert!(
-        fixture
-            .attr_of(
-                "[data-library-feeds-entry=\"sub1:guid11\"]",
-                "data-library-feeds-entry-cursor"
-            )
-            .is_none(),
-        "no other entry carries it"
+        !fixture.presents("[data-library-feeds-entry-cursor]"),
+        "no entry carries a cursor"
+    );
+    assert_eq!(
+        fixture.attr_of("[data-pointer-row]", "data-pointer-row"),
+        Some("sub1:guid12".to_owned()),
+        "the first entry carries the pointer marker"
     );
 }

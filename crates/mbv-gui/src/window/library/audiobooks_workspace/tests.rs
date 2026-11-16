@@ -1,13 +1,11 @@
-//! Headless tests of the Audiobooks Hero's Workspace interaction state (D16):
-//! the contracts of `audiobooks-workspace.test.ts` — the chapter cursor's
-//! movement and clamping, its re-resolution to the marked chapter (or the
-//! first chapter) when its chapter leaves the frame, the reset when the
-//! selected book changes, the chapter command the cursor names, and the book
+//! Headless tests of the Audiobooks Hero's Workspace (D16): the contracts of
+//! `audiobooks-workspace.test.ts` — the marked chapter, the chapter the
+//! pointer's marker names, the chapter command that marker sends, and the book
 //! commands the selected book names. The current chapter is the window's
 //! derivation from the playhead (gui-change-driven-sections design D5): the
-//! tests pass the predicted position explicitly, so no clock runs. The
-//! harness builds a `DioxusDocument` whose root creates the store and runs
-//! each scenario in one effect over a recording core link, so no test opens a
+//! tests pass the predicted position explicitly, so no clock runs. The harness
+//! builds a `DioxusDocument` whose root creates the store and runs each
+//! scenario in one effect over a recording core link, so no test opens a
 //! window or sleeps, and no IPC runs.
 
 use std::sync::{Arc, Mutex, mpsc};
@@ -25,12 +23,9 @@ use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::sections::Sections;
 
-use crate::window::library::list::ListMove;
-
 use super::{
-    current_chapter_row, marked_chapter_of, move_abs_chapter_cursor, play_abs_book,
-    play_abs_chapter, queue_abs_book, reset_abs_chapter_cursor, resolve_abs_chapter_cursor,
-    workspace_of,
+    abs_chapter_at, current_chapter_row, marked_chapter_of, play_abs_book, play_abs_chapter,
+    queue_abs_book,
 };
 use crate::window::library::state::LibraryState;
 
@@ -41,12 +36,11 @@ type Facts = Arc<Mutex<Vec<String>>>;
 type Scenario = std::rc::Rc<dyn Fn(&LibraryState, &Facts)>;
 
 /// The root: creates the store once and runs the scenario in one effect.
-fn harness(
-    (tx, facts, scenario, position): (mpsc::Sender<CoreInput>, Facts, Scenario, f64),
-) -> Element {
+fn harness((tx, facts, scenario): (mpsc::Sender<CoreInput>, Facts, Scenario)) -> Element {
     let state = use_hook(move || {
-        // The playhead's predicted position, held at the scenario's value.
-        let playhead_position = Memo::new(move || position);
+        // The playhead's predicted position: none, so only the assertions that
+        // name a position mark a chapter.
+        let playhead_position = Memo::new(|| 0.0);
         let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
         LibraryState::new(Sections::new(), CoreLink::new(tx), playhead_position, clock)
     });
@@ -58,18 +52,10 @@ fn harness(
     }
 }
 
-/// Run one scenario at the default position (0 ticks) and return the facts it
-/// recorded and the commands the core link received. Bounded by construction:
-/// the effect runs once and the poll loop stops when the document goes idle.
+/// Run one scenario and return the facts it recorded and the commands the core
+/// link received. Bounded by construction: the effect runs once and the poll
+/// loop stops when the document goes idle.
 fn run(
-    scenario: impl Fn(&LibraryState, &Facts) + 'static,
-) -> (Vec<String>, mpsc::Receiver<CoreInput>) {
-    run_with_position(0.0, scenario)
-}
-
-/// Run one scenario at `position` ticks.
-fn run_with_position(
-    position: f64,
     scenario: impl Fn(&LibraryState, &Facts) + 'static,
 ) -> (Vec<String>, mpsc::Receiver<CoreInput>) {
     let (tx, rx) = mpsc::channel::<CoreInput>();
@@ -83,7 +69,6 @@ fn run_with_position(
                 std::rc::Rc::new(move |state: &LibraryState, recorded: &Facts| {
                     scenario(state, recorded);
                 }),
-                position,
             ),
         ),
         DocumentConfig::default(),
@@ -198,56 +183,6 @@ fn audiobooks_detail(
     }
 }
 
-/// Put the cursor on `chapter`.
-fn cursor_at(state: &LibraryState, chapter: usize) {
-    let mut audiobooks_workspace = state.audiobooks_workspace;
-    audiobooks_workspace.with_mut(|held| held.cursor = Some(chapter));
-}
-
-/// The Workspace's cursor the assertions read.
-fn cursor_fact(state: &LibraryState, facts: &Facts) {
-    facts.lock().expect("facts").push(format!(
-        "cursor={:?}",
-        state.audiobooks_workspace.peek().cursor
-    ));
-}
-
-// A cursor move steps to the next chapter.
-#[test]
-fn a_cursor_move_steps_to_the_next_chapter() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, 1);
-
-        move_abs_chapter_cursor(
-            state,
-            ListMove::Down,
-            &audiobooks_detail(chapters(), Some("book1"), None),
-        );
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(2)"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// A cursor move past the last chapter stays there.
-#[test]
-fn a_cursor_move_past_the_last_chapter_stays_there() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, 2);
-
-        move_abs_chapter_cursor(
-            state,
-            ListMove::Down,
-            &audiobooks_detail(chapters(), Some("book1"), None),
-        );
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(2)"]);
-    assert_eq!(commands(&rx), []);
-}
-
 // The marked chapter follows the predicted position while the Hero's book
 // plays: an earlier position marks the first chapter.
 #[test]
@@ -292,90 +227,42 @@ fn an_empty_span_never_holds_a_position() {
     assert!(current_chapter_row(&parts, 10.0 * SECOND_F).is_none());
 }
 
-// A cursor keeps its chapter while the frame paints it.
+// A marker names the chapter its number carries.
 #[test]
-fn a_cursor_keeps_its_chapter_while_the_frame_paints_it() {
-    let detail = audiobooks_detail(chapters(), Some("book1"), Some("book1"));
-
-    let cursor = resolve_abs_chapter_cursor(
-        workspace_of(&detail),
-        Some(1),
-        marked_chapter_of(&detail, Some(30.0 * 60.0 * SECOND_F)),
-    );
-    assert_eq!(cursor.map(|row| row.chapter), Some(1));
-}
-
-// A cursor whose chapter left the frame resolves to the marked chapter.
-#[test]
-fn a_cursor_whose_chapter_left_the_frame_resolves_to_the_marked_chapter() {
-    let detail = audiobooks_detail(chapters(), Some("book1"), Some("book1"));
-
-    let cursor = resolve_abs_chapter_cursor(
-        workspace_of(&detail),
-        Some(7),
-        marked_chapter_of(&detail, Some(30.0 * 60.0 * SECOND_F)),
-    );
-    assert_eq!(cursor.map(|row| row.chapter), Some(2));
-}
-
-// A cursor with no marked chapter resolves to the first chapter.
-#[test]
-fn a_cursor_with_no_marked_chapter_resolves_to_the_first_chapter() {
+fn a_marker_names_the_chapter_its_number_carries() {
     let detail = audiobooks_detail(chapters(), Some("book1"), None);
 
-    let cursor = resolve_abs_chapter_cursor(workspace_of(&detail), Some(7), None);
-    assert_eq!(cursor.map(|row| row.chapter), Some(1));
+    let chapter = abs_chapter_at(&detail, "2");
+    assert_eq!(chapter.map(|row| row.chapter), Some(2));
 }
 
-// A cursor over a book with no chapters resolves to none.
+// A marker that names no painted chapter names nothing: a chapter the book
+// does not carry, and a marker that is no chapter number at all.
 #[test]
-fn a_cursor_over_a_book_with_no_chapters_resolves_to_none() {
+fn a_marker_that_names_no_painted_chapter_names_nothing() {
+    let detail = audiobooks_detail(chapters(), Some("book1"), None);
+
+    assert!(abs_chapter_at(&detail, "7").is_none());
+    assert!(abs_chapter_at(&detail, "first").is_none());
+}
+
+// A Workspace with no chapter resolves no marker.
+#[test]
+fn a_workspace_with_no_chapter_resolves_no_marker() {
     let detail = audiobooks_detail(Vec::new(), Some("book1"), None);
 
-    let cursor = resolve_abs_chapter_cursor(workspace_of(&detail), Some(1), None);
-    assert!(cursor.is_none());
+    assert!(abs_chapter_at(&detail, "1").is_none());
 }
 
-// A cursor whose chapter left the frame moves on from the marked chapter:
-// the position at 30:00 marks the second chapter, so the move starts there
-// and clamps at the book's end.
+// The chapter command names the chapter and the selected book.
 #[test]
-fn a_cursor_whose_chapter_left_the_frame_moves_on_from_the_marked_chapter() {
-    let (facts, rx) = run_with_position(30.0 * 60.0 * SECOND_F, |state, facts| {
-        cursor_at(state, 7);
-        let detail = audiobooks_detail(chapters(), Some("book1"), Some("book1"));
-        move_abs_chapter_cursor(state, ListMove::Down, &detail);
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=Some(2)"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// A cursor reset starts the Workspace over.
-#[test]
-fn a_cursor_reset_starts_the_workspace_over() {
-    let (facts, rx) = run(|state, facts| {
-        cursor_at(state, 2);
-
-        reset_abs_chapter_cursor(state);
-        cursor_fact(state, facts);
-    });
-
-    assert_eq!(facts, ["cursor=None"]);
-    assert_eq!(commands(&rx), []);
-}
-
-// The chapter command names the cursor chapter and the selected book.
-#[test]
-fn the_chapter_command_names_the_cursor_chapter_and_the_selected_book() {
+fn the_chapter_command_names_the_chapter_and_the_selected_book() {
     let (_facts, rx) = run(|state, _facts| {
-        cursor_at(state, 2);
-
         play_abs_chapter(
             state,
             LIB_IDX,
             &audiobooks_detail(chapters(), Some("book1"), None),
+            2,
         );
     });
 
@@ -389,14 +276,15 @@ fn the_chapter_command_names_the_cursor_chapter_and_the_selected_book() {
     );
 }
 
-// The chapter command sends nothing while no chapter carries the cursor.
+// The chapter command sends nothing while the frame selects no book.
 #[test]
-fn the_chapter_command_sends_nothing_while_no_chapter_carries_the_cursor() {
+fn the_chapter_command_sends_nothing_while_the_frame_selects_no_book() {
     let (_facts, rx) = run(|state, _facts| {
         play_abs_chapter(
             state,
             LIB_IDX,
-            &audiobooks_detail(Vec::new(), Some("book1"), None),
+            &audiobooks_detail(chapters(), None, None),
+            2,
         );
     });
 

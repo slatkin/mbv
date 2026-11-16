@@ -1,16 +1,16 @@
 //! Headless tests of the Audiobooks keys (D16): the contracts of
-//! `audiobooks-keys.test.ts` — the list's cursor moves, Enter plays the
-//! cursor book and `a` queues it, `n` is consumed and does nothing (books
-//! have no play-next), and the Hero's keys act through the chapter
-//! Workspace's own contract functions. The 7.1 review's lesson holds: every
+//! `audiobooks-keys.test.ts` on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
+//! under the pointer, Enter plays the hovered book and `a` queues it, the
+//! Hero's Enter plays the hovered chapter, and `n` is consumed and does
+//! nothing (books have no play-next). The 7.1 review's lesson holds: every
 //! Library key on the list returns handled and none reaches the core. The
-//! router under test is the panel's
-//! one routing site, [`super::super::keys::route_library_key`], so these
-//! assertions cover the Audiobooks dispatch it hands to
-//! [`super::route_audiobooks_panel_key`]. The harness builds a
-//! `DioxusDocument` whose root creates the store and runs each scenario in
-//! one effect over a recording core link, so no test opens a window or
-//! sleeps, and no IPC runs.
+//! router under test is the panel's one routing site,
+//! [`super::super::keys::route_library_key`], so these assertions cover the
+//! Audiobooks dispatch it hands to [`super::route_audiobooks_panel_key`]. The
+//! harness builds a `DioxusDocument` whose root creates the store and runs
+//! each scenario in one effect over a recording core link, so no test opens a
+//! window or sleeps, and no IPC runs.
 
 use std::sync::{Arc, Mutex, mpsc};
 
@@ -117,18 +117,75 @@ fn key(value: &str, shift: bool) -> DomKey {
     }
 }
 
-/// Route one keydown against the given section stores and paint the outcome.
-fn route_on(
+/// The pointer target a list key routes under: the pointer over the Library
+/// column, not on a list or a Hero control.
+fn library_pointer() -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: None,
+        row: None,
+    }
+}
+
+/// The pointer target over `list`, resting on the row `row` when one is named.
+fn pointer_on(list: PointerList, row: Option<&str>) -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(list),
+        row: row.map(str::to_owned),
+    }
+}
+
+/// Route one keydown under one pointer target and paint the outcome.
+fn route_pointer(
     state: &LibraryState,
     facts: &Facts,
     name: &str,
     value: &str,
-    shift: bool,
-    sections: &Sections,
+    pointer: &PointerTarget,
 ) {
     let outcome = super::super::keys::route_library_key(
+        &key(value, false),
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+        pointer,
+    );
+    facts
+        .lock()
+        .expect("facts")
+        .push(format!("{name}={outcome:?}"));
+}
+
+/// Route one keydown with the pointer over the book list, resting on `row`.
+fn route_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Audiobooks, Some(row)),
+    );
+}
+
+/// Route one keydown with the pointer over the Hero's chapter Workspace,
+/// resting on `row` when one is named.
+fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: Option<&str>) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Workspace, row),
+    );
+}
+
+/// Route one keydown with the pointer over the Library column, on no list.
+fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
+    let outcome = super::super::keys::route_library_key(
         &key(value, shift),
-        Some(sections),
+        Some(&state.sections),
         state,
         None,
         GuiArrangement::Wide,
@@ -138,43 +195,6 @@ fn route_on(
         .lock()
         .expect("facts")
         .push(format!("{name}={outcome:?}"));
-}
-
-/// The pointer target a list key routes under: the pointer over the Library
-/// column, not on a Hero list.
-fn library_pointer() -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: None,
-        row: None,
-    }
-}
-
-/// Route one keydown with the pointer over the Hero's chapter Workspace.
-fn route_hero(state: &LibraryState, facts: &Facts, name: &str, value: &str) {
-    let pointer = PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: Some(PointerList::Workspace),
-        row: None,
-    };
-    let outcome = super::super::keys::route_library_key(
-        &key(value, false),
-        Some(&state.sections),
-        state,
-        None,
-        GuiArrangement::Wide,
-        &pointer,
-    );
-    facts
-        .lock()
-        .expect("facts")
-        .push(format!("{name}={outcome:?}"));
-}
-
-/// Route one keydown against the window's own section stores and paint the
-/// outcome.
-fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    route_on(state, facts, name, value, shift, &state.sections);
 }
 
 /// The Library's own keys: the movements, Right and Left's open and close,
@@ -259,13 +279,22 @@ fn audiobooks_hero() -> GuiAudiobooksHeroFrame {
         art_shape: GuiArtShapeFrame::Portrait,
         art: None,
         workspace: Some(GuiAudiobooksWorkspaceFrame {
-            rows: vec![GuiAudiobooksChapterRowFrame {
-                chapter: 1,
-                title: "Act one".to_owned(),
-                duration: "2:16".to_owned(),
-                start_ticks: 0,
-                end_ticks: 136 * 1_000_000,
-            }],
+            rows: vec![
+                GuiAudiobooksChapterRowFrame {
+                    chapter: 1,
+                    title: "Act one".to_owned(),
+                    duration: "2:16".to_owned(),
+                    start_ticks: 0,
+                    end_ticks: 136 * 1_000_000,
+                },
+                GuiAudiobooksChapterRowFrame {
+                    chapter: 2,
+                    title: "Act two".to_owned(),
+                    duration: "2:16".to_owned(),
+                    start_ticks: 136 * 1_000_000,
+                    end_ticks: 272 * 1_000_000,
+                },
+            ],
         }),
     }
 }
@@ -290,23 +319,19 @@ fn content(hero: Option<GuiAudiobooksHeroFrame>) -> (GuiLibraryList, GuiLibraryD
     (list, GuiLibraryDetail::Audiobooks(audiobooks_detail(hero)))
 }
 
-/// Carry the content and paint the list's cursor.
-fn carry(state: &LibraryState, cursor: Option<&str>) {
-    carry_content(state, content(None), cursor);
+/// Carry the content without a Hero.
+fn carry(state: &LibraryState) {
+    carry_content(state, content(None));
 }
 
-/// Carry the content with the Hero, and paint the list's cursor: the Hero's
-/// chapter Workspace is the control the pointer marks.
-fn carry_hero(state: &LibraryState, cursor: Option<&str>) {
-    carry_content(state, content(Some(audiobooks_hero())), cursor);
+/// Carry the content with the Hero: its chapter Workspace is the control the
+/// pointer marks.
+fn carry_hero(state: &LibraryState) {
+    carry_content(state, content(Some(audiobooks_hero())));
 }
 
-/// Carry the given content and paint the list's cursor.
-fn carry_content(
-    state: &LibraryState,
-    carried: (GuiLibraryList, GuiLibraryDetail),
-    cursor: Option<&str>,
-) {
+/// Carry the given content.
+fn carry_content(state: &LibraryState, carried: (GuiLibraryList, GuiLibraryDetail)) {
     let (list, detail) = carried;
     let batch = GuiSectionBatch {
         library_list: Some(GuiSection {
@@ -322,30 +347,35 @@ fn carry_content(
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
     let mut audiobooks_ui = state.audiobooks_ui;
-    audiobooks_ui.with_mut(|ui| {
-        ui.cursor = cursor.map(str::to_owned);
-        ui.filter.clear();
-    });
+    audiobooks_ui.with_mut(|ui| ui.filter.clear());
 }
 
-/// The filter and cursor facts the assertions read.
-fn ui_facts(state: &LibraryState) -> String {
-    let ui = state.ui.peek().clone();
-    let audiobooks = state.audiobooks_ui.peek().clone();
-    let workspace = state.audiobooks_workspace.peek().clone();
+/// The list's scroll facts the assertions read.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.audiobooks.peek();
     format!(
-        "filter_open={} filter={:?} cursor={:?} chapter_cursor={:?}",
-        ui.filter_open, audiobooks.filter, audiobooks.cursor, workspace.cursor,
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
     )
 }
 
-// Enter on the cursor book plays it from its saved position.
-#[test]
-fn enter_on_the_cursor_book_plays_it_from_its_saved_position() {
-    let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b2"));
+/// The filter facts the assertions read.
+fn ui_facts(state: &LibraryState) -> String {
+    let ui = state.ui.peek().clone();
+    let audiobooks = state.audiobooks_ui.peek().clone();
+    format!(
+        "filter_open={} filter={:?}",
+        ui.filter_open, audiobooks.filter,
+    )
+}
 
-        route(state, facts, "enter", "Enter", false);
+// Enter on the hovered book plays it from its saved position.
+#[test]
+fn enter_on_the_hovered_book_plays_it_from_its_saved_position() {
+    let (facts, rx) = run(|state, facts| {
+        carry(state);
+
+        route_row(state, facts, "enter", "Enter", "b2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -357,27 +387,13 @@ fn enter_on_the_cursor_book_plays_it_from_its_saved_position() {
     );
 }
 
-// A movement key moves the book cursor and sends no key.
+// `a` on the hovered book queues it.
 #[test]
-fn a_movement_key_moves_the_book_cursor_and_sends_no_key() {
+fn a_on_the_hovered_book_queues_it() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b1"));
+        carry(state);
 
-        route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "down=Handled");
-    assert!(facts[1].contains("cursor=Some(\"b2\")"));
-    assert_eq!(commands(&rx), []);
-}
-
-// `a` on the list pane queues the cursor book.
-#[test]
-fn a_on_the_list_pane_queues_the_cursor_book() {
-    let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b3"));
-
-        route(state, facts, "a", "a", false);
+        route_row(state, facts, "a", "a", "b3");
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -392,13 +408,61 @@ fn a_on_the_list_pane_queues_the_cursor_book() {
 // Books have no play-next: `n` is consumed, so no command leaves and no key
 // reaches the core (design D12, row 9.1).
 #[test]
-fn n_on_the_list_pane_does_nothing_and_is_handled() {
+fn n_on_the_hovered_book_does_nothing_and_is_handled() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b2"));
+        carry(state);
 
-        route(state, facts, "n", "n", false);
+        route_row(state, facts, "n", "n", "b2");
     });
     assert_eq!(facts, ["n=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Enter, `n`, and `a` with the pointer over no book row do nothing (design
+// D2, step 3): the key is the window's, and it sends no command.
+#[test]
+fn enter_n_and_a_with_no_hovered_row_send_nothing() {
+    let (facts, rx) = run(|state, facts| {
+        carry(state);
+
+        route(state, facts, "enter", "Enter", false);
+        route(state, facts, "n", "n", false);
+        route(state, facts, "a", "a", false);
+    });
+    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Down over the book list scrolls it by the height of the row at the top edge
+// (design D6) and plays nothing.
+#[test]
+fn down_over_the_book_list_scrolls_it_by_one_row() {
+    let (facts, rx) = run(|state, facts| {
+        carry(state);
+        state.measure_audiobooks_list(40.0);
+
+        route_row(state, facts, "down", "ArrowDown", "b1");
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Handled");
+    // The letter heading covers the list's top edge, so the step is its 24 px.
+    assert_eq!(facts[1], "top=24 viewport=40");
+    assert_eq!(commands(&rx), []);
+}
+
+// The movement keys are the core's while the pointer rests off the book list
+// (design D2, step 4): nothing scrolls.
+#[test]
+fn down_off_the_book_list_is_the_cores_key() {
+    let (facts, rx) = run(|state, facts| {
+        carry(state);
+        state.measure_audiobooks_list(40.0);
+
+        route(state, facts, "down", "ArrowDown", false);
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Core(None)");
+    assert_eq!(facts[1], "top=0 viewport=40");
     assert_eq!(commands(&rx), []);
 }
 
@@ -408,7 +472,7 @@ fn n_on_the_list_pane_does_nothing_and_is_handled() {
 #[test]
 fn slash_opens_the_audiobooks_filter_and_sends_no_key() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, Some("b1"));
+        carry(state);
 
         route(state, facts, "slash", "/", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -424,7 +488,7 @@ fn slash_opens_the_audiobooks_filter_and_sends_no_key() {
 #[test]
 fn esc_closes_the_audiobooks_filter_and_drops_its_text() {
     let (facts, rx) = run(|state, facts| {
-        carry(state, None);
+        carry(state);
         let mut audiobooks_ui = state.audiobooks_ui;
         audiobooks_ui.with_mut(|ui| ui.filter = "b1".to_owned());
         let mut ui = state.ui;
@@ -439,30 +503,15 @@ fn esc_closes_the_audiobooks_filter_and_drops_its_text() {
     assert_eq!(commands(&rx), []);
 }
 
-// The Hero's Workspace keys act through the Workspace's own contract functions
-// (design D12): the movements move the chapter cursor, Enter plays the
-// chapter, and `a` queues the selected book.
+// Enter on the hovered chapter plays or seeks from it (design D1, D2): the
+// chapter row's marker is the chapter number, and the Enter path parses it
+// back.
 #[test]
-fn the_hero_workspace_moves_the_chapter_cursor() {
+fn enter_on_the_hovered_chapter_plays_it() {
     let (facts, rx) = run(|state, facts| {
-        carry_hero(state, Some("b1"));
+        carry_hero(state);
 
-        route_hero(state, facts, "down", "ArrowDown");
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "down=Handled");
-    // The Workspace's single chapter row: the move clamps at its end.
-    assert!(facts[1].contains("chapter_cursor=Some(1)"));
-    assert_eq!(commands(&rx), []);
-}
-
-// The Hero's Workspace plays the cursor chapter on Enter.
-#[test]
-fn the_hero_workspace_plays_the_cursor_chapter_on_enter() {
-    let (facts, rx) = run(|state, facts| {
-        carry_hero(state, Some("b1"));
-
-        route_hero(state, facts, "enter", "Enter");
+        route_hero(state, facts, "enter", "Enter", Some("2"));
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -470,18 +519,45 @@ fn the_hero_workspace_plays_the_cursor_chapter_on_enter() {
         [mbv::GuiLibraryCommand::AbsPlayChapter {
             lib_idx: 4,
             book_id: "b1".to_owned(),
-            chapter: 1,
+            chapter: 2,
         }]
     );
+}
+
+// Enter on a marker that names no painted chapter sends nothing, and the key
+// stays the window's.
+#[test]
+fn enter_on_no_painted_chapter_sends_nothing() {
+    let (facts, rx) = run(|state, facts| {
+        carry_hero(state);
+
+        route_hero(state, facts, "enter", "Enter", Some("7"));
+        route_hero(state, facts, "enter", "Enter", None);
+    });
+    assert_eq!(facts, ["enter=Handled", "enter=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// The movement keys over the Workspace move nothing and send no key: the
+// Workspace keeps no cursor (design D6).
+#[test]
+fn a_movement_key_on_the_workspace_moves_no_row() {
+    let (facts, rx) = run(|state, facts| {
+        carry_hero(state);
+
+        route_hero(state, facts, "down", "ArrowDown", Some("1"));
+    });
+    assert_eq!(facts, ["down=Handled"]);
+    assert_eq!(commands(&rx), []);
 }
 
 // The Hero's Workspace queues the selected book on `a`.
 #[test]
 fn the_hero_workspace_queues_the_selected_book_on_a() {
     let (facts, rx) = run(|state, facts| {
-        carry_hero(state, Some("b1"));
+        carry_hero(state);
 
-        route_hero(state, facts, "a", "a");
+        route_hero(state, facts, "a", "a", Some("1"));
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -497,9 +573,9 @@ fn the_hero_workspace_queues_the_selected_book_on_a() {
 #[test]
 fn the_hero_workspace_consumes_n_without_a_call() {
     let (facts, rx) = run(|state, facts| {
-        carry_hero(state, Some("b1"));
+        carry_hero(state);
 
-        route_hero(state, facts, "n", "n");
+        route_hero(state, facts, "n", "n", Some("1"));
     });
     assert_eq!(facts, ["n=Handled"]);
     assert_eq!(commands(&rx), []);
@@ -512,9 +588,9 @@ fn the_hero_workspace_consumes_n_without_a_call() {
 #[test]
 fn the_list_consumes_every_library_key() {
     let (facts, _rx) = run(|state, facts| {
-        carry(state, None);
+        carry(state);
         for value in LIBRARY_KEYS {
-            route(state, facts, value, value, false);
+            route_row(state, facts, value, value, "b1");
         }
     });
     let taken: Vec<String> = LIBRARY_KEYS

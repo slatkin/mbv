@@ -29,7 +29,6 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
-use crate::window::library::audiobooks_workspace::press_abs_chapter;
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::ticks_f64;
 use crate::window::sections::{SectionRef, Sections};
@@ -526,23 +525,6 @@ fn a_chapter_s_play_gesture_sends_its_play_chapter_command() {
             chapter: 2,
         }],
         "the play-chapter command names the played chapter"
-    );
-}
-
-/// Contract (`LibraryAudiobooksHero.test.ts`): a press on a chapter moves the
-/// cursor onto its row — the store's cursor the Workspace paints, driven here
-/// through the handler the component's own press handler calls.
-#[test]
-fn a_press_on_a_chapter_moves_the_cursor_onto_its_row() {
-    let mut fixture = built_book();
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || press_abs_chapter(&state, 1));
-
-    assert_eq!(
-        fixture.state.audiobooks_workspace.peek().cursor,
-        Some(1),
-        "the cursor rests on the pressed chapter"
     );
 }
 

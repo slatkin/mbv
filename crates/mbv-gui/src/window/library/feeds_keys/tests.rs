@@ -1,7 +1,9 @@
 //! Headless tests of the Feeds keys (D16): the contracts of
-//! `feeds-keys.test.ts` — the list's cursor moves, Enter plays the entry it
-//! rests on, `a` queues it, `n` is consumed and does nothing, and Space stays
-//! the core's key. The router under test is the panel's one routing site,
+//! `feeds-keys.test.ts` on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
+//! under the pointer, Enter plays the hovered entry, `a` queues it, `n` is
+//! consumed and does nothing, and Space stays the core's key. The router under
+//! test is the panel's one routing site,
 //! [`super::super::keys::route_library_key`], so these assertions cover the
 //! Feeds dispatch it hands to [`super::route_feeds_panel_key`]. The harness
 //! builds a `DioxusDocument` whose root creates the store and runs each
@@ -27,7 +29,7 @@ use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::feeds::initial_feeds_ui;
 use crate::window::library::state::LibraryState;
-use crate::window::pointer_target::{PointerTarget, PointerZone};
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -116,18 +118,63 @@ fn key(value: &str, shift: bool) -> DomKey {
     }
 }
 
-/// Route one keydown against the given section stores and paint the outcome.
-fn route_on(
+/// The pointer target a list key routes under: the pointer over the Library
+/// column, not on a list or a Hero control.
+fn library_pointer() -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: None,
+        row: None,
+    }
+}
+
+/// The pointer target over `list`, resting on the row `row` when one is named.
+fn pointer_on(list: PointerList, row: Option<&str>) -> PointerTarget {
+    PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(list),
+        row: row.map(str::to_owned),
+    }
+}
+
+/// Route one keydown under one pointer target and paint the outcome.
+fn route_pointer(
     state: &LibraryState,
     facts: &Facts,
     name: &str,
     value: &str,
-    shift: bool,
-    sections: &Sections,
+    pointer: &PointerTarget,
 ) {
     let outcome = super::super::keys::route_library_key(
+        &key(value, false),
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+        pointer,
+    );
+    facts
+        .lock()
+        .expect("facts")
+        .push(format!("{name}={outcome:?}"));
+}
+
+/// Route one keydown with the pointer over the entry list, resting on `row`.
+fn route_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Feeds, Some(row)),
+    );
+}
+
+/// Route one keydown with the pointer over the Library column, on no list.
+fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
+    let outcome = super::super::keys::route_library_key(
         &key(value, shift),
-        Some(sections),
+        Some(&state.sections),
         state,
         None,
         GuiArrangement::Wide,
@@ -137,22 +184,6 @@ fn route_on(
         .lock()
         .expect("facts")
         .push(format!("{name}={outcome:?}"));
-}
-
-/// The pointer target a list key routes under: the pointer over the Library
-/// column, not on a Hero list.
-fn library_pointer() -> PointerTarget {
-    PointerTarget {
-        zone: Some(PointerZone::Library),
-        list: None,
-        row: None,
-    }
-}
-
-/// Route one keydown against the window's own section stores and paint the
-/// outcome.
-fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
-    route_on(state, facts, name, value, shift, &state.sections);
 }
 
 /// The entry rows the Latest pill merges, newest first.
@@ -257,12 +288,8 @@ fn feeds_content(
     (list, detail)
 }
 
-/// Carry the Feeds content and paint the list's cursor.
-fn carry_feeds(
-    state: &LibraryState,
-    content: (GuiLibraryList, GuiLibraryDetail),
-    cursor: Option<&str>,
-) {
+/// Carry the Feeds content and start the list's interaction state over.
+fn carry_feeds(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail)) {
     let (list, detail) = content;
     let batch = GuiSectionBatch {
         library_list: Some(GuiSection {
@@ -283,35 +310,36 @@ fn carry_feeds(
         ui.item_menu_open = true;
     });
     let mut feeds_ui = state.feeds_ui;
-    feeds_ui.with_mut(|ui| {
-        *ui = initial_feeds_ui();
-        ui.cursor = cursor.map(str::to_owned);
-    });
+    feeds_ui.with_mut(|ui| *ui = initial_feeds_ui());
 }
 
-/// The filter and cursor facts the assertions read.
+/// The list's scroll facts the assertions read.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.feeds.peek();
+    format!(
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
+    )
+}
+
+/// The filter facts the assertions read.
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let feeds = state.feeds_ui.peek().clone();
     format!(
-        "filter_open={} dismissed={} item_menu_open={} cursor={:?} filter={:?} pill_select={:?}",
-        ui.filter_open,
-        ui.hero_dismissed,
-        ui.item_menu_open,
-        feeds.cursor,
-        feeds.filter,
-        feeds.pill_select,
+        "filter_open={} dismissed={} item_menu_open={} filter={:?} pill_select={:?}",
+        ui.filter_open, ui.hero_dismissed, ui.item_menu_open, feeds.filter, feeds.pill_select,
     )
 }
 
-// Enter on the cursor row plays the entry.
+// Enter on the hovered row plays the entry.
 #[test]
-fn enter_on_the_cursor_row_plays_the_entry() {
+fn enter_on_the_hovered_row_plays_the_entry() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s2::e2"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "enter", "Enter", false);
+        route_row(state, facts, "enter", "Enter", "s2::e2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -322,29 +350,14 @@ fn enter_on_the_cursor_row_plays_the_entry() {
     );
 }
 
-// A movement key moves the cursor and sends no key.
+// `a` on the hovered row queues the entry.
 #[test]
-fn a_movement_key_moves_the_cursor_and_sends_no_key() {
+fn a_on_the_hovered_row_queues_the_entry() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(ui_facts(state));
-    });
-    assert_eq!(facts[0], "down=Handled");
-    assert!(facts[1].contains("cursor=Some(\"s2::e2\")"));
-    assert_eq!(commands(&rx), []);
-}
-
-// `a` on the cursor row queues the entry.
-#[test]
-fn a_on_the_cursor_row_queues_the_entry() {
-    let content = feeds_content(PillSelection::Latest, &entries(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s1::e1"));
-
-        route(state, facts, "a", "a", false);
+        route_row(state, facts, "a", "a", "s1::e1");
     });
     assert_eq!(facts, ["a=Handled"]);
     assert_eq!(
@@ -358,14 +371,66 @@ fn a_on_the_cursor_row_queues_the_entry() {
 // A feed entry has no play-next (row 11.1): `n` is consumed and sends
 // nothing, so it neither queues nor reaches the core's playback chords.
 #[test]
-fn n_on_the_cursor_row_sends_nothing_and_is_handled() {
+fn n_on_the_hovered_row_sends_nothing_and_is_handled() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
-        route(state, facts, "n", "n", false);
+        route_row(state, facts, "n", "n", "s1::e1");
     });
     assert_eq!(facts, ["n=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Enter, `n`, and `a` with the pointer over no entry row do nothing (design
+// D2, step 3): the key is the window's, and it sends no command.
+#[test]
+fn enter_n_and_a_with_no_hovered_row_send_nothing() {
+    let content = feeds_content(PillSelection::Latest, &entries(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route(state, facts, "enter", "Enter", false);
+        route(state, facts, "n", "n", false);
+        route(state, facts, "a", "a", false);
+    });
+    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Down over the list scrolls it by the height of the row at the top edge
+// (design D6) and plays nothing.
+#[test]
+fn down_over_the_feeds_list_scrolls_it_by_one_row() {
+    let content = feeds_content(PillSelection::Latest, &entries(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+        state.measure_feeds_list(40.0);
+
+        route_row(state, facts, "down", "ArrowDown", "s1::e1");
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Handled");
+    // The first row is 48 px, and the 96 px of rows clamp the step at the
+    // list's end.
+    assert_eq!(facts[1], "top=48 viewport=40");
+    assert_eq!(commands(&rx), []);
+}
+
+// The movement keys are the core's while the pointer rests off the list
+// (design D2, step 4): nothing scrolls.
+#[test]
+fn down_off_the_feeds_list_is_the_cores_key() {
+    let content = feeds_content(PillSelection::Latest, &entries(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+        state.measure_feeds_list(40.0);
+
+        route(state, facts, "down", "ArrowDown", false);
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Core(None)");
+    assert_eq!(facts[1], "top=0 viewport=40");
     assert_eq!(commands(&rx), []);
 }
 
@@ -376,7 +441,7 @@ fn n_on_the_cursor_row_sends_nothing_and_is_handled() {
 fn slash_opens_the_feeds_filter_and_sends_no_key() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s1::e1"));
+        carry_feeds(state, content.clone());
 
         route(state, facts, "slash", "/", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -393,7 +458,7 @@ fn slash_opens_the_feeds_filter_and_sends_no_key() {
 fn esc_closes_the_feeds_filter_and_drops_its_text() {
     let content = feeds_content(PillSelection::Latest, &entries(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_feeds(state, content.clone(), Some("s1::e1"));
+        carry_feeds(state, content.clone());
         let mut feeds_ui = state.feeds_ui;
         feeds_ui.with_mut(|ui| ui.filter = "s1".to_owned());
         let mut ui = state.ui;

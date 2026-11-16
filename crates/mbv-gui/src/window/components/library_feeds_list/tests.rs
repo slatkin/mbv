@@ -1,8 +1,8 @@
 //! Headless tests of the Feeds list (D16): the contracts of
 //! `LibraryFeedsList.test.ts` — the flat entry list paints its date gutter
 //! with no letter heading and no rail, a press sends the select command with
-//! the row id while a double-click plays the entry, the cursor row and the
-//! core's selected entry carry their own fills, a played entry dims its
+//! the row id while a double-click plays the entry, the core's selected entry
+//! carries its fill and no row paints a cursor, a played entry dims its
 //! title while an active one paints its resume percent, the loading fact
 //! paints its own line, and the header names the active pill. The IPC
 //! of the earlier tests is the mock core link here; a headless document
@@ -415,27 +415,14 @@ fn a_double_click_plays_the_entry() {
     );
 }
 
-/// Contract (`LibraryFeedsList.test.ts`): the cursor row and the core's
-/// selected entry carry their own fills.
+/// Contract (`LibraryFeedsList.test.ts`): the core's selected entry carries
+/// its mark and its fill, and no row paints a cursor — the list keeps none
+/// (`gui-pointer-target-interaction` D6).
 #[test]
-fn the_cursor_row_and_the_cores_selected_entry_carry_their_own_fills() {
+fn the_cores_selected_entry_carries_its_fill_and_no_row_paints_a_cursor() {
     let mut fixture = built(frame(entries(), false), detail(Some("s1::e1")));
     fixture.measure(300.0);
 
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || {
-        let mut feeds_ui = state.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.cursor = Some("s2::e2".to_owned()));
-    });
-
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-feeds-row-id=\"s2::e2\"]",
-            "data-library-feeds-cursor",
-        ),
-        Some(String::new()),
-        "the cursor row paints its mark"
-    );
     assert_eq!(
         fixture.attr_of(
             "[data-library-feeds-row-id=\"s1::e1\"]",
@@ -443,6 +430,16 @@ fn the_cursor_row_and_the_cores_selected_entry_carry_their_own_fills() {
         ),
         Some(String::new()),
         "the selected entry paints its mark"
+    );
+    assert!(
+        fixture
+            .attr_of("[data-library-feeds-row-id=\"s1::e1\"]", "style")
+            .is_some_and(|style| style.contains("background")),
+        "the selected entry paints its fill"
+    );
+    assert!(
+        !fixture.presents("[data-library-feeds-cursor]"),
+        "no row paints a cursor"
     );
 }
 

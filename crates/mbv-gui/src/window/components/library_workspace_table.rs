@@ -2,18 +2,16 @@
 //! of `LibraryWorkspaceTable`; add-gui-library-panel design D15,
 //! invariant 30): the one table every destination's Workspace paints —
 //! Music's tracklist, Shows' episodes, Audiobooks' chapters, and Feeds'
-//! entries. The header row, the row grid, the cursor fill, the playing
-//! glyph, the duration cell, the resume run, the hover controls, and the
-//! loading line are painted here once, so a fix lands in every list.
+//! entries. The header row, the row grid, the playing glyph, the duration cell,
+//! the resume run, the hover controls, and the loading line are painted here
+//! once, so a fix lands in every list.
 //!
-//! A destination supplies its rows, its cursor, its hover actions, and its
-//! hook prefix; it never restates the layout. The hover is the table's own
-//! paint: the pointer-over row swaps its number for the play control and
-//! shows its actions. A press runs the destination's press act — nothing on a
-//! Workspace that keeps no cursor (`gui-pointer-target-interaction` D6) — and a
-//! double-click on a row, like the play control, plays it.
-
-use std::fmt::Write as _;
+//! A destination supplies its rows, its hover actions, and its hook prefix; it
+//! never restates the layout. The hover is the table's own paint: the
+//! pointer-over row swaps its number for the play control and shows its actions.
+//! The table keeps no cursor (`gui-pointer-target-interaction` D6): a press runs
+//! the destination's press act, and a double-click on a row, like the play
+//! control, plays it.
 
 use dioxus_native::prelude::*;
 
@@ -149,9 +147,6 @@ pub struct LibraryWorkspaceTableProps {
     pub pointer_list: PointerList,
     /// The rows in painted order.
     pub rows: Vec<WorkspaceRow>,
-    /// The cursor's row id, or `None` while the destination keeps no cursor.
-    #[props(default)]
-    pub cursor: Option<String>,
     /// The rows' hover actions.
     #[props(default)]
     pub actions: Vec<WorkspaceAction>,
@@ -178,7 +173,6 @@ impl std::fmt::Debug for LibraryWorkspaceTableProps {
             .field("noun", &self.noun)
             .field("pointer_list", &self.pointer_list)
             .field("rows", &self.rows)
-            .field("cursor", &self.cursor)
             .field("actions", &self.actions)
             .field("loading", &self.loading)
             .finish_non_exhaustive()
@@ -222,12 +216,11 @@ fn paint_loading(loading: &WorkspaceLoading) -> Element {
     }
 }
 
-/// The table facts one row's paint borrows: the destination's hooks, the
-/// cursor, the hover state, the actions, and the press and play callbacks.
+/// The table facts one row's paint borrows: the destination's hooks, the hover
+/// state, the actions, and the press and play callbacks.
 struct RowPaint<'a> {
     hook: &'static str,
     noun: &'static str,
-    cursor: Option<&'a str>,
     hovered: Signal<Option<String>>,
     actions: &'a [WorkspaceAction],
     on_press: Callback<String>,
@@ -236,22 +229,14 @@ struct RowPaint<'a> {
 }
 
 /// One row's own hooks: the id always paints — and, with it, the row's pointer
-/// marker — the cursor, playing, and state marks only while they hold.
-fn row_attrs(row: &WorkspaceRow, hook: &str, cursor_row: bool) -> Vec<Attribute> {
+/// marker — the playing and state marks only while they hold.
+fn row_attrs(row: &WorkspaceRow, hook: &str) -> Vec<Attribute> {
     let mut attrs = vec![
         Attribute::new(library_attr(hook, ""), row.id.clone(), None, false),
         // The row marker (`gui-pointer-target-interaction` D1): the row's own
         // id, the value the destination's commands name.
         Attribute::new(ROW_ATTRIBUTE, row.id.clone(), None, false),
     ];
-    if cursor_row {
-        attrs.push(Attribute::new(
-            library_attr(hook, "cursor"),
-            "",
-            None,
-            false,
-        ));
-    }
     if row.playing {
         attrs.push(Attribute::new(
             library_attr(hook, "playing"),
@@ -431,19 +416,15 @@ fn paint_actions_cell(
     }
 }
 
-/// The duration cell: the time token at the
-/// repeat opacity, the cursor row's own ink excepted (design D14).
-fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow, cursor_row: bool) -> Element {
+/// The duration cell: the time token at
+/// the repeat opacity.
+fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow) -> Element {
     let own_attrs = vec![Attribute::new(
         library_attr(hook, "duration"),
         "",
         None,
         false,
     )];
-    let mut style = "font-size: 12px; text-align: right;".to_owned();
-    if cursor_row {
-        let _ = write!(style, " color: {};", canvas_var("muted"));
-    }
     let segments = vec![GuiMetaSegmentFrame {
         text: row.duration.clone(),
         kind: GuiMetaKindFrame::Time,
@@ -451,23 +432,22 @@ fn paint_duration_cell(hook: &'static str, row: &WorkspaceRow, cursor_row: bool)
     rsx! {
         span {
             class: "font-mono tabular-nums",
-            style: "{style}",
+            style: "font-size: 12px; text-align: right;",
             ..own_attrs,
             TypedText {
                 segments: segments,
-                repeat: !cursor_row,
+                repeat: true,
             }
         }
     }
 }
 
 /// One row of the table: the cells over the row
-/// grid, with the cursor fill, the hover swap, and the resume run.
+/// grid, with the hover swap and the resume run.
 fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
     let RowPaint {
         hook,
         noun,
-        cursor,
         hovered,
         actions,
         on_press,
@@ -480,12 +460,8 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
         None,
         false,
     )];
-    let cursor_row = *cursor == Some(row.id.as_str());
     let is_hovered = hovered.cloned().as_deref() == Some(row.id.as_str());
-    let mut row_style = format!("{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px;");
-    if cursor_row {
-        let _ = write!(row_style, " background: {};", canvas_var("selected"));
-    }
+    let row_style = format!("{GRID_COLUMNS} height: 34px; padding: 0 8px; border-radius: 4px;");
     let row_id = row.id.clone();
     let enter_id = row_id.clone();
     let context_id = row_id;
@@ -512,11 +488,11 @@ fn paint_row(row: &WorkspaceRow, paint: &RowPaint<'_>) -> Element {
                     ));
                 }
             },
-            ..row_attrs(row, hook, cursor_row),
+            ..row_attrs(row, hook),
             { paint_number_cell(hook, row, is_hovered, *on_play) }
             { paint_name_button(hook, row, noun, *on_press, row_play) }
             { paint_actions_cell(hook, &row.id, is_hovered, actions) }
-            { paint_duration_cell(hook, row, cursor_row) }
+            { paint_duration_cell(hook, row) }
             if let Some(progress) = row.progress {
                 // The resume position: a thin accent run under the row's
                 // bottom edge, at the frame's bounded percent.
@@ -539,7 +515,6 @@ pub fn LibraryWorkspaceTable(props: LibraryWorkspaceTableProps) -> Element {
     let paint = RowPaint {
         hook: props.hook,
         noun: props.noun,
-        cursor: props.cursor.as_deref(),
         hovered,
         actions: &props.actions,
         on_press: props.on_press,

@@ -18,7 +18,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
-use crate::window::pointer_target::PointerTarget;
+use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::feeds_list::FeedsItemRow;
 use super::keys_shared::{PanelKeys, route_panel_list_key};
@@ -41,8 +41,8 @@ impl FeedsFrame {
 }
 
 /// The Feeds facts the shared panel key handler routes over (row 7C.2): the
-/// item the play and queue commands name is the entry row itself, and there is
-/// no play-next.
+/// item the play and queue commands name is the entry the pointer marks, and
+/// there is no play-next.
 struct FeedsKeys<'a> {
     state: &'a LibraryState,
 }
@@ -71,16 +71,22 @@ impl PanelKeys for FeedsKeys<'_> {
         library_feeds_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, _pointer: &PointerTarget) -> Option<FeedsItemRow> {
-        self.state.feeds_cursor_row()
+    fn row(&self, pointer: &PointerTarget) -> Option<FeedsItemRow> {
+        if pointer.list != Some(PointerList::Feeds) {
+            return None;
+        }
+        self.state.feeds_row_at(pointer.row.as_deref()?)
     }
 
     fn item_id(&self, item: &FeedsItemRow) -> Option<String> {
         Some(item.row.id.clone())
     }
 
-    fn move_list(&self, mv: ListMove, _pointer: &PointerTarget) -> bool {
-        self.state.move_feeds_list_cursor(mv);
+    fn move_list(&self, mv: ListMove, pointer: &PointerTarget) -> bool {
+        if pointer.list != Some(PointerList::Feeds) {
+            return false;
+        }
+        self.state.step_feeds_scroll(mv);
         true
     }
 
@@ -97,8 +103,8 @@ impl PanelKeys for FeedsKeys<'_> {
 }
 
 /// Route a key to the Feeds keys (row 11.1): the shared handler over the
-/// Feeds facts. Enter on the cursor row plays the entry it rests on — which
-/// the Owner replaces the queue with — and `a` queues it.
+/// Feeds facts. Enter on the hovered entry plays it — which the Owner replaces
+/// the queue with — and `a` queues it.
 #[must_use]
 pub fn route_feeds_panel_key(
     state: &LibraryState,

@@ -1,7 +1,7 @@
 //! The movement vocabulary and the list routing the Library's key routers share
 //! (`add-gui-library-panel` design D3, row 7C.2, the port of
 //! `lib/library/keys-shared.ts`): the keys the Library keeps from the core's
-//! router, the list movement each cursor key names, and the one key handler the
+//! router, the list movement each movement key names, and the one key handler the
 //! Feeds, Podcasts, Emby, Audiobooks, and Shows destinations run over their own
 //! facts — the frame, the rows, and the item commands.
 //! [`super::keys`] routes the vocabulary for Music and Home;
@@ -13,9 +13,8 @@
 //! key acts on (design D2 of `gui-pointer-target-interaction`).
 //!
 //! The keys act on the row the pointer marks, and their movement keys scroll
-//! the destination's list (design D2, D6). Emby, Shows, Music, and Home route
-//! that way; the Feeds, Podcasts, and Audiobooks destinations still keep a
-//! keyboard cursor, which their rows answer until rows 5.7 to 5.9 port them.
+//! the destination's list (design D2, D6). Every destination routes that way,
+//! so no list and no Workspace keeps a keyboard cursor.
 
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
@@ -69,7 +68,7 @@ pub fn is_list_and_hero_key(key: &str) -> bool {
     )
 }
 
-/// The list movement each cursor key names (design D3, D7).
+/// The list movement each movement key names (design D3, D7).
 #[must_use]
 pub fn cursor_move(key: &str) -> Option<ListMove> {
     match key {
@@ -113,18 +112,15 @@ pub trait PanelKeys {
     /// The row a list key acts on (design D1, D2): the row the pointer marks
     /// in this destination's list, resolved against the painted rows, so a
     /// stale or foreign id names no row. `None` while the pointer marks no row
-    /// of it — another list, a Hero control, or no row at all. A destination
-    /// that still keeps a keyboard cursor answers its cursor row and ignores
-    /// the pointer (rows 5.7 to 5.9 port those).
+    /// of it — another list, a Hero control, or no row at all.
     fn row(&self, pointer: &PointerTarget) -> Option<Self::Item>;
 
     /// The item id the play and queue commands name.
     fn item_id(&self, item: &Self::Item) -> Option<String>;
 
-    /// Move the list one movement key along (design D6): a pointer destination
-    /// scrolls its list, and one that still keeps a keyboard cursor moves the
-    /// cursor. `false` when the key is not this list's, because the pointer
-    /// rests on another control: the router then sends it to the core.
+    /// Scroll the list one movement key along (design D6). `false` when the key
+    /// is not this list's, because the pointer rests on another control: the
+    /// router then sends it to the core.
     fn move_list(&self, mv: ListMove, pointer: &PointerTarget) -> bool;
 
     /// Play the item Enter or a double-click names.
@@ -183,10 +179,9 @@ pub trait PanelKeys {
 /// control the pointer marks takes the key. On a Hero control — the tracklist
 /// or a Workspace — the destination's own Hero router runs, or the Hero's
 /// default: the movements and Enter change nothing but are consumed, and `n`
-/// and `a` act on the item the core selected. Anywhere else the list's cursor
-/// moves and Enter plays the item it rests on, Right and Left act on the row
-/// under it through the destination's hooks, and `n` and `a` play it next or
-/// queue it. Every one of them is consumed, so no Library key reaches the
+/// and `a` act on the item the core selected. Anywhere else Enter plays the row
+/// the pointer marks, Right and Left act on that row through the destination's
+/// hooks, and `n` and `a` play it next or queue it. Every one of them is consumed, so no Library key reaches the
 /// core's playback chords from the list.
 pub fn route_panel_list_key<K: PanelKeys>(
     key: &DomKey,

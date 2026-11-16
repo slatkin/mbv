@@ -119,9 +119,6 @@ pub struct LibraryState {
     pub search: Signal<super::search::LibrarySearchState>,
     /// The pending query send's timer (D10), or `None` while none is armed.
     pub search_send: Signal<Option<crate::window::clock::TimerId>>,
-    /// The Audiobooks Hero's Workspace cursor (`audiobooks-workspace.ts`'s
-    /// `audiobooksWorkspace`).
-    pub audiobooks_workspace: Signal<super::audiobooks_workspace::AudiobooksWorkspaceState>,
     /// The Home list's row memo (`home-list.ts`'s `homeRowsOf`).
     pub home_rows_memo: super::home_list::HomeRowsMemo,
     /// The Emby list's row memo (`emby-list.ts`'s `embyRowsOf`).
@@ -191,9 +188,6 @@ impl LibraryState {
             emby_ui: Signal::new(super::emby::initial_emby_ui()),
             shows_ui: Signal::new(super::shows::ShowsUiState::initial()),
             audiobooks_ui: Signal::new(super::audiobooks::AudiobooksUiState::initial()),
-            audiobooks_workspace: Signal::new(
-                super::audiobooks_workspace::AudiobooksWorkspaceState::initial(),
-            ),
             podcasts_ui: Signal::new(super::podcasts::initial_podcasts_ui()),
             feeds_ui: Signal::new(super::feeds::initial_feeds_ui()),
             search: Signal::new(super::search::initial_library_search()),

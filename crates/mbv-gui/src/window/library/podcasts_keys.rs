@@ -17,7 +17,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::keys::DomKey;
 use crate::window::input::KeyOutcome;
-use crate::window::pointer_target::PointerTarget;
+use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::keys_shared::{PanelKeys, route_panel_list_key};
 use super::list::ListMove;
@@ -42,8 +42,8 @@ impl PodcastsFrame {
 }
 
 /// The Podcasts facts the shared panel key handler routes over (row 7C.2):
-/// the item the play and queue commands name is the episode the cursor row
-/// carries, and there is no play-next.
+/// the item the play and queue commands name is the episode the pointer marks,
+/// and there is no play-next.
 struct PodcastsKeys<'a> {
     state: &'a LibraryState,
 }
@@ -72,16 +72,22 @@ impl PanelKeys for PodcastsKeys<'_> {
         library_podcasts_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn row(&self, _pointer: &PointerTarget) -> Option<PodcastsItemRow> {
-        self.state.podcasts_cursor_row()
+    fn row(&self, pointer: &PointerTarget) -> Option<PodcastsItemRow> {
+        if pointer.list != Some(PointerList::Podcasts) {
+            return None;
+        }
+        self.state.podcasts_row_at(pointer.row.as_deref()?)
     }
 
     fn item_id(&self, item: &PodcastsItemRow) -> Option<String> {
         Some(item.row.id.clone())
     }
 
-    fn move_list(&self, mv: ListMove, _pointer: &PointerTarget) -> bool {
-        self.state.move_podcasts_list_cursor(mv);
+    fn move_list(&self, mv: ListMove, pointer: &PointerTarget) -> bool {
+        if pointer.list != Some(PointerList::Podcasts) {
+            return false;
+        }
+        self.state.step_podcasts_scroll(mv);
         true
     }
 
@@ -98,8 +104,8 @@ impl PanelKeys for PodcastsKeys<'_> {
 }
 
 /// Route a key to the Podcasts keys (row 10.1): the shared handler over the
-/// Podcasts facts. Enter on the cursor row plays the episode it rests on —
-/// which the Owner replaces the queue with — and `a` queues it.
+/// Podcasts facts. Enter on the hovered episode plays it — which the Owner
+/// replaces the queue with — and `a` queues it.
 #[must_use]
 pub fn route_podcasts_panel_key(
     state: &LibraryState,

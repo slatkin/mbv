@@ -1,6 +1,6 @@
 //! Headless tests of the Audiobooks list's row model (D16): the contracts of
 //! `audiobooks-list.test.ts` — the letter headings over each run of the
-//! catalog's author sort keys, the empty catalog, the cursor's movement over
+//! catalog's author sort keys, the empty catalog, the rows' geometry over
 //! the book rows only, and the A–Z rail over the author sort key with the
 //! letters no row carries disabled. The model is plain data, so the geometry
 //! is asserted without a layout.
@@ -84,29 +84,6 @@ fn a_letter_heading_paints_over_each_run_of_author_sort_keys() {
 #[test]
 fn an_empty_catalog_paints_no_row() {
     assert_eq!(build_audiobooks_rows(&[], ""), Vec::new());
-}
-
-// Movement steps over the letter headings.
-#[test]
-fn movement_steps_over_the_letter_headings() {
-    let painted = build_audiobooks_rows(&catalog(), "");
-
-    assert_eq!(
-        move_audiobooks_cursor(&painted, Some("b2"), ListMove::Down, 1),
-        Some("b3".to_owned())
-    );
-    assert_eq!(
-        move_audiobooks_cursor(&painted, Some("b3"), ListMove::Down, 1),
-        Some("b4".to_owned())
-    );
-    assert_eq!(
-        move_audiobooks_cursor(&painted, None, ListMove::Down, 1),
-        Some("b1".to_owned())
-    );
-    assert_eq!(
-        move_audiobooks_cursor(&painted, Some("b1"), ListMove::End, 1),
-        Some("b4".to_owned())
-    );
 }
 
 // The rail holds the first book under each letter and disables the rest.

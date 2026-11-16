@@ -117,10 +117,9 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     let layout = hero_layout(&facts, "feed");
 
     // The feed's entries, newest first, as the Workspace table paints them:
-    // the active pill's rows that belong to the Hero's feed, the selected
-    // entry marked by the table's cursor. A date takes the time cell. The
-    // rows are narrowed from the list handle, so a Hero repaint never clones
-    // them (`share-gui-sections-by-rc` design D3).
+    // the active pill's rows that belong to the Hero's feed. A date takes the
+    // time cell. The rows are narrowed from the list handle, so a Hero repaint
+    // never clones them (`share-gui-sections-by-rc` design D3).
     let rows: &[GuiEntryRowFrame] =
         library_feeds_list(Some(&props.list)).map_or(&[][..], |list| list.rows.as_slice());
     let entry_rows: Vec<WorkspaceRow> = match hero.parent.as_deref() {
@@ -197,7 +196,6 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
                     noun: "Entry",
                     pointer_list: PointerList::Workspace,
                     rows: entry_rows,
-                    cursor: detail.selected.clone(),
                     actions: row_actions,
                     on_press,
                     on_play,
