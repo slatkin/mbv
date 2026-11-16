@@ -144,16 +144,6 @@ pub fn audiobooks_selectable_rows(rows: &[AudiobooksListRow]) -> Vec<&Audiobooks
         .collect()
 }
 
-/// The rail letter a painted row belongs to, or `None` on a heading (row
-/// 9.1). A book row always carries its sort letter.
-#[must_use]
-pub fn audiobooks_row_letter(row: &AudiobooksListRow) -> Option<char> {
-    match row {
-        AudiobooksListRow::Heading { letter, .. } => Some(*letter),
-        AudiobooksListRow::Item(item) => Some(item.row.sort_letter),
-    }
-}
-
 /// The cursor key a movement leaves (row 9.1): the next, the previous, or a
 /// page away book row, clamped to the list's ends, stepping over the letter
 /// headings. With no cursor on an item row, Up and End start from the last book

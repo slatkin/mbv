@@ -71,21 +71,21 @@ impl PanelKeys for AudiobooksKeys<'_> {
         library_audiobooks_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn cursor_row(&self) -> Option<AudiobooksItemRow> {
-        self.state
-            .audiobooks_cursor_row()
-            .and_then(|row| match row {
-                AudiobooksListRow::Item(item) => Some(item),
-                AudiobooksListRow::Heading { .. } => None,
-            })
+    fn row(&self, _pointer: &PointerTarget) -> Option<AudiobooksItemRow> {
+        let row = self.state.audiobooks_cursor_row()?;
+        match row {
+            AudiobooksListRow::Item(item) => Some(item),
+            AudiobooksListRow::Heading { .. } => None,
+        }
     }
 
     fn item_id(&self, item: &AudiobooksItemRow) -> Option<String> {
         Some(item.row.id.clone())
     }
 
-    fn move_list_cursor(&self, mv: ListMove) {
+    fn move_list(&self, mv: ListMove, _pointer: &PointerTarget) -> bool {
         self.state.move_audiobooks_list_cursor(mv);
+        true
     }
 
     fn play_item(&self, item_id: &str) {
@@ -100,6 +100,7 @@ impl PanelKeys for AudiobooksKeys<'_> {
         &self,
         key: &DomKey,
         frame: &AudiobooksFrame,
+        _pointer: &PointerTarget,
         target: KeyTarget,
     ) -> Option<KeyOutcome> {
         Some(route_workspace_key(self.state, key, frame.lib_idx, target))

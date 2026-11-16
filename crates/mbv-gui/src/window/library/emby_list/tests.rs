@@ -91,25 +91,6 @@ fn the_feed_group_mode_paints_flat_rows_with_their_date_and_no_heading() {
     assert_eq!(painted[1].top(), EMBY_ROW_HEIGHT);
 }
 
-// Movement steps over the letter headings and every row is selectable.
-#[test]
-fn movement_steps_over_the_letter_headings_and_every_row_is_selectable() {
-    let painted = build_emby_rows(&movies(), false, "");
-
-    assert_eq!(
-        move_emby_cursor(&painted, Some("m2"), ListMove::Down, 1),
-        Some("m3".to_owned())
-    );
-    assert_eq!(
-        move_emby_cursor(&painted, None, ListMove::Down, 1),
-        Some("m1".to_owned())
-    );
-    assert_eq!(
-        move_emby_cursor(&painted, Some("m1"), ListMove::End, 1),
-        Some("m4".to_owned())
-    );
-}
-
 // The rail holds the first row under each letter and disables the rest.
 #[test]
 fn the_rail_holds_the_first_row_under_each_letter_and_disables_the_rest() {

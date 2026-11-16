@@ -72,7 +72,7 @@ impl PanelKeys for PodcastsKeys<'_> {
         library_podcasts_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn cursor_row(&self) -> Option<PodcastsItemRow> {
+    fn row(&self, _pointer: &PointerTarget) -> Option<PodcastsItemRow> {
         self.state.podcasts_cursor_row()
     }
 
@@ -80,8 +80,9 @@ impl PanelKeys for PodcastsKeys<'_> {
         Some(item.row.id.clone())
     }
 
-    fn move_list_cursor(&self, mv: ListMove) {
+    fn move_list(&self, mv: ListMove, _pointer: &PointerTarget) -> bool {
         self.state.move_podcasts_list_cursor(mv);
+        true
     }
 
     fn play_item(&self, item_id: &str) {

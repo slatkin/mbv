@@ -71,7 +71,7 @@ impl PanelKeys for FeedsKeys<'_> {
         library_feeds_detail(detail.as_deref()).and_then(|detail| detail.selected.clone())
     }
 
-    fn cursor_row(&self) -> Option<FeedsItemRow> {
+    fn row(&self, _pointer: &PointerTarget) -> Option<FeedsItemRow> {
         self.state.feeds_cursor_row()
     }
 
@@ -79,8 +79,9 @@ impl PanelKeys for FeedsKeys<'_> {
         Some(item.row.id.clone())
     }
 
-    fn move_list_cursor(&self, mv: ListMove) {
+    fn move_list(&self, mv: ListMove, _pointer: &PointerTarget) -> bool {
         self.state.move_feeds_list_cursor(mv);
+        true
     }
 
     fn play_item(&self, item_id: &str) {

@@ -9,7 +9,8 @@
 //! A destination supplies its rows, its cursor, its hover actions, and its
 //! hook prefix; it never restates the layout. The hover is the table's own
 //! paint: the pointer-over row swaps its number for the play control and
-//! shows its actions. A press moves the destination's cursor, and a
+//! shows its actions. A press runs the destination's press act — nothing on a
+//! Workspace that keeps no cursor (`gui-pointer-target-interaction` D6) — and a
 //! double-click on a row, like the play control, plays it.
 
 use std::fmt::Write as _;
@@ -148,13 +149,14 @@ pub struct LibraryWorkspaceTableProps {
     pub pointer_list: PointerList,
     /// The rows in painted order.
     pub rows: Vec<WorkspaceRow>,
-    /// The cursor's row id, or `None`.
+    /// The cursor's row id, or `None` while the destination keeps no cursor.
     #[props(default)]
     pub cursor: Option<String>,
     /// The rows' hover actions.
     #[props(default)]
     pub actions: Vec<WorkspaceAction>,
-    /// A press on a row: the destination moves its cursor.
+    /// A press on a row: the destination's press act, or a callback that does
+    /// nothing on a Workspace that keeps no cursor.
     pub on_press: Callback<String>,
     /// Play a row: the number cell's play control and the row's double-click.
     pub on_play: Callback<String>,

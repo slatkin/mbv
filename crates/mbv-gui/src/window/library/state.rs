@@ -107,9 +107,6 @@ pub struct LibraryState {
     pub emby_ui: Signal<super::emby::EmbyUiState>,
     /// The Shows list's interaction state (`shows.ts`'s `showsUi`).
     pub shows_ui: Signal<super::shows::ShowsUiState>,
-    /// The Shows Hero's Workspace cursor (`shows-workspace.ts`'s
-    /// `showsWorkspace`).
-    pub shows_workspace: Signal<super::shows_workspace::ShowsWorkspaceState>,
     /// The Audiobooks list's interaction state (`audiobooks.ts`'s
     /// `audiobooksUi`).
     pub audiobooks_ui: Signal<super::audiobooks::AudiobooksUiState>,
@@ -193,7 +190,6 @@ impl LibraryState {
             home_ui: Signal::new(super::home::HomeUiState::initial()),
             emby_ui: Signal::new(super::emby::initial_emby_ui()),
             shows_ui: Signal::new(super::shows::ShowsUiState::initial()),
-            shows_workspace: Signal::new(super::shows_workspace::ShowsWorkspaceState::initial()),
             audiobooks_ui: Signal::new(super::audiobooks::AudiobooksUiState::initial()),
             audiobooks_workspace: Signal::new(
                 super::audiobooks_workspace::AudiobooksWorkspaceState::initial(),

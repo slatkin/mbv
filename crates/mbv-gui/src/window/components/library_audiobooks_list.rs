@@ -31,9 +31,7 @@ use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
-use crate::window::library::audiobooks_list::{
-    AudiobooksListRow, audiobooks_letter_rail, audiobooks_row_letter,
-};
+use crate::window::library::audiobooks_list::{AudiobooksListRow, audiobooks_letter_rail};
 use crate::window::library::audiobooks_workspace::reset_abs_chapter_cursor;
 use crate::window::library::parts::{library_audiobooks_detail, library_audiobooks_list};
 use crate::window::library::state::LibraryState;
@@ -125,13 +123,7 @@ pub fn LibraryAudiobooksList() -> Element {
     // The rail's A–Z letters over the painted rows (row 9.1).
     let rail = audiobooks_letter_rail(&rows);
 
-    // The row the cursor rests on, and the letter the rail marks: the one
-    // the cursor row belongs to.
     let cursor = audiobooks_ui.cursor.clone();
-    let marked = rows
-        .iter()
-        .find(|row| Some(row.id()) == cursor.as_deref())
-        .and_then(audiobooks_row_letter);
     let selected = detail.and_then(|detail| detail.selected.clone());
 
     // The Hero's chapter cursor belongs to the selected book (row 9.1): a
@@ -227,7 +219,6 @@ pub fn LibraryAudiobooksList() -> Element {
                 {virtual_list}
                 LibraryLetterRail {
                     letters: rail,
-                    marked,
                     jump: Some(Callback::new(move |letter: char| {
                         jump_library.jump_audiobooks_to_letter(letter);
                     })),

@@ -35,7 +35,6 @@ use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::library::parts::library_shows_detail;
-use crate::window::library::shows_workspace::press_shows_episode;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::{SectionRef, Sections};
 
@@ -553,31 +552,6 @@ fn a_hovered_row_adds_its_episode_to_the_queue() {
             item_id: "ep2".to_owned(),
         }],
         "the enqueue command names the hovered episode"
-    );
-}
-
-/// Contract (`LibraryShowsHero.test.ts`): a press on an episode moves the
-/// cursor onto its row — the store's cursor the Workspace paints, driven
-/// here through the handler the component's own press handler calls.
-#[test]
-fn a_press_on_an_episode_moves_the_cursor_onto_its_row() {
-    let mut fixture = built_series();
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || press_shows_episode(&state, "ep2"));
-
-    assert_eq!(
-        fixture.state.shows_workspace.peek().cursor,
-        Some("ep2".to_owned()),
-        "the cursor rests on the pressed episode"
-    );
-    assert_eq!(
-        fixture.attr_of(
-            "[data-library-shows-episode=\"ep2\"]",
-            "data-library-shows-episode-cursor"
-        ),
-        Some(String::new()),
-        "the pressed episode's row paints the cursor"
     );
 }
 

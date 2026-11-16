@@ -1,12 +1,14 @@
 //! Headless tests of the plain Emby-library keys (D16): the contracts of
-//! `emby-keys.test.ts` — the list's cursor moves, Enter and the double-click's
-//! play command play every row (a collection row too), `n` and `a` play next
-//! and queue, and `/` is taken. The router under test is the
-//! panel's one routing site, [`super::super::keys::route_library_key`], so
-//! these assertions cover the Emby dispatch it hands to [`super::
-//! route_emby_panel_key`]. The harness builds a `DioxusDocument` whose root
-//! creates the store and runs each scenario in one effect over a recording
-//! core link, so no test opens a window or sleeps, and no IPC runs.
+//! `emby-keys.test.ts`, on the row the pointer marks
+//! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
+//! under the pointer, Enter and the double-click's play command play every row
+//! (a collection row too), `n` and `a` play next and queue, and `/` is taken.
+//! The router under test is the panel's one routing site,
+//! [`super::super::keys::route_library_key`], so these assertions cover the
+//! Emby dispatch it hands to [`super::route_emby_panel_key`]. The harness builds
+//! a `DioxusDocument` whose root creates the store and runs each scenario in one
+//! effect over a recording core link, so no test opens a window or sleeps, and
+//! no IPC runs.
 
 use std::sync::{Arc, Mutex, mpsc};
 
@@ -25,7 +27,7 @@ use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
-use crate::window::pointer_target::{PointerTarget, PointerZone};
+use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
 use crate::window::sections::Sections;
 
 /// The facts one scenario recorded, in its run order.
@@ -147,10 +149,41 @@ fn library_pointer() -> PointerTarget {
     }
 }
 
+/// Route one keydown with the pointer over the Emby list, resting on the row
+/// `row` (design D1, D2), against the window's own section stores.
+fn route_on_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: &str) {
+    let pointer = PointerTarget {
+        zone: Some(PointerZone::Library),
+        list: Some(PointerList::Emby),
+        row: Some(row.to_owned()),
+    };
+    let outcome = super::super::keys::route_library_key(
+        &key(value, false),
+        Some(&state.sections),
+        state,
+        None,
+        GuiArrangement::Wide,
+        &pointer,
+    );
+    facts
+        .lock()
+        .expect("facts")
+        .push(format!("{name}={outcome:?}"));
+}
+
 /// Route one keydown against the window's own section stores and paint the
 /// outcome.
 fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
     route_on(state, facts, name, value, shift, &state.sections);
+}
+
+/// The Emby list's scroll facts the assertions read.
+fn scroll_facts(state: &LibraryState) -> String {
+    let scroll = *state.scrolls.emby.peek();
+    format!(
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
+    )
 }
 
 /// The plain mode's name-sorted rows: two `A` movies and one `B` movie.
@@ -265,12 +298,8 @@ fn emby_content(
     (list, detail)
 }
 
-/// Carry the Emby content and paint the list's cursor.
-fn carry_emby(
-    state: &LibraryState,
-    content: (GuiLibraryList, GuiLibraryDetail),
-    cursor: Option<&str>,
-) {
+/// Carry the Emby content and start the list's interaction state over.
+fn carry_emby(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail)) {
     let (list, detail) = content;
     let batch = GuiSectionBatch {
         library_list: Some(crate::bridge::sections::GuiSection {
@@ -287,30 +316,29 @@ fn carry_emby(
     sections.apply_batch(&batch);
     let mut emby_ui = state.emby_ui;
     emby_ui.with_mut(|ui| {
-        ui.cursor = cursor.map(str::to_owned);
         ui.pill_select = None;
         ui.filter.clear();
     });
 }
 
-/// The filter and cursor facts the assertions read.
+/// The filter facts the assertions read.
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let emby = state.emby_ui.peek().clone();
     format!(
-        "filter_open={} emby_filter={:?} pill_select={:?} cursor={:?}",
-        ui.filter_open, emby.filter, emby.pill_select, emby.cursor,
+        "filter_open={} emby_filter={:?} pill_select={:?}",
+        ui.filter_open, emby.filter, emby.pill_select,
     )
 }
 
-// Enter on the cursor row plays it.
+// Enter on the hovered row plays it.
 #[test]
-fn enter_on_the_cursor_row_plays_it() {
+fn enter_on_the_hovered_row_plays_it() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("m2"));
+        carry_emby(state, content.clone());
 
-        route(state, facts, "enter", "Enter", false);
+        route_on_row(state, facts, "enter", "Enter", "m2");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -328,9 +356,9 @@ fn enter_on_the_cursor_row_plays_it() {
 fn enter_on_a_collection_row_plays_it() {
     let content = emby_content(true, &feed_rows(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("f1"));
+        carry_emby(state, content.clone());
 
-        route(state, facts, "enter", "Enter", false);
+        route_on_row(state, facts, "enter", "Enter", "f1");
     });
     assert_eq!(facts, ["enter=Handled"]);
     assert_eq!(
@@ -342,15 +370,15 @@ fn enter_on_a_collection_row_plays_it() {
     );
 }
 
-// `n` and `a` play the cursor row next and queue it.
+// `n` and `a` play the hovered row next and queue it.
 #[test]
-fn n_and_a_play_the_cursor_row_next_and_queue_it() {
+fn n_and_a_play_the_hovered_row_next_and_queue_it() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("m1"));
+        carry_emby(state, content.clone());
 
-        route(state, facts, "n", "n", false);
-        route(state, facts, "a", "a", false);
+        route_on_row(state, facts, "n", "n", "m1");
+        route_on_row(state, facts, "a", "a", "m1");
     });
     assert_eq!(facts, ["n=Handled", "a=Handled"]);
     assert_eq!(
@@ -368,18 +396,54 @@ fn n_and_a_play_the_cursor_row_next_and_queue_it() {
     );
 }
 
-// A movement key moves the Emby cursor and sends no key.
+// Enter, `n`, and `a` with the pointer over no Emby row do nothing (design D2,
+// step 3): the key is the window's, and it sends no command.
 #[test]
-fn a_movement_key_moves_the_emby_cursor_and_sends_no_key() {
+fn enter_n_and_a_with_no_hovered_row_send_nothing() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("m1"));
+        carry_emby(state, content.clone());
 
-        route(state, facts, "down", "ArrowDown", false);
-        facts.lock().expect("facts").push(ui_facts(state));
+        route(state, facts, "enter", "Enter", false);
+        route(state, facts, "n", "n", false);
+        route(state, facts, "a", "a", false);
+    });
+    assert_eq!(facts, ["enter=Handled", "n=Handled", "a=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Down over the Emby list scrolls the list by the height of the row at the top
+// edge (design D6) and selects nothing.
+#[test]
+fn down_over_the_emby_list_scrolls_it_by_one_row() {
+    let content = emby_content(false, &movies(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_emby(state, content.clone());
+        state.measure_emby_list(40.0);
+
+        route_on_row(state, facts, "down", "ArrowDown", "m1");
+        facts.lock().expect("facts").push(scroll_facts(state));
     });
     assert_eq!(facts[0], "down=Handled");
-    assert!(facts[1].contains("cursor=Some(\"m2\")"));
+    // The letter heading covers the list's top edge, so the step is its 24 px.
+    assert_eq!(facts[1], "top=24 viewport=40");
+    assert_eq!(commands(&rx), []);
+}
+
+// The movement keys are the core's while the pointer rests off the Emby list
+// (design D2, step 4): nothing scrolls.
+#[test]
+fn down_off_the_emby_list_is_the_cores_key() {
+    let content = emby_content(false, &movies(), None);
+    let (facts, rx) = run(move |state, facts| {
+        carry_emby(state, content.clone());
+        state.measure_emby_list(40.0);
+
+        route(state, facts, "down", "ArrowDown", false);
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Core(None)");
+    assert_eq!(facts[1], "top=0 viewport=40");
     assert_eq!(commands(&rx), []);
 }
 
@@ -390,7 +454,7 @@ fn a_movement_key_moves_the_emby_cursor_and_sends_no_key() {
 fn slash_opens_the_emby_filter_and_sends_no_key() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("m1"));
+        carry_emby(state, content.clone());
 
         route(state, facts, "slash", "/", false);
         facts.lock().expect("facts").push(ui_facts(state));
@@ -407,7 +471,7 @@ fn slash_opens_the_emby_filter_and_sends_no_key() {
 fn esc_closes_the_emby_filter_and_drops_its_text() {
     let content = emby_content(false, &movies(), None);
     let (facts, rx) = run(move |state, facts| {
-        carry_emby(state, content.clone(), Some("m1"));
+        carry_emby(state, content.clone());
         let mut emby_ui = state.emby_ui;
         emby_ui.with_mut(|ui| ui.filter = "m1".to_owned());
         let mut ui = state.ui;

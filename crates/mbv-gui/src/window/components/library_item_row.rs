@@ -67,7 +67,10 @@ pub struct LibraryItemRowProps {
     pub title_color: String,
     /// The row's painted fill, when the cursor or the selection marks it.
     pub background: Option<String>,
-    /// Whether the cursor rests on the row.
+    /// Whether the cursor rests on the row: a destination that acts on the row
+    /// the pointer marks keeps no cursor, so it names none
+    /// (`gui-pointer-target-interaction` D6).
+    #[props(default)]
     pub cursor: bool,
     /// Whether the selection marks the row.
     pub selected: bool,
