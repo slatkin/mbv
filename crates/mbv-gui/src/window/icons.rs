@@ -204,6 +204,19 @@ pub fn ChevronDown(props: IconProps) -> Element {
     )
 }
 
+/// The Lucide `chevron-left` icon.
+#[component]
+pub fn ChevronLeft(props: IconProps) -> Element {
+    icon_shell(
+        "chevron-left",
+        &[],
+        &props,
+        rsx! {
+            path { d: "m15 18-6-6 6-6" }
+        },
+    )
+}
+
 /// The Lucide `chevron-right` icon.
 #[component]
 pub fn ChevronRight(props: IconProps) -> Element {

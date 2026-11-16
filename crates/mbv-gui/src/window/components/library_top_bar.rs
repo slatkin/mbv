@@ -26,7 +26,9 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame, GuiSearchRowFrame};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::settings::GuiSettingsCommand;
-use crate::window::icons::Settings;
+use crate::window::icons::{ChevronLeft, ChevronRight, Settings};
+use crate::window::input::f32_from_f64;
+use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
 use crate::window::theme::{canvas_var, role_var};
 use crate::window::truncate::{TextStyle, Truncate};
@@ -123,6 +125,55 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
         highlight_library.set_search_highlight(frame.results.first().map(|row| row.id.clone()));
     }));
 
+    // The tab strip's overflow window: the strip's measured width, and the
+    // first painted tab the chevrons step. The strip's basis is zero, so its
+    // width never depends on the tabs it holds.
+    let mut strip_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let mut strip_width = use_signal(|| 0.0_f32);
+    let mut first_tab = use_signal(|| 0_usize);
+    let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
+    use_effect(move || {
+        // Reading the epoch re-measures the strip on every layout change.
+        let _epoch = epoch.as_ref().map(Signal::cloned);
+        let mounted = strip_mounted.cloned();
+        spawn(async move {
+            let Some(event) = mounted else {
+                return;
+            };
+            let Ok(rect) = event.get_client_rect().await else {
+                return;
+            };
+            let width = f32_from_f64(rect.width());
+            if (*strip_width.peek() - width).abs() > 0.5 {
+                strip_width.set(width);
+            }
+        });
+    });
+    // A new current tab, a new tab list, or a new strip width scrolls the
+    // current tab into view. The held first tab reads through `peek`, so a
+    // chevron press is never undone by this effect.
+    use_effect(use_reactive(
+        (&props.tabs, &props.current_tab),
+        move |(tabs, current)| {
+            let width = strip_width.cloned();
+            let Some(current) =
+                current.and_then(|position| tabs.iter().position(|tab| tab.position == position))
+            else {
+                return;
+            };
+            let start =
+                tabs::start_showing(&tabs::tab_widths(&tabs), current, *first_tab.peek(), width);
+            if start != *first_tab.peek() && width > 0.0 {
+                first_tab.set(start);
+            }
+        },
+    ));
+    let tab_window = tabs::tab_window(
+        &tabs::tab_widths(&props.tabs),
+        first_tab.cloned(),
+        strip_width.cloned(),
+    );
+
     // The current tab's run: the tab bar's underline role in both strokes.
     let underline = role_var(GuiRole::TabSelectedUnderline);
     // The Search field's text and the held highlight, read once per render.
@@ -176,39 +227,70 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                     path { d: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" }
                 }
             }
-            for tab in &props.tabs {
-                {
-                    let current = Some(tab.position) == props.current_tab;
-                    let position = tab.position;
-                    let label = tab.label.clone();
-                    let weight = if current { "700" } else { "500" };
-                    let color = if current {
-                        canvas_var("heading")
-                    } else {
-                        canvas_var("muted")
-                    };
-                    let tab_library = library.clone();
-                    rsx! {
-                        button {
-                            key: "{position}",
-                            "type": "button",
-                            class: "flex items-center uppercase",
-                            style: "height: 56px; padding: 0 12px; font-size: 14px; font-weight: {weight}; letter-spacing: 0.06em; color: {color};",
-                            "aria-current": current.then_some("page"),
-                            "data-library-tab": "{position}",
-                            onclick: move |_| open_destination(&tab_library, position),
-                            if current {
-                                // The current tab's run: the canvas's two
-                                // underline strokes around the label.
-                                span {
-                                    class: "block",
-                                    style: "border-top: 2px solid {underline}; border-bottom: 2px solid {underline}; padding: 3px 1px 2px; line-height: 1;",
+            // The tab strip: the tabs that fit, with a chevron at each edge
+            // that hides some. The chevrons step the first painted tab by
+            // one, as the TUI's tab bar scrolls its anchor.
+            div {
+                class: "flex items-center",
+                style: "flex: 1 1 0; min-width: 120px; height: 56px; gap: 2px; overflow: hidden;",
+                "data-library-tabs": "",
+                onmounted: move |event: Event<MountedData>| strip_mounted.set(Some(event)),
+                if tab_window.left {
+                    button {
+                        "type": "button",
+                        class: "flex flex-none items-center justify-center",
+                        style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
+                        "aria-label": "Previous tabs",
+                        "data-library-tabs-left": "",
+                        onclick: move |_| first_tab.set(tab_window.start.saturating_sub(1)),
+                        ChevronLeft { size: 16 }
+                    }
+                }
+                for tab in &props.tabs[tab_window.start..tab_window.end] {
+                    {
+                        let current = Some(tab.position) == props.current_tab;
+                        let position = tab.position;
+                        let label = tab.label.clone();
+                        let weight = if current { "700" } else { "500" };
+                        let color = if current {
+                            canvas_var("heading")
+                        } else {
+                            canvas_var("muted")
+                        };
+                        let tab_library = library.clone();
+                        rsx! {
+                            button {
+                                key: "{position}",
+                                "type": "button",
+                                class: "flex items-center uppercase",
+                                style: "height: 56px; padding: 0 12px; font-size: 14px; font-weight: {weight}; letter-spacing: 0.06em; color: {color};",
+                                "aria-current": current.then_some("page"),
+                                "data-library-tab": "{position}",
+                                onclick: move |_| open_destination(&tab_library, position),
+                                if current {
+                                    // The current tab's run: the canvas's two
+                                    // underline strokes around the label.
+                                    span {
+                                        class: "block",
+                                        style: "border-top: 2px solid {underline}; border-bottom: 2px solid {underline}; padding: 3px 1px 2px; line-height: 1;",
+                                        "{label}"
+                                    }
+                                } else {
                                     "{label}"
                                 }
-                            } else {
-                                "{label}"
                             }
                         }
+                    }
+                }
+                if tab_window.right {
+                    button {
+                        "type": "button",
+                        class: "flex flex-none items-center justify-center",
+                        style: "width: 24px; height: 44px; border: 0; background: none; color: var(--canvas-muted); cursor: pointer;",
+                        "aria-label": "Next tabs",
+                        "data-library-tabs-right": "",
+                        onclick: move |_| first_tab.set(tab_window.start + 1),
+                        ChevronRight { size: 16 }
                     }
                 }
             }
@@ -216,8 +298,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             // router owns every key while it holds the keyboard, so the
             // field never answers a key itself.
             div {
-                class: "relative flex-none",
-                style: "margin-left: auto; width: 220px;",
+                class: "relative",
+                style: "margin-left: auto; flex: 0 1 220px; min-width: 0;",
                 "data-library-search": "",
                 input {
                     "type": "text",
@@ -345,6 +427,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
         }
     }
 }
+
+mod tabs;
 
 #[cfg(test)]
 mod tests;

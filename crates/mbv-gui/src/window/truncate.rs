@@ -143,6 +143,20 @@ const FACE_FILES: &[&str] = &[
     "jetbrains-mono-latin-600-normal.woff2",
 ];
 
+/// The width of `text` at `style`, in CSS pixels, on one line: the measure
+/// the fit and the tab bar's overflow window share.
+///
+/// # Panics
+/// Panics when the process measure is poisoned — only possible if a caller
+/// panicked while holding it.
+#[must_use]
+pub fn text_width(text: &str, style: &TextStyle) -> f32 {
+    MEASURE
+        .lock()
+        .expect("the measure is not poisoned")
+        .width(text, style)
+}
+
 /// The longest text that fits `width` CSS pixels at `style` (D12): the text
 /// unchanged when it fits, else the longest grapheme-cluster prefix whose
 /// width plus the ellipsis width fits, ending in `…` (U+2026). A binary
