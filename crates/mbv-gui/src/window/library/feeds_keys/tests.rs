@@ -17,8 +17,9 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPillFrame,
+    GuiArtShapeFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame,
+    GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPillFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::library::GuiFeedPill;
@@ -170,6 +171,24 @@ fn route_row(state: &LibraryState, facts: &Facts, name: &str, value: &str, row: 
     );
 }
 
+/// Route one keydown with the pointer over the Hero's entry Workspace,
+/// resting on `row` when one is named.
+fn route_workspace(
+    state: &LibraryState,
+    facts: &Facts,
+    name: &str,
+    value: &str,
+    row: Option<&str>,
+) {
+    route_pointer(
+        state,
+        facts,
+        name,
+        value,
+        &pointer_on(PointerList::Workspace, row),
+    );
+}
+
 /// Route one keydown with the pointer over the Library column, on no list.
 fn route(state: &LibraryState, facts: &Facts, name: &str, value: &str, shift: bool) {
     let outcome = super::super::keys::route_library_key(
@@ -248,6 +267,21 @@ fn pills(selected: PillSelection) -> Vec<GuiPillFrame<GuiFeedPill>> {
     ]
 }
 
+/// A Feeds Hero over the feed `parent`, with its entries in the list band.
+fn feeds_hero(parent: &str) -> GuiFeedsHeroFrame {
+    GuiFeedsHeroFrame {
+        title: "Entry A".to_owned(),
+        parent: Some(parent.to_owned()),
+        meta_rows: vec![vec![GuiMetaSegmentFrame {
+            text: "0 h 54 m".to_owned(),
+            kind: GuiMetaKindFrame::Time,
+        }]],
+        duration_row: Some(0),
+        progress_row: None,
+        art_shape: GuiArtShapeFrame::Square,
+    }
+}
+
 /// The pill selection the fixtures name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PillSelection {
@@ -264,7 +298,23 @@ fn feeds_content(
     rows: &[GuiEntryRowFrame],
     hero: Option<GuiFeedsHeroFrame>,
 ) -> (GuiLibraryList, GuiLibraryDetail) {
-    let selected = rows.first().map(|row| row.id.clone());
+    feeds_content_selected(
+        rows.first().map(|row| row.id.as_str()),
+        pill_selection,
+        rows,
+        hero,
+    )
+}
+
+/// The carried content with `selected` as the core's selection, which the
+/// Hero's Workspace never reads — the keys act on the hovered row.
+fn feeds_content_selected(
+    selected: Option<&str>,
+    pill_selection: PillSelection,
+    rows: &[GuiEntryRowFrame],
+    hero: Option<GuiFeedsHeroFrame>,
+) -> (GuiLibraryList, GuiLibraryDetail) {
+    let selected = selected.map(str::to_owned);
     let list = GuiLibraryList {
         tabs: vec![
             GuiLibraryTabFrame {
@@ -470,5 +520,110 @@ fn esc_closes_the_feeds_filter_and_drops_its_text() {
     assert_eq!(facts[0], "esc=Handled");
     assert!(facts[1].contains("filter_open=false"));
     assert!(facts[1].contains("filter=\"\""));
+    assert_eq!(commands(&rx), []);
+}
+
+// Enter on the hovered Workspace entry plays that entry (design D2): the Hero's
+// list band carries the feed's entries, and their pointer marker is the entry's
+// stable id.
+#[test]
+fn enter_on_the_hovered_workspace_entry_plays_it() {
+    let content = feeds_content_selected(
+        Some("s2::e2"),
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "enter", "Enter", Some("s1::e1"));
+    });
+    assert_eq!(facts, ["enter=Handled"]);
+    assert_eq!(
+        commands(&rx),
+        [mbv::GuiLibraryCommand::FeedsPlay {
+            item_id: "s1::e1".to_owned(),
+        }]
+    );
+}
+
+// `a` on the hovered Workspace entry queues that entry, not the core's
+// selected one (design D2).
+#[test]
+fn a_on_the_hovered_workspace_entry_queues_it_not_the_selected_one() {
+    let content = feeds_content_selected(
+        Some("s2::e2"),
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "a", "a", Some("s1::e1"));
+    });
+    assert_eq!(facts, ["a=Handled"]);
+    assert_eq!(
+        commands(&rx),
+        [mbv::GuiLibraryCommand::FeedsQueue {
+            item_id: "s1::e1".to_owned(),
+        }]
+    );
+}
+
+// Enter on a marker that names no entry the Hero paints sends nothing: another
+// feed's entry, and no row at all.
+#[test]
+fn enter_on_no_painted_workspace_entry_sends_nothing() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "enter", "Enter", Some("s2::e2"));
+        route_workspace(state, facts, "enter", "Enter", None);
+    });
+    assert_eq!(facts, ["enter=Handled", "enter=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// Feeds has no play-next: `n` on the Workspace is consumed and sends nothing.
+#[test]
+fn n_on_the_workspace_is_consumed_without_a_call() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "n", "n", Some("s1::e1"));
+    });
+    assert_eq!(facts, ["n=Handled"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// A movement key on the Workspace moves no row and sends no key: the Workspace
+// keeps no cursor (design D6).
+#[test]
+fn a_movement_key_on_the_workspace_moves_no_row() {
+    let content = feeds_content(
+        PillSelection::Latest,
+        &entries(),
+        Some(feeds_hero("Sub One")),
+    );
+    let (facts, rx) = run(move |state, facts| {
+        carry_feeds(state, content.clone());
+
+        route_workspace(state, facts, "down", "ArrowDown", Some("s1::e1"));
+        facts.lock().expect("facts").push(scroll_facts(state));
+    });
+    assert_eq!(facts[0], "down=Handled");
+    assert_eq!(facts[1], "top=0 viewport=0");
     assert_eq!(commands(&rx), []);
 }

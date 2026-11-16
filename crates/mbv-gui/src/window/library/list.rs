@@ -42,7 +42,7 @@ pub struct RowBase {
 }
 
 /// One painted row of the canvas tree (design D7). A letter heading is
-/// structural: the cursor never rests on it.
+/// structural: the pointer marker never names it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LibraryRow {
     /// A letter heading above the first artist of the letter.
@@ -111,8 +111,8 @@ impl LibraryRow {
         }
     }
 
-    /// Whether the cursor may rest on the row: a letter heading is
-    /// structural and never carries it.
+    /// Whether a key may act on the row: a letter heading is structural and
+    /// never carries the pointer marker.
     #[must_use]
     pub fn selectable(&self) -> bool {
         !matches!(self, LibraryRow::Letter(_))
@@ -513,7 +513,7 @@ pub fn build_flat_rows_with_kind<'a, Item: FlatItem, Kind: Clone>(
         .collect()
 }
 
-/// A cursor movement the design's keys name (design D3): row by row for Up and
+/// A list movement the design's keys name (design D3): row by row for Up and
 /// Down, one viewport for Page Up and Page Down, and the list's ends for Home
 /// and End.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

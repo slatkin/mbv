@@ -30,9 +30,9 @@ fn with_id(ids: &mut Vec<String>, id: &str, present: bool) {
 impl LibraryState {
     /// The row model under one interaction state (design D7): the carried
     /// union, the open nodes, and the filter text. The union borrows from the
-    /// section store's own storage — a cursor or scroll step copies none of it
-    /// — and the memo keys it on the section's revision, so its hit test never
-    /// compares the union (design D6).
+    /// section store's own storage — a scroll step copies none of it — and the
+    /// memo keys it on the section's revision, so its hit test never compares
+    /// the union (design D6).
     #[must_use]
     pub fn rows_of(&self, ui: &LibraryUiState) -> Arc<[LibraryRow]> {
         let list = self.sections.library_list.peek();
@@ -73,9 +73,9 @@ impl LibraryState {
         }
     }
 
-    /// The item an action on the cursor names (design D3, D8): an artist row's
-    /// Service item, an album's own id, and a track's id, so the play-next and
-    /// add-to-queue keys act on what the cursor rests on.
+    /// The item an action on the hovered row names (design D3, D8): an artist
+    /// row's Service item, an album's own id, and a track's id, so the
+    /// play-next and add-to-queue keys act on what the pointer marks.
     #[must_use]
     pub fn action_item_id(row: &LibraryRow) -> Option<String> {
         match row {

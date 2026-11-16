@@ -6,6 +6,10 @@
 //! decides the control a key acts on: the list, or the Hero — which carries no
 //! Workspace and no cursor.
 //!
+//! Enter, `n`, and `a` act on the row the pointer marks, and the Hero's entry
+//! Workspace has its own router, so Enter plays the entry the pointer marks
+//! there and `a` queues it (design D2, D6).
+//!
 //! The routing itself is the shared panel key handler's
 //! ([`super::keys_shared`], row 7C.2): the movements and Enter never reach
 //! the core, Esc's overlay and menu handling runs before this, `/` opens the
@@ -16,12 +20,12 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::keys::DomKey;
+use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget};
 
 use super::feeds_list::FeedsItemRow;
-use super::keys_shared::{PanelKeys, route_panel_list_key};
+use super::keys_shared::{PanelKeys, is_list_and_hero_key, route_panel_list_key};
 use super::list::ListMove;
 use super::parts::{library_feeds_detail, library_feeds_list};
 use super::state::LibraryState;
@@ -98,8 +102,57 @@ impl PanelKeys for FeedsKeys<'_> {
         self.state.queue_feeds_row(item_id);
     }
 
+    fn route_hero(
+        &self,
+        key: &DomKey,
+        _frame: &FeedsFrame,
+        pointer: &PointerTarget,
+        target: KeyTarget,
+    ) -> Option<KeyOutcome> {
+        Some(route_workspace_key(self.state, key, pointer, target))
+    }
+
     // A feed entry has no play-next: the shared default consumes `n` and
     // sends nothing.
+}
+
+/// Route a key to the Hero's entry Workspace (design D2, D6): Enter plays the
+/// entry the pointer marks and `a` queues it. No movement key moves a row,
+/// because the Workspace keeps no cursor, and `n` is consumed because Feeds has
+/// no play-next.
+fn route_workspace_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+    target: KeyTarget,
+) -> KeyOutcome {
+    match key.key.as_str() {
+        "Enter" | "a" => {
+            route_workspace_item_key(state, key, pointer);
+            KeyOutcome::Handled
+        }
+        "n" => KeyOutcome::Handled,
+        _ if is_list_and_hero_key(&key.key) => KeyOutcome::Handled,
+        _ => KeyOutcome::Core(target),
+    }
+}
+
+/// Run Enter or `a` against the Workspace entry the pointer marks (design D2):
+/// the marker carries the entry's stable id, and a marker that names no painted
+/// entry sends nothing.
+fn route_workspace_item_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) {
+    let Some(entry) = pointer
+        .row
+        .as_deref()
+        .and_then(|row| state.feeds_hero_row_at(row))
+    else {
+        return;
+    };
+    if key.key == "a" {
+        state.queue_feeds_row(&entry.id);
+        return;
+    }
+    state.play_feeds_row(&entry.id);
 }
 
 /// Route a key to the Feeds keys (row 11.1): the shared handler over the

@@ -22,11 +22,13 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiEntryRowFrame;
 use crate::bridge::library::{GuiFeedPill, GuiLibraryCommand};
 use crate::window::library::feeds_list::FeedsItemRow;
 use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_feeds_list;
 
+use super::parts::library_feeds_detail;
 use super::pill_list::PillListUiState;
 use super::scroll::set_scroll_top;
 use super::state::LibraryState;
@@ -75,6 +77,26 @@ impl LibraryState {
         self.feeds_rows()
             .iter()
             .find(|row| row.id == row_id)
+            .cloned()
+    }
+
+    /// The Hero's feed entry the pointer's marker names (design D1, D2): the
+    /// Hero's list band paints the carried rows whose subscription is the
+    /// selected feed's, and the marker carries the entry's id, so a stale or
+    /// foreign id names no entry. `None` while the Hero paints no such entry.
+    #[must_use]
+    pub fn feeds_hero_row_at(&self, row_id: &str) -> Option<GuiEntryRowFrame> {
+        let detail_section = self.sections.library_detail.peek();
+        let parent = library_feeds_detail(detail_section.as_deref())?
+            .hero
+            .as_ref()?
+            .parent
+            .clone()?;
+        let list_section = self.sections.library_list.peek();
+        let rows = library_feeds_list(list_section.as_deref())?;
+        rows.rows
+            .iter()
+            .find(|row| row.id == row_id && row.subtitle.as_deref() == Some(parent.as_str()))
             .cloned()
     }
 
