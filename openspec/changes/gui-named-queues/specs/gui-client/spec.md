@@ -7,7 +7,7 @@
 
 ### Requirement: The queue shows a row menu and drag reorder
 
-The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Rows SHALL have a fixed height of 30 px and SHALL carry the canvas's one-line row: its queue ordinal, its title line, and its progress where the state has one. A row SHALL carry no right-column value. The shown queue's start slot SHALL be marked as playing while its queue plays and as the start of playback while its queue is stopped or resting, and the two marks SHALL be distinct. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
+The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Rows SHALL have a fixed height of 30 px and SHALL carry the canvas's one-line row: its queue ordinal, its title line, and its progress where the state has one. A row SHALL carry no right-column value. The shown queue's start slot SHALL be marked as playing while its queue plays and as the start of playback while its queue is stopped or resting, and the two marks SHALL be distinct. A shown queue whose owner reports no start slot, such as a peer without named queues, SHALL carry the playing mark on its observed active slot, and no start mark. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
 
 #### Scenario: Rows show their state
 
@@ -31,6 +31,12 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 - **GIVEN** the shown queue is stopped with its third slot as its start slot
 - **WHEN** the queue rows paint
 - **THEN** the third row carries the start mark, and no row carries the playing mark
+
+#### Scenario: A peer queue marks its playing row
+
+- **GIVEN** the GUI Client shows a peer that reports no start slot and plays its second slot
+- **WHEN** the queue rows paint
+- **THEN** the second row carries the playing mark
 
 #### Scenario: Play turns the start mark into the playing mark
 

@@ -135,6 +135,9 @@ command-rejection path.
 
 ### D6. Persistence: one new state file, slot ids kept
 
+A new queue's name is `Queue N` with the lowest N from 2 up that no queue named `Queue N` uses,
+so the first new queue beside `Default` is `Queue 2` and a freed number is used again.
+
 `named_queues_state.json` in the state directory (`mbv_config::named_queues_state_path()`) holds
 `{ current, next_queue_id, queues: [{ id, name, source, lineage, start_slot, slots: [{ slot_id,
 item }] }] }`. Items go through the same Service-position clearing that
@@ -142,8 +145,8 @@ item }] }] }`. Items go through the same Service-position clearing that
 (`spawn_queue_persistence_worker`) writes the whole file atomically on each dirty tick and at
 shutdown.
 
-On restore, each `PlaybackQueue` is built with its saved slot ids, and `next_slot_id` starts above
-the largest id (the existing adopt rule in `mbv-queue`). When the new file is absent and
+On restore, each `PlaybackQueue` is built with its saved slot ids through the existing
+`PlaybackQueue::from_slot_items`, which already sets `next_slot_id` above the largest id. When the new file is absent and
 `stay_alive_queue_state.json` exists, the Owner loads it as one current queue named `Default` with
 fresh slot ids, writes the new file, and leaves the old file untouched.
 
@@ -158,7 +161,9 @@ ADR 0034's single-link rule stays true; only the choice of link changes.
 The local link holds two views: the existing `local_view` (the current queue, from
 `UnifiedQueueState`) and a new `shown_resting: Option<(NamedQueueId, QueueView)>` (from
 `NamedQueueSnapshot`). `displayed_queue()` returns the resting view when the shown local queue is
-not current. Each local edit that the GUI sends carries the shown queue id.
+not current. Each local edit that the GUI sends carries the shown queue id. Each undo entry on the
+local undo stack records the Named queue it edited, and `undo_last_queue_edit` sends the inverse
+edit to that queue, whichever entry is shown at the time.
 
 A connect from the target chooser sets `Peer`. A disconnect or a lost link sets
 `Local(current)`. Showing an entry clears the Queue filter and the marks and puts the active row on
@@ -191,7 +196,9 @@ the start slot (spec "Showing an entry resets the Queue active row and marks").
 - **Start mark:** `GuiQueue` gains `start: Option<u64>` and `playing: bool`, projected from the
   snapshot's `start_slot` and the playback state. The row paints a filled mark when it is the
   start slot and the queue plays, and an outlined mark when it is the start slot and the queue is
-  stopped or resting.
+  stopped or resting. When the snapshot carries no `start_slot` (a peer without `named-queues`),
+  `start` falls back to the observed active slot, which keeps today's playing mark on a peer
+  queue and gives it no outlined mark.
 - **Footer:** `GuiQueueSummary` gains `total_secs: i64`, `total_partial: bool`,
   `marked_secs: Option<i64>`, and `marked_partial: bool`, summed in
   `queue_summary_projection.rs` from `QueueItem::runtime_ticks` over every slot of the shown queue

@@ -80,13 +80,25 @@ A request to play a Named queue SHALL make it the current queue and SHALL start 
 
 ### Requirement: A Client creates and renames queues
 
-A Client SHALL be able to ask the Owner to create a Named queue and to rename a Named queue. A new queue SHALL be empty, SHALL rest, and SHALL take the name `Queue N` with the lowest number N that no queue uses. A rename SHALL accept any non-empty name after the Owner trims surrounding whitespace, and two queues MAY share a name. The Owner SHALL publish the result to every Client that negotiated named queues.
+A Client SHALL be able to ask the Owner to create a Named queue and to rename a Named queue. A new queue SHALL be empty, SHALL rest, and SHALL take the name `Queue N`, where N is the lowest number from 2 up that no queue named `Queue N` uses. A rename SHALL accept any non-empty name after the Owner trims surrounding whitespace, and two queues MAY share a name. The Owner SHALL publish the result to every Client that negotiated named queues.
 
 #### Scenario: A new queue is made
 
 - **GIVEN** the Owner holds `Default` and `Queue 2`
 - **WHEN** a Client asks for a new queue
 - **THEN** the Owner holds a third, empty, resting queue named `Queue 3`
+
+#### Scenario: The first new queue
+
+- **GIVEN** the Owner holds only `Default`
+- **WHEN** a Client asks for a new queue
+- **THEN** the new queue is named `Queue 2`
+
+#### Scenario: A freed number is used again
+
+- **GIVEN** the Owner holds `Default` and `Queue 3`
+- **WHEN** a Client asks for a new queue
+- **THEN** the new queue is named `Queue 2`
 
 #### Scenario: An empty name is refused
 
