@@ -425,10 +425,13 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                     // backdrop press and Esc close it (design D3), so a picked
                     // item never leaves an overlay no input dismisses; the
                     // card scrolls its own content and swallows the presses
-                    // that land on it.
+                    // that land on it. The overlay sits at `z-20`, above
+                    // the root's Queue divider (`z-10`), whose band overlaps
+                    // the Library column's edge by 3 px: a press there closes
+                    // the overlay, it never starts a Queue resize.
                     div {
                         "data-library-region": "heroOverlay",
-                        class: "absolute inset-0 z-10 flex",
+                        class: "absolute inset-0 z-20 flex",
                         style: "background: rgba(0, 0, 0, 0.45);",
                         button {
                             "type": "button",

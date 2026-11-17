@@ -215,6 +215,20 @@ pub(crate) fn mini_shows_queue(arrangement: GuiArrangement) -> bool {
     arrangement == GuiArrangement::Mini
 }
 
+/// The Queue column's class for its one root slot. Two columns pin its width;
+/// a queue-only expanded panel fills the window; a queue-only collapsed rail
+/// fills the window's height but end-aligns its 72 px to the right edge.
+#[must_use]
+fn queue_column_class(two_columns: bool, collapsed: bool) -> &'static str {
+    if two_columns {
+        "flex h-full min-h-0 flex-col flex-none"
+    } else if collapsed {
+        "flex h-full min-h-0 flex-col flex-1 items-end"
+    } else {
+        "flex h-full min-h-0 flex-col flex-1"
+    }
+}
+
 /// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
 /// port of `reset.ts`): a changed value resets the panel widths, the Library
 /// interaction stores, and the Settings interaction state on the same fact.
@@ -548,11 +562,7 @@ pub fn App() -> Element {
                         }
                         if queue_visible {
                             div {
-                                class: if two_columns {
-                                    "flex h-full min-h-0 flex-col flex-none"
-                                } else {
-                                    "flex h-full min-h-0 flex-col flex-1"
-                                },
+                                class: queue_column_class(two_columns, panel.collapsed),
                                 "data-queue-column": "",
                                 style: if two_columns {
                                     format!("width: {}px;", widths.queue)
