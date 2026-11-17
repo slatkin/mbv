@@ -246,23 +246,14 @@ impl QueueChooserState {
         // leave the cursor past its end: it clamps before it is read.
         self.cursor = self.cursor.min(entries.len().saturating_sub(1));
         match key.code {
-            Key::Up if key.modifiers.is_empty() => {
-                move_overlay_cursor(&mut self.cursor, false, entries.len());
-                OverlayKeyOutcome::Consumed
-            }
-            Key::Down if key.modifiers.is_empty() => {
-                move_overlay_cursor(&mut self.cursor, true, entries.len());
-                OverlayKeyOutcome::Consumed
-            }
-            Key::Enter if key.modifiers.is_empty() => OverlayKeyOutcome::Execute(self.cursor),
             Key::Char('r') if key.modifiers.is_empty() => {
                 self.open_rename_draft(entries);
                 OverlayKeyOutcome::Consumed
             }
             // The spec binds `t` to open and close the chooser, and the
             // toggle it opened with is that same chord.
-            Key::Char('t') | Key::Esc if key.modifiers.is_empty() => OverlayKeyOutcome::Dismiss,
-            _ => OverlayKeyOutcome::Consumed,
+            Key::Char('t') if key.modifiers.is_empty() => OverlayKeyOutcome::Dismiss,
+            _ => apply_overlay_list_key(&mut self.cursor, key, entries.len()),
         }
     }
 

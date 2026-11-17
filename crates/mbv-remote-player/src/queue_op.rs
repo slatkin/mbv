@@ -75,7 +75,7 @@ impl RemotePlayer {
     ) -> Result<Option<QueueOpId>, RemotePlayerError> {
         let op = self
             .supports_answered_queue_ops()
-            .then(|| QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed)));
+            .then(|| self.mint_queue_op_id());
         let command = self.queue_op_command(operation, queue, op)?;
         if !self.send_ctrl_cmd(command) {
             return Err(RemotePlayerError::queue_operation(
@@ -83,6 +83,11 @@ impl RemotePlayer {
             ));
         }
         Ok(op)
+    }
+
+    /// The next correlation id of the shared queue operation counter.
+    pub(crate) fn mint_queue_op_id(&self) -> QueueOpId {
+        QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed))
     }
 
     /// The ctrl command one [`QueueOp`] sends: the wire vocabulary this crate

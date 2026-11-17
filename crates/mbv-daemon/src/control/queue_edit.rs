@@ -26,7 +26,7 @@ fn note_start_slot_after_removal(
 }
 
 /// The position `removed` occupies when it is the queue's start slot.
-fn start_slot_position(
+pub(super) fn start_slot_position(
     queue: &PlaybackQueue,
     start_slot: Option<QueueSlotId>,
     removed: QueueSlotId,

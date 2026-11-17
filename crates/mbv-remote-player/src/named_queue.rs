@@ -3,8 +3,6 @@
 //! owner is authoritative for the queues, so each command is a request the
 //! owner applies and answers.
 
-use std::sync::atomic::Ordering;
-
 use mbv_ctrl::{CtrlCmd, QueueOpId};
 use mbv_queue::NamedQueueId;
 
@@ -22,13 +20,7 @@ impl RemotePlayer {
     /// Returns [`RemotePlayerError::queue_operation`] when the command could
     /// not reach the owner, because the connection is gone.
     pub fn send_named_queue_create(&self) -> Result<QueueOpId, RemotePlayerError> {
-        let op = QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed));
-        if !self.send_ctrl_cmd(CtrlCmd::NamedQueueCreate { op }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send the named queue create to the Player owner",
-            ));
-        }
-        Ok(op)
+        self.send_named_queue_cmd("create", |op| CtrlCmd::NamedQueueCreate { op })
     }
 
     /// Close one Named queue (design D3, D8 of `gui-named-queues`): the close
@@ -44,13 +36,7 @@ impl RemotePlayer {
         &self,
         queue: NamedQueueId,
     ) -> Result<QueueOpId, RemotePlayerError> {
-        let op = QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed));
-        if !self.send_ctrl_cmd(CtrlCmd::NamedQueueClose { queue, op }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send the named queue close to the Player owner",
-            ));
-        }
-        Ok(op)
+        self.send_named_queue_cmd("close", |op| CtrlCmd::NamedQueueClose { queue, op })
     }
 
     /// Rename one Named queue (design D3, D8 of `gui-named-queues`): the Queue
@@ -67,11 +53,21 @@ impl RemotePlayer {
         queue: NamedQueueId,
         name: String,
     ) -> Result<QueueOpId, RemotePlayerError> {
-        let op = QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed));
-        if !self.send_ctrl_cmd(CtrlCmd::NamedQueueRename { queue, name, op }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send the named queue rename to the Player owner",
-            ));
+        self.send_named_queue_cmd("rename", |op| CtrlCmd::NamedQueueRename { queue, name, op })
+    }
+
+    /// Mints one op id from the queue operations' counter and sends the
+    /// command built over it, so the owner's answer correlates with it.
+    fn send_named_queue_cmd(
+        &self,
+        what: &str,
+        build: impl FnOnce(QueueOpId) -> CtrlCmd,
+    ) -> Result<QueueOpId, RemotePlayerError> {
+        let op = self.mint_queue_op_id();
+        if !self.send_ctrl_cmd(build(op)) {
+            return Err(RemotePlayerError::queue_operation(format!(
+                "could not send the named queue {what} to the Player owner"
+            )));
         }
         Ok(op)
     }

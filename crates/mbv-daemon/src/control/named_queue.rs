@@ -7,6 +7,7 @@
 //! stay on the Owner core, so an edit that names it (or names no queue) takes
 //! the existing queue path (design D5).
 
+use super::queue_edit::start_slot_position;
 use super::queue_setup::{install_replaced_queue, start_replaced_queue};
 use super::{
     CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PlaybackQueue, PlayerCommand,
@@ -170,7 +171,8 @@ pub(super) fn remove_slots(ctx: &mut CtrlContext<'_>, index: usize, slot_ids: Ve
     apply_edit(ctx, index, |resting| {
         for raw in slot_ids {
             let slot_id = QueueSlotId::from_raw(raw);
-            let start_slot_removed_at = start_slot_position(resting, slot_id);
+            let start_slot_removed_at =
+                start_slot_position(&resting.queue, resting.start_slot, slot_id);
             let removed = match resting.queue.remove_slot(slot_id) {
                 RemoveSlotResult::Removed(_) => true,
                 // A resting queue has no active slot, so this arm is not
@@ -190,15 +192,6 @@ pub(super) fn remove_slots(ctx: &mut CtrlContext<'_>, index: usize, slot_ids: Ve
     });
 }
 
-/// The position the slot `removed` occupies when it is the queue's start slot.
-fn start_slot_position(resting: &RestingNamedQueue, removed: QueueSlotId) -> Option<usize> {
-    if resting.start_slot == Some(removed) {
-        resting.queue.slot_index(removed)
-    } else {
-        None
-    }
-}
-
 /// Moves a slot of a resting queue to `to_index` (design D5).
 pub(super) fn move_slot(ctx: &mut CtrlContext<'_>, index: usize, slot_id: u64, to_index: usize) {
     apply_edit(ctx, index, |resting| {
@@ -216,27 +209,25 @@ pub(super) fn move_slot(ctx: &mut CtrlContext<'_>, index: usize, slot_id: u64, t
 /// pinned first: the permutation comes from the Owner's own rng, exactly as it
 /// does for the current queue.
 pub(super) fn shuffle(ctx: &mut CtrlContext<'_>, index: usize) {
-    if ctx.owner.named_queues.resting.get(index).is_none() {
-        reject(ctx, UNKNOWN_QUEUE);
-        return;
-    }
     let DaemonPlayerOwner {
         named_queues, rng, ..
     } = &mut *ctx.owner;
-    if let Some(resting) = named_queues.resting.get_mut(index) {
-        let order = resting.queue.shuffled_slot_order(rng, false);
-        // An order that matches the current one edits nothing: no revision and
-        // no reorder, the same rule the current queue's shuffle follows. The
-        // permutation is otherwise always the queue's own slots, so it applies.
-        let unchanged = resting
-            .queue
-            .slots()
-            .iter()
-            .map(|slot| slot.slot_id)
-            .eq(order.iter().copied());
-        if !unchanged {
-            let _ = resting.queue.reorder_slots(&order);
-        }
+    let Some(resting) = named_queues.resting.get_mut(index) else {
+        reject(ctx, UNKNOWN_QUEUE);
+        return;
+    };
+    let order = resting.queue.shuffled_slot_order(rng, false);
+    // An order that matches the current one edits nothing: no revision and
+    // no reorder, the same rule the current queue's shuffle follows. The
+    // permutation is otherwise always the queue's own slots, so it applies.
+    let unchanged = resting
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .eq(order.iter().copied());
+    if !unchanged {
+        let _ = resting.queue.reorder_slots(&order);
     }
     finish_edit(ctx, index);
 }
@@ -457,11 +448,7 @@ pub(super) fn play_resting(ctx: &mut CtrlContext<'_>, index: usize, start: Queue
         return;
     };
     let RestingNamedQueue { queue, source, .. } = taken;
-    let slots: Vec<(QueueSlotId, QueueItem)> = queue
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.clone()))
-        .collect();
+    let slots = queue.into_slot_items();
     install_replaced_queue(ctx, slots, next_cursor, source);
     finish_swap(ctx);
     start_replaced_queue(ctx, except_op_client, next_cursor, None);
@@ -574,11 +561,7 @@ fn install_as_current(ctx: &mut CtrlContext<'_>) {
     } = next;
     ctx.owner.named_queues.current = id;
     ctx.owner.named_queues.current_name = name;
-    let slots: Vec<(QueueSlotId, QueueItem)> = queue
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.clone()))
-        .collect();
+    let slots = queue.into_slot_items();
     let mint = ctx.owner.core.queue.revision_mint();
     ctx.owner.core.queue = PlaybackQueue::from_slot_items(slots, start_slot, mint);
     ctx.owner.core.source = source;

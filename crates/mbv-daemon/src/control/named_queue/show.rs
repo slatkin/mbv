@@ -70,6 +70,19 @@ pub(super) fn publish_snapshot(ctx: &CtrlContext<'_>, index: usize, except: Opti
 /// One resting queue's `NamedQueueSnapshot` event as one connection's queue
 /// transports project it, serialized for the wire.
 fn snapshot_json(resting: &RestingNamedQueue, queue_transport: QueueTransport) -> Option<String> {
+    let data = resting_state(resting, queue_transport)?;
+    serialize_ctrl_event(&CtrlEvent::NamedQueueSnapshot {
+        queue: resting.id,
+        data,
+    })
+}
+
+/// One resting queue's state as one connection's queue transports project it:
+/// no playhead, because a resting queue has no run.
+fn resting_state(
+    resting: &RestingNamedQueue,
+    queue_transport: QueueTransport,
+) -> Option<UnifiedQueueStateData> {
     let event = unified_queue_state_for_peer(
         Some(resting.id),
         &mbv_ctrl::player::PlayerStatus::default(),
@@ -85,10 +98,7 @@ fn snapshot_json(resting: &RestingNamedQueue, queue_transport: QueueTransport) -
     let CtrlEvent::UnifiedQueueState(data) = event else {
         return None;
     };
-    serialize_ctrl_event(&CtrlEvent::NamedQueueSnapshot {
-        queue: resting.id,
-        data,
-    })
+    Some(data)
 }
 
 /// The snapshot one resting queue's Clients hold (design D3): its slots, its
@@ -103,20 +113,7 @@ pub(super) fn resting_snapshot(
         let clients = ctx.ctrl_clients.lock().unwrap();
         clients.queue_transport(ctx.client_id)
     };
-    let CtrlEvent::UnifiedQueueState(data) = unified_queue_state_for_peer(
-        Some(resting.id),
-        &mbv_ctrl::player::PlayerStatus::default(),
-        &resting.queue,
-        &resting.source,
-        resting.lineage,
-        None,
-        resting.start_slot,
-        None,
-        None,
-        queue_transport,
-    ) else {
-        return None;
-    };
+    let data = resting_state(resting, queue_transport)?;
     Some((resting.id, data))
 }
 

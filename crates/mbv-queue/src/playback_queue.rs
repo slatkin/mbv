@@ -168,6 +168,16 @@ impl PlaybackQueue {
         self.slots
     }
 
+    /// Consume the queue and return its `(slot_id, item)` pairs, the input of
+    /// [`Self::from_slot_items`], without cloning any item.
+    #[must_use]
+    pub fn into_slot_items(self) -> Vec<(QueueSlotId, QueueItem)> {
+        self.slots
+            .into_iter()
+            .map(|slot| (slot.slot_id, slot.item))
+            .collect()
+    }
+
     #[must_use]
     pub fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.active_slot_id
