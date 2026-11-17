@@ -84,10 +84,16 @@ pub(super) enum DaemonEvent {
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),
     QueuePersistenceFailed(String),
-    /// The Named-queue state a ctrl handler changed, for the persistence worker
-    /// to write to `named_queues_state.json` (gui-named-queues design D6). The
-    /// event loop owns the worker, so the write never happens on the ctrl path.
-    SaveNamedQueues(Box<mbv_config::NamedQueuesState>),
+    /// A ctrl handler changed the Named-queue state (gui-named-queues design
+    /// D6). The event loop snapshots the live state at handling time — never
+    /// a payload taken earlier, which a change handled ahead of the request
+    /// could outrun — and writes it through the persistence worker, so the
+    /// write never happens on the ctrl path.
+    NamedQueuesDirty,
+    /// The persistence worker failed to write a Named-queue snapshot. The
+    /// event loop unsets its capture, so the next dirty event retries the
+    /// write.
+    NamedQueuesPersistFailed(String),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.

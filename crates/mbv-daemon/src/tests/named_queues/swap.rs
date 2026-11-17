@@ -159,7 +159,10 @@ fn play_a_resting_queue_starts_its_start_slot() {
         }
         _ => panic!("expected the play to be answered"),
     }
-    assert_eq!(persisted_named_queues(&merged_rx).current, kids_id);
+    assert_eq!(
+        persisted_named_queues(&merged_rx, &owner, &fixture.shared_queue).current,
+        kids_id
+    );
 }
 
 /// Contract: spec `named-queues` "Play starts a queue at its start slot" — a
@@ -223,7 +226,10 @@ fn play_a_row_of_a_resting_queue_while_another_queue_plays() {
     assert_eq!(status.current_idx, 0, "the named row is the one that plays");
     assert_eq!(status.queue_len, 2);
     drop(status);
-    assert_eq!(persisted_named_queues(&merged_rx).current, kids_id);
+    assert_eq!(
+        persisted_named_queues(&merged_rx, &owner, &fixture.shared_queue).current,
+        kids_id
+    );
 }
 
 /// Contract: design D2 — a replace that names a resting queue swaps that queue
@@ -267,7 +273,10 @@ fn replace_of_a_resting_queue_installs_the_new_items() {
     assert_eq!(status.current_idx, 0);
     assert_eq!(status.queue_len, 1);
     drop(status);
-    assert_eq!(persisted_named_queues(&merged_rx).current, kids_id);
+    assert_eq!(
+        persisted_named_queues(&merged_rx, &owner, &fixture.shared_queue).current,
+        kids_id
+    );
 }
 
 /// Contract: spec `named-queues` "Clients without named queues see the current

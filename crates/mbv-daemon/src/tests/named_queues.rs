@@ -320,10 +320,17 @@ fn resting_item_ids(owner: &DaemonPlayerOwner, index: usize) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The pending persistence request a Named-queue command sends (design D6).
-fn persisted_named_queues(merged_rx: &mpsc::Receiver<DaemonEvent>) -> mbv_config::NamedQueuesState {
+/// The Named-queue state a Named-queue command marks for persistence (design
+/// D6): the command sends `NamedQueuesDirty`, and the loop writes the live
+/// state at handling time, so the test snapshots the store the same way the
+/// handler will.
+fn persisted_named_queues(
+    merged_rx: &mpsc::Receiver<DaemonEvent>,
+    owner: &DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+) -> mbv_config::NamedQueuesState {
     match merged_rx.recv().expect("the command persisted the store") {
-        DaemonEvent::SaveNamedQueues(state) => *state,
+        DaemonEvent::NamedQueuesDirty => crate::named_queues_state(owner, shared_queue),
         _ => panic!("expected the Named-queue persistence request"),
     }
 }
@@ -390,7 +397,7 @@ fn append_to_a_resting_queue_edits_the_store() {
         }
         _ => panic!("expected the resting queue's snapshot as the op answer"),
     }
-    let persisted = persisted_named_queues(&merged_rx);
+    let persisted = persisted_named_queues(&merged_rx, &owner, &shared_queue);
     assert_eq!(persisted.queues.len(), 2, "the whole store is persisted");
 }
 
@@ -490,7 +497,9 @@ fn a_new_queue_takes_the_lowest_free_number(#[case] existing: &[&str], #[case] e
         "a new queue rests; the current queue still holds the playhead"
     );
     assert_eq!(
-        persisted_named_queues(&merged_rx).queues.len(),
+        persisted_named_queues(&merged_rx, &owner, &shared_queue)
+            .queues
+            .len(),
         existing.len() + 1
     );
 }
@@ -616,7 +625,7 @@ fn close_the_playing_queue_stops_and_installs_the_first_remaining_queue() {
         }
         _ => panic!("expected the close to be answered"),
     }
-    let persisted = persisted_named_queues(&merged_rx);
+    let persisted = persisted_named_queues(&merged_rx, &owner, &shared_queue);
     assert_eq!(persisted.current, default_id);
     assert_eq!(persisted.queues.len(), 1);
 }

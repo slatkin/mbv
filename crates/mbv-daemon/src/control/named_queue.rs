@@ -14,9 +14,7 @@ use super::{
     QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump, handle_stop,
     reject_command, send_to, unified_queue_state_for_peer,
 };
-use crate::core::{
-    JumpOrigin, NamedQueueListSeed, NamedQueueTarget, RestingNamedQueue, named_queues_state,
-};
+use crate::core::{JumpOrigin, NamedQueueListSeed, NamedQueueTarget, RestingNamedQueue};
 use crate::ctrl::{CtrlClientId, QueueTransport, serialize_ctrl_event};
 use mbv_ctrl::{CtrlEvent, QueueOpOutcome, UnifiedQueueStateData};
 use mbv_queue::{
@@ -688,16 +686,12 @@ fn broadcast_list(ctx: &CtrlContext<'_>) {
         .broadcast_named_queue_event(&json);
 }
 
-/// Sends the whole Named-queue state to the daemon's persistence worker
-/// (design D6). The event loop owns the worker, so the write never happens on
-/// the ctrl path.
+/// Marks the Named-queue state as changed (design D6). The event loop owns
+/// the worker and snapshots the live state at handling time, so the write
+/// never happens on the ctrl path and never carries a payload a change
+/// handled ahead of the request could outrun.
 fn persist(ctx: &CtrlContext<'_>) {
-    let state = named_queues_state(ctx.owner, ctx.shared_queue);
-    if ctx
-        .merged_tx
-        .send(DaemonEvent::SaveNamedQueues(Box::new(state)))
-        .is_err()
-    {
+    if ctx.merged_tx.send(DaemonEvent::NamedQueuesDirty).is_err() {
         tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "the daemon event loop is gone; the Named queues were not persisted");
     }
 }

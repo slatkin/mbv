@@ -171,8 +171,16 @@ impl DaemonLoop {
                 tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error, "failed to persist Stay-alive queue");
                 EventOutcome::CONTINUE
             }
-            DaemonEvent::SaveNamedQueues(state) => {
-                self.save_named_queues(*state);
+            DaemonEvent::NamedQueuesDirty => {
+                self.save_named_queues();
+                EventOutcome::CONTINUE
+            }
+            DaemonEvent::NamedQueuesPersistFailed(error) => {
+                tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error, "failed to persist the Named queues");
+                // The file does not hold the state the capture described, so
+                // the capture must go: the next dirty event retries the
+                // write instead of trusting a file older than the capture.
+                self.named_queues_saved = None;
                 EventOutcome::CONTINUE
             }
             DaemonEvent::AudiobookshelfProgress(update) => {
@@ -335,18 +343,9 @@ impl DaemonLoop {
         }
         // The Named-queue file holds the current queue too (gui-named-queues
         // design D6), so a change of the current queue is a change of the
-        // file — but only of the content the file persists: it holds no
-        // Service position, so a dirty event that only recorded progress
-        // matches the last capture and writes nothing.
-        let named_queues_saved = self
-            .named_queues_saved
-            .as_ref()
-            .is_some_and(|saved| saved.matches(&self.owner, &self.shared_queue));
-        if !named_queues_saved {
-            self.save_named_queues(self.named_queues_snapshot());
-            self.named_queues_saved =
-                Some(NamedQueuesSaved::capture(&self.owner, &self.shared_queue));
-        }
+        // file — but only of the content the file persists; `save_named_queues`
+        // skips a write whose live state still matches the last capture.
+        self.save_named_queues();
         if let Some(tx) = &self.queue_persist_tx {
             let snapshot = super::stay_alive_owner_queue_snapshot(
                 &self.owner,
@@ -364,13 +363,36 @@ impl DaemonLoop {
         }
     }
 
-    /// Persists the Named-queue state a ctrl handler changed (gui-named-queues
-    /// design D6) through the same worker that writes the owner queue, so the
-    /// write is atomic and off the event-loop thread.
-    fn save_named_queues(&mut self, state: mbv_config::NamedQueuesState) {
+    /// Persists the Named-queue state (gui-named-queues design D6). One writer
+    /// here snapshots the live state at handling time — never a payload a
+    /// caller took earlier, which a change handled ahead of the request could
+    /// outrun — and writes it through the same worker that writes the owner
+    /// queue, so the write is atomic and off the event-loop thread.
+    ///
+    /// The capture is recorded only when the write was accepted: a store
+    /// error or a gone worker leaves it unset, and the worker reports a failed
+    /// write back as `NamedQueuesPersistFailed`, which unsets it. Either way
+    /// the next dirty event retries the write instead of trusting a file
+    /// older than the capture.
+    fn save_named_queues(&mut self) {
+        if self
+            .named_queues_saved
+            .as_ref()
+            .is_some_and(|saved| saved.matches(&self.owner, &self.shared_queue))
+        {
+            // The file already holds this state: a dirty event that only
+            // recorded progress changed no persisted Named-queue content, so
+            // the file is not written again.
+            return;
+        }
+        let state = self.named_queues_snapshot();
+        let saved = NamedQueuesSaved::capture(&self.owner, &self.shared_queue);
         let Some(tx) = &self.queue_persist_tx else {
-            if let Err(error) = (self.named_store)(state) {
-                tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
+            match (self.named_store)(state) {
+                Ok(()) => self.named_queues_saved = Some(saved),
+                Err(error) => {
+                    tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
+                }
             }
             return;
         };
@@ -378,8 +400,10 @@ impl DaemonLoop {
             .send(super::QueuePersistenceRequest::SaveNamedQueues(Box::new(
                 state,
             )))
-            .is_err()
+            .is_ok()
         {
+            self.named_queues_saved = Some(saved);
+        } else {
             tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", "queue persistence worker is unavailable");
         }
     }
