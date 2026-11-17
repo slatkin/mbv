@@ -514,6 +514,38 @@ pub fn App() -> Element {
                         // from the Library panel's own arrangement.
                         SettingsScreen { arrangement: settings_screen_arrangement }
                     } else {
+                        // The Library panel is at the left window edge and the
+                        // Queue column at the right window edge
+                        // (gui-swap-queue-and-library-sides design D1), so the
+                        // root paints the Library panel, then the Queue
+                        // divider, then the Queue column.
+                        if library_visible && has_library_list {
+                            LibraryPanel {
+                                arrangement,
+                                list_width: widths.list,
+                                library_column: widths.library_column,
+                            }
+                        }
+                        if two_columns && !panel.collapsed {
+                            // The Queue panel's divider (design D4): dragging
+                            // it resizes the Queue column and, with it, the
+                            // Library column the arrangement measures; a
+                            // double-click returns the canvas width. The Queue
+                            // column sits right of the divider, so the side
+                            // is Right and a drag to the left widens it.
+                            PanelDivider {
+                                side: DividerSide::Right,
+                                name: DividerName::Queue,
+                                width: widths.queue,
+                                on_drag: move |width| {
+                                    drag_widths
+                                        .drag_queue_width(width, drag_container.cloned().width);
+                                },
+                                on_reset: move |()| {
+                                    reset_widths.reset_queue_width();
+                                },
+                            }
+                        }
                         if queue_visible {
                             div {
                                 class: if two_columns {
@@ -531,31 +563,6 @@ pub fn App() -> Element {
                                     container: container.cloned(),
                                     library_visible,
                                 }
-                            }
-                        }
-                        if two_columns && !panel.collapsed {
-                            // The Queue panel's divider (design D4): dragging
-                            // it resizes the Queue column and, with it, the
-                            // Library column the arrangement measures; a
-                            // double-click returns the canvas width.
-                            PanelDivider {
-                                side: DividerSide::Left,
-                                name: DividerName::Queue,
-                                width: widths.queue,
-                                on_drag: move |width| {
-                                    drag_widths
-                                        .drag_queue_width(width, drag_container.cloned().width);
-                                },
-                                on_reset: move |()| {
-                                    reset_widths.reset_queue_width();
-                                },
-                            }
-                        }
-                        if library_visible && has_library_list {
-                            LibraryPanel {
-                                arrangement,
-                                list_width: widths.list,
-                                library_column: widths.library_column,
                             }
                         }
                     }

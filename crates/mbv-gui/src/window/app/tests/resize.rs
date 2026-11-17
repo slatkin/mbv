@@ -90,17 +90,20 @@ fn resize_app(props: Props) -> Element {
                 class: "relative flex h-full min-h-0 w-full min-w-0 overflow-hidden",
                 "data-arrangement": arrangement.name(),
                 onmounted: move |event| container_mounted.set(Some(event)),
+                // The Library column is at the left window edge and the Queue
+                // column at the right window edge, the order the root paints
+                // (`window/app.rs`, gui-swap-queue-and-library-sides D1).
+                if library_visible {
+                    div {
+                        class: "flex h-full min-h-0 flex-col flex-1",
+                        "data-library-column": "",
+                    }
+                }
                 if queue_visible {
                     div {
                         class: "flex h-full min-h-0 flex-col flex-none",
                         "data-queue-column": "",
                         style: "width: {widths.queue}px;",
-                    }
-                }
-                if library_visible {
-                    div {
-                        class: "flex h-full min-h-0 flex-col flex-1",
-                        "data-library-column": "",
                     }
                 }
             }
