@@ -79,21 +79,21 @@ holds that change.
 
 ## 6. Client core: shown entry (`src/app`)
 
-- [ ] 6.1 Adopt `NamedQueueList` and `NamedQueueSnapshot` into Client core state (the queue list,
+- [x] 6.1 Adopt `NamedQueueList` and `NamedQueueSnapshot` into Client core state (the queue list,
   the current id, and `shown_resting`), and send `NamedQueueShow` when the GUI shows a resting
   queue (design D7). Verify with a core test that a resting snapshot fills the shown view and the
   current queue view does not change.
-- [ ] 6.2 Add `gui_shown_entry` and make `QueueLinkResolution` follow it for the GUI Client only,
+- [x] 6.2 Add `gui_shown_entry` and make `QueueLinkResolution` follow it for the GUI Client only,
   so `displayed_queue()`, the player panel, and edits resolve to the shown entry's link; the TUI
   keeps the connection rule (design D7). Verify with tests for "A GUI Client connected to a peer
   shows a local queue" and one test that the TUI link does not change.
-- [ ] 6.3 Make every GUI queue edit, enqueue, play-next, replace, and row play to the local Owner
+- [x] 6.3 Make every GUI queue edit, enqueue, play-next, replace, and row play to the local Owner
   carry the shown queue id, and make Play with nothing playing send `NamedQueuePlay` for the shown
   queue (spec "Edits and enqueue reach the shown queue", "Play with nothing playing starts the
   shown queue"). Record the edited Named queue on each local undo entry and make
   `undo_last_queue_edit` send the inverse edit to that queue (design D7). Verify with tests for
   "Enqueue to a resting queue", "Play a stopped queue", and "Undo reaches the queue it edited".
-- [ ] 6.4 Set the shown entry on connect (`Peer`), on disconnect and lost link (`Local(current)`),
+- [x] 6.4 Set the shown entry on connect (`Peer`), on disconnect and lost link (`Local(current)`),
   and on a close of the shown queue; on each change clear the Queue filter and the marks and put
   the active row on the start slot (spec "A connect adds a peer entry", "Showing an entry resets
   the Queue active row and marks"). Verify with tests for "The connection is lost" and "Switch
