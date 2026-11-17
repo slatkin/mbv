@@ -1,0 +1,69 @@
+# Proposal
+
+## Why
+
+The GUI Library panel shows its collections as a row of pills. A destination with many collections
+(16 YouTube folders, every Podcast show, every Feeds subscription) overflows the row, and the row
+selects only one collection at a time. The `mbv Svelte Player` artboard (page 7) replaces the row
+with one dropdown filter that checks one or more collections. The feed-based destinations also have
+no way to read their list oldest first.
+
+## What Changes
+
+- **BREAKING (GUI only)**: the pill row goes away in every GUI destination. A collection dropdown
+  replaces it in Music, Podcasts, Feeds, and an Emby library in feed-group mode (YouTube). The TUI
+  does not change.
+- The dropdown selection is **All** or one or more checked collections, never a mix. Check a
+  collection: All unchecks. Uncheck the last collection: the selection goes back to All. Check All:
+  every collection unchecks. The list is the de-duplicated union of the checked collections.
+- The dropdown trigger shows a **Clear** control while the selection is not All. Clear sets All.
+- The open dropdown has a filter field that narrows its collection rows.
+- The dropdown is pointer-only. It adds no keybinding. While the filter field is open it takes the
+  typed keys, and Esc closes the dropdown.
+- **All** replaces the Podcasts and Feeds **Latest** pill. Music gains **All**: today one group is
+  always selected.
+- The Podcasts state pills (All, Unplayed, Played) go away in the GUI, as the Feeds state pills did.
+- The Emby feed-group **New** pill goes away for now. A later Home redesign takes the Latest-style
+  views.
+- YouTube, Podcasts, and Feeds get an **Oldest / Newest** toggle beside the trigger. Newest is the
+  default. Undated rows stay last in both orders. A YouTube folder no longer reads oldest first by
+  default.
+- Shows loses its pill row and shows only its series list (the All mode). Its **Latest** and
+  **Upcoming** lists move to GUI Home as two more sections after Recently added: **Latest episodes**
+  and **Upcoming**. Each merges every TV library.
+- Upcoming rows on Home are display-only: a press does not select them, they do not play or enqueue,
+  and the Hero keeps its item.
+- Music keeps its save across a restart, now for the checked set or All, through the existing GUI
+  launch location. YouTube, Podcasts, and Feeds selections and every sort order are session memory
+  only.
+- The Library Status bar location names All, or the checked collections joined.
+
+## Capabilities
+
+### New Capabilities
+
+None.
+
+### Modified Capabilities
+
+- `gui-client`: the pill requirements ("One collection pill is selected at a time", "The pill
+  selection persists per destination", "Each collection pill keeps its last picked album") become
+  collection dropdown requirements. New requirements cover the date order toggle, the Shows
+  destination with no mode selector, the GUI Home Latest episodes and Upcoming sections, and the
+  dropdown filter field among the open text fields that keep the keys. The Library Status bar
+  location names the checked set.
+
+## Impact
+
+- `src/app/gui_library/`: a shared collection-set type and date order in the core; the Music,
+  Podcasts, Feeds, and Emby feed-group selections move to it; the commands that set a pill are
+  replaced; Home gains two sections; Shows loses its mode commands.
+- `src/app/dispatch/feeds/feed.rs`: a folder fetch that does not move the TUI-shared feed-group
+  selection, so the GUI can load more than one folder.
+- `crates/mbv-gui/src/bridge/`: one collection frame replaces the per-destination pill frames.
+- `crates/mbv-gui/src/window/`: a new collection dropdown component replaces `LibraryPillRow` and
+  the five destination pill components; the window holds the dropdown's open state and filter text.
+- `CONTEXT.md`: the *Collection pill* term becomes *Collection dropdown*.
+- `crates/mbv-config` GUI launch state: no format change. `group_ids` is already a list; an empty
+  list now means All.
+- No new dependency.
