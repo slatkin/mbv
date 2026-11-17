@@ -60,6 +60,10 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
         hover: None,
         start: None,
         playing: false,
+        // A queue with no start mark reports its start slot as a queue with
+        // one does: the window paints no outlined mark from an unreported
+        // slot, so the fixture's rows carry no mark either way.
+        start_slot_reported: true,
         drag: None,
     }
 }

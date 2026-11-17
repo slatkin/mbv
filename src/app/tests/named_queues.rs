@@ -607,6 +607,10 @@ fn a_resting_queue_never_marks_the_playing_queue_s_index() {
     assert_eq!(playback.active_idx, None);
     let start = app.gui_queue_start_projection();
     assert!(!start.playing, "a resting queue does not play");
+    assert!(
+        start.start_slot_reported,
+        "the resting queue's snapshot reports its start slot"
+    );
     assert_eq!(
         start.start,
         app.displayed_queue()
@@ -644,6 +648,10 @@ fn a_peer_queue_marks_its_playing_row() {
         "the observed active slot stands in for the missing start slot"
     );
     assert!(start.playing, "the peer's queue plays");
+    assert!(
+        !start.start_slot_reported,
+        "the peer reports no start slot, so the rows paint no outlined mark"
+    );
 }
 
 /// A Play-next move inside a shown resting queue reaches that queue: the row

@@ -48,33 +48,55 @@ fn an_empty_frame_renders_the_empty_queue_state() {
 
 /// Contract (design D9 of `gui-named-queues`, spec `gui-client` "A stopped
 /// queue marks its start slot", "Play turns the start mark into the playing
-/// mark", "The right column is switched"): the shown queue's start slot is one
-/// row in two states — filled while the queue plays, outlined while it is
-/// stopped or resting — and no other row carries a mark or a runtime.
+/// mark", "A peer queue marks its playing row", "The right column is
+/// switched"): the mark is one row in two states — filled while the queue
+/// plays, outlined while a queue that reports its start slot is stopped or
+/// resting — and a queue that reports no start slot (a peer without
+/// `named-queues`) marks its observed active slot as the playing row while it
+/// plays and paints no outlined mark. No other row carries a mark or a
+/// runtime.
 #[rstest]
-#[case::stopped(Some(3), false, Some("none"))]
-#[case::playing(Some(3), true, Some("currentColor"))]
-#[case::no_start_slot(None, true, None)]
+#[case::reported_stopped(Some(3), false, true, Some((3, "none")))]
+#[case::reported_playing(Some(3), true, true, Some((3, "currentColor")))]
+#[case::reported_without_a_slot(None, false, true, None)]
+#[case::observed_active_stopped(Some(2), false, false, None)]
+#[case::observed_active_playing(Some(2), true, false, Some((2, "currentColor")))]
 fn the_start_slot_carries_the_filled_or_outlined_mark(
     #[case] start: Option<u64>,
     #[case] playing: bool,
-    #[case] expected_fill: Option<&str>,
+    #[case] start_slot_reported: bool,
+    #[case] expected: Option<(u64, &str)>,
 ) {
     let mut rows = queue(vec![item(1), item(2), item(3)]);
     rows.start = start;
     rows.playing = playing;
+    rows.start_slot_reported = start_slot_reported;
     let fixture = built_with_frame(queue_panel_app, rows, summary(), None);
 
-    assert_eq!(
-        fixture.attr_of("[data-slot=\"3\"] svg", local_name!("fill")),
-        expected_fill.map(str::to_owned)
-    );
-    assert!(!fixture.presents("[data-slot=\"1\"] svg"));
-    assert!(!fixture.presents("[data-slot=\"2\"] svg"));
+    assert_eq!(marks(&fixture), expected_fills(expected));
     assert!(
         !fixture.text().contains("3:12"),
         "no row paints its runtime"
     );
+}
+
+/// The fill attribute of each of the three fixture rows' mark, `None` where
+/// the row paints no mark.
+fn marks(fixture: &Fixture) -> Vec<Option<String>> {
+    (1..=3_u64)
+        .map(|slot| fixture.attr_of(&format!("[data-slot=\"{slot}\"] svg"), local_name!("fill")))
+        .collect()
+}
+
+/// The fills `marks` expects for a lone mark on `expected`'s slot.
+fn expected_fills(expected: Option<(u64, &str)>) -> Vec<Option<String>> {
+    (1..=3_u64)
+        .map(|slot| {
+            expected
+                .filter(|(marked, _)| *marked == slot)
+                .map(|(_, fill)| fill.to_owned())
+        })
+        .collect()
 }
 
 /// Contract (`QueuePanel.test.ts`): the rows paint the watched, active, and

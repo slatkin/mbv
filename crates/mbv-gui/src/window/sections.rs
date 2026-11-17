@@ -258,6 +258,7 @@ fn fresh_queue() -> GuiQueue {
         hover: None,
         start: None,
         playing: false,
+        start_slot_reported: true,
         drag: None,
     }
 }

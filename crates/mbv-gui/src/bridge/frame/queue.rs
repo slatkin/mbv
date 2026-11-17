@@ -38,6 +38,11 @@ pub struct GuiQueue {
     /// D9): the rows paint the start slot filled while it does and outlined
     /// while the queue is stopped or resting.
     pub playing: bool,
+    /// Whether the shown queue's owner reports [`Self::start`] as its start
+    /// slot (gui-named-queues design D9): only a reported start slot can carry
+    /// the outlined mark, so an owner without one paints the playing mark on
+    /// its observed active slot and no outlined mark.
+    pub start_slot_reported: bool,
     /// The row drag in progress, if any: the drag ghost and insertion line.
     pub drag: Option<GuiQueueDrag>,
 }
@@ -103,8 +108,8 @@ impl GuiQueue {
     /// summary's filter text narrows the projected rows locally — the library's
     /// one word-local acceptance rule (`mbv-text`) decides what matches, and the
     /// Surface state and the canonical queue stay whole. `start` names the
-    /// shown queue's start slot and whether that queue plays (design D9 of
-    /// `gui-named-queues`).
+    /// shown queue's start slot, whether that queue plays, and whether its
+    /// owner reported the slot (design D9 of `gui-named-queues`).
     #[must_use]
     pub fn from_surface(
         queue: &QueueSurface,
@@ -176,6 +181,7 @@ impl GuiQueue {
             hover: queue.hover().map(QueueSlotId::raw),
             start: start.start,
             playing: start.playing,
+            start_slot_reported: start.start_slot_reported,
             drag: queue
                 .row_drag()
                 .and_then(|drag| GuiQueueDrag::from_surface(queue, drag)),

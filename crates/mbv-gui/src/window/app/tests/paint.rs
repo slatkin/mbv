@@ -132,6 +132,7 @@ fn queue() -> GuiQueue {
         hover: Some(2),
         start: Some(2),
         playing: true,
+        start_slot_reported: true,
         drag: None,
     }
 }

@@ -84,9 +84,10 @@ pub struct QueueSurfaceProjection {
 }
 
 /// The Queue rows' start mark for one read (design D9 of `gui-named-queues`):
-/// the slot a play of the shown queue starts at, and whether that queue is
-/// the one that plays. The rows paint the start slot filled while the queue
-/// plays and outlined while it is stopped or resting.
+/// the slot a play of the shown queue starts at, whether that queue is the
+/// one that plays, and whether its owner reported the slot at all. The rows
+/// paint the start slot filled while the queue plays and outlined while it is
+/// stopped or resting.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct QueueStartProjection {
     /// The shown queue's start slot (`QueueSlotId::raw`). An owner that
@@ -96,6 +97,11 @@ pub struct QueueStartProjection {
     /// Whether the shown queue is the queue that plays. A resting queue never
     /// plays, so its rows carry the start mark and no playing mark.
     pub playing: bool,
+    /// Whether the shown queue's owner reports a start slot, which decides
+    /// which mark the rows paint: the outlined mark stands only for a reported
+    /// start slot, so an owner without one paints the playing mark on its
+    /// observed active slot and no outlined mark (design D9).
+    pub start_slot_reported: bool,
 }
 
 impl App {
@@ -107,17 +113,19 @@ impl App {
     /// carries no playhead, so it is never `playing`; its `start` is its own
     /// snapshot's start slot (design D7). An owner that reports no start slot,
     /// such as a peer without `named-queues`, keeps its playing mark on the
-    /// observed active slot and gives it no outlined mark.
+    /// observed active slot and gives it no outlined mark, which
+    /// `start_slot_reported` tells the rows apart.
     #[must_use]
     pub fn gui_queue_start_projection(&self) -> QueueStartProjection {
         let queue = self.displayed_queue();
         let playback = self.displayed_queue_playback_state();
+        let reported = queue.start_slot_id();
         QueueStartProjection {
-            start: queue
-                .start_slot_id()
+            start: reported
                 .or_else(|| queue.active_slot_id())
                 .map(mbv_queue::QueueSlotId::raw),
             playing: playback.active && playback.active_idx.is_some(),
+            start_slot_reported: reported.is_some(),
         }
     }
 

@@ -140,14 +140,18 @@ fn playing_queue_frame_carries_rows_and_active_slot() {
 
 /// The queue section carries the rows' start mark (gui-named-queues design
 /// D9): the `start` projection names the slot a play of the shown queue starts
-/// at, and `playing` says whether that queue is the one that plays. The stub's
-/// third slot is the start slot it reports, and its first one plays.
+/// at, `playing` says whether that queue is the one that plays, and
+/// `start_slot_reported` says whether the owner reports the slot at all — the fact
+/// that keeps an owner without a start slot from painting the outlined mark.
+/// The stub's third slot is the start slot it reports, and its first one
+/// plays.
 #[test]
 fn the_queue_frame_carries_the_start_slot_and_the_playing_fact() {
     let mut app = mbv::stub_app_with_playing_start_slot(3, 2);
     let frame = frame_after_tick(&mut app);
     assert_eq!(frame.queue().start, Some(3));
     assert!(frame.queue().playing);
+    assert!(frame.queue().start_slot_reported);
 }
 
 /// The row ordinal is the slot's 1-based position in the canonical queue, not

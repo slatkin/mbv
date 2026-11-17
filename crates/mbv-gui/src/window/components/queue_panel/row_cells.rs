@@ -143,19 +143,19 @@ pub(super) enum StartMark {
 }
 
 /// The start mark the row of `slot` paints, if any: only the shown queue's
-/// start slot carries one. The frame's `start` already falls back to the
-/// observed active slot for an owner that reports no start slot (a peer
-/// without `named-queues`), so such a queue marks its playing row and paints
-/// no outlined mark.
+/// start slot carries one. A queue that reports a start slot marks it filled
+/// while it plays and outlined while it is stopped or resting. A queue that
+/// reports no start slot — a peer without `named-queues` — marks its observed
+/// active slot as the playing row while it plays and carries no outlined mark
+/// (design D9).
 pub(super) fn start_mark(queue: &GuiQueue, slot: u64) -> Option<StartMark> {
     if queue.start != Some(slot) {
         return None;
     }
-    Some(if queue.playing {
-        StartMark::Playing
-    } else {
-        StartMark::Start
-    })
+    if queue.playing {
+        return Some(StartMark::Playing);
+    }
+    queue.start_slot_reported.then_some(StartMark::Start)
 }
 
 /// The props of one row's cells: the item row, its tone, which chrome paints
