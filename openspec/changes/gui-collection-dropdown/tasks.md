@@ -40,4 +40,4 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv -p mbv-gui`, and fix every failure.
+- [x] 7.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv -p mbv-gui`, and fix every failure.
