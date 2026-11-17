@@ -56,10 +56,10 @@ pub use self::gui_library::{
     GuiAudiobooksWorkspace,
 };
 pub use self::gui_library::{
-    GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill,
-    GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode,
-    GuiShowsPill, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill,
-    GuiShowsSeries, GuiShowsWorkspace,
+    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
+    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries,
+    GuiShowsWorkspace,
 };
 pub use self::gui_library::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,

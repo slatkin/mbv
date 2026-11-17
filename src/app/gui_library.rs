@@ -39,12 +39,9 @@ pub use self::collection::{
     GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
 };
 pub use self::emby::GuiEmbyLibrarySelection;
-pub(in crate::app) use self::emby::{
-    GuiEmbyLatestItems, GuiEmbyLatestItemsEvent, GuiEmbyRootItems, GuiEmbyRootItemsEvent,
-};
+pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind,
+    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow, GuiPillOption};
 pub use self::feeds::GuiFeedsSelection;
@@ -165,13 +162,18 @@ pub enum GuiLibraryCommand {
     /// Select a plain Emby-library row (design D12, row 8.1): the row the
     /// Hero shows. A row the active list no longer holds changes nothing.
     EmbySelect { lib_idx: usize, row: String },
-    /// Set the feed-view library's selected group (design D12, row 8.1):
-    /// the TUI's own selection path, so the session cache, the stale-drop,
-    /// and the lazy fetch behave as the TUI pill's press does. A `lib_idx`
-    /// that names no feed-view library changes nothing.
+    /// Apply the feed-view library's interim All-and-folders pill press
+    /// (design D12, row 8.1; gui-collection-dropdown design D2, D3): `None`
+    /// is the All pill's press, and `Some(folder_id)` toggles that folder by
+    /// its stable Service id in the GUI's checked set, whose fetches start
+    /// through the frame path's ensure. The shared
+    /// `FeedHomeVideoState::selection` is never written, so the TUI keeps its
+    /// own selection. A folder the root listing does not hold changes
+    /// nothing. A `lib_idx` that names no feed-view library changes nothing.
     EmbySetFeedGroup {
         lib_idx: usize,
-        group: emby_projection::GuiEmbyFeedGroup,
+        /// `None` is All; `Some(id)` toggles that folder in the set.
+        group: Option<String>,
     },
     /// Play a plain Emby-library row (design D12, row 8.1): Enter on the
     /// row, or the double-click a window sends with this same command.
@@ -345,7 +347,7 @@ impl App {
                 self.gui_emby_select(lib_idx, &row);
             }
             GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => {
-                self.gui_emby_set_feed_group(lib_idx, &group);
+                self.gui_emby_set_feed_group(lib_idx, group.as_deref());
             }
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
                 self.play_gui_emby_item(lib_idx, &item_id);

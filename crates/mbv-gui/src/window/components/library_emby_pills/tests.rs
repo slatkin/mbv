@@ -213,7 +213,7 @@ fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
         fixture.library_commands(),
         [mbv::GuiLibraryCommand::EmbySetFeedGroup {
             lib_idx: 3,
-            group: mbv::GuiEmbyFeedGroup::Folder("folder-1".to_owned()),
+            group: Some("folder-1".to_owned()),
         }]
     );
 }
@@ -236,7 +236,7 @@ fn the_keys_pill_request_sends_the_set_feed_group_command() {
         fixture.library_commands(),
         [mbv::GuiLibraryCommand::EmbySetFeedGroup {
             lib_idx: 3,
-            group: mbv::GuiEmbyFeedGroup::Folder("folder-1".to_owned()),
+            group: Some("folder-1".to_owned()),
         }]
     );
 }

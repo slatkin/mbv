@@ -108,9 +108,21 @@ impl App {
         &self,
         lib_idx: usize,
     ) -> Option<String> {
+        let selection = self.libs.get(lib_idx)?.feed_home_video.as_ref()?;
+        self.feed_home_video_parent_id(lib_idx, &selection.selection)
+    }
+
+    /// The parent one target fetches (design D3): All reads the root
+    /// listing's own parent, a folder its own id. The target is passed in, so
+    /// a fetch the GUI's checked set starts reads its own parent while the
+    /// TUI's selection stays what the TUI set.
+    fn feed_home_video_parent_id(
+        &self,
+        lib_idx: usize,
+        target: &FeedHomeVideoSelection,
+    ) -> Option<String> {
         let lib = self.libs.get(lib_idx)?;
-        let state = lib.feed_home_video.as_ref()?;
-        Some(match &state.selection {
+        Some(match target {
             FeedHomeVideoSelection::All => lib.nav_stack.first()?.parent_id.clone(),
             FeedHomeVideoSelection::Folder(id) => id.clone(),
         })
@@ -270,11 +282,12 @@ impl App {
 
     /// Apply one feed-group selection to the library's feed state: the
     /// selection write, the cursor reset, the stale-fetch drop, the lazy
-    /// fetch trigger, and the state log. Shared by the TUI pill press
-    /// (`select_feed_folder_group`) and the GUI Library's set-feed-group
-    /// action (add-gui-library-panel row 8.1), so the two Clients cannot
-    /// drift. The callers guard the library index; an empty nav stack leaves
-    /// the selection as it is.
+    /// fetch trigger, and the state log. This is the TUI's pill press
+    /// (`select_feed_folder_group`); the GUI Library never calls it, because
+    /// its own checked folder set reads the shared cache without moving the
+    /// TUI's selection (gui-collection-dropdown design D2, D3). The callers
+    /// guard the library index; an empty nav stack leaves the selection as it
+    /// is.
     pub(in crate::app) fn apply_feed_home_video_group_selection(
         &mut self,
         lib_idx: usize,
@@ -357,40 +370,63 @@ impl App {
         if cached_or_loading {
             return;
         }
-        let Some(client) = self.emby_snapshot() else {
-            // No Service client yet: leave the selection uncached and
-            // unloaded; a later selection or shown pass retries.
-            let Some(state) = self
-                .libs
-                .get_mut(lib_idx)
-                .and_then(|lib| lib.feed_home_video.as_mut())
-            else {
-                return;
-            };
-            state.loading = false;
+        let selection = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .map(|state| state.selection.clone());
+        let Some(selection) = selection else {
             return;
         };
-        let Some(parent_id) = self.feed_home_video_selected_parent_id(lib_idx) else {
+        if self.spawn_feed_home_video_fetch(lib_idx, selection) {
             return;
+        }
+        // The fetch could not start (no Service client yet, or no parent to
+        // read): leave the selection uncached and unmarked, so a later
+        // selection or shown pass retries.
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.loading = false;
+        }
+    }
+
+    /// Spawn one feed-group target's items fetch (design D3): the body of the
+    /// TUI's selection fetch with the target passed in instead of read from
+    /// the state, so the GUI's checked folders fetch through the same call
+    /// without moving the TUI's selection. The fetch marks `fetching` against
+    /// its target — the listing completion's `loading` hand-off and the
+    /// result arm both read that to tell a live fetch apart from the
+    /// listing-pending seed — and its result lands through
+    /// `FeedHomeVideoSelectionLoaded`. Returns whether the fetch started: a
+    /// fetch that cannot start leaves no mark, so nothing waits on it.
+    pub(in crate::app) fn spawn_feed_home_video_fetch(
+        &mut self,
+        lib_idx: usize,
+        target: FeedHomeVideoSelection,
+    ) -> bool {
+        let Some(client) = self.emby_snapshot() else {
+            return false;
+        };
+        let Some(parent_id) = self.feed_home_video_parent_id(lib_idx, &target) else {
+            return false;
+        };
+        // The All list reads newest-first (spec `feed-home-video-group-view`);
+        // folder lists keep the flat oldest-first order.
+        let sort_order = match &target {
+            FeedHomeVideoSelection::All => "Descending",
+            FeedHomeVideoSelection::Folder(_) => "Ascending",
         };
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_mut())
         else {
-            return;
+            return false;
         };
-        let selection = state.selection.clone();
-        // The All list reads newest-first (spec `feed-home-video-group-view`);
-        // folder pill lists keep the flat oldest-first order.
-        let sort_order = match &selection {
-            FeedHomeVideoSelection::All => "Descending",
-            FeedHomeVideoSelection::Folder(_) => "Ascending",
-        };
-        // Mark the fetch outstanding against its selection: the listing
-        // completion's `loading` hand-off and the result arm both read this
-        // to tell a live fetch apart from the listing-pending seed.
-        state.fetching = Some(selection.clone());
+        state.fetching = Some(target.clone());
         self.log_feed_home_video_state(lib_idx, "selection_fetch_spawned");
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
@@ -433,18 +469,21 @@ impl App {
                 BrowseEvent::FeedHomeVideoSelectionLoaded {
                     lib_idx,
                     parent_id,
-                    selection,
+                    selection: target,
                     items,
                 },
             ));
         });
+        true
     }
 
     /// The `FeedHomeVideoSelectionLoaded` arm. Stale guard: a result serves
-    /// the library only while its root parent still matches (an All fetch's
-    /// source listing) and its selection is still the state's current one; a
+    /// the library only while its selection is still wanted (the TUI's own
+    /// selection, or a target the GUI's checked set still holds — design D3)
+    /// and its root parent still matches (an All fetch's source listing). A
     /// selection left before its fetch returned is dropped, and the cache
-    /// fills only through a live selection.
+    /// fills only through a wanted selection; only the TUI's own selection
+    /// ends its loading mark.
     pub(in crate::app) fn handle_feed_home_video_selection_loaded(
         &mut self,
         lib_idx: usize,
@@ -452,15 +491,14 @@ impl App {
         selection: FeedHomeVideoSelection,
         items: Vec<EmbyItem>,
     ) {
-        let stale = self
+        let current = self
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-            .is_none_or(|state| {
-                state.selection != selection
-                    || matches!(selection, FeedHomeVideoSelection::All)
-                        && !self.feed_home_video_root_matches(lib_idx, parent_id)
-            });
+            .is_some_and(|state| state.selection == selection);
+        let stale = !self.feed_home_video_selection_wanted(lib_idx, &selection)
+            || matches!(selection, FeedHomeVideoSelection::All)
+                && !self.feed_home_video_root_matches(lib_idx, parent_id);
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -473,7 +511,12 @@ impl App {
             }
             if !stale {
                 state.items.insert(selection, items);
-                state.loading = false;
+                // Only the TUI's own selection ends its loading mark: a
+                // checked folder's list the GUI fetched beside it answers no
+                // spinner the TUI paints.
+                if current {
+                    state.loading = false;
+                }
             }
         }
         if stale {
@@ -482,6 +525,23 @@ impl App {
         }
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "selection_loaded");
+    }
+
+    /// Whether a landed target's list still serves the library (design D3):
+    /// the TUI's rule (its selection is still the state's current one) or the
+    /// GUI's checked set still holds the target, so a fetch the GUI started
+    /// lands while the TUI's selection stays what the TUI set.
+    fn feed_home_video_selection_wanted(
+        &self,
+        lib_idx: usize,
+        target: &FeedHomeVideoSelection,
+    ) -> bool {
+        let current = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .is_some_and(|state| state.selection == *target);
+        current || self.gui_emby_feed_wants_target(lib_idx, target)
     }
 
     /// Rule 5: when the folder listing completes (open, restore), the

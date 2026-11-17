@@ -311,6 +311,21 @@ pub struct App {
     /// never reads it.
     pub(in crate::app) gui_emby_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
+    /// The GUI Library's Emby feed-group selection (add-gui-library-panel
+    /// design D12, row 8.1; gui-collection-dropdown design D2, D3, D4): per
+    /// feed-group library, the checked folders (or All) and the list's date
+    /// order. The GUI reads and fills the library tab's shared
+    /// `feed_home_video` cache without writing its `selection`, so the TUI's
+    /// own pill selection stays the TUI's. A library with no entry has set no
+    /// GUI selection and reads All on Newest; the store is session memory
+    /// only. The TUI never reads it.
+    pub(in crate::app) gui_emby_feed_sets: std::collections::HashMap<
+        usize,
+        (
+            crate::app::gui_library::GuiCollectionSet,
+            crate::app::gui_library::GuiDateOrder,
+        ),
+    >,
     /// The GUI Library's Emby root-list store (row 8.1): each plain Emby
     /// library's full root list, paged to completion, keyed by the library
     /// index. It lands outside `nav_stack`, because the TUI's root path
@@ -319,15 +334,6 @@ pub struct App {
     /// reads. The TUI never reads it.
     pub(in crate::app) gui_emby_roots:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
-    /// The GUI Library's destination-Latest store (row 8.1): each Emby
-    /// library's Latest snapshot, keyed by the library index — the list the
-    /// New pill paints, fetched through the store's own `get_latest` fetch
-    /// the way the root-list store fetches its flat list. A loaded snapshot
-    /// lives for the session, and a failed one stays failed until the pill
-    /// is selected again. The TUI's own Latest snapshot stays the shell's
-    /// (`tv_latest_snapshots`), and the TUI never reads this store.
-    pub(in crate::app) gui_emby_latest:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLatestItems>,
     /// The GUI Library's Audiobooks selection (add-gui-library-panel design
     /// D12, row 9.1): per Audiobookshelf book library, the book the Hero
     /// shows, by stable `library_item_id`. The TUI's own resting selection is

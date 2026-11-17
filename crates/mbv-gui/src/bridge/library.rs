@@ -313,9 +313,12 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => Self::EmbySetFeedGroup {
                 lib_idx,
                 group: match group {
-                    GuiEmbyFeedGroup::Latest => mbv::GuiEmbyFeedGroup::Latest,
-                    GuiEmbyFeedGroup::All => mbv::GuiEmbyFeedGroup::All,
-                    GuiEmbyFeedGroup::Folder(folder_id) => mbv::GuiEmbyFeedGroup::Folder(folder_id),
+                    // The core's interim press key: None is All, Some a
+                    // folder's stable id. The New pill's press presses All —
+                    // the row paints no New pill while the set replaces the
+                    // row.
+                    GuiEmbyFeedGroup::Latest | GuiEmbyFeedGroup::All => None,
+                    GuiEmbyFeedGroup::Folder(folder_id) => Some(folder_id),
                 },
             },
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },

@@ -29,10 +29,13 @@ const MOVIES_BODY: &str = r#"{"Items":[{"Id":"m-1","Name":"A Movie","Type":"Movi
 const VIDEO_BODY: &str =
     r#"{"Items":[{"Id":"vid-1","Name":"Clip","Type":"Video"}],"TotalRecordCount":1}"#;
 
-/// A Latest snapshot listing: the answer the New pill's `get_latest` fetch
-/// parses into its items — a bare JSON array — with the video's containing
-/// folder and its date added, the facts the New rows project.
-const LATEST_BODY: &str = r#"[{"Id":"vid-new","Name":"Fresh Clip","Type":"Video","ParentId":"folder-1","DateCreated":"2026-11-01T10:00:00.0000000Z"}]"#;
+/// The first checked folder's listing: the old video and the video both
+/// folders publish, with the date added the GUI's list sorts by.
+const FIRST_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-old","Name":"Old Clip","Type":"Video","DateCreated":"2020-01-01T10:00:00.0000000Z"},{"Id":"vid-shared","Name":"Shared Clip","Type":"Video","DateCreated":"2022-06-01T10:00:00.0000000Z"}],"TotalRecordCount":2}"#;
+
+/// The second checked folder's listing: the shared video and the newest one,
+/// so the merged list de-duplicates the shared row.
+const SECOND_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-shared","Name":"Shared Clip","Type":"Video","DateCreated":"2022-06-01T10:00:00.0000000Z"},{"Id":"vid-new","Name":"New Clip","Type":"Video","DateCreated":"2026-01-01T10:00:00.0000000Z"}],"TotalRecordCount":2}"#;
 
 /// A browse level over `items`, hanging off `parent_id`.
 fn level(parent_id: &str, title: &str, items: Vec<EmbyItem>) -> BrowseLevel {
@@ -123,6 +126,33 @@ fn land_shown_selection(app: &mut App) {
     }
 }
 
+/// Land events until no feed-group fetch is outstanding: the stale frame's
+/// event and the fetch's own completion both ride the channel.
+fn land_until_fetched(app: &mut App) {
+    while app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .is_some_and(|state| state.fetching.is_some())
+    {
+        land(app);
+    }
+}
+
+/// The ids one checked folder's cached list holds, as the merged list reads
+/// it.
+fn checked_folder_ids<'a>(app: &'a App, folder_id: &str) -> Vec<&'a str> {
+    app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .and_then(|state| {
+            state
+                .items
+                .get(&FeedHomeVideoSelection::Folder(folder_id.to_string()))
+        })
+        .map(|items| items.iter().map(|item| item.id.as_str()).collect())
+        .unwrap_or_default()
+}
+
 /// Opening the Movies library lands its full root list on the App through the
 /// GUI tick's drain (row 8.1, contract a): the open runs the TUI's own
 /// activation — the root listing the TUI also loads — and the root-list
@@ -192,12 +222,13 @@ fn opening_a_feed_view_library_loads_its_default_selection() {
     );
 }
 
-/// `gui_emby_set_feed_group` loads another group's items and drops a stale
-/// completion (row 8.1, contract b): the selection write and the lazy fetch
-/// run the TUI's own path, a completion for a selection the library no
-/// longer shows is dropped on arrival, and the shown group's own items land.
+/// The interim folder pill checks a folder without moving the TUI's own
+/// selection (2.6, design D2, D3): the GUI fetches the checked folder's items
+/// into the shared cache, a completion for a folder the set does not hold is
+/// dropped on arrival, and the TUI's `FeedHomeVideoState::selection` stays
+/// what the TUI set.
 #[test]
-fn setting_another_feed_group_loads_its_items_and_drops_a_stale_completion() {
+fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond_repeated(200, VIDEO_BODY, 4);
@@ -213,133 +244,114 @@ fn setting_another_feed_group_loads_its_items_and_drops_a_stale_completion() {
         .push(level(FEED_ID, "YouTube", vec![folder]));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.gui_emby_set_feed_group(0, &GuiEmbyFeedGroup::Folder("folder-1".into()));
-    // A completion for a group the shown selection is not: the stale-drop
+    app.gui_emby_set_feed_group(0, Some("folder-1"));
+    // A completion for a folder the checked set does not hold: the stale-drop
     // rule drops it whatever order it arrives in.
     let _ = app.channels.lib_tx.send(LibEvent::Browse(
         crate::app::BrowseEvent::FeedHomeVideoSelectionLoaded {
             lib_idx: 0,
-            parent_id: "folder-1".into(),
+            parent_id: "gone".into(),
             selection: FeedHomeVideoSelection::Folder("gone".into()),
             items: vec![make_item("Stray", "Video")],
         },
     ));
-    land_shown_selection(&mut app);
+    land_until_fetched(&mut app);
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
         state.selection,
-        FeedHomeVideoSelection::Folder("folder-1".into()),
-        "the shown group is the set-feed-group command's"
+        FeedHomeVideoSelection::All,
+        "the TUI's own selection stays where the TUI left it"
     );
     assert_eq!(
-        app.feed_home_video_selected_items(0)
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
+        checked_folder_ids(&app, "folder-1"),
         vec!["vid-1"],
-        "the shown group's own items landed; the stale completion's did not"
+        "the checked folder's items landed"
+    );
+    assert!(
+        !state
+            .items
+            .contains_key(&FeedHomeVideoSelection::Folder("gone".into())),
+        "the stale completion stored nothing"
     );
     assert_eq!(state.fetching, None, "the live fetch retired its mark");
 }
 
-/// The feed-group pill row carries the New pill first (row 8.1, the TUI's
-/// own selector row): New leads, All follows, and each counted folder keeps
-/// its pill, with All selected while the default group view is active.
+/// Two checked folders fetch one at a time and merge (2.6, design D3, D4): the
+/// first uncached target's fetch runs while `fetching` names it, the second
+/// starts only after the first lands, and the list is both folders' items
+/// de-duplicated by id and sorted by date added, newest first.
 #[test]
-fn the_feed_group_pill_row_carries_the_new_pill_first() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    let mut library = make_item("YouTube", "CollectionFolder");
-    library.id = FEED_ID.into();
-    library.collection_type = "homevideos".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.config
-        .lock()
-        .unwrap()
-        .feed_view_libraries
-        .push("youtube".into());
-    let folder = folder_item("folder-1", "Channel 1");
-    app.libs[0]
-        .nav_stack
-        .push(level(FEED_ID, "YouTube", vec![folder]));
-    let mut state = FeedHomeVideoState::default();
-    state.folder_counts.insert("folder-1".into(), 1);
-    app.libs[0].feed_home_video = Some(state);
-
-    let projection = app.gui_emby_projection(0);
-
-    let names: Vec<&str> = projection
-        .pills
-        .iter()
-        .map(|pill| pill.name.as_str())
-        .collect();
-    assert_eq!(
-        names,
-        vec!["New", "All", "Channel 1"],
-        "New leads the pill row"
-    );
-    assert!(
-        !projection.pills[0].selected && projection.pills[1].selected,
-        "All is the default selection while the group view is active"
-    );
-}
-
-/// Selecting the New pill fetches the Latest snapshot through the store's
-/// own fetch (row 8.1) and projects its rows with the programme line and the
-/// date-added gutter, the TUI New view's list.
-#[test]
-fn selecting_the_new_pill_fetches_the_latest_snapshot_and_projects_its_rows() {
+fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
-    http.respond_repeated(200, LATEST_BODY, 2);
+    // One answer per folder, so the two fetches cannot mis-script each other:
+    // the shared item rides both folders' lists.
+    http.respond_when("ParentId=folder-1", 200, FIRST_FOLDER_BODY);
+    http.respond_when("ParentId=folder-2", 200, SECOND_FOLDER_BODY);
     let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
     app.config
         .lock()
         .unwrap()
         .feed_view_libraries
         .push("youtube".into());
-    let folder = folder_item("folder-1", "Channel 1");
-    app.libs[0]
-        .nav_stack
-        .push(level(FEED_ID, "YouTube", vec![folder]));
+    app.libs[0].nav_stack.push(level(
+        FEED_ID,
+        "YouTube",
+        vec![
+            folder_item("folder-1", "Channel 1"),
+            folder_item("folder-2", "Channel 2"),
+        ],
+    ));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.gui_emby_set_feed_group(0, &crate::app::gui_library::GuiEmbyFeedGroup::Latest);
+    app.gui_emby_set_feed_group(0, Some("folder-1"));
+    app.gui_emby_set_feed_group(0, Some("folder-2"));
+    assert_eq!(
+        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        Some(FeedHomeVideoSelection::Folder("folder-1".into())),
+        "the first checked folder's fetch runs while the second waits"
+    );
+
+    land(&mut app);
+    assert_eq!(
+        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        None,
+        "the first fetch retired its mark"
+    );
+    app.ensure_gui_emby_selection(0);
+    assert_eq!(
+        app.libs[0].feed_home_video.as_ref().unwrap().fetching,
+        Some(FeedHomeVideoSelection::Folder("folder-2".into())),
+        "the second folder's fetch starts once the first lands"
+    );
     land(&mut app);
 
-    assert!(
-        matches!(
-            app.gui_emby_latest.get(&0),
-            Some(crate::app::gui_library::GuiEmbyLatestItems::Loaded(_))
-        ),
-        "the Latest snapshot landed in the store"
-    );
     let projection = app.gui_emby_projection(0);
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["vid-new", "vid-shared", "vid-old"],
+        "the merged list is newest first, with the shared item once"
+    );
+    let pill_names: Vec<&str> = projection
+        .pills
+        .iter()
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(
+        pill_names,
+        ["All", "Channel 1", "Channel 2"],
+        "the row offers All and each folder, with no New pill"
+    );
+    assert!(
+        projection.pills.iter().skip(1).all(|pill| pill.selected),
+        "both checked folders' pills are checked"
+    );
     assert_eq!(
         projection.collection_names,
-        vec!["New"],
-        "the location names the pill"
-    );
-    assert!(
-        projection.pills[0].selected,
-        "the New pill is the selection"
-    );
-    assert_eq!(
-        projection.rows[0].id, "vid-new",
-        "the list is the snapshot's rows"
-    );
-    assert_eq!(
-        projection.rows[0].subtitle.as_deref(),
-        Some("Channel 1"),
-        "the row names the programme (root folder) the video sits in"
-    );
-    assert_eq!(
-        projection.rows[0].date.as_deref(),
-        Some("1 Nov"),
-        "the gutter is the date added, short, the TUI Latest row's gutter"
+        ["Channel 1", "Channel 2"],
+        "the location names the checked folders"
     );
 }
 
@@ -561,11 +573,10 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     assert!(hero.art.is_none());
 }
 
-/// The feed-group mode's projection (row 8.1, contract b): the pills are New,
-/// All, and each folder whose video count is positive, with the selection's
-/// pill the selected one, the selected group's items are the rows in the
-/// server's date order with the year gutter and no rail letter, and the
-/// mode's flag is set.
+/// The feed-group mode's projection (row 8.1, contract b; 2.6, design D2, D3,
+/// D4): the pills are All and each root folder, with the checked set's pill
+/// checked, the checked folders' items are the rows in the stored date order
+/// with the year gutter and no rail letter, and the mode's flag is set.
 #[test]
 fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -593,12 +604,14 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     first.id = "vid-1".into();
     first.production_year = 2020;
     first.parent_id = "folder-1".into();
+    first.date_added = "2020-01-01T10:00:00.0000000Z".into();
     let mut second = make_item("New Clip", "Video");
     second.id = "vid-2".into();
     second.parent_id = "folder-1".into();
+    second.date_added = "2026-01-01T10:00:00.0000000Z".into();
     app.libs[0].feed_home_video = Some(FeedHomeVideoState {
         folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
-        items: [(FeedHomeVideoSelection::All, vec![second, first])]
+        items: [(FeedHomeVideoSelection::All, vec![first, second])]
             .into_iter()
             .collect(),
         ..FeedHomeVideoState::default()
@@ -614,8 +627,8 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         .collect();
     assert_eq!(
         names,
-        ["New", "All", "Channel 1"],
-        "the pills are New, All, and each folder with items"
+        ["All", "Channel 1", "Empty"],
+        "the pills are All and each root folder, with no New pill"
     );
     let selected: Vec<&str> = projection
         .pills
@@ -623,16 +636,12 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
         .filter(|pill| pill.selected)
         .map(|pill| pill.name.as_str())
         .collect();
-    assert_eq!(
-        selected,
-        ["All"],
-        "the selection's pill is the selected one"
-    );
+    assert_eq!(selected, ["All"], "the selection's pill is the checked one");
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
         ["vid-2", "vid-1"],
-        "the rows are the group's date order"
+        "the rows are the checked folders' date order, newest first"
     );
     assert!(
         projection.rows.iter().all(|row| row.sort_letter.is_none()),
@@ -671,7 +680,6 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
         0,
         crate::app::gui_library::GuiEmbyLibrarySelection {
             picked_row: Some("box-1".into()),
-            feed_latest: false,
         },
     );
 

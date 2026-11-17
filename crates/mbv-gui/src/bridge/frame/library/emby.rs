@@ -5,8 +5,7 @@
 //! carries, never by position.
 
 use mbv::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind,
+    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiPillOption,
 };
 
 use super::GuiArtShapeFrame;
@@ -52,40 +51,36 @@ pub struct GuiEmbyDetail {
     pub hero: Option<GuiEmbyHeroFrame>,
 }
 
-/// The feed-group pill a press selects (row 8.1): `New` (the destination
-/// Latest view), `All`, or one root folder by its stable Service id.
+/// The feed-group pill a press selects (row 8.1): `All`, or one root folder
+/// by its stable Service id. Until the collections frame replaces the row, the
+/// core carries the collection set's key — `None` for All, `Some(id)` for a
+/// folder (gui-collection-dropdown design D1); this DTO is the transitional
+/// wire shape the pill row paints until then, and the row paints no New pill.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiEmbyFeedGroupFrame {
     /// The New pill: the library's destination-Latest snapshot, newest first.
+    /// The row paints no New pill any more (design D2); the arm stays for the
+    /// transitional wire shape until the collections frame replaces it.
     Latest,
-    /// The All pill: the library root's own listing, newest first.
+    /// The All pill: the library root's own listing.
     All,
     /// One root folder that holds items, by its stable Service id.
     Folder(String),
 }
 
-impl From<GuiEmbyFeedGroup> for GuiEmbyFeedGroupFrame {
-    fn from(group: GuiEmbyFeedGroup) -> Self {
-        match group {
-            GuiEmbyFeedGroup::Latest => Self::Latest,
-            GuiEmbyFeedGroup::All => Self::All,
-            GuiEmbyFeedGroup::Folder(folder_id) => Self::Folder(folder_id),
-        }
-    }
-}
-
-/// One pill of a feed-view library's pill row (row 8.1): single-select.
+/// One pill of a feed-view library's pill row (row 8.1): multi-select while
+/// the collections frame is coming, its `selected` the core set's membership.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyPillFrame {
     /// The group the pill selects: the set-feed-group command carries it.
     pub group: GuiEmbyFeedGroupFrame,
     /// The pill's label: `All`, or the folder's name.
     pub name: String,
-    /// Whether the feed state's selection is this pill's group.
+    /// Whether the core's selection checks this pill.
     pub selected: bool,
     /// Whether the pill is a collection pill (multi-select) rather than a
-    /// single-select one. Every Emby-library pill is single-select (design
-    /// D6).
+    /// single-select one. The Emby feed-group row is the checked set's while
+    /// the dropdown is coming (gui-collection-dropdown design D1).
     pub collection: bool,
 }
 
@@ -189,13 +184,16 @@ impl GuiEmbyDetail {
     }
 }
 
-impl From<&GuiEmbyPill> for GuiEmbyPillFrame {
-    fn from(pill: &GuiEmbyPill) -> Self {
+impl From<&GuiPillOption<Option<String>>> for GuiEmbyPillFrame {
+    fn from(option: &GuiPillOption<Option<String>>) -> Self {
         Self {
-            group: GuiEmbyFeedGroupFrame::from(pill.group.clone()),
-            name: pill.name.clone(),
-            selected: pill.selected,
-            collection: false,
+            group: match &option.pill {
+                None => GuiEmbyFeedGroupFrame::All,
+                Some(folder_id) => GuiEmbyFeedGroupFrame::Folder(folder_id.clone()),
+            },
+            name: option.name.clone(),
+            selected: option.selected,
+            collection: true,
         }
     }
 }
