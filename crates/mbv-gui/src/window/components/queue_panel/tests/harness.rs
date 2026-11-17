@@ -24,8 +24,8 @@ use crate::bridge::frame::playback::{
     GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{
-    GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueInsertion, GuiQueueRow, GuiQueueSummary,
-    GuiSemanticState, GuiTrailing,
+    GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueHeaderFacts, GuiQueueInsertion, GuiQueueRow,
+    GuiQueueSummary, GuiSemanticState, GuiTrailing,
 };
 use crate::bridge::frame::theme::GuiTheme;
 use crate::bridge::layout::{LayoutReport, RegionTarget};
@@ -47,7 +47,8 @@ pub(super) const SECOND: i64 = 10_000_000;
 /// it with the shared formatter, so the assertion holds in every zone.
 pub(super) const WALL_MS: i64 = 1_700_000_000_000;
 
-/// A queue of `rows`, no cursor, marks, active slot, hover, or drag.
+/// A queue of `rows`, no cursor, marks, active slot, start slot, hover, or
+/// drag.
 pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
     GuiQueue {
         rows,
@@ -55,12 +56,16 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
         marks: Vec::new(),
         active: None,
         hover: None,
+        start: None,
+        playing: false,
         drag: None,
     }
 }
 
 /// The summary the fixture paints: two remaining rows, the queue's finish
-/// 43 minutes past the transport's finish, no filter.
+/// 43 minutes past the transport's finish, no filter, and the header's "One
+/// queue and no peer" facts (spec `gui-queue-chooser`) — one entry, so no
+/// chooser and a disabled close control.
 pub(super) fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
@@ -68,6 +73,29 @@ pub(super) fn summary() -> GuiQueueSummary {
         tail_secs: Some(43 * 60),
         filter: String::new(),
         filter_active: false,
+        total_secs: 9 * 60 * 60,
+        total_partial: false,
+        marked_secs: None,
+        marked_partial: false,
+        header: GuiQueueHeaderFacts {
+            entries: 1,
+            shown_name: "Default".to_owned(),
+            close_disabled: true,
+        },
+    }
+}
+
+/// The summary the header's "Several entries" contract paints (spec
+/// `gui-queue-chooser`): `Default` and `Kids` are the local Owner's queues and
+/// no peer connects, so the chooser shows and the close control acts.
+pub(super) fn several_entries() -> GuiQueueSummary {
+    GuiQueueSummary {
+        header: GuiQueueHeaderFacts {
+            entries: 2,
+            shown_name: "Kids".to_owned(),
+            close_disabled: false,
+        },
+        ..summary()
     }
 }
 

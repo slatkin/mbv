@@ -47,13 +47,13 @@ pub use self::app::{
     HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
     PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
     PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueChooserEntryProjection,
-    QueueChooserRenameProjection, QueueEndOffsets, QueueFooterProjection, QueuePlaybackProjection,
-    QueueStartProjection, QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget,
-    RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection,
-    SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome,
-    TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, TrickplayGrid, TrickplayPreviewTile,
-    TrickplaySheetKey, TrickplayTile, VisualIntent, WorkspaceRelayout,
-    resolve_router_outcome_with_focused,
+    QueueChooserRenameProjection, QueueEndOffsets, QueueFooterProjection, QueueHeaderProjection,
+    QueuePlaybackProjection, QueueStartProjection, QueueSummaryProjection, QueueSurfaceProjection,
+    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+    RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
+    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
+    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
+    WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
@@ -74,7 +74,7 @@ pub use self::app::{
     stub_app_with_completed_emby_startup_and_contents, stub_app_with_failed_emby_setup,
     stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
-    stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,
-    stub_app_with_unsaved_queue,
+    stub_app_with_playing_start_slot, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit, stub_app_with_track_choices,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };

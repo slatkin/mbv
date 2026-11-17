@@ -185,6 +185,23 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::Filter) => {
                 Some(Msg::Playback(PlaybackRequest::ActivateQueueFilter))
             }
+            // The queue header's Queue chooser button (gui-named-queues design
+            // D9): the press emits the request the GUI-only `t` chord
+            // dispatches, so the control and the chord run one path.
+            RegionTarget::Queue(QueueTargetId::QueueChooser) => {
+                Some(Msg::Playback(PlaybackRequest::QueueChooserToggle))
+            }
+            // The queue header's new-queue control (design D9): the same
+            // request `Ctrl+T` dispatches.
+            RegionTarget::Queue(QueueTargetId::NewQueue) => {
+                Some(Msg::Playback(PlaybackRequest::NewQueue))
+            }
+            // The queue header's close control (design D9): the same request
+            // `Ctrl+W` dispatches. A disabled control reports no region, so a
+            // press never reaches this arm.
+            RegionTarget::Queue(QueueTargetId::CloseQueue) => {
+                Some(Msg::Playback(PlaybackRequest::CloseQueue))
+            }
             // The footer's playlist pill is informational in the GUI (its
             // layout report carries no `playlistPill` region — the GUI
             // presents no playlists surface, so no press resolves here).

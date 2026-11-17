@@ -344,13 +344,23 @@ impl SectionLedger {
         // and queue sections carry in place of the clock strings the window
         // now derives from the playhead anchor.
         let offsets = app.gui_queue_end_offsets();
+        // The rows' start mark (gui-named-queues design D9) and the header's
+        // chooser facts read the same shown queue and entry list the
+        // projections above read, so the frame cannot disagree inside one
+        // tick.
+        let start = app.gui_queue_start_projection();
+        let header = app.gui_queue_header_projection();
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
         self.attach.adopt(None);
-        self.queue
-            .adopt(GuiQueue::from_surface(queue, viewport_rows, &summary));
+        self.queue.adopt(GuiQueue::from_surface(
+            queue,
+            viewport_rows,
+            &summary,
+            &start,
+        ));
         self.summary
-            .adopt(GuiQueueSummary::build(&summary, &offsets));
+            .adopt(GuiQueueSummary::build(&summary, &offsets, &header));
         self.panel.adopt(GuiPanelToggles::new(
             &app.panel_toggles_projection(),
             app.gui_ui_reset_epoch(),

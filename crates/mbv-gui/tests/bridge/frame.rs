@@ -138,6 +138,18 @@ fn playing_queue_frame_carries_rows_and_active_slot() {
     assert_eq!(frame.queue().active, Some(1));
 }
 
+/// The queue section carries the rows' start mark (gui-named-queues design
+/// D9): the `start` projection names the slot a play of the shown queue starts
+/// at, and `playing` says whether that queue is the one that plays. The stub's
+/// third slot is the start slot it reports, and its first one plays.
+#[test]
+fn the_queue_frame_carries_the_start_slot_and_the_playing_fact() {
+    let mut app = mbv::stub_app_with_playing_start_slot(3, 2);
+    let frame = frame_after_tick(&mut app);
+    assert_eq!(frame.queue().start, Some(3));
+    assert!(frame.queue().playing);
+}
+
 /// The row ordinal is the slot's 1-based position in the canonical queue, not
 /// its index in the painted viewport (audit/main.md 19): a viewport scrolled
 /// to its second row still numbers the visible rows by queue position.
@@ -156,7 +168,12 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
     ));
     queue.set_cursor(&QueueCursorUpdate::Set(2));
 
-    let frame = GuiQueue::from_surface(&queue, 2, &app.queue_summary_projection(&[]));
+    let frame = GuiQueue::from_surface(
+        &queue,
+        2,
+        &app.queue_summary_projection(&[]),
+        &app.gui_queue_start_projection(),
+    );
 
     let painted: Vec<(&str, usize)> = frame
         .rows

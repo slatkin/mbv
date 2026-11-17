@@ -110,7 +110,11 @@ impl RegionTarget {
                 | QueuePlaybackTargetId::SubtitleChip
                 | QueuePlaybackTargetId::PlaybackTarget,
             )
-            | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_))
+            | Self::Queue(
+                QueueTargetId::RowMenuEntry(_)
+                | QueueTargetId::RowActions(_)
+                | QueueTargetId::QueueChooser,
+            )
             | Self::Confirm(_)
             | Self::DaemonLost(_) => true,
             Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
@@ -184,6 +188,18 @@ pub enum QueueTargetId {
     /// The queue header's filter control: a press runs the `/` chord's text
     /// entry (add-tauri-gui-client row 6.5).
     Filter,
+    /// The queue header's Queue chooser button (gui-named-queues design D9): a
+    /// press toggles the Queue chooser dropdown open or closed, as the GUI-only
+    /// `t` chord does. The button paints only while the chooser lists two or
+    /// more entries.
+    QueueChooser,
+    /// The queue header's new-queue control (gui-named-queues design D9): a
+    /// press asks the local Owner for a new Named queue, as `Ctrl+T` does.
+    NewQueue,
+    /// The queue header's close control (gui-named-queues design D9): a press
+    /// closes the shown entry, as `Ctrl+W` does. The control reports no region
+    /// while it is disabled — the only local queue has no close.
+    CloseQueue,
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.

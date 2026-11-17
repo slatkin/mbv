@@ -6,8 +6,10 @@ use super::harness::*;
 use crate::bridge::layout::{ListId, ListRows, QueueTargetId, RegionTarget};
 
 /// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
-/// grip, actions, and menu-entry ids, menu last — the header's `filter` target
-/// leads, the rows follow, the hovered row's chrome trails them, and the
+/// grip, actions, and menu-entry ids, menu last — the header's controls lead in
+/// paint order (the filter and the new-queue control, with one local queue so
+/// no chooser and no acting close control), the rows follow, the hovered row's
+/// chrome trails them, and the
 /// menu's entries report last.
 #[test]
 fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last() {
@@ -20,6 +22,7 @@ fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last()
         fixture.last_reported_targets(),
         vec![
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
             RegionTarget::Queue(QueueTargetId::Slot(2)),
             RegionTarget::Queue(QueueTargetId::RowGrip(2)),
@@ -72,6 +75,7 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
             .collect::<Vec<_>>(),
         vec![
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(7)),
         ]
     );

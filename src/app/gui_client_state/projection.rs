@@ -12,6 +12,26 @@ use super::popover::track_popover_choices;
 use crate::app::App;
 use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
 
+/// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
+/// "The queue header holds the chooser and its controls"): the number of
+/// entries the Queue chooser lists, the name the chooser button shows, and
+/// whether the close control is disabled. The header shows the chooser only
+/// with two or more entries, and the close control acts on the only local
+/// queue only through a disabled control, so both facts come from the same
+/// entry list the dropdown paints.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct QueueHeaderProjection {
+    /// Every entry the Queue chooser lists: the local Owner's Named queues in
+    /// queue order, then the connected peer Player owner when one is.
+    pub entries: usize,
+    /// The name of the shown entry: the chooser button's label. Empty while
+    /// the Owner's first queue list has not arrived, when no entry shows.
+    pub shown_name: String,
+    /// Whether the close control is disabled: the only local queue has no
+    /// close, and no entry has arrived to close yet.
+    pub close_disabled: bool,
+}
+
 /// The canvas panel's collapse and queue-fold facts (design D10): the front
 /// end picks the panel layout from its container size plus these two
 /// toggles. The TUI Client has no canvas panel, so it never reads them.
@@ -153,6 +173,26 @@ pub enum GuiConfirmButtonTone {
 }
 
 impl App {
+    /// The Queue header's chooser facts (spec `gui-queue-chooser` "The queue
+    /// header holds the chooser and its controls"): the chooser's entry count,
+    /// the shown entry's name, and whether the close control is disabled.
+    /// Read-only, and read from the same live entry list the chooser's keys
+    /// and presses resolve against, so the header and the dropdown cannot
+    /// disagree inside one tick.
+    #[must_use]
+    pub fn gui_queue_header_projection(&self) -> QueueHeaderProjection {
+        let entries = self.queue_chooser_entries();
+        QueueHeaderProjection {
+            shown_name: entries
+                .iter()
+                .find(|entry| entry.shown)
+                .map(|entry| entry.label.clone())
+                .unwrap_or_default(),
+            close_disabled: entries.len() < 2,
+            entries: entries.len(),
+        }
+    }
+
     /// The open overlay as the frame carries it (design D4), built from the
     /// same playback projection read the frame carries, so the popover's
     /// choices and the track chips cannot disagree inside one frame.

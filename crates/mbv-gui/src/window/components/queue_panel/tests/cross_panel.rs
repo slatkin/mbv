@@ -31,8 +31,8 @@ fn a_chooser_row_paints_the_brand_mark_of_its_target_kind() {
 
 /// Contract (`QueuePlaybackPanel.test.ts`): an open chooser reports its rows
 /// after the queue and footer regions — the hit map's last push wins where
-/// a chooser row paints over a queue row beneath it. The header's `filter`
-/// region leads the queue's, the footer's line reports none.
+/// a chooser row paints over a queue row beneath it. The header's control
+/// regions lead the queue's, the footer's line reports none.
 #[test]
 fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     let mut fixture = built_sized(panel_tree_app);
@@ -105,6 +105,7 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
         ]
     );

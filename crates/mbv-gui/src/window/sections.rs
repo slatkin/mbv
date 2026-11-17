@@ -23,7 +23,7 @@ use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::{GuiRole, GuiTheme};
 use crate::bridge::frame::{GuiAttachState, GuiPanelToggles};
@@ -256,11 +256,14 @@ fn fresh_queue() -> GuiQueue {
         marks: Vec::new(),
         active: None,
         hover: None,
+        start: None,
+        playing: false,
         drag: None,
     }
 }
 
-/// The fresh summary: nothing played, no filter.
+/// The fresh summary: nothing played, no filter, no chooser entry, and the
+/// queue's total unknown.
 fn fresh_summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 0,
@@ -268,6 +271,15 @@ fn fresh_summary() -> GuiQueueSummary {
         tail_secs: None,
         filter: String::new(),
         filter_active: false,
+        total_secs: 0,
+        total_partial: false,
+        marked_secs: None,
+        marked_partial: false,
+        header: GuiQueueHeaderFacts {
+            entries: 0,
+            shown_name: String::new(),
+            close_disabled: true,
+        },
     }
 }
 

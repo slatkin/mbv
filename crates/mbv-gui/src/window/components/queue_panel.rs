@@ -34,19 +34,22 @@
 //! installer — the core owns the gesture, the drop index, and the move
 //! request.
 //!
-//! The regions report in paint order: the header's filter resolves to its
-//! `filter` target first, then the rows resolve to their stable slots, then
+//! The regions report in paint order: the header's controls resolve to their
+//! `queueChooser`, `filter`, `newQueue`, and `closeQueue` targets, then the
+//! rows resolve to their stable slots, then
 //! the hovered row's `rowGrip` and `rowActions`
 //! — pushed after the row's `slot` region so the chrome wins where it paints
-//! over the row (the hit map's last push wins). The open row menu's entries
+//! over the row (the hit map's last push wins). The chooser's button and the
+//! close control claim a pointer only while they paint and act. The open row
+//! menu's entries
 //! (`QueueRowMenu`, presentation-only) report their `rowMenuEntry` indices
 //! under a second report key this component inserts when the menu opens —
 //! the same technique `TrackChips` uses for its popover rows — so they land
 //! after every region the panel reports and win the hit map where the menu
 //! paints over a row beneath it.
 //!
-//! The Queue chooser, the new-queue control, and the close control are task
-//! 8.2's.
+//! The Queue chooser dropdown (task 8.3), the row marks and hover chrome
+//! (task 8.4), and the footer totals (task 8.5) are later tasks'.
 //!
 //! The row paint is the canvas's (U4.2): its hexes come through the
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
@@ -67,7 +70,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueInsertion, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_header::QueueHeader;
@@ -197,6 +200,47 @@ fn whole_rows(height: f32) -> usize {
     usize::try_from(rows).unwrap_or(0)
 }
 
+/// The Queue header's region handles (gui-named-queues task 8.2): the mounted
+/// events its four controls set, `None` while a control does not paint.
+struct HeaderHandles<'a> {
+    chooser: Option<&'a Event<MountedData>>,
+    filter: Option<&'a Event<MountedData>>,
+    new_queue: Option<&'a Event<MountedData>>,
+    close: Option<&'a Event<MountedData>>,
+}
+
+/// The queue header's painted regions in paint order: the Queue chooser, the
+/// filter, the new-queue control, and the close control (gui-named-queues task
+/// 8.2). A control that does not paint or act claims no pointer, so the
+/// chooser reports only with two or more entries and the close control only
+/// while it is enabled.
+async fn header_regions(
+    header: &GuiQueueHeaderFacts,
+    handles: HeaderHandles<'_>,
+) -> Vec<LayoutRegion> {
+    let mut regions: Vec<LayoutRegion> = Vec::new();
+    if header.entries >= 2
+        && let Some(mounted) = handles.chooser
+    {
+        regions.extend(
+            element_region(mounted, RegionTarget::Queue(QueueTargetId::QueueChooser)).await,
+        );
+    }
+    if let Some(mounted) = handles.filter {
+        regions.extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await);
+    }
+    if let Some(mounted) = handles.new_queue {
+        regions.extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::NewQueue)).await);
+    }
+    if !header.close_disabled
+        && let Some(mounted) = handles.close
+    {
+        regions
+            .extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::CloseQueue)).await);
+    }
+    regions
+}
+
 /// The Queue panel (task 5.5). The panel reads the `queue`, `summary`,
 /// and `overlay` sections and the playhead's prediction; each paint
 /// that moved a region reports, and the layout epoch — the `ResizeObserver`
@@ -210,9 +254,15 @@ pub fn QueuePanel() -> Element {
     let menu_key = use_hook(LayoutKey::next);
 
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The header's filter control's mounted event — the handle the `filter`
-    // region reads.
+    // The header's control handles: the Queue chooser button's, the filter's,
+    // the new-queue control's, and the close control's mounted events — the
+    // handles the `queueChooser`, `filter`, `newQueue`, and `closeQueue`
+    // regions read. Each signal sets while its control paints; the panel
+    // reads only the ones its facts say paint (gui-named-queues task 8.2).
+    let chooser_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let filter_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let new_queue_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    let close_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     // The painted rows' mounted events, by their stable slot — the handles
     // the row regions read (the former client `querySelectorAll('[data-slot]')`).
     let slot_handles: Signal<Vec<(u64, Event<MountedData>)>> = use_signal(Vec::new);
@@ -271,11 +321,17 @@ pub fn QueuePanel() -> Element {
     // is open. The reporter dedupes an unchanged contribution, so a frame
     // that moves only the cursor sends nothing.
     let watch_queue = sections.queue;
+    let watch_summary = sections.summary;
     let watch_overlay = sections.overlay;
     use_effect(move || {
         // The effect reads its own handle to the queue, so a batch that wrote
         // the section re-reports while a render that read it again would not.
         let queue = watch_queue.cloned();
+        // The header's control facts decide which of its handles report
+        // (gui-named-queues task 8.2): the chooser paints only with two or
+        // more entries, and the close control claims no pointer while it is
+        // disabled.
+        let header = watch_summary.cloned().header;
         let overlay_open = watch_overlay.cloned();
         let _epoch = epoch.0.cloned();
         let list = list_mounted.cloned();
@@ -283,7 +339,10 @@ pub fn QueuePanel() -> Element {
         let grip = grip_mounted.cloned();
         let actions = actions_mounted.cloned();
         let menu_row_handles = menu_rows.cloned();
+        let chooser = chooser_handle.cloned();
         let filter = filter_handle.cloned();
+        let new_queue = new_queue_handle.cloned();
+        let close = close_handle.cloned();
         let menu = match overlay_open.as_ref() {
             Some(frame @ GuiOverlayFrame::RowMenu { .. }) => Some(frame.clone()),
             _ => None,
@@ -299,14 +358,19 @@ pub fn QueuePanel() -> Element {
             if menu_rows.peek().len() > entry_count {
                 menu_rows.write().truncate(entry_count);
             }
-            let mut regions: Vec<LayoutRegion> = Vec::new();
-            // The queue header's `filter` segment reports first, then the
-            // rows, then the hovered row's chrome.
-            if let Some(mounted) = filter.as_ref() {
-                regions.extend(
-                    element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await,
-                );
-            }
+            // The queue header's controls report in paint order — the chooser,
+            // then the filter, the new-queue control, and the close control —
+            // then the rows, then the hovered row's chrome.
+            let mut regions: Vec<LayoutRegion> = header_regions(
+                &header,
+                HeaderHandles {
+                    chooser: chooser.as_ref(),
+                    filter: filter.as_ref(),
+                    new_queue: new_queue.as_ref(),
+                    close: close.as_ref(),
+                },
+            )
+            .await;
             for slot in queue
                 .rows
                 .iter()
@@ -401,7 +465,10 @@ pub fn QueuePanel() -> Element {
                 "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
+                    chooser: chooser_handle,
                     filter: filter_handle,
+                    new_queue: new_queue_handle,
+                    close: close_handle,
                 }
                 div {
                     class: "relative min-h-0 flex-1 overflow-hidden",
