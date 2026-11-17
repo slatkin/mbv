@@ -96,12 +96,9 @@ pub fn library_arrangement(container: LayoutSize, queue_width: f32) -> GuiArrang
     GuiArrangement::Narrow
 }
 
-/// The arrangement the Settings screen paints (the former client
-/// `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`): the Library
-/// column's measurement with the screen's fixed 260 px sidebar at the left
-/// window edge — the Queue column's former place. The sidebar takes neither
-/// the session's dragged Queue width nor the collapse toggle, so the screen's
-/// Mini threshold is the window width minus 260 px.
+/// The arrangement the Settings screen paints: `library_arrangement` with the
+/// fixed 260 px sidebar, which ignores the dragged Queue width and the collapse
+/// toggle, so the Mini threshold is the window width minus 260 px.
 #[must_use]
 pub fn settings_arrangement(container: LayoutSize) -> GuiArrangement {
     library_arrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)

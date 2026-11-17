@@ -20,19 +20,8 @@ fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
 
     let regions = fixture.regions();
     assert_eq!(regions[..3], ["topBar", "pills", "list"]);
-    // The content row paints the list before the Hero pane
-    // (gui-swap-queue-and-library-sides D1); the Music list's letter rail
-    // paints inside the list region.
-    let list_at = regions
-        .iter()
-        .position(|region| region == "list")
-        .expect("the list region paints");
-    let hero_at = regions
-        .iter()
-        .position(|region| region == "hero")
-        .expect("the Wide Hero region paints");
-    assert!(list_at < hero_at);
-    assert!(regions.contains(&"list".to_owned()));
+    // The Wide Hero paints after the list (gui-swap-queue-and-library-sides D1).
+    assert!(regions[3..].contains(&"hero".to_owned()));
     // The pill row's painter mounts for real (row 7.4): the pills region is
     // the pill row's group, and the Music list's painter mounts under it.
     assert!(

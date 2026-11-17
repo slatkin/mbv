@@ -361,10 +361,8 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 // The list column: the canvas's index in Wide, the whole
                 // Library column in Mini and Narrow. Rows 7.2 and 7.7 paint
                 // the destination lists here. Wide paints the session's width
-                // (design D4), and its divider sits between the list and the
-                // Hero pane. In Wide the list is at the left window edge, so
-                // its border faces the Hero pane on the right
-                // (gui-swap-queue-and-library-sides design D3).
+                // (design D4) at the left edge; its divider and the Hero pane
+                // sit to its right.
                 div {
                     "data-library-region": "list",
                     class: if wide {
@@ -387,8 +385,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 if wide {
                     // The Wide list column's divider (design D4): dragging it
                     // resizes the list column, a double-click returns the
-                    // canvas width. The list sits left of the divider, so the
-                    // side is Left and a drag to the right widens it.
+                    // canvas width.
                     PanelDivider {
                         side: DividerSide::Left,
                         name: DividerName::List,
@@ -400,11 +397,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                             reset_widths.reset_list_width();
                         },
                     }
-                }
-                if wide {
-                    // The Wide arrangement's Hero pane, to the right of the
-                    // list (gui-swap-queue-and-library-sides design D1),
-                    // with the active destination's Hero inside.
+                    // The Wide Hero pane, with the active destination's Hero inside.
                     div {
                         "data-library-region": "hero",
                         class: "flex min-h-0 min-w-0 flex-1 flex-col",

@@ -407,11 +407,8 @@ pub fn App() -> Element {
     let container_size = container.cloned();
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
     let arrangement = library_arrangement(container_size, widths.queue);
-    // The Settings screen's own measure: its sidebar is the canvas's fixed
-    // 260 px at the left window edge, so the screen's Mini threshold is
-    // the window width minus that width, never the dragged Queue column's
-    // (design D11; `App`'s
-    // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
+    // The Settings screen's own measure: its fixed 260 px sidebar, never the
+    // dragged Queue column's width (design D11).
     let settings_screen_arrangement = settings_arrangement(container_size);
     // The Library panel's one presence fact (design D2, D10, D12): the
     // window holds the active destination's content, whose painters the
@@ -528,11 +525,8 @@ pub fn App() -> Element {
                         // from the Library panel's own arrangement.
                         SettingsScreen { arrangement: settings_screen_arrangement }
                     } else {
-                        // The Library panel is at the left window edge and the
-                        // Queue column at the right window edge
-                        // (gui-swap-queue-and-library-sides design D1), so the
-                        // root paints the Library panel, then the Queue
-                        // divider, then the Queue column.
+                        // Paint order, left to right: Library panel, Queue
+                        // divider, Queue column (design D1).
                         if library_visible && has_library_list {
                             LibraryPanel {
                                 arrangement,
@@ -544,9 +538,7 @@ pub fn App() -> Element {
                             // The Queue panel's divider (design D4): dragging
                             // it resizes the Queue column and, with it, the
                             // Library column the arrangement measures; a
-                            // double-click returns the canvas width. The Queue
-                            // column sits right of the divider, so the side
-                            // is Right and a drag to the left widens it.
+                            // double-click returns the canvas width.
                             PanelDivider {
                                 side: DividerSide::Right,
                                 name: DividerName::Queue,

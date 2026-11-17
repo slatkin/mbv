@@ -56,9 +56,9 @@ fn the_wide_list_region_ends_left_of_the_hero_region() {
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
-    let list = fixture.rect_of("[data-library-region=\"list\"]");
-    let hero = fixture.rect_of("[data-library-region=\"hero\"]");
-    assert!(list.x + list.width <= hero.x);
+    let list_box = fixture.rect_of("[data-library-region=\"list\"]");
+    let hero_box = fixture.rect_of("[data-library-region=\"hero\"]");
+    assert!(list_box.x + list_box.width <= hero_box.x);
 }
 
 /// Carry a Shows list and open its item menu at `x, y`, as the core's

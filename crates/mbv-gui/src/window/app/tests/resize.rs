@@ -90,9 +90,7 @@ fn resize_app(props: Props) -> Element {
                 class: "relative flex h-full min-h-0 w-full min-w-0 overflow-hidden",
                 "data-arrangement": arrangement.name(),
                 onmounted: move |event| container_mounted.set(Some(event)),
-                // The Library column is at the left window edge and the Queue
-                // column at the right window edge, the order the root paints
-                // (`window/app.rs`, gui-swap-queue-and-library-sides D1).
+                // The Library column sits left of the Queue column, as the root paints them.
                 if library_visible {
                     div {
                         class: "flex h-full min-h-0 flex-col flex-1",
@@ -101,7 +99,7 @@ fn resize_app(props: Props) -> Element {
                 }
                 if queue_visible {
                     div {
-                        class: "flex h-full min-h-0 flex-col flex-none",
+                        class: super::super::queue_column_class(true, false),
                         "data-queue-column": "",
                         style: "width: {widths.queue}px;",
                     }
