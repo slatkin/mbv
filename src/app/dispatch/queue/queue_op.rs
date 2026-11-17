@@ -177,24 +177,7 @@ impl App {
                     }
                 },
                 Ok(PlayerEvent::QueueOpResult { op, outcome }) => {
-                    // Another op's answer (or a duplicate). The new-queue
-                    // control's own answer can be the one that arrives here
-                    // while an edit's pump waits (design D8): it is not a queue
-                    // snapshot, and it must reach its request instead of being
-                    // adopted as background, or the control would wait for it
-                    // forever and the queue it made would never be shown.
-                    // Every other answer is adopted like any other owner
-                    // snapshot.
-                    let applied = match &outcome {
-                        mbv_ctrl::QueueOpOutcome::Applied(snapshot) => Some(&**snapshot),
-                        mbv_ctrl::QueueOpOutcome::Rejected(_) => None,
-                    };
-                    if self.take_new_queue_answer(op, applied) {
-                        continue;
-                    }
-                    if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
-                        self.adopt_queue_op_snapshot(link, &snapshot, false);
-                    }
+                    self.adopt_foreign_answer(link, op, outcome);
                 }
                 Ok(PlayerEvent::NamedQueue(event)) if link == QueueLink::Local => {
                     // Owner Named-queue state, adopted inline like a snapshot:
@@ -223,6 +206,33 @@ impl App {
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     return false;
                 }
+            }
+        }
+    }
+
+    /// Adopt one answer that is not the op this pump waits for (design D8 of
+    /// `gui-named-queues`): another op's answer, or a duplicate. The
+    /// new-queue control's own answer can be the one that arrives here while an
+    /// edit's pump waits, so it must reach its request instead of being adopted
+    /// as background, or the control would wait for it forever and the queue it
+    /// made would never be shown. A refused Named-queue command reports here
+    /// too, because it has no pump of its own and this pump reads the link that
+    /// would have answered it. Every other answer is adopted like any other
+    /// owner snapshot.
+    fn adopt_foreign_answer(
+        &mut self,
+        link: QueueLink,
+        op: QueueOpId,
+        outcome: mbv_ctrl::QueueOpOutcome,
+    ) {
+        match outcome {
+            mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
+                if !self.take_new_queue_answer(op, Some(&snapshot)) {
+                    self.adopt_queue_op_snapshot(link, &snapshot, false);
+                }
+            }
+            mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
+                self.report_named_queue_rejection(op, reason);
             }
         }
     }

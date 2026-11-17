@@ -137,6 +137,13 @@ pub struct App {
     /// queue that the control then shows with its name open for edit. `None`
     /// while no request is in flight.
     pub(in crate::app) pending_new_queue: Option<mbv_ctrl::QueueOpId>,
+    /// The `op` of every Named-queue command whose answer the Client does not
+    /// pump for — the close and the rename the Queue chooser sends, beside the
+    /// create the control holds in `pending_new_queue` (gui-named-queues design
+    /// D8). Each answer arrives in a drain, so this set is how a rejection
+    /// finds the request it answers and tells the user why; an op leaves the
+    /// set when its answer arrives, and a lost Owner clears it.
+    pub(in crate::app) pending_named_queue_ops: std::collections::HashSet<mbv_ctrl::QueueOpId>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,

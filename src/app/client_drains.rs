@@ -187,10 +187,15 @@ impl App {
             PlayerEvent::Stopped {
                 slot_id, consume, ..
             } => self.finish_home_stop(slot_id, consume),
-            // A rejected answer the new-queue control is waiting for ends the
-            // wait; anything else a rejection answers already reported itself.
-            PlayerEvent::QueueOpResult { op, .. } => {
-                self.take_new_queue_answer(op, None);
+            // A rejected answer ends the Named-queue command it answers and
+            // tells the user why (design D8); an edit's own rejection already
+            // flashed from the pump that waited for it, so an op that ends no
+            // Named-queue command stays silent.
+            PlayerEvent::QueueOpResult {
+                op,
+                outcome: mbv_ctrl::QueueOpOutcome::Rejected(reason),
+            } => {
+                self.report_named_queue_rejection(op, reason);
             }
             PlayerEvent::RemoteDisconnected(_) => {
                 self.suspended_local = None;

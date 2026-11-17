@@ -65,9 +65,10 @@ impl App {
     /// Handle a late or unmatched `PlayerEvent::QueueOpResult` (row 5.1): the
     /// pump adopts the matching answer inline, so anything arriving here missed
     /// its wait and is adopted like any other owner snapshot. A late
-    /// `Rejected` reports nothing more -- the timeout already flashed. The
-    /// answer to the new-queue control's own request is not a queue snapshot
-    /// (design D8): it ends that request and opens the queue it names.
+    /// `Rejected` reports nothing more unless it answers a Named-queue command,
+    /// whose request ends only here (design D8). The answer to the new-queue
+    /// control's own request is not a queue snapshot: it ends that request and
+    /// opens the queue it names.
     fn handle_queue_op_result(
         &mut self,
         op: mbv_ctrl::QueueOpId,
@@ -80,8 +81,13 @@ impl App {
                 }
                 flow_after(self.handle_unified_queue_updated(self.active_queue_link(), &snapshot))
             }
-            mbv_ctrl::QueueOpOutcome::Rejected(_) => {
-                self.take_new_queue_answer(op, None);
+            mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
+                // A Named-queue command has no pump to report its refusal, so
+                // this drain is where its request ends and the user learns why
+                // (design D8). An edit's own rejection already flashed from the
+                // pump that waited for it, so an op that ends no Named-queue
+                // command stays silent.
+                self.report_named_queue_rejection(op, reason);
                 PlayerEventFlow::Proceed
             }
         }
@@ -603,8 +609,10 @@ impl App {
     /// other blocking overlay was showing -- only one is ever active.
     pub(in crate::app) fn raise_daemon_lost_modal(&mut self) {
         // A new-queue request the lost link owed an answer will never receive
-        // it, so the control works again once an Owner is back.
+        // it, so the control works again once an Owner is back. The same holds
+        // for every Named-queue command the link owed an answer.
         self.pending_new_queue = None;
+        self.pending_named_queue_ops.clear();
         // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
         // arm calls `dismiss_blocking_modals`, which now also unmounts the
         // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,

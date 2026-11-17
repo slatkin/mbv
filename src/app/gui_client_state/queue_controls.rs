@@ -11,6 +11,7 @@ use mbv_queue::NamedQueueId;
 use mbv_ui_model::confirm::ConfirmAction;
 
 use super::overlay::{GuiOverlay, QueueChooserState, QueueRenameDraft};
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::ShownEntry;
 use crate::app::{App, ConfirmModal};
 
@@ -75,6 +76,31 @@ impl App {
             self.pending_new_queue = None;
         }
         held
+    }
+
+    /// Record a Named-queue command whose answer the Client does not pump for,
+    /// so a rejection can find it (design D8).
+    pub(in crate::app) fn note_named_queue_op(&mut self, op: QueueOpId) {
+        self.pending_named_queue_ops.insert(op);
+    }
+
+    /// End the Named-queue command a rejected answer answers and tell the user
+    /// why (design D8): a refused close, rename, or create would otherwise
+    /// no-op silently while the list it raced stays what the panel shows.
+    /// Returns whether `op` was one of them, so a pump that meets a foreign
+    /// rejection reports only what has no other reporter — an edit's own
+    /// rejection already flashed from the pump that waited for it.
+    pub(in crate::app) fn report_named_queue_rejection(
+        &mut self,
+        op: QueueOpId,
+        reason: String,
+    ) -> bool {
+        let ends_create = self.ends_new_queue_request(op);
+        if !(ends_create || self.pending_named_queue_ops.remove(&op)) {
+            return false;
+        }
+        self.flash(reason, ToastSeverity::Error);
+        true
     }
 
     /// Show the queue a new-queue request made and open its name for edit
@@ -144,18 +170,21 @@ impl App {
     /// resting queue and stops playback to close the current one, then publishes
     /// the queue list the panel follows to the current queue.
     pub(in crate::app) fn send_named_queue_close(&mut self, queue: NamedQueueId) {
-        if let Err(e) = self
+        match self
             .local_queue_player()
             .remote()
             .send_named_queue_close(queue)
         {
-            tracing::warn!(
-                name: "queue.close.send_failed",
-                target: "queue",
-                error = %e,
-                "the named queue close did not reach the Player owner"
-            );
-            self.flash_error(&e);
+            Ok(op) => self.note_named_queue_op(op),
+            Err(e) => {
+                tracing::warn!(
+                    name: "queue.close.send_failed",
+                    target: "queue",
+                    error = %e,
+                    "the named queue close did not reach the Player owner"
+                );
+                self.flash_error(&e);
+            }
         }
     }
 }

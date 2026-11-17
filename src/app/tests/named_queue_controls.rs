@@ -86,6 +86,47 @@ fn sent_close(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<NamedQueueId> {
     })
 }
 
+/// The `op` of one `NamedQueueClose` in `rx`, or `None` when the Owner is sent
+/// none.
+fn sent_close_op(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<mbv_ctrl::QueueOpId> {
+    rx.try_iter().find_map(|cmd| match cmd {
+        CtrlCmd::NamedQueueClose { op, .. } => Some(op),
+        _ => None,
+    })
+}
+
+/// A refused close tells the user why instead of no-oping: the Owner refuses
+/// its last queue and a stale list may refuse any close (design D8, spec
+/// `named-queues` "A Client closes queues").
+#[test]
+fn a_rejected_close_tells_the_user_why() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_local_current_entry();
+    app.player.update_status(|status| status.active = false);
+    request_close(&mut app);
+    let op = sent_close_op(&cmd_rx).expect("the close reaches the Owner");
+    app.status.clear();
+
+    app.handle_player_event(PlayerEvent::QueueOpResult {
+        op,
+        outcome: mbv_ctrl::QueueOpOutcome::Rejected("The last queue cannot be closed".into()),
+    });
+
+    assert_eq!(
+        app.status, "The last queue cannot be closed",
+        "the refusal says why the queue stayed"
+    );
+    assert_eq!(
+        app.status_severity,
+        crate::app::dispatch::notify::ToastSeverity::Error,
+        "a refusal is an error, not a neutral status"
+    );
+    assert!(
+        app.pending_named_queue_ops.is_empty(),
+        "the answered close ends its request"
+    );
+}
+
 /// The new-queue control asks the local Owner for a queue, and the answer that
 /// names it shows it with its name open for edit (spec `gui-queue-chooser`
 /// "Make a queue").
@@ -207,6 +248,49 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         sent_create(&cmd_rx),
         Some(mbv_ctrl::QueueOpId(created.0 + 2)),
         "the control makes another queue once its request ended"
+    );
+}
+
+/// A rejected create ends its request and tells the user why: the control
+/// works again, and the press is never silent (design D8, spec
+/// `gui-queue-chooser` "The new-queue control makes and shows a queue").
+#[test]
+fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
+    let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
+    app.status.clear();
+
+    app.handle_player_event(PlayerEvent::QueueOpResult {
+        op: created,
+        outcome: mbv_ctrl::QueueOpOutcome::Rejected("named queues unavailable".into()),
+    });
+
+    assert!(
+        app.pending_new_queue.is_none(),
+        "the refusal ends the request"
+    );
+    assert_eq!(
+        app.status, "named queues unavailable",
+        "the refusal says why no queue was made"
+    );
+}
+
+/// A rejection that answers no Named-queue command stays silent: an edit's own
+/// rejection already flashed from the pump that waited for it (design D8).
+#[test]
+fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
+    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    app.status.clear();
+
+    app.handle_player_event(PlayerEvent::QueueOpResult {
+        op: mbv_ctrl::QueueOpId(42),
+        outcome: mbv_ctrl::QueueOpOutcome::Rejected("MISSING_SLOT".into()),
+    });
+
+    assert!(
+        app.status.is_empty(),
+        "nothing reports an edit's own rejection twice"
     );
 }
 

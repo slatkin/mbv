@@ -125,6 +125,7 @@ impl App {
             gui_shown_entry: None,
             shown_resting: None,
             pending_new_queue: None,
+            pending_named_queue_ops: std::collections::HashSet::new(),
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,
