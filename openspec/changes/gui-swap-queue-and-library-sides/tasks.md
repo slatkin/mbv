@@ -40,14 +40,14 @@
 
 ## 4. Docs
 
-- [ ] 4.1 In `docs/architecture/gui-client.md`, state the column order where the file places the
+- [x] 4.1 In `docs/architecture/gui-client.md`, state the column order where the file places the
   panels: the Library panel column at the left window edge and the Queue column at the right
   window edge (near line 673, "a column beside the Queue panel"); the Wide list at the left edge of
   the Library panel with the Hero pane to its right; the collapsed rail at the right edge. Change
   the Settings text near line 1282 ("the sidebar sits in the Queue column's place") to say the
   sidebar sits at the left window edge. Verify: `rg -n -i "Queue column's place" docs/architecture/gui-client.md`
   finds nothing.
-- [ ] 4.2 In `crates/mbv-gui/src/window/components/panel_divider.rs`, check that the module and
+- [x] 4.2 In `crates/mbv-gui/src/window/components/panel_divider.rs`, check that the module and
   `DividerSide` comments name no specific column on a specific side; if a comment says which
   column sits on which side, update it to the new order. Verify: `cargo fmt --all -- --check` and
   `cargo nextest run -p mbv-gui` pass.
