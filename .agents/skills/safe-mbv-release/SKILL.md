@@ -37,8 +37,9 @@ git tag --sort=-version:refname | head -10
   do not run the release script, commit, push, or tag unless the user asks to
   perform the release.
 - Stop on uncommitted changes to *tracked* files or detached `HEAD`. Untracked
-  files never enter the release commit and are no reason to stop (the script
-  enforces the same distinction).
+  files never enter the release commit, but only untracked `*.md` notes are
+  tolerated: any other untracked file could be a source the tag would silently
+  omit, so it also stops the release (the script enforces the same rule).
 - Do not bypass the script's checks or force a tag as a shortcut.
 
 ## Normal Release

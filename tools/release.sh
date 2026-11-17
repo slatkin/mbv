@@ -17,11 +17,19 @@ VERSION="${VERSION#v}"
 TAG="v${VERSION}"
 
 # Uncommitted *tracked* changes would make the test run validate code that the
-# tag does not contain. Untracked files never enter the release commit, so they
-# are not a reason to stop.
+# tag does not contain. Untracked files never enter the release commit, but only
+# untracked *.md notes are safe to ignore; any other untracked file could be a
+# source the tag would silently omit.
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
   echo "error: uncommitted changes to tracked files"
-  echo "commit them before running a release (untracked files are fine)"
+  echo "commit them before running a release (untracked *.md files are fine)"
+  exit 1
+fi
+UNTRACKED_NON_MD="$(git ls-files --others --exclude-standard | grep -vE '\.md$' || true)"
+if [[ -n "${UNTRACKED_NON_MD}" ]]; then
+  echo "error: untracked non-markdown files would be left out of the release"
+  echo "${UNTRACKED_NON_MD}"
+  echo "commit or remove them before running a release (untracked *.md files are fine)"
   exit 1
 fi
 
