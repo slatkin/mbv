@@ -228,6 +228,17 @@ fn observe(
         .find(|session| session.device_id == output.device_id)
     else {
         output.misses = output.misses.saturating_add(1);
+        // The first miss and the disconnect are the two moments worth a line:
+        // a device that vanishes from the list is why an item never presents.
+        if output.misses == 1 || output.misses == EMBY_SESSION_DISCONNECT_MISSES {
+            tracing::info!(
+                name: "daemon.emby_session_output.device_missing",
+                target: "daemon",
+                device = %output.device_id,
+                misses = output.misses,
+                "the Emby Session poll did not list the device"
+            );
+        }
         if output.misses >= EMBY_SESSION_DISCONNECT_MISSES {
             output.connection = OutputConnection::Disconnected;
         }
@@ -242,6 +253,7 @@ fn observe(
     // reads the tracked item's sighting and its end margin from it.
     let continuation = super::end::queue_end_continuation(output, &session, now);
     let presented = presented_loaded_slot(output, &session);
+    log_observation_change(output, &session);
     output.last_observation = Some(session);
     output.observed_at = Some(now);
     output.connection = OutputConnection::Connected;
@@ -251,6 +263,40 @@ fn observe(
         device_advance,
         continuation,
     }
+}
+
+/// Logs what the device reports when it differs from the observation it
+/// replaces: the session id, the item it plays, and its pause state. A poll
+/// runs every second, so an unchanged reading logs nothing. The line carries
+/// the item the Owner loaded beside the item the device plays, and whether the
+/// device accepts `PlayNow`, so a load that never presents can be read against
+/// what the device showed.
+fn log_observation_change(output: &EmbySessionOutput, session: &SessionInfo) {
+    let changed = output.last_observation.as_ref().is_none_or(|previous| {
+        previous.id != session.id
+            || previous.now_playing_item_id != session.now_playing_item_id
+            || previous.is_paused != session.is_paused
+    });
+    if !changed {
+        return;
+    }
+    tracing::info!(
+        name: "daemon.emby_session_output.observed",
+        target: "daemon",
+        session = %session.id,
+        client = %session.client,
+        now_playing_item = session.now_playing_item_id.as_deref().unwrap_or("none"),
+        paused = session.is_paused,
+        accepts_play_now = session
+            .supported_commands
+            .iter()
+            .any(|command| command.eq_ignore_ascii_case("PlayNow")),
+        loaded_item = output
+            .loaded
+            .as_ref()
+            .map_or("none", |loaded| loaded.item_id.as_str()),
+        "the Emby Session reports a changed state"
+    );
 }
 
 /// The loaded slot this observation presents (design D6, task 4.3): the
