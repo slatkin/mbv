@@ -5,8 +5,8 @@
 //! entry").
 
 use super::named_queues::{
-    current, gui_app_with_named_queues, gui_app_with_peer, named_queue_list, op_answer, resting,
-    resting_snapshot,
+    current, gui_app_with_named_queues, gui_app_with_peer, inject_local_events, named_queue_list,
+    op_answer, resting, resting_snapshot,
 };
 use super::*;
 use crate::app::gui_client_state::GuiOverlay;
@@ -40,6 +40,15 @@ fn new_queue_snapshot() -> UnifiedQueueStateData {
     }
 }
 
+/// The new queue's own snapshot holding `items`, as the answer to an edit of it
+/// carries it.
+fn new_queue_with(items: &[EmbyItem]) -> UnifiedQueueStateData {
+    UnifiedQueueStateData {
+        queue: Some(new_queue()),
+        ..resting_snapshot(items)
+    }
+}
+
 /// One key of an answer to the shared confirmation modal.
 fn answer_key(code: Key) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -48,6 +57,15 @@ fn answer_key(code: Key) -> KeyEvent {
 /// The close request the frame's control sends: the shown entry's close.
 fn request_close(app: &mut App) {
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestCloseQueue));
+}
+
+/// The `op` of the next `NamedQueueCreate` in `rx`, or `None` when the Owner is
+/// sent none.
+fn sent_create(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<mbv_ctrl::QueueOpId> {
+    rx.try_iter().find_map(|cmd| match cmd {
+        CtrlCmd::NamedQueueCreate { op } => Some(op),
+        _ => None,
+    })
 }
 
 /// The `queue` of one `NamedQueueClose` in `rx`, or `None` when the Owner is
@@ -98,6 +116,68 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
     let draft = chooser.renaming.as_ref().expect("the name is open");
     assert_eq!(draft.queue, new_queue());
     assert_eq!(draft.text, "Queue 3", "the draft opens on the given name");
+}
+
+/// An edit dispatched while the new-queue request still waits: every queue edit
+/// pumps the link for its own answer, so the pump can meet the create's answer
+/// first. That answer must still reach its request — the new queue is shown with
+/// its name open, and the control works again — instead of being adopted as a
+/// background snapshot the drain never sees (spec `gui-queue-chooser` "The
+/// new-queue control makes and shows a queue").
+#[test]
+fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let tx = inject_local_events(&mut app);
+
+    app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
+    let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
+    // The Owner publishes the list, then answers the create with the new
+    // queue's own snapshot. The stub mints the edit's `op` next, so both
+    // answers are already waiting when the edit's pump starts.
+    app.adopt_named_queue_list(list_with_new_queue(), current());
+    tx.send(op_answer(created.0, new_queue_snapshot())).unwrap();
+    tx.send(op_answer(created.0 + 1, new_queue_with(&make_items(1))))
+        .unwrap();
+
+    let appended = app.append_on_owner(
+        QueueLink::Local,
+        make_items(1)
+            .into_iter()
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
+        None,
+    );
+
+    assert!(appended, "the edit's own answer still applies");
+    assert!(
+        app.pending_new_queue.is_none(),
+        "the create's answer ends its request"
+    );
+    assert_eq!(
+        app.gui_shown_entry,
+        Some(ShownEntry::Local(new_queue())),
+        "the Queue panel shows the queue the Owner made"
+    );
+    assert_eq!(
+        app.displayed_queue().slots().len(),
+        1,
+        "the shown queue holds the appended item"
+    );
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+        panic!("the new queue's name is open for edit");
+    };
+    assert_eq!(
+        chooser.renaming.as_ref().map(|draft| draft.queue),
+        Some(new_queue())
+    );
+
+    app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
+
+    assert_eq!(
+        sent_create(&cmd_rx),
+        Some(mbv_ctrl::QueueOpId(created.0 + 2)),
+        "the control makes another queue once its request ended"
+    );
 }
 
 /// Closing the current queue while it plays asks through the shared

@@ -43,10 +43,33 @@ impl App {
         }
     }
 
+    /// Adopt one answer to the held new-queue request (design D8, spec
+    /// `gui-queue-chooser` "The new-queue control makes and shows a queue"):
+    /// the Owner answers `NamedQueueCreate` with the new queue's own snapshot
+    /// under the request's `op`, so that answer — never a queue snapshot — is
+    /// what names the queue. It shows the queue and opens its name for edit,
+    /// and a rejected answer only ends the request. Returns whether `op` was the
+    /// held request, so every caller that meets an answer — the drains, and an
+    /// edit's answer pump that took it as a foreign op — treats it the same way
+    /// and adopts no queue state.
+    pub(in crate::app) fn take_new_queue_answer(
+        &mut self,
+        op: QueueOpId,
+        applied: Option<&mbv_ctrl::UnifiedQueueStateData>,
+    ) -> bool {
+        if !self.ends_new_queue_request(op) {
+            return false;
+        }
+        if let Some(queue) = applied.and_then(|snapshot| snapshot.queue) {
+            self.open_new_queue_rename(queue);
+        }
+        true
+    }
+
     /// Whether `op` is the new-queue request the control sent, which this
     /// answer ends (design D8): a held request is taken once, so a late or
     /// repeated answer opens nothing.
-    pub(in crate::app) fn ends_new_queue_request(&mut self, op: QueueOpId) -> bool {
+    fn ends_new_queue_request(&mut self, op: QueueOpId) -> bool {
         let held = self.pending_new_queue == Some(op);
         if held {
             self.pending_new_queue = None;

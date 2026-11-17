@@ -74,16 +74,13 @@ impl App {
     ) -> PlayerEventFlow {
         match outcome {
             mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
-                if self.ends_new_queue_request(op)
-                    && let Some(queue) = snapshot.queue
-                {
-                    self.open_new_queue_rename(queue);
+                if self.take_new_queue_answer(op, Some(&snapshot)) {
                     return PlayerEventFlow::Proceed;
                 }
                 flow_after(self.handle_unified_queue_updated(&snapshot))
             }
             mbv_ctrl::QueueOpOutcome::Rejected(_) => {
-                self.ends_new_queue_request(op);
+                self.take_new_queue_answer(op, None);
                 PlayerEventFlow::Proceed
             }
         }

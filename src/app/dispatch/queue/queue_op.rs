@@ -149,7 +149,9 @@ impl App {
     }
 
     /// Pump `link`'s link receiver until `QueueOpResult{op: id}` or `bound`.
-    /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`.
+    /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`. The
+    /// new-queue control's answer is routed to its own request when it is the
+    /// foreign op that arrives first (design D8 of `gui-named-queues`).
     /// Deferred to the next tick's source-link drain: every other event.
     /// Returns whether the matching answer was `Applied`; a late or unmatched
     /// `Applied` is adopted as a background snapshot, a late `Rejected`
@@ -174,9 +176,22 @@ impl App {
                         return false;
                     }
                 },
-                Ok(PlayerEvent::QueueOpResult { outcome, .. }) => {
-                    // Another op's answer (or a duplicate): adopt its state
-                    // like any other owner snapshot, and keep waiting.
+                Ok(PlayerEvent::QueueOpResult { op, outcome }) => {
+                    // Another op's answer (or a duplicate). The new-queue
+                    // control's own answer can be the one that arrives here
+                    // while an edit's pump waits (design D8): it is not a queue
+                    // snapshot, and it must reach its request instead of being
+                    // adopted as background, or the control would wait for it
+                    // forever and the queue it made would never be shown.
+                    // Every other answer is adopted like any other owner
+                    // snapshot.
+                    let applied = match &outcome {
+                        mbv_ctrl::QueueOpOutcome::Applied(snapshot) => Some(&**snapshot),
+                        mbv_ctrl::QueueOpOutcome::Rejected(_) => None,
+                    };
+                    if self.take_new_queue_answer(op, applied) {
+                        continue;
+                    }
                     if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
                         self.adopt_queue_op_snapshot(link, &snapshot, false);
                     }

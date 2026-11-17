@@ -316,7 +316,7 @@ fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::Ctrl
 
 /// Replace the Local link's event receiver with an injected one, so a test can
 /// answer the Client's own queue op; keep the sender alive to deliver it.
-fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
+pub(crate) fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
     let (tx, rx) = std::sync::mpsc::channel();
     app.player_rx = rx;
     tx
