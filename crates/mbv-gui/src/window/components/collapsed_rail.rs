@@ -19,7 +19,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::arrangement::QUEUE_RAIL_WIDTH_PX;
 use crate::window::components::art_image::ArtImage;
-use crate::window::icons::{ChevronsRight, Pause, Play, SkipForward};
+use crate::window::icons::{ChevronsLeft, Pause, Play, SkipForward};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
@@ -243,7 +243,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 "aria-label": "Expand panel",
                 title: "Expand panel (z)",
                 onmounted: move |event| expand_mounted.set(Some(event)),
-                ChevronsRight {
+                ChevronsLeft {
                     size: 16,
                     color: role_var(GuiRole::TextMuted),
                 }
