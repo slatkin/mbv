@@ -364,3 +364,43 @@ fn defaults_reproduce_todays_resolution() {
         }
     }
 }
+
+/// The GUI-only Queue controls (design D8 of `gui-named-queues`): `t`,
+/// `Ctrl+T`, and `Ctrl+W` resolve to the chooser toggle and the two controls
+/// only in the GUI Client, and only while the Queue list box is the pointer
+/// target — the Panel focus the GUI core sets from the key's target.
+#[test]
+fn gui_queue_controls_need_the_gui_queue_target() {
+    let gui = RouterSnapshot {
+        gui_client: true,
+        panel_focus: PanelFocus::Queue,
+        ..snapshot()
+    };
+    let expected = [
+        (
+            KeyCode::Char('t'),
+            KeyModifiers::NONE,
+            "gui_queue_chooser_toggle",
+        ),
+        (KeyCode::Char('t'), KeyModifiers::CONTROL, "gui_new_queue"),
+        (KeyCode::Char('w'), KeyModifiers::CONTROL, "gui_close_queue"),
+    ];
+    for (code, mods, name) in expected {
+        assert_eq!(
+            resolve_policy(chord(code, mods), &gui, &keybinds()).map(|entry| entry.name),
+            Some(name)
+        );
+        let mut library = gui;
+        library.panel_focus = PanelFocus::Library;
+        assert_eq!(
+            resolve_policy(chord(code, mods), &library, &keybinds()).map(|entry| entry.name),
+            None,
+            "{name} needs the Queue pointer target"
+        );
+        assert_eq!(
+            resolve_policy(chord(code, mods), &snapshot(), &keybinds()).map(|entry| entry.name),
+            None,
+            "{name} is GUI-only"
+        );
+    }
+}
