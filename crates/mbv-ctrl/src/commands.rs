@@ -181,20 +181,26 @@ pub enum CtrlCmd {
     SelectPlaybackOutput(OutputSelection),
 
     // ── Named queue commands (require `named-queues`) ───────────────────
-    /// Create one Named queue, resting and empty, and answer `op` with the
-    /// new `CtrlEvent::NamedQueueList` (design D3 of `gui-named-queues`).
+    /// Create one Named queue, resting and empty. The Owner broadcasts
+    /// `CtrlEvent::NamedQueueList` and answers `op` with the new queue's own
+    /// snapshot as `QueueOpResult::Applied`, whose data names the queue
+    /// (design D3, D6 of `gui-named-queues`).
     #[serde(rename = "NamedQueueCreate")]
     NamedQueueCreate {
         op: QueueOpId,
     },
-    /// Rename one Named queue after trimming surrounding whitespace.
+    /// Rename one Named queue after trimming surrounding whitespace. The
+    /// Owner answers `op` with the renamed queue's own snapshot as
+    /// `QueueOpResult::Applied`.
     #[serde(rename = "NamedQueueRename")]
     NamedQueueRename {
         queue: NamedQueueId,
         name: String,
         op: QueueOpId,
     },
-    /// Close one Named queue. The Owner refuses to close its last queue.
+    /// Close one Named queue. The Owner refuses to close its last queue, and
+    /// answers `op` with the current queue's snapshot as
+    /// `QueueOpResult::Applied`.
     #[serde(rename = "NamedQueueClose")]
     NamedQueueClose {
         queue: NamedQueueId,
