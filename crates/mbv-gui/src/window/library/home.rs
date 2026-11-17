@@ -68,11 +68,16 @@ impl LibraryState {
     /// Select the row (design D12): the select command the core stores, whose
     /// frame paints the Hero. A select repaints the Narrow arrangement's Hero
     /// overlay and closes an open menu, because the facts they paint belong to
-    /// the previous row (the pick's reset, as Music's does).
+    /// the previous row (the pick's reset, as Music's does). An `Upcoming` row
+    /// takes no select (gui-collection-dropdown design D9): a press on it
+    /// changes nothing, so it sends no command and resets nothing.
     fn settle_home_selection(&self, row: Option<&HomeListRow>) {
         let Some(HomeListRow::Item { row, .. }) = row else {
             return;
         };
+        if matches!(row.row_id, GuiHomeRowIdFrame::Upcoming(_)) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::HomeSelect {
             row: crate::bridge::library::GuiHomeRowId::from(&row.row_id),
         });

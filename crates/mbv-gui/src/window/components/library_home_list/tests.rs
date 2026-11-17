@@ -423,6 +423,81 @@ fn the_list_paints_only_the_rows_in_view() {
     );
 }
 
+/// The four sections' rows in paint order (gui-collection-dropdown design
+/// D9): `Continue watching`, `Recently added`, `Latest episodes`, then
+/// `Upcoming`, one item row each.
+fn four_section_frame() -> GuiHomeList {
+    GuiHomeList {
+        loading: false,
+        rows: vec![
+            GuiHomeRowFrame::Heading {
+                text: "Continue watching".to_owned(),
+            },
+            GuiHomeRowFrame::Item(continued_with_art()),
+            GuiHomeRowFrame::Spacer,
+            GuiHomeRowFrame::Heading {
+                text: "Recently added".to_owned(),
+            },
+            GuiHomeRowFrame::Item(added()),
+            GuiHomeRowFrame::Spacer,
+            GuiHomeRowFrame::Heading {
+                text: "Latest episodes".to_owned(),
+            },
+            GuiHomeRowFrame::Item(GuiHomeItemRowFrame {
+                id: GuiHomeRowIdFrame::LatestEpisode("ep1".to_owned()),
+                title: "Show B".to_owned(),
+                subtitle: Some("New".to_owned()),
+                date: Some("10 Nov".to_owned()),
+                kind: GuiHomeRowKindFrame::Media,
+                state: GuiHomeRowStateFrame::Ordinary,
+                art: None,
+            }),
+            GuiHomeRowFrame::Spacer,
+            GuiHomeRowFrame::Heading {
+                text: "Upcoming".to_owned(),
+            },
+            GuiHomeRowFrame::Item(GuiHomeItemRowFrame {
+                id: GuiHomeRowIdFrame::Upcoming("series-a:2026-11-20".to_owned()),
+                title: "Show A".to_owned(),
+                subtitle: Some("S01:E02 — The Episode".to_owned()),
+                date: Some("20 Nov".to_owned()),
+                kind: GuiHomeRowKindFrame::Media,
+                state: GuiHomeRowStateFrame::Ordinary,
+                art: None,
+            }),
+        ],
+    }
+}
+
+/// Contract (spec "GUI Home shows Latest episodes and Upcoming"): the two new
+/// sections paint after `Recently added`, in that order.
+#[test]
+fn the_latest_episode_and_upcoming_sections_paint_after_recently_added() {
+    let mut fixture = built(four_section_frame(), home_detail());
+    fixture.measure(4000.0);
+
+    assert_eq!(
+        fixture.all_attrs("[data-library-home-heading]", "data-library-home-heading"),
+        [
+            "Continue watching".to_owned(),
+            "Recently added".to_owned(),
+            "Latest episodes".to_owned(),
+            "Upcoming".to_owned(),
+        ],
+        "the sections paint after Recently added, in order"
+    );
+    assert_eq!(
+        fixture.all_attrs("[data-library-home-row-id]", "data-library-home-row-id"),
+        [
+            "home-continue:e1".to_owned(),
+            "home-recent:Feed:f1".to_owned(),
+            "home-latest:ep1".to_owned(),
+            "home-upcoming:series-a:2026-11-20".to_owned(),
+        ],
+        "each section's row paints under its heading"
+    );
+}
+
 /// Contract (`LibraryHomeList.test.ts`): a press sends the select command
 /// with the row's opaque id. The press that sends it is the handler function
 /// the component's own handler calls one line each (a headless document

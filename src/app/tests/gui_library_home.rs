@@ -394,6 +394,11 @@ fn two_tv_libraries_upcoming_premieres_merge_soonest_first() {
         "both libraries' premieres paint as one list, soonest first"
     );
     assert_eq!(
+        row_labels(&projection.rows[1]),
+        ("Show B", Some("S01:E02 — The Episode")),
+        "an Upcoming row carries the premiere number and the episode's title"
+    );
+    assert_eq!(
         projection.selected, None,
         "an Upcoming row is display-only, so it is never the Hero's row"
     );

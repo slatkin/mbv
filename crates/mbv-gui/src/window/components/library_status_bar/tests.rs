@@ -15,9 +15,9 @@ use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiCollectionEntry,
     GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
-    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
-    GuiPodcastsDetail, GuiPodcastsList,
+    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
 };
 use crate::window::sections::SectionRef;
 
@@ -365,6 +365,59 @@ fn the_bar_paints_the_audiobooks_location_for_the_carried_content() {
     assert_eq!(
         text_of(&doc, "[data-library-status-location]"),
         "Audiobooks › Dune"
+    );
+    assert_eq!(hint_texts(&doc).len(), 5);
+}
+
+/// The carried Feeds list part: two checked subscriptions and one selected
+/// entry (spec "The Library Status bar shows hints and the location").
+fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
+    let list = GuiDestinationList::Feeds(GuiFeedsList {
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Feeds,
+            all: false,
+            entries: vec![
+                GuiCollectionEntry {
+                    key: "sub1".to_owned(),
+                    name: "Tifo Football".to_owned(),
+                    checked: true,
+                },
+                GuiCollectionEntry {
+                    key: "sub2".to_owned(),
+                    name: "Off Menu".to_owned(),
+                    checked: true,
+                },
+            ],
+            noun: mbv::GuiCollectionNoun::Subscriptions,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
+        loading: false,
+        failed: false,
+        rows: vec![GuiEntryRowFrame {
+            id: "sub1:guid12".to_owned(),
+            title: "The Long Road Home".to_owned(),
+            subtitle: Some("Tifo Football".to_owned()),
+            date: Some("08 Oct".to_owned()),
+            state: GuiHomeRowStateFrame::Ordinary,
+        }],
+    });
+    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        selected: Some("sub1:guid12".to_owned()),
+        hero: None,
+    });
+    (list, detail)
+}
+
+/// Contract (spec "The Library Status bar shows hints and the location"): two
+/// checked subscriptions both name in the location, between the destination
+/// and the picked entry.
+#[test]
+fn the_bar_names_every_checked_subscription_in_the_location() {
+    let doc = built(destination_props("Feeds", feeds_content()));
+
+    assert_eq!(
+        text_of(&doc, "[data-library-status-location]"),
+        "Feeds › Tifo Football, Off Menu › The Long Road Home"
     );
     assert_eq!(hint_texts(&doc).len(), 5);
 }

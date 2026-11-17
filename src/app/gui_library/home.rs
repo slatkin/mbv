@@ -10,6 +10,7 @@
 
 use mbv_components::library_panel::content::ArtworkShape;
 use mbv_components::library_panel::hero::hero_content_queue;
+use mbv_components::tv_content::premiere_number_label;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
@@ -432,9 +433,10 @@ impl App {
     }
 
     /// The merged `Upcoming` rows (design D9): every TV library's premieres as
-    /// one list, the soonest premiere first with the undated rows last. An
-    /// Upcoming row is display-only, so it carries no queue item and no
-    /// artwork.
+    /// one list, the soonest premiere first with the undated rows last. The
+    /// subtitle carries the premiere number and the episode's title, the text
+    /// the TUI's upcoming rows paint. An Upcoming row is display-only, so it
+    /// carries no queue item and no artwork.
     fn gui_home_upcoming_rows(&self) -> Vec<GuiHomeItemRow> {
         let mut premieres: Vec<&mbv_emby_model::UpcomingPremiere> =
             self.tv_upcoming_snapshots.values().flatten().collect();
@@ -453,7 +455,11 @@ impl App {
                 GuiHomeItemRow {
                     id: GuiHomeRowId::Upcoming(premiere.stable_key()),
                     title: premiere.series_name.clone(),
-                    subtitle: Some(premiere.title.clone()),
+                    subtitle: Some(format!(
+                        "{} — {}",
+                        premiere_number_label(premiere),
+                        premiere.title
+                    )),
                     date: row_date(secs),
                     kind: GuiHomeRowKind::Media,
                     state: MediaSemanticState::Ordinary,

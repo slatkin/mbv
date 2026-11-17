@@ -24,7 +24,7 @@ use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
-use crate::window::library::home_list::{HOME_ITEM_ROW_HEIGHT, build_home_rows};
+use crate::window::library::home_list::{HOME_ITEM_ROW_HEIGHT, HomeListRow, build_home_rows};
 use crate::window::library::list::{GeometryRow, ListMove};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
@@ -126,6 +126,20 @@ fn added() -> GuiHomeItemRowFrame {
     }
 }
 
+/// The `Upcoming` row the fixture carries: display-only, so a press on it
+/// takes no select (gui-collection-dropdown design D9).
+fn upcoming() -> GuiHomeItemRowFrame {
+    GuiHomeItemRowFrame {
+        id: GuiHomeRowIdFrame::Upcoming("series-a:2026-11-20".to_owned()),
+        title: "Show A".to_owned(),
+        subtitle: Some("S01:E02 — The Episode".to_owned()),
+        date: Some("20 Nov".to_owned()),
+        kind: GuiHomeRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
+        art: None,
+    }
+}
+
 /// The carried content while Home is active (design D12): the two sections'
 /// rows, and the selection the frame paints.
 fn carry_home(state: &LibraryState) {
@@ -144,6 +158,48 @@ fn carry_home(state: &LibraryState) {
                     text: "Recently added".to_owned(),
                 },
                 GuiHomeRowFrame::Item(added()),
+            ],
+        }),
+    };
+    let detail = crate::bridge::frame::library::GuiLibraryDetail::Home(
+        crate::bridge::frame::library::GuiHomeDetail {
+            selected: Some(GuiHomeRowIdFrame::Continue("e1".to_owned())),
+            hero: None,
+        },
+    );
+    let batch = GuiSectionBatch {
+        library_list: Some(crate::bridge::sections::GuiSection {
+            revision: 1,
+            value: Some(list),
+        }),
+        library_detail: Some(crate::bridge::sections::GuiSection {
+            revision: 1,
+            value: Some(detail),
+        }),
+        ..GuiSectionBatch::default()
+    };
+    let mut sections = state.sections.clone();
+    sections.apply_batch(&batch);
+}
+
+/// Carry one `Continue watching` row and one `Upcoming` row, as the core's
+/// batch would (gui-collection-dropdown design D9).
+fn carry_home_with_upcoming(state: &LibraryState) {
+    let list = crate::bridge::frame::library::GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: None,
+        destination: crate::bridge::frame::library::GuiDestinationList::Home(GuiHomeList {
+            loading: false,
+            rows: vec![
+                GuiHomeRowFrame::Heading {
+                    text: "Continue watching".to_owned(),
+                },
+                GuiHomeRowFrame::Item(continued()),
+                GuiHomeRowFrame::Spacer,
+                GuiHomeRowFrame::Heading {
+                    text: "Upcoming".to_owned(),
+                },
+                GuiHomeRowFrame::Item(upcoming()),
             ],
         }),
     };
@@ -223,6 +279,30 @@ fn end_scrolls_to_the_lists_last_screenful() {
         facts,
         [format!("top={}", bottom - HOME_ITEM_ROW_HEIGHT * 3.0)]
     );
+    assert_eq!(commands(&rx), []);
+}
+
+// An `Upcoming` row is display-only (gui-collection-dropdown design D9): a
+// press on it sends no select command, so the Hero keeps its item.
+#[test]
+fn a_press_on_an_upcoming_row_sends_nothing() {
+    let (facts, rx) = run(|state, facts| {
+        carry_home_with_upcoming(state);
+        let upcoming = state
+            .home_rows("")
+            .iter()
+            .find(|row| {
+                matches!(row, HomeListRow::Item { row, .. }
+                    if matches!(row.row_id, GuiHomeRowIdFrame::Upcoming(_)))
+            })
+            .cloned()
+            .expect("an Upcoming row");
+
+        state.press_home_row(&upcoming);
+
+        facts.lock().expect("facts").push(home_facts(state));
+    });
+    assert_eq!(facts, ["top=0"]);
     assert_eq!(commands(&rx), []);
 }
 

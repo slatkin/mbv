@@ -168,11 +168,11 @@ impl PanelKeys for ShowsKeys<'_> {
 }
 
 /// Route a key to the Shows keys (design D12): the shared handler over the
-/// Shows facts. The pill row walks its modes and selects the pressed one, the
-/// movement keys scroll the list under the pointer, and Enter selects a series
-/// or plays a flat row. `n` and `a` act on the item the pointer's control names
-/// — a flat row in the list, an episode in the Workspace — and a series row is
-/// not playable, so its `n` and `a` change nothing.
+/// Shows facts. The movement keys scroll the list under the pointer, and Enter
+/// opens or closes a series or season node and plays an episode leaf. `n` and
+/// `a` act on the item the pointer's control names — a series row in the tree,
+/// an episode in the Workspace — and a series, season, or heading row is not
+/// playable, so its `n` and `a` change nothing.
 #[must_use]
 pub fn route_shows_panel_key(
     state: &LibraryState,

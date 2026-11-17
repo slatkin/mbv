@@ -1,7 +1,6 @@
 //! Headless tests of the Library Status bar's location (D16): the contracts
-//! of `status.test.ts` — the destination, the selected collection names in
-//! pill order, and the picked item's artist or title, joined by the canvas's
-//! separator.
+//! of `status.test.ts` — the destination, the checked collection names, and
+//! the picked item's artist or title, joined by the canvas's separator.
 
 use super::*;
 use crate::bridge::frame::library::{
@@ -127,15 +126,22 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
             collections: Some(GuiCollectionsFrame {
                 target: mbv::GuiCollectionTarget::EmbyFeed(2),
                 all: false,
-                entries: vec![GuiCollectionEntry {
-                    key: "f1".to_owned(),
-                    name: "Home videos".to_owned(),
-                    checked: true,
-                }],
+                entries: vec![
+                    GuiCollectionEntry {
+                        key: "f1".to_owned(),
+                        name: "Home videos".to_owned(),
+                        checked: true,
+                    },
+                    GuiCollectionEntry {
+                        key: "f2".to_owned(),
+                        name: "Holiday clips".to_owned(),
+                        checked: true,
+                    },
+                ],
                 noun: mbv::GuiCollectionNoun::Folders,
                 order: Some(mbv::GuiDateOrder::Newest),
             }),
-            collection_names: vec!["Home videos".to_owned()],
+            collection_names: vec!["Home videos".to_owned(), "Holiday clips".to_owned()],
             feed_group: true,
             loading: false,
             failed: false,
@@ -349,19 +355,15 @@ fn the_location_reads_the_plain_emby_destination_and_the_selected_row() {
     );
 }
 
-// A feed-group library names the selected feed pill between the destination
-// and the row (design D10, D12, row 8.1).
+// A feed-group library names the checked folders between the destination and
+// the row (design D10, D12, row 8.1, D2): every checked folder shows, not the
+// first one alone.
 #[test]
-fn the_location_reads_the_feed_pill_name_in_feed_group_mode() {
+fn the_location_reads_every_checked_folder_in_feed_group_mode() {
     let (list, detail) = emby_feed();
     assert_eq!(
-        library_location(
-            &[tab(2, "Home videos")],
-            Some(2),
-            Some(&list),
-            Some(&detail)
-        ),
-        "Home videos › Home videos › Holiday"
+        library_location(&[tab(2, "Movies")], Some(2), Some(&list), Some(&detail)),
+        "Movies › Home videos › Holiday clips › Holiday"
     );
 }
 
@@ -389,10 +391,10 @@ fn an_audiobooks_selection_with_no_carried_book_leaves_the_location_at_the_desti
 }
 
 // On a Feeds destination the location reads the destination tab's label, the
-// selected pill's name, and the selected entry's title, joined by the canvas's
-// separator (design D10, D12, row 11.1).
+// checked subscriptions' names, and the selected entry's title, joined by the
+// canvas's separator (design D10, D12, row 11.1).
 #[test]
-fn the_location_reads_the_feeds_destination_the_selected_pill_and_the_selected_entry() {
+fn the_location_reads_the_feeds_destination_the_checked_subscriptions_and_the_selected_entry() {
     let (list, detail) = feeds_content();
     assert_eq!(
         library_location(&[tab(5, "Feeds")], Some(5), Some(&list), Some(&detail)),
@@ -412,11 +414,15 @@ fn the_location_reads_home_and_the_home_hero_title() {
 }
 
 // On Shows the location reads the destination tab's label and the selected
-// row's title: the destination paints no collection selector (design D10,
-// D12, D8).
+// row's title: the series list carries no collection selector, so a carried
+// name never reaches the line (design D10, D12, D8).
 #[test]
 fn the_location_reads_the_shows_destination_and_the_selected_row() {
-    let (list, detail) = shows_content();
+    let (mut list, detail) = shows_content();
+    let GuiDestinationList::Shows(shows) = &mut list.destination else {
+        panic!("shows fixture");
+    };
+    shows.collection_names = vec!["Latest episodes".to_owned()];
     assert_eq!(
         library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
         "Shows › The Bear"

@@ -48,6 +48,7 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
+pub use episode_rows::premiere_number_label;
 use episode_rows::{build_latest_episode_rows, upcoming_premiere_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
