@@ -190,6 +190,9 @@ impl App {
             slots = slots.len(),
             "sending the handed-off queue copy to the peer"
         );
+        // The hand-off replaces the peer's queue with the copy of the run, so
+        // the replacement names no Named queue (design D7: the transfer is a
+        // hand-off of the run, not an edit of the shown queue).
         let sent = self.queue_op(
             QueueLink::Peer,
             mbv_remote_player::QueueOp::Replace {
@@ -198,7 +201,7 @@ impl App {
                 source,
                 start_position_secs: Some(position_secs),
             },
-            self.shown_queue_edit(),
+            None,
         );
         if sent == QueueOpEdit::NotApplied {
             // The answered-edit bound reported the rejection or the timeout
