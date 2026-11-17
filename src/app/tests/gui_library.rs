@@ -658,6 +658,78 @@ fn a_second_group_keeps_the_hero() {
     );
 }
 
+/// A pick under the one effectively-checked group is the kept per-group pick
+/// (gui-collection-dropdown "Each Music group keeps its last picked album",
+/// review P2): the pick rule reads the effective set the projection paints,
+/// so a stored set the catalog trimmed to one group still saves the pick to
+/// `gui_library_picks`, which the launch file persists — never to the
+/// session-only union pick.
+#[test]
+fn a_pick_under_the_effectively_single_group_is_kept() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-paul",
+            "Paul's Boutique",
+            "Beastie Boys",
+            1989,
+        )],
+        Vec::new(),
+    );
+    // The catalog refresh dropped Soul while the stored set still checks
+    // both groups: the effective selection is one group.
+    app.libs[0].nav_stack[0]
+        .items
+        .retain(|group| group.id == HIPHOP);
+    app.gui_library_groups.insert(
+        0,
+        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+    );
+
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-paul".into(),
+    });
+
+    assert_eq!(
+        app.gui_library_pick_for_test(0, HIPHOP),
+        Some("alb-paul"),
+        "the pick lands in the kept per-group pick"
+    );
+    assert!(
+        !app.gui_music_union_picks.contains_key(&0),
+        "the session-only union pick stays empty"
+    );
+}
+
+/// A widening carry seeds no album the Hero never showed (design D11,
+/// review P2): with All selected and no union pick, checking more groups
+/// carries nothing, so resolution falls through to the union's first album
+/// in artist order — never to a list-order first album of one group.
+#[test]
+fn a_widening_carry_seeds_no_album_the_hero_never_showed() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album("alb-zeb", "Zebra Album", "Zebra", 1990)],
+        vec![stored_album("alb-aar", "Aardvark Album", "Aardvark", 1989)],
+    );
+    app.gui_library_groups.remove(&0);
+
+    app.install_gui_library_collection(
+        0,
+        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+    );
+
+    assert!(
+        !app.gui_music_union_picks.contains_key(&0),
+        "no union pick is seeded from a list-order first album"
+    );
+    assert_eq!(
+        hero_album_id(&mut app),
+        Some("alb-aar".to_string()),
+        "the union's first album in artist order is the Hero"
+    );
+}
+
 /// A saved checked set restores as it was saved, in saved order
 /// (gui-collection-dropdown "The collection selection persists per
 /// destination", scenario "The GUI starts again").

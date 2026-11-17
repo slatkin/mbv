@@ -20,8 +20,8 @@ impl App {
             Self::log_stale_library_item("showDetail", item_id);
             return;
         };
-        let single_group = match self.gui_library_groups.get(&lib_idx) {
-            Some(GuiCollectionSet::Checked(keys)) if keys.len() == 1 => Some(keys[0].clone()),
+        let single_group = match self.gui_effective_music_set(lib_idx) {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
             _ => None,
         };
         if let Some(group_id) = single_group {

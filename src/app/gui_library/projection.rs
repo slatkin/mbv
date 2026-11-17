@@ -391,11 +391,11 @@ impl App {
                 .iter()
                 .any(|artist| artist.albums.iter().any(|album| album.album_id == album_id))
         };
-        let single_group = match self.gui_library_groups.get(&lib_idx) {
-            Some(GuiCollectionSet::Checked(keys)) if keys.len() == 1 => Some(&keys[0]),
+        let single_group = match self.gui_effective_music_set(lib_idx) {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.into_iter().next(),
             _ => None,
         };
-        if let Some(group_id) = single_group
+        if let Some(group_id) = &single_group
             && let Some(pick) = self.gui_library_picks.get(&(lib_idx, group_id.clone()))
             && holds(pick.as_str())
         {

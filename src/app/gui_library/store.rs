@@ -77,11 +77,11 @@ impl App {
         lib_idx: usize,
         set: GuiCollectionSet,
     ) {
-        let previous = self
-            .gui_library_groups
-            .get(&lib_idx)
-            .cloned()
-            .unwrap_or_else(GuiCollectionSet::all);
+        // The previous selection as the projection paints it: the effective
+        // set, not the raw stored entry, so a set the catalog trimmed (one
+        // of two checked groups dropped) carries through the one group's
+        // kept pick.
+        let previous = self.gui_effective_music_set(lib_idx);
         let next_single = matches!(&set, GuiCollectionSet::Checked(keys) if keys.len() == 1);
         if !next_single && let Some(album_id) = self.gui_hero_album_under(lib_idx, &previous) {
             self.gui_music_union_picks.insert(lib_idx, album_id);
@@ -92,34 +92,27 @@ impl App {
 
     /// The album the Hero showed under `set` (gui-collection-dropdown design
     /// D11), from the kept picks and the loaded store lists alone: one
-    /// checked group's kept pick, All or several groups' union pick, else the
-    /// first album of the selection's first loaded group list. `None` while
-    /// no album is known.
+    /// checked group's kept pick, else that group's first loaded album; All
+    /// or several groups' union pick, and nothing else — a carry must never
+    /// seed an album the Hero did not show, so a several-checked selection
+    /// with no union pick carries none and resolution falls through to the
+    /// union's first album. `None` while no album is known.
     fn gui_hero_album_under(&self, lib_idx: usize, set: &GuiCollectionSet) -> Option<String> {
-        let group_ids: Vec<String> = match set {
-            GuiCollectionSet::All => self.gui_selected_groups(lib_idx),
-            GuiCollectionSet::Checked(keys) => keys.clone(),
-        };
         match set {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
-                if let Some(pick) = self.gui_library_picks.get(&(lib_idx, keys[0].clone())) {
+                let key = (lib_idx, keys[0].clone());
+                if let Some(pick) = self.gui_library_picks.get(&key) {
                     return Some(pick.clone());
                 }
-            }
-            _ => {
-                if let Some(pick) = self.gui_music_union_picks.get(&lib_idx) {
-                    return Some(pick.clone());
+                match self.gui_music_albums.get(&key) {
+                    Some(GuiGroupAlbums::Loaded(albums)) => {
+                        albums.first().map(|album| album.id.clone())
+                    }
+                    Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Failed) | None => None,
                 }
             }
+            _ => self.gui_music_union_picks.get(&lib_idx).cloned(),
         }
-        group_ids.iter().find_map(|group_id| {
-            match self.gui_music_albums.get(&(lib_idx, group_id.clone())) {
-                Some(GuiGroupAlbums::Loaded(albums)) => {
-                    albums.first().map(|album| album.id.clone())
-                }
-                Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Failed) | None => None,
-            }
-        })
     }
 
     /// Why the selected collection cannot apply to `lib_idx` (design D5, D6):
