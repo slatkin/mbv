@@ -121,6 +121,9 @@ impl App {
             audiobookshelf_socket_generation: init.audiobookshelf_socket_generation,
             local_view: init.local_view,
             remote_view: init.remote_view,
+            named_queues: crate::app::state::named_queues::NamedQueueList::default(),
+            gui_shown_entry: None,
+            shown_resting: None,
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,

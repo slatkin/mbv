@@ -44,7 +44,39 @@ impl App {
     /// Handle a `PlayerEvent` received from the player thread.
     /// Returns [`PlayerEventFlow::RestartLoop`] if the caller's event loop
     /// should `continue` (skip render for this tick).
+    ///
+    /// The Owner's queue state is adopted here, and the events that report what
+    /// the Player owner or the local run did go to [`Self::handle_playback_event`]:
+    /// a queue list, a resting queue's snapshot, and a queue snapshot's late
+    /// answer change no playhead.
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
+        match ev {
+            // Named-queue traffic is Owner state the Client core adopts
+            // (gui-named-queues design D7), never a playback observation.
+            PlayerEvent::UnifiedQueueUpdated(unified) => {
+                flow_after(self.handle_unified_queue_updated(&unified))
+            }
+            PlayerEvent::QueueOpResult { outcome, .. } => self.handle_queue_op_result(outcome),
+            ev => self.handle_playback_event(ev),
+        }
+    }
+
+    /// Handle a late or unmatched `PlayerEvent::QueueOpResult` (row 5.1): the
+    /// pump adopts the matching answer inline, so anything arriving here missed
+    /// its wait and is adopted like any other owner snapshot. A late
+    /// `Rejected` reports nothing more -- the timeout already flashed.
+    fn handle_queue_op_result(&mut self, outcome: mbv_ctrl::QueueOpOutcome) -> PlayerEventFlow {
+        match outcome {
+            mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
+                flow_after(self.handle_unified_queue_updated(&snapshot))
+            }
+            mbv_ctrl::QueueOpOutcome::Rejected(_) => PlayerEventFlow::Proceed,
+        }
+    }
+
+    /// The playback half of the player-event dispatch: every event that
+    /// reports what the Player owner or the local run did.
+    fn handle_playback_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
         match ev {
             PlayerEvent::Stopped { .. } => flow_after(self.handle_stopped_event(ev)),
             PlayerEvent::TrackCompleted { .. } => {
@@ -74,21 +106,6 @@ impl App {
             PlayerEvent::QueueNextUp { next_idx } => {
                 self.handle_queue_next_up(next_idx);
                 PlayerEventFlow::Proceed
-            }
-            PlayerEvent::UnifiedQueueUpdated(unified) => {
-                flow_after(self.handle_unified_queue_updated(&unified))
-            }
-            PlayerEvent::QueueOpResult { outcome, .. } => {
-                // Late or unmatched answers (row 5.1): the pump adopts the
-                // matching answer inline, so anything arriving here missed
-                // its wait and is adopted like any other owner snapshot.
-                // A late `Rejected` reports nothing more -- the timeout
-                // already flashed.
-                if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
-                    flow_after(self.handle_unified_queue_updated(&snapshot))
-                } else {
-                    PlayerEventFlow::Proceed
-                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.handle_intro_started(intro_end_ticks);
@@ -143,6 +160,15 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::PlaybackOutput(state) => self.apply_playback_output(state),
+            PlayerEvent::NamedQueue(event) => {
+                self.adopt_named_queue_event(event);
+                PlayerEventFlow::Proceed
+            }
+            // Both are adopted by `handle_player_event`, which takes them
+            // before this half runs: no playback observation comes of either.
+            PlayerEvent::UnifiedQueueUpdated(_) | PlayerEvent::QueueOpResult { .. } => {
+                PlayerEventFlow::Proceed
+            }
             PlayerEvent::SwapPrepare | PlayerEvent::SwapQuit => {
                 // The shell drain intercepts both pin-swap events before they
                 // reach App dispatch (tray-pin-swap 4.4): the launch snapshot
@@ -487,6 +513,15 @@ impl App {
         &mut self,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) -> bool {
+        // A snapshot that names a resting Named queue is that queue's own
+        // state, never the current queue's (gui-named-queues design D3, D7):
+        // it fills the shown resting view and leaves the current queue's view
+        // and the playback status alone, because a resting queue holds no
+        // playhead and its status is a default.
+        if let Some(queue) = unified.queue {
+            self.adopt_named_queue_snapshot(queue, unified);
+            return false;
+        }
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         self.player.set_status(unified.status.clone());

@@ -18,7 +18,7 @@ use mbv_ctrl::{
 };
 use mbv_net::stream::SocketStream;
 
-use crate::PinSwapHello;
+use crate::ClientHelloClaims;
 
 use crate::RemotePlayer;
 
@@ -105,20 +105,25 @@ fn apply_ctrl_event(
             event_tx,
             PlayerEvent::AudiobookshelfBookProgress(event),
         ),
-        // Named-queue traffic needs the Client core's shown entry, which this
-        // read loop does not carry: the events are a documented no-op here
-        // until the core adopts them (gui-named-queues task 6.1).
-        CtrlEvent::NamedQueueList { .. } | CtrlEvent::NamedQueueSnapshot { .. } => {
-            log_ignored_named_queue_event();
-        }
+        // Named-queue traffic is forwarded for the Client core's shown entry
+        // (gui-named-queues design D7): the read loop keeps no queue list or
+        // resting view, so the core adopts both. The queue list and a resting
+        // queue's snapshot carry no playback status of their own, so neither
+        // touches `status` or `unified_queue` here.
+        CtrlEvent::NamedQueueList { queues, current } => send_if_notifying(
+            notify,
+            event_tx,
+            PlayerEvent::NamedQueue(mbv_ctrl::NamedQueueEvent::List { queues, current }),
+        ),
+        CtrlEvent::NamedQueueSnapshot { queue, data } => send_if_notifying(
+            notify,
+            event_tx,
+            PlayerEvent::NamedQueue(mbv_ctrl::NamedQueueEvent::Snapshot {
+                queue,
+                data: Box::new(data),
+            }),
+        ),
     }
-}
-
-/// Documented no-op for `CtrlEvent::NamedQueueList`/`NamedQueueSnapshot`
-/// (gui-named-queues task 4.2): adopting the queue list and a resting queue's
-/// snapshot belongs to the Client core (task 6.1), not to the read loop.
-fn log_ignored_named_queue_event() {
-    tracing::debug!(name: "remote.named_queue_event.ignored", target: "remote", "ignoring named-queue event in the ctrl read loop");
 }
 
 fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: PlayerEvent) {
@@ -265,7 +270,7 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
-    pin_swap: Option<&PinSwapHello>,
+    claims: &ClientHelloClaims,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let peer_build = if matches!(endpoint, DaemonEndpoint::Local) {
         PeerBuild::MustMatch
@@ -274,7 +279,7 @@ pub(crate) fn connect_endpoint(
     };
     let stream = endpoint.connect_stream()?;
     tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
-    connect_stream(stream, peer_build, pin_swap)
+    connect_stream(stream, peer_build, claims)
 }
 
 struct ReaderThreadState {
@@ -311,7 +316,7 @@ struct HandshakeOutcome {
 fn run_bounded_handshake(
     handshake_stream: SocketStream,
     peer_build: PeerBuild,
-    pin_swap: Option<PinSwapHello>,
+    claims: ClientHelloClaims,
     seed_read_timeout: Duration,
 ) -> Result<HandshakeOutcome, crate::RemotePlayerError> {
     mbv_net::bounded::run_with_hard_bound_or_error(
@@ -322,7 +327,7 @@ fn run_bounded_handshake(
                     || Ok(mbv_config::load_or_create_control_credential()?),
                     HandshakeRole::Client,
                     peer_build,
-                    pin_swap.as_ref(),
+                    &claims,
                 )?;
             // An Owner that advertises `playback-output` cold-seeds a
             // claiming Client with `CtrlEvent::PlaybackOutput` right after
@@ -358,12 +363,12 @@ fn run_bounded_handshake(
 fn connect_stream(
     stream: SocketStream,
     peer_build: PeerBuild,
-    pin_swap: Option<&PinSwapHello>,
+    claims: &ClientHelloClaims,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     connect_stream_with_seed_timeout(
         stream,
         peer_build,
-        pin_swap,
+        claims,
         PLAYBACK_OUTPUT_SEED_READ_TIMEOUT,
     )
 }
@@ -373,7 +378,7 @@ fn connect_stream(
 fn connect_stream_with_seed_timeout(
     stream: SocketStream,
     peer_build: PeerBuild,
-    pin_swap: Option<&PinSwapHello>,
+    claims: &ClientHelloClaims,
     seed_read_timeout: Duration,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
@@ -412,7 +417,7 @@ fn connect_stream_with_seed_timeout(
     } = run_bounded_handshake(
         stream.try_clone()?,
         peer_build,
-        pin_swap.cloned(),
+        claims.clone(),
         seed_read_timeout,
     )?;
     let SeedLineRead {
@@ -739,7 +744,10 @@ pub fn connect_stub_daemon_pair() -> Result<
     let (player, rx) = connect_stream(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .map_err(|error| error.to_string())?;
     Ok((player, rx, peer))

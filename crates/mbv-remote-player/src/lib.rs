@@ -134,10 +134,10 @@ pub(crate) use mbv_net::stream::SocketStream;
 /// D2): the `pin-swap` capability makes the Client a swap target that answers
 /// `SwapPrepared`, `pinned` adds the `pinned-surface` capability, and
 /// `swap_token` marks the Hello of an Owner-launched swap replacement.
-/// `None` at [`RemotePlayer::connect_endpoint`] sends a plain Client Hello,
-/// so the Owner never picks that Client as a swap target — the GUI Client,
-/// which is neither a terminal Client nor a pinned panel and cannot produce
-/// the swap's TUI launch snapshot, connects that way.
+/// `None` in [`ClientHelloClaims::pin_swap`] sends a plain Client Hello, so
+/// the Owner never picks that Client as a swap target — the GUI Client, which
+/// is neither a terminal Client nor a pinned panel and cannot produce the
+/// swap's TUI launch snapshot, connects that way.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PinSwapHello {
     /// Advertise `pinned-surface`: this Client runs in the pinwin panel.
@@ -146,16 +146,31 @@ pub struct PinSwapHello {
     pub swap_token: Option<String>,
 }
 
+/// What one Client connection claims in its Hello beyond the standard Client
+/// capabilities (gui-named-queues design D7). The Client kind that makes a
+/// claim decides the value, so this crate holds no global Client state.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ClientHelloClaims {
+    /// The Pin-swap advertisement (tray-pin-swap design D2): `Some` for a
+    /// Client that takes part in Pin swap, `None` for a plain Client Hello.
+    pub pin_swap: Option<PinSwapHello>,
+    /// Advertise `named-queues`: this Client reads the local Owner's Named
+    /// queues and shows one of them at a time (gui-named-queues design D3,
+    /// D7). Only the GUI Client's link to the local Owner claims it; the TUI
+    /// Client shows the current queue by its connection rule and never does.
+    pub named_queues: bool,
+}
+
 impl RemotePlayer {
-    /// Connect to `endpoint` as a control Client. `Some(pin_swap)` advertises
-    /// the Pin-swap capabilities and token (tray-pin-swap design D2/D6); the
-    /// TUI Client always connects that way. `None` sends a plain Client
-    /// Hello, so the Owner never picks this Client as a swap target.
+    /// Connect to `endpoint` as a control Client, advertising `claims` in the
+    /// Client Hello. The TUI Client advertises Pin swap (tray-pin-swap design
+    /// D2/D6); the GUI Client sends a plain Hello and claims `named-queues` on
+    /// its link to the local Owner.
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
-        pin_swap: Option<&PinSwapHello>,
+        claims: &ClientHelloClaims,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-        connect::connect_endpoint(endpoint, pin_swap)
+        connect::connect_endpoint(endpoint, claims)
     }
 
     #[must_use]

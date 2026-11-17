@@ -119,6 +119,19 @@ pub struct App {
     pub(in crate::app) libs: Vec<LibraryTab>,
     pub(in crate::app) local_view: QueueView,
     pub(in crate::app) remote_view: Option<QueueView>,
+    /// The local Owner's Named queues as the last `NamedQueueList` reported
+    /// them (gui-named-queues design D7). Empty unless this Client negotiated
+    /// `named-queues`, which only a GUI Client's local link does.
+    pub(in crate::app) named_queues: crate::app::state::named_queues::NamedQueueList,
+    /// The GUI Client's shown entry: the local Named queue or the connected
+    /// peer whose queue the Queue panel, the player panel, and the edits follow
+    /// (design D7, ADR 0041). `None` for the TUI Client, which keeps the
+    /// connection rule (ADR 0034).
+    pub(in crate::app) gui_shown_entry: Option<crate::app::state::playback::ShownEntry>,
+    /// The shown resting queue's own view, beside the current queue's
+    /// `local_view` (design D7): filled from `NamedQueueSnapshot` while the GUI
+    /// Client shows a queue that rests.
+    pub(in crate::app) shown_resting: Option<(mbv_queue::NamedQueueId, QueueView)>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,

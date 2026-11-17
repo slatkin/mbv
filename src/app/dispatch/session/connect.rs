@@ -95,7 +95,7 @@ impl App {
 
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            crate::pin::pin_swap_hello().as_ref(),
+            &crate::client_kind::client_hello_claims(endpoint),
         )
     }
 
@@ -123,7 +123,7 @@ impl App {
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            crate::pin::pin_swap_hello().as_ref(),
+            &crate::client_kind::client_hello_claims(endpoint),
         )
     }
 

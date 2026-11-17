@@ -183,6 +183,10 @@ impl App {
             PlayerEvent::PlaybackOutput(_) => {
                 tracing::debug!(name: "home_link.playback_output.ignored", target: "shell", "ignoring playback-output event from the suspended home link");
             }
+            // The suspended home link is the local Owner's link too, so the
+            // Named-queue traffic a GUI Client negotiated arrives here while a
+            // peer holds the active link (gui-named-queues design D7).
+            PlayerEvent::NamedQueue(event) => self.adopt_named_queue_event(event),
             _ => {}
         }
         HomeEventDrain::Consumed

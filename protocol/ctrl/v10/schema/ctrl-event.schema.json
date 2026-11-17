@@ -702,6 +702,65 @@
       ],
       "type": "object"
     },
+    "NamedQueueEvent": {
+      "description": "The Named-queue traffic a Client that negotiated `named-queues` receives,\nforwarded by `RemotePlayer` as one `PlayerEvent` (gui-named-queues design\nD3, D7): the Owner's queue list, or one resting queue's snapshot. The Client\ncore adopts both, so the ctrl read loop keeps neither.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The local Owner's Named queues, in queue order, with the current queue.",
+          "properties": {
+            "List": {
+              "properties": {
+                "current": {
+                  "$ref": "#/$defs/NamedQueueId",
+                  "description": "The current queue: the one that holds the playhead."
+                },
+                "queues": {
+                  "items": {
+                    "$ref": "#/$defs/NamedQueueEntry"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "queues",
+                "current"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "List"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One resting Named queue the Client shows: its slots, source, lineage,\nand start slot, with no playhead and a default status. The snapshot\nnames its queue, so it is never mistaken for the current queue's state.",
+          "properties": {
+            "Snapshot": {
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/UnifiedQueueStateData"
+                },
+                "queue": {
+                  "$ref": "#/$defs/NamedQueueId"
+                }
+              },
+              "required": [
+                "queue",
+                "data"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Snapshot"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "NamedQueueId": {
       "description": "The identity of one Named queue, minted by the Owner and persisted with it.\nIt is stable across renames and restarts and is never reused within one\nstate file (design D3 of `gui-named-queues`).",
       "format": "uint64",
@@ -1386,6 +1445,19 @@
           },
           "required": [
             "PlaybackOutput"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The Named-queue traffic a Client that negotiated `named-queues` receives,\nforwarded from `CtrlEvent::NamedQueueList` and\n`CtrlEvent::NamedQueueSnapshot` (gui-named-queues design D3, D7). The\nClient core adopts it; this enum keeps both shapes on one variant so the\nplayback dispatch stays one arm.",
+          "properties": {
+            "NamedQueue": {
+              "$ref": "#/$defs/NamedQueueEvent"
+            }
+          },
+          "required": [
+            "NamedQueue"
           ],
           "type": "object"
         }

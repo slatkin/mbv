@@ -113,7 +113,10 @@ fn a_stop_intent_is_delivered_before_the_connection_closes() {
     });
     let (player, _event_rx) = RemotePlayer::connect_endpoint(
         &super::DaemonEndpoint::Unix(path.clone()),
-        Some(&super::PinSwapHello::default()),
+        &super::ClientHelloClaims {
+            pin_swap: Some(super::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .unwrap();
 

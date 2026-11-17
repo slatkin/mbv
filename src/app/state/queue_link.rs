@@ -106,8 +106,17 @@ impl App {
         }
     }
 
+    /// How the shown queue and the playback target resolve to a link (ADR
+    /// 0034, amended by ADR 0041). Only a GUI Client's resolution reads a
+    /// shown entry: the TUI Client keeps the connection rule, whatever its
+    /// shown-entry field holds.
     fn queue_link_resolution(&self) -> QueueLinkResolution {
-        QueueLinkResolution::new(self.has_direct_remote_queue())
+        let gui_shown_entry = if self.gui_client {
+            self.gui_shown_entry
+        } else {
+            None
+        };
+        QueueLinkResolution::new(self.has_direct_remote_queue(), gui_shown_entry)
     }
 
     pub(in crate::app) fn local_queue_metadata_applies(&self, link: QueueLink) -> bool {
@@ -151,12 +160,24 @@ impl App {
         self.queue_link_resolution().playback_target()
     }
 
+    /// The queue the Client presents: the peer's queue on the peer link, and
+    /// on the local link the shown resting queue's own view when the GUI Client
+    /// shows one, else the current queue's `local_view` (design D7).
     pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
-        self.queue_for_link(self.playing_queue_link())
+        match self.playing_queue_link() {
+            QueueLink::Local => self.shown_local_queue(),
+            QueueLink::Peer => self.queue_for_link(QueueLink::Peer),
+        }
     }
 
+    /// The mutable displayed queue. Only the current queue's view is ever
+    /// mutated through here: a resting queue's slots change only in the
+    /// Owner's snapshots, which `adopt_named_queue_snapshot` adopts.
     pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
-        self.queue_for_link_mut(self.playing_queue_link())
+        match self.playing_queue_link() {
+            QueueLink::Local => &mut self.local_view,
+            QueueLink::Peer => self.queue_for_link_mut(QueueLink::Peer),
+        }
     }
 
     pub(in crate::app) fn playback_queue(&self) -> &QueueView {

@@ -104,7 +104,10 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
     let (remote, events) = connect_stream(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .unwrap();
     let daemon = daemon_rx.recv().unwrap();
@@ -490,7 +493,10 @@ fn connect_with_advertised_hello(
     let (player, event_rx) = connect_stream(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .unwrap();
     (player, event_rx, peer)
@@ -648,7 +654,10 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let (player, event_rx) = connect_stream_with_seed_timeout(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
         Duration::from_millis(200),
     )
     .unwrap();

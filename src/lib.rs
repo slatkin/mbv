@@ -10,6 +10,7 @@
 //! window stack.
 
 mod app;
+mod client_kind;
 mod config;
 mod launch;
 mod local_daemon;

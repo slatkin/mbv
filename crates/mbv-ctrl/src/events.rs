@@ -105,6 +105,27 @@ pub enum CtrlEvent {
     },
 }
 
+/// The Named-queue traffic a Client that negotiated `named-queues` receives,
+/// forwarded by `RemotePlayer` as one `PlayerEvent` (gui-named-queues design
+/// D3, D7): the Owner's queue list, or one resting queue's snapshot. The Client
+/// core adopts both, so the ctrl read loop keeps neither.
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub enum NamedQueueEvent {
+    /// The local Owner's Named queues, in queue order, with the current queue.
+    List {
+        queues: Vec<NamedQueueEntry>,
+        /// The current queue: the one that holds the playhead.
+        current: NamedQueueId,
+    },
+    /// One resting Named queue the Client shows: its slots, source, lineage,
+    /// and start slot, with no playhead and a default status. The snapshot
+    /// names its queue, so it is never mistaken for the current queue's state.
+    Snapshot {
+        queue: NamedQueueId,
+        data: Box<UnifiedQueueStateData>,
+    },
+}
+
 /// One Named queue as the queue list reports it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct NamedQueueEntry {

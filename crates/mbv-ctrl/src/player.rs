@@ -406,6 +406,12 @@ pub enum PlayerEvent {
     /// `playback-output`; the TUI reads it for the connection mark, the output
     /// indicator, and the idle keep-panel rule.
     PlaybackOutput(crate::OutputState),
+    /// The Named-queue traffic a Client that negotiated `named-queues` receives,
+    /// forwarded from `CtrlEvent::NamedQueueList` and
+    /// `CtrlEvent::NamedQueueSnapshot` (gui-named-queues design D3, D7). The
+    /// Client core adopts it; this enum keeps both shapes on one variant so the
+    /// playback dispatch stays one arm.
+    NamedQueue(crate::NamedQueueEvent),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

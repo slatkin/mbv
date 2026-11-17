@@ -107,7 +107,7 @@ pub fn attach_owner(
     let client = cached_emby_client(config);
     let (remote, player_rx) = RemotePlayer::connect_endpoint(
         &DaemonEndpoint::Local,
-        crate::pin::pin_swap_hello().as_ref(),
+        &crate::client_kind::client_hello_claims(&DaemonEndpoint::Local),
     )?;
     let mut app = App::new_remote_optional_with_config(
         client,
@@ -166,6 +166,7 @@ pub fn exclusive_owner_refusal_text(error: &RemotePlayerError) -> String {
 /// it cannot produce. Call once at start-up, before the first Owner
 /// connection. The TUI Client is the default and always takes part.
 pub fn declare_gui_client() {
+    crate::client_kind::claim_gui_client();
     crate::pin::claim_pin_swap_participant(false);
 }
 

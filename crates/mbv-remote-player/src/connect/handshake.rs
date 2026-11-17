@@ -61,7 +61,7 @@ where
         load_control_token,
         HandshakeRole::Client,
         PeerBuild::Any,
-        None,
+        &crate::ClientHelloClaims::default(),
     )
 }
 
@@ -80,7 +80,7 @@ where
         // applies: no Control credential reaches a stale Owner (invariant
         // 15).
         PeerBuild::MustMatch,
-        None,
+        &crate::ClientHelloClaims::default(),
     )
 }
 
@@ -106,7 +106,7 @@ pub(super) fn perform_handshake_with_role<F>(
     load_control_token: F,
     role: HandshakeRole,
     peer_build: PeerBuild,
-    pin_swap: Option<&crate::PinSwapHello>,
+    claims: &crate::ClientHelloClaims,
 ) -> Result<Handshaken, crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -121,7 +121,7 @@ where
         &ctrl_compatibility,
         load_control_token,
         role,
-        pin_swap,
+        claims,
     )?;
     let state_event = read_initial_state(&mut reader)?;
 
@@ -192,7 +192,7 @@ pub(super) fn send_client_hello<F>(
     compatibility: &CtrlCompatibility,
     load_control_token: F,
     role: HandshakeRole,
-    pin_swap: Option<&crate::PinSwapHello>,
+    claims: &crate::ClientHelloClaims,
 ) -> Result<(), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -220,7 +220,7 @@ where
                 Some(control_token) => CtrlHello::current_control_client(control_token),
                 None => CtrlHello::current(),
             };
-            match pin_swap {
+            match &claims.pin_swap {
                 Some(pin_swap) => hello.with_pin_swap(pin_swap.pinned, pin_swap.swap_token.clone()),
                 None => hello,
             }
@@ -232,8 +232,11 @@ where
     // state and include it in every output broadcast. It also negotiates
     // `emby-session-output`: without that claim the Owner masks an Emby
     // Session output to `Local` for this Client (design D3), so a selected
-    // Session appears to do nothing. Restricted-role hellos stay plain, so
-    // the Owner never seeds them an unread line.
+    // Session appears to do nothing. `named-queues` is a claim the Client's
+    // kind decides (gui-named-queues design D7): the Owner sends the queue
+    // list and the shown resting queue's snapshots only to a Client that
+    // advertises it. Restricted-role hellos stay plain, so the Owner never
+    // seeds them an unread line and never publishes Named queues to them.
     if matches!(role, HandshakeRole::Client) {
         client_hello
             .capabilities
@@ -241,6 +244,11 @@ where
         client_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
+        if claims.named_queues {
+            client_hello
+                .capabilities
+                .push(mbv_ctrl::CTRL_CAP_NAMED_QUEUES.to_string());
+        }
     }
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))

@@ -54,7 +54,10 @@ fn local_handshake_rejects_a_mismatched_owner_before_client_hello(
         || Ok("unused".to_string()),
         HandshakeRole::Client,
         PeerBuild::MustMatch,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .unwrap_err();
 
@@ -117,7 +120,10 @@ fn local_handshake_accepts_an_owner_with_a_different_build_id() {
     let (remote, _events) = connect_stream(
         SocketStream::Unix(client),
         PeerBuild::MustMatch,
-        Some(&crate::PinSwapHello::default()),
+        &crate::ClientHelloClaims {
+            pin_swap: Some(crate::PinSwapHello::default()),
+            named_queues: false,
+        },
     )
     .unwrap();
     peer.join().unwrap();

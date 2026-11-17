@@ -28,7 +28,7 @@ pub use commands::{
 #[doc(inline)]
 pub use events::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlEvent, DisconnectReason,
-    NamedQueueEntry, PipePlaybackPhase, PipePlaybackStatus, PlaybackIntentEvent,
+    NamedQueueEntry, NamedQueueEvent, PipePlaybackPhase, PipePlaybackStatus, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackIntentRejection, QueueOpOutcome, ServiceSetupRejection,
 };
 #[doc(inline)]
