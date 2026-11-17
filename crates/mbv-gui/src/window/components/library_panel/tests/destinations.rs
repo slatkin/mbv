@@ -8,17 +8,30 @@ use super::{built, fixtures, seed_idle_status};
 use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::window::arrangement::GuiArrangement;
 
-/// Contract (`LibraryPanel.test.ts`): the panel paints the top bar and the
-/// pill row above the list region, and the Wide Hero pane between them.
+/// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7):
+/// the panel paints the top bar and the pill row above the content row, and
+/// the content row paints the list region before the Wide Hero pane.
 #[test]
-fn the_panel_paints_the_top_bar_the_pill_row_and_the_hero_above_the_list_region() {
+fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::music_sections(None);
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
     let regions = fixture.regions();
-    assert_eq!(regions[..3], ["topBar", "pills", "hero"]);
+    assert_eq!(regions[..3], ["topBar", "pills", "list"]);
+    // The content row paints the list before the Hero pane
+    // (gui-swap-queue-and-library-sides D1); the Music list's letter rail
+    // paints inside the list region.
+    let list_at = regions
+        .iter()
+        .position(|region| region == "list")
+        .expect("the list region paints");
+    let hero_at = regions
+        .iter()
+        .position(|region| region == "hero")
+        .expect("the Wide Hero region paints");
+    assert!(list_at < hero_at);
     assert!(regions.contains(&"list".to_owned()));
     // The pill row's painter mounts for real (row 7.4): the pills region is
     // the pill row's group, and the Music list's painter mounts under it.
