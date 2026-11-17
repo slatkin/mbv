@@ -113,6 +113,13 @@ impl crate::app::App {
             }
             PlaybackRequest::NewQueue => self.dispatch_panel(PanelIntent::RequestNewQueue),
             PlaybackRequest::CloseQueue => self.dispatch_panel(PanelIntent::RequestCloseQueue),
+            // One Queue chooser entry's press (task 8.3 of `gui-named-queues`):
+            // the entry the window painted, shown through the same path the
+            // chooser's Enter runs. The TUI Client paints no Queue chooser, so
+            // no TUI leaf produces it.
+            PlaybackRequest::QueueChooserEntry(queue) => {
+                self.show_gui_queue_chooser_entry(*queue);
+            }
         }
     }
 

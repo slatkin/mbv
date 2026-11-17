@@ -113,7 +113,9 @@ impl RegionTarget {
             | Self::Queue(
                 QueueTargetId::RowMenuEntry(_)
                 | QueueTargetId::RowActions(_)
-                | QueueTargetId::QueueChooser,
+                | QueueTargetId::QueueChooser
+                | QueueTargetId::QueueChooserEntry(_)
+                | QueueTargetId::QueueChooserPeer,
             )
             | Self::Confirm(_)
             | Self::DaemonLost(_) => true,
@@ -200,6 +202,16 @@ pub enum QueueTargetId {
     /// closes the shown entry, as `Ctrl+W` does. The control reports no region
     /// while it is disabled — the only local queue has no close.
     CloseQueue,
+    /// One entry of the open Queue chooser that is a local Named queue
+    /// (gui-named-queues task 8.3): the number is `NamedQueueId::raw`. A press
+    /// shows that queue, as the chooser's Enter does, and starts, stops, and
+    /// moves no playback.
+    QueueChooserEntry(u64),
+    /// The open Queue chooser's peer entry (gui-named-queues task 8.3): a press
+    /// shows the connected peer Player owner's queue, as the chooser's Enter
+    /// does. The entry carries no queue id of its own, so it needs its own
+    /// target.
+    QueueChooserPeer,
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.

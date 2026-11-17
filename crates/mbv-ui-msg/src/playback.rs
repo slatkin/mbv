@@ -1,6 +1,8 @@
 //! Playback request type. Split from `msg.rs` (task 8.3) to keep the central
 //! `Msg` file below the 800-line cap.
 
+use mbv_queue::NamedQueueId;
+
 /// Playback effect requests emitted by Interactive Components. The shell
 /// resolves them through the existing `App::dispatch` path; the component
 /// owns the cursor and the user intent.
@@ -59,6 +61,13 @@ pub enum PlaybackRequest {
     /// the `Ctrl+W` chord's request, pressed on the header control.
     /// GUI-painted only.
     CloseQueue,
+    /// One entry of the open Queue chooser (task 8.3 of `gui-named-queues`): the
+    /// entry's painted identity — a local Named queue, or `None` for the
+    /// connected peer Player owner — so the press shows what the window painted
+    /// and a queue that closed in between is not replaced by its neighbour. It
+    /// runs the same show the chooser's Enter applies: the entry is shown, and
+    /// no playback starts, stops, or moves.
+    QueueChooserEntry(Option<NamedQueueId>),
 }
 
 /// Which track chip a popover belongs to (add-tauri-gui-client row 6.2).

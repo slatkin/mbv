@@ -50,6 +50,7 @@ pub mod library_workspace_table;
 pub mod list_frame_notices;
 pub mod panel;
 pub mod panel_divider;
+pub mod queue_chooser_menu;
 pub mod queue_footer;
 pub mod queue_header;
 pub mod queue_panel;

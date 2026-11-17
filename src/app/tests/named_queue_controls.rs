@@ -1,8 +1,9 @@
-//! The Client core's two GUI queue header controls (gui-named-queues design D8):
-//! the new-queue control and the close control, each one path the header's press
-//! and its GUI-only chord share. Specs: `gui-queue-chooser` ("The new-queue
-//! control makes and shows a queue", "The close control closes the shown
-//! entry").
+//! The Client core's GUI queue controls (gui-named-queues design D8): the
+//! new-queue control and the close control, each one path the header's press and
+//! its GUI-only chord share, and the Queue chooser's entry press (task 8.3),
+//! which runs the show its Enter runs. Specs: `gui-queue-chooser` ("The
+//! new-queue control makes and shows a queue", "The close control closes the
+//! shown entry", "The chooser lists local queues and connected peers").
 
 use super::named_queues::{
     current, gui_app_with_named_queues, gui_app_with_peer, inject_local_events, named_queue_list,
@@ -14,7 +15,7 @@ use crate::app::state::playback::ShownEntry;
 use mbv_ctrl::{CtrlCmd, NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PlaybackRequest};
 
 /// The queue the Owner mints for the first new queue beside `Default`.
 fn new_queue() -> NamedQueueId {
@@ -319,4 +320,37 @@ fn a_resting_queue_shown_closes_without_a_prompt() {
         "a resting queue asks nothing"
     );
     assert_eq!(sent_close(&cmd_rx), Some(resting()));
+}
+
+/// A press on a Queue chooser entry shows the entry the window painted and
+/// dismisses the chooser on it, and starts, stops, and moves no playback (spec
+/// `gui-queue-chooser` "The chooser lists local queues and connected peers").
+/// The region carries the entry's own queue, so the press shows what the
+/// window painted rather than whatever the list's row holds now.
+#[test]
+fn a_chooser_entry_press_shows_the_painted_queue() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_local_current_entry();
+    app.toggle_gui_queue_chooser();
+    while cmd_rx.try_recv().is_ok() {}
+
+    app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
+
+    assert_eq!(
+        app.gui_shown_entry,
+        Some(ShownEntry::Local(resting())),
+        "the press shows the entry it painted"
+    );
+    assert!(
+        !app.gui_overlay_is_open(),
+        "the chooser dismisses on the entry it showed"
+    );
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(CtrlCmd::NamedQueueShow { queue }) if queue == resting()),
+        "the shown queue's snapshots are asked of the local Owner"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the show sends no playback command"
+    );
 }

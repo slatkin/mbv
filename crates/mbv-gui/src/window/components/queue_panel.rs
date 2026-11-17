@@ -46,10 +46,16 @@
 //! under a second report key this component inserts when the menu opens —
 //! the same technique `TrackChips` uses for its popover rows — so they land
 //! after every region the panel reports and win the hit map where the menu
-//! paints over a row beneath it.
+//! paints over a row beneath it. The open Queue chooser's entries
+//! (`QueueChooserMenu`, presentation-only) report under a third key in the
+//! same way, naming each painted entry's own identity.
 //!
-//! The Queue chooser dropdown (task 8.3), the row marks and hover chrome
-//! (task 8.4), and the footer totals (task 8.5) are later tasks'.
+//! The open Queue chooser's dropdown (task 8.3) is `QueueChooserMenu`'s: the
+//! panel measures its `[data-chooser-entry]` rows and reports each entry's
+//! region — the local queue's own identity, or the peer entry — under a third
+//! report key inserted when the chooser opens, so the dropdown's rows win the
+//! hit map over the queue rows beneath them. The row marks and hover chrome
+//! (task 8.4) and the footer totals (task 8.5) are later tasks'.
 //!
 //! The row paint is the canvas's (U4.2): its hexes come through the
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
@@ -69,10 +75,11 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::overlay::GuiOverlayFrame;
+use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueInsertion, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
+use crate::window::components::queue_chooser_menu::QueueChooserMenu;
 use crate::window::components::queue_header::QueueHeader;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, GripVertical};
@@ -241,6 +248,46 @@ async fn header_regions(
     regions
 }
 
+/// The open Queue chooser's entries (gui-named-queues task 8.3): the frame's
+/// list while the chooser is up, else none — and a shrinking list drops the
+/// stale painted-row handles, so a queue another Client closed leaves no region
+/// to press (the track chips' idiom).
+fn painted_chooser_entries(
+    overlay: Option<&GuiOverlayFrame>,
+    mut rows: Signal<Vec<Option<Event<MountedData>>>>,
+) -> Vec<GuiQueueChooserEntry> {
+    let entries = match overlay {
+        Some(GuiOverlayFrame::QueueChooser { entries, .. }) => entries.clone(),
+        _ => Vec::new(),
+    };
+    if rows.peek().len() > entries.len() {
+        rows.write().truncate(entries.len());
+    }
+    entries
+}
+
+/// The open Queue chooser's entry regions (gui-named-queues task 8.3), in paint
+/// order: each painted entry names the identity the window painted — the local
+/// queue's `QueueChooserEntry`, or the peer's `QueueChooserPeer` — so a list
+/// change between the paint and the press shows the painted entry or nothing.
+async fn chooser_entry_regions(
+    entries: &[GuiQueueChooserEntry],
+    handles: &[Option<Event<MountedData>>],
+) -> Vec<LayoutRegion> {
+    let mut regions: Vec<LayoutRegion> = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let Some(Some(mounted)) = handles.get(index) else {
+            continue;
+        };
+        let id = match entry.queue {
+            Some(raw) => QueueTargetId::QueueChooserEntry(raw),
+            None => QueueTargetId::QueueChooserPeer,
+        };
+        regions.extend(element_region(mounted, RegionTarget::Queue(id)).await);
+    }
+    regions
+}
+
 /// The Queue panel (task 5.5). The panel reads the `queue`, `summary`,
 /// and `overlay` sections and the playhead's prediction; each paint
 /// that moved a region reports, and the layout epoch — the `ResizeObserver`
@@ -252,6 +299,7 @@ pub fn QueuePanel() -> Element {
     let reporter = consume_context::<LayoutReporter>();
     let key = use_hook(LayoutKey::next);
     let menu_key = use_hook(LayoutKey::next);
+    let chooser_key = use_hook(LayoutKey::next);
 
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     // The header's control handles: the Queue chooser button's, the filter's,
@@ -274,6 +322,10 @@ pub fn QueuePanel() -> Element {
     // The open row menu's painted entries, by their entry index (the former client
     // `querySelectorAll('[data-menu-entry]')`).
     let mut menu_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
+    // The open Queue chooser's painted entries, by their entry index (task
+    // 8.3): the handles its `queueChooserEntry` and `queueChooserPeer` regions
+    // read.
+    let chooser_rows: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
 
     // No region outlives the panel: the contributions retract on unmount, as
     // the former client `onMount` teardown did.
@@ -308,6 +360,16 @@ pub fn QueuePanel() -> Element {
         GuiOverlayFrame::RowMenu { anchor_slot, .. } => menu_top(&queue, *anchor_slot),
         _ => String::new(),
     });
+    // The open Queue chooser, or `None` while another overlay (or none) is up:
+    // the core's cursor, the entries in paint order, and the rename draft.
+    let chooser_open = match overlay.as_ref() {
+        Some(GuiOverlayFrame::QueueChooser {
+            cursor,
+            entries,
+            renaming,
+        }) => Some((*cursor, entries.clone(), renaming.clone())),
+        _ => None,
+    };
     // The recessed box's fill: the chrome's `queuePanel` resting fill at
     // every state (user decision 2026-11-15). The property is undefined
     // on purpose (`window/theme.rs::write_chrome`), so the box paints no fill
@@ -339,6 +401,8 @@ pub fn QueuePanel() -> Element {
         let grip = grip_mounted.cloned();
         let actions = actions_mounted.cloned();
         let menu_row_handles = menu_rows.cloned();
+        let chooser_row_handles = chooser_rows.cloned();
+        let chooser_entries = painted_chooser_entries(overlay_open.as_ref(), chooser_rows);
         let chooser = chooser_handle.cloned();
         let filter = filter_handle.cloned();
         let new_queue = new_queue_handle.cloned();
@@ -434,12 +498,31 @@ pub fn QueuePanel() -> Element {
             } else {
                 effect_reporter.retract_layout(menu_key);
             }
+            // The open Queue chooser's entries report under their own key, last
+            // over every region above (the dropdown paints over the rows
+            // beneath it), and each names the identity the window painted —
+            // a local queue or the peer — so a list change between the paint
+            // and the press shows the painted entry or nothing.
+            if chooser_entries.is_empty() {
+                effect_reporter.retract_layout(chooser_key);
+            } else {
+                let chooser_regions =
+                    chooser_entry_regions(&chooser_entries, &chooser_row_handles).await;
+                effect_reporter.report_layout(
+                    chooser_key,
+                    LayoutContribution {
+                        lists: Vec::new(),
+                        regions: chooser_regions,
+                    },
+                );
+            }
         });
     });
 
     use_drop(move || {
         drop_reporter.retract_layout(key);
         drop_reporter.retract_layout(menu_key);
+        drop_reporter.retract_layout(chooser_key);
     });
 
     rsx! {
@@ -664,6 +747,18 @@ pub fn QueuePanel() -> Element {
                         entries,
                         top: menu_top.unwrap_or_default(),
                         row_slot: menu_rows,
+                    }
+                }
+                if let Some((cursor, entries, renaming)) = chooser_open {
+                    // The open Queue chooser (task 8.3): the frame's entries
+                    // under the header at the chooser button's leading edge.
+                    // Its entries report their own regions under the third key,
+                    // last over the rows beneath.
+                    QueueChooserMenu {
+                        cursor,
+                        entries,
+                        renaming,
+                        row_slot: chooser_rows,
                     }
                 }
             }

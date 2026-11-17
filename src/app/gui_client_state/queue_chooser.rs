@@ -61,6 +61,24 @@ impl App {
         }));
     }
 
+    /// Show one Queue chooser entry from a press (task 8.3 of
+    /// `gui-named-queues`): the entry's painted identity, never its painted
+    /// row, because the list is live and a queue can close between the paint
+    /// and the press. It runs the same show the chooser's Enter applies and
+    /// dismisses the chooser on the entry it showed, so a press and Enter leave
+    /// one state; the show starts, stops, and moves no playback (spec
+    /// `gui-queue-chooser` "The chooser lists local queues and connected
+    /// peers").
+    pub(in crate::app) fn show_gui_queue_chooser_entry(&mut self, queue: Option<NamedQueueId>) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
+            self.gui_overlay = None;
+        }
+        match queue {
+            Some(queue) => self.show_named_queue(queue),
+            None => self.show_peer_entry(),
+        }
+    }
+
     /// Send one confirmed rename to the local Owner (design D3, D8) and close
     /// the chooser: the Owner trims the name, refuses one left empty, and
     /// publishes the queue list that carries the new name. An empty name never

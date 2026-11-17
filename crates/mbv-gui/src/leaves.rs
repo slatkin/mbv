@@ -17,7 +17,7 @@
 //! painted choice or nothing.
 
 use mbv::GuiSurfaceLeaf;
-use mbv_queue::QueueSlotId;
+use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::{MediaListOperation, RowIntent};
 use mbv_surfaces::queue::{QueueRowInsertionSide, QueueSurface};
@@ -201,6 +201,20 @@ impl<'a> QueueLeaf<'a> {
             // press never reaches this arm.
             RegionTarget::Queue(QueueTargetId::CloseQueue) => {
                 Some(Msg::Playback(PlaybackRequest::CloseQueue))
+            }
+            // One entry of the open Queue chooser (task 8.3): the press shows
+            // the queue the painted entry named, through the same request the
+            // chooser's Enter resolves to, so the press and the key run one
+            // path. The region carries the entry's own queue identity, so a
+            // list change between the paint and the press shows the painted
+            // queue or nothing, never its neighbour.
+            RegionTarget::Queue(QueueTargetId::QueueChooserEntry(raw)) => Some(Msg::Playback(
+                PlaybackRequest::QueueChooserEntry(Some(NamedQueueId::from_raw(*raw))),
+            )),
+            // The open Queue chooser's peer entry (task 8.3): the peer owns no
+            // Named queue, so the entry's identity is the peer itself.
+            RegionTarget::Queue(QueueTargetId::QueueChooserPeer) => {
+                Some(Msg::Playback(PlaybackRequest::QueueChooserEntry(None)))
             }
             // The footer's playlist pill is informational in the GUI (its
             // layout report carries no `playlistPill` region — the GUI

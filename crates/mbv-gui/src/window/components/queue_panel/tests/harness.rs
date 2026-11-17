@@ -18,7 +18,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::super::QueuePanel;
 use crate::art::GuiArtRef;
-use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiRowMenuEntry};
+use crate::bridge::frame::overlay::{
+    GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename, GuiRowMenuEntry,
+};
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey,
     GuiTransportAvailability,
@@ -96,6 +98,51 @@ pub(super) fn several_entries() -> GuiQueueSummary {
             close_disabled: false,
         },
         ..summary()
+    }
+}
+
+/// The summary the Queue chooser's contracts paint (spec `gui-queue-chooser`):
+/// `Default` and `Kids` are local queues and a peer connects, so the header
+/// paints its chooser and its close control acts.
+pub(super) fn chooser_summary() -> GuiQueueSummary {
+    GuiQueueSummary {
+        header: GuiQueueHeaderFacts {
+            entries: 3,
+            shown_name: "Kids".to_owned(),
+            close_disabled: false,
+        },
+        ..summary()
+    }
+}
+
+/// One entry of the open Queue chooser: its label, the local queue it shows
+/// (`None` for the peer), and its shown and current marks.
+pub(super) fn chooser_entry(
+    label: &str,
+    queue: Option<u64>,
+    shown: bool,
+    current: bool,
+) -> GuiQueueChooserEntry {
+    GuiQueueChooserEntry {
+        label: label.to_owned(),
+        queue,
+        shown,
+        current,
+    }
+}
+
+/// The open Queue chooser the fixture paints (task 8.3): `Default` is current
+/// and `Kids` is shown, then the connected peer. `renaming` carries the draft
+/// the chooser holds.
+pub(super) fn queue_chooser(renaming: Option<GuiQueueChooserRename>) -> GuiOverlayFrame {
+    GuiOverlayFrame::QueueChooser {
+        cursor: 1,
+        entries: vec![
+            chooser_entry("Default", Some(1), false, true),
+            chooser_entry("Kids", Some(2), true, false),
+            chooser_entry("living-room", None, false, false),
+        ],
+        renaming,
     }
 }
 

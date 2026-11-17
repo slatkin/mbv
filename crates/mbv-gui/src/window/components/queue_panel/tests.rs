@@ -14,6 +14,7 @@
 //! channel is a mock pair; the clocks are the injected recorders (D10); no
 //! test opens a window, sleeps, or reaches the core.
 
+mod chooser;
 mod cross_panel;
 mod harness;
 mod header;
