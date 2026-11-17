@@ -112,10 +112,10 @@ pub fn dom_pointer(
 /// to size a scroll.
 const PIXELS_PER_LINE: f64 = 16.0;
 
-/// A `wheel` event as a [`DomPointer`], with the DOM delta converted to
-/// logical pixels (D4: `DomPointer` carries logical pixels; the window
-/// converts lines and pages before it sends). The conversion is unit-only:
-/// the core decides what a wheel step means, so no notch or gesture policy
+/// A `wheel` event as a [`DomPointer`], with Blitz's delta converted to the
+/// DOM's sign and to logical pixels (D4: `DomPointer` carries logical pixels;
+/// the window converts lines and pages before it sends). The conversion is
+/// unit and sign only: the core decides what a wheel step means, so no notch or gesture policy
 /// lives here. `viewport_height` is the window's inner height — the page unit
 /// stands for it, as `window.innerHeight` did.
 #[must_use]
@@ -128,8 +128,14 @@ pub fn dom_wheel(event: &WheelData, viewport_height: f64) -> DomPointer {
         WheelDelta::Lines(delta) => (PIXELS_PER_LINE, delta.x, delta.y),
         WheelDelta::Pages(delta) => (viewport_height, delta.x, delta.y),
     };
-    pointer.delta_x = f32_from_f64(delta_x * unit);
-    pointer.delta_y = f32_from_f64(delta_y * unit);
+    // Blitz hands the window winit's wheel delta unchanged: positive `y`
+    // moves the content down (the wheel turned away from the user), where a
+    // DOM `deltaY` is positive for the wheel turned toward the user. The
+    // core reads the DOM sign (`bridge/pointer.rs`: a positive delta scrolls
+    // down), so both axes flip here, and a wheel turned toward the user
+    // moves the list's rows up and the scroll bar's thumb down.
+    pointer.delta_x = f32_from_f64(-delta_x * unit);
+    pointer.delta_y = f32_from_f64(-delta_y * unit);
     pointer
 }
 

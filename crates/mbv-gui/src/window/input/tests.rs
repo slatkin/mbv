@@ -332,7 +332,9 @@ fn a_pointer_press_forwards_to_the_core() {
 }
 
 /// Contract 3 (task 3.3): a pixel-mode wheel delta keeps its logical pixels,
-/// and the vertical delta's sign picks the neutral scroll direction.
+/// and the vertical delta's sign picks the neutral scroll direction. Blitz's
+/// delta carries winit's sign, so the window flips it to the DOM's (a wheel
+/// turned toward the user is a positive `deltaY` and scrolls the list down).
 #[test]
 fn a_pixel_wheel_delta_keeps_its_logical_pixels() {
     let wheel = WheelData::new(TestWheel {
@@ -342,14 +344,17 @@ fn a_pixel_wheel_delta_keeps_its_logical_pixels() {
             client: ClientPoint::new(4.0, 8.0),
             modifiers: Modifiers::empty(),
         },
-        delta: WheelDelta::pixels(0.0, -120.0, 0.0),
+        delta: WheelDelta::pixels(0.0, 120.0, 0.0),
     });
 
     let pointer = dom_wheel(&wheel, 600.0);
 
     assert_eq!(pointer.kind, DomPointerKind::Wheel);
     assert_eq!(pointer.delta_x, 0.0);
-    assert_eq!(pointer.delta_y, -120.0);
+    assert_eq!(
+        pointer.delta_y, -120.0,
+        "Blitz's winit sign flips to the DOM's"
+    );
 }
 
 /// Contract 4 (task 3.3): a line-mode wheel delta converts to pixels — three
@@ -368,7 +373,7 @@ fn a_line_mode_wheel_delta_converts_to_pixels() {
 
     let pointer = dom_wheel(&wheel, 600.0);
 
-    assert_eq!(pointer.delta_y, 48.0);
+    assert_eq!(pointer.delta_y, -48.0);
 }
 
 /// Contract 5 (task 3.3): a `pointercancel` forwards the neutral cancel, so
