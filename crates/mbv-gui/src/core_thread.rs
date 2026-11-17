@@ -531,6 +531,19 @@ impl CoreThread {
         else {
             return false;
         };
+        // A press names the gesture it recognized and the region it landed
+        // on, so a click that does nothing (a double click that never plays)
+        // shows in the log where it stopped.
+        if matches!(event.kind, PointerKind::Press) {
+            let gesture_label = gesture_name(&gesture);
+            let region = self.regions.resolve(event.position);
+            tracing::info!(
+                name: "gui.pointer.press",
+                target: "gui_pointer",
+                { x = event.position.x, y = event.position.y, gesture = gesture_label, region = ?region },
+                "press recognized"
+            );
+        }
         // The row drag's motion and release address the Queue Surface state
         // directly (add-tauri-gui-client row 6.5, design D5): motion only
         // previews the drop, and the release emits the one move request. A
@@ -767,5 +780,17 @@ impl fmt::Debug for CoreThread {
             .field("pending", &self.pending.len())
             .field("painted", &self.painted)
             .finish_non_exhaustive()
+    }
+}
+
+/// The gesture's name for the press log.
+fn gesture_name(gesture: &PointerGesture<Position>) -> &'static str {
+    match gesture {
+        PointerGesture::Click { .. } => "click",
+        PointerGesture::DoubleClick(_) => "double-click",
+        PointerGesture::RightClick(_) => "right-click",
+        PointerGesture::Scroll { .. } => "scroll",
+        PointerGesture::Drag { .. } => "drag",
+        PointerGesture::DragEnd => "drag-end",
     }
 }
