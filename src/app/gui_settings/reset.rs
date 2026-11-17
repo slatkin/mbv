@@ -30,6 +30,7 @@ impl App {
         // TUI's reset keeps its fetched content too.
         self.gui_library_groups.clear();
         self.gui_library_picks.clear();
+        self.gui_music_union_picks.clear();
         self.gui_home_selection = None;
         self.gui_tv_shows.clear();
         self.gui_emby_libs.clear();

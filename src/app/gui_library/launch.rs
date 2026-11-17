@@ -15,6 +15,7 @@ use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::tab_selection::TabSelection;
 
+use super::collection::GuiCollectionSet;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
@@ -57,13 +58,13 @@ impl App {
     }
 
     /// Apply the saved collection choices of the destination the first phase
-    /// opened (design D9, D13): the saved picks of the groups the library
-    /// still holds restore, and the first saved group the library still
-    /// holds — in saved order — is the one selected; with none, a saved set
-    /// the library emptied, and a destination with no saved entry, a fresh
-    /// launch's case, the destination keeps its default first group (design
-    /// D6). The saved entry matches `destination`, the identity phase 1
-    /// recorded, and
+    /// opened (design D9, D10; gui-collection-dropdown design D11): the saved
+    /// picks of the groups the library still holds restore, and the saved
+    /// checked set restores through the catalog's retention — the groups the
+    /// library still holds stay checked, and a saved set the library emptied
+    /// falls back to All, as do a saved All (an empty list) and a destination
+    /// with no saved entry, a fresh launch's case, whose default is All. The
+    /// saved entry matches `destination`, the identity phase 1 recorded, and
     /// the active destination must still be that one: a mid-restore tab
     /// switch abandons the restore, so no other destination's saved set
     /// lands under the user. Returns `false` while the destination's group
@@ -74,7 +75,7 @@ impl App {
         destination: &TabIdentity,
     ) -> bool {
         let Some(lib_idx) = self.gui_music_destination() else {
-            // The active destination paints no collection pills.
+            // The active destination paints no collection dropdown.
             return true;
         };
         if self.gui_launch_destination() != *destination {
@@ -86,12 +87,12 @@ impl App {
             return false;
         };
         // The saved entry of the destination the first phase opened: its
-        // picks restore first, and its group ids select the group with.
+        // picks restore first, and its group ids check the groups with.
         let saved_entry = state
             .collections
             .iter()
             .find(|entry| entry.destination == *destination);
-        // The saved picks of the groups the library still holds (design D13)
+        // The saved picks of the groups the library still holds (design D10)
         // restore first, and never overwrite a pick the session already made.
         for pick in saved_entry.map_or(&[][..], |entry| entry.picks.as_slice()) {
             if present.contains(&pick.group_id) {
@@ -101,21 +102,18 @@ impl App {
             }
         }
         if self.gui_library_groups.contains_key(&lib_idx) {
-            // The user already selected a group in the pre-restore window: the
-            // restore never clobbers a choice the session made.
+            // The user already selected collections in the pre-restore window:
+            // the restore never clobbers a choice the session made.
             return true;
         }
-        // The saved group the library still holds, in saved order, is the
-        // one selected. Without one, the destination keeps the default first
-        // group (design D6), so a fresh launch opens on the first group.
-        let saved_group = saved_entry.and_then(|entry| {
-            entry
-                .group_ids
-                .iter()
-                .find(|group_id| present.contains(group_id))
-        });
-        if let Some(group_id) = saved_group.cloned() {
-            self.select_gui_library_collection(lib_idx, group_id);
+        // The saved checked set the library still holds, in saved order,
+        // restores through the retention (design D10); a saved All, an
+        // emptied set, and no saved entry leave the default All.
+        if let Some(entry) = saved_entry {
+            let set = GuiCollectionSet::Checked(entry.group_ids.clone()).retain_present(&present);
+            if !set.is_all() {
+                self.install_gui_library_collection(lib_idx, set);
+            }
         }
         true
     }
@@ -140,12 +138,13 @@ impl App {
         }
     }
 
-    /// The selected collection and the group picks of the catalog's
-    /// destinations (design D9, D13), in catalog order: one entry per
-    /// destination whose choice or pick the session holds, so a destination the
-    /// session never touched opens on its first group. The file keeps the list
-    /// shape, and each entry holds the one selected group and the picks in
-    /// group-id order, so the saved file is stable.
+    /// The selected collections and the group picks of the catalog's
+    /// destinations (design D9, D10), in catalog order: one entry per
+    /// destination whose choice or pick the session holds, so a destination
+    /// the session never touched saves nothing and opens on All. The file
+    /// keeps the list shape, and each entry holds the checked groups (an
+    /// empty list is All) and the picks in group-id order, so the saved file
+    /// is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
         (0..self.libs.len())
             .filter_map(|lib_idx| {
@@ -163,12 +162,15 @@ impl App {
                     return None;
                 }
                 picks.sort_by(|a, b| a.group_id.cmp(&b.group_id));
+                let group_ids = selected
+                    .map(|set| set.checked_keys().to_vec())
+                    .unwrap_or_default();
                 Some(GuiDestinationCollections {
                     destination: library_identity(
                         ServiceKind::Emby,
                         &self.libs[lib_idx].library.id,
                     ),
-                    group_ids: selected.cloned().into_iter().collect(),
+                    group_ids,
                     picks,
                 })
             })

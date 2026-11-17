@@ -1,11 +1,13 @@
 //! The GUI Library's Music collection store (add-gui-library-panel design D5):
-//! per Grouped Music library, the one selected group and the album list each
-//! group loaded. The fetch runs off the Client core thread and lands in the
-//! store rather than in `nav_stack`, so the TUI's navigation state and fetches
-//! do not change.
+//! per Grouped Music library, the selected collection set and the album list
+//! each group loaded. The fetch runs off the Client core thread and lands in
+//! the store rather than in `nav_stack`, so the TUI's navigation state and
+//! fetches do not change. The selection is All or a set of checked groups
+//! (gui-collection-dropdown design D1, D2, D11).
 
 use mbv_emby_model::EmbyItem;
 
+use super::collection::GuiCollectionSet;
 use crate::app::state::events::LibEvent;
 use crate::app::{App, PAGE_SIZE};
 
@@ -34,10 +36,11 @@ pub(in crate::app) struct GuiGroupAlbumsEvent {
 
 impl App {
     /// Select the one collection group of the Grouped Music library `lib_idx`
-    /// (design D5, D6): one group is always selected, as in the TUI. The store
-    /// keeps the choice per library and starts the group's album fetch when
-    /// the store holds no list for it, so a group selected again fetches
-    /// nothing.
+    /// as a checked set of that one group (gui-collection-dropdown design
+    /// D1): the pill press's single-group path, which the dropdown's toggle
+    /// commands replace in a later unit. The store keeps the choice per
+    /// library and starts the groups' album fetches when the store holds no
+    /// list for them, so a group selected again fetches nothing.
     pub(in crate::app) fn select_gui_library_collection(
         &mut self,
         lib_idx: usize,
@@ -57,8 +60,66 @@ impl App {
             group = %group_id,
             "the selected collection changed"
         );
-        self.gui_library_groups.insert(lib_idx, group_id.clone());
-        self.fetch_gui_group_albums(lib_idx, group_id);
+        self.install_gui_library_collection(lib_idx, GuiCollectionSet::Checked(vec![group_id]));
+    }
+
+    /// Install the collection set of the Grouped Music library `lib_idx`
+    /// (gui-collection-dropdown design D2, D11): the one entry every
+    /// selection change goes through, so the Hero's album carries across the
+    /// change. While the new selection is All or several groups, the session
+    /// union pick takes the album the Hero showed under the previous
+    /// selection, so the Hero keeps it while the new union holds it; one
+    /// checked group resolves through its kept pick instead, so nothing
+    /// carries. The checked groups' album fetches start through the ensure
+    /// step, one at a time.
+    pub(in crate::app) fn install_gui_library_collection(
+        &mut self,
+        lib_idx: usize,
+        set: GuiCollectionSet,
+    ) {
+        let previous = self
+            .gui_library_groups
+            .get(&lib_idx)
+            .cloned()
+            .unwrap_or_else(GuiCollectionSet::all);
+        let next_single = matches!(&set, GuiCollectionSet::Checked(keys) if keys.len() == 1);
+        if !next_single && let Some(album_id) = self.gui_hero_album_under(lib_idx, &previous) {
+            self.gui_music_union_picks.insert(lib_idx, album_id);
+        }
+        self.gui_library_groups.insert(lib_idx, set);
+        self.ensure_gui_music_selection(lib_idx);
+    }
+
+    /// The album the Hero showed under `set` (gui-collection-dropdown design
+    /// D11), from the kept picks and the loaded store lists alone: one
+    /// checked group's kept pick, All or several groups' union pick, else the
+    /// first album of the selection's first loaded group list. `None` while
+    /// no album is known.
+    fn gui_hero_album_under(&self, lib_idx: usize, set: &GuiCollectionSet) -> Option<String> {
+        let group_ids: Vec<String> = match set {
+            GuiCollectionSet::All => self.gui_selected_groups(lib_idx),
+            GuiCollectionSet::Checked(keys) => keys.clone(),
+        };
+        match set {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
+                if let Some(pick) = self.gui_library_picks.get(&(lib_idx, keys[0].clone())) {
+                    return Some(pick.clone());
+                }
+            }
+            _ => {
+                if let Some(pick) = self.gui_music_union_picks.get(&lib_idx) {
+                    return Some(pick.clone());
+                }
+            }
+        }
+        group_ids.iter().find_map(|group_id| {
+            match self.gui_music_albums.get(&(lib_idx, group_id.clone())) {
+                Some(GuiGroupAlbums::Loaded(albums)) => {
+                    albums.first().map(|album| album.id.clone())
+                }
+                Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Failed) | None => None,
+            }
+        })
     }
 
     /// Why the selected collection cannot apply to `lib_idx` (design D5, D6):
@@ -81,21 +142,31 @@ impl App {
         }
     }
 
-    /// Start the shown group's album fetch when the store holds no list for it
-    /// (design D5). The frame path calls this for the Music destination, so
-    /// the default first group loads without a pick. A failed fetch is not
-    /// retried here: it stays failed until the user selects the group again,
-    /// so a paint never re-issues it.
+    /// Start the shown groups' album fetches when the store holds no list for
+    /// them (design D5, gui-collection-dropdown design D1): the frame path
+    /// calls this for the Music destination, so All's and every checked
+    /// group's list loads without a pick. One fetch runs at a time per
+    /// library: the next group's fetch starts on a later frame, when the
+    /// previous one landed. A failed fetch is not retried here: it stays
+    /// failed until the user selects the group again, so a paint never
+    /// re-issues it.
     pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
-        let Some(group_id) = self.gui_selected_group(lib_idx) else {
-            return;
-        };
-        if self
-            .gui_music_albums
-            .contains_key(&(lib_idx, group_id.clone()))
-        {
+        let group_ids = self.gui_selected_groups(lib_idx);
+        if group_ids.iter().any(|group_id| {
+            matches!(
+                self.gui_music_albums.get(&(lib_idx, group_id.clone())),
+                Some(GuiGroupAlbums::Loading)
+            )
+        }) {
             return;
         }
+        let Some(group_id) = group_ids.into_iter().find(|group_id| {
+            !self
+                .gui_music_albums
+                .contains_key(&(lib_idx, group_id.clone()))
+        }) else {
+            return;
+        };
         self.fetch_gui_group_albums(lib_idx, group_id);
     }
 

@@ -47,8 +47,9 @@ pub use self::gui_client_state::{
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
-    GuiArtShape, GuiEntryListProjection, GuiEntryRow, GuiHomeHero, GuiHomeItemRow,
-    GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiPillOption,
+    GuiArtShape, GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, GuiEntryListProjection,
+    GuiEntryRow, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
+    GuiHomeRowKind, GuiPillOption, compare_gui_date_order,
 };
 pub use self::gui_library::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,

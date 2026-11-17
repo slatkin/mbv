@@ -240,22 +240,30 @@ impl App {
         ));
     }
 
-    /// The Grouped Music library's selected group ids in pill order
-    /// (add-gui-library-panel design D5).
+    /// The Grouped Music library's first checked group id
+    /// (add-gui-library-panel design D5; gui-collection-dropdown design D1):
+    /// `None` while All is selected or no entry is stored.
     #[must_use]
     pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> Option<&str> {
-        self.gui_library_groups.get(&lib_idx).map(String::as_str)
+        match self.gui_library_groups.get(&lib_idx) {
+            Some(crate::app::gui_library::GuiCollectionSet::Checked(keys)) => {
+                keys.first().map(String::as_str)
+            }
+            Some(crate::app::gui_library::GuiCollectionSet::All) | None => None,
+        }
     }
 
-    /// Seed the GUI Music selection with `group_ids` for `lib_idx`, as a
-    /// landed set-collections command would (add-gui-library-panel): a
-    /// command test pins the selection before its first step, so the launch
-    /// restore's own application skips it and the test's mock answers serve
-    /// the test's commands alone.
+    /// Seed the GUI Music selection with the single checked group
+    /// `group_id` for `lib_idx`, as a landed set-collections command would
+    /// (add-gui-library-panel): a command test pins the selection before its
+    /// first step, so the launch restore's own application skips it and the
+    /// test's mock answers serve the test's commands alone.
     #[cfg(feature = "test")]
     pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_id: &str) {
-        self.gui_library_groups
-            .insert(lib_idx, group_id.to_string());
+        self.gui_library_groups.insert(
+            lib_idx,
+            crate::app::gui_library::GuiCollectionSet::Checked(vec![group_id.to_string()]),
+        );
     }
 
     /// The album ids the GUI Music store loaded for `group_id`; `None` while

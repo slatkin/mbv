@@ -8,6 +8,7 @@
 mod artwork;
 mod audiobooks;
 mod audiobooks_projection;
+mod collection;
 mod emby;
 mod emby_projection;
 mod entry_list;
@@ -33,6 +34,9 @@ pub use self::audiobooks::GuiAudiobooksSelection;
 pub use self::audiobooks_projection::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
     GuiAudiobooksWorkspace,
+};
+pub use self::collection::{
+    GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
 };
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{

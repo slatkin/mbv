@@ -263,13 +263,15 @@ pub struct App {
     /// hide, so the visualizer and hide setters and the persisted hide do
     /// nothing for the GUI Client.
     pub(in crate::app) gui_client: bool,
-    /// The GUI Library panel's selected collection per destination
-    /// (add-gui-library-panel design D2, D5, D6): a Grouped Music library's
-    /// selected group id, keyed by the library index. One group is always
-    /// selected, so an absent entry (or one the library no longer holds)
-    /// selects the first group. The window content sends the choice with the
-    /// select-collection command; the TUI never reads it.
-    pub(in crate::app) gui_library_groups: std::collections::HashMap<usize, String>,
+    /// The GUI Library panel's selected collections per destination
+    /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design
+    /// D1, D2): All or the checked collection ids of a Grouped Music library,
+    /// keyed by the library index. An absent entry is All, and a checked set
+    /// the library emptied falls back to All where the selection is read. The
+    /// window content sends the choice with the collection commands; the TUI
+    /// never reads it.
+    pub(in crate::app) gui_library_groups:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSet>,
     /// The GUI Library's Music collection store (design D5): each selected
     /// group's album list, keyed by the library index and the group id. It
     /// lands outside `nav_stack`, so the TUI's navigation state and fetches do
@@ -280,6 +282,11 @@ pub struct App {
     /// Hero (design D13), keyed by the library index and the group id. A group
     /// with no entry shows its first album. The TUI never reads it.
     pub(in crate::app) gui_library_picks: std::collections::HashMap<(usize, String), String>,
+    /// The album the Hero last showed while All or several Music groups were
+    /// checked (gui-collection-dropdown design D11), keyed by the library
+    /// index: the session-only union pick, which the launch file never saves.
+    /// The TUI never reads it.
+    pub(in crate::app) gui_music_union_picks: std::collections::HashMap<usize, String>,
     /// The item whose full menu the frame's `rowMenu` section carries (the
     /// GUI Library's right-click item menu): the item the row-menu command
     /// last named. The TUI never reads it.

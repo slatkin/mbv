@@ -122,7 +122,8 @@ fn app_with_stored_groups(
 ) -> App {
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(0, HIPHOP.to_string());
+    app.gui_library_groups
+        .insert(0, GuiCollectionSet::Checked(vec![HIPHOP.to_string()]));
     app.gui_music_albums
         .insert((0, HIPHOP.to_string()), GuiGroupAlbums::Loaded(hiphop));
     app.gui_music_albums
@@ -276,13 +277,14 @@ fn the_selected_group_alone_fills_the_list() {
     );
 }
 
-/// A stored group the library no longer holds falls back to the first group,
-/// as the TUI's persisted pill does (design D6): one group stays selected.
+/// A stored set the library emptied falls back to All (gui-collection-dropdown
+/// design D1): no group stays checked, so the list is every group's.
 #[test]
-fn a_stored_group_the_library_lost_falls_back_to_the_first_group() {
+fn a_stored_group_the_library_lost_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.gui_library_groups.insert(0, "grp-gone".to_string());
+    app.gui_library_groups
+        .insert(0, GuiCollectionSet::Checked(vec!["grp-gone".to_string()]));
 
     let projection = app.gui_music_projection(0);
 
@@ -291,14 +293,24 @@ fn a_stored_group_the_library_lost_falls_back_to_the_first_group() {
         .iter()
         .filter(|pill| pill.selected)
         .map(|pill| pill.group_id.as_str())
-        .collect();
-    assert_eq!(selected, [HIPHOP]);
+        .collect::<Vec<&str>>();
+    assert_eq!(
+        selected,
+        Vec::<&str>::new(),
+        "the emptied checked set reads as All, which checks no pill"
+    );
+    assert_eq!(
+        projection.collection_names,
+        ["All"],
+        "All names itself in the frame's collection names"
+    );
 }
 
-/// With no stored choice, the first group in pill order is the selected one
-/// (design D6): one group is always selected.
+/// With no stored choice, the destination starts on All (gui-collection-dropdown
+/// "The selection is All or checked collections"): no pill is checked and the
+/// union is every group's.
 #[test]
-fn the_first_group_is_selected_when_no_choice_is_stored() {
+fn no_stored_choice_selects_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
@@ -319,7 +331,16 @@ fn the_first_group_is_selected_when_no_choice_is_stored() {
         .filter(|pill| pill.selected)
         .map(|pill| pill.group_id.as_str())
         .collect();
-    assert_eq!(selected, [HIPHOP]);
+    assert_eq!(
+        selected,
+        Vec::<&str>::new(),
+        "All is selected, which checks no pill"
+    );
+    assert_eq!(
+        projection.collection_names,
+        ["All"],
+        "All names itself in the frame's collection names"
+    );
 }
 
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).
@@ -577,7 +598,8 @@ fn a_failed_selected_group_shows_a_failure_line() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(0, SOUL.to_string());
+    app.gui_library_groups
+        .insert(0, GuiCollectionSet::Checked(vec![SOUL.to_string()]));
     app.gui_music_albums
         .insert((0, SOUL.to_string()), GuiGroupAlbums::Failed);
 
@@ -597,6 +619,116 @@ fn a_failed_selected_group_shows_a_failure_line() {
         artists.is_empty(),
         "the failed selected group holds no albums"
     );
+}
+
+/// A second checked group keeps the Hero (gui-collection-dropdown "Each Music
+/// group keeps its last picked album"): the pick the one checked group kept
+/// carries into the session's union pick on the selection change, so the Hero
+/// still shows Paul's Boutique while the union holds it.
+#[test]
+fn a_second_group_keeps_the_hero() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-paul",
+            "Paul's Boutique",
+            "Beastie Boys",
+            1989,
+        )],
+        vec![stored_album(
+            "alb-3ft",
+            "3 Feet High and Rising",
+            "De La Soul",
+            1989,
+        )],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-paul".into(),
+    });
+
+    app.install_gui_library_collection(
+        0,
+        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+    );
+
+    assert_eq!(
+        hero_album_id(&mut app),
+        Some("alb-paul".to_string()),
+        "the Hero keeps its album while the union holds it"
+    );
+}
+
+/// A saved checked set restores as it was saved, in saved order
+/// (gui-collection-dropdown "The collection selection persists per
+/// destination", scenario "The GUI starts again").
+#[test]
+fn a_saved_checked_set_restores_as_saved() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(200, ALBUMS);
+    let mut app = app_with_music_groups(&http);
+    let destination = saved_music_identity();
+    let state = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: destination.clone(),
+        collections: vec![mbv_config::GuiDestinationCollections {
+            destination: destination.clone(),
+            group_ids: vec![SOUL.to_string(), HIPHOP.to_string()],
+            picks: Vec::new(),
+        }],
+    };
+
+    assert!(app.restore_gui_launch_collections(&state, &destination));
+
+    assert_eq!(
+        app.gui_library_groups.get(&0),
+        Some(&GuiCollectionSet::Checked(vec![
+            SOUL.to_string(),
+            HIPHOP.to_string(),
+        ])),
+        "the saved groups restore checked, in saved order"
+    );
+    land_one_group(&mut app);
+}
+
+/// A saved group the library no longer holds falls back to All
+/// (gui-collection-dropdown "The collection selection persists per
+/// destination", scenario "A saved collection no longer exists").
+#[test]
+fn a_saved_group_no_longer_held_restores_as_all() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    let destination = saved_music_identity();
+    let state = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: destination.clone(),
+        collections: vec![mbv_config::GuiDestinationCollections {
+            destination: destination.clone(),
+            group_ids: vec!["grp-gone".to_string()],
+            picks: Vec::new(),
+        }],
+    };
+
+    assert!(app.restore_gui_launch_collections(&state, &destination));
+
+    assert!(
+        !app.gui_library_groups.contains_key(&0),
+        "the vanished group restores as All: no entry is stored"
+    );
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "All fetches nothing"
+    );
+}
+
+/// The saved identity of the stub's Grouped Music library, as the launch file
+/// carries it.
+fn saved_music_identity() -> mbv_config::TabIdentity {
+    mbv_config::TabIdentity::ServiceLibrary {
+        kind: mbv_queue::ServiceKind::Emby,
+        library_id: LIB_ID.to_string(),
+    }
 }
 
 /// A stub `App` whose catalog holds two Grouped Music libraries around a
