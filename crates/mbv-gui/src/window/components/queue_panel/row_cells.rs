@@ -1,23 +1,22 @@
 //! One queue row's canvas cells (the `rowCells` snippet of
-//! `QueuePanel`): the padded queue ordinal, the one title line over
-//! its progress track, and the right-column value. The hovered row reserves
-//! the leading and trailing slots its sibling chrome covers, and the drag
-//! ghost paints the title and the percent only. The row's colours come
-//! through the queue-local `--canvas-*` tokens (U13).
+//! `QueuePanel`): the padded queue ordinal, the one title line over its
+//! progress track, and the start mark. The row carries no right-column value
+//! (gui-named-queues task 8.4, design D9). The hovered row reserves the
+//! leading slot its sibling grip covers and the trailing space its sibling
+//! actions button paints over, and the drag ghost paints the title and the
+//! percent only. The row's colours come through the queue-local `--canvas-*`
+//! tokens (U13).
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
-use crate::bridge::frame::queue::{GuiMediaKind, GuiQueueRow, GuiSemanticState};
-use crate::window::components::typed_text::TypedText;
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
 use crate::window::icons::Play;
 use crate::window::playhead::Playhead;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// Which cells a row paints: the list row, the hovered row (the chrome
-/// replaces the ordinal and the right value), or the drag ghost (the title
-/// and the percent only).
+/// replaces the ordinal), or the drag ghost (the title and the percent only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RowChrome {
     Row,
@@ -32,8 +31,6 @@ pub(super) struct ItemRow {
     pub(super) slot: u64,
     ordinal: usize,
     primary: String,
-    duration: Option<String>,
-    kind: GuiMediaKind,
     state: GuiSemanticState,
     pub(super) striped: bool,
 }
@@ -46,8 +43,6 @@ impl ItemRow {
                 slot,
                 ordinal,
                 primary,
-                duration,
-                kind,
                 state,
                 striped,
                 ..
@@ -55,8 +50,6 @@ impl ItemRow {
                 slot: *slot,
                 ordinal: *ordinal,
                 primary: primary.clone(),
-                duration: duration.clone(),
-                kind: *kind,
                 state: state.clone(),
                 striped: *striped,
             }),
@@ -138,29 +131,48 @@ fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     }
 }
 
-/// The row's right-column text: the media row's duration. A collection row
-/// carries none.
-fn right_value(row: &ItemRow) -> Option<String> {
-    if row.kind == GuiMediaKind::Media {
-        return row.duration.clone();
-    }
-    None
+/// The start mark a row paints (design D9): the shown queue's start slot is
+/// one row in two states, filled while that queue plays and outlined while it
+/// is stopped or resting, so the two marks stay distinct.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StartMark {
+    /// The start slot of the queue that plays: the filled mark.
+    Playing,
+    /// The start slot of a stopped or resting queue: the outlined mark.
+    Start,
 }
 
-/// The props of one row's cells: the item row, its tone, and which chrome
-/// paints it.
+/// The start mark the row of `slot` paints, if any: only the shown queue's
+/// start slot carries one. The frame's `start` already falls back to the
+/// observed active slot for an owner that reports no start slot (a peer
+/// without `named-queues`), so such a queue marks its playing row and paints
+/// no outlined mark.
+pub(super) fn start_mark(queue: &GuiQueue, slot: u64) -> Option<StartMark> {
+    if queue.start != Some(slot) {
+        return None;
+    }
+    Some(if queue.playing {
+        StartMark::Playing
+    } else {
+        StartMark::Start
+    })
+}
+
+/// The props of one row's cells: the item row, its tone, which chrome paints
+/// it, and its start mark while it carries one.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub(super) struct RowCellsProps {
     pub(super) row: ItemRow,
     pub(super) cell_tone: RowTone,
     pub(super) chrome: RowChrome,
+    pub(super) mark: Option<StartMark>,
 }
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
-/// ordinal, the one title line over its progress track, and the
-/// right-column value. The hovered row reserves the leading and trailing
-/// slots its sibling chrome covers, and the drag ghost paints the title and
-/// the percent only.
+/// ordinal, the one title line over its progress track, and the start mark.
+/// The hovered row reserves the leading slot its sibling grip covers and the
+/// trailing space its sibling actions button paints over, and the drag ghost
+/// paints the title and the percent only.
 #[component]
 pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -169,11 +181,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let chrome = props.chrome;
     let progress = row_progress(row, &playhead);
     let progress_width = progress.map(|progress| progress.max(3));
-    let right = if chrome == RowChrome::Row {
-        right_value(row)
-    } else {
-        None
-    };
+    let mark = props.mark.filter(|_| chrome == RowChrome::Row);
     let ordinal = row.ordinal;
     let ordinal_text = format!("{ordinal:02}");
 
@@ -199,11 +207,25 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
             span {
                 class: "flex min-w-0 items-center",
                 style: "gap: 6px;",
-                if row.state == GuiSemanticState::NowPlaying && chrome == RowChrome::Row {
-                    Play {
-                        size: 12,
-                        fill: canvas_var("accent"),
-                        color: canvas_var("accent"),
+                // The start mark: the filled triangle while the shown queue
+                // plays, the outlined one while it is stopped or resting
+                // (design D9).
+                if let Some(mark) = mark {
+                    match mark {
+                        StartMark::Playing => rsx! {
+                            Play {
+                                size: 12,
+                                fill: canvas_var("accent"),
+                                color: canvas_var("accent"),
+                            }
+                        },
+                        StartMark::Start => rsx! {
+                            Play {
+                                size: 12,
+                                fill: "none".to_owned(),
+                                color: canvas_var("accent"),
+                            }
+                        },
                     }
                 }
                 {
@@ -245,45 +267,14 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 }
             }
         }
-        if let Some(right) = right {
-            // The right column repeats a time down the list, so it paints the
-            // time token at the repeat opacity; the current row keeps its own
-            // ink at full strength (design D14).
-            if row.state == GuiSemanticState::NowPlaying {
-                span {
-                    class: "shrink-0 font-mono text-xs tabular-nums",
-                    style: "color: var(--canvas-ink);",
-                    "data-right-value": "",
-                    {right}
-                }
-            } else {
-                span {
-                    class: "shrink-0 font-mono text-xs tabular-nums",
-                    "data-right-value": "",
-                    TypedText {
-                        segments: vec![GuiMetaSegmentFrame {
-                            text: right.clone(),
-                            kind: GuiMetaKindFrame::Time,
-                        }],
-                        repeat: true,
-                    }
-                }
-            }
-        } else if chrome == RowChrome::Ghost {
-            if let Some(progress) = progress {
-                span {
-                    class: "shrink-0 font-mono tabular-nums",
-                    style: "font-size: 12px; color: var(--canvas-partial);",
-                    "data-ghost-percent": "",
-                    "{progress}%"
-                }
-            }
-        } else if chrome == RowChrome::Hover {
-            // The actions button's slot: it replaces the right-column value.
+        if chrome == RowChrome::Ghost
+            && let Some(progress) = progress
+        {
             span {
-                class: "shrink-0",
-                style: "width: 30px;",
-                "aria-hidden": "true",
+                class: "shrink-0 font-mono tabular-nums",
+                style: "font-size: 12px; color: var(--canvas-partial);",
+                "data-ghost-percent": "",
+                "{progress}%"
             }
         }
     }

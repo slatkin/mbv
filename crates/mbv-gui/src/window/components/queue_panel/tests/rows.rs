@@ -1,9 +1,10 @@
 //! The Queue panel's row-paint contracts (`QueuePanel.test.ts`): the frame's
-//! viewport rows, the empty-queue state, the rows' right value, the watched,
-//! active, and partial-progress states, the canvas one-liner, the four row
+//! viewport rows, the empty-queue state, the watched, active, and
+//! partial-progress states, the start mark, the canvas one-liner, the four row
 //! looks, and the hovered row's chrome.
 
 use blitz_dom::local_name;
+use rstest::rstest;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueRow, GuiSemanticState};
@@ -45,42 +46,41 @@ fn an_empty_frame_renders_the_empty_queue_state() {
     assert_eq!(fixture.all("[data-slot]").len(), 0);
 }
 
-/// Contract (`QueuePanel.test.ts`): the right value paints the media row's
-/// duration in the time token at the repeat opacity.
-#[test]
-fn the_right_value_paints_the_duration_as_a_repeated_time() {
-    let fixture = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
+/// Contract (design D9 of `gui-named-queues`, spec `gui-client` "A stopped
+/// queue marks its start slot", "Play turns the start mark into the playing
+/// mark", "The right column is switched"): the shown queue's start slot is one
+/// row in two states — filled while the queue plays, outlined while it is
+/// stopped or resting — and no other row carries a mark or a runtime.
+#[rstest]
+#[case::stopped(Some(3), false, Some("none"))]
+#[case::playing(Some(3), true, Some("currentColor"))]
+#[case::no_start_slot(None, true, None)]
+fn the_start_slot_carries_the_filled_or_outlined_mark(
+    #[case] start: Option<u64>,
+    #[case] playing: bool,
+    #[case] expected_fill: Option<&str>,
+) {
+    let mut rows = queue(vec![item(1), item(2), item(3)]);
+    rows.start = start;
+    rows.playing = playing;
+    let fixture = built_with_frame(queue_panel_app, rows, summary(), None);
 
-    assert_eq!(fixture.text_of("[data-right-value]"), "3:12");
-    let token = fixture.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
-    assert!(token.contains("color: var(--canvas-type-time)"), "{token}");
+    assert_eq!(
+        fixture.attr_of("[data-slot=\"3\"] svg", local_name!("fill")),
+        expected_fill.map(str::to_owned)
+    );
+    assert!(!fixture.presents("[data-slot=\"1\"] svg"));
+    assert!(!fixture.presents("[data-slot=\"2\"] svg"));
     assert!(
-        token.contains("opacity: var(--canvas-type-repeat-opacity)"),
-        "{token}"
+        !fixture.text().contains("3:12"),
+        "no row paints its runtime"
     );
-}
-
-/// Contract (`QueuePanel.test.ts`): the current row keeps its ink in the
-/// right column at full strength — the now-playing row's value paints in the
-/// canvas's ink, not the repeated time token.
-#[test]
-fn the_current_row_keeps_its_ink_in_the_right_column() {
-    let fixture = built_with_frame(
-        queue_panel_app,
-        queue(vec![in_state(item(1), GuiSemanticState::NowPlaying)]),
-        summary(),
-        None,
-    );
-
-    let value = fixture.style_of("[data-slot=\"1\"] [data-right-value]");
-    assert!(value.contains("color: var(--canvas-ink)"), "{value}");
-    assert!(fixture.text().contains("3:12"));
 }
 
 /// Contract (`QueuePanel.test.ts`): the rows paint the watched, active, and
 /// partial-progress states — the watched row strikes its title through in
-/// the canvas's strike colour, the playing row keeps its own fill, shows a
-/// play glyph, and weights its title 600, and the track under the title
+/// the canvas's strike colour, the playing row keeps its own fill, carries the
+/// filled start mark, and weights its title 600, and the track under the title
 /// fills to max(percent, 3)%.
 #[test]
 fn the_rows_paint_the_watched_active_and_partial_progress_states() {
@@ -96,7 +96,10 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
             GuiSemanticState::Active { progress: Some(1) },
         ),
     ];
-    let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
+    let mut rows_frame = queue(rows);
+    rows_frame.start = Some(2);
+    rows_frame.playing = true;
+    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
     let watched = fixture.attr_of("[data-slot=\"1\"] .truncate", local_name!("class"));
     assert!(watched.is_some_and(|class| class.contains("line-through")));
@@ -193,10 +196,10 @@ fn the_hovered_row_paints_no_active_treatment() {
 }
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.3): the hovered row
-/// alone paints the grip and the actions button in place of its ordinal and
-/// value — the grip's six dots in the leading slot, the 30 px actions box in
-/// the canvas's fill and radius at the trailing slot, the row filled with
-/// the hover colour, and its title ellipsised in the hover text.
+/// alone paints the grip and the actions button — the grip's six dots in the
+/// leading slot, the 30 px actions box in the canvas's fill and radius over the
+/// empty space at the row's trailing end, the row filled with the hover colour,
+/// and its title ellipsised in the hover text.
 #[test]
 fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     let rows = vec![item(1), item(2), item(3)];
@@ -208,11 +211,13 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     assert_eq!(fixture.all("[data-actions]").len(), 1);
     assert_eq!(fixture.all("[data-row=\"2\"] [data-grip] circle").len(), 6);
     assert!(!fixture.presents("[data-row=\"2\"] [data-ordinal]"));
-    assert!(!fixture.presents("[data-slot=\"2\"] [data-right-value]"));
     assert!(fixture.presents("[data-row=\"1\"] [data-ordinal]"));
-
-    let actions = fixture.attr_of("[data-actions]", local_name!("aria-label"));
-    assert_eq!(actions.as_deref(), Some("Row actions"));
+    assert_eq!(
+        fixture
+            .attr_of("[data-actions]", local_name!("aria-label"))
+            .as_deref(),
+        Some("Row actions")
+    );
     let actions_style = fixture.style_of("[data-actions]");
     assert!(actions_style.contains("width: 30px"), "{actions_style}");
     assert!(actions_style.contains("height: 30px"), "{actions_style}");
@@ -225,10 +230,15 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
         "{actions_style}"
     );
 
-    // The hovered row paints no fill of its own (design D7): the veil every
-    // hovered `button` paints (`assets/app.css`) is its hover look, and the
-    // picked fill stays with the active and marked rows.
+    // The hovered row reserves the button's width at its trailing end and
+    // paints no fill of its own (design D7): the veil every hovered `button`
+    // paints (`assets/app.css`) is its hover look, and the picked fill stays
+    // with the active and marked rows.
     let row_style = fixture.style_of("[data-slot=\"2\"]");
+    assert!(
+        row_style.contains("padding-inline: 4px 34px"),
+        "{row_style}"
+    );
     assert!(!row_style.contains("background"), "{row_style}");
     assert!(row_style.contains("border-radius: 4px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");

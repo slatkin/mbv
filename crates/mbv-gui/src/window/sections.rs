@@ -320,17 +320,14 @@ fn fresh_playback() -> GuiQueuePlayback {
     }
 }
 
-/// The fresh footer: two empty pills, no autosave, no dirty marker.
+/// The fresh footer: an empty playlist pill, no autosave, no dirty marker.
 fn fresh_footer() -> GuiQueueFooter {
-    let pill = GuiFooterPill {
-        text: String::new(),
-        role: GuiRole::TextPrimary,
-        bold: false,
-    };
     GuiQueueFooter {
-        owner: pill.clone(),
-        owner_live: false,
-        playlist: pill,
+        playlist: GuiFooterPill {
+            text: String::new(),
+            role: GuiRole::TextPrimary,
+            bold: false,
+        },
         autosave: None,
         dirty: None,
     }

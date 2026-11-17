@@ -14,7 +14,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::{Sections, fresh_footer, fresh_queue, fresh_summary};
-use crate::bridge::frame::chrome::GuiQueueFooter;
+use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter};
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 
@@ -46,13 +46,17 @@ fn queue_batch(revision: u64, cursor: Option<u64>) -> GuiSectionBatch {
     }
 }
 
-/// A `footer` section batch at `revision` carrying `owner_live`.
-fn footer_batch(revision: u64, owner_live: bool) -> GuiSectionBatch {
+/// A `footer` section batch at `revision` carrying `source` as its playlist
+/// text.
+fn footer_batch(revision: u64, source: &str) -> GuiSectionBatch {
     GuiSectionBatch {
         footer: Some(GuiSection {
             revision,
             value: GuiQueueFooter {
-                owner_live,
+                playlist: GuiFooterPill {
+                    text: source.to_owned(),
+                    ..fresh_footer().playlist
+                },
                 ..fresh_footer()
             },
         }),
@@ -72,9 +76,9 @@ fn sections_app(batches: Vec<GuiSectionBatch>) -> Element {
     });
     let cursor = sections.queue.read().cursor;
     let remaining = sections.summary.read().remaining;
-    let owner_live = sections.footer.read().owner_live;
+    let source = sections.footer.read().playlist.text.clone();
     rsx! {
-        div { "cursor={cursor:?} remaining={remaining} owner_live={owner_live}" }
+        div { "cursor={cursor:?} remaining={remaining} source={source}" }
     }
 }
 
@@ -160,13 +164,13 @@ fn a_section_at_any_other_revision_is_written(#[case] revision: u64) {
 fn a_batch_writes_all_its_sections_in_one_pass() {
     let mut batch = summary_batch(7, 3);
     batch.queue = queue_batch(1, Some(2)).queue;
-    batch.footer = footer_batch(1, true).footer;
+    batch.footer = footer_batch(1, "mix").footer;
 
     let text = rendered(vec![batch]);
 
     assert!(text.contains("cursor=Some(2)"), "{text}");
     assert!(text.contains("remaining=3"), "{text}");
-    assert!(text.contains("owner_live=true"), "{text}");
+    assert!(text.contains("source=mix"), "{text}");
 }
 
 /// Contract (`share-gui-sections-by-rc` task 1.3, the spec's "A repaint

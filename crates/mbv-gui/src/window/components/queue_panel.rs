@@ -7,26 +7,27 @@
 //!
 //! The rows paint the canvas's states from the frame's per-row
 //! `GuiSemanticState`: a watched (`played`) row strikes its text through,
-//! the now-playing row shows a play glyph beside its title (the highlight is
-//! for focus only, so the row keeps its own fill), and a partial-progress
-//! row (and the playing row) draws a thin progress track on the title's
-//! line. Every row leads with its padded queue ordinal and carries one
-//! title line and the right-column value — no second line and no date
-//! gutter, as the canvas's row draws. The rows paint four looks (design D7):
+//! the now-playing row weights its title and keeps its own fill (the
+//! highlight is for focus only), and a partial-progress row (and the playing
+//! row) draws a thin progress track on the title's line. Every row leads with
+//! its padded queue ordinal and carries one title line — no right-column
+//! value, no second line, and no date gutter, as the canvas's row draws. The
+//! shown queue's start slot carries the start mark: a filled triangle while
+//! that queue plays and an outlined one while it is stopped or resting (task
+//! 8.4, design D9). The rows paint four looks (design D7):
 //! a hovered row paints the window's hover veil and no fill of its own, the
 //! active row (the cursor slot) paints the canvas's picked fill with a 4 px
 //! leading accent edge, a marked row paints the picked fill with no edge,
 //! and every other row paints the zebra stripe or nothing. The active row's
 //! look needs no focus fact: the window holds no focus, and the pointer
-//! resting on the active row leaves its fill and edge in place. The right
-//! column paints the value the summary's mode names: "Length" or "Ends at".
+//! resting on the active row leaves its fill and edge in place.
 //!
 //! The row hover and the drag paint from the frame too — the window holds
 //! neither (the `gui-client` spec): `queue.hover` names the row that shows
 //! the six-dot grip in its ordinal's slot and the canvas's 30 px actions
-//! button in its right value's slot — the two chrome pieces stay siblings of
-//! the row's one button, over slots the row reserves, so no control nests in
-//! it — and `queue.drag` carries the drag ghost's content and the insertion
+//! button over the row's trailing end — the two chrome pieces stay siblings
+//! of the row's one button, over slots the row reserves, so no control nests
+//! in it — and `queue.drag` carries the drag ghost's content and the insertion
 //! line's stable-slot anchor. The ghost floats at the line the drop would
 //! insert at, with no ordinal and the dragged row's percent when it has one;
 //! the dragged row no longer dims in place (the canvas keeps it lit). Every
@@ -54,8 +55,8 @@
 //! panel measures its `[data-chooser-entry]` rows and reports each entry's
 //! region — the local queue's own identity, or the peer entry — under a third
 //! report key inserted when the chooser opens, so the dropdown's rows win the
-//! hit map over the queue rows beneath them. The row marks and hover chrome
-//! (task 8.4) and the footer totals (task 8.5) are later tasks'.
+//! hit map over the queue rows beneath them. The footer totals are the Queue
+//! footer line's (task 8.5).
 //!
 //! The row paint is the canvas's (U4.2): its hexes come through the
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
@@ -92,7 +93,7 @@ use crate::window::theme::{canvas_var, role_var};
 
 mod row_cells;
 
-use row_cells::{ItemRow, RowCells, RowChrome, tone};
+use row_cells::{ItemRow, RowCells, RowChrome, start_mark, tone};
 
 #[cfg(test)]
 mod tests;
@@ -583,7 +584,7 @@ pub fn QueuePanel() -> Element {
                                     let active_row = queue.cursor == Some(slot);
                                     let mut button_style = format!(
                                         "height: 30px; padding-inline: {}; gap: 10px; border-radius: 4px;",
-                                        if hovered { "4px 2px" } else { "8px" }
+                                        if hovered { "4px 34px" } else { "8px" }
                                     );
                                     if let Some(background) = row_background(&item, &queue) {
                                         let _ = write!(button_style, " background: {background};");
@@ -598,6 +599,7 @@ pub fn QueuePanel() -> Element {
                                             )
                                         });
                                     let cells_row = item.clone();
+                                    let mark = start_mark(&queue, slot);
                                     let mut slot_slot = slot_handles;
                                     let mut grip_slot = grip_mounted;
                                     let mut actions_slot = actions_mounted;
@@ -629,6 +631,7 @@ pub fn QueuePanel() -> Element {
                                                     row: cells_row,
                                                     cell_tone: tone(&item, queue.hover),
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
+                                                    mark,
                                                 }
                                             }
                                             if active_row {
@@ -658,11 +661,12 @@ pub fn QueuePanel() -> Element {
                                                 // The hover chrome (the Menus artboard): the
                                                 // six-dot grip over the leading slot the row
                                                 // reserves in place of its ordinal, and the
-                                                // 30 px actions button over the trailing slot
-                                                // in place of its right value. Each is its own
-                                                // region, pushed after the row's `slot` region
-                                                // so the press resolves to the chrome. They
-                                                // stay siblings of the row's button, so no
+                                                // 30 px actions button over the empty space at
+                                                // the row's trailing end — the space the row
+                                                // reserves in its trailing padding. Each is its
+                                                // own region, pushed after the row's `slot`
+                                                // region so the press resolves to the chrome.
+                                                // They stay siblings of the row's button, so no
                                                 // control nests in it.
                                                 span {
                                                     class: "absolute flex items-center",
@@ -729,6 +733,7 @@ pub fn QueuePanel() -> Element {
                                 row: ghost_row.clone(),
                                 cell_tone: tone(ghost_row, queue.hover),
                                 chrome: RowChrome::Ghost,
+                                mark: None,
                             }
                         }
                     }

@@ -118,8 +118,8 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
         "{ghost_title}"
     );
     assert!(
-        !fixture.presents("[data-ghost] [data-right-value]"),
-        "the ghost paints no right value"
+        !fixture.presents("[data-ghost] svg"),
+        "the ghost paints no start mark"
     );
 
     let line = fixture.style_of("[data-insertion]");

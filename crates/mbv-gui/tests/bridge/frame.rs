@@ -334,12 +334,12 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
 /// codepoint and no emoji fallback reaches the window. The stub's Nerd
 /// Font setting is off, so the projection's composed text carries the emoji
 /// fallbacks the frame must drop, and the unsaved queue's dirty pill carries
-/// its word.
+/// its word. The footer carries no Player-owner pill (gui-named-queues task
+/// 8.5, design D9).
 #[test]
 fn footer_pill_text_carries_no_glyph() {
     let mut app = stub_app_with_unsaved_queue(1);
     let frame = frame_after_tick(&mut app);
-    assert!(!frame.footer().owner.text.chars().any(is_glyph));
     assert!(!frame.footer().playlist.text.chars().any(is_glyph));
     assert_eq!(
         frame.footer().dirty.as_ref().map(|pill| pill.text.as_str()),

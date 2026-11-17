@@ -7,14 +7,11 @@ use mbv_ui_model::toast::{StatusToast, ToastSeverity};
 
 use super::theme::GuiRole;
 
-/// The Queue footer's status pills, mirroring `QueueFooterProjection`.
+/// The Queue footer's status pills, mirroring `QueueFooterProjection`. The
+/// footer line carries no Player-owner label and no liveness dot
+/// (gui-named-queues task 8.5, design D9), so neither crosses the bridge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueFooter {
-    /// The owner indicator, always present.
-    pub owner: GuiFooterPill,
-    /// Whether the shown queue's Player owner is live. The session marker
-    /// paints its dot only while this holds (design D4a).
-    pub owner_live: bool,
     /// The playlist source pill.
     pub playlist: GuiFooterPill,
     /// The autosave indicator. Present only while save-on-consume is on for a
@@ -28,8 +25,6 @@ pub struct GuiQueueFooter {
 impl From<&QueueFooterProjection> for GuiQueueFooter {
     fn from(projection: &QueueFooterProjection) -> Self {
         Self {
-            owner: GuiFooterPill::from(&projection.owner),
-            owner_live: projection.owner_live,
             playlist: GuiFooterPill::from(&projection.playlist),
             autosave: projection.autosave.as_ref().map(GuiFooterPill::from),
             dirty: projection.dirty.as_ref().map(GuiFooterPill::from),
