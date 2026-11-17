@@ -145,12 +145,16 @@ impl App {
         origin: QueueOrigin,
     ) -> bool {
         let lineage = origin.lineage;
+        // The source update carries the lineage the mutation was fenced
+        // against, which is the current queue's: it names no Named queue, so a
+        // shown resting queue is never the one that takes the new source.
         let sent = self.queue_op(
             QueueLink::Local,
             mbv_remote_player::QueueOp::SourceUpdate {
                 source: source.clone(),
                 lineage,
             },
+            None,
         );
         if sent == QueueOpEdit::NotApplied {
             self.flash(
@@ -266,7 +270,7 @@ impl App {
     /// land at the tail. Read from the queue as it is before the append: the
     /// append's own answer is what adds the new slots.
     fn play_next_anchor(&self) -> Option<u64> {
-        let queue = self.queue_for_link(self.playing_queue_link());
+        let queue = self.displayed_queue();
         let active = queue.slot_index(queue.active_slot_id()?)?;
         queue.slot_id_at(active + 1).map(mbv_ctrl::slot_id_to_u64)
     }

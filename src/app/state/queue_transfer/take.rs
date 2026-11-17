@@ -212,6 +212,9 @@ impl App {
             position_secs,
             "sending the taken queue copy to the local Owner"
         );
+        // Take installs the taken copy as the local current queue, so the
+        // replacement names no Named queue (design D7: the transfer is a
+        // hand-off of the run, not an edit of the shown queue).
         let sent = self.queue_op(
             QueueLink::Local,
             mbv_remote_player::QueueOp::Replace {
@@ -220,6 +223,7 @@ impl App {
                 source: read.source,
                 start_position_secs: Some(position_secs),
             },
+            None,
         );
         if sent == QueueOpEdit::NotApplied {
             // The answered-edit bound reported the rejection or the timeout

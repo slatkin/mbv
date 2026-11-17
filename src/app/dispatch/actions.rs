@@ -194,6 +194,7 @@ impl App {
             items,
             start_idx,
             queue_source,
+            self.shown_queue_edit(),
         );
         if sent == QueueOpEdit::NotApplied {
             return;
@@ -279,6 +280,7 @@ impl App {
             episodes,
             0,
             mbv_queue::QueueSource::Series,
+            self.shown_queue_edit(),
         );
         if sent == QueueOpEdit::NotApplied {
             return true;
@@ -305,6 +307,7 @@ impl App {
             vec![item],
             0,
             mbv_queue::QueueSource::Unknown,
+            self.shown_queue_edit(),
         );
         if sent == QueueOpEdit::NotApplied {
             return;
@@ -430,8 +433,13 @@ impl App {
         // negotiates `answered-queue-ops` (which also cold-starts a run
         // when none is alive); legacy owners get the same replace in its
         // legacy wire form.
-        let sent =
-            self.replace_queue_on_owner(link, vec![item], 0, mbv_queue::QueueSource::Unknown);
+        let sent = self.replace_queue_on_owner(
+            link,
+            vec![item],
+            0,
+            mbv_queue::QueueSource::Unknown,
+            self.shown_queue_edit(),
+        );
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
@@ -457,8 +465,14 @@ impl App {
         items: Vec<QueueItem>,
         before: Option<u64>,
     ) -> bool {
-        // Entries appear only when the owner's answered Append is adopted.
-        let sent = self.queue_op(link, mbv_remote_player::QueueOp::Append { items, before });
+        // Entries appear only when the owner's answered Append is adopted. The
+        // append names the shown queue, so an enqueue from the Library panel
+        // reaches the queue the panel shows (design D7 of `gui-named-queues`).
+        let sent = self.queue_op(
+            link,
+            mbv_remote_player::QueueOp::Append { items, before },
+            self.shown_queue_edit(),
+        );
         if sent == QueueOpEdit::NotApplied {
             return false;
         }

@@ -30,7 +30,13 @@ impl App {
         // `start_idx`, and the Client adopts the resulting snapshot; the
         // Client holds no editable queue of its own.
         let link = self.playing_queue_link();
-        let sent = self.replace_emby_queue_on_owner(link, items, start_idx, source);
+        let sent = self.replace_emby_queue_on_owner(
+            link,
+            items,
+            start_idx,
+            source,
+            self.shown_queue_edit(),
+        );
         if sent == QueueOpEdit::NotApplied {
             return;
         }
@@ -42,13 +48,17 @@ impl App {
 
     pub(super) fn execute_pending_queue_clear(&mut self) {
         let link = self.playing_queue_link();
-        let had_items = self.queue_for_link(link).total_queue_len() > 0;
+        let had_items = self.displayed_queue().total_queue_len() > 0;
         if had_items {
             // Row 5.3 (design D6): the clear reaches the viewed queue's owner
             // as an answered op (UnifiedQueueClearOp for a capable owner); the
             // owner stops its player, clears the canonical queue, and the
             // Client adopts the empty queue only from the answer.
-            let sent = self.queue_op(link, mbv_remote_player::QueueOp::Clear);
+            let sent = self.queue_op(
+                link,
+                mbv_remote_player::QueueOp::Clear,
+                self.shown_queue_edit(),
+            );
             if sent == QueueOpEdit::NotApplied {
                 return;
             }

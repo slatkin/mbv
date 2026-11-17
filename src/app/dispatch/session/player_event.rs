@@ -356,9 +356,12 @@ impl App {
                 .iter()
                 .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
+            // A stop reaction addresses the queue the run played, which is the
+            // Owner's current queue, whatever the Queue panel shows.
             self.queue_op(
                 self.playing_queue_link(),
                 mbv_remote_player::QueueOp::RemoveSlots { slot_ids: raw },
+                None,
             );
         } else if deleted_slot.is_some() {
             // Confirmation deferred removal until playback stopped; the Client
@@ -369,6 +372,7 @@ impl App {
                     mbv_remote_player::QueueOp::RemoveSlot {
                         slot_id: mbv_ctrl::slot_id_to_u64(deleted_slot),
                     },
+                    None,
                 );
             }
         } else {

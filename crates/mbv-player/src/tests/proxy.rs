@@ -85,7 +85,7 @@ fn shuffle_queue_sends_the_shuffle_command_only_to_a_capable_owner() {
     let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     let proxy = PlayerProxy::from_remote(remote.clone(), false);
     assert!(!proxy.supports_queue_shuffle());
-    proxy.shuffle_queue();
+    proxy.shuffle_queue(None);
     cmd_rx.try_recv().unwrap_err();
 
     let mut compatibility = CtrlCompatibility::current();
@@ -93,7 +93,7 @@ fn shuffle_queue_sends_the_shuffle_command_only_to_a_capable_owner() {
     remote.set_ctrl_compatibility_for_test(compatibility);
     let proxy = PlayerProxy::from_remote(remote, false);
     assert!(proxy.supports_queue_shuffle());
-    proxy.shuffle_queue();
+    proxy.shuffle_queue(None);
     assert!(matches!(
         cmd_rx.recv().unwrap(),
         CtrlCmd::UnifiedQueueShuffle {

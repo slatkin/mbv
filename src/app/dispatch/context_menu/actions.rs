@@ -246,8 +246,10 @@ impl App {
                 // queue-content-shuffle design D6: the menu only offers the
                 // entry when the owner advertises the `queue-shuffle`
                 // capability, so this is a plain send; the next queue
-                // snapshot reports the new order.
-                self.player.shuffle_queue();
+                // snapshot reports the new order. The shuffle names the shown
+                // queue (design D7 of `gui-named-queues`).
+                self.shown_queue_owner_player()
+                    .shuffle_queue(self.shown_queue_edit());
                 None
             }
             Some(ContextAction::PlayQueue(index)) => {

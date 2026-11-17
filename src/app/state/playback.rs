@@ -63,14 +63,26 @@ impl QueueLinkResolution {
 }
 
 /// A reversible queue edit (design D7). Undo re-sends the inverse edit to
-/// the Player owner: `Remove` re-appends the removed item before the entry
-/// now at its former index (resolved at undo time), and `Move` moves the
+/// the queue the edit reached: `Remove` re-appends the removed item before the
+/// entry now at its former index (resolved at undo time), and `Move` moves the
 /// slot back to `from`. `slot_id` is the runtime queue occurrence that was
 /// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
-    Remove { item: Box<QueueItem>, index: usize },
-    Move { slot_id: QueueSlotId, from: usize },
+    Remove {
+        /// The Named queue the edit reached: the GUI Client's shown queue, or
+        /// `None` for the current queue. The inverse edit names it, whichever
+        /// entry the panel shows when the user undoes (design D7).
+        queue: Option<NamedQueueId>,
+        item: Box<QueueItem>,
+        index: usize,
+    },
+    Move {
+        /// The Named queue the edit reached, as `Remove` carries it.
+        queue: Option<NamedQueueId>,
+        slot_id: QueueSlotId,
+        from: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

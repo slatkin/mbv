@@ -192,6 +192,10 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// One-shot presentation reset for the next queue sync: the shown entry
+    /// changed, so the Queue Surface drops its marks and viewport before it
+    /// adopts the start-slot cursor (design D7 of `gui-named-queues`).
+    pub(in crate::app) pending_queue_surface_reset: bool,
     /// Fingerprint of the queue projection `queue_surface_projection` last
     /// pushed to a Client's Queue Surface state. The projection runs once per
     /// Client tick; rebuilding the row vec (slot clone + per-row `format!`)

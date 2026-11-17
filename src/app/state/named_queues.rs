@@ -9,9 +9,9 @@
 use mbv_ctrl::{NamedQueueEntry, NamedQueueEvent};
 use mbv_queue::NamedQueueId;
 
-use crate::app::App;
 use crate::app::state::playback::ShownEntry;
 use crate::app::state::queue_view::{AdoptCause, QueueView};
+use crate::app::{App, QueueLink};
 
 /// The Named queues one local Owner reported (`CtrlEvent::NamedQueueList`).
 #[derive(Debug, Default)]
@@ -44,11 +44,19 @@ impl NamedQueueList {
         self.current
     }
 
+    /// Whether the Owner still holds `queue`, whichever of its queues is
+    /// current. A list the Owner published before the queue existed answers
+    /// false here, as it does for a queue the Owner closed.
+    #[must_use]
+    pub(in crate::app) fn holds(&self, queue: NamedQueueId) -> bool {
+        self.entries.iter().any(|entry| entry.id == queue)
+    }
+
     /// Whether `queue` is a Named queue that rests: the Owner still holds it
     /// and it is not the current queue.
     #[must_use]
     pub(in crate::app) fn rests(&self, queue: NamedQueueId) -> bool {
-        self.current != Some(queue) && self.entries.iter().any(|entry| entry.id == queue)
+        self.current != Some(queue) && self.holds(queue)
     }
 }
 
@@ -70,9 +78,11 @@ impl App {
 
     /// Adopt one `NamedQueueList` (design D3): the queue list and the current
     /// queue. A shown resting queue the Owner no longer rests (it became
-    /// current, or it closed) drops its resting view here, so the Queue panel
-    /// falls back to the current queue instead of painting a queue the Owner
-    /// no longer holds.
+    /// current) drops its resting view here, so the Queue panel falls back to
+    /// the current queue instead of painting a queue the Owner no longer
+    /// holds. A shown entry the Owner no longer holds at all (it closed) shows
+    /// the current queue, with the entry-change reset (design D7, spec
+    /// `gui-queue-chooser` "The close control closes the shown entry").
     pub(in crate::app) fn adopt_named_queue_list(
         &mut self,
         entries: Vec<NamedQueueEntry>,
@@ -84,12 +94,21 @@ impl App {
         {
             self.shown_resting = None;
         }
+        // A shown local queue that closed leaves the shown entry on the queue
+        // that holds the playhead.
+        if let Some(ShownEntry::Local(queue)) = self.gui_shown_entry
+            && !self.named_queues.holds(queue)
+        {
+            self.show_local_current_entry();
+        }
     }
 
     /// Adopt one resting queue's snapshot (design D7): it fills the shown
     /// resting view when the GUI Client shows that queue, and it never touches
     /// the current queue's view or the playback status, because a resting
-    /// queue holds no playhead.
+    /// queue holds no playhead. The first snapshot to fill an empty shown view
+    /// places the Queue's active row on the queue's start slot: the entry was
+    /// shown before the queue's rows were known.
     pub(in crate::app) fn adopt_named_queue_snapshot(
         &mut self,
         queue: NamedQueueId,
@@ -98,11 +117,19 @@ impl App {
         if self.gui_shown_entry != Some(ShownEntry::Local(queue)) {
             return;
         }
-        match &mut self.shown_resting {
+        let first_fill = match &mut self.shown_resting {
             Some((shown, view)) if *shown == queue => {
+                let empty = view.total_queue_len() == 0;
                 view.adopt(data, AdoptCause::Background { held: false });
+                empty
             }
-            _ => self.shown_resting = Some((queue, QueueView::from_snapshot(data))),
+            _ => {
+                self.shown_resting = Some((queue, QueueView::from_snapshot(data)));
+                true
+            }
+        };
+        if first_fill {
+            self.place_active_row_on_start();
         }
     }
 
@@ -114,8 +141,8 @@ impl App {
         if !self.gui_client {
             return;
         }
-        self.gui_shown_entry = Some(ShownEntry::Peer);
         self.shown_resting = None;
+        self.show_entry(Some(ShownEntry::Peer));
     }
 
     /// Show the local Owner's current queue in the GUI Client's Queue panel
@@ -127,8 +154,42 @@ impl App {
         if !self.gui_client {
             return;
         }
-        self.gui_shown_entry = self.named_queues.current().map(ShownEntry::Local);
         self.shown_resting = None;
+        self.show_entry(self.named_queues.current().map(ShownEntry::Local));
+    }
+
+    /// Record the shown entry and run the entry-change reset (design D7, spec
+    /// `gui-queue-chooser` "Showing an entry resets the Queue active row and
+    /// marks"). Only a changed entry resets: a connect, a disconnect, and a
+    /// close each name the entry they land on, and the reset follows the
+    /// change, not the event.
+    fn show_entry(&mut self, entry: Option<ShownEntry>) {
+        if !self.gui_client || self.gui_shown_entry == entry {
+            return;
+        }
+        self.gui_shown_entry = entry;
+        self.reset_queue_presentation();
+    }
+
+    /// The reset every shown-entry change runs: the Queue filter closes and
+    /// empties, the Queue Surface drops its marks, and the active row moves to
+    /// the shown queue's start slot, or its first row when it has none.
+    fn reset_queue_presentation(&mut self) {
+        self.queue_filter.clear();
+        self.queue_filter_active = false;
+        self.pending_queue_surface_reset = true;
+        self.place_active_row_on_start();
+    }
+
+    /// Put the Queue's active row on the shown queue's start slot, or its first
+    /// row when it has none (design D7, D9): the row the owner starts the queue
+    /// at. The Surface adopts the move through the one cursor push, so this
+    /// stays the only place the entry-change cursor is decided.
+    fn place_active_row_on_start(&mut self) {
+        let link = self.playing_queue_link();
+        let index = self.displayed_queue().start_index().unwrap_or(0);
+        self.displayed_queue_mut().set_cursor(index);
+        self.pending_queue_cursor_reanchor = Some(link);
     }
 
     /// Show one local Named queue in the GUI Client's Queue panel (design D7):
@@ -145,13 +206,15 @@ impl App {
         if !self.gui_client {
             return;
         }
-        self.gui_shown_entry = Some(ShownEntry::Local(queue));
-        if !self.named_queues.rests(queue) {
+        let rests = self.named_queues.rests(queue);
+        if !rests {
             self.shown_resting = None;
-            return;
-        }
-        if self.shown_resting.as_ref().map(|(shown, _)| *shown) != Some(queue) {
+        } else if self.shown_resting.as_ref().map(|(shown, _)| *shown) != Some(queue) {
             self.shown_resting = Some((queue, QueueView::default()));
+        }
+        self.show_entry(Some(ShownEntry::Local(queue)));
+        if !rests {
+            return;
         }
         let _ = self
             .local_queue_player()
@@ -167,6 +230,61 @@ impl App {
         match &self.shown_resting {
             Some((queue, view)) if self.named_queues.rests(*queue) => view,
             _ => &self.local_view,
+        }
+    }
+
+    /// The resting Named queue whose own view the Queue panel shows, or `None`
+    /// while the panel shows the current queue's `local_view` (design D7).
+    #[must_use]
+    pub(in crate::app) fn shown_resting_queue_id(&self) -> Option<NamedQueueId> {
+        match &self.shown_resting {
+            Some((queue, _)) if self.named_queues.rests(*queue) => Some(*queue),
+            _ => None,
+        }
+    }
+
+    /// The Named queue the Queue panel shows on the local link: the shown
+    /// resting queue, or the current queue when the panel shows `local_view`
+    /// (design D7).
+    #[must_use]
+    pub(in crate::app) fn displayed_queue_id(&self) -> Option<NamedQueueId> {
+        self.shown_resting_queue_id()
+            .or_else(|| self.named_queues.current())
+    }
+
+    /// The Named queue a Play asks the local Owner to start (design D7): the
+    /// GUI Client's shown local queue while the local Owner plays nothing, so
+    /// Play starts the shown queue at its own start slot (spec
+    /// `gui-queue-chooser` "Play with nothing playing starts the shown
+    /// queue"). `None` while something plays — the transport then pauses or
+    /// resumes the run — and for the TUI Client, whose transport keeps its
+    /// behaviour.
+    #[must_use]
+    pub(in crate::app) fn shown_queue_play_request(&self) -> Option<NamedQueueId> {
+        let queue = self.shown_queue_edit()?;
+        (!self.shown_playback_status().active).then_some(queue)
+    }
+
+    /// Whether the Queue panel shows a resting local Named queue, so the
+    /// display is not the run's queue and none of its rows carries a playhead
+    /// (design D7).
+    #[must_use]
+    pub(in crate::app) fn shows_resting_local_queue(&self) -> bool {
+        self.playing_queue_link() == QueueLink::Local && self.shown_resting_queue_id().is_some()
+    }
+
+    /// The Named queue a GUI edit of the shown queue names on the wire (design
+    /// D3, D7): the shown local queue's identity, or `None` for the current
+    /// queue. The TUI Client names none — it shows the current queue by the
+    /// connection rule — and a peer has no Named queues.
+    #[must_use]
+    pub(in crate::app) fn shown_queue_edit(&self) -> Option<NamedQueueId> {
+        if !self.gui_client {
+            return None;
+        }
+        match self.gui_shown_entry {
+            Some(ShownEntry::Local(queue)) => Some(queue),
+            Some(ShownEntry::Peer) | None => None,
         }
     }
 }

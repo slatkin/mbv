@@ -5,9 +5,11 @@
 //! ("Queue edits name their queue").
 
 use super::*;
+use crate::app::state::playback::ShownEntry;
 use crate::app::tests::route_state::stub_endpoint;
 use mbv_ctrl::{NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
+use mbv_surfaces::queue::QueueCursorUpdate;
 
 /// The stub Owner's current queue.
 fn current() -> NamedQueueId {
@@ -246,5 +248,331 @@ fn the_tui_panel_and_transport_keep_the_connection_rule() {
     assert!(
         home_cmd_rx.try_recv().is_err(),
         "the local Owner is not the connection's playback target"
+    );
+}
+
+/// Adopt `state` as the current queue's view: the snapshot the Owner would
+/// have published for the queue that holds the playhead.
+fn adopt_current_queue(app: &mut App, state: &UnifiedQueueStateData) {
+    app.local_view.adopt(
+        state,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+}
+
+/// The current queue's snapshot: `items` as its slots, with its start slot at
+/// `start_index` (design D4).
+fn queue_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueStateData {
+    let mut state = emby_unified_state(items, 0);
+    state.start_slot = state.slots.get(start_index).map(|slot| slot.slot_id);
+    state
+}
+
+/// A GUI Client attached to a local Owner that advertises answered queue ops,
+/// with the Named-queue list adopted and its constructor traffic drained.
+/// Every named-queue edit is an answered op, so a test answers the Client's
+/// own op through [`inject_local_events`].
+fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..remote_stub_config()
+    };
+    let mut app = App::new_remote_with_config(
+        mbv_emby::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Local,
+        config,
+    );
+    close_initial_services(&mut app);
+    while cmd_rx.try_recv().is_ok() {}
+    app.enable_gui_client();
+    app.adopt_named_queue_list(named_queue_list(), current());
+    (app, cmd_rx)
+}
+
+/// A TUI Client attached to a local Owner that advertises answered queue ops.
+fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..remote_stub_config()
+    };
+    let mut app = App::new_remote_with_config(
+        mbv_emby::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Local,
+        config,
+    );
+    close_initial_services(&mut app);
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
+/// Replace the Local link's event receiver with an injected one, so a test can
+/// answer the Client's own queue op; keep the sender alive to deliver it.
+fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.player_rx = rx;
+    tx
+}
+
+/// The answer to the Client's own queue op `op`, carrying `data`.
+fn op_answer(op: u64, data: UnifiedQueueStateData) -> PlayerEvent {
+    PlayerEvent::QueueOpResult {
+        op: mbv_ctrl::QueueOpId(op),
+        outcome: mbv_ctrl::QueueOpOutcome::Applied(Box::new(data)),
+    }
+}
+
+/// The `queue` field one sent command carries, for the commands that address a
+/// Named queue.
+fn sent_queue(cmd: &mbv_ctrl::CtrlCmd) -> Option<NamedQueueId> {
+    match cmd {
+        mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlot { queue, .. }
+        | mbv_ctrl::CtrlCmd::UnifiedQueueAppend { queue, .. } => *queue,
+        other => panic!("not a quantity-carrying queue command: {other:?}"),
+    }
+}
+
+/// An enqueue from the Library panel reaches the shown resting queue, and the
+/// playing current queue keeps its slots (spec `gui-queue-chooser` "Enqueue to
+/// a resting queue").
+#[test]
+fn an_enqueue_to_a_resting_queue_names_it() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let tx = inject_local_events(&mut app);
+    app.show_named_queue(resting());
+    while cmd_rx.try_recv().is_ok() {}
+    let kids_after_append = resting_snapshot(&make_items(2));
+    tx.send(op_answer(1, kids_after_append)).unwrap();
+
+    let appended = app.append_on_owner(
+        QueueLink::Local,
+        make_items(1)
+            .into_iter()
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
+        None,
+    );
+
+    assert!(appended);
+    assert_eq!(
+        sent_queue(&cmd_rx.try_recv().unwrap()),
+        Some(resting()),
+        "the append names the shown resting queue"
+    );
+    assert_eq!(
+        app.displayed_queue().slots().len(),
+        2,
+        "the answer fills the shown resting queue"
+    );
+    assert_eq!(
+        app.local_view.slots().len(),
+        3,
+        "the playing current queue does not change"
+    );
+}
+
+/// Play while the local Owner plays nothing and a resting queue is shown asks
+/// the Owner to play that queue, so it starts at its own start slot (spec
+/// `gui-queue-chooser` "Play a stopped queue").
+#[test]
+fn play_with_nothing_playing_starts_the_shown_queue() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let tx = inject_local_events(&mut app);
+    app.show_named_queue(resting());
+    while cmd_rx.try_recv().is_ok() {}
+    app.player.update_status(|status| status.active = false);
+    tx.send(op_answer(1, queue_with_start(&make_items(3), 2)))
+        .unwrap();
+
+    LocalPlaybackTarget::toggle_play_pause(&mut app);
+
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::NamedQueuePlay {
+                queue,
+                slot: None,
+                op: mbv_ctrl::QueueOpId(1),
+            } if queue == resting()
+        ),
+        "Play names the shown queue and lets it pick its own start slot"
+    );
+}
+
+/// Undo sends its inverse edit to the queue the undone edit reached, whichever
+/// entry is shown when the user undoes (spec `gui-queue-chooser` "Undo reaches
+/// the queue it edited").
+#[test]
+fn undo_reaches_the_queue_it_edited() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    let tx = inject_local_events(&mut app);
+    app.show_named_queue(resting());
+    while cmd_rx.try_recv().is_ok() {}
+    app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
+    tx.send(op_answer(1, resting_snapshot(&make_items(1))))
+        .unwrap();
+    app.remove_from_queue(1);
+    assert_eq!(
+        sent_queue(&cmd_rx.try_recv().unwrap()),
+        Some(resting()),
+        "the removal names the shown resting queue"
+    );
+
+    app.show_local_current_entry();
+    tx.send(op_answer(2, resting_snapshot(&make_items(2))))
+        .unwrap();
+    app.undo_last_queue_edit(QueueLink::Local);
+
+    match cmd_rx.try_recv().unwrap() {
+        mbv_ctrl::CtrlCmd::UnifiedQueueAppend {
+            queue,
+            items,
+            before,
+            ..
+        } => {
+            assert_eq!(queue, Some(resting()), "the undo names the edited queue");
+            assert_eq!(items.len(), 1);
+            assert_eq!(
+                before, None,
+                "a resting queue the panel no longer shows holds no client view, so the item returns at its end"
+            );
+        }
+        other => panic!("expected the inverse append: {other:?}"),
+    }
+    assert_eq!(
+        app.local_view.slots().len(),
+        3,
+        "the queue the panel shows now does not change"
+    );
+}
+
+/// The TUI Client shows the current queue by the connection rule, so its edits
+/// name no Named queue (spec `named-queues` "Queue edits name their queue": an
+/// edit that names no queue applies to the current queue).
+#[test]
+fn a_tui_edit_names_no_queue() {
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_local_events(&mut app);
+    tx.send(op_answer(1, emby_unified_state(&make_items(2), 0)))
+        .unwrap();
+
+    app.remove_from_queue(1);
+
+    assert_eq!(
+        sent_queue(&cmd_rx.try_recv().unwrap()),
+        None,
+        "a TUI Client's edit carries no Named queue"
+    );
+}
+
+/// A lost connection removes the peer entry and shows the current local queue,
+/// with the entry-change reset: the filter clears and the active row returns to
+/// the shown queue's start slot (spec `gui-queue-chooser` "A connect adds a peer
+/// entry" — "The connection is lost").
+#[test]
+fn the_connection_is_lost_shows_the_current_queue() {
+    let (mut app, home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    while home_cmd_rx.try_recv().is_ok() {}
+    adopt_current_queue(&mut app, &queue_with_start(&make_items(3), 1));
+    app.queue_filter = "kid".to_string();
+    app.queue_filter_active = true;
+
+    app.restore_local_mode("lost");
+
+    assert_eq!(
+        app.gui_shown_entry,
+        Some(ShownEntry::Local(current())),
+        "the queue panel returns to the current local queue"
+    );
+    assert!(
+        app.queue_filter.is_empty() && !app.queue_filter_active,
+        "the Queue filter closes and empties"
+    );
+    let projection = app.queue_surface_projection();
+    assert!(
+        projection.presentation_reset,
+        "the Queue Surface drops its marks"
+    );
+    assert!(
+        matches!(projection.cursor, QueueCursorUpdate::Set(1)),
+        "the active row rests on the shown queue's start slot"
+    );
+}
+
+/// Showing another entry clears the filter and the marks and puts the active
+/// row on the shown queue's start slot (spec `gui-queue-chooser` "Showing an
+/// entry resets the Queue active row and marks").
+#[test]
+fn showing_another_entry_resets_the_queue_presentation() {
+    let (mut app, home_cmd_rx) = gui_app_with_named_queues();
+    adopt_current_queue(&mut app, &queue_with_start(&make_items(3), 1));
+    while home_cmd_rx.try_recv().is_ok() {}
+
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &queue_with_start(&make_items(3), 2));
+    assert!(
+        matches!(
+            app.queue_surface_projection().cursor,
+            QueueCursorUpdate::Set(2)
+        ),
+        "the resting queue's own start slot is its first active row"
+    );
+    app.queue_filter = "kid".to_string();
+    app.queue_filter_active = true;
+
+    app.show_local_current_entry();
+
+    assert!(
+        app.queue_filter.is_empty() && !app.queue_filter_active,
+        "the Queue filter closes and empties"
+    );
+    let projection = app.queue_surface_projection();
+    assert!(
+        projection.presentation_reset,
+        "the Queue Surface drops its marks"
+    );
+    assert!(matches!(projection.cursor, QueueCursorUpdate::Set(1)));
+}
+
+/// A close of the shown queue that another Client asked for removes its entry
+/// and shows the current local queue, with the same reset (spec
+/// `gui-queue-chooser` "The close control closes the shown entry": after a
+/// close the Queue panel shows the current local queue).
+#[test]
+fn a_closed_shown_queue_returns_to_the_current_queue() {
+    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
+    app.show_named_queue(resting());
+    app.queue_filter = "kid".to_string();
+    app.queue_filter_active = true;
+
+    app.adopt_named_queue_list(
+        vec![NamedQueueEntry {
+            id: current(),
+            name: "Default".to_string(),
+            len: 3,
+        }],
+        current(),
+    );
+
+    assert_eq!(
+        app.gui_shown_entry,
+        Some(ShownEntry::Local(current())),
+        "the queue the panel shows is the one that holds the playhead"
+    );
+    assert!(
+        app.queue_filter.is_empty() && !app.queue_filter_active,
+        "the Queue filter closes and empties"
+    );
+    assert!(
+        app.queue_surface_projection().presentation_reset,
+        "the Queue Surface drops its marks"
     );
 }

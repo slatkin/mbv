@@ -198,6 +198,7 @@ impl App {
                 source,
                 start_position_secs: Some(position_secs),
             },
+            self.shown_queue_edit(),
         );
         if sent == QueueOpEdit::NotApplied {
             // The answered-edit bound reported the rejection or the timeout

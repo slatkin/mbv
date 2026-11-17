@@ -5,7 +5,7 @@ fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
     let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.ctrl_compatibility.supports_answered_queue_ops = true;
     let op = remote
-        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, None)
         .unwrap();
     let Some(expected) = op else {
         panic!("current peer advertises answered queue operations");
@@ -27,7 +27,7 @@ fn legacy_queue_op_sends_without_an_operation_id() {
     remote.ctrl_compatibility.supports_answered_queue_ops = false;
     assert_eq!(
         remote
-            .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+            .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, None)
             .unwrap(),
         None
     );
@@ -523,17 +523,53 @@ fn replace_start_position_is_sent_only_to_an_owner_that_advertises_the_capabilit
         .supports_queue_replace_start_position = advertises;
 
     remote
-        .send_queue_op(QueueOp::Replace {
-            items: Vec::new(),
-            start_idx: Some(2),
-            source: QueueSource::Unknown,
-            start_position_secs: Some(95.5),
-        })
+        .send_queue_op(
+            QueueOp::Replace {
+                items: Vec::new(),
+                start_idx: Some(2),
+                source: QueueSource::Unknown,
+                start_position_secs: Some(95.5),
+            },
+            None,
+        )
         .unwrap();
 
     assert!(matches!(
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueReplace { start_position_secs, .. })
             if start_position_secs == expected
+    ));
+}
+
+/// A Named queue edit carries the queue it reaches, and the play names its
+/// queue in the command (design D3, D7 of `gui-named-queues`).
+#[test]
+fn a_named_queue_operation_names_its_queue_on_the_wire() {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.ctrl_compatibility.supports_answered_queue_ops = true;
+    let queue = mbv_queue::NamedQueueId::from_raw(7);
+
+    remote
+        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, Some(queue))
+        .unwrap();
+    remote
+        .send_queue_op(QueueOp::PlayQueue { slot: Some(17) }, Some(queue))
+        .unwrap();
+
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueRemoveSlot {
+            slot_id: 17,
+            queue: Some(sent),
+            ..
+        }) if sent == queue
+    ));
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::NamedQueuePlay {
+            queue: sent,
+            slot: Some(17),
+            ..
+        }) if sent == queue
     ));
 }

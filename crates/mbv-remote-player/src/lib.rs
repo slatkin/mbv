@@ -11,51 +11,10 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
-use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
+use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_queue::{QueueItem, QueueLineage, QueueSource};
-
-/// An owner-authoritative queue operation sent over ctrl.
-#[derive(Clone, Debug)]
-pub enum QueueOp {
-    Replace {
-        items: Vec<mbv_ctrl::UnifiedQueueSlot>,
-        start_idx: Option<usize>,
-        source: QueueSource,
-        /// One-time start position for the start slot, in seconds. Sent only
-        /// to an owner that advertises `queue-replace-start-position`; the
-        /// owner otherwise ignores the field and would start at the wrong
-        /// position (queue-handoff-and-take design D4).
-        start_position_secs: Option<f64>,
-    },
-    Append {
-        items: Vec<QueueItem>,
-        before: Option<u64>,
-    },
-    RemoveSlot {
-        slot_id: u64,
-    },
-    RemoveSlots {
-        slot_ids: Vec<u64>,
-    },
-    MoveSlot {
-        slot_id: u64,
-        to_index: usize,
-    },
-    PlaySlot {
-        slot_id: u64,
-    },
-    Clear,
-    SourceUpdate {
-        source: QueueSource,
-        lineage: QueueLineage,
-    },
-    Refresh,
-    ApplyProgress {
-        updates: Vec<mbv_ctrl::ProgressUpdate>,
-    },
-}
+use mbv_queue::QueueItem;
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +69,7 @@ pub struct RemotePlayer {
 
 pub(crate) mod connect;
 mod error;
+mod queue_op;
 #[doc(inline)]
 pub use error::RemotePlayerError;
 
@@ -118,6 +78,9 @@ mod stub;
 
 #[cfg(test)]
 mod tests;
+
+#[doc(inline)]
+pub use queue_op::QueueOp;
 
 #[cfg(any(test, feature = "test"))]
 #[doc(inline)]
@@ -570,106 +533,6 @@ impl RemotePlayer {
     #[must_use]
     pub fn supports_twitch_queue(&self) -> bool {
         self.ctrl_compatibility.supports_twitch_queue
-    }
-
-    /// Send an owner queue operation, using answered correlation when negotiated.
-    pub fn send_queue_op(
-        &self,
-        operation: QueueOp,
-    ) -> Result<Option<QueueOpId>, RemotePlayerError> {
-        let op = self
-            .supports_answered_queue_ops()
-            .then(|| QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed)));
-        let command = match operation {
-            QueueOp::Replace {
-                items,
-                start_idx,
-                source,
-                start_position_secs,
-            } => {
-                // An owner without the capability ignores the field and would
-                // start the slot at its resume source instead — never send it
-                // there (queue-handoff-and-take spec, owner without the
-                // capability).
-                let start_position_secs =
-                    start_position_secs.filter(|_| self.supports_queue_replace_start_position());
-                CtrlCmd::UnifiedQueueReplace {
-                    queue: None,
-                    items: items.iter().map(|slot| slot.item.clone()).collect(),
-                    slots: items,
-                    start_idx,
-                    source,
-                    start_position_secs,
-                    op,
-                }
-            }
-            QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend {
-                queue: None,
-                items,
-                before,
-                op,
-            },
-            QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot {
-                queue: None,
-                slot_id,
-                op,
-            },
-            QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots {
-                queue: None,
-                slot_ids,
-                op,
-            },
-            QueueOp::MoveSlot { slot_id, to_index } => CtrlCmd::UnifiedQueueMoveSlot {
-                queue: None,
-                slot_id,
-                to_index,
-                op,
-            },
-            QueueOp::PlaySlot { slot_id } => CtrlCmd::UnifiedQueuePlaySlot {
-                queue: None,
-                slot_id,
-                op,
-            },
-            QueueOp::Clear => match op {
-                Some(op) => CtrlCmd::UnifiedQueueClearOp { queue: None, op },
-                None => CtrlCmd::UnifiedQueueClear,
-            },
-            QueueOp::SourceUpdate { source, lineage } => {
-                if !self.supports_owner_queue_source_update() {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support owner queue source updates",
-                    ));
-                }
-                CtrlCmd::UnifiedQueueSourceUpdate {
-                    queue: None,
-                    source,
-                    lineage,
-                    op,
-                }
-            }
-            QueueOp::Refresh => {
-                let Some(op) = op else {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support answered queue refresh",
-                    ));
-                };
-                CtrlCmd::UnifiedQueueRefresh { op }
-            }
-            QueueOp::ApplyProgress { updates } => {
-                let Some(op) = op else {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support answered queue progress",
-                    ));
-                };
-                CtrlCmd::UnifiedQueueApplyProgress { op, updates }
-            }
-        };
-        if !self.send_ctrl_cmd(command) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send queue operation to Player owner",
-            ));
-        }
-        Ok(op)
     }
 
     /// Snapshot of the owner-reported playback state. Locks internally and

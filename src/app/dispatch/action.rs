@@ -246,7 +246,7 @@ pub(in crate::app) fn idle_feed_command_for_key(
 
 impl App {
     fn reject_disconnected_remote_jump(&mut self) -> bool {
-        if !self.player.is_remote_disconnected() {
+        if !self.shown_queue_owner_player().is_remote_disconnected() {
             return false;
         }
         self.handle_player_event(mbv_ctrl::player::PlayerEvent::CommandRejected(
@@ -260,12 +260,16 @@ impl App {
             return false;
         }
         // The jump is an answered owner operation, so
-        // the playing slot changes only through the owner's answer.
+        // the playing slot changes only through the owner's answer. It names
+        // the shown queue (design D7 of `gui-named-queues`), so a row of a
+        // resting queue makes that queue current and plays the row (design D2).
+        let queue = self.shown_queue_edit();
         let sent = self.queue_op(
             self.playing_queue_link(),
             mbv_remote_player::QueueOp::PlaySlot {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
             },
+            queue,
         );
         sent != QueueOpEdit::NotApplied
     }
@@ -561,7 +565,8 @@ impl App {
         }
         // Validate the item at the cursor exists.
         let item = queue.item_at(t).cloned()?;
-        let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
+        let owner_can_admit_audiobookshelf =
+            self.shown_queue_owner_player().can_admit_audiobookshelf();
         if !item.admissible_for_owner_with_audiobookshelf(
             false,
             |service| {
@@ -579,10 +584,10 @@ impl App {
     }
 
     fn handle_disconnected_queue_play(&mut self, t: usize) -> bool {
-        if !self.player.is_remote_disconnected() {
+        if !self.shown_queue_owner_player().is_remote_disconnected() {
             return false;
         }
-        let status = self.player.status_snapshot();
+        let status = self.shown_playback_status();
         let active = status.active;
         let current_idx = status.current_idx;
         let queue = self.displayed_queue();
@@ -633,24 +638,46 @@ impl App {
         slot_id: Option<QueueSlotId>,
         all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
+        // A shown resting queue is not the run's queue: none of its rows
+        // carries a playhead, so activating one asks the Owner to play that
+        // slot of it, which makes the queue current (design D2, D7). The
+        // local playhead says nothing about it.
+        if self.shows_resting_local_queue() {
+            let Some(slot_id) = slot_id else {
+                return;
+            };
+            if !self.request_slot_jump(slot_id) {
+                self.flash(
+                    "Playback owner rejected the queue selection".into(),
+                    ToastSeverity::Error,
+                );
+            }
+            return;
+        }
         // Local / direct-remote playback. The same path handles
         // both Feed and Emby items: jump to an active slot or
         // cold-start the full canonical queue. The shown queue is always
         // the playback target's queue (ADR 0034), so `active` alone gates
-        // the jump against the cold start.
-        let st = self.player.status_snapshot();
+        // the jump against the cold start. The gate reads the shown entry's
+        // owner (design D7): a peer connection is not the panel's playback
+        // while a local queue is shown.
+        let st = self.shown_playback_status();
         let active = st.active;
         let current_idx = st.current_idx;
         if active {
             if t == current_idx {
-                let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                let _ = self
+                    .shown_queue_owner_player()
+                    .send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {
                 let Some(slot_id) = slot_id else {
                     return;
                 };
                 // One owner-kind seam for every fresh jump, so
                 // explicit play and the Next-Up accept cannot diverge.
-                if !self.request_slot_jump(slot_id) && !self.player.is_remote_disconnected() {
+                if !self.request_slot_jump(slot_id)
+                    && !self.shown_queue_owner_player().is_remote_disconnected()
+                {
                     self.flash(
                         "Playback owner rejected the queue selection".into(),
                         ToastSeverity::Error,
@@ -671,7 +698,8 @@ impl App {
         // Cold start: submit the full canonical queue (all
         // variants) so the player's internal playlist matches
         // the QueueView's queue exactly.
-        let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
+        let owner_can_admit_audiobookshelf =
+            self.shown_queue_owner_player().can_admit_audiobookshelf();
         let eligible: Vec<_> = all_slots
             .into_iter()
             .filter(|slot| {
@@ -702,12 +730,12 @@ impl App {
                     .count()
                     .min(eligible.len().saturating_sub(1))
             });
-        let submitted = self.player.submit_queue_slots(
+        let submitted = self.shown_queue_owner_player().submit_queue_slots(
             eligible,
             start_idx,
             self.playback_queue().source().clone(),
         );
-        if !submitted && self.player.is_remote_disconnected() {
+        if !submitted && self.shown_queue_owner_player().is_remote_disconnected() {
             self.flash(
                 crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                 ToastSeverity::Warning,

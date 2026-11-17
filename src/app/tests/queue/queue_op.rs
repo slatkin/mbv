@@ -112,6 +112,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
             items: one_queue_item(),
             before: None,
         },
+        None,
     );
 
     assert_eq!(
@@ -163,6 +164,7 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
             items: one_queue_item(),
             before: None,
         },
+        None,
     );
 
     assert!(
@@ -401,6 +403,7 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
             items: one_queue_item(),
             before: None,
         },
+        None,
     );
 
     assert!(
@@ -429,7 +432,7 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.queue_op(QueueLink::Local, QueueOp::Refresh);
+    app.queue_op(QueueLink::Local, QueueOp::Refresh, None);
 
     assert!(
         matches!(

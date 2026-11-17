@@ -1,12 +1,28 @@
 use super::LocalPlaybackTarget;
 use crate::app::App;
+use crate::app::QueueLink;
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_remote_player::QueueOp;
 use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
+    /// Play/pause on the shown entry's owner. While the local Owner plays
+    /// nothing and a local Named queue is shown, Play asks the Owner to play
+    /// that queue instead: the queue starts at its own start slot, whichever
+    /// of the Owner's queues holds the panel (design D2, D4, D7 of
+    /// `gui-named-queues`).
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
+        if let Some(queue) = app.shown_queue_play_request() {
+            app.flash("Play requested".to_string(), ToastSeverity::Neutral);
+            app.queue_op(
+                QueueLink::Local,
+                QueueOp::PlayQueue { slot: None },
+                Some(queue),
+            );
+            return;
+        }
         let paused = !app.shown_playback_status().paused;
         app.flash(
             if paused {

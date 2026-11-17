@@ -167,6 +167,7 @@ impl App {
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
             pending_queue_cursor_reanchor: None,
+            pending_queue_surface_reset: false,
             last_queue_projection: None,
             pending_queue_transfer: None,
             staged_queue_transfer: None,

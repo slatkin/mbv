@@ -372,6 +372,7 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     let _cmd_rx = live_owner_channel(&mut app);
     app.local_view.adopt_queue_items(emby_items(2), 0);
     app.queue_undo_stack.push(UndoEntry::Remove {
+        queue: None,
         index: 0,
         item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
             "restored", "Movie",
@@ -407,6 +408,7 @@ fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     let mut app = app;
     app.remote_queue_undo_stack.push(UndoEntry::Move {
+        queue: None,
         slot_id: mbv_queue::QueueSlotId::from_raw(2),
         from: 0,
     });

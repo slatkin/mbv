@@ -92,7 +92,14 @@ impl App {
                 .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
                 .collect::<Vec<_>>();
             if !slot_ids.is_empty() {
-                self.queue_op(link, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+                // The slot identities come from `link`'s own view, so the edit
+                // names no Named queue: it clears the matches of the queue it
+                // read, which is the current queue on the local link.
+                self.queue_op(
+                    link,
+                    mbv_remote_player::QueueOp::RemoveSlots { slot_ids },
+                    None,
+                );
             }
         }
     }
@@ -181,14 +188,25 @@ impl App {
         }
     }
 
-    /// The mutable displayed queue. Only the current queue's view is ever
-    /// mutated through here: a resting queue's slots change only in the
+    /// The mutable displayed queue. Only presentation state (the cursor) is
+    /// written through here: a resting queue's slots change only in the
     /// Owner's snapshots, which `adopt_named_queue_snapshot` adopts.
     pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
         match self.playing_queue_link() {
-            QueueLink::Local => &mut self.local_view,
+            QueueLink::Local => match &mut self.shown_resting {
+                Some((queue, view)) if self.named_queues.rests(*queue) => view,
+                _ => &mut self.local_view,
+            },
             QueueLink::Peer => self.queue_for_link_mut(QueueLink::Peer),
         }
+    }
+
+    /// Position of `slot_id` in the Queue panel's shown queue: the slot
+    /// addressing every edit, move, and row activation resolves against, so a
+    /// row picked from a resting queue is never addressed in another queue
+    /// (design D7).
+    pub(in crate::app) fn displayed_slot_index(&self, slot_id: QueueSlotId) -> Option<usize> {
+        self.displayed_queue().slot_index(slot_id)
     }
 
     pub(in crate::app) fn playback_queue(&self) -> &QueueView {

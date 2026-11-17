@@ -12,6 +12,10 @@ pub struct QueueView {
     queue: PlaybackQueue,
     source: QueueSource,
     lineage: QueueLineage,
+    /// The slot a play of this queue starts, as the owner last named it (design
+    /// D4): `None` when the queue has none and on an owner without
+    /// `named-queues`.
+    start_slot: Option<QueueSlotId>,
     pending_playback_slot: Option<QueueSlotId>,
     revision_mint: Arc<QueueRevisionMint>,
 }
@@ -32,6 +36,7 @@ impl Default for QueueView {
             queue: PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
             source: QueueSource::Unknown,
             lineage: QueueLineage::default(),
+            start_slot: None,
             pending_playback_slot: None,
             revision_mint,
         }
@@ -67,6 +72,7 @@ impl QueueView {
         };
         self.source = state.source.clone();
         self.lineage = state.lineage;
+        self.start_slot = state.start_slot.map(QueueSlotId::from_raw);
         self.pending_playback_slot = pending_playback_slot(state);
     }
 
@@ -157,6 +163,14 @@ impl QueueView {
     #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    /// The index of the queue's start slot, when the queue still holds it
+    /// (design D4, D7): the row a play of the queue starts, and the active row
+    /// the Queue panel rests on when the entry is shown.
+    #[must_use]
+    pub fn start_index(&self) -> Option<usize> {
+        self.start_slot.and_then(|slot_id| self.slot_index(slot_id))
     }
 }
 

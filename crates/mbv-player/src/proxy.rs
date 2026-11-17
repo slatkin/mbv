@@ -47,15 +47,13 @@ impl PlayerProxy {
     /// Send `CtrlCmd::UnifiedQueueShuffle` to the Player owner, but only
     /// when the owner advertises the `queue-shuffle` ctrl capability
     /// (design D4): an older owner gets nothing and the menu hides the
-    /// entry instead.
-    pub fn shuffle_queue(&self) {
+    /// entry instead. `queue` names the Named queue to shuffle (design D3,
+    /// D7 of `gui-named-queues`), or `None` for the current queue.
+    pub fn shuffle_queue(&self, queue: Option<mbv_queue::NamedQueueId>) {
         if self.remote.supports_queue_shuffle() {
             let _ = self
                 .remote
-                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueShuffle {
-                    queue: None,
-                    op: None,
-                });
+                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueShuffle { queue, op: None });
         }
     }
 

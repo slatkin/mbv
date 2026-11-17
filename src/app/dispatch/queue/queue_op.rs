@@ -33,12 +33,18 @@ impl App {
     /// queue, begins playback at `start_idx`, and answers with the snapshot
     /// the Client adopts — the Client holds no editable queue of its own.
     /// Slot identities are minted client-side (1..=n).
+    ///
+    /// `queue` names the Named queue the replacement reaches (design D7 of
+    /// `gui-named-queues`): the GUI Client's shown queue, so a replacement of
+    /// a resting queue makes it current and plays it, or `None` for the
+    /// current queue.
     pub(in crate::app) fn replace_queue_on_owner(
         &mut self,
         link: QueueLink,
         items: Vec<mbv_queue::QueueItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
+        queue: Option<mbv_queue::NamedQueueId>,
     ) -> QueueOpEdit {
         let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
             .into_iter()
@@ -56,6 +62,7 @@ impl App {
                 source,
                 start_position_secs: None,
             },
+            queue,
         )
     }
 
@@ -65,6 +72,7 @@ impl App {
         items: Vec<mbv_emby_model::EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
+        queue: Option<mbv_queue::NamedQueueId>,
     ) -> QueueOpEdit {
         self.replace_queue_on_owner(
             link,
@@ -74,6 +82,7 @@ impl App {
                 .collect(),
             start_idx,
             source,
+            queue,
         )
     }
 
@@ -84,13 +93,20 @@ impl App {
     /// [`QueueOpEdit::Applied`] on an `Applied` answer, [`QueueOpEdit::SentLegacy`]
     /// for a legacy owner, and [`QueueOpEdit::NotApplied`] on rejection,
     /// timeout, or a failed send.
+    ///
+    /// `queue` names the Named queue the operation reaches (design D7 of
+    /// `gui-named-queues`): the GUI Client's shown queue for an edit of the
+    /// shown queue, the undone entry's queue for an undo, or `None` for the
+    /// current queue. Each caller states its own target, so an edit resolved
+    /// against one queue's slots can never be sent as another queue's edit.
     pub(in crate::app) fn queue_op(
         &mut self,
         link: QueueLink,
         operation: mbv_remote_player::QueueOp,
+        queue: Option<mbv_queue::NamedQueueId>,
     ) -> QueueOpEdit {
         let remote = self.queue_link(link).0.remote();
-        let answer = match remote.send_queue_op(operation) {
+        let answer = match remote.send_queue_op(operation, queue) {
             Ok(answer) => answer,
             Err(e) => {
                 tracing::warn!(name: "queue.edit.send_failed", target: "queue", error = %e, "the queue edit did not reach the Player owner");
@@ -188,13 +204,21 @@ impl App {
 
     /// Adopt one owner snapshot seen by the answer pump: through
     /// `adopt_home_snapshot` for a suspended home link, like the tick drain,
-    /// and through the live `UnifiedQueueUpdated` adoption otherwise.
+    /// and through the live `UnifiedQueueUpdated` adoption otherwise. A
+    /// snapshot that names a Named queue is a resting queue's answer (design
+    /// D3, D5): its slots refill the shown resting view, and the current
+    /// queue's view, its source fence, and the playback status stay as they
+    /// were, because a resting queue holds no playhead.
     fn adopt_queue_op_snapshot(
         &mut self,
         link: QueueLink,
         unified: &UnifiedQueueStateData,
         own_answer: bool,
     ) {
+        if let Some(queue) = unified.queue {
+            self.adopt_named_queue_snapshot(queue, unified);
+            return;
+        }
         if own_answer {
             if link == self.playing_queue_link() {
                 self.player.set_status(unified.status.clone());

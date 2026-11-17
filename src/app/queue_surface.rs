@@ -19,6 +19,9 @@ pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
     lineage: mbv_queue::QueueLineage,
     link: QueueLink,
+    /// The shown resting Named queue's identity, so showing another queue of
+    /// the same link rebuilds its rows even when the two revisions coincide.
+    named_queue: Option<mbv_queue::NamedQueueId>,
     active: bool,
     active_target: Option<mbv_queue::QueueSlotId>,
     /// The adopted pending transition awaiting playback-owner observation.
@@ -75,6 +78,9 @@ pub struct QueueSurfaceProjection {
     /// slot across a content refresh; `Set` is an authoritative move
     /// (follow-the-playhead, jump-to-now-playing, link switch).
     pub cursor: QueueCursorUpdate,
+    /// Whether the Surface drops its marks and viewport before it adopts
+    /// `cursor` (design D7 of `gui-named-queues`): the shown entry changed.
+    pub presentation_reset: bool,
 }
 
 impl App {
@@ -91,12 +97,12 @@ impl App {
         let playback = self.displayed_queue_playback_state();
         let pending_slot = self
             .pending_playback_slot()
-            .filter(|target| self.queue_for_link(link).slot(*target).is_some());
+            .filter(|target| self.displayed_queue().slot(*target).is_some());
         let fingerprint = self.queue_projection_fingerprint(link, playback, pending_slot);
         let (rows_changed, bucket_only) = self.queue_projection_changes(&fingerprint);
         let cursor = match self.pending_queue_cursor_reanchor.take() {
             Some(reanchor) if reanchor == link => {
-                QueueCursorUpdate::Set(self.queue_for_link(link).cursor())
+                QueueCursorUpdate::Set(self.displayed_queue().cursor())
             }
             _ => QueueCursorUpdate::Preserve,
         };
@@ -107,6 +113,7 @@ impl App {
             slots: None,
             patch: None,
             cursor,
+            presentation_reset: std::mem::take(&mut self.pending_queue_surface_reset),
         };
         if rows_changed {
             self.last_queue_projection = Some(fingerprint);
@@ -116,7 +123,7 @@ impl App {
         if bucket_only {
             projection.patch = self.queue_projection_patch(&fingerprint, playback, pending_slot);
         } else if rows_changed {
-            projection.slots = Some(self.queue_for_link(link).slots().to_vec());
+            projection.slots = Some(self.displayed_queue().slots().to_vec());
         }
         projection
     }
@@ -129,11 +136,12 @@ impl App {
         playback: PlaybackState,
         pending_slot: Option<mbv_queue::QueueSlotId>,
     ) -> QueueProjectionFingerprint {
-        let slots = self.queue_for_link(link).slots();
+        let slots = self.displayed_queue().slots();
         QueueProjectionFingerprint {
-            revision: self.queue_for_link(link).revision().raw(),
-            lineage: self.queue_for_link(link).lineage(),
+            revision: self.displayed_queue().revision().raw(),
+            lineage: self.displayed_queue().lineage(),
             link,
+            named_queue: self.shown_resting_queue_id(),
             active: playback.active,
             active_target: projected_active_target(slots, playback, pending_slot),
             pending_target: pending_slot,
@@ -148,6 +156,7 @@ impl App {
             old.revision == fingerprint.revision
                 && old.lineage == fingerprint.lineage
                 && old.link == fingerprint.link
+                && old.named_queue == fingerprint.named_queue
                 && old.active == fingerprint.active
                 && old.active_target == fingerprint.active_target
                 && old.pending_target == fingerprint.pending_target
@@ -162,7 +171,7 @@ impl App {
         playback: PlaybackState,
         pending_slot: Option<mbv_queue::QueueSlotId>,
     ) -> Option<(mbv_queue::QueueSlotId, MediaListRow<mbv_queue::QueueSlotId>)> {
-        let queue = self.queue_for_link(fingerprint.link);
+        let queue = self.displayed_queue();
         let target = fingerprint.active_target?;
         let index = queue.slot_index(target)?;
         let slot = queue.slots().get(index)?;

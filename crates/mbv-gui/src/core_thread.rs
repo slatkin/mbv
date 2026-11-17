@@ -709,6 +709,11 @@ impl CoreThread {
     /// section that reads the Surface state builds.
     fn sync_queue_surface(&mut self) {
         let update = self.app.queue_surface_projection();
+        // The shown entry changed: drop the marks and the viewport before the
+        // start-slot cursor lands (design D7 of `gui-named-queues`).
+        if update.presentation_reset {
+            self.queue.reset_presentation();
+        }
         if let Some(slots) = update.slots {
             self.queue.list_mut().set_content(queue_media_rows(
                 &slots,
