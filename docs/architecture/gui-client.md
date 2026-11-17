@@ -97,16 +97,19 @@ A section whose content can be absent has an `Option` value, so a `null`
 clears it. The sections are: the pre-attach state (`attach`, `null` once the
 attach succeeds), the theme (`theme`, `GuiTheme`), the
 Queue viewport rows with their stable `QueueSlotId` raw numbers, the active
-row, marks, active slot, row hover, row drag, and each item row's zebra parity
-(`queue`, `GuiQueue`), the queue header's remaining count, next item title,
-queue finish's tail offset, right-column mode, and filter text with its
-caret fact (`summary`, `GuiQueueSummary`), the collapse and queue-fold
+row, marks, active slot, row hover, row drag, each item row's zebra parity,
+and the shown queue's start-mark facts — its start slot, whether it plays,
+and whether its owner reported a start slot (`queue`, `GuiQueue`), the Queue
+chooser facts the header's controls read, the filter text with its caret
+fact, and the totals the footer shows, beside the folded strip's remaining
+count, next item title, and finish tail (`summary`, `GuiQueueSummary`), the collapse and queue-fold
 toggles the
 Client core holds, with the UI-reset counter `ui_reset_epoch` beside them
 (`panel`, `GuiPanelToggles`), the open menu or popover (`overlay`,
 `Option<GuiOverlayFrame>`: the row menu with its entries, key hints, and
 destructive flags, the track popover, the playback-target chooser, the
-shared confirmation modal with its message and button row, and the
+Queue chooser with its cursor, entries, and rename draft, the shared
+confirmation modal with its message and button row, and the
 daemon-lost recovery dialog with its diagnostics and recovery choices), the
 Queue playback projection (`playback`, `GuiQueuePlayback`), the scrubber's
 hover preview (`hover`, `Option<GuiScrubberHover>`), the footer pills
@@ -396,8 +399,8 @@ is built, never split in the window. The core's Hero meta rows and the
 window's own facts lines (`src/window/library/hero.rs`) return segments, and
 `src/window/components/typed_text.rs` paints them: each segment maps its
 kind to its token, and a plain segment inherits the line's own colour. A
-time or a date repeated down a list — a duration column, a tree row's year,
-the queue's right column — paints at `--canvas-type-repeat-opacity`; a
+time or a date repeated down a list — a duration column, a Music tree row's
+year — paints at `--canvas-type-repeat-opacity`; a
 selected or current row keeps its own ink at full strength by painting
 without `repeat`. The scrubber's remaining clock is a time at 0.75, as the
 canvas draws it. A single-type field needs no segments: its painter names its
@@ -423,8 +426,9 @@ exception: a playback-target chooser row paints the brand mark of its target
 kind (`src/window/brand_icons.rs`, whose three paths are simple-icons', CC0) for
 Emby, Google Cast, and the mpv Player owner, because Lucide carries no brand
 glyph. The transport controls and the playback-target indicator are Lucide
-icons. The now-playing row shows the canvas's play glyph
-beside its title, in the accent colour (the `queue` section still names
+icons. The shown queue's start slot shows the canvas's play glyph
+beside its title, in the accent colour: filled while its queue plays, and
+outlined while it is stopped or resting (the `queue` section still names
 `active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
 solid transport glyphs paint — with the availability the colour already
@@ -433,9 +437,8 @@ carried gating them. The header's playback-target indicator maps both of
 cast family for local and remote alike — so the role colour and the
 host label carry the distinction. `GuiFooterPill.text` carries glyph-free
 text. The autosave and dirty pills map to their Lucide icons in the
-component (`SaveCheck` and `SaveOff`); the playlist pill and the session
-marker paint plain label text — the marker adds its liveness dot — with
-no leading icon, as the canvas draws them.
+component (`SaveCheck` and `SaveOff`); the queue's source text paints plain
+label text with no leading icon, as the canvas draws it.
 
 ## The panel's four states
 
@@ -523,11 +526,10 @@ paused, with no update from the core: one timer re-arms at each wall-clock
 minute. The panels read the derived signals: the scrubber's fill and clocks, the
 transport's finish clock (`format_wall_clock`, the zero-padded `HH:MM` in the
 window's local zone), the rail's ring and remaining time, the compact
-strip's progress line, the queue header's and the folded line's finish
+strip's progress line, the folded line's finish
 clock — the wall clock at the summary's `tail_secs` past the active item's
-end, with the ` +1d` suffix when the finish lands past the local day, the
-rule `queue_finish_clock` runs in Rust for the TUI — each row's "Ends at"
-clock (the same wall clock at the row's `ends_after_secs` offset), the active
+end, with the ` +1d` suffix when the finish lands past the local day; the
+rule `queue_finish_clock` runs in Rust for the TUI — the active
 queue row's progress, and the Audiobooks Workspace's current chapter: the
 chapter row whose `startTicks <= position < endTicks` span holds the
 predicted position while the Hero's book is the frame's `playing_book_id`;
@@ -554,16 +556,79 @@ local player is inactive.
 
 The Queue panel's recessed box sits below the player block on the
 `queuePanel` fill, with its header row, its rows, and its bottom spacer. The
-header paints the remaining count, the queue's derived finish clock (the
-` +1d` rule above), the Length /
-Ends-at switch, and the filter control; the switch, the filter, and each row
-report their own region. The item rows zebra-stripe as the TUI's
+header paints the Queue chooser button — only while the chooser lists two or
+more entries, and it names the shown entry — the filter control, the
+new-queue control, and the close control, and nothing else: no remaining
+count and no queue finish clock (the folded line keeps both). The close
+control is disabled on the only local queue, and a disabled control claims
+no pointer. The header's controls and each row report their own region: the
+chooser, the filter, the new control, and the close control report their
+`queueChooser`, `filter`, `newQueue`, and `closeQueue` targets.
+
+### The Queue chooser
+
+The chooser button opens the Queue chooser
+(`src/window/components/queue_chooser_menu.rs`), a dropdown painted under
+the header at the button's leading edge, in the row menu's canvas chrome.
+Its entries are the local Owner's Named queues in queue order, then one
+entry for the connected peer Player owner, named by the peer's own name
+(its device name, or the route or endpoint it connects by).
+The shown entry leads with a check, the current queue — the one that holds
+the playhead — trails with an accent dot, and the peer entry trails with
+the direct-peer brand mark, so a peer is never read as a local queue.
+Choosing an entry — a press on its row, or Enter on the chooser's cursor —
+shows it and starts, stops, and moves no playback; a press sends
+`PlaybackRequest::QueueChooserEntry` with the entry's own identity (the
+local queue's `NamedQueueId`, or none for the peer), never a painted row.
+While the chooser is open it owns the keyboard: the arrow keys move its
+wrapping cursor, Enter shows the entry under the cursor, `r` opens the name
+of the local queue under the cursor for edit, and `t` or Esc closes it. A
+rename edits inline, in place of the entry's label and with the filter's
+block caret; Enter confirms it as `NamedQueueRename` and Esc cancels the
+edit and keeps the old name, with the chooser still open. A peer entry
+cannot be renamed.
+
+The chooser rides the `overlay` section as the `GuiOverlayFrame::QueueChooser`
+variant: the core's cursor, the entries, and the rename draft while one is
+open. Its entry rows report their own regions under a third report key the
+panel inserts while the chooser is open, naming each painted entry's own
+identity, so the dropdown wins the hit map over the queue rows beneath it.
+
+The shown entry decides which queue the panel shows and which owner the
+player panel follows (ADR 0041). While a local Named queue is shown, the
+player panel shows and controls the local Owner's playback — including
+while that queue rests — and while the peer entry is shown, it shows and
+controls the peer's. The transport controls the current queue of the owner
+it shows, whichever of that owner's queues is shown. Every queue edit,
+enqueue, play-next, and whole-queue replacement from the window reaches the
+shown entry's queue, and a Play with nothing playing starts the shown
+queue. Showing an entry clears the Queue filter and the marks and puts the
+shown queue's start slot on the Queue's active row, or its first row when
+it has no start slot.
+
+The `t` chord opens and closes the chooser, `Ctrl+T` runs the new-queue
+control, and `Ctrl+W` runs the close control. The three chords are GUI-only
+key-context bindings (`src/app/input/key_policy.rs`) gated on the Queue
+list box pointer target: they run only while the pointer target is the
+Queue list box, and the TUI Client's bindings do not change. The new-queue
+control asks the local Owner for a new Named queue; the Owner answers with
+the new queue's own snapshot, the panel shows it, and its given name opens
+for edit in the chooser. The close control acts on the shown entry: a peer
+entry disconnects and the peer keeps playing; a local queue closes, with a
+confirmation only on the playing current queue, because closing it stops
+playback; and after a close the panel shows the current local queue.
+
+The item rows zebra-stripe as the TUI's
 `media_list/wide.rs` walk paints them: the frame carries each row's parity —
 a grouped list alternates within each group from its first member, an
 ungrouped list throughout — and a striped row takes the `queueColumn` fill
 inside the box. Each row paints the canvas row: its padded mono ordinal in
-place of the date gutter, one title line over a 2 px progress track, and
-the right-column value — no second text line. At the canvas's fixed 30
+place of the date gutter, one title line over a 2 px progress track, with no
+right-column value and no second text line. The shown queue's start slot
+carries the start mark: the filled play glyph while its queue plays, the
+outlined one while it is stopped or resting. A shown queue whose owner
+reports no start slot — a peer without `named-queues` — carries the playing
+mark on its observed active slot and no start mark. At the canvas's fixed 30
 logical pixel height, the rows paint four looks (ADR 0040), and the four
 are distinct. The active row — the frame's `cursor`
 slot, the row the Queue's Surface state names — always paints the
@@ -579,7 +644,7 @@ reserves one only while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
-the grip and the row-actions button. The button opens the `rowMenu` overlay,
+the grip in its ordinal's slot and the row-actions button at the row's end. The button opens the `rowMenu` overlay,
 whose entries — Play now, Play next, Mark watched, Go to episode, Remove
 from queue, and Clear queue — carry their key hints; the menu paints the
 canvas's return glyph `⏎` where the core's hint chord is `Enter`, at paint
@@ -646,10 +711,16 @@ with the restart's own diagnostic and the quit choice returns the run's
 quit decision to the core.
 
 The footer line paints below the box between gap rows on the
-`queueFooterBand` fill. Its left group carries the `PREFIX` badge while
-prefix mode is armed, the autosave indicator, and the playlist pill; its
-right group carries the dirty indicator and the session marker; and a live
-toast paints inline at its centre in the severity colour.
+`queueFooterBand` fill. Its left group carries the autosave indicator
+(while save-on-consume is on for a saved playlist), the queue's source text
+with no leading icon, and the dirty mark beside the source it describes;
+its centre carries the armed `PREFIX` badge and a live toast inline in the
+severity colour; and its right group carries the shown queue's totals — the
+marked rows' total, named `Sel`, while rows are marked, beside the queue
+total, each with a `+` while its sum carries an unknown runtime. The filter
+narrows no total. The footer names no Player owner and paints no liveness
+dot: the shown queue's owner reads from the playback target in the panel's
+header.
 
 ## The Status bar in the footer line
 
@@ -659,8 +730,8 @@ separate status bar: `src/window/components/queue_footer.rs` paints both facts i
 line. The
 badge drops while a toast is live — the TUI's pill-drop rule — and the
 toast moves no layout, because the line is always painted and the toast
-only fills its centre span. The line reports no regions: the playlist pill
-paints but is no press target (the slice presents no playlists surface), and
+only fills its centre span. The line reports no regions: the source text
+paints but is no press target (the GUI presents no playlists surface), and
 a point anywhere on the line resolves to nothing. The spec permits the GUI to show toasts in a
 conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the line is lawful. While the Library panel shows, the
@@ -1203,9 +1274,9 @@ and Queue-filter steps, and the Library steps do not run
 With no Settings frame, the Library chain runs. The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
-   playback-target chooser, the confirmation modal, the daemon-lost recovery
-   dialog) or prefix mode is armed, the key goes to the core with the target
-   the pointer resolved. Both facts are in the frame. The Queue filter's text
+   playback-target chooser, the Queue chooser, the confirmation modal, the
+   daemon-lost recovery dialog) or prefix mode is armed, the key goes to the
+   core with the target the pointer resolved. Both facts are in the frame. The Queue filter's text
    entry is the core's too, so every key is the core's while it holds the
    keyboard, with the `Queue` target wherever the pointer is — the keys the
    filter does not consume still reach the Queue leaf.

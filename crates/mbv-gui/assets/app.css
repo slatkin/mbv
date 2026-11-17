@@ -144,7 +144,7 @@
 	--canvas-insertion: #83c092; /* the drag's insertion line */
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the sources' teal: a selected pill, a key hint, and the date hue */
-	--canvas-owner: #dbbc7f; /* the footer's owner marker */
+	--canvas-owner: #dbbc7f; /* the role-and-character hue: `--canvas-type-role` aliases it */
 	/* The Settings screen's values (`Settings.dc.html`, add-gui-settings-screen
 	   design D13): the success fill and border a Ready Service pill and a
 	   checked box paint, and the outline the destructive button paints. */
