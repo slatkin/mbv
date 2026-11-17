@@ -1,6 +1,6 @@
 //! The Settings screen's sidebar (`replace-tauri-with-blitz` task 8.3, the
 //! port of `SettingsSidebar`; add-gui-settings-screen design D11,
-//! D13's canvas `nav`): the fixed section list in the Queue column's place.
+//! D13's canvas `nav`): the fixed section list at the left window edge.
 //! It paints the frame's `sections` in order — a section whose every row the
 //! GUI hides never arrives — each with its Lucide icon and its name, the
 //! cursor the window content owns, and the open section's row in the accent

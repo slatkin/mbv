@@ -454,7 +454,8 @@ measurement `LayoutReport.container_size` carries to the core — so the painted
 list capacity, and the hit map follow one size.
 
 The `z` toggle (`GuiPanelToggles.collapsed`) wins over every size and paints
-the 72 px rail: a progress ring around the artwork, play/pause, next, the
+the 72 px rail at the window's right edge: a progress ring around the
+artwork, play/pause, next, the
 remaining time, and a control that expands the panel again. A measured
 height below 520 px paints the compact strip: the 96×54 still, the title,
 the parent line, play/pause, next, and a thin progress line. Its next-item
@@ -741,7 +742,8 @@ place of the hints.
 
 ## The Library panel
 
-The GUI paints a Library panel in a column beside the Queue panel
+The GUI paints a Library panel in the column at the left window edge,
+beside the Queue panel in the column at the right window edge
 (`src/window/components/library_panel.rs`). It follows the design canvas's Library artboard, not
 the TUI: the GUI does not keep parity with the TUI, and the TUI does not change
 (ADR 0036). The panel's interaction state lives in the window content, and the
@@ -1323,7 +1325,8 @@ Queue panel's state constants, and the core does not classify the size. Mini
 mounts only the Queue panel; a later tabbed Mini view can widen that (ADR
 0040). Narrow mounts both panels, and
 a picked item opens the Hero as an overlay over the list. Wide mounts both
-panels with the Hero beside the list. The Queue panel keeps its four states
+panels with the Hero beside the list — the list at the left edge of the
+Library panel, the Hero pane to its right. The Queue panel keeps its four states
 inside every arrangement, and a resize across a threshold moves no active
 row, pill selection, or picked item, because those live in the window
 content and the core.
@@ -1350,10 +1353,8 @@ needs none, because the Queue panel's own resize observer re-reports the
 regions a drag moved.
 
 While the Settings screen is open it replaces the two columns
-(add-gui-settings-screen design D11): the sidebar sits in the Queue column's
-place at the column's expanded width — the dragged or the default width,
-whatever the collapse toggle, because the 72 px rail cannot hold the section
-list — and paints no divider; the shown section's content takes the rest of
+(add-gui-settings-screen design D11): the sidebar sits at the left window
+edge and paints no divider; the shown section's content takes the rest of
 the window, and the status line closes the screen with the frame's `status`
 facts (the prefix-armed state and the live toast). Below the Mini threshold
 — `libraryArrangement` measured on the window width minus the sidebar's

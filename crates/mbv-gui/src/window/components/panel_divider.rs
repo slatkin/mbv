@@ -16,7 +16,7 @@
 //! callback, and the root's `pointermove`, `pointerup`, and `pointercancel`
 //! handlers drive it — exactly the events the `window` listeners took. The
 //! sized column sits on one side of the divider, so a drag right widens a
-//! right column and narrows a left one.
+//! column left of the divider and narrows one right of it.
 
 use dioxus_native::prelude::*;
 

@@ -394,7 +394,7 @@ pub fn App() -> Element {
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
     let arrangement = library_arrangement(container_size, widths.queue);
     // The Settings screen's own measure: its sidebar is the canvas's fixed
-    // 260 px in the Queue column's place, so the screen's Mini threshold is
+    // 260 px at the left window edge, so the screen's Mini threshold is
     // the window width minus that width, never the dragged Queue column's
     // (design D11; `App`'s
     // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
