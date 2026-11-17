@@ -175,7 +175,24 @@ impl App {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
-            self.gui_music_albums.insert(key, GuiGroupAlbums::Failed);
+            // The no-client failure lands through the same event a real fetch
+            // failure takes (design D5): the started fetch stays `Loading`
+            // until the event drains, so a build that starts it and the next
+            // collect's clean build hold the same store state — a synchronous
+            // `Failed` insert here would change the Library section's built
+            // content between collects with no mark, and the window would
+            // never see the change.
+            self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);
+            let tx = self.channels.lib_tx.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(LibEvent::GuiGroupAlbums(GuiGroupAlbumsEvent {
+                    lib_idx,
+                    group_id,
+                    result: Err(mbv_emby::EmbyError::resolve(
+                        "the Emby Service holds no client",
+                    )),
+                }));
+            });
             return;
         };
         self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);
