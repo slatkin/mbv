@@ -131,6 +131,12 @@ pub struct App {
     /// `local_view` (design D7): filled from `NamedQueueSnapshot` while the GUI
     /// Client shows a queue that rests.
     pub(in crate::app) shown_resting: Option<(mbv_queue::NamedQueueId, QueueView)>,
+    /// The `op` of the new-queue request the control sent and the Owner has
+    /// not answered yet (gui-named-queues design D8). The Owner answers it with
+    /// the new queue's own snapshot under this `op`, so the answer names the
+    /// queue that the control then shows with its name open for edit. `None`
+    /// while no request is in flight.
+    pub(in crate::app) pending_new_queue: Option<mbv_ctrl::QueueOpId>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,

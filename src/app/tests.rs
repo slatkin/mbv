@@ -30,6 +30,7 @@ mod library_route;
 mod library_viewport_reach_tests;
 mod lifecycle;
 mod music_grouping;
+mod named_queue_controls;
 mod named_queues;
 mod narrow_browse_migration;
 mod panel_focus;

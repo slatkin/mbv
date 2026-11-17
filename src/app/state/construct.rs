@@ -124,6 +124,7 @@ impl App {
             named_queues: crate::app::state::named_queues::NamedQueueList::default(),
             gui_shown_entry: None,
             shown_resting: None,
+            pending_new_queue: None,
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,

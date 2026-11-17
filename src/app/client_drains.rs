@@ -167,11 +167,27 @@ impl App {
             return HomeEventDrain::Client(lifecycle);
         }
         match event {
-            PlayerEvent::UnifiedQueueUpdated(snapshot)
-            | PlayerEvent::QueueOpResult {
+            PlayerEvent::UnifiedQueueUpdated(snapshot) => self.adopt_home_snapshot(&snapshot),
+            PlayerEvent::QueueOpResult {
+                op,
                 outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
-                ..
-            } => self.adopt_home_snapshot(&snapshot),
+            } => {
+                // The new-queue control's own answer is not a queue snapshot
+                // (design D8): it ends that request and opens the queue it
+                // names.
+                if self.ends_new_queue_request(op)
+                    && let Some(queue) = snapshot.queue
+                {
+                    self.open_new_queue_rename(queue);
+                } else {
+                    self.adopt_home_snapshot(&snapshot);
+                }
+            }
+            // A rejected answer the new-queue control is waiting for ends the
+            // wait; anything else a rejection answers already reported itself.
+            PlayerEvent::QueueOpResult { op, .. } => {
+                self.ends_new_queue_request(op);
+            }
             PlayerEvent::RemoteDisconnected(_) => {
                 self.suspended_local = None;
                 self.drop_staged_queue_transfer_on_teardown();

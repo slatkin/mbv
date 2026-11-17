@@ -47,6 +47,18 @@ pub enum PlaybackRequest {
     /// The canvas queue header's filter control (row 6.5): the `/` chord's
     /// text-entry focus, pressed on the header control. GUI-painted only.
     ActivateQueueFilter,
+    /// The canvas queue header's chooser control (design D8 of
+    /// `gui-named-queues`): the `t` chord's open and close, pressed on the
+    /// header control. GUI-painted only.
+    QueueChooserToggle,
+    /// The canvas queue header's new-queue control (design D8 of
+    /// `gui-named-queues`): the `Ctrl+T` chord's request, pressed on the header
+    /// control. GUI-painted only.
+    NewQueue,
+    /// The canvas queue header's close control (design D8 of `gui-named-queues`):
+    /// the `Ctrl+W` chord's request, pressed on the header control.
+    /// GUI-painted only.
+    CloseQueue,
 }
 
 /// Which track chip a popover belongs to (add-tauri-gui-client row 6.2).

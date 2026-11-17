@@ -12,18 +12,18 @@ use mbv_queue::NamedQueueId;
 use mbv_surfaces::queue::QueueCursorUpdate;
 
 /// The stub Owner's current queue.
-fn current() -> NamedQueueId {
+pub(crate) fn current() -> NamedQueueId {
     NamedQueueId::from_raw(1)
 }
 
 /// The stub Owner's resting queue.
-fn resting() -> NamedQueueId {
+pub(crate) fn resting() -> NamedQueueId {
     NamedQueueId::from_raw(2)
 }
 
 /// The queue list the stub Owner publishes: `current()` holds three slots, the
 /// resting queue holds one.
-fn named_queue_list() -> Vec<NamedQueueEntry> {
+pub(crate) fn named_queue_list() -> Vec<NamedQueueEntry> {
     vec![
         NamedQueueEntry {
             id: current(),
@@ -39,7 +39,7 @@ fn named_queue_list() -> Vec<NamedQueueEntry> {
 }
 
 /// One resting queue's snapshot: `items` as its slots, naming `resting()`.
-fn resting_snapshot(items: &[EmbyItem]) -> UnifiedQueueStateData {
+pub(crate) fn resting_snapshot(items: &[EmbyItem]) -> UnifiedQueueStateData {
     UnifiedQueueStateData {
         queue: Some(resting()),
         start_slot: None,
@@ -137,7 +137,7 @@ const PEER_POSITION: i64 = 42;
 /// [`PEER_POSITION`]: each link's commands land on its own channel. The
 /// connect shows the peer entry (design D7), as the playback-target chooser
 /// does.
-fn gui_app_with_peer() -> (
+pub(crate) fn gui_app_with_peer() -> (
     App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
@@ -272,7 +272,7 @@ fn queue_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueState
 /// with the Named-queue list adopted and its constructor traffic drained.
 /// Every named-queue edit is an answered op, so a test answers the Client's
 /// own op through [`inject_local_events`].
-fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+pub(crate) fn gui_app_with_named_queues() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(3), 0);
     let config = crate::config::Config {
@@ -322,7 +322,7 @@ fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
 }
 
 /// The answer to the Client's own queue op `op`, carrying `data`.
-fn op_answer(op: u64, data: UnifiedQueueStateData) -> PlayerEvent {
+pub(crate) fn op_answer(op: u64, data: UnifiedQueueStateData) -> PlayerEvent {
     PlayerEvent::QueueOpResult {
         op: mbv_ctrl::QueueOpId(op),
         outcome: mbv_ctrl::QueueOpOutcome::Applied(Box::new(data)),

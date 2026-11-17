@@ -56,7 +56,7 @@ impl App {
             PlayerEvent::UnifiedQueueUpdated(unified) => {
                 flow_after(self.handle_unified_queue_updated(&unified))
             }
-            PlayerEvent::QueueOpResult { outcome, .. } => self.handle_queue_op_result(outcome),
+            PlayerEvent::QueueOpResult { op, outcome } => self.handle_queue_op_result(op, outcome),
             ev => self.handle_playback_event(ev),
         }
     }
@@ -64,13 +64,28 @@ impl App {
     /// Handle a late or unmatched `PlayerEvent::QueueOpResult` (row 5.1): the
     /// pump adopts the matching answer inline, so anything arriving here missed
     /// its wait and is adopted like any other owner snapshot. A late
-    /// `Rejected` reports nothing more -- the timeout already flashed.
-    fn handle_queue_op_result(&mut self, outcome: mbv_ctrl::QueueOpOutcome) -> PlayerEventFlow {
+    /// `Rejected` reports nothing more -- the timeout already flashed. The
+    /// answer to the new-queue control's own request is not a queue snapshot
+    /// (design D8): it ends that request and opens the queue it names.
+    fn handle_queue_op_result(
+        &mut self,
+        op: mbv_ctrl::QueueOpId,
+        outcome: mbv_ctrl::QueueOpOutcome,
+    ) -> PlayerEventFlow {
         match outcome {
             mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
+                if self.ends_new_queue_request(op)
+                    && let Some(queue) = snapshot.queue
+                {
+                    self.open_new_queue_rename(queue);
+                    return PlayerEventFlow::Proceed;
+                }
                 flow_after(self.handle_unified_queue_updated(&snapshot))
             }
-            mbv_ctrl::QueueOpOutcome::Rejected(_) => PlayerEventFlow::Proceed,
+            mbv_ctrl::QueueOpOutcome::Rejected(_) => {
+                self.ends_new_queue_request(op);
+                PlayerEventFlow::Proceed
+            }
         }
     }
 
@@ -498,6 +513,15 @@ impl App {
         &mut self,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) {
+        // A snapshot that names a resting Named queue is that queue's own
+        // state here too (gui-named-queues design D3, D7): the answer to an
+        // edit of a resting queue arrives on the home link while a peer holds
+        // the active one, and it fills the shown resting view rather than the
+        // current queue's.
+        if let Some(queue) = unified.queue {
+            self.adopt_named_queue_snapshot(queue, unified);
+            return;
+        }
         self.local_view.adopt(
             unified,
             crate::app::state::queue_view::AdoptCause::Background {
@@ -544,6 +568,9 @@ impl App {
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     pub(in crate::app) fn raise_daemon_lost_modal(&mut self) {
+        // A new-queue request the lost link owed an answer will never receive
+        // it, so the control works again once an Owner is back.
+        self.pending_new_queue = None;
         // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
         // arm calls `dismiss_blocking_modals`, which now also unmounts the
         // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,

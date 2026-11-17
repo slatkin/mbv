@@ -1,5 +1,6 @@
 use super::Model;
 use super::{PanelFocus, palette};
+use crate::app::dispatch::action::{AppCommand, PanelIntent};
 use mbv_components::PlaybackProjection;
 use mbv_ui_msg::PlaybackRequest;
 
@@ -36,7 +37,6 @@ impl crate::app::App {
     /// shell and the GUI Client both apply it here, so each transport control
     /// does one thing in both Clients.
     pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
-        use crate::app::dispatch::action::AppCommand;
         use crate::app::dispatch::action::PlaybackIntent;
         match request {
             PlaybackRequest::TogglePlayPause => {
@@ -103,7 +103,23 @@ impl crate::app::App {
             // effect the `/` chord dispatches, so the header control and the
             // chord run one path.
             PlaybackRequest::ActivateQueueFilter => self.activate_queue_filter(),
+            // The canvas queue header's three queue controls (design D8 of
+            // `gui-named-queues`): each dispatches the same panel intent its
+            // GUI-only chord resolves to, so the control's press and the chord
+            // run one path. The TUI paints no such control; these arms are here
+            // for the shared dispatch's exhaustiveness.
+            PlaybackRequest::QueueChooserToggle => {
+                self.dispatch_panel(PanelIntent::ToggleQueueChooser);
+            }
+            PlaybackRequest::NewQueue => self.dispatch_panel(PanelIntent::RequestNewQueue),
+            PlaybackRequest::CloseQueue => self.dispatch_panel(PanelIntent::RequestCloseQueue),
         }
+    }
+
+    /// Dispatch one panel intent from a GUI header control's press: the same
+    /// dispatch the intent's own chord takes.
+    fn dispatch_panel(&mut self, intent: PanelIntent) {
+        let _ = self.dispatch(&crate::app::dispatch::action::AppCommand::Panel(intent));
     }
 
     fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::AppCommand) {

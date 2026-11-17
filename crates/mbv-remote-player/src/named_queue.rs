@@ -12,6 +12,47 @@ use crate::RemotePlayer;
 use crate::error::RemotePlayerError;
 
 impl RemotePlayer {
+    /// Ask for one new Named queue (design D3, D8 of `gui-named-queues`): the
+    /// new-queue control. The owner names it, publishes the queue list, and
+    /// answers the request's `op` with the new queue's own snapshot, so the
+    /// returned `op` is what identifies the queue the control must show.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RemotePlayerError::queue_operation`] when the command could
+    /// not reach the owner, because the connection is gone.
+    pub fn send_named_queue_create(&self) -> Result<QueueOpId, RemotePlayerError> {
+        let op = QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed));
+        if !self.send_ctrl_cmd(CtrlCmd::NamedQueueCreate { op }) {
+            return Err(RemotePlayerError::queue_operation(
+                "could not send the named queue create to the Player owner",
+            ));
+        }
+        Ok(op)
+    }
+
+    /// Close one Named queue (design D3, D8 of `gui-named-queues`): the close
+    /// control. The owner refuses its last queue, deletes a resting queue
+    /// without touching playback, and stops playback when it closes the
+    /// current queue, so the `op` correlates the answer with this request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RemotePlayerError::queue_operation`] when the command could
+    /// not reach the owner, because the connection is gone.
+    pub fn send_named_queue_close(
+        &self,
+        queue: NamedQueueId,
+    ) -> Result<QueueOpId, RemotePlayerError> {
+        let op = QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed));
+        if !self.send_ctrl_cmd(CtrlCmd::NamedQueueClose { queue, op }) {
+            return Err(RemotePlayerError::queue_operation(
+                "could not send the named queue close to the Player owner",
+            ));
+        }
+        Ok(op)
+    }
+
     /// Rename one Named queue (design D3, D8 of `gui-named-queues`): the Queue
     /// chooser's confirmed rename draft. The `op` is minted from the same
     /// counter the queue operations use, so the owner's answer correlates with

@@ -51,6 +51,17 @@ impl NamedQueueList {
         &self.entries
     }
 
+    /// The name the Owner last published for `queue`, or `None` when the list
+    /// does not hold it: the name the close prompt shows and the text a
+    /// new queue's rename draft opens with.
+    #[must_use]
+    pub(in crate::app) fn name_of(&self, queue: NamedQueueId) -> Option<String> {
+        self.entries
+            .iter()
+            .find(|entry| entry.id == queue)
+            .map(|entry| entry.name.clone())
+    }
+
     /// Whether the Owner still holds `queue`, whichever of its queues is
     /// current. A list the Owner published before the queue existed answers
     /// false here, as it does for a queue the Owner closed.

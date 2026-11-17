@@ -64,6 +64,14 @@ impl App {
             ConfirmAction::HandOffPlaybackToSession { device_id, name } => {
                 self.confirm_hand_off_playback_to_session(&device_id, &name, key);
             }
+            // The close control's prompt (gui-named-queues design D8): Enter
+            // sends the close to the local Owner, and any other answer — Esc
+            // above all — changes nothing.
+            ConfirmAction::CloseNamedQueue(queue) => {
+                if key.code == Key::Enter {
+                    self.send_named_queue_close(queue);
+                }
+            }
         }
         false
     }

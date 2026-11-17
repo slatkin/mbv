@@ -63,6 +63,13 @@ pub enum ConfirmAction {
         device_id: String,
         name: String,
     },
+    /// The GUI Client's close control on a local Named queue that plays
+    /// (`gui-named-queues` spec `gui-queue-chooser` "The close control closes
+    /// the shown entry"): only the playing current queue asks, because closing
+    /// it stops playback. Confirming sends the queue's `NamedQueueClose`;
+    /// cancelling changes nothing. The queue is held by identity, so a list
+    /// change while the prompt is up cannot redirect the close.
+    CloseNamedQueue(mbv_queue::NamedQueueId),
 }
 
 /// How a modal button reads: the affirmative choice in the accent green, the

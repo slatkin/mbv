@@ -17,6 +17,7 @@ mod overlay;
 mod popover;
 mod projection;
 mod queue_chooser;
+mod queue_controls;
 mod row_menu;
 mod target;
 

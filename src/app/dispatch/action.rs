@@ -160,14 +160,12 @@ pub enum PanelIntent {
     /// Client has no Named queue to choose between.
     ToggleQueueChooser,
     /// The new-queue control (design D8): the GUI-only `Ctrl+T` chord and the
-    /// header's new-queue press. Its behaviour — the `NamedQueueCreate`
-    /// request and the rename draft the Owner's answer opens — lands with row
-    /// 7.3, so the intent reaches the dispatch seam and runs nothing yet.
+    /// header's new-queue press, which run one core path: ask the local Owner
+    /// for a new Named queue and open the queue its answer names for rename.
     RequestNewQueue,
     /// The close control (design D8): the GUI-only `Ctrl+W` chord and the
-    /// header's close press. Its behaviour — closing the shown entry, with the
-    /// confirmation only the playing current queue asks for — lands with row
-    /// 7.4, so the intent reaches the dispatch seam and runs nothing yet.
+    /// header's close press, which run one core path: close the shown entry,
+    /// with the confirmation only the playing current queue asks for.
     RequestCloseQueue,
     /// The playback-target chooser (add-tauri-gui-client row 6.4): the GUI-
     /// only `r` chord's open/close of the Client-core overlay the header's
@@ -408,16 +406,15 @@ impl App {
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
             PanelIntent::ToggleQueueChooser => self.toggle_gui_queue_chooser(),
             PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
-            // The new-queue and close controls land with rows 7.3 and 7.4: the
-            // GUI-only chords and the header presses reach this seam, which
-            // runs nothing yet. The row move's own seam is empty for the same
-            // reason it always was: the GUI router delivers it to the focused
-            // Queue leaf (`input/gui.rs`), which addresses the selection its
-            // surface paints, and the App holds no cursor-free selection to
+            // The new-queue and close controls (design D8): the header's presses
+            // and their GUI-only chords reach the one core path each. The row
+            // move's own seam is empty because the GUI router delivers it to the
+            // focused Queue leaf (`input/gui.rs`), which addresses the selection
+            // its surface paints, and the App holds no cursor-free selection to
             // move here.
-            PanelIntent::RequestNewQueue
-            | PanelIntent::RequestCloseQueue
-            | PanelIntent::MoveQueueRow(_) => {}
+            PanelIntent::RequestNewQueue => self.request_new_gui_queue(),
+            PanelIntent::RequestCloseQueue => self.request_close_shown_queue(),
+            PanelIntent::MoveQueueRow(_) => {}
         }
     }
 
