@@ -6,12 +6,12 @@ use super::{
     reset_slot_jumps, submit_queue_slots_for_replace, twitch_queue_transport_rejection,
 };
 use crate::AudiobookshelfOwnerContext;
-use crate::core::NamedQueueTarget;
 use crate::ctrl::CtrlClientId;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
 use mbv_queue::NamedQueueId;
 use std::collections::HashSet;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -208,13 +208,12 @@ pub(super) fn handle_queue_source_update(
 ) {
     // A resting queue keeps its own source and has no lineage to check against
     // the current queue's (gui-named-queues design D1, D5).
-    match named_queue::edit_target(ctx, named) {
-        Some(NamedQueueTarget::Current) => {}
-        Some(NamedQueueTarget::Resting(index)) => {
-            named_queue::set_source(ctx, index, new_source);
-            return;
-        }
-        None => return,
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::set_source(ctx, index, new_source);
+        return;
     }
     let except_op_client = ctx.except_op_client();
     let supports_operation = ctx
@@ -367,10 +366,8 @@ pub(super) fn handle_queue_replace(
     // A replace that names a resting queue swaps that queue in and installs the
     // command's slots in place of its own (gui-named-queues design D2), so the
     // replace never lands on a queue the Client did not name.
-    let resting = match named_queue::edit_target(ctx, named) {
-        Some(NamedQueueTarget::Current) => None,
-        Some(NamedQueueTarget::Resting(index)) => Some(index),
-        None => return,
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
     };
     let has_emby = ctx.has_emby();
     let (slots, next_cursor) =
@@ -655,15 +652,14 @@ pub(super) fn handle_queue_append(
     // An append to a resting queue is admitted on the same terms as one to the
     // current queue and lands in the store, with no output projection
     // (gui-named-queues design D5).
-    match named_queue::edit_target(ctx, named) {
-        Some(NamedQueueTarget::Current) => {}
-        Some(NamedQueueTarget::Resting(index)) => {
-            if let Some(items) = admit_append_items(ctx, items, lineage) {
-                named_queue::append(ctx, index, items, before);
-            }
-            return;
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        if let Some(items) = admit_append_items(ctx, items, lineage) {
+            named_queue::append(ctx, index, items, before);
         }
-        None => return,
+        return;
     }
     let except_op_client = ctx.except_op_client();
     if items.is_empty() {

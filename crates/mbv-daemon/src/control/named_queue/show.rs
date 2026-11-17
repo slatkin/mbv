@@ -13,9 +13,6 @@ use super::{
     target, unified_queue_state_for_peer,
 };
 
-/// The reason a show names a queue the Owner no longer holds.
-const UNKNOWN_SHOW: &str = "named queue not found; show skipped";
-
 /// `CtrlCmd::NamedQueueShow`: subscribe one connection to a Named queue's
 /// snapshots (design D3). The queue's whole state is sent at once and again
 /// after each change of it, and a connection shows one Named queue at a time,
@@ -23,7 +20,7 @@ const UNKNOWN_SHOW: &str = "named queue not found; show skipped";
 /// resting view: the connection drops its subscription and receives the
 /// current queue's own snapshot, which is how that queue is read.
 pub(crate) fn handle_show(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
-    let Some(target) = target(ctx, Some(queue), UNKNOWN_SHOW) else {
+    let Some(target) = target(ctx, Some(queue), "show") else {
         return;
     };
     match target {

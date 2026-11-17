@@ -23,14 +23,18 @@ use mbv_queue::{
     NamedQueueId, QueueItem, QueueMutationResult, QueueSource, RemoveSlotResult,
     StartSlotObservation,
 };
+use std::ops::ControlFlow;
 
 mod show;
 pub(super) use show::handle_show;
 use show::{drop_current_shows, drop_shows, publish_snapshot, resting_snapshot};
 
-/// The reason an edit names a queue the Owner no longer holds (design D5, spec
-/// `named-queues` "Queue edits name their queue").
-const UNKNOWN_QUEUE: &str = "named queue not found; edit skipped";
+/// The reason a command or edit names a queue the Owner no longer holds
+/// (design D5, spec `named-queues` "Queue edits name their queue"). One site
+/// builds the text for every verb.
+fn unknown_queue(verb: &str) -> String {
+    format!("named queue not found; {verb} skipped")
+}
 
 /// The reason a play names a slot its queue does not hold.
 const MISSING_SLOT: &str = "slot not found; play skipped";
@@ -48,25 +52,33 @@ const EMPTY_NAME: &str = "queue name is empty; rename skipped";
 /// `named-queues` "The last queue does not close").
 const LAST_QUEUE: &str = "the last named queue does not close";
 
-/// The queue one addressed edit reaches, or `None` after the Owner has
-/// rejected the edit because it no longer holds the queue it names (design D5).
+/// Routes one addressed queue edit to the queue it names (design D5):
+/// [`ControlFlow::Break`] after the Owner has rejected the edit because it no
+/// longer holds the queue it names, `Continue(Some(index))` when the edit
+/// reaches the resting queue at `index`, and `Continue(None)` when it reaches
+/// the current queue and the caller's own path applies.
 pub(super) fn edit_target(
-    ctx: &CtrlContext<'_>,
+    ctx: &mut CtrlContext<'_>,
     named: Option<NamedQueueId>,
-) -> Option<NamedQueueTarget> {
-    target(ctx, named, UNKNOWN_QUEUE)
+) -> ControlFlow<(), Option<usize>> {
+    match target(ctx, named, "edit") {
+        Some(NamedQueueTarget::Current) => ControlFlow::Continue(None),
+        Some(NamedQueueTarget::Resting(index)) => ControlFlow::Continue(Some(index)),
+        None => ControlFlow::Break(()),
+    }
 }
 
 /// The queue one addressed command reaches, or `None` after the Owner has
-/// rejected it because it no longer holds that queue (design D5).
+/// rejected it because it no longer holds that queue (design D5). `verb` names
+/// the command in the rejection text.
 fn target(
     ctx: &CtrlContext<'_>,
     named: Option<NamedQueueId>,
-    skipped: &str,
+    verb: &str,
 ) -> Option<NamedQueueTarget> {
     let target = ctx.owner.named_queues.target(named);
     if target.is_none() {
-        reject(ctx, skipped);
+        reject(ctx, &unknown_queue(verb));
     }
     target
 }
@@ -106,7 +118,7 @@ pub(super) fn apply_edit(
     match result {
         Some(Ok(())) => finish_edit(ctx, index),
         Some(Err(reason)) => reject(ctx, &reason),
-        None => reject(ctx, UNKNOWN_QUEUE),
+        None => reject(ctx, &unknown_queue("edit")),
     }
 }
 
@@ -147,20 +159,37 @@ pub(super) fn append(
     });
 }
 
+/// Removes one slot of a resting queue and notes the start-slot removal it
+/// caused (design D4, D5). Returns `false` when the queue holds no such slot.
+fn remove_one(resting: &mut RestingNamedQueue, slot_id: QueueSlotId) -> bool {
+    let start_slot_removed_at = start_slot_position(&resting.queue, resting.start_slot, slot_id);
+    let removed = match resting.queue.remove_slot(slot_id) {
+        RemoveSlotResult::Removed(_) => true,
+        // A resting queue has no active slot, so this arm is not
+        // reachable — but the slot is still removed rather than
+        // silently skipped.
+        RemoveSlotResult::RequiresActiveConfirmation(slot_id) => {
+            resting.queue.remove_active_slot_confirmed(slot_id);
+            true
+        }
+        RemoveSlotResult::NotFound => false,
+    };
+    if let Some(position) = start_slot_removed_at.filter(|_| removed) {
+        resting.note_start_slot(StartSlotObservation::StartSlotRemoved { index: position });
+    }
+    removed
+}
+
 /// Removes one slot of a resting queue (design D5), rejecting a stale slot
 /// identity exactly as the current queue's removal does.
 pub(super) fn remove_slot(ctx: &mut CtrlContext<'_>, index: usize, slot_id: u64) {
-    let held = ctx
-        .owner
-        .named_queues
-        .resting
-        .get(index)
-        .is_some_and(|resting| resting.queue.slot(QueueSlotId::from_raw(slot_id)).is_some());
-    if held {
-        remove_slots(ctx, index, vec![slot_id]);
-    } else {
-        reject(ctx, "slot not found; remove skipped");
-    }
+    apply_edit(ctx, index, |resting| {
+        if remove_one(resting, QueueSlotId::from_raw(slot_id)) {
+            Ok(())
+        } else {
+            Err("slot not found; remove skipped".to_string())
+        }
+    });
 }
 
 /// Removes every listed slot from a resting queue as one edit (design D5), so a
@@ -170,23 +199,7 @@ pub(super) fn remove_slot(ctx: &mut CtrlContext<'_>, index: usize, slot_id: u64)
 pub(super) fn remove_slots(ctx: &mut CtrlContext<'_>, index: usize, slot_ids: Vec<u64>) {
     apply_edit(ctx, index, |resting| {
         for raw in slot_ids {
-            let slot_id = QueueSlotId::from_raw(raw);
-            let start_slot_removed_at =
-                start_slot_position(&resting.queue, resting.start_slot, slot_id);
-            let removed = match resting.queue.remove_slot(slot_id) {
-                RemoveSlotResult::Removed(_) => true,
-                // A resting queue has no active slot, so this arm is not
-                // reachable — but the slot is still removed rather than
-                // silently skipped.
-                RemoveSlotResult::RequiresActiveConfirmation(slot_id) => {
-                    resting.queue.remove_active_slot_confirmed(slot_id);
-                    true
-                }
-                RemoveSlotResult::NotFound => false,
-            };
-            if let Some(position) = start_slot_removed_at.filter(|_| removed) {
-                resting.note_start_slot(StartSlotObservation::StartSlotRemoved { index: position });
-            }
+            remove_one(resting, QueueSlotId::from_raw(raw));
         }
         Ok(())
     });
@@ -213,7 +226,7 @@ pub(super) fn shuffle(ctx: &mut CtrlContext<'_>, index: usize) {
         named_queues, rng, ..
     } = &mut *ctx.owner;
     let Some(resting) = named_queues.resting.get_mut(index) else {
-        reject(ctx, UNKNOWN_QUEUE);
+        reject(ctx, &unknown_queue("edit"));
         return;
     };
     let order = resting.queue.shuffled_slot_order(rng, false);
@@ -236,15 +249,24 @@ pub(super) fn shuffle(ctx: &mut CtrlContext<'_>, index: usize) {
 /// them, exactly as a clear of the current queue does (design D4).
 pub(super) fn clear(ctx: &mut CtrlContext<'_>, index: usize) {
     apply_edit(ctx, index, |resting| {
-        let start_slot_removed_at = resting
-            .start_slot
-            .and_then(|slot_id| resting.queue.slot_index(slot_id));
-        resting.queue.clear();
+        let start_slot_removed_at = clear_noting_start_slot(&mut resting.queue, resting.start_slot);
         if let Some(position) = start_slot_removed_at {
             resting.note_start_slot(StartSlotObservation::StartSlotRemoved { index: position });
         }
         Ok(())
     });
+}
+
+/// Clears `queue` after reading where its start slot sits, returning the
+/// position the caller's start-slot note carries (design D4). Shared by a
+/// resting queue's clear and the current queue's clear.
+pub(super) fn clear_noting_start_slot(
+    queue: &mut PlaybackQueue,
+    start_slot: Option<QueueSlotId>,
+) -> Option<usize> {
+    let start_slot_removed_at = start_slot.and_then(|slot_id| queue.slot_index(slot_id));
+    queue.clear();
+    start_slot_removed_at
 }
 
 /// Updates only the source of a resting queue (design D5).
@@ -263,7 +285,7 @@ pub(super) fn handle_create(ctx: &mut CtrlContext<'_>) {
     let mint = ctx.owner.core.queue.revision_mint();
     let index = ctx.owner.named_queues.push_new_queue(mint);
     broadcast_list(ctx);
-    if let Some((id, data)) = resting_snapshot(ctx, index) {
+    if let Some((id, data)) = snapshot_of(ctx, NamedQueueTarget::Resting(index)) {
         answer(ctx, id, data);
     }
     persist(ctx);
@@ -279,26 +301,21 @@ pub(super) fn handle_rename(ctx: &mut CtrlContext<'_>, queue: NamedQueueId, name
         reject(ctx, EMPTY_NAME);
         return;
     }
-    let Some(target) = target(ctx, Some(queue), "named queue not found; rename skipped") else {
+    let Some(target) = target(ctx, Some(queue), "rename") else {
         return;
     };
+    let name = name.to_string();
     match target {
-        NamedQueueTarget::Current => {
-            ctx.owner.named_queues.current_name = name.to_string();
-            broadcast_list(ctx);
-            if let Some((id, data)) = current_snapshot(ctx) {
-                answer(ctx, id, data);
-            }
-        }
+        NamedQueueTarget::Current => ctx.owner.named_queues.current_name = name,
         NamedQueueTarget::Resting(index) => {
             if let Some(resting) = ctx.owner.named_queues.resting.get_mut(index) {
-                resting.name = name.to_string();
-            }
-            broadcast_list(ctx);
-            if let Some((id, data)) = resting_snapshot(ctx, index) {
-                answer(ctx, id, data);
+                resting.name = name;
             }
         }
+    }
+    broadcast_list(ctx);
+    if let Some((id, data)) = snapshot_of(ctx, target) {
+        answer(ctx, id, data);
     }
     persist(ctx);
 }
@@ -309,7 +326,7 @@ pub(super) fn handle_rename(ctx: &mut CtrlContext<'_>, queue: NamedQueueId, name
 /// queue stops playback, deletes it, and makes the first remaining queue in
 /// queue order current without playing it.
 pub(super) fn handle_close(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
-    let Some(target) = target(ctx, Some(queue), "named queue not found; close skipped") else {
+    let Some(target) = target(ctx, Some(queue), "close") else {
         return;
     };
     if ctx.owner.named_queues.queue_count() <= 1 {
@@ -332,7 +349,7 @@ pub(super) fn handle_close(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
         }
     }
     broadcast_list(ctx);
-    if let Some((id, data)) = current_snapshot(ctx) {
+    if let Some((id, data)) = snapshot_of(ctx, NamedQueueTarget::Current) {
         answer(ctx, id, data);
     }
     persist(ctx);
@@ -343,7 +360,7 @@ pub(super) fn handle_close(ctx: &mut CtrlContext<'_>, queue: NamedQueueId) {
 /// queue starts it in place; naming a resting queue swaps it in first (design
 /// D2). A request to play an empty queue changes nothing.
 pub(super) fn handle_play(ctx: &mut CtrlContext<'_>, queue: NamedQueueId, slot: Option<u64>) {
-    let Some(target) = edit_target(ctx, Some(queue)) else {
+    let Some(target) = target(ctx, Some(queue), "edit") else {
         return;
     };
     match target {
@@ -444,7 +461,7 @@ pub(super) fn play_resting(ctx: &mut CtrlContext<'_>, index: usize, start: Queue
     };
     let except_op_client = ctx.except_op_client();
     let Some(taken) = swap_in(ctx, index) else {
-        reject(ctx, UNKNOWN_QUEUE);
+        reject(ctx, &unknown_queue("edit"));
         return;
     };
     let RestingNamedQueue { queue, source, .. } = taken;
@@ -461,7 +478,7 @@ pub(super) fn replace_with_resting(ctx: &mut CtrlContext<'_>, index: usize) {
     // The command's items replace the taken queue's slots, so only its identity
     // and name are used: they are the current queue's from here on.
     if swap_in(ctx, index).is_none() {
-        reject(ctx, UNKNOWN_QUEUE);
+        reject(ctx, &unknown_queue("edit"));
     }
 }
 
@@ -609,6 +626,19 @@ fn answer(ctx: &CtrlContext<'_>, queue: NamedQueueId, data: UnifiedQueueStateDat
             },
         ),
         None => send_to(ctx.reply_tx, &CtrlEvent::NamedQueueSnapshot { queue, data }),
+    }
+}
+
+/// The snapshot the addressed queue's own answer carries (design D3, D5): the
+/// current queue's for [`NamedQueueTarget::Current`], the resting queue's for
+/// [`NamedQueueTarget::Resting`].
+fn snapshot_of(
+    ctx: &CtrlContext<'_>,
+    target: NamedQueueTarget,
+) -> Option<(NamedQueueId, UnifiedQueueStateData)> {
+    match target {
+        NamedQueueTarget::Current => current_snapshot(ctx),
+        NamedQueueTarget::Resting(index) => resting_snapshot(ctx, index),
     }
 }
 
