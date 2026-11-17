@@ -54,7 +54,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`,
+- [x] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo nextest run -p mbv-gui`, and `openspec validate gui-swap-queue-and-library-sides --strict`.
   Verify: all pass.
 
