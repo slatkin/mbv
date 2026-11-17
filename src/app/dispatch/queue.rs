@@ -8,6 +8,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_ui_model::ui_util::is_playable;
 use mbv_ui_msg::{QueueMove, QueueRequest};
+use std::cmp::Ordering;
 
 pub(in crate::app) use self::queue_op::{QUEUE_OP_ANSWER_BOUND, QueueOpEdit};
 
@@ -233,30 +234,43 @@ impl App {
     /// request path a drag or a `Shift+Arrow` move does. A playhead-less
     /// queue has no next position, and the playing row and the row already
     /// next to it are no-ops. A resting queue the GUI shows is playhead-less
-    /// whatever the playing queue does: the playing queue's index names none
-    /// of its rows (design D7, D9 of `gui-named-queues`).
+    /// whatever the playing queue does — the playing queue's index names none
+    /// of its rows — so its start slot stands where a playhead stands, and the
+    /// row lands directly after it (design D7, D9 of `gui-named-queues`).
     pub(in crate::app) fn play_queue_item_next(&mut self, index: usize) {
-        if self.shows_resting_local_queue() {
-            return;
-        }
         let link = self.playing_queue_link();
         let len = self.displayed_queue().total_queue_len();
-        let active = self
-            .displayed_playback_state()
-            .active_idx
-            .filter(|active| *active < len);
-        let Some(active) = active else { return };
-        if index >= len || index == active {
+        if index >= len {
             return;
         }
-        // The owner applies `to_index` as the insert position after the
-        // removal: a row before the playhead lands right after the shifted
-        // playhead, a row after it right after the unshifted one.
-        let to = if index < active { active } else { active + 1 };
-        if index == to {
+        let Some(to) = self.play_next_position(index, len) else {
             return;
-        }
+        };
         self.move_queue_item_to(link, index, to);
+    }
+
+    /// Where a "Play next" move of the row at `index` lands in the shown queue
+    /// (add-tauri-gui-client row 6.2): directly after the playhead, and in a
+    /// resting queue the GUI shows, directly after its start slot — that
+    /// queue's own analogue of a playhead, so the move reaches the queue the
+    /// panel shows. A resting queue with no start slot plays from its first
+    /// row, so the row lands first. `None` when the shown queue has nothing to
+    /// play next after (no playhead, or a resting queue with no rows), or the
+    /// row already sits in that place.
+    fn play_next_position(&self, index: usize, len: usize) -> Option<usize> {
+        let to = if self.shows_resting_local_queue() {
+            match self.displayed_queue().start_index() {
+                Some(start) => position_after(start, index)?,
+                None => 0,
+            }
+        } else {
+            let playhead = self
+                .displayed_playback_state()
+                .active_idx
+                .filter(|playhead| *playhead < len)?;
+            position_after(playhead, index)?
+        };
+        (to != index).then_some(to)
     }
 
     /// Moves the item at `from` by `delta` within the displayed queue's
@@ -560,5 +574,18 @@ impl App {
         self.set_panel_focus(PanelFocus::Queue);
         self.mark_queue_cursor_user_active();
         Some(index)
+    }
+}
+
+/// The position a moved row lands at so it sits directly after `anchor`: the
+/// owner applies the move as a removal followed by an insert, so a row that
+/// stood before the anchor lands on the anchor's own index — the anchor shifts
+/// down by one — and one after it lands one past. `None` when the row is the
+/// anchor and has nowhere to go.
+fn position_after(anchor: usize, index: usize) -> Option<usize> {
+    match index.cmp(&anchor) {
+        Ordering::Less => Some(anchor),
+        Ordering::Greater => Some(anchor + 1),
+        Ordering::Equal => None,
     }
 }

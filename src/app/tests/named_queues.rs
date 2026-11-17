@@ -10,6 +10,7 @@ use crate::app::tests::route_state::stub_endpoint;
 use mbv_ctrl::{NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_surfaces::queue::QueueCursorUpdate;
+use rstest::rstest;
 
 /// The stub Owner's current queue.
 pub(crate) fn current() -> NamedQueueId {
@@ -577,11 +578,14 @@ fn a_closed_shown_queue_returns_to_the_current_queue() {
     );
 }
 
-/// One resting queue's snapshot: its start slot at `start_index` and no
-/// playhead, because a resting queue holds no run (design D4, D7).
-fn resting_state_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueStateData {
-    let mut state = queue_with_start(items, start_index);
+/// One resting queue's snapshot: its start slot at `start_index` — `None` for a
+/// queue without one — and no playhead, because a resting queue holds no run
+/// (design D4, D7).
+fn resting_state(items: &[EmbyItem], start_index: Option<usize>) -> UnifiedQueueStateData {
+    let mut state = emby_unified_state(items, 0);
     state.active_slot = None;
+    state.start_slot =
+        start_index.and_then(|index| state.slots.get(index).map(|slot| slot.slot_id));
     state
 }
 
@@ -593,7 +597,7 @@ fn resting_state_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQu
 fn a_resting_queue_never_marks_the_playing_queue_s_index() {
     let (mut app, _cmd_rx) = gui_app_with_named_queues();
     app.show_named_queue(resting());
-    app.adopt_named_queue_snapshot(resting(), &resting_state_with_start(&make_items(3), 2));
+    app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), Some(2)));
 
     let playback = app.displayed_queue_playback_state();
     assert!(
@@ -642,20 +646,47 @@ fn a_peer_queue_marks_its_playing_row() {
     assert!(start.playing, "the peer's queue plays");
 }
 
-/// A Play-next move inside a resting queue has no anchor: the playing queue's
-/// active index names none of its rows, so the Owner receives no move (design
-/// D7, D9).
-#[test]
-fn a_resting_queue_has_no_play_next_anchor() {
+/// A Play-next move inside a shown resting queue reaches that queue: the row
+/// lands directly after the queue's start slot, which stands where a playhead
+/// stands without one, and first when the queue has no start slot (spec
+/// `gui-queue-chooser` "Edits and enqueue reach the shown entry", design D7,
+/// D9).
+#[rstest]
+#[case::after_its_start_slot(Some(0), 2, 1)]
+#[case::at_the_front_without_a_start_slot(None, 2, 0)]
+fn play_next_on_a_resting_queue_reaches_it(
+    #[case] start_index: Option<usize>,
+    #[case] moved: usize,
+    #[case] expected_to: usize,
+) {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.show_named_queue(resting());
-    app.adopt_named_queue_snapshot(resting(), &resting_state_with_start(&make_items(3), 2));
-    while cmd_rx.try_recv().is_ok() {}
+    app.adopt_named_queue_snapshot(resting(), &resting_state(&make_items(3), start_index));
+    drain_commands(&cmd_rx);
 
-    app.play_queue_item_next(2);
+    app.play_queue_item_next(moved);
 
-    assert!(
-        cmd_rx.try_recv().is_err(),
-        "the resting queue's rows do not move after another queue's playhead"
+    let sent = cmd_rx
+        .try_recv()
+        .expect("the shown queue receives the move");
+    assert_eq!(
+        sent_move_target(&sent),
+        Some((expected_to, Some(resting()))),
+        "the move lands after the resting queue's own anchor, naming it"
     );
+}
+
+/// Drain every command the Client sent so far.
+fn drain_commands(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    while cmd_rx.try_recv().is_ok() {}
+}
+
+/// The target index and Named queue one sent queue move carries.
+fn sent_move_target(cmd: &mbv_ctrl::CtrlCmd) -> Option<(usize, Option<NamedQueueId>)> {
+    match cmd {
+        mbv_ctrl::CtrlCmd::UnifiedQueueMoveSlot {
+            to_index, queue, ..
+        } => Some((*to_index, *queue)),
+        _ => None,
+    }
 }
