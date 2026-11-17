@@ -28,7 +28,7 @@ impl App {
             return;
         }
         let player_vol = {
-            let s = self.player.status_snapshot();
+            let s = self.shown_playback_status();
             s.active.then(|| {
                 u8::try_from(s.volume.clamp(0, 200)).expect("clamped player volume fits in u8")
             })

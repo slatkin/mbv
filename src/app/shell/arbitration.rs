@@ -250,7 +250,7 @@ impl Model {
         // until the whole `let snapshot = ...;` statement ends, so taking that
         // lock inline self-deadlocked the run loop on the first key press in
         // any QueueOnly/mini-view frame. Read it in its own statement.
-        let player_active = self.app.player.status_snapshot().active;
+        let player_active = self.app.shown_playback_status().active;
         let snapshot = RouterSnapshot {
             playback: crate::app::input::RouterPlaybackState {
                 player_active,

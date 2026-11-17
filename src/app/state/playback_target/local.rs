@@ -7,7 +7,7 @@ use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
-        let paused = !app.player.status_snapshot().paused;
+        let paused = !app.shown_playback_status().paused;
         app.flash(
             if paused {
                 "Pause requested".to_string()
@@ -16,16 +16,18 @@ impl LocalPlaybackTarget {
             },
             ToastSeverity::Neutral,
         );
-        let _ = app.player.set_paused(paused);
+        let _ = app.shown_queue_owner_player().set_paused(paused);
     }
 
     pub(in crate::app) fn stop(app: &mut App) {
         app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
-        app.player.stop();
+        app.shown_queue_owner_player().stop();
     }
 
     pub(in crate::app) fn seek_relative(app: &mut App, delta: f64) {
-        let _ = app.player.send_command(PlayerCommand::Seek(delta));
+        let _ = app
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::Seek(delta));
     }
 
     pub(in crate::app) fn jump_track(app: &mut App, step: i64) {
@@ -38,22 +40,26 @@ impl LocalPlaybackTarget {
             .to_string(),
             ToastSeverity::Neutral,
         );
+        let player = app.shown_queue_owner_player();
         if step >= 0 {
-            let _ = app.player.next();
+            let _ = player.next();
         } else {
-            let _ = app.player.previous();
+            let _ = player.previous();
         }
     }
 
     pub(in crate::app) fn toggle_command_mute(app: &mut App) {
         app.mute_on = !app.mute_on;
-        let _ = app.player.send_command(PlayerCommand::SetMute(app.mute_on));
+        let mute = app.mute_on;
+        let _ = app
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SetMute(mute));
         app.save_prefs();
     }
 
     pub(in crate::app) fn cycle_audio(app: &mut App) {
         let (tracks, current_id) = {
-            let s = app.player.status_snapshot();
+            let s = app.shown_playback_status();
             (s.audio_tracks.clone(), s.audio_id)
         };
         if tracks.is_empty() {
@@ -66,26 +72,29 @@ impl LocalPlaybackTarget {
         let next_id = entries[next];
         if next_id == 0 {
             app.pre_mute_volume = Some(app.ui_volume);
-            let _ = app.player.send_command(PlayerCommand::SetVolume(0));
+            let _ = app
+                .shown_queue_owner_player()
+                .send_command(PlayerCommand::SetVolume(0));
             app.ui_volume = 0;
         } else if current_id == 0
             && let Some(v) = app.pre_mute_volume.take()
         {
             let _ = app
-                .player
+                .shown_queue_owner_player()
                 .send_command(PlayerCommand::SetVolume(i64::from(v)));
             app.ui_volume = v;
         }
-        let _ = app.player.send_command(PlayerCommand::SetAudio(next_id));
+        let _ = app
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SetAudio(next_id));
     }
 
     pub(in crate::app) fn adjust_volume(app: &mut App, delta: i64) {
-        let active = app.player.status_snapshot().active;
-        if active {
-            let st = app.player.status_snapshot();
+        let st = app.shown_playback_status();
+        if st.active {
             let v = u8::try_from((st.volume + delta).clamp(0, st.volume_max)).unwrap_or(u8::MAX);
             let _ = app
-                .player
+                .shown_queue_owner_player()
                 .send_command(PlayerCommand::SetVolume(i64::from(v)));
             app.ui_volume = v;
         } else {
@@ -97,7 +106,7 @@ impl LocalPlaybackTarget {
 
     pub(in crate::app) fn cycle_sub(app: &mut App) {
         let (active, tracks, current_id) = {
-            let s = app.player.status_snapshot();
+            let s = app.shown_playback_status();
             (s.active, s.sub_tracks.clone(), s.sub_id)
         };
         if !active {
@@ -110,12 +119,14 @@ impl LocalPlaybackTarget {
         let mut entries: Vec<i64> = vec![0];
         entries.extend(tracks.iter().map(|(id, _, _)| *id));
         let next_id = App::next_subtitle_entry(&entries, current_id);
-        let _ = app.player.send_command(PlayerCommand::SetSub(next_id));
+        let _ = app
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SetSub(next_id));
         app.save_prefs();
     }
 
     pub(in crate::app) fn displayed_volume(app: &App) -> i64 {
-        let s = app.player.status_snapshot();
+        let s = app.shown_playback_status();
         if s.active {
             if s.muted { 0 } else { s.volume }
         } else if app.mute_on {
@@ -133,7 +144,7 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn indicator_data(app: &App) -> Option<IndicatorData> {
-        let pst = app.player.status_snapshot();
+        let pst = app.shown_playback_status();
         if !pst.active {
             return None;
         }

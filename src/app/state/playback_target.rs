@@ -9,7 +9,11 @@ pub(in crate::app) struct LocalPlaybackTarget;
 impl App {
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
-        let s = self.player.status_snapshot();
+        // The panel and its gates follow the shown entry's owner (design D7 of
+        // `gui-named-queues`, ADR 0041), so a GUI Client showing a local queue
+        // while a peer holds the connection paints and gates on the local
+        // Owner's playback.
+        let s = self.shown_playback_status();
         // The owner presents content it did not load from `OutputState`
         // alone (design D12): the status' `current_idx` is then only the
         // queue's loaded-slot marker, not a local playhead. Keep the slot

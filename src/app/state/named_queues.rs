@@ -38,6 +38,12 @@ impl NamedQueueList {
         self.current = Some(current);
     }
 
+    /// The current queue, or `None` until the first list arrives.
+    #[must_use]
+    pub(in crate::app) fn current(&self) -> Option<NamedQueueId> {
+        self.current
+    }
+
     /// Whether `queue` is a Named queue that rests: the Owner still holds it
     /// and it is not the current queue.
     #[must_use]
@@ -100,6 +106,31 @@ impl App {
         }
     }
 
+    /// Show the connected peer's queue in the GUI Client's Queue panel (design
+    /// D7): a connect from the playback-target chooser shows the peer's entry.
+    /// The TUI Client keeps the connection rule, so it records nothing and its
+    /// resolution ignores a shown entry either way.
+    pub(in crate::app) fn show_peer_entry(&mut self) {
+        if !self.gui_client {
+            return;
+        }
+        self.gui_shown_entry = Some(ShownEntry::Peer);
+        self.shown_resting = None;
+    }
+
+    /// Show the local Owner's current queue in the GUI Client's Queue panel
+    /// (design D7): a disconnect, a lost link, or a close of the shown queue
+    /// lands back on the current queue. Before the first queue list arrives
+    /// there is no identity to name, so the shown entry is cleared and the
+    /// resolution falls back to the same queue.
+    pub(in crate::app) fn show_local_current_entry(&mut self) {
+        if !self.gui_client {
+            return;
+        }
+        self.gui_shown_entry = self.named_queues.current().map(ShownEntry::Local);
+        self.shown_resting = None;
+    }
+
     /// Show one local Named queue in the GUI Client's Queue panel (design D7):
     /// record the shown entry and ask the local Owner for that queue's
     /// snapshots when it rests. A resting queue's view starts empty and fills
@@ -111,6 +142,9 @@ impl App {
     /// lands.
     #[cfg(test)]
     pub(in crate::app) fn show_named_queue(&mut self, queue: NamedQueueId) {
+        if !self.gui_client {
+            return;
+        }
         self.gui_shown_entry = Some(ShownEntry::Local(queue));
         if !self.named_queues.rests(queue) {
             self.shown_resting = None;

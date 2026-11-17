@@ -34,16 +34,27 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
-    /// The `PlayerProxy` whose link the shown queue's Player owner answers on:
-    /// the Local queue's link (the suspended home link while a peer
+    /// The `PlayerProxy` whose queue and playback the Queue panel shows and
+    /// controls: the Local queue's link (the suspended home link while a peer
     /// attachment is shown), else the peer attachment. The shown queue and
-    /// the player resolve to one link (ADR 0034), so the owner's liveness is
-    /// the same link's connection state.
+    /// the player panel resolve to one link (ADR 0034), so the owner's
+    /// liveness, its status, and the transport commands are all this link's.
     pub(in crate::app) fn shown_queue_owner_player(&self) -> &mbv_player::PlayerProxy {
         match self.playing_queue_link() {
             QueueLink::Local => self.local_queue_player(),
             QueueLink::Peer => &self.player,
         }
+    }
+
+    /// The confirmed status the player panel shows: the shown entry's owner's
+    /// playback (design D7 of `gui-named-queues`, ADR 0041). Presentation and
+    /// transport gates read this, so the panel, its transport, its track
+    /// chips, and the queue edits all name one owner. The active Owner link's
+    /// own event handling keeps reading `self.player`, which is that link's
+    /// status whatever is shown.
+    #[must_use]
+    pub(in crate::app) fn shown_playback_status(&self) -> mbv_ctrl::player::PlayerStatus {
+        self.shown_queue_owner_player().status_snapshot()
     }
 
     pub(in crate::app) fn queue_for_link(&self, link: QueueLink) -> &QueueView {
@@ -207,7 +218,7 @@ impl App {
     /// `PlayerStatus::previous_idx`/`next_idx` fold in `active` and
     /// `queue_len`, so they answer both questions from the owner's status.
     pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {
-        let st = self.player.status_snapshot();
+        let st = self.shown_playback_status();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 

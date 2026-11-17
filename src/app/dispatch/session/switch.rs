@@ -68,8 +68,16 @@ impl App {
         let shown_before = self.playing_queue_link();
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_view);
+            // An attach to the local Owner shows its current queue in the GUI
+            // Client's Queue panel (gui-named-queues design D7).
+            self.show_local_current_entry();
         } else {
             self.remote_view = Some(daemon_view);
+            // A connect from the playback-target chooser shows the peer's
+            // entry in the GUI Client's Queue panel (gui-named-queues design
+            // D7). The TUI Client keeps the connection rule and records
+            // nothing.
+            self.show_peer_entry();
         }
         self.reanchor_queue_cursor_after_link_change(shown_before);
         self.advance_queue_epoch();
@@ -244,6 +252,9 @@ impl App {
         self.direct_remote_label = None;
         self.direct_remote_session_id = None;
         self.active_route = None;
+        // The peer entry leaves the GUI Client's Queue panel and the current
+        // local queue shows (gui-named-queues design D7).
+        self.show_local_current_entry();
         self.next_up_item = None;
         self.rebind_mpris_to_current_player();
         self.flash(status, ToastSeverity::Warning);

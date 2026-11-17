@@ -18,14 +18,14 @@ pub(in crate::app) struct QueueLinkResolution {
 }
 
 /// The entry the GUI Client's Queue panel shows (gui-named-queues design D7):
-/// one of the local Owner's Named queues, or the connected peer Player owner —
-/// the peer entry arrives with the connect path that shows it, so only the
-/// local shape exists here.
+/// one of the local Owner's Named queues, or the connected peer Player owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) enum ShownEntry {
     /// The local Owner's Named queue with this identity: the current queue, or
     /// one that rests.
     Local(NamedQueueId),
+    /// The queue of the peer Player owner this Client is connected to.
+    Peer,
 }
 
 impl QueueLinkResolution {
@@ -52,7 +52,7 @@ impl QueueLinkResolution {
         }
         match self.gui_shown_entry {
             Some(ShownEntry::Local(_)) => QueueLink::Local,
-            None => QueueLink::Peer,
+            Some(ShownEntry::Peer) | None => QueueLink::Peer,
         }
     }
 

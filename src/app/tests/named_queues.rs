@@ -123,3 +123,128 @@ fn the_tui_link_keeps_the_connection_rule() {
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     assert_eq!(app.displayed_queue().slots().len(), 2);
 }
+
+/// The local Owner's own position, distinct from the peer's.
+const HOME_POSITION: i64 = 7;
+
+/// The connected peer's own position, distinct from the local Owner's.
+const PEER_POSITION: i64 = 42;
+
+/// A GUI Client attached to the local Owner whose link plays at
+/// [`HOME_POSITION`], then connected to a peer that plays at
+/// [`PEER_POSITION`]: each link's commands land on its own channel. The
+/// connect shows the peer entry (design D7), as the playback-target chooser
+/// does.
+fn gui_app_with_peer() -> (
+    App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) {
+    let (mut app, home_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    while home_cmd_rx.try_recv().is_ok() {}
+    app.player
+        .update_status(|status| status.position_ticks = HOME_POSITION);
+    app.enable_gui_client();
+    app.adopt_named_queue_list(named_queue_list(), current());
+
+    let (peer, peer_rx, peer_cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(make_items(2), 1);
+    let sess = make_session("peer-host", "mbv");
+    app.switch_to_direct_remote(&sess, peer, peer_rx, &stub_endpoint());
+    app.player
+        .update_status(|status| status.position_ticks = PEER_POSITION);
+    while peer_cmd_rx.try_recv().is_ok() {}
+    (app, home_cmd_rx, peer_cmd_rx)
+}
+
+/// The pause intent one transport command sent to `link`'s owner.
+fn pause_intent(paused: bool) -> impl Fn(&mbv_ctrl::CtrlCmd) -> bool {
+    move |cmd| {
+        matches!(
+            cmd,
+            mbv_ctrl::CtrlCmd::PlaybackIntent(mbv_ctrl::PlaybackIntent {
+                action: mbv_ctrl::PlaybackIntentAction::SetPaused { paused: sent },
+                ..
+            }) if *sent == paused
+        )
+    }
+}
+
+/// A resting local queue shown while the local Owner plays: the panel and the
+/// transport follow the local Owner, so pause pauses its playback and the
+/// connected peer's playback is untouched (design D7, spec
+/// `gui-queue-chooser` "A resting queue is shown while another plays").
+#[test]
+fn a_shown_resting_queue_pauses_the_local_owner_not_the_peer() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(resting());
+    assert!(
+        matches!(
+            home_cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::NamedQueueShow { .. })
+        ),
+        "the show reaches the local Owner's link"
+    );
+
+    assert_eq!(app.effective_playback_state().position_ticks, HOME_POSITION);
+    LocalPlaybackTarget::toggle_play_pause(&mut app);
+
+    assert!(
+        pause_intent(true)(&home_cmd_rx.try_recv().unwrap()),
+        "pause reaches the local Owner's playback"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the connect's peer keeps playing"
+    );
+}
+
+/// The peer entry shown: the panel and the transport follow the peer, so the
+/// panel reports the peer's position and pause reaches it (design D7, spec
+/// `gui-queue-chooser` "A peer entry is shown").
+#[test]
+fn a_shown_peer_entry_follows_the_peer_playback() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
+
+    assert_eq!(app.effective_playback_state().position_ticks, PEER_POSITION);
+    LocalPlaybackTarget::toggle_play_pause(&mut app);
+
+    assert!(
+        pause_intent(true)(&peer_cmd_rx.try_recv().unwrap()),
+        "pause reaches the shown peer's playback"
+    );
+    assert!(
+        home_cmd_rx.try_recv().is_err(),
+        "the local Owner is not the shown entry"
+    );
+}
+
+/// The TUI Client keeps the connection rule for the panel and the transport
+/// too: with a peer connected, its status is the panel's and its playback is
+/// what the transport controls, and the connect records no shown entry.
+#[test]
+fn the_tui_panel_and_transport_keep_the_connection_rule() {
+    let (mut app, home_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    while home_cmd_rx.try_recv().is_ok() {}
+    let (peer, peer_rx, peer_cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(make_items(2), 1);
+    let sess = make_session("peer-host", "mbv");
+    app.switch_to_direct_remote(&sess, peer, peer_rx, &stub_endpoint());
+    app.player
+        .update_status(|status| status.position_ticks = PEER_POSITION);
+    while peer_cmd_rx.try_recv().is_ok() {}
+
+    assert!(
+        app.gui_shown_entry.is_none(),
+        "a TUI Client records no entry"
+    );
+    assert_eq!(app.effective_playback_state().position_ticks, PEER_POSITION);
+    LocalPlaybackTarget::toggle_play_pause(&mut app);
+
+    assert!(pause_intent(true)(&peer_cmd_rx.try_recv().unwrap()));
+    assert!(
+        home_cmd_rx.try_recv().is_err(),
+        "the local Owner is not the connection's playback target"
+    );
+}
