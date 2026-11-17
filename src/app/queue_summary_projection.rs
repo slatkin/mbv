@@ -9,6 +9,7 @@
 //! projection's single-row patch would leave the other rows' clocks stale
 //! until the next full row rebuild.
 
+use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use mbv_emby_model::TICKS_PER_SECOND;
@@ -189,20 +190,35 @@ fn runtime_totals<'a>(slots: impl Iterator<Item = &'a QueueSlot>) -> (i64, bool)
     (secs, partial)
 }
 
-/// The marked rows' total time and partial flag: `None` while `marks` names no
-/// slot of `slots`, so a queue with no marked row carries no marked total
-/// (design D9).
+/// The marked rows' total time and partial flag, in one pass over `slots`:
+/// `None` while `marks` names no slot of `slots`, so a queue with no marked
+/// row carries no marked total (design D9).
 #[must_use]
 fn marked_totals(slots: &[QueueSlot], marks: &[QueueSlotId]) -> (Option<i64>, bool) {
-    let marked: Vec<&QueueSlot> = slots
-        .iter()
-        .filter(|slot| marks.contains(&slot.slot_id))
-        .collect();
-    if marked.is_empty() {
+    if marks.is_empty() {
         return (None, false);
     }
-    let (secs, partial) = runtime_totals(marked.into_iter());
-    (Some(secs), partial)
+    let marked: HashSet<QueueSlotId> = marks.iter().copied().collect();
+    let mut marked_any = false;
+    let mut secs = 0;
+    let mut partial = false;
+    for slot in slots {
+        if !marked.contains(&slot.slot_id) {
+            continue;
+        }
+        let runtime_secs = slot.item.runtime_ticks() / TICKS_PER_SECOND;
+        if runtime_secs <= 0 {
+            partial = true;
+        } else {
+            secs += runtime_secs;
+        }
+        marked_any = true;
+    }
+    if marked_any {
+        (Some(secs), partial)
+    } else {
+        (None, false)
+    }
 }
 
 /// The wall-clock epoch at which the playhead's item ends, from `now_secs`:

@@ -43,6 +43,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::art_image::{ArtEvents, ArtImage};
+use crate::window::components::row_handle::record_row_handle;
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{
     Cast, Check, ChevronDown, Maximize2, Monitor, Pause, Play, SkipBack, SkipForward,
@@ -348,7 +349,7 @@ impl std::fmt::Debug for TargetChooserPopoverProps {
 /// `onmounted` hands its event to the panel's chooser-regions signal, under
 /// the row's `data-choice` index.
 #[component]
-fn TargetChooserPopover(mut props: TargetChooserPopoverProps) -> Element {
+fn TargetChooserPopover(props: TargetChooserPopoverProps) -> Element {
     rsx! {
         div {
             class: "absolute top-full left-0 z-20 mt-1 flex min-w-56 flex-col rounded-md border py-1 shadow-md",
@@ -366,12 +367,9 @@ fn TargetChooserPopover(mut props: TargetChooserPopoverProps) -> Element {
                             class: "flex items-center text-left",
                             style: "padding: calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1); gap: var(--mbv-cell-col); color: {row_color};",
                             "data-choice": "{index}",
-                            onmounted: move |event| {
-                                let mut rows = props.chooser_rows.write();
-                                if rows.len() <= index {
-                                    rows.resize(index + 1, None);
-                                }
-                                rows[index] = Some(event);
+                            onmounted: {
+                                let chooser_rows = props.chooser_rows;
+                                move |event| record_row_handle(chooser_rows, index, event)
                             },
                             span {
                                 class: "flex w-4 shrink-0 justify-center",

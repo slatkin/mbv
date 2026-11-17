@@ -8,14 +8,14 @@ use super::{is_pinned, swap_token};
 /// it answers `SwapPrepare` and is a swap target — and the GUI Client never
 /// does: it is neither a terminal Client nor a pinned panel, and the swap's
 /// launch snapshot is a TUI shell query it cannot produce (design D9 of
-/// `extract-client-core`). Claimed once at start-up, before the first Owner
-/// connection, so every connection this process makes advertises alike.
+/// `extract-client-core`). Claimed before the first Owner connection, so
+/// every connection this process makes advertises alike.
 static PIN_SWAP_PARTICIPANT: OnceLock<bool> = OnceLock::new();
 
 /// Claim whether this process's Client connections take part in Pin swap.
-/// Called once at start-up. The unclaimed default `true` is the TUI Client's
-/// claim; the GUI Client claims `false` through the library's
-/// [`crate::declare_gui_client`].
+/// Called before this process's first Owner connection. The unclaimed
+/// default `true` is the TUI Client's claim; the GUI Client claims `false`
+/// when its Owner-link attach passes `crate::ClientKind::Gui`.
 pub(crate) fn claim_pin_swap_participant(participates: bool) {
     let _ = PIN_SWAP_PARTICIPANT.set(participates);
 }

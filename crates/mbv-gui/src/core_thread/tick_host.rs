@@ -120,8 +120,8 @@ impl ClientTickHost for CoreThread {
         loop {
             match self.app.drain_home_event() {
                 HomeEventDrain::Empty => break,
-                // The GUI Client never joins the Pin swap —
-                // `declare_gui_client` sends a plain Hello — so the
+                // The GUI Client never joins the Pin swap — its attach
+                // claims a GUI Client and so sends a plain Hello — so the
                 // lifecycle arms consume their event with no action.
                 HomeEventDrain::Consumed
                 | HomeEventDrain::Client(

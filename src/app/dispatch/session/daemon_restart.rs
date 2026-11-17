@@ -56,7 +56,7 @@ impl App {
 
         let (remote, remote_rx) = RemotePlayer::connect_endpoint(
             &DaemonEndpoint::Local,
-            &crate::client_kind::client_hello_claims(&DaemonEndpoint::Local),
+            &crate::client_kind::client_hello_claims(self.client_kind, &DaemonEndpoint::Local),
         )
         .map_err(|error| {
             std::io::Error::other(format!("failed to attach to local daemon: {error}"))

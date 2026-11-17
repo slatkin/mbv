@@ -110,6 +110,7 @@ impl App {
             mpris: None,
             client_waker: client_waker.clone(),
             owner_exe: None,
+            client_kind: crate::ClientKind::default(),
             player_rx: spawn_waking_relay(init.player_rx, client_waker),
             deferred_player_events: std::collections::VecDeque::new(),
             deferred_home_events: std::collections::VecDeque::new(),

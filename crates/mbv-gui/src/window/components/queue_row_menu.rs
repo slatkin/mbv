@@ -35,6 +35,8 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
+use crate::window::components::menu_card::MENU_CARD_STYLE;
+use crate::window::components::row_handle::record_row_handle;
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The props of the row menu (the `QueueRowMenu` props, in order):
@@ -112,7 +114,9 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
             class: "absolute z-20 flex flex-col",
             role: "menu",
             "aria-label": "{props.label}",
-            style: "{position} width: 230px; padding: 6px; gap: 2px; background: var(--canvas-menu); border: 1px solid var(--canvas-menu-border); border-radius: 8px; box-shadow: var(--canvas-menu-shadow);",
+            style: format!(
+                "{position} width: 230px; padding: 6px; gap: 2px; {MENU_CARD_STYLE}"
+            ),
             "data-row-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {
                 {
@@ -136,7 +140,7 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                     let label = entry.label.clone();
                     let hint = entry.key_hint.as_deref().map(paint_hint);
                     let entry_index = entry.index.unwrap_or(index);
-                    let mut row_slot = props.row_slot;
+                    let row_slot = props.row_slot;
                     rsx! {
                         if entry.destructive {
                             // The canvas's divider above the destructive entry.
@@ -165,11 +169,7 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                                 }
                             },
                             onmounted: move |event| {
-                                let mut rows = row_slot.write();
-                                if rows.len() <= index {
-                                    rows.resize(index + 1, None);
-                                }
-                                rows[index] = Some(event);
+                                record_row_handle(row_slot, index, event);
                             },
                             // The 13 px the row's style sets is the label's inherited
                             // size and weight: the box carries no style of its own.

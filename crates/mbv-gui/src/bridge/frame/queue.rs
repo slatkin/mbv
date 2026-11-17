@@ -385,18 +385,20 @@ pub struct GuiQueueHeaderFacts {
 impl GuiQueueSummary {
     /// The summary section from the projection's remaining, next-item, total,
     /// and filter facts, the shown queue's end offsets' tail (design D5), and
-    /// the header's chooser facts (design D9 of `gui-named-queues`).
+    /// the header's chooser facts (design D9 of `gui-named-queues`). Consumes
+    /// `summary`: the frame reads it once, so its owned strings move instead
+    /// of a second clone.
     #[must_use]
     pub fn build(
-        summary: &QueueSummaryProjection,
+        summary: QueueSummaryProjection,
         offsets: &QueueEndOffsets,
         header: &QueueHeaderProjection,
     ) -> Self {
         Self {
             remaining: summary.remaining,
-            next_title: summary.next_title.clone(),
+            next_title: summary.next_title,
             tail_secs: offsets.tail,
-            filter: summary.filter.clone(),
+            filter: summary.filter,
             filter_active: summary.filter_active,
             total_secs: summary.total_secs,
             total_partial: summary.total_partial,

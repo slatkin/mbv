@@ -189,10 +189,8 @@ impl App {
                 }
             }
         }
-        let (remote, player_rx) = Self::try_daemon_route_connect(
-            &mbv_remote_player::DaemonEndpoint::Local,
-            "owner process",
-        )?;
+        let (remote, player_rx) = self
+            .try_daemon_route_connect(&mbv_remote_player::DaemonEndpoint::Local, "owner process")?;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         Ok(Some(SuspendedLocalSession {
             player: PlayerProxy::from_remote(remote, always_play_next),
@@ -353,7 +351,7 @@ impl App {
             // directly so "restore local mode" actually lands back on this
             // app's real baseline instead of leaving the player
             // disconnected.
-            match Self::try_daemon_route_connect(
+            match self.try_daemon_route_connect(
                 &mbv_remote_player::DaemonEndpoint::Local,
                 "owner process",
             ) {
@@ -422,7 +420,7 @@ impl App {
             self.restore_local_mode("Local playback restored");
             return;
         }
-        match Self::try_daemon_route_connect(endpoint, name) {
+        match self.try_daemon_route_connect(endpoint, name) {
             Ok((remote, remote_rx)) => {
                 self.switch_to_library_route(name, remote, remote_rx, endpoint);
             }
@@ -476,7 +474,7 @@ impl App {
             self.restore_local_mode("Local playback restored");
             return Ok(true);
         }
-        match Self::connect_direct_endpoint(&endpoint) {
+        match self.connect_direct_endpoint(&endpoint) {
             Ok((remote, remote_rx)) => {
                 self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
                 Ok(true)

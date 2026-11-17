@@ -360,7 +360,7 @@ impl SectionLedger {
             &start,
         ));
         self.summary
-            .adopt(GuiQueueSummary::build(&summary, &offsets, &header));
+            .adopt(GuiQueueSummary::build(summary, &offsets, &header));
         self.panel.adopt(GuiPanelToggles::new(
             &app.panel_toggles_projection(),
             app.gui_ui_reset_epoch(),

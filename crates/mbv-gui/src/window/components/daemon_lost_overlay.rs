@@ -22,6 +22,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::overlay::GuiConfirmButton;
 use crate::bridge::layout::{DaemonLostTargetId, RegionTarget};
 use crate::window::components::confirm_overlay::{BUTTON_FILL, button_color};
+use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
@@ -122,7 +123,9 @@ pub fn DaemonLostOverlay(props: DaemonLostOverlayProps) -> Element {
             "aria-label": "The local daemon connection was lost",
             div {
                 class: "flex flex-col",
-                style: "background: var(--canvas-menu); border: 1px solid var(--canvas-menu-border); border-radius: 8px; box-shadow: var(--canvas-menu-shadow); padding: 16px; gap: 12px; max-width: 420px;",
+                style: format!(
+                    "{MENU_CARD_STYLE} padding: 16px; gap: 12px; max-width: 420px;"
+                ),
                 p {
                     style: "font-size: 13px; color: var(--canvas-heading);",
                     "The local daemon connection was lost unexpectedly."

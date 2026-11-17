@@ -16,7 +16,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, declare_gui_client, load_config};
+use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, load_config};
 use mbv_config::ensure_runtime_dir;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
@@ -154,9 +154,9 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
                 return;
             }
         };
-        // Declare the GUI Client before the first Owner connection (design
-        // D9): the campaign's connections send a plain Hello.
-        declare_gui_client();
+        // The GUI Client's attach passes `ClientKind::Gui`, which sends a
+        // plain Hello (design D9) and claims the local link's `named-queues`
+        // (gui-named-queues design D7) before the first Owner connection.
         let steps = LibraryOwnerSteps::new(&config);
         let outcome = {
             let mut campaign = AttachCampaign::new(&rx, &sink, &quit, &steps);

@@ -16,8 +16,8 @@ use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, Config, OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text,
-    find_owner, start_owner,
+    App, ClientKind, Config, OwnerStartOptions, OwnerState, attach_owner,
+    exclusive_owner_refusal_text, find_owner, start_owner,
 };
 use mbv_config::owner_lock_path;
 use mbv_daemon::{SignalOwnerError, signal_owner};
@@ -537,7 +537,12 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
     }
 
     fn attach(&self, program: &Path) -> Result<App, RemotePlayerError> {
-        attach_owner(self.config, Some(program), mbv::ImageDecode::SourceOnly)
+        attach_owner(
+            self.config,
+            Some(program),
+            mbv::ImageDecode::SourceOnly,
+            ClientKind::Gui,
+        )
     }
 
     fn wait_tick(&self) -> OwnerWait {

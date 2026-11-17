@@ -30,6 +30,8 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
+use crate::window::components::menu_card::MENU_CARD_STYLE;
+use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::Check;
 use crate::window::theme::canvas_var;
 
@@ -93,7 +95,9 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             class: "absolute z-20 flex w-56 flex-col",
             role: "menu",
             "aria-label": "Queue chooser",
-            style: "top: var(--canvas-queue-header-height); left: 16px; padding: 6px; gap: 2px; background: var(--canvas-menu); border: 1px solid var(--canvas-menu-border); border-radius: 8px; box-shadow: var(--canvas-menu-shadow);",
+            style: format!(
+                "top: var(--canvas-queue-header-height); left: 16px; padding: 6px; gap: 2px; {MENU_CARD_STYLE}"
+            ),
             "data-queue-chooser-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {
                 {
@@ -123,7 +127,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     let shown = entry.shown;
                     let current = entry.current;
                     let peer = entry.queue.is_none();
-                    let mut row_slot = props.row_slot;
+                    let row_slot = props.row_slot;
                     rsx! {
                         button {
                             "type": "button",
@@ -133,11 +137,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                             "data-chooser-entry": "{key}",
                             "aria-label": "{label}",
                             onmounted: move |event| {
-                                let mut rows = row_slot.write();
-                                if rows.len() <= index {
-                                    rows.resize(index + 1, None);
-                                }
-                                rows[index] = Some(event);
+                                record_row_handle(row_slot, index, event);
                             },
                             div {
                                 class: "flex min-w-0 items-center",

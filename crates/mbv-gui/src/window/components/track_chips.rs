@@ -34,6 +34,7 @@ use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind, GuiTrackP
 use crate::bridge::frame::playback::{GuiTrackChip, GuiTrackChips};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
+use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Captions, Check, MonitorPlay};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
@@ -333,14 +334,8 @@ fn TrackPopoverList(props: TrackPopoverProps) -> Element {
                             style: "height: 36px; padding: 0 10px; border-radius: 4px; font-size: 13px; background: {row_fill}; color: {row_color};",
                             "data-popover-row": "{index}",
                             onmounted: {
-                                let mut row_slot = props.row_slot;
-                                move |event| {
-                                    let mut rows = row_slot.write();
-                                    if rows.len() <= index {
-                                        rows.resize(index + 1, None);
-                                    }
-                                    rows[index] = Some(event);
-                                }
+                                let row_slot = props.row_slot;
+                                move |event| record_row_handle(row_slot, index, event)
                             },
                             span {
                                 class: "flex min-w-0 flex-1 items-center",

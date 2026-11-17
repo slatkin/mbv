@@ -55,10 +55,11 @@ pub use self::app::{
     TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
     WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
+pub use self::client_kind::ClientKind;
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
-    OwnerStartOptions, OwnerState, attach_owner, declare_gui_client, exclusive_owner_refusal_text,
-    find_owner, refusal_text, start_owner,
+    OwnerStartOptions, OwnerState, attach_owner, exclusive_owner_refusal_text, find_owner,
+    refusal_text, start_owner,
 };
 pub use self::startup::run;
 pub use mbv_images::ImageDecode;
