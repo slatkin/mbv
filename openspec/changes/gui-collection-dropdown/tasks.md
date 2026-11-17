@@ -17,9 +17,9 @@
 ## 3. Shows and Home
 
 - [x] 3.1 Shows: make the GUI Shows destination always use `TvContentMode::All` and delete `GuiShowsMode`, the Shows pill frame, and the Latest and Upcoming flat-row paths in `src/app/gui_library/shows.rs` and `shows_projection.rs` (D8). Verify with `src/app/tests/gui_library_shows.rs` updated so Shows opens on the series list.
-- [ ] 3.2 Home Latest episodes: add `gui_home_tv_latest`, the launch-time worker fetch per TV library through `get_latest_episodes(parent_id, 30)`, and its new `LibEvent` arm (D9). Verify with a test in `src/app/tests/` that injects the event for two libraries and reads one merged, newest-first section.
-- [ ] 3.3 Home Upcoming: request the eager Upcoming fetch for each TV library at GUI launch through the existing once-per-session guard, and merge `tv_upcoming_snapshots` soonest first (D9). Verify with a test that two snapshots merge and that no section shows when both are empty.
-- [ ] 3.4 Home rows: add `GuiHomeRowId::LatestEpisode` and `GuiHomeRowId::Upcoming` in `src/app/gui_library/home.rs`, resolve `LatestEpisode` through the Recently added Emby item path, and make the four Home commands on `Upcoming` documented no-op arms (D9). Verify with a test that `HomeSelect` on an Upcoming row keeps the Hero and that `HomePlay` on it enqueues nothing.
+- [x] 3.2 Home Latest episodes: add `gui_home_tv_latest`, the launch-time worker fetch per TV library through `get_latest_episodes(parent_id, 30)`, and its new `LibEvent` arm (D9). Verify with a test in `src/app/tests/` that injects the event for two libraries and reads one merged, newest-first section.
+- [x] 3.3 Home Upcoming: request the eager Upcoming fetch for each TV library at GUI launch through the existing once-per-session guard, and merge `tv_upcoming_snapshots` soonest first (D9). Verify with a test that two snapshots merge and that no section shows when both are empty.
+- [x] 3.4 Home rows: add `GuiHomeRowId::LatestEpisode` and `GuiHomeRowId::Upcoming` in `src/app/gui_library/home.rs`, resolve `LatestEpisode` through the Recently added Emby item path, and make the four Home commands on `Upcoming` documented no-op arms (D9). Verify with a test that `HomeSelect` on an Upcoming row keeps the Hero and that `HomePlay` on it enqueues nothing.
 
 ## 4. Bridge frame
 
