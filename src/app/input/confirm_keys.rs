@@ -235,7 +235,11 @@ impl App {
             return;
         }
         self.pending_delete_selection = Some(live);
-        self.player.stop();
+        // The removal is deferred to the shown owner's own `Stopped`, so the
+        // stop names that owner: the active link may be a connected peer's
+        // playback, which the removal never touches (design D7 of
+        // `gui-named-queues`).
+        self.shown_queue_owner_player().stop();
         if self.local_queue_metadata_applies(link) {
             self.queue_dirty = true;
         }
@@ -250,7 +254,9 @@ impl App {
         let slot_id = self.queue_for_link_mut(link).slot_id_at(pos);
         if let Some(slot_id) = slot_id {
             self.pending_delete_slot = Some(slot_id);
-            self.player.stop();
+            // As above: the deferred removal belongs to the shown owner's
+            // `Stopped`, so this stop reaches the shown owner's playback.
+            self.shown_queue_owner_player().stop();
             if self.local_queue_metadata_applies(link) {
                 self.queue_dirty = true;
             }

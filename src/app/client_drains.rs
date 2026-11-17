@@ -179,6 +179,14 @@ impl App {
                     self.adopt_home_snapshot(&snapshot);
                 }
             }
+            // The one home-link playback event the pending-delete path needs: a
+            // confirmed removal of the now-playing row stops the shown (local)
+            // owner and removes the slot from the `Stopped` that answers that
+            // stop. Every other playback event of the suspended link belongs to
+            // the local run's presentation, which the active link owns.
+            PlayerEvent::Stopped {
+                slot_id, consume, ..
+            } => self.finish_home_stop(slot_id, consume),
             // A rejected answer the new-queue control is waiting for ends the
             // wait; anything else a rejection answers already reported itself.
             PlayerEvent::QueueOpResult { op, .. } => {

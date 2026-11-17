@@ -292,9 +292,35 @@ impl App {
         }
         self.next_up_item = None;
         self.status.clear();
-        self.finish_stopped_consumption(deleted_slot, deleted_selection, slot_id, consume);
+        let link = self.active_queue_link();
+        self.finish_stopped_consumption(link, deleted_slot, deleted_selection, slot_id, consume);
         self.refresh_after_stop();
         false
+    }
+
+    /// Complete a confirmed removal from the suspended home link's `Stopped`
+    /// (design D7 of `gui-named-queues`). The Client stopped the local Owner's
+    /// playback because a confirmed removal named its now-playing row, so the
+    /// local Owner's `Stopped` is where the removal reaches it. With no pending
+    /// removal the event changes nothing: the local run's presentation belongs
+    /// to the shown owner, not to this drain.
+    pub(in crate::app) fn finish_home_stop(
+        &mut self,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+        consume: bool,
+    ) {
+        if self.pending_delete_slot.is_none() && self.pending_delete_selection.is_none() {
+            return;
+        }
+        let deleted_slot = self.pending_delete_slot.take();
+        let deleted_selection = self.pending_delete_selection.take();
+        self.finish_stopped_consumption(
+            crate::app::QueueLink::Local,
+            deleted_slot,
+            deleted_selection,
+            slot_id,
+            consume,
+        );
     }
 
     /// The remote-disconnect prefix of `handle_stopped_event` (task 7.2/7.4
@@ -354,9 +380,12 @@ impl App {
     }
 
     /// Delete-vs-consume tail of a normal `Stopped`: send a confirmed removal
-    /// to the Player owner, or run the consume reaction.
+    /// to `link`'s Player owner, or run the consume reaction. `link` is the
+    /// link the stop came from — the queue the run played — never the queue
+    /// the panel shows, so a stop on one link never edits the other's queue.
     fn finish_stopped_consumption(
         &mut self,
+        link: crate::app::QueueLink,
         deleted_slot: Option<mbv_queue::QueueSlotId>,
         deleted_selection: Option<Vec<mbv_queue::QueueSlotId>>,
         slot_id: Option<mbv_queue::QueueSlotId>,
@@ -369,10 +398,8 @@ impl App {
                 .iter()
                 .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
-            // A stop reaction addresses the queue the run played, which is the
-            // Owner's current queue, whatever the Queue panel shows.
             self.queue_op(
-                self.playing_queue_link(),
+                link,
                 mbv_remote_player::QueueOp::RemoveSlots { slot_ids: raw },
                 None,
             );
@@ -381,7 +408,7 @@ impl App {
             // now asks the owner to remove the stable slot identity.
             if let Some(deleted_slot) = deleted_slot {
                 self.queue_op(
-                    self.playing_queue_link(),
+                    link,
                     mbv_remote_player::QueueOp::RemoveSlot {
                         slot_id: mbv_ctrl::slot_id_to_u64(deleted_slot),
                     },

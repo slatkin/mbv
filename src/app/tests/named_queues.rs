@@ -289,6 +289,127 @@ fn a_shown_peer_entry_follows_the_peer_playback() {
     );
 }
 
+/// Whether `cmd` is the standard stop playback intent.
+fn stop_intent(cmd: &mbv_ctrl::CtrlCmd) -> bool {
+    matches!(
+        cmd,
+        mbv_ctrl::CtrlCmd::PlaybackIntent(mbv_ctrl::PlaybackIntent {
+            action: mbv_ctrl::PlaybackIntentAction::Stop,
+            ..
+        })
+    )
+}
+
+/// The confirming answer to a shared confirmation prompt.
+fn confirm_key() -> mbv_ui_msg::KeyEvent {
+    mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Enter, mbv_ui_msg::KeyModifiers::NONE)
+}
+
+/// A confirmed removal of the now-playing row stops the shown owner, never the
+/// active one: with a local queue shown beside a connected peer, the stop
+/// reaches the local Owner, the peer keeps playing, and the local Owner's
+/// `Stopped` is what completes the deferred removal (design D7).
+#[test]
+fn confirming_the_now_playing_local_row_stops_the_local_owner_not_the_peer() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(current());
+    drain_commands(&home_cmd_rx);
+    let tx = inject_home_events(&mut app);
+
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::RemoveActiveQueueItem(0),
+        confirm_key(),
+    );
+
+    assert!(
+        matches!(home_cmd_rx.try_recv(), Ok(cmd) if stop_intent(&cmd)),
+        "the shown owner stops"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the peer's playback is not the shown entry's"
+    );
+    assert!(
+        app.pending_delete_slot.is_some(),
+        "the removal waits for the shown owner's stop"
+    );
+
+    let local_slot = app
+        .local_view
+        .slot_id_at(0)
+        .expect("the local queue holds the row");
+    tx.send(PlayerEvent::Stopped {
+        slot_id: Some(local_slot),
+        run_identity: 0,
+        position_ticks: 0,
+        played: false,
+        consume: false,
+        error: None,
+    })
+    .unwrap();
+
+    app.drain_home_event();
+
+    assert!(
+        app.pending_delete_slot.is_none(),
+        "the local Owner's stop completes the removal"
+    );
+    let sent = home_cmd_rx
+        .try_recv()
+        .expect("the removal reaches the local Owner");
+    assert!(
+        matches!(
+            sent,
+            mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlot {
+                slot_id,
+                queue: None,
+                ..
+            } if slot_id == mbv_ctrl::slot_id_to_u64(local_slot)
+        ),
+        "the removal names the local Owner's row: {sent:?}"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the peer's queue is not the one the removal names"
+    );
+}
+
+/// The multi-select variant stops the shown owner too, and the slots it will
+/// remove wait for that owner's `Stopped` (design D7).
+#[test]
+fn confirming_the_now_playing_local_selection_stops_the_local_owner_not_the_peer() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(current());
+    drain_commands(&home_cmd_rx);
+    let slot_ids = vec![
+        app.local_view
+            .slot_id_at(0)
+            .expect("the local queue holds the row"),
+    ];
+
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::RemoveActiveQueueSelection {
+            link: QueueLink::Local,
+            slot_ids: slot_ids.clone(),
+        },
+        confirm_key(),
+    );
+
+    assert!(
+        matches!(home_cmd_rx.try_recv(), Ok(cmd) if stop_intent(&cmd)),
+        "the shown owner stops"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the peer's playback is not the shown entry's"
+    );
+    assert_eq!(
+        app.pending_delete_selection.as_deref(),
+        Some(slot_ids.as_slice()),
+        "the selection waits for the shown owner's stop"
+    );
+}
+
 /// The TUI Client keeps the connection rule for the panel and the transport
 /// too: with a peer connected, its status is the panel's and its playback is
 /// what the transport controls, and the connect records no shown entry.
