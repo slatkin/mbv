@@ -32,7 +32,6 @@ use crate::bridge::frame::overlay::{GuiQueueChooserEntry, GuiQueueChooserRename}
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::icons::Check;
 use crate::window::theme::canvas_var;
-use crate::window::truncate::{TextStyle, Truncate};
 
 /// The current queue's mark: the accent dot's diameter in logical pixels.
 const CURRENT_MARK_PX: u16 = 6;
@@ -58,6 +57,9 @@ pub struct QueueChooserMenuProps {
 struct EntryPaint {
     label: String,
     draft: bool,
+    /// Whether the draft's whole text is selected: it paints highlighted and
+    /// carries no caret.
+    selected: bool,
 }
 
 impl EntryPaint {
@@ -68,6 +70,7 @@ impl EntryPaint {
         Self {
             label: draft.map_or_else(|| entry.label.clone(), |draft| draft.text.clone()),
             draft: draft.is_some(),
+            selected: draft.is_some_and(|draft| draft.selected),
         }
     }
 }
@@ -105,6 +108,16 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                         "height: 30px; padding: 0 10px; gap: 8px; border-radius: 4px; font-size: 13px; background: {}; color: {row_color};",
                         if cursor { "var(--canvas-selected)" } else { "none" },
                     );
+                    let label_align = if paint.draft { " justify-content: flex-end;" } else { "" };
+                    let label_style = if paint.selected {
+                        format!(
+                            "padding: 0 2px; border-radius: 2px; background: {}; color: {};",
+                            canvas_var("accent"),
+                            canvas_var("heading"),
+                        )
+                    } else {
+                        String::new()
+                    };
                     let key = entry_key(entry);
                     let label = entry.label.clone();
                     let shown = entry.shown;
@@ -138,18 +151,24 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                         Check { size: 14, color: canvas_var("accent") }
                                     }
                                 }
-                                // The entry's label, or the name open for edit
-                                // with the filter's block caret after it.
+                                // The entry's label, or the name open for edit:
+                                // highlighted while all of it is selected, else
+                                // with the filter's block caret after it. Plain
+                                // text, never `Truncate`: a content-sized
+                                // `Truncate` box keeps the cut of its first
+                                // measure, which cut a name as it was typed. A
+                                // draft aligns to the end, so a name longer than
+                                // the row keeps its caret in view.
                                 div {
-                                    class: "flex min-w-0 items-center",
-                                    style: "gap: 2px;",
-                                    Truncate {
-                                        text: paint.label,
-                                        class: "min-w-0".to_owned(),
-                                        css: "font-size: 13px;".to_owned(),
-                                        style: TextStyle::sans(13.0, 400.0),
+                                    class: "flex min-w-0 items-center overflow-hidden whitespace-nowrap",
+                                    style: "gap: 2px; font-size: 13px;{label_align}",
+                                    span {
+                                        class: "shrink-0",
+                                        style: "{label_style}",
+                                        "data-chooser-label": "",
+                                        "{paint.label}"
                                     }
-                                    if paint.draft {
+                                    if paint.draft && !paint.selected {
                                         span {
                                             class: "inline-block w-px shrink-0",
                                             style: "height: 12px; background: {canvas_var(\"heading\")};",

@@ -118,7 +118,7 @@ impl App {
         let text = self.named_queues.name_of(queue).unwrap_or_default();
         self.gui_overlay = Some(GuiOverlay::QueueChooser(QueueChooserState {
             cursor,
-            renaming: Some(QueueRenameDraft { queue, text }),
+            renaming: Some(QueueRenameDraft::selecting(queue, text)),
         }));
     }
 

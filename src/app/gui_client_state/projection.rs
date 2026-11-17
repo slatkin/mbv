@@ -154,6 +154,9 @@ pub struct QueueChooserEntryProjection {
 pub struct QueueChooserRenameProjection {
     pub queue: NamedQueueId,
     pub text: String,
+    /// Whether the whole text is selected, so the entry paints it highlighted
+    /// and the next character replaces it.
+    pub selected: bool,
 }
 
 /// One button of the projected confirmation modal: the label, the key
@@ -275,6 +278,7 @@ impl App {
                         .map(|draft| QueueChooserRenameProjection {
                             queue: draft.queue,
                             text: draft.text.clone(),
+                            selected: draft.selected,
                         }),
                 })
             }

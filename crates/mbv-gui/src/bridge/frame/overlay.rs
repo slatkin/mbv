@@ -269,6 +269,8 @@ impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
 pub struct GuiQueueChooserRename {
     pub queue: u64,
     pub text: String,
+    /// Whether the whole text is selected: the entry paints it highlighted.
+    pub selected: bool,
 }
 
 impl From<&QueueChooserRenameProjection> for GuiQueueChooserRename {
@@ -276,6 +278,7 @@ impl From<&QueueChooserRenameProjection> for GuiQueueChooserRename {
         Self {
             queue: draft.queue.raw(),
             text: draft.text.clone(),
+            selected: draft.selected,
         }
     }
 }

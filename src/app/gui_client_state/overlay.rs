@@ -59,10 +59,26 @@ pub(in crate::app) struct QueueChooserState {
 
 /// One open rename draft: the local Named queue it renames and the text the
 /// user typed. The queue is held, not the cursor's row, so a list change
-/// while the name is open cannot redirect the rename.
+/// while the name is open cannot redirect the rename. A draft opens with its
+/// whole text selected, so the first typed character replaces the name and
+/// Enter keeps it.
 pub(in crate::app) struct QueueRenameDraft {
     pub(in crate::app) queue: NamedQueueId,
     pub(in crate::app) text: String,
+    /// Whether the whole text is selected: the next character or Backspace
+    /// replaces or clears it.
+    pub(in crate::app) selected: bool,
+}
+
+impl QueueRenameDraft {
+    /// A draft over `text` with all of it selected.
+    pub(in crate::app) fn selecting(queue: NamedQueueId, text: String) -> Self {
+        Self {
+            queue,
+            text,
+            selected: true,
+        }
+    }
 }
 
 /// The GUI Client's open overlay (design D4a): the row menu, a track chip's
@@ -261,10 +277,7 @@ impl QueueChooserState {
         let Some(queue) = entry.queue else {
             return;
         };
-        self.renaming = Some(QueueRenameDraft {
-            queue,
-            text: entry.label.clone(),
-        });
+        self.renaming = Some(QueueRenameDraft::selecting(queue, entry.label.clone()));
     }
 }
 
@@ -278,8 +291,10 @@ enum RenameKeyOutcome {
 
 /// One rename draft's key rules: Enter confirms a name that holds more than
 /// whitespace, Esc cancels the edit, Backspace pops, and unmodified and
-/// Shift-folded characters append — the Queue filter's draft pattern. Every
-/// other chord is consumed and dropped.
+/// Shift-folded characters append — the Queue filter's draft pattern. While
+/// the whole text is selected (a draft opens so), the first character
+/// replaces it and Backspace clears it. Every other chord is consumed and
+/// dropped, and keeps the selection.
 fn apply_rename_key(draft: &mut QueueRenameDraft, key: KeyEvent) -> RenameKeyOutcome {
     match key.code {
         Key::Enter if key.modifiers.is_empty() => {
@@ -293,13 +308,22 @@ fn apply_rename_key(draft: &mut QueueRenameDraft, key: KeyEvent) -> RenameKeyOut
         }
         Key::Esc if key.modifiers.is_empty() => RenameKeyOutcome::Cancel,
         Key::Backspace if key.modifiers.is_empty() => {
-            draft.text.pop();
+            if draft.selected {
+                draft.text.clear();
+                draft.selected = false;
+            } else {
+                draft.text.pop();
+            }
             RenameKeyOutcome::Keep
         }
         Key::Char(c)
             if !key.modifiers.contains(KeyModifiers::CONTROL)
                 && !key.modifiers.contains(KeyModifiers::ALT) =>
         {
+            if draft.selected {
+                draft.text.clear();
+                draft.selected = false;
+            }
             draft.text.push(c);
             RenameKeyOutcome::Keep
         }

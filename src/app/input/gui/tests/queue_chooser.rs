@@ -127,9 +127,10 @@ fn the_open_chooser_shows_the_entry_under_its_cursor() {
     );
 }
 
-/// `r` opens the name of the local queue under the cursor for edit, the typed
-/// text extends it, and Enter sends one `NamedQueueRename` for that queue
-/// (spec `gui-queue-chooser` "Rename by key").
+/// `r` opens the name of the local queue under the cursor for edit with the
+/// whole name selected, so the typed text replaces it, and Enter sends one
+/// `NamedQueueRename` for that queue (spec `gui-queue-chooser` "Rename by
+/// key"; user request 2026-11-17).
 #[test]
 fn a_queue_renames_by_key_from_the_chooser() {
     let (mut app, cmd_rx) = app_with_queues();
@@ -137,18 +138,48 @@ fn a_queue_renames_by_key_from_the_chooser() {
     press(&mut app, letter('t'));
     press(&mut app, KeyEvent::new(Key::Down, KeyModifiers::NONE));
     press(&mut app, letter('r'));
-    press(&mut app, KeyEvent::new(Key::Backspace, KeyModifiers::NONE));
+    press(&mut app, letter('Z'));
+    press(&mut app, letter('o'));
     press(&mut app, KeyEvent::new(Key::Enter, KeyModifiers::NONE));
 
     assert!(
         matches!(
             cmd_rx.try_recv(),
             Ok(CtrlCmd::NamedQueueRename { queue, name, .. })
-                if queue == resting() && name == "Kid"
+                if queue == resting() && name == "Zo"
         ),
-        "the rename names the queue under the cursor and the typed text"
+        "the rename names the queue under the cursor and the typed text alone"
     );
     assert!(app.gui_overlay.is_none(), "the confirmed rename closes it");
+}
+
+/// A name open for edit is selected, so Enter accepts it unchanged and
+/// Backspace clears it: a user never has to select the default name first.
+#[test]
+fn an_open_name_is_selected_so_enter_keeps_it_and_backspace_clears_it() {
+    let (mut app, cmd_rx) = app_with_queues();
+    press(&mut app, letter('t'));
+    press(&mut app, KeyEvent::new(Key::Down, KeyModifiers::NONE));
+    press(&mut app, letter('r'));
+    press(&mut app, KeyEvent::new(Key::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(
+            cmd_rx.try_recv(),
+            Ok(CtrlCmd::NamedQueueRename { name, .. }) if name == "Kids"
+        ),
+        "Enter on the untouched draft keeps the name"
+    );
+
+    press(&mut app, letter('t'));
+    press(&mut app, KeyEvent::new(Key::Down, KeyModifiers::NONE));
+    press(&mut app, letter('r'));
+    press(&mut app, KeyEvent::new(Key::Backspace, KeyModifiers::NONE));
+    let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
+        panic!("the chooser is open");
+    };
+    let draft = chooser.renaming.as_ref().expect("the name is open");
+    assert_eq!(draft.text, "", "Backspace clears the selected name");
+    assert!(!draft.selected, "the selection is spent");
 }
 
 /// The peer entry cannot be renamed: `r` on it opens no draft, so Enter shows
@@ -208,6 +239,10 @@ fn the_chooser_projects_its_entries_and_rename_draft() {
     let renames = renaming.expect("the draft projects");
     assert_eq!(renames.queue, current());
     assert_eq!(renames.text, "Default");
+    assert!(
+        renames.selected,
+        "the draft opens with its whole name selected"
+    );
 }
 
 /// The three Queue chords act only while the pointer target is the Queue list

@@ -90,6 +90,7 @@ fn the_chooser_paints_the_rename_draft_with_a_caret() {
         Some(queue_chooser(Some(GuiQueueChooserRename {
             queue: 2,
             text: "Kid".to_owned(),
+            selected: false,
         }))),
     );
 
@@ -99,4 +100,34 @@ fn the_chooser_paints_the_rename_draft_with_a_caret() {
         "the draft carries the block caret"
     );
     assert!(!fixture.presents("[data-chooser-entry=\"peer\"] [data-caret]"));
+}
+
+/// Contract (user request 2026-11-17): a draft whose whole name is selected
+/// paints the name highlighted and no caret, and a long draft is never cut to
+/// an ellipsis as it is typed.
+#[test]
+fn a_selected_draft_paints_highlighted_and_is_never_cut() {
+    let name = "A long queue name typed in";
+    let fixture = built_with_frame(
+        queue_panel_app,
+        queue(Vec::new()),
+        chooser_summary(),
+        Some(queue_chooser(Some(GuiQueueChooserRename {
+            queue: 2,
+            text: name.to_owned(),
+            selected: true,
+        }))),
+    );
+
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"2\"] [data-chooser-label]"),
+        name
+    );
+    assert!(
+        fixture
+            .style_of("[data-chooser-entry=\"2\"] [data-chooser-label]")
+            .contains("background"),
+        "the selected name paints highlighted"
+    );
+    assert!(!fixture.presents("[data-chooser-entry=\"2\"] [data-caret]"));
 }
