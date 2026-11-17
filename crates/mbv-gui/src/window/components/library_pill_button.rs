@@ -1,9 +1,10 @@
-//! The one pill button every Library selector paints
+//! The one pill button the Shows Hero's season pills paint
 //! (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPillButton`; add-gui-library-panel design D6, D15): the
-//! top pill rows and the Shows Hero's season pills. A destination supplies
-//! the pill's name, its selected state, its own attributes, and the press; it
-//! never restates the pill's look, so the two selectors cannot drift.
+//! `LibraryPillButton`; add-gui-library-panel design D6, D15): the season
+//! selector in the series Hero. A destination supplies the pill's name, its
+//! selected state, its own attributes, and the press; it never restates the
+//! pill's look. The Library's collection selector is the collection dropdown
+//! (gui-collection-dropdown design D6), so this button has one surface left.
 
 use dioxus_native::prelude::*;
 

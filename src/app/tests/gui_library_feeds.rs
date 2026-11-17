@@ -52,6 +52,31 @@ fn listed_guids(app: &App) -> Vec<String> {
         .collect()
 }
 
+/// The dropdown's rows as `(name, checked)` pairs, in catalog order.
+fn selector_rows(projection: &GuiFeedsProjection) -> Vec<(String, bool)> {
+    projection
+        .collections
+        .as_ref()
+        .expect("the Feeds destination carries its collections")
+        .entries
+        .iter()
+        .map(|entry| (entry.name.clone(), entry.checked))
+        .collect()
+}
+
+/// The names of the dropdown's checked subscriptions.
+fn checked_names(projection: &GuiFeedsProjection) -> Vec<String> {
+    projection
+        .collections
+        .as_ref()
+        .expect("the Feeds destination carries its collections")
+        .entries
+        .iter()
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.clone())
+        .collect()
+}
+
 /// The entry identity the frame paints (row 11.1): the subscription's URL and
 /// the entry's `guid`, encoded as one opaque string.
 fn entry_id(feed_id: &str, guid: &str) -> String {
@@ -274,13 +299,17 @@ fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
         "the row id is the composite entry identity"
     );
     assert_eq!(
+        selector_rows(&projection),
+        [("Feed A".to_owned(), false), ("Feed B".to_owned(), false)],
+        "the dropdown offers every subscription by name, all unchecked under All"
+    );
+    assert!(
         projection
-            .pills
-            .iter()
-            .map(|pill| (pill.name.as_str(), pill.selected))
-            .collect::<Vec<_>>(),
-        [("All", true), ("Feed A", false), ("Feed B", false)],
-        "the pill row is All first, then each subscription by name"
+            .collections
+            .as_ref()
+            .expect("the Feeds destination carries its collections")
+            .all,
+        "the selection starts on All"
     );
     assert_eq!(
         projection.selected.as_deref(),
@@ -328,13 +357,9 @@ fn a_checked_subscription_scopes_the_rows_to_that_subscription() {
         "a subscription pill holds that subscription's entries only"
     );
     assert_eq!(
-        projection
-            .pills
-            .iter()
-            .filter(|pill| pill.selected)
-            .map(|pill| pill.name.as_str())
-            .collect::<Vec<_>>(),
-        ["Feed B"]
+        checked_names(&projection),
+        ["Feed B"],
+        "only the checked subscription's row is checked"
     );
     assert_eq!(
         projection.selected.as_deref(),
@@ -373,14 +398,9 @@ fn a_vanished_checked_subscription_falls_back_to_all() {
         "the fallback view lists the remaining subscription"
     );
     assert_eq!(
-        projection
-            .pills
-            .iter()
-            .filter(|pill| pill.selected)
-            .map(|pill| pill.name.as_str())
-            .collect::<Vec<_>>(),
-        ["All"],
-        "All paints as checked"
+        checked_names(&projection),
+        Vec::<String>::new(),
+        "All checks no subscription"
     );
 }
 
@@ -405,13 +425,9 @@ fn two_checked_subscriptions_merge_their_entries_in_date_order() {
         "the two checked subscriptions' entries merge in the date order"
     );
     assert_eq!(
-        projection
-            .pills
-            .iter()
-            .map(|pill| (pill.name.as_str(), pill.selected))
-            .collect::<Vec<_>>(),
-        [("All", false), ("Feed A", true), ("Feed B", true)],
-        "both subscriptions' pills stay checked and All does not"
+        checked_names(&projection),
+        ["Feed A", "Feed B"],
+        "both subscriptions stay checked"
     );
 }
 

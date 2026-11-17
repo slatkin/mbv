@@ -308,7 +308,6 @@ fn carry_emby(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail))
     sections.apply_batch(&batch);
     let mut emby_ui = state.emby_ui;
     emby_ui.with_mut(|ui| {
-        ui.pill_select = None;
         ui.filter.clear();
     });
 }
@@ -318,8 +317,8 @@ fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let emby = state.emby_ui.peek().clone();
     format!(
-        "filter_open={} emby_filter={:?} pill_select={:?}",
-        ui.filter_open, emby.filter, emby.pill_select,
+        "filter_open={} emby_filter={:?}",
+        ui.filter_open, emby.filter,
     )
 }
 

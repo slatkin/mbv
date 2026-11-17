@@ -5,8 +5,10 @@
 //! move.
 //!
 //! The core owns the data selection (which collections are selected, the picked
-//! item), so nothing here mirrors it: the collection toggle the keys request is
-//! an intent the pill row turns into the collection command (design D6).
+//! item), so nothing here mirrors it: a press on the collection dropdown sends
+//! the collection command the frame names, and the frame carries the choice
+//! back. The dropdown's open fact and its filter text are interaction state, so
+//! they live here (gui-collection-dropdown design D7).
 
 use dioxus_native::prelude::*;
 
@@ -36,6 +38,20 @@ pub struct RowMenu {
     pub y: f32,
 }
 
+/// The collection dropdown's interaction state (gui-collection-dropdown design
+/// D7), which the window owns and the core never reads.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CollectionsUiState {
+    /// Whether the dropdown is open: a press on its trigger opens it, and a
+    /// press outside it, Esc, or a destination change closes it.
+    pub open: bool,
+    /// The dropdown's filter text: while it is open it takes the typed keys
+    /// wherever the pointer is, and it narrows the collection entries by the
+    /// Library filter's match rule. A close clears it, so the next open starts
+    /// empty.
+    pub filter: String,
+}
+
 /// The Library panel's interaction state (`state.ts`'s `LibraryUiState`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LibraryUiState {
@@ -45,10 +61,10 @@ pub struct LibraryUiState {
     /// The filter's text: the `/` field types it, and it narrows the list
     /// without case (design D7).
     pub filter: String,
-    /// The collection pill a press asked for (design D6), by the paint key
-    /// the interim pill row carries. The pill row turns it into the
-    /// collection command.
-    pub pill_select: Option<String>,
+    /// The collection dropdown's interaction state (gui-collection-dropdown
+    /// design D7): whether it is open, and the filter text the open popover
+    /// narrows its entries by.
+    pub collections: CollectionsUiState,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -77,7 +93,7 @@ impl LibraryUiState {
         Self {
             filter_open: false,
             filter: String::new(),
-            pill_select: None,
+            collections: CollectionsUiState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
             // No pick has happened yet: the Narrow arrangement shows the list,
@@ -262,33 +278,55 @@ impl LibraryState {
         ui.with_mut(|ui| ui.filter_open = false);
     }
 
-    /// Ask for a collection pill to be selected (design D6): the pill row
-    /// turns the request into the collection command. The key is the paint
-    /// key the row carries — `GuiCollectionsFrame::ALL_KEY` for All.
-    pub fn request_library_pill_select(&self, key: String) {
-        let mut ui = self.ui;
-        ui.with_mut(|ui| ui.pill_select = Some(key));
-    }
-
-    /// Send the collection command a press on the pill painted with `key`
-    /// asks for (gui-collection-dropdown design D5): the All row selects All,
-    /// and every other key toggles its collection. The frame names the
-    /// destination, so every collection destination shares this one press
-    /// path.
-    pub fn press_collection_pill(&self, collections: &GuiCollectionsFrame, key: &str) {
+    /// Ask for a collection row to be pressed (gui-collection-dropdown design
+    /// D5, D6): the All row and the Clear control send All, and every other key
+    /// toggles its collection. The frame names the destination, so every
+    /// collection destination shares this one press path.
+    pub fn press_collection(&self, collections: &GuiCollectionsFrame, key: &str) {
         self.link.library(collections.pressed(key));
     }
 
-    /// Turn the keys' pill request into the collection command the pill row
-    /// sends (design D6). The intent is consumed here, so one key sends one
-    /// command.
-    pub fn apply_library_pill_select(&self, collections: &GuiCollectionsFrame) {
-        let Some(key) = self.ui.peek().pill_select.clone() else {
+    /// Press the date-order toggle (design D4, D6): the feed-based
+    /// destinations' order switches between Newest and Oldest. Music carries no
+    /// order, so its frame sends nothing.
+    pub fn press_date_order(&self, collections: &GuiCollectionsFrame) {
+        let Some(order) = collections.next_order() else {
             return;
         };
+        self.link.library(GuiLibraryCommand::DateOrder {
+            target: collections.target.clone(),
+            order,
+        });
+    }
+
+    /// Open or close the collection dropdown (design D7): a press on the
+    /// trigger opens it when it is closed, and closes it when it is open. A
+    /// close drops the filter text, so the next open starts empty.
+    pub fn toggle_collections_dropdown(&self) {
+        if self.ui.peek().collections.open {
+            self.close_collections_dropdown();
+        } else {
+            let mut ui = self.ui;
+            ui.with_mut(|ui| ui.collections.open = true);
+        }
+    }
+
+    /// Close the collection dropdown and clear its filter text (design D7): a
+    /// press outside it, Esc, a destination change, and a second press on the
+    /// trigger all land here.
+    pub fn close_collections_dropdown(&self) {
         let mut ui = self.ui;
-        ui.with_mut(|ui| ui.pill_select = None);
-        self.press_collection_pill(collections, &key);
+        ui.with_mut(|ui| {
+            ui.collections.open = false;
+            ui.collections.filter.clear();
+        });
+    }
+
+    /// Type into the collection dropdown's filter (design D7): the entries
+    /// narrow by the Library filter's match rule, and checks change nothing.
+    pub fn set_collections_filter(&self, filter: String) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.collections.filter = filter);
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
@@ -318,15 +356,17 @@ impl LibraryState {
     /// Reset the state an open leaves behind (design D2 of
     /// `gui-pointer-target-interaction`): the core's default row is not a
     /// pick, so the Narrow arrangement shows the new destination's list and
-    /// paints no overlay Hero, and an open row menu or item menu closes. The
-    /// core cannot reach this state, so the window runs this reset on the
-    /// carried `current_tab` change ([`Self::settle_destination_tab`]).
+    /// paints no overlay Hero, and an open row menu, item menu, or collection
+    /// dropdown closes (gui-collection-dropdown design D7: a destination change
+    /// closes the dropdown and clears its filter).
     pub fn reset_for_destination(&self) {
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.hero_dismissed = true;
             ui.item_menu_open = false;
             ui.row_menu = None;
+            ui.collections.open = false;
+            ui.collections.filter.clear();
         });
     }
 

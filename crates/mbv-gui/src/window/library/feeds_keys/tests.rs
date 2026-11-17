@@ -375,8 +375,8 @@ fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let feeds = state.feeds_ui.peek().clone();
     format!(
-        "filter_open={} dismissed={} item_menu_open={} filter={:?} pill_select={:?}",
-        ui.filter_open, ui.hero_dismissed, ui.item_menu_open, feeds.filter, feeds.pill_select,
+        "filter_open={} dismissed={} item_menu_open={} filter={:?}",
+        ui.filter_open, ui.hero_dismissed, ui.item_menu_open, feeds.filter,
     )
 }
 

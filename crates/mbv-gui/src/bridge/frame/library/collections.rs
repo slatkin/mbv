@@ -48,9 +48,9 @@ pub struct GuiCollectionEntry {
 }
 
 impl GuiCollectionsFrame {
-    /// The paint key the All row carries in the interim pill row: no
-    /// collection's stable Service id is empty, so the row keeps All and the
-    /// entries in one key space until the dropdown replaces it (design D6).
+    /// The paint key the All row carries: no collection's stable Service id is
+    /// empty, so the row keeps All and the entries in one key space and a
+    /// press names one row's command (design D6).
     pub const ALL_KEY: &'static str = "";
 
     /// The selector's label (design D6): `All`, the one checked collection's
@@ -84,6 +84,27 @@ impl GuiCollectionsFrame {
                 key: key.to_owned(),
             }
         }
+    }
+
+    /// The order a press on the date-order toggle asks for (design D4, D6):
+    /// Newest switches to Oldest and Oldest to Newest. `None` on Music, whose
+    /// frame carries no order and which paints no toggle.
+    #[must_use]
+    pub fn next_order(&self) -> Option<GuiDateOrder> {
+        self.order.map(|order| match order {
+            GuiDateOrder::Newest => GuiDateOrder::Oldest,
+            GuiDateOrder::Oldest => GuiDateOrder::Newest,
+        })
+    }
+
+    /// The date-order toggle's label (design D6): Newest or Oldest. `None` on
+    /// Music, which paints no toggle.
+    #[must_use]
+    pub fn order_label(&self) -> Option<&'static str> {
+        self.order.map(|order| match order {
+            GuiDateOrder::Newest => "Newest",
+            GuiDateOrder::Oldest => "Oldest",
+        })
     }
 }
 

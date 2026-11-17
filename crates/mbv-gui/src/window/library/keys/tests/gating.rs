@@ -14,7 +14,7 @@ fn slash_opens_the_filter_and_sends_no_key() {
         facts,
         vec![
             "slash=Handled",
-            "filter_open=true filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=true filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -33,7 +33,7 @@ fn the_queue_zone_sends_slash_to_the_core() {
         facts,
         vec![
             "slash=Core(Queue)",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     // The key command itself is the forwarder's; the router sends none.
@@ -90,7 +90,7 @@ fn an_open_core_overlay_sends_a_library_key_to_the_core() {
         facts,
         vec![
             "slash=Core(None)",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
 }
@@ -121,7 +121,7 @@ fn sections_without_the_library_list_leave_every_library_key_to_the_core() {
         facts,
         vec![
             "slash=Core(None)",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -142,7 +142,7 @@ fn the_open_filter_takes_a_typed_key() {
         facts,
         vec![
             "r=Text",
-            "filter_open=true filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=true filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -166,7 +166,7 @@ fn esc_closes_the_filter_clears_its_text() {
         facts,
         vec![
             "escape=Handled",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);

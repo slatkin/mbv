@@ -35,6 +35,16 @@ fn select_all_shows(app: &mut App, lib_idx: usize) {
     });
 }
 
+/// The names of the Podcasts dropdown's checked shows.
+fn checked_names(projection: &GuiPodcastsProjection) -> Vec<&str> {
+    let collections = projection.collections.as_ref().expect("collections");
+    let entries = collections.entries.iter();
+    entries
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.as_str())
+        .collect()
+}
+
 /// The generation the event arms accept while the test's runtime holds none.
 fn generation() -> mbv_core::service_runtime::SetupGeneration {
     mbv_core::service_runtime::SetupGeneration::default()
@@ -474,21 +484,16 @@ fn all_merges_two_shows_in_date_order_with_the_default_hero() {
         "an undated episode carries no gutter"
     );
 
-    let names: Vec<&str> = projection
-        .pills
+    let collections = projection.collections.as_ref().expect("collections");
+    let rows: Vec<(&str, bool)> = collections
+        .entries
         .iter()
-        .map(|pill| pill.name.as_str())
+        .map(|entry| (entry.name.as_str(), entry.checked))
         .collect();
     assert_eq!(
-        names,
-        ["All", "Show A", "Show B"],
-        "the pill row carries the All pill and one pill per show"
-    );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
-    assert_eq!(
-        selected_pills,
-        [true, false, false],
-        "All is the default selection"
+        rows,
+        [("Show A", false), ("Show B", false)],
+        "the dropdown offers every show, all unchecked under All"
     );
 
     let first = GuiPodcastEpisodeId::new("show-b".into(), "b-new".into()).encode();
@@ -544,11 +549,10 @@ fn a_checked_show_scopes_the_rows_to_that_show() {
         ["A Old", "A Undated"],
         "a checked show holds that show's episodes only"
     );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
     assert_eq!(
-        selected_pills,
-        [false, true, false],
-        "the checked show's pill is the one checked"
+        checked_names(&projection),
+        ["Show A"],
+        "the checked show's row is the one checked"
     );
 }
 
@@ -574,11 +578,10 @@ fn two_checked_shows_merge_their_episodes_in_date_order() {
         ["B New", "A Old", "A Undated"],
         "the two checked shows' episodes merge in the date order"
     );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
     assert_eq!(
-        selected_pills,
-        [false, true, true],
-        "both shows' pills stay checked and All does not"
+        checked_names(&projection),
+        ["Show A", "Show B"],
+        "both shows stay checked"
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill,
@@ -634,8 +637,11 @@ fn a_vanished_checked_show_falls_back_to_all() {
         ["B New"],
         "the fallback view merges every listed show"
     );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
-    assert_eq!(selected_pills, [true, false], "All paints as checked");
+    assert_eq!(
+        checked_names(&projection),
+        Vec::<&str>::new(),
+        "All checks no show"
+    );
 }
 
 /// The rows carry the shared row rule (row 10.1, spec `playback-resume`):

@@ -443,8 +443,13 @@ fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     format!(
-        "filter_open={} filter={:?} pill_select={:?} open={:?} dismissed={}",
-        ui.filter_open, ui.filter, ui.pill_select, ui.open_nodes, ui.hero_dismissed,
+        "filter_open={} filter={:?} collections_open={} collections_filter={:?} open={:?} dismissed={}",
+        ui.filter_open,
+        ui.filter,
+        ui.collections.open,
+        ui.collections.filter,
+        ui.open_nodes,
+        ui.hero_dismissed,
     )
 }
 
@@ -464,9 +469,9 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
 
 // A cursor move below the rows in view scrolls its row into view.
 
+mod collections;
 mod gating;
 mod home;
 mod list;
-mod pills;
 mod search_keys;
 mod window_keys;

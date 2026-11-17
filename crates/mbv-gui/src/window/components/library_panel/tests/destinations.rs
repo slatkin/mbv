@@ -1,15 +1,15 @@
 //! The destination-mount contracts (`LibraryPanel.test.ts`): the panel
 //! mounts the active destination's painters in place of the others' — the
-//! pill row mounts for real since row 7.4, the Heroes since rows 7.5-7.6,
-//! and the destination lists since row 7.7, each named by its own list
-//! column hook.
+//! collection dropdown for the destinations that have collections, the Heroes
+//! since rows 7.5-7.6, and the destination lists since row 7.7, each named by
+//! its own list column hook.
 
 use super::{built, fixtures, seed_idle_status};
 use crate::window::arrangement::GuiArrangement;
 
 /// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7):
-/// the panel paints the top bar and the pill row above the content row, and
-/// the content row paints the list region before the Wide Hero pane.
+/// the panel paints the top bar and the collection dropdown above the content
+/// row, and the content row paints the list region before the Wide Hero pane.
 #[test]
 fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
     let mut fixture = built(GuiArrangement::Wide);
@@ -21,11 +21,16 @@ fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
     assert_eq!(regions[..3], ["topBar", "pills", "list"]);
     // The Wide Hero paints after the list (gui-swap-queue-and-library-sides D1).
     assert!(regions[3..].contains(&"hero".to_owned()));
-    // The pill row's painter mounts for real (row 7.4): the pills region is
-    // the pill row's group, and the Music list's painter mounts under it.
+    // The dropdown's painter mounts for real (gui-collection-dropdown row 5.3):
+    // the pills region is the dropdown's group, and the Music list's painter
+    // mounts under it.
     assert!(
         fixture.presents("[data-library-region=\"pills\"][role=\"group\"]"),
-        "the Music pill row's painter mounts"
+        "the Music collection dropdown's painter mounts"
+    );
+    assert!(
+        fixture.presents("[data-library-collections-trigger]"),
+        "the dropdown's trigger mounts"
     );
     assert!(
         fixture.presents("[data-library-list-column]"),
@@ -41,7 +46,7 @@ fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 6.2): while
 /// the Home content is present (design D12, the destinations are exclusive),
 /// the panel mounts the Home painters in place of the Music ones, and the
-/// pill row and the letter rail do not paint.
+/// collection dropdown and the letter rail do not paint.
 #[test]
 fn the_home_content_mounts_the_home_list_and_hero_and_no_pills() {
     let mut fixture = built(GuiArrangement::Wide);
@@ -51,7 +56,7 @@ fn the_home_content_mounts_the_home_list_and_hero_and_no_pills() {
 
     assert!(
         !fixture.presents("[data-library-region=\"pills\"]"),
-        "Home paints no pill row"
+        "Home paints no collection dropdown"
     );
     assert!(
         !fixture.presents("[data-library-region=\"rail\"]"),
@@ -96,9 +101,9 @@ fn the_shows_content_mounts_the_shows_list_and_the_series_hero() {
     );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 8.1): while
-/// the plain Emby-library content is present (design D12, the destinations
-/// are exclusive), the panel mounts the Emby painters in place of the Music,
-/// Home, and Shows ones — its list and its Hero, and no pill row.
+/// the plain Emby-library content is present (design D12, the destinations are
+/// exclusive), the panel mounts the Emby painters in place of the Music,
+/// Home, and Shows ones — its list and its Hero, and no collection dropdown.
 #[test]
 fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_destinations() {
     let mut fixture = built(GuiArrangement::Wide);
@@ -116,7 +121,7 @@ fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_de
     );
     assert!(
         !fixture.presents("[data-library-region=\"pills\"]"),
-        "a plain library paints no pill row"
+        "a plain library paints no collection dropdown"
     );
     assert!(
         !fixture.presents("[data-library-list-column]")
@@ -126,27 +131,48 @@ fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_de
     );
 }
 /// Contract (`LibraryPanel.test.ts`, row 8.1): the feed-group Emby content
-/// mounts its pill row.
+/// mounts its collection dropdown and its list (gui-collection-dropdown row
+/// 5.3).
 #[test]
-fn the_feed_group_emby_content_mounts_its_pill_row() {
+fn the_feed_group_emby_content_mounts_its_collection_dropdown() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::emby_sections(true, "Home videos");
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture.presents("[data-library-region=\"pills\"]"),
-        "the feed-group pill row mounts"
+        fixture.presents("[data-library-collections-trigger]"),
+        "the feed-group collection dropdown mounts"
     );
     assert!(
         fixture.presents("[data-library-emby-list-column]"),
         "the Emby list's painter mounts"
     );
 }
+
+/// Contract (gui-collection-dropdown spec "A destination without
+/// collections"): the Shows content paints its series list and no collection
+/// dropdown.
+#[test]
+fn the_shows_content_paints_no_collection_dropdown() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::shows_sections();
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+
+    assert!(
+        fixture.presents("[data-library-shows-list-column]"),
+        "the Shows list's painter mounts"
+    );
+    assert!(
+        !fixture.presents("[data-library-region=\"pills\"]"),
+        "Shows paints no collection dropdown"
+    );
+}
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 9.1): while
 /// the Audiobooks content is present (design D12, the destinations are
 /// exclusive), the panel mounts the book list and the book Hero in place of
-/// the other destinations' painters, and no pill row rides on the
+/// the other destinations' painters, and no collection dropdown rides on the
 /// destination.
 #[test]
 fn the_audiobooks_content_mounts_the_book_list_and_hero_and_none_of_the_other_destinations() {
@@ -165,7 +191,7 @@ fn the_audiobooks_content_mounts_the_book_list_and_hero_and_none_of_the_other_de
     );
     assert!(
         !fixture.presents("[data-library-region=\"pills\"]"),
-        "no pill row rides on the destination"
+        "no collection dropdown rides on the destination"
     );
     assert!(
         !fixture.presents("[data-library-list-column]")
@@ -199,9 +225,9 @@ fn the_hero_less_audiobooks_content_paints_its_list_and_no_hero() {
     );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 11.1): while
-/// the Feeds content is present (design D12, the destinations are
-/// exclusive), the panel mounts the view pills, the entry list, and the
-/// entry Hero, and none of the other destinations' painters.
+/// the Feeds content is present (design D12, the destinations are exclusive),
+/// the panel mounts the collection dropdown, the entry list, and the entry
+/// Hero, and none of the other destinations' painters.
 #[test]
 fn the_feeds_content_mounts_the_feeds_pills_list_and_hero_and_none_of_the_other_destinations() {
     let mut fixture = built(GuiArrangement::Wide);
@@ -210,8 +236,8 @@ fn the_feeds_content_mounts_the_feeds_pills_list_and_hero_and_none_of_the_other_
     seed_idle_status(&mut fixture);
 
     assert!(
-        fixture.presents("[data-library-region=\"pills\"]"),
-        "the view pills mount"
+        fixture.presents("[data-library-collections-trigger]"),
+        "the collection dropdown mounts"
     );
     assert!(
         fixture.presents("[data-library-feeds-list-column]"),

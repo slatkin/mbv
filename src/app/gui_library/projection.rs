@@ -1,9 +1,10 @@
 //! The GUI Library's Music projection (add-gui-library-panel design D5): the
-//! group pills, the union of the selected groups' artists by `ArtistKey` in
-//! artist sort-name order, their albums with the cached tracklists, and the
-//! Hero's facts for the picked album. The selection is All or a set of checked
-//! groups (gui-collection-dropdown design D1, D2, D11). The projection reads
-//! `App` data only, so the TUI's own projections and paint do not change.
+//! group collection selector, the union of the selected groups' artists by
+//! `ArtistKey` in artist sort-name order, their albums with the cached
+//! tracklists, and the Hero's facts for the picked album. The selection is All
+//! or a set of checked groups (gui-collection-dropdown design D1, D2, D11).
+//! The projection reads `App` data only, so the TUI's own projections and paint
+//! do not change.
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,21 +16,6 @@ use mbv_ui_model::ui_util::fmt_duration_short;
 use super::GuiGroupAlbums;
 use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use crate::app::App;
-
-/// One group pill of the Music destination (add-gui-library-panel design D5,
-/// D6): a Grouped Music library's collections are its groups, so every Music
-/// pill is a collection pill. The dropdown replaces the row; until it does,
-/// `selected` marks the checked groups of the collection set.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiMusicPill {
-    /// The group's stable Service id: the set-collections command and the
-    /// collection store key it.
-    pub group_id: String,
-    /// The group's display name, the pill's label.
-    pub name: String,
-    /// Whether the core's selection checks the group.
-    pub selected: bool,
-}
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
 /// its albums, in artist sort-name order.
@@ -112,11 +98,9 @@ pub struct GuiMusicHero {
 }
 
 /// The Music projection the GUI Library panel paints (design D5): the group
-/// pills with their selected state, the artist union, and the Hero's facts.
+/// collection selector, the artist union, and the Hero's facts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiMusicProjection {
-    /// The group pills in the group level's order (design D5, D6).
-    pub pills: Vec<GuiMusicPill>,
     /// The destination's collection selector (design D6): All, every group in
     /// the group level's order with its checked flag, the Groups noun, and no
     /// date order — Music sorts by name. The bridge's collections frame rides
@@ -171,23 +155,19 @@ impl App {
     #[must_use]
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
         let set = self.gui_effective_music_set(lib_idx);
-        let pills = self.gui_music_pills(lib_idx, &set);
-        let collection_names = selected_collection_names(&set, &pills);
         let collections = Some(GuiCollections::new(
             GuiCollectionTarget::Music(lib_idx),
             &set,
             GuiCollectionNoun::Groups,
-            pills
-                .iter()
-                .map(|pill| (pill.group_id.clone(), pill.name.clone())),
+            self.gui_music_groups(lib_idx),
             None,
         ));
+        let collection_names = selected_collection_names(collections.as_ref());
         let selected_groups = self.gui_selected_groups(lib_idx);
         let union = self.gui_music_union(lib_idx, &selected_groups);
         let artists = self.gui_music_artists(&union);
         let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
         let projection = GuiMusicProjection {
-            pills,
             collections,
             collection_names,
             loading: union.loading,
@@ -225,11 +205,11 @@ impl App {
         });
     }
 
-    /// The Grouped Music library's group pills in the group level's order
-    /// (design D5): the group level is the library's own level in
-    /// `nav_stack`, and the pills paint the checked groups of the collection
-    /// set; All checks no pill (gui-collection-dropdown design D1).
-    fn gui_music_pills(&self, lib_idx: usize, set: &GuiCollectionSet) -> Vec<GuiMusicPill> {
+    /// The Grouped Music library's groups as the collection selector's catalog
+    /// in the group level's order (design D5, D6): each group's stable Service
+    /// id and its display name. The group level is the library's own level in
+    /// `nav_stack`.
+    fn gui_music_groups(&self, lib_idx: usize) -> Vec<(String, String)> {
         if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
             return Vec::new();
         }
@@ -239,11 +219,7 @@ impl App {
         group_level
             .items
             .iter()
-            .map(|group| GuiMusicPill {
-                group_id: group.id.clone(),
-                name: group.name.clone(),
-                selected: set.checked_keys().contains(&group.id),
-            })
+            .map(|group| (group.id.clone(), group.name.clone()))
             .collect()
     }
 
@@ -474,17 +450,21 @@ impl App {
 
 /// The names the frame carries for the selection (design D6):
 /// gui-collection-dropdown's All names itself, and a checked set names its
-/// checked groups' names in pill order. The one derivation of the names the
+/// checked groups' names in catalog order. The one derivation of the names the
 /// projection carries, so every painter that names the selected collections
 /// reads the same fact.
-fn selected_collection_names(set: &GuiCollectionSet, pills: &[GuiMusicPill]) -> Vec<String> {
-    if set.is_all() {
+fn selected_collection_names(collections: Option<&GuiCollections>) -> Vec<String> {
+    let Some(collections) = collections else {
+        return Vec::new();
+    };
+    if collections.all {
         return vec!["All".to_string()];
     }
-    pills
+    collections
+        .entries
         .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.clone())
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.clone())
         .collect()
 }
 

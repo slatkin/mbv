@@ -238,15 +238,11 @@ fn the_selected_group_alone_fills_the_list() {
 
     let projection = app.gui_music_projection(0);
 
-    let pills: Vec<(&str, bool)> = projection
-        .pills
-        .iter()
-        .map(|pill| (pill.name.as_str(), pill.selected))
-        .collect();
+    let rows: Vec<(&str, bool)> = checked_rows(&projection);
     assert_eq!(
-        pills,
+        rows,
         [("Hip-Hop", true), ("Soul", false)],
-        "the pills paint the core's selection"
+        "the dropdown paints the core's selection"
     );
     let artists: Vec<&str> = projection
         .artists
@@ -340,16 +336,10 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
 
     let projection = app.gui_music_projection(0);
 
-    let selected: Vec<&str> = projection
-        .pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.group_id.as_str())
-        .collect::<Vec<&str>>();
     assert_eq!(
-        selected,
+        checked_names(&projection),
         Vec::<&str>::new(),
-        "the emptied checked set reads as All, which checks no pill"
+        "the emptied checked set reads as All, which checks no group"
     );
     assert_eq!(
         projection.collection_names,
@@ -359,7 +349,7 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
 }
 
 /// With no stored choice, the destination starts on All (gui-collection-dropdown
-/// "The selection is All or checked collections"): no pill is checked and the
+/// "The selection is All or checked collections"): no group is checked and the
 /// union is every group's.
 #[test]
 fn no_stored_choice_selects_all() {
@@ -377,22 +367,34 @@ fn no_stored_choice_selects_all() {
 
     let projection = app.gui_music_projection(0);
 
-    let selected: Vec<&str> = projection
-        .pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.group_id.as_str())
-        .collect();
     assert_eq!(
-        selected,
+        checked_names(&projection),
         Vec::<&str>::new(),
-        "All is selected, which checks no pill"
+        "All is selected, which checks no group"
     );
     assert_eq!(
         projection.collection_names,
         ["All"],
         "All names itself in the frame's collection names"
     );
+}
+
+/// The Music dropdown's rows as `(name, checked)` pairs, in catalog order.
+fn checked_rows(projection: &GuiMusicProjection) -> Vec<(&str, bool)> {
+    let collections = projection.collections.as_ref().expect("collections");
+    let entries = collections.entries.iter();
+    entries
+        .map(|entry| (entry.name.as_str(), entry.checked))
+        .collect()
+}
+
+/// The names of the Music dropdown's checked groups.
+fn checked_names(projection: &GuiMusicProjection) -> Vec<&str> {
+    checked_rows(projection)
+        .into_iter()
+        .filter(|(_, checked)| *checked)
+        .map(|(name, _)| name)
+        .collect()
 }
 
 /// The album the Hero shows, by Service id (add-gui-library-panel design D13).

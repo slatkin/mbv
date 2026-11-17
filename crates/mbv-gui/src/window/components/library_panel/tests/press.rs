@@ -1,10 +1,11 @@
 //! The panel's press contracts (`LibraryPanel.test.ts`, design D2 of
 //! `gui-pointer-target-interaction`, D8, D15): the item menu's paint on a
-//! destination that is not Music and the outside-press close. The presses are
-//! the panel's handler functions, tested against the mock core link; a headless
-//! document cannot fire a DOM press.
+//! destination that is not Music and the outside-press close, the library
+//! menu's, and the collection dropdown's (gui-collection-dropdown design D7).
+//! The presses are the panel's handler functions, tested against the mock core
+//! link; a headless document cannot fire a DOM press.
 
-use super::{Fixture, built, fixtures, press_outside_menu, seed_idle_status};
+use super::{Fixture, built, fixtures, press_in_panel, seed_idle_status};
 use crate::window::arrangement::GuiArrangement;
 use dioxus_native::prelude::*;
 
@@ -83,8 +84,33 @@ fn a_press_inside_the_panel_closes_the_open_row_menu() {
     fixture.receiver.try_iter().last();
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || press_outside_menu(&state));
+    fixture.in_runtime(move || press_in_panel(&state));
 
     assert!(fixture.state.ui.peek().row_menu.is_none());
     assert_eq!(fixture.library_commands(), []);
+}
+
+/// Contract (gui-collection-dropdown design D7, spec "A press outside closes
+/// the dropdown"): a press inside the panel while the dropdown is open closes
+/// it and clears its filter text, so the next open starts empty.
+#[test]
+fn a_press_inside_the_panel_closes_the_open_collection_dropdown() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::music_sections(None);
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || {
+        state.toggle_collections_dropdown();
+        state.set_collections_filter("tifo".to_owned());
+    });
+    assert!(fixture.presents("[data-library-collections-menu]"));
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || press_in_panel(&state));
+
+    assert!(!fixture.state.ui.peek().collections.open);
+    assert_eq!(fixture.state.ui.peek().collections.filter, "");
+    assert_eq!(fixture.library_commands(), []);
+    assert!(!fixture.presents("[data-library-collections-menu]"));
 }

@@ -20,12 +20,9 @@ use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
 use super::collection::{
-    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
-    compare_gui_date_order,
+    GuiCollectionNoun, GuiCollectionTarget, GuiCollections, GuiDateOrder, compare_gui_date_order,
 };
-use super::entry_list::{
-    GuiEntryListProjection, GuiEntryRow, GuiPillOption, collection_pill_options, picked_or_first,
-};
+use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
@@ -95,17 +92,10 @@ impl GuiFeedEntryId {
     }
 }
 
-/// One pill of the Feeds pill row (row 11.1): All first, then one pill per
-/// configured subscription in the tab's order — the interim collection pill
-/// over the subscription's URL key (`None` is All). The pill row paints the
-/// collection set's membership; the dropdown replaces the row in a later
-/// unit.
-pub type GuiFeedsPillOption = GuiPillOption<Option<String>>;
-
-/// One row of the Feeds list (row 11.1) — the shared pill-scoped entry-list
-/// row. The identity is the entry's `(subscription url, guid)` pair, encoded
-/// as one opaque string a select, play, or enqueue command sends, never a row
-/// position.
+/// One row of the Feeds list (row 11.1) — the shared collection-scoped
+/// entry-list row. The identity is the entry's `(subscription url, guid)` pair,
+/// encoded as one opaque string a select, play, or enqueue command sends, never
+/// a row position.
 pub type GuiFeedsRow = GuiEntryRow;
 
 /// The selected entry's Hero facts (row 11.1): the shared `hero_content_feed`
@@ -136,15 +126,15 @@ pub struct GuiFeedsHero {
 }
 
 /// The Feeds projection the GUI Library panel paints (row 11.1) — the
-/// shared pill-scoped entry-list projection over the collection pill row and
-/// Hero: the All and subscription pills with their checked state, the
+/// shared collection-scoped entry-list projection over the collection selector
+/// and Hero: All and the subscriptions with their checked state, the
 /// selection's entry rows, the core's selected entry, and its Hero. No letter
 /// rail rides here and no state filter.
-pub type GuiFeedsProjection = GuiEntryListProjection<Option<String>, GuiFeedsHero>;
+pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
 
 impl App {
     /// The Feeds projection the GUI Library panel paints (row 11.1): the
-    /// collection pill row, the selection's entry rows in the stored date
+    /// collection selector, the selection's entry rows in the stored date
     /// order, the selected entry, and its Hero. A Client with no configured
     /// subscription projects the empty projection, as the frame's gate
     /// excludes that destination anyway.
@@ -155,14 +145,11 @@ impl App {
         }
         let set = self.gui_feeds_effective_set();
         let order = self.gui_feeds_date_order();
-        let pills = self.gui_feeds_pills(&set);
         let collections = Some(GuiCollections::new(
             GuiCollectionTarget::Feeds,
             &set,
             GuiCollectionNoun::Subscriptions,
-            pills
-                .iter()
-                .filter_map(|pill| pill.pill.clone().map(|key| (key, pill.name.clone()))),
+            self.gui_feeds_subscriptions(),
             Some(order),
         ));
         let rows = self.gui_feeds_rows(order);
@@ -172,7 +159,6 @@ impl App {
             .and_then(GuiFeedEntryId::decode)
             .and_then(|entry| self.gui_feeds_hero(&entry));
         GuiFeedsProjection {
-            pills,
             collections,
             loading: self.feed_tab.loading,
             failed: false,
@@ -182,17 +168,14 @@ impl App {
         }
     }
 
-    /// The collection pill row (row 11.1): All first, then each configured
-    /// subscription by its name in the tab's order, each checked exactly when
-    /// the selection holds it.
-    fn gui_feeds_pills(&self, set: &GuiCollectionSet) -> Vec<GuiFeedsPillOption> {
-        collection_pill_options(
-            set,
-            self.feed_tab
-                .subscriptions
-                .iter()
-                .map(|subscription| (subscription.url.clone(), subscription.name.clone())),
-        )
+    /// The Feeds collection selector's catalog (row 11.1): each configured
+    /// subscription by its name in the tab's order, keyed by its URL.
+    fn gui_feeds_subscriptions(&self) -> Vec<(String, String)> {
+        self.feed_tab
+            .subscriptions
+            .iter()
+            .map(|subscription| (subscription.url.clone(), subscription.name.clone()))
+            .collect()
     }
 
     /// The selection's entry rows (row 11.1; gui-collection-dropdown design

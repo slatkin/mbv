@@ -342,20 +342,25 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
         ["vid-new", "vid-shared", "vid-old"],
         "the merged list is newest first, with the shared item once"
     );
-    let pill_names: Vec<&str> = projection
-        .pills
+    let collections = projection
+        .collections
+        .as_ref()
+        .expect("the feed-group mode carries its collections");
+    let names: Vec<&str> = collections
+        .entries
         .iter()
-        .map(|pill| pill.name.as_str())
+        .map(|entry| entry.name.as_str())
         .collect();
     assert_eq!(
-        pill_names,
-        ["All", "Channel 1", "Channel 2"],
-        "the row offers All and each folder, with no New pill"
+        names,
+        ["Channel 1", "Channel 2"],
+        "the dropdown offers each folder, with no New row"
     );
     assert!(
-        projection.pills.iter().skip(1).all(|pill| pill.selected),
-        "both checked folders' pills are checked"
+        collections.entries.iter().all(|entry| entry.checked),
+        "both checked folders' rows are checked"
     );
+    assert!(!collections.all, "All is not the selection");
     assert_eq!(
         projection.collection_names,
         ["Channel 1", "Channel 2"],
@@ -531,8 +536,8 @@ fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
     );
     assert!(projection.rows.iter().all(|row| row.date.is_none()));
     assert!(
-        projection.pills.is_empty() && !projection.feed_group,
-        "the plain mode carries no pill"
+        projection.collections.is_none() && !projection.feed_group,
+        "the plain mode carries no collection selector"
     );
     assert!(!projection.loading && !projection.failed);
     assert_eq!(
@@ -628,23 +633,28 @@ fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
     let projection = app.gui_emby_projection(0);
 
     assert!(projection.feed_group, "the feed-group mode is named");
-    let names: Vec<&str> = projection
-        .pills
+    let collections = projection
+        .collections
+        .as_ref()
+        .expect("the feed-group mode carries its collections");
+    let names: Vec<&str> = collections
+        .entries
         .iter()
-        .map(|pill| pill.name.as_str())
+        .map(|entry| entry.name.as_str())
         .collect();
     assert_eq!(
         names,
-        ["All", "Channel 1", "Empty"],
-        "the pills are All and each root folder, with no New pill"
+        ["Channel 1", "Empty"],
+        "the dropdown offers each root folder, with no New row"
     );
-    let selected: Vec<&str> = projection
-        .pills
+    let selected: Vec<&str> = collections
+        .entries
         .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.as_str())
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.as_str())
         .collect();
-    assert_eq!(selected, ["All"], "the selection's pill is the checked one");
+    assert_eq!(selected, Vec::<&str>::new(), "All checks no folder's row");
+    assert!(collections.all, "the selection is All");
     let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,

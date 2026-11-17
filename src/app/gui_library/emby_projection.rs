@@ -19,7 +19,6 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
     compare_gui_date_order,
 };
-use super::entry_list::{GuiPillOption, collection_pill_options};
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
 use crate::app::App;
@@ -117,12 +116,6 @@ pub struct GuiEmbyProjection {
     /// The library's display name: the list header's title, so the column
     /// names the library it holds as the TUI's panel header does.
     pub library_name: String,
-    /// The feed-group mode's interim pill row (row 8.1; design D1, D6): the
-    /// All pill first, then one pill per root folder in listing order, each
-    /// checked exactly when the GUI's effective set holds its key. Empty in
-    /// plain mode, whose rail replaces the TUI's letter-range pill row. The
-    /// dropdown replaces the row in a later unit; the New pill is gone.
-    pub pills: Vec<GuiPillOption<Option<String>>>,
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): `Some` in the feed-group mode, with All, every root folder in
     /// listing order with its checked flag, the Folders noun, and the list's
@@ -131,11 +124,11 @@ pub struct GuiEmbyProjection {
     pub collections: Option<GuiCollections>,
     /// The selected collection's name the Library Status bar's location
     /// reads (design D10), as the Shows projection carries its mode's name:
-    /// the selection's pill name in the feed-group mode, and nothing in
-    /// plain mode, whose list is the whole library.
+    /// the selection's name in the feed-group mode, and nothing in plain
+    /// mode, whose list is the whole library.
     pub collection_names: Vec<String>,
     /// Whether the library is a feed-view library in the feed-group mode
-    /// (`feed_view_libraries`): the mode the pills, the row order, and the
+    /// (`feed_view_libraries`): the mode the selector, the row order, and the
     /// rail follow.
     pub feed_group: bool,
     /// Whether the active list has not landed yet: the root-list store's
@@ -253,7 +246,6 @@ impl App {
             .map(|item| self.gui_emby_hero(&item));
         GuiEmbyProjection {
             library_name: self.gui_emby_library_name(lib_idx),
-            pills: Vec::new(),
             collections: None,
             collection_names: Vec::new(),
             feed_group: false,
@@ -272,7 +264,6 @@ impl App {
     fn gui_emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let set = self.gui_emby_feed_effective_set(lib_idx);
         let folders = self.gui_root_folder_names(lib_idx);
-        let pills = self.gui_emby_feed_pills(lib_idx, &set);
         let collections = Some(GuiCollections::new(
             GuiCollectionTarget::EmbyFeed(lib_idx),
             &set,
@@ -294,7 +285,6 @@ impl App {
             .map(|item| self.gui_emby_hero(&item));
         GuiEmbyProjection {
             library_name: self.gui_emby_library_name(lib_idx),
-            pills,
             collections,
             collection_names,
             feed_group: true,
@@ -346,19 +336,6 @@ impl App {
             .get(lib_idx)
             .and_then(|lib| lib.nav_stack.first())
             .is_none_or(|root| root.loading)
-    }
-
-    /// The feed-group mode's interim pill row (row 8.1; design D1, D6): All
-    /// first, then one pill per root folder in listing order, each checked
-    /// exactly when the GUI's effective set holds its key. The dropdown
-    /// replaces the row in a later unit, and the New pill is gone with the
-    /// destination-Latest view.
-    fn gui_emby_feed_pills(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-    ) -> Vec<GuiPillOption<Option<String>>> {
-        collection_pill_options(set, self.gui_root_folder_names(lib_idx))
     }
 
     /// The core's selected row (design D2, row 8.1): the stored pick while

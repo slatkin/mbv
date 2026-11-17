@@ -44,11 +44,9 @@ pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
     GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
-pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow, GuiPillOption};
+pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 pub use self::feeds::GuiFeedsSelection;
-pub use self::feeds_projection::{
-    GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
-};
+pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
 pub(in crate::app) use self::home::GuiHomeLatestEvent;
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
@@ -59,11 +57,10 @@ pub use self::launch::GuiLaunchOpen;
 pub use self::marks::GuiPlayheadMarks;
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
-    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,
-    GuiPodcastsRow,
+    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
 };
 pub use self::projection::{
-    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
 pub(in crate::app) use self::search::GuiSearchStore;

@@ -66,12 +66,57 @@ fn accept_active_filter(state: &LibraryState) {
     }
 }
 
+/// Whether a key is one the open collection dropdown's filter types (design
+/// D7): one printable character, or Backspace. A chord key and every control
+/// key stay the Library's and the core's, so the dropdown binds no key beyond
+/// the filter's own.
+fn types_into_filter(key: &DomKey) -> bool {
+    key.key == "Backspace"
+        || (!key.modifiers.ctrl_key
+            && !key.meta_key
+            && !key.modifiers.alt_key
+            && key.key.chars().count() == 1)
+}
+
+/// Route a key while the collection dropdown is open (gui-collection-dropdown
+/// design D7): Esc closes it and clears its filter text, and the filter takes
+/// the typed keys and Backspace wherever the pointer is. Every other key
+/// passes to the rest of the routing, so the dropdown binds nothing else.
+fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    if key.key == "Escape" && bare(key) {
+        state.close_collections_dropdown();
+        return Some(KeyOutcome::Handled);
+    }
+    types_into_filter(key).then_some(KeyOutcome::Text)
+}
+
+/// Route a key while an open text field of the panel holds the keyboard (design
+/// D3, step 2; gui-collection-dropdown design D7): the list's `/` filter takes
+/// every key, and the collection dropdown's own filter takes the typed keys,
+/// Backspace, and Esc — everywhere the pointer is. `None` while no field of the
+/// panel is open, so the rest of the routing answers the key.
+fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+    // The facts are copied out of the store: a route may write it, and a held
+    // read would meet that write.
+    let (filter_open, collections_open) = {
+        let ui = state.ui.peek();
+        (ui.filter_open, ui.collections.open)
+    };
+    if filter_open {
+        return Some(route_filter_key(state, key));
+    }
+    if collections_open {
+        return route_collections_open_key(state, key);
+    }
+    None
+}
+
 /// Route a key to the Home keys (design D12, D2 of
 /// `gui-pointer-target-interaction`): `/` opens the list filter, the movement
 /// keys scroll the list under the pointer, and Enter, `n`, and `a` act on the
 /// hovered row. With no hovered row they are consumed and do nothing. There is
-/// no destination filter and no pill row on Home, so Space passes to the
-/// core's router.
+/// no destination filter and no collection dropdown on Home, so Space passes
+/// to the core's router.
 fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTarget) -> KeyOutcome {
     let target = core_target(pointer);
     if key.key == "/" && bare(key) {
@@ -79,8 +124,8 @@ fn route_home_panel_key(state: &LibraryState, key: &DomKey, pointer: &PointerTar
         return KeyOutcome::Handled;
     }
     if key.key == " " {
-        // No pill row on Home (row 6.2): Space keeps its core effect, as it
-        // does under the Queue.
+        // No collection dropdown on Home (row 6.2): Space keeps its core
+        // effect, as it does under the Queue.
         return KeyOutcome::Core(target);
     }
     if !bare(key) {
@@ -312,8 +357,9 @@ fn route_music_panel_key(
         state.open_library_filter();
         return KeyOutcome::Handled;
     }
-    // Space stays the core's play and pause (design D2, step 4): the pill row
-    // holds no keyboard focus, so the window never takes it.
+    // Space stays the core's play and pause (design D2, step 4): the
+    // collection dropdown's trigger holds no keyboard focus, so the window
+    // never takes it.
     if key.key == " " {
         return KeyOutcome::Core(core_target(pointer));
     }
@@ -428,8 +474,8 @@ pub fn route_library_key(
     if state.search_field_mounted() && state.search_field_focused() {
         return route_search_key(state, key, sections.search.peek().as_ref());
     }
-    if state.ui.peek().filter_open {
-        return route_filter_key(state, key);
+    if let Some(outcome) = route_open_field_key(state, key) {
+        return outcome;
     }
     // (3) Esc closes what the window opened, wherever the pointer is (design
     // D2, step 1). With nothing open it stays the core's key.

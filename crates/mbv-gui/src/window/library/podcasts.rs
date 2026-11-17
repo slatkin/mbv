@@ -1,44 +1,44 @@
 //! The Podcasts destination's interaction state (`add-gui-library-panel`
 //! design D12, row 10.1, the port of `lib/library/podcasts.ts`): what the
-//! window content owns and the core never reads — the `/` filter's text and the
-//! pill row's request. The scroll offset and the measured viewport live in the
-//! Podcasts list's scroll store ([`super::scroll`], design D9). The core owns
-//! the pill selection and the selected episode (the frame's `pills` and
-//! `selected`), so nothing here mirrors them: a press sends the select command,
-//! and the frame carries the choice back. The row model is
-//! [`super::podcasts_list`]'s; the Hero overlay stays in [`super::state`]'s
-//! shared store. There is no play-next: `n` is consumed and does nothing.
+//! window content owns and the core never reads — the `/` filter's text. The
+//! scroll offset and the measured viewport live in the Podcasts list's scroll
+//! store ([`super::scroll`], design D9). The core owns the collection selection
+//! and the selected episode (the frame's `collections` and `selected`), so
+//! nothing here mirrors them: a press sends the select command, and the frame
+//! carries the choice back. The row model is [`super::podcasts_list`]'s; the
+//! Hero overlay stays in [`super::state`]'s shared store. There is no
+//! play-next: `n` is consumed and does nothing.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
 //! list (design D6).
 //!
-//! The state, the filter, and the scroll store are the pill-list controller's
-//! ([`super::pill_list`], row 7C.1); this module keeps the Podcasts frame, the
-//! Podcasts rows, the Podcasts command shapes, and the Podcasts names.
+//! The state, the filter, and the scroll store are the filtered-list
+//! controller's ([`super::list_state`], row 7C.1); this module keeps the
+//! Podcasts frame, the Podcasts rows, the Podcasts command shapes, and the
+//! Podcasts names.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiCollectionsFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_podcasts_list;
 use crate::window::library::podcasts_list::PodcastsItemRow;
 
-use super::pill_list::PillListUiState;
+use super::list_state::ListUiState;
 use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
-/// The Podcasts list's interaction state: the shared pill-list state over the
-/// show selector (gui-collection-dropdown design D6).
-pub type PodcastsUiState = PillListUiState;
+/// The Podcasts list's interaction state: the shared filtered-list state over
+/// the show selector (gui-collection-dropdown design D6).
+pub type PodcastsUiState = ListUiState;
 
 /// The state a freshly mounted Podcasts list starts with.
 #[must_use]
 pub fn initial_podcasts_ui() -> PodcastsUiState {
-    PillListUiState::initial()
+    ListUiState::initial()
 }
 
 impl LibraryState {
@@ -180,25 +180,5 @@ impl LibraryState {
         let rows = self.podcasts_rows();
         let held = *self.scrolls.podcasts.peek();
         set_scroll_top(self.scrolls.podcasts, &rows, held.scroll_top);
-    }
-
-    /// Ask for a collection pill to be selected (design D6): the pill row
-    /// turns the request into the collection command, and the key is the paint
-    /// key the row carries.
-    pub fn request_podcasts_pill_select(&self, key: String) {
-        let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.pill_select = Some(key));
-    }
-
-    /// Turn the keys' pill request into the collection command the pill row
-    /// sends (design D6). The intent is consumed here, so one key sends one
-    /// command.
-    pub fn apply_podcasts_pill_select(&self, collections: &GuiCollectionsFrame) {
-        let key = self.podcasts_ui.peek().pill_select.clone();
-        if let Some(key) = key {
-            let mut podcasts_ui = self.podcasts_ui;
-            podcasts_ui.with_mut(|ui| ui.pill_select = None);
-            self.press_collection_pill(collections, &key);
-        }
     }
 }

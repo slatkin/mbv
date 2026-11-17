@@ -57,7 +57,7 @@ fn esc_closes_the_open_row_menu_from_the_queue_zone() {
     assert_eq!(facts[0], "escape=Handled");
     assert_eq!(
         facts[1],
-        "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+        "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
     );
     // Only the open's own command reached the core: the Esc sent nothing.
     assert_eq!(
@@ -110,7 +110,7 @@ fn esc_closes_the_narrow_hero_overlay() {
         facts,
         vec![
             "escape=Handled",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);
@@ -139,7 +139,7 @@ fn esc_with_no_overlay_or_menu_open_is_the_cores_key() {
         facts,
         vec![
             "escape=Core(None)",
-            "filter_open=false filter=\"\" pill_select=None open=[] dismissed=true"
+            "filter_open=false filter=\"\" collections_open=false collections_filter=\"\" open=[] dismissed=true"
         ]
     );
     assert_eq!(commands(&rx), []);

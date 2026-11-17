@@ -29,9 +29,7 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
     compare_gui_date_order,
 };
-use super::entry_list::{
-    GuiEntryListProjection, GuiEntryRow, GuiPillOption, collection_pill_options, picked_or_first,
-};
+use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
@@ -123,17 +121,10 @@ impl From<&PodcastEpisodeTarget> for GuiPodcastEpisodeId {
     }
 }
 
-/// One pill of the Podcasts pill row (row 10.1): All first, then one pill
-/// per show in the show list's title order — the interim collection pill
-/// over the show's `library_item_id` key (`None` is All). The pill row paints
-/// the collection set's membership; the dropdown replaces the row in a later
-/// unit.
-pub type GuiPodcastsPillOption = GuiPillOption<Option<String>>;
-
-/// One row of the Podcasts list (row 10.1) — the shared pill-scoped
-/// entry-list row. The identity is the episode's stable
-/// `(library_item_id, episode_id)` pair, encoded as one opaque string a
-/// select, play, or enqueue command sends, never a row position.
+/// One row of the Podcasts list (row 10.1) — the shared collection-scoped
+/// entry-list row. The identity is the episode's stable `(library_item_id,
+/// episode_id)` pair, encoded as one opaque string a select, play, or enqueue
+/// command sends, never a row position.
 pub type GuiPodcastsRow = GuiEntryRow;
 
 /// The selected episode's Hero facts (row 10.1): the shared
@@ -169,15 +160,15 @@ pub struct GuiPodcastsHero {
 }
 
 /// The Podcasts projection the GUI Library panel paints (row 10.1) — the
-/// shared pill-scoped entry-list projection over the collection pill row and
-/// Hero: the All and show pills with their checked state, the selection's
+/// shared collection-scoped entry-list projection over the collection selector
+/// and Hero: All and the shows with their checked state, the selection's
 /// episode rows, the core's selected episode, and its Hero. No letter rail
 /// rides here — the list is sorted by date — and no Workspace.
-pub type GuiPodcastsProjection = GuiEntryListProjection<Option<String>, GuiPodcastsHero>;
+pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastsHero>;
 
 impl App {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
-    /// collection pill row, the selection's episode rows in the stored date
+    /// collection selector, the selection's episode rows in the stored date
     /// order, the selected episode, and its Hero. A `lib_idx` that names no
     /// podcast library projects the empty projection, as the frame's gate
     /// excludes that destination anyway.
@@ -188,14 +179,11 @@ impl App {
         }
         let set = self.gui_podcast_effective_set(lib_idx);
         let order = self.gui_podcast_date_order(lib_idx);
-        let pills = self.gui_podcast_pills(lib_idx, &set);
         let collections = Some(GuiCollections::new(
             GuiCollectionTarget::Podcasts(lib_idx),
             &set,
             GuiCollectionNoun::Shows,
-            pills
-                .iter()
-                .filter_map(|pill| pill.pill.clone().map(|key| (key, pill.name.clone()))),
+            self.gui_podcast_shows(lib_idx),
             Some(order),
         ));
         let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &set, order);
@@ -205,7 +193,6 @@ impl App {
             .and_then(GuiPodcastEpisodeId::decode)
             .and_then(|episode| self.gui_podcast_hero(lib_idx, &episode));
         GuiPodcastsProjection {
-            pills,
             collections,
             loading,
             failed,
@@ -215,25 +202,19 @@ impl App {
         }
     }
 
-    /// The collection pill row (row 10.1): All first, then each listed show
-    /// by title — the order the show list already holds — each checked
-    /// exactly when the selection holds it.
-    fn gui_podcast_pills(
-        &self,
-        lib_idx: usize,
-        set: &GuiCollectionSet,
-    ) -> Vec<GuiPodcastsPillOption> {
+    /// The Podcasts collection selector's catalog (row 10.1): each listed show
+    /// by title — the order the show list already holds — as its
+    /// `library_item_id` key and title.
+    fn gui_podcast_shows(&self, lib_idx: usize) -> Vec<(String, String)> {
         let shows = self
             .audiobookshelf_browse
             .get(lib_idx)
             .map(|state| state.shows.as_slice())
             .unwrap_or_default();
-        collection_pill_options(
-            set,
-            shows
-                .iter()
-                .map(|show| (show.library_item_id.clone(), show.title.clone())),
-        )
+        shows
+            .iter()
+            .map(|show| (show.library_item_id.clone(), show.title.clone()))
+            .collect()
     }
 
     /// The selection's episode rows with the view's loading and failure
