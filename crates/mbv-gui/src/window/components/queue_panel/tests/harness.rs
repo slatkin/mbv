@@ -133,6 +133,7 @@ pub(super) fn chooser_entry(
         queue,
         shown,
         current,
+        playing: false,
     }
 }
 
@@ -148,6 +149,22 @@ pub(super) fn queue_chooser(renaming: Option<GuiQueueChooserRename>) -> GuiOverl
             chooser_entry("living-room", None, false, false),
         ],
         renaming,
+    }
+}
+
+/// The open Queue chooser while the local Owner plays its current queue:
+/// `queue_chooser` with `Default` marked as playing.
+pub(super) fn queue_chooser_playing() -> GuiOverlayFrame {
+    GuiOverlayFrame::QueueChooser {
+        cursor: 1,
+        entries: vec![
+            GuiQueueChooserEntry {
+                playing: true,
+                ..chooser_entry("Default", Some(1), false, true)
+            },
+            chooser_entry("Kids", Some(2), true, false),
+        ],
+        renaming: None,
     }
 }
 

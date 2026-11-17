@@ -19,6 +19,8 @@ impl App {
     #[must_use]
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
         let current = self.named_queues.current();
+        let local_status = self.local_queue_player().status_snapshot();
+        let local_plays = local_status.active && !local_status.paused;
         let mut entries: Vec<QueueChooserEntryProjection> = self
             .named_queues
             .entries()
@@ -28,6 +30,7 @@ impl App {
                 queue: Some(entry.id),
                 shown: self.gui_shown_entry == Some(ShownEntry::Local(entry.id)),
                 current: current == Some(entry.id),
+                playing: local_plays && current == Some(entry.id),
             })
             .collect();
         if self.has_direct_remote_queue() {
@@ -36,6 +39,7 @@ impl App {
                 queue: None,
                 shown: self.gui_shown_entry == Some(ShownEntry::Peer),
                 current: false,
+                playing: false,
             });
         }
         entries

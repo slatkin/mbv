@@ -146,6 +146,10 @@ pub struct QueueChooserEntryProjection {
     pub shown: bool,
     /// Whether this entry is the queue that holds the playhead.
     pub current: bool,
+    /// Whether this entry is the current queue while the local Owner plays
+    /// it: playback is active and not paused. A stopped or paused current
+    /// queue still holds the playhead but is not marked as playing.
+    pub playing: bool,
 }
 
 /// The rename draft an open Queue chooser holds, as the frame carries it: the

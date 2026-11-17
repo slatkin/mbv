@@ -250,6 +250,8 @@ pub struct GuiQueueChooserEntry {
     pub shown: bool,
     /// Whether this entry is the queue that holds the playhead.
     pub current: bool,
+    /// Whether this entry is the current queue while the local Owner plays it.
+    pub playing: bool,
 }
 
 impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
@@ -259,6 +261,7 @@ impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
             queue: entry.queue.map(mbv_queue::NamedQueueId::raw),
             shown: entry.shown,
             current: entry.current,
+            playing: entry.playing,
         }
     }
 }

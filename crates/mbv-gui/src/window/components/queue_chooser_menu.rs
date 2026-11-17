@@ -13,7 +13,8 @@
 //! overlays read alike.
 //!
 //! The marks: the shown entry leads with the canvas's check, the current queue —
-//! the one that holds the playhead — trails with a filled accent dot, and the
+//! the one that holds the playhead — trails with a filled accent dot, or with
+//! the audio-lines mark in its place while the local Owner plays it, and the
 //! peer entry trails with the direct-peer brand mark, so a peer is never read as
 //! a local queue and binds no rename. The rename draft paints in place of its
 //! entry's label, with the block caret the Queue filter's entry paints, because
@@ -32,7 +33,7 @@ use crate::bridge::frame::overlay::{GuiQueueChooserEntry, GuiQueueChooserRename}
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::components::row_handle::record_row_handle;
-use crate::window::icons::Check;
+use crate::window::icons::{AudioLines, Check};
 use crate::window::theme::canvas_var;
 
 /// The current queue's mark: the accent dot's diameter in logical pixels.
@@ -126,6 +127,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     let label = entry.label.clone();
                     let shown = entry.shown;
                     let current = entry.current;
+                    let playing = entry.playing;
                     let peer = entry.queue.is_none();
                     let row_slot = props.row_slot;
                     rsx! {
@@ -181,8 +183,17 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                 class: "flex shrink-0 items-center",
                                 style: "gap: 4px;",
                                 // The current queue — the one that holds the
-                                // playhead — trails with the accent dot.
-                                if current {
+                                // playhead — trails with the accent dot, and
+                                // with the audio-lines mark in its place while
+                                // the local Owner plays it.
+                                if playing {
+                                    span {
+                                        class: "flex items-center",
+                                        title: "Playing",
+                                        "data-chooser-playing": "",
+                                        AudioLines { size: 14, color: canvas_var("accent") }
+                                    }
+                                } else if current {
                                     span {
                                         class: "inline-block rounded-full",
                                         style: "width: {CURRENT_MARK_PX}px; height: {CURRENT_MARK_PX}px; background: {canvas_var(\"accent\")};",

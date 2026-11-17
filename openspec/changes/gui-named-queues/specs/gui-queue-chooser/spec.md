@@ -26,13 +26,19 @@ The GUI queue header SHALL show the Queue chooser, the Queue filter control, a c
 
 ### Requirement: The chooser lists local queues and connected peers
 
-The Queue chooser SHALL list every Named queue of the local Owner in queue order, then one entry for each peer Player owner the GUI Client is connected to, named by the peer's device name. The list SHALL mark the shown entry and the current queue, and SHALL mark a peer entry as a peer. Choosing an entry SHALL show it and SHALL NOT start, stop, or move playback.
+The Queue chooser SHALL list every Named queue of the local Owner in queue order, then one entry for each peer Player owner the GUI Client is connected to, named by the peer's device name. The list SHALL mark the shown entry and the current queue, and SHALL mark a peer entry as a peer. While the local Owner plays the current queue, its entry SHALL carry a playing mark in place of the current mark; a stopped or paused current queue keeps the current mark. Choosing an entry SHALL show it and SHALL NOT start, stop, or move playback.
 
 #### Scenario: Choose a resting queue
 
 - **GIVEN** `Default` plays
 - **WHEN** the user chooses `Kids` in the chooser
 - **THEN** the Queue panel shows `Kids` and `Default` keeps playing
+
+#### Scenario: The playing queue is marked
+
+- **GIVEN** `Default` is the current queue and plays, and `Kids` is shown
+- **WHEN** the user opens the chooser
+- **THEN** `Default` carries the playing mark, `Kids` carries the shown mark, and no entry carries both the playing mark and the current mark
 
 ### Requirement: A connect adds a peer entry
 

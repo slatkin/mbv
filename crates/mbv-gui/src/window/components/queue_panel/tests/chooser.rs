@@ -44,6 +44,32 @@ fn the_chooser_lists_the_local_queues_then_the_peer_and_reports_each_entry() {
     );
 }
 
+/// Contract (user request on PR 1019, spec `gui-queue-chooser`): while the
+/// local Owner plays its current queue, that entry carries the playing mark in
+/// place of the current dot, and no other entry carries it.
+#[test]
+fn the_chooser_marks_the_queue_that_plays_in_place_of_the_current_dot() {
+    let fixture = built_with_frame(
+        queue_panel_app,
+        queue(Vec::new()),
+        chooser_summary(),
+        Some(queue_chooser_playing()),
+    );
+
+    assert!(
+        fixture.presents("[data-chooser-entry=\"1\"] [data-chooser-playing]"),
+        "the playing queue carries the playing mark"
+    );
+    assert!(
+        !fixture.presents("[data-chooser-entry=\"1\"] [data-chooser-current]"),
+        "the playing mark replaces the current dot"
+    );
+    assert!(
+        !fixture.presents("[data-chooser-entry=\"2\"] [data-chooser-playing]"),
+        "a resting queue is not marked as playing"
+    );
+}
+
 /// Contract (spec `gui-queue-chooser` "The chooser lists local queues and
 /// connected peers"): the list marks the shown entry, marks the current queue,
 /// and marks the peer entry as a peer.
