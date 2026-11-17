@@ -11,7 +11,7 @@ use mbv_queue::NamedQueueId;
 
 use crate::app::state::playback::ShownEntry;
 use crate::app::state::queue_view::{AdoptCause, QueueView};
-use crate::app::{App, QueueLink};
+use crate::app::{App, QueueLink, QueueTarget};
 
 /// The Named queues one local Owner reported (`CtrlEvent::NamedQueueList`).
 #[derive(Debug, Default)]
@@ -238,15 +238,27 @@ impl App {
             .send_ctrl_cmd(mbv_ctrl::CtrlCmd::NamedQueueShow { queue });
     }
 
+    /// The shown resting queue and its own view, when the Queue panel shows a
+    /// local Named queue the Owner still rests (design D7): one accessor
+    /// decides it, and `shown_local_queue` and `shown_resting_queue_id` both
+    /// read it. A stale entry — the Owner has since made the queue current —
+    /// answers `None`, so the panel falls back to the current queue's view.
+    fn shown_resting_live(&self) -> Option<(NamedQueueId, &QueueView)> {
+        match &self.shown_resting {
+            Some((queue, view)) if self.named_queues.rests(*queue) => Some((*queue, view)),
+            _ => None,
+        }
+    }
+
     /// The local link's displayed view: the shown resting queue's own view, or
     /// the current queue's `local_view` (design D7). A resting view the Owner
     /// has since made current is stale, so the current queue's view answers
     /// then.
     #[must_use]
     pub(in crate::app) fn shown_local_queue(&self) -> &QueueView {
-        match &self.shown_resting {
-            Some((queue, view)) if self.named_queues.rests(*queue) => view,
-            _ => &self.local_view,
+        match self.shown_resting_live() {
+            Some((_, view)) => view,
+            None => &self.local_view,
         }
     }
 
@@ -254,10 +266,7 @@ impl App {
     /// while the panel shows the current queue's `local_view` (design D7).
     #[must_use]
     pub(in crate::app) fn shown_resting_queue_id(&self) -> Option<NamedQueueId> {
-        match &self.shown_resting {
-            Some((queue, _)) if self.named_queues.rests(*queue) => Some(*queue),
-            _ => None,
-        }
+        self.shown_resting_live().map(|(queue, _)| queue)
     }
 
     /// The Named queue the Queue panel shows on the local link: the shown
@@ -303,5 +312,37 @@ impl App {
             Some(ShownEntry::Local(queue)) => Some(queue),
             Some(ShownEntry::Peer) | None => None,
         }
+    }
+
+    /// The queue target an edit of `link`'s queue names (design D7): `link`
+    /// plus the shown queue's identity, resolved once per edit. The TUI Client
+    /// and a peer entry name no Named queue, so the target is the link's
+    /// current queue.
+    #[must_use]
+    pub(in crate::app) fn queue_target(&self, link: QueueLink) -> QueueTarget {
+        QueueTarget {
+            link,
+            queue: self.shown_queue_edit(),
+        }
+    }
+
+    /// The queue target an edit of the queue the panel shows names (design
+    /// D7): the shown queue's link plus its identity, resolved once per edit.
+    #[must_use]
+    pub(in crate::app) fn queue_edit_target(&self) -> QueueTarget {
+        self.queue_target(self.playing_queue_link())
+    }
+
+    /// The row a "Play next" move lands directly after in the queue the panel
+    /// shows (design D7, D9 of `gui-named-queues`): the run's active row, or —
+    /// for a resting queue the GUI shows, which holds no playhead — its start
+    /// slot. `None` while the run is idle, or a resting queue has no start
+    /// slot.
+    #[must_use]
+    pub(in crate::app) fn shown_queue_anchor(&self) -> Option<usize> {
+        if self.shows_resting_local_queue() {
+            return self.displayed_queue().start_index();
+        }
+        self.displayed_playback_state().active_idx
     }
 }

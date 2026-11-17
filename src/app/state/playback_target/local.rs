@@ -1,7 +1,6 @@
 use super::LocalPlaybackTarget;
-use crate::app::App;
-use crate::app::QueueLink;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::{App, QueueLink, QueueTarget};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_remote_player::QueueOp;
 use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
@@ -17,9 +16,11 @@ impl LocalPlaybackTarget {
         if let Some(queue) = app.shown_queue_play_request() {
             app.flash("Play requested".to_string(), ToastSeverity::Neutral);
             app.queue_op(
-                QueueLink::Local,
+                QueueTarget {
+                    link: QueueLink::Local,
+                    queue: Some(queue),
+                },
                 QueueOp::PlayQueue { slot: None },
-                Some(queue),
             );
             return;
         }

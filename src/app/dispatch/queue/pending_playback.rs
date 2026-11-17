@@ -30,13 +30,8 @@ impl App {
         // `start_idx`, and the Client adopts the resulting snapshot; the
         // Client holds no editable queue of its own.
         let link = self.playing_queue_link();
-        let sent = self.replace_emby_queue_on_owner(
-            link,
-            items,
-            start_idx,
-            source,
-            self.shown_queue_edit(),
-        );
+        let sent =
+            self.replace_emby_queue_on_owner(self.queue_edit_target(), items, start_idx, source);
         if sent == QueueOpEdit::NotApplied {
             return;
         }
@@ -58,11 +53,7 @@ impl App {
             // as an answered op (UnifiedQueueClearOp for a capable owner); the
             // owner stops its player, clears the canonical queue, and the
             // Client adopts the empty queue only from the answer.
-            let sent = self.queue_op(
-                link,
-                mbv_remote_player::QueueOp::Clear,
-                self.shown_queue_edit(),
-            );
+            let sent = self.queue_op(self.queue_edit_target(), mbv_remote_player::QueueOp::Clear);
             if sent == QueueOpEdit::NotApplied {
                 return;
             }

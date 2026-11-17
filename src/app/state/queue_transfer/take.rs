@@ -10,7 +10,7 @@ use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::queue_transfer::{
     PendingQueueTransfer, QueueTransferDirection, StagedQueueTransfer, StagedQueueTransferLink,
 };
-use crate::app::{App, QueueLink};
+use crate::app::{App, QueueLink, QueueTarget};
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::panel_targets::SessionTargetKey;
@@ -216,14 +216,13 @@ impl App {
         // replacement names no Named queue (design D7: the transfer is a
         // hand-off of the run, not an edit of the shown queue).
         let sent = self.queue_op(
-            QueueLink::Local,
+            QueueTarget::current(QueueLink::Local),
             mbv_remote_player::QueueOp::Replace {
                 items: read.slots,
                 start_idx: Some(start_idx),
                 source: read.source,
                 start_position_secs: Some(position_secs),
             },
-            None,
         );
         if sent == QueueOpEdit::NotApplied {
             // The answered-edit bound reported the rejection or the timeout

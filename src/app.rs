@@ -125,7 +125,7 @@ pub(in crate::app) use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::state::playback::{
-    DestinationLatestSource, PendingQueueAction, QueueLinkResolution, RemoteSlotState,
+    DestinationLatestSource, PendingQueueAction, QueueLinkResolution, QueueTarget, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use crate::app::state::queue_deferrals::QueueDeferrals;

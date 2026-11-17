@@ -10,7 +10,7 @@ use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, QueueLink};
+use crate::app::{App, QueueLink, QueueTarget};
 use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
@@ -107,12 +107,11 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
     .unwrap();
 
     app.queue_op(
-        QueueLink::Local,
+        QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
         },
-        None,
     );
 
     assert_eq!(
@@ -159,12 +158,11 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
     tx.send(applied(1, snapshot(2))).unwrap();
 
     app.queue_op(
-        QueueLink::Local,
+        QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
         },
-        None,
     );
 
     assert!(
@@ -398,12 +396,11 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     let _tx = inject_player_rx(&mut app);
 
     app.queue_op(
-        QueueLink::Local,
+        QueueTarget::current(QueueLink::Local),
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
         },
-        None,
     );
 
     assert!(
@@ -432,7 +429,7 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.queue_op(QueueLink::Local, QueueOp::Refresh, None);
+    app.queue_op(QueueTarget::current(QueueLink::Local), QueueOp::Refresh);
 
     assert!(
         matches!(

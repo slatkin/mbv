@@ -94,21 +94,10 @@ impl App {
             return;
         }
         self.gui_overlay = None;
-        match self
-            .local_queue_player()
-            .remote()
-            .send_named_queue_rename(queue, name.to_string())
-        {
-            Ok(op) => self.note_named_queue_op(op),
-            Err(e) => {
-                tracing::warn!(
-                    name: "queue.rename.send_failed",
-                    target: "queue",
-                    error = %e,
-                    "the named queue rename did not reach the Player owner"
-                );
-                self.flash_error(&e);
-            }
+        if let Some(op) = self.send_named_queue_cmd("rename", |remote| {
+            remote.send_named_queue_rename(queue, name.to_string())
+        }) {
+            self.note_named_queue_op(op);
         }
     }
 }

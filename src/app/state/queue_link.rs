@@ -1,4 +1,6 @@
-use crate::app::{App, PendingQueueAction, QueueLink, QueueLinkResolution, QueueView, UndoEntry};
+use crate::app::{
+    App, PendingQueueAction, QueueLink, QueueLinkResolution, QueueTarget, QueueView, UndoEntry,
+};
 use mbv_queue::{QueueItem, QueueSlotId};
 
 impl App {
@@ -114,9 +116,8 @@ impl App {
                 // names no Named queue: it clears the matches of the queue it
                 // read, which is the current queue on the local link.
                 self.queue_op(
-                    link,
+                    QueueTarget::current(link),
                     mbv_remote_player::QueueOp::RemoveSlots { slot_ids },
-                    None,
                 );
             }
         }
@@ -129,6 +130,35 @@ impl App {
                 .remote_view
                 .as_mut()
                 .expect("remote queue link requires remote queue"),
+        }
+    }
+
+    /// The queue view `target` names (design D7): one path decides which view
+    /// an id maps to, for an edit of the shown queue, for an undone entry's
+    /// queue, and for the cursor an undo places alike. The peer link's queue
+    /// is the remote view; on the local link, a resting Named queue's own view
+    /// answers while the Client shows it, and the current queue's `local_view`
+    /// answers otherwise — the shown current queue's edits and the current
+    /// queue's edits alike. `None` for a resting queue the Client no longer
+    /// shows: it holds no Client-side view, so a position in it resolves
+    /// against nothing (the owner addresses it by identity instead).
+    pub(in crate::app) fn view_for(&mut self, target: QueueTarget) -> Option<&mut QueueView> {
+        match target.queue {
+            Some(queue) if self.named_queues.rests(queue) => {
+                let (shown, view) = self.shown_resting.as_mut()?;
+                (*shown == queue).then_some(view)
+            }
+            // The local link's current queue, and — `queue` being `None` —
+            // the peer link's whole queue: the link decides when no Named
+            // queue id does.
+            None => match target.link {
+                QueueLink::Peer => Some(self.queue_for_link_mut(QueueLink::Peer)),
+                QueueLink::Local => Some(&mut self.local_view),
+            },
+            // A Named queue that is current (or that the Owner no longer
+            // lists) is the current queue's view, whichever link is active:
+            // a peer edit never names one.
+            Some(_) => Some(&mut self.local_view),
         }
     }
 

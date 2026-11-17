@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PlaylistMutation;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueLink, QueueView,
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueLink, QueueTarget,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
 };
 use mbv_emby_model::EmbyItem;
@@ -11,7 +11,6 @@ use mbv_ui_msg::{QueueMove, QueueRequest};
 use std::cmp::Ordering;
 
 pub(in crate::app) use self::queue_op::{QUEUE_OP_ANSWER_BOUND, QueueOpEdit};
-
 mod pending_playback;
 mod playlist;
 mod playlist_mutation;
@@ -20,16 +19,21 @@ mod replacement;
 
 impl App {
     pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
-        let link = self.playing_queue_link();
-        if pos >= self.displayed_queue().total_queue_len() {
-            let view = self.displayed_queue_mut();
-            view.set_cursor(view.cursor());
+        let target = self.queue_edit_target();
+        let len = self
+            .view_for(target)
+            .map_or(0, |view| view.total_queue_len());
+        if pos >= len {
+            if let Some(view) = self.view_for(target) {
+                let cursor = view.cursor();
+                view.set_cursor(cursor);
+            }
             return;
         }
-        let Some(slot_id) = self.displayed_queue().slot_id_at(pos) else {
+        let Some(slot_id) = self.view_for(target).and_then(|view| view.slot_id_at(pos)) else {
             return;
         };
-        if self.queue_slot_needs_active_confirm(link, slot_id) {
+        if self.queue_slot_needs_active_confirm(target.link, slot_id) {
             self.ask_confirm(ConfirmModal::two_button(
                 "Remove now-playing item and stop playback?".into(),
                 "Confirm",
@@ -42,27 +46,25 @@ impl App {
         // owner's last accepted state before the edit is sent: the Client
         // holds no editable queue, so the view changes only when the
         // owner's answer is adopted.
-        let cursor_before = self.displayed_queue().cursor();
-        let Some(item) = self.displayed_queue().item_at(pos).cloned() else {
+        let Some(view) = self.view_for(target) else {
             return;
         };
-        let queue = self.shown_queue_edit();
+        let cursor_before = view.cursor();
+        let Some(item) = view.item_at(pos).cloned() else {
+            return;
+        };
         let sent = self.queue_op(
-            link,
+            target,
             mbv_remote_player::QueueOp::RemoveSlot {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
             },
-            queue,
         );
         if sent != QueueOpEdit::NotApplied {
-            self.record_undoable_queue_edit(
-                link,
-                UndoEntry::Remove {
-                    queue,
-                    item: Box::new(item),
-                    index: pos,
-                },
-            );
+            self.record_undoable_queue_edit(UndoEntry::Remove {
+                target,
+                item: Box::new(item),
+                index: pos,
+            });
         }
         if sent == QueueOpEdit::Applied {
             // The selected slot is gone; the selection moves to the entry
@@ -72,7 +74,9 @@ impl App {
             } else {
                 cursor_before
             };
-            self.displayed_queue_mut().set_cursor(cursor);
+            if let Some(view) = self.view_for(target) {
+                view.set_cursor(cursor);
+            }
         }
     }
 
@@ -119,17 +123,20 @@ impl App {
     /// not a plain edit.
     pub(in crate::app) fn remove_slots_from_queue(
         &mut self,
-        link: QueueLink,
+        target: QueueTarget,
         slot_ids: &[mbv_queue::QueueSlotId],
     ) {
         let needs_confirm = slot_ids
             .iter()
-            .any(|slot_id| self.queue_slot_needs_active_confirm(link, *slot_id));
+            .any(|slot_id| self.queue_slot_needs_active_confirm(target.link, *slot_id));
         if needs_confirm {
             let mut confirmed: Vec<mbv_queue::QueueSlotId> = slot_ids.to_vec();
             confirmed.sort_unstable();
             confirmed.dedup();
-            confirmed.retain(|slot_id| self.displayed_slot_index(*slot_id).is_some());
+            confirmed.retain(|slot_id| {
+                self.view_for(target)
+                    .is_some_and(|view| view.slot_index(*slot_id).is_some())
+            });
             if confirmed.is_empty() {
                 return;
             }
@@ -141,19 +148,18 @@ impl App {
                 "Confirm",
                 "Cancel",
                 ConfirmAction::RemoveActiveQueueSelection {
-                    link,
+                    link: target.link,
                     slot_ids: confirmed,
                 },
             ));
             return;
         }
-
+        let Some(view) = self.view_for(target) else {
+            return;
+        };
         let mut targets: Vec<(mbv_queue::QueueSlotId, usize)> = slot_ids
             .iter()
-            .filter_map(|slot_id| {
-                self.displayed_slot_index(*slot_id)
-                    .map(|pos| (*slot_id, pos))
-            })
+            .filter_map(|slot_id| view.slot_index(*slot_id).map(|pos| (*slot_id, pos)))
             .collect();
         targets.sort_unstable_by_key(|(_, pos)| *pos);
         targets.dedup_by_key(|(_, pos)| *pos);
@@ -172,7 +178,7 @@ impl App {
         let removed: Vec<(usize, QueueItem)> = targets
             .iter()
             .filter_map(|(_, pos)| {
-                let item = self.displayed_queue().item_at(*pos)?.clone();
+                let item = view.item_at(*pos)?.clone();
                 Some((*pos, item))
             })
             .collect();
@@ -180,13 +186,11 @@ impl App {
             .iter()
             .map(|(slot_id, _)| mbv_ctrl::slot_id_to_u64(*slot_id))
             .collect();
-        let queue = self.shown_queue_edit();
         let sent = self.queue_op(
-            link,
+            target,
             mbv_remote_player::QueueOp::RemoveSlots {
                 slot_ids: raw_slot_ids,
             },
-            queue,
         );
         if sent == QueueOpEdit::NotApplied {
             return;
@@ -194,24 +198,26 @@ impl App {
         // Undo entries pop in ascending index order, so each re-append
         // resolves its anchor against the state the previous undo produced.
         {
-            let stack = self.undo_stack_for_link_mut(link);
+            let stack = self.undo_stack_for_link_mut(target.link);
             for (pos, item) in removed.into_iter().rev() {
                 stack.push(UndoEntry::Remove {
-                    queue,
+                    target,
                     item: Box::new(item),
                     index: pos,
                 });
             }
         }
-        if self.local_queue_metadata_applies(link) {
+        if self.local_queue_metadata_applies(target.link) {
             self.queue_dirty = true;
         }
         if sent == QueueOpEdit::Applied {
-            self.displayed_queue_mut().set_cursor(cursor_after);
+            if let Some(view) = self.view_for(target) {
+                view.set_cursor(cursor_after);
+            }
             // The mounted component owns the painted cursor and only adopts
             // `App`'s value when a re-anchor is armed; the adopted snapshot
             // moved the cursor onto the item preceding the range.
-            self.pending_queue_cursor_reanchor = Some(link);
+            self.pending_queue_cursor_reanchor = Some(target.link);
         }
         self.advance_queue_epoch();
     }
@@ -238,7 +244,6 @@ impl App {
     /// of its rows — so its start slot stands where a playhead stands, and the
     /// row lands directly after it (design D7, D9 of `gui-named-queues`).
     pub(in crate::app) fn play_queue_item_next(&mut self, index: usize) {
-        let link = self.playing_queue_link();
         let len = self.displayed_queue().total_queue_len();
         if index >= len {
             return;
@@ -246,29 +251,24 @@ impl App {
         let Some(to) = self.play_next_position(index, len) else {
             return;
         };
-        self.move_queue_item_to(link, index, to);
+        self.move_queue_item_to(self.queue_edit_target(), index, to);
     }
 
     /// Where a "Play next" move of the row at `index` lands in the shown queue
-    /// (add-tauri-gui-client row 6.2): directly after the playhead, and in a
-    /// resting queue the GUI shows, directly after its start slot — that
-    /// queue's own analogue of a playhead, so the move reaches the queue the
-    /// panel shows. A resting queue with no start slot plays from its first
-    /// row, so the row lands first. `None` when the shown queue has nothing to
-    /// play next after (no playhead, or a resting queue with no rows), or the
-    /// row already sits in that place.
+    /// (add-tauri-gui-client row 6.2): directly after the queue's anchor — the
+    /// playhead, or a resting queue's start slot — that queue's own analogue of
+    /// a playhead, so the move reaches the queue the panel shows (design D7,
+    /// D9 of `gui-named-queues`). A resting queue with no start slot plays from
+    /// its first row, so the row lands first. `None` when the shown queue has
+    /// nothing to play next after (no anchor, or an anchor past the queue's
+    /// end), or the row already sits in that place.
     fn play_next_position(&self, index: usize, len: usize) -> Option<usize> {
-        let to = if self.shows_resting_local_queue() {
-            match self.displayed_queue().start_index() {
-                Some(start) => position_after(start, index)?,
-                None => 0,
-            }
-        } else {
-            let playhead = self
-                .displayed_playback_state()
-                .active_idx
-                .filter(|playhead| *playhead < len)?;
-            position_after(playhead, index)?
+        let to = match self.shown_queue_anchor() {
+            Some(anchor) if anchor < len => position_after(anchor, index)?,
+            // A resting queue with no start slot plays from its first row, so
+            // the row lands first: there is no anchor to land after.
+            None if self.shows_resting_local_queue() => 0,
+            _ => return None,
         };
         (to != index).then_some(to)
     }
@@ -279,7 +279,6 @@ impl App {
     /// rather than this function re-reading `queue.cursor()` as an
     /// ambient argument channel.
     fn move_queue_item_by(&mut self, from: usize, delta: isize) {
-        let link = self.playing_queue_link();
         let queue = self.displayed_queue();
         let len = queue.total_queue_len();
         let to = if delta < 0 {
@@ -294,46 +293,55 @@ impl App {
             }
             t
         };
-        self.move_queue_item_to(link, from, to);
+        self.move_queue_item_to(self.queue_edit_target(), from, to);
     }
 
-    /// Moves the item at `from` to `to` within `link`'s queue by asking the
-    /// link's Player owner to move the slot (row 5.2). `link` is passed
-    /// explicitly (D2) rather than re-read from `playing_queue_link()` as an
-    /// ambient channel.
-    pub(in crate::app) fn move_queue_item_to(&mut self, link: QueueLink, from: usize, to: usize) {
-        let len = self.displayed_queue().total_queue_len();
+    /// Moves the item at `from` to `to` in the queue `target` names by asking
+    /// that Player owner to move the slot (row 5.2). The caller resolves the
+    /// target (split-queue-cursor-ownership D2): the shell resolves the slot
+    /// the user selected rather than this function re-reading the shown
+    /// queue's cursor as an ambient argument channel.
+    pub(in crate::app) fn move_queue_item_to(
+        &mut self,
+        target: QueueTarget,
+        from: usize,
+        to: usize,
+    ) {
+        let Some(view) = self.view_for(target) else {
+            return;
+        };
+        let len = view.total_queue_len();
         if from >= len || to >= len || from == to {
             return;
         }
-        let Some(slot_id) = self.displayed_queue().slot_id_at(from) else {
+        let Some(slot_id) = view.slot_id_at(from) else {
             return;
         };
-        let queue = self.shown_queue_edit();
         let sent = self.queue_op(
-            link,
+            target,
             mbv_remote_player::QueueOp::MoveSlot {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
                 to_index: to,
             },
-            queue,
         );
         let entry = || UndoEntry::Move {
-            queue,
+            target,
             slot_id,
             from,
         };
         match sent {
             QueueOpEdit::Applied => {
-                if link != QueueLink::Peer {
+                if target.link != QueueLink::Peer {
                     // The selection stays on the moved entry at its new
                     // position.
-                    self.displayed_queue_mut().set_cursor(to);
+                    if let Some(view) = self.view_for(target) {
+                        view.set_cursor(to);
+                    }
                 }
-                self.record_undoable_queue_edit(link, entry());
+                self.record_undoable_queue_edit(entry());
             }
             QueueOpEdit::SentLegacy => {
-                self.record_undoable_queue_edit(link, entry());
+                self.record_undoable_queue_edit(entry());
             }
             QueueOpEdit::NotApplied => {}
         }
@@ -351,8 +359,9 @@ impl App {
         let Some(entry) = self.undo_stack_for_link_mut(link).pop() else {
             return;
         };
+        let target = entry.target();
         match entry {
-            UndoEntry::Remove { queue, item, index } => {
+            UndoEntry::Remove { item, index, .. } => {
                 // Resolve the anchor at undo time: the slot now at the
                 // removed item's former position, or the end when that
                 // position no longer exists. A resting queue the Client no
@@ -360,86 +369,63 @@ impl App {
                 // unknown and the item returns at the queue's end; the Owner
                 // addresses it by identity either way.
                 let before = self
-                    .undo_queue_view(queue)
+                    .view_for(target)
                     .and_then(|view| view.slot_id_at(index))
                     .map(mbv_ctrl::slot_id_to_u64);
                 let sent = self.queue_op(
-                    link,
+                    target,
                     mbv_remote_player::QueueOp::Append {
                         items: vec![*item],
                         before,
                     },
-                    queue,
                 );
                 if sent == QueueOpEdit::Applied {
-                    self.place_undo_cursor(link, queue, index);
+                    self.place_undo_cursor(target, index);
                 }
             }
-            UndoEntry::Move {
-                queue,
-                slot_id,
-                from,
-            } => {
+            UndoEntry::Move { slot_id, from, .. } => {
                 let sent = self.queue_op(
-                    link,
+                    target,
                     mbv_remote_player::QueueOp::MoveSlot {
                         slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
                         to_index: from,
                     },
-                    queue,
                 );
                 if sent == QueueOpEdit::Applied {
-                    self.place_undo_cursor(link, queue, from);
+                    self.place_undo_cursor(target, from);
                 }
             }
-        }
-    }
-
-    /// The view an undo entry's position resolves against (design D7): the
-    /// queue the entry edited, when the Client still holds it. A resting
-    /// queue's view answers only while the Client shows it, and the current
-    /// queue's view answers always, because the Client always holds it.
-    fn undo_queue_view(&self, queue: Option<mbv_queue::NamedQueueId>) -> Option<&QueueView> {
-        match queue {
-            Some(queue) if self.named_queues.rests(queue) => {
-                let (shown, view) = self.shown_resting.as_ref()?;
-                (*shown == queue).then_some(view)
-            }
-            _ => Some(&self.local_view),
         }
     }
 
     /// Put the shown queue's active row on the undone edit's position, when
     /// the Client shows the queue the edit reached: another entry's view is
     /// left where the user put it (design D7).
-    fn place_undo_cursor(
-        &mut self,
-        link: QueueLink,
-        queue: Option<mbv_queue::NamedQueueId>,
-        index: usize,
-    ) {
-        let shows_edited_queue = match link {
+    fn place_undo_cursor(&mut self, target: QueueTarget, index: usize) {
+        let shows_edited_queue = match target.link {
             // A peer's queue is the whole of that link, so its undo always
             // lands on the view the panel shows.
             QueueLink::Peer => true,
             QueueLink::Local => {
-                queue.or_else(|| self.named_queues.current()) == self.displayed_queue_id()
+                target.queue.or_else(|| self.named_queues.current()) == self.displayed_queue_id()
             }
         };
-        if shows_edited_queue {
-            self.displayed_queue_mut().set_cursor(index);
+        if shows_edited_queue && let Some(view) = self.view_for(target) {
+            view.set_cursor(index);
         }
     }
 
     /// Bookkeeping for an edit the owner's queue now holds (or that a legacy
     /// owner took): mark local playlist metadata dirty, record the undo
     /// entry, and advance the queue epoch so in-flight playlist mutations
-    /// detect the changed queue.
-    fn record_undoable_queue_edit(&mut self, link: QueueLink, entry: UndoEntry) {
-        if self.local_queue_metadata_applies(link) {
+    /// detect the changed queue. The entry itself names the queue it edited,
+    /// so the stack it lands on and the metadata gate both read it.
+    fn record_undoable_queue_edit(&mut self, entry: UndoEntry) {
+        if self.local_queue_metadata_applies(entry.target().link) {
             self.queue_dirty = true;
         }
-        self.undo_stack_for_link_mut(link).push(entry);
+        self.undo_stack_for_link_mut(entry.target().link)
+            .push(entry);
         self.advance_queue_epoch();
     }
 
@@ -473,7 +459,7 @@ impl App {
                 // One batch edit: the owner applies the whole range before
                 // publishing a queue snapshot, so the list does not shrink one
                 // row per removal.
-                self.remove_slots_from_queue(link, &slot_ids);
+                self.remove_slots_from_queue(self.queue_target(link), &slot_ids);
             }
             QueueRequest::Move {
                 link,
@@ -502,7 +488,7 @@ impl App {
                     return;
                 };
                 if from != to_index {
-                    self.move_queue_item_to(link, from, to_index);
+                    self.move_queue_item_to(self.queue_target(link), from, to_index);
                 }
             }
             QueueRequest::ResizeColumnLive(width) => {
@@ -537,7 +523,7 @@ impl App {
             return;
         };
         if from != to {
-            self.move_queue_item_to(link, from, to);
+            self.move_queue_item_to(self.queue_target(link), from, to);
         }
     }
 

@@ -198,7 +198,6 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         .unwrap();
 
     let appended = app.append_on_owner(
-        QueueLink::Local,
         make_items(1)
             .into_iter()
             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))

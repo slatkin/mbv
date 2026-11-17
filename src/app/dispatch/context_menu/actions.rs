@@ -130,8 +130,7 @@ impl App {
                     }
                 }
                 if !queue_slot_ids.is_empty() {
-                    let link = self.playing_queue_link();
-                    self.remove_slots_from_queue(link, &queue_slot_ids);
+                    self.remove_slots_from_queue(self.queue_edit_target(), &queue_slot_ids);
                 }
                 None
             }

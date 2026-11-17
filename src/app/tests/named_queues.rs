@@ -209,7 +209,6 @@ fn an_enqueue_to_a_resting_queue_names_it() {
     tx.send(op_answer(1, kids_after_append)).unwrap();
 
     let appended = app.append_on_owner(
-        QueueLink::Local,
         make_items(1)
             .into_iter()
             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))

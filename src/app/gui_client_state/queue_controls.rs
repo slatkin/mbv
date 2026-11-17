@@ -30,18 +30,13 @@ impl App {
         if !self.gui_client || self.pending_new_queue.is_some() {
             return;
         }
-        match self.local_queue_player().remote().send_named_queue_create() {
-            Ok(op) => self.pending_new_queue = Some(op),
-            Err(e) => {
-                tracing::warn!(
-                    name: "queue.create.send_failed",
-                    target: "queue",
-                    error = %e,
-                    "the named queue create did not reach the Player owner"
-                );
-                self.flash_error(&e);
-            }
-        }
+        let Some(op) = self.send_named_queue_cmd(
+            "create",
+            mbv_remote_player::RemotePlayer::send_named_queue_create,
+        ) else {
+            return;
+        };
+        self.pending_new_queue = Some(op);
     }
 
     /// Adopt one answer to the held new-queue request (design D8, spec
@@ -170,20 +165,35 @@ impl App {
     /// resting queue and stops playback to close the current one, then publishes
     /// the queue list the panel follows to the current queue.
     pub(in crate::app) fn send_named_queue_close(&mut self, queue: NamedQueueId) {
-        match self
-            .local_queue_player()
-            .remote()
-            .send_named_queue_close(queue)
+        if let Some(op) =
+            self.send_named_queue_cmd("close", |remote| remote.send_named_queue_close(queue))
         {
-            Ok(op) => self.note_named_queue_op(op),
+            self.note_named_queue_op(op);
+        }
+    }
+
+    /// Send one Named-queue command to the local Owner (design D3, D8): a
+    /// failed send warns and flashes once here, and returns no `op`, so the
+    /// caller's request ends with nothing to correlate.
+    pub(in crate::app) fn send_named_queue_cmd(
+        &mut self,
+        command: &'static str,
+        send: impl FnOnce(
+            &mbv_remote_player::RemotePlayer,
+        ) -> Result<QueueOpId, mbv_remote_player::RemotePlayerError>,
+    ) -> Option<QueueOpId> {
+        match send(self.local_queue_player().remote()) {
+            Ok(op) => Some(op),
             Err(e) => {
                 tracing::warn!(
-                    name: "queue.close.send_failed",
+                    name: "queue.command.send_failed",
                     target: "queue",
+                    command,
                     error = %e,
-                    "the named queue close did not reach the Player owner"
+                    "the named queue command did not reach the Player owner"
                 );
                 self.flash_error(&e);
+                None
             }
         }
     }

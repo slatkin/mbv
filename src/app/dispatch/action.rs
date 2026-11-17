@@ -272,13 +272,11 @@ impl App {
         // the playing slot changes only through the owner's answer. It names
         // the shown queue (design D7 of `gui-named-queues`), so a row of a
         // resting queue makes that queue current and plays the row (design D2).
-        let queue = self.shown_queue_edit();
         let sent = self.queue_op(
-            self.playing_queue_link(),
+            self.queue_edit_target(),
             mbv_remote_player::QueueOp::PlaySlot {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
             },
-            queue,
         );
         sent != QueueOpEdit::NotApplied
     }

@@ -62,6 +62,29 @@ impl QueueLinkResolution {
     }
 }
 
+/// The queue one edit, view lookup, or undone edit names (design D7 of
+/// `gui-named-queues`): the Player-owner link it reaches and, on the local
+/// link, the Named queue it names. `None` names the link's current queue — on
+/// the wire and as the Client's `local_view` — and a GUI edit of the shown
+/// queue names the shown queue, whichever entry the panel shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct QueueTarget {
+    /// The Player-owner link the edit reaches: the suspended home link for
+    /// `Local` while a peer holds the active one, else the active link.
+    pub(in crate::app) link: QueueLink,
+    /// The Named queue the edit names, or `None` for the link's current queue.
+    pub(in crate::app) queue: Option<NamedQueueId>,
+}
+
+impl QueueTarget {
+    /// The target that names `link`'s current queue: the default for every
+    /// path that does not edit the GUI Client's shown queue (design D7).
+    #[must_use]
+    pub(in crate::app) fn current(link: QueueLink) -> Self {
+        Self { link, queue: None }
+    }
+}
+
 /// A reversible queue edit (design D7). Undo re-sends the inverse edit to
 /// the queue the edit reached: `Remove` re-appends the removed item before the
 /// entry now at its former index (resolved at undo time), and `Move` moves the
@@ -70,19 +93,30 @@ impl QueueLinkResolution {
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
     Remove {
-        /// The Named queue the edit reached: the GUI Client's shown queue, or
-        /// `None` for the current queue. The inverse edit names it, whichever
-        /// entry the panel shows when the user undoes (design D7).
-        queue: Option<NamedQueueId>,
+        /// The queue the edit reached: the GUI Client's shown queue, or the
+        /// current queue. The inverse edit and the view lookups name it,
+        /// whichever entry the panel shows when the user undoes (design D7).
+        target: QueueTarget,
         item: Box<QueueItem>,
         index: usize,
     },
     Move {
-        /// The Named queue the edit reached, as `Remove` carries it.
-        queue: Option<NamedQueueId>,
+        /// The queue the edit reached, as `Remove` carries it.
+        target: QueueTarget,
         slot_id: QueueSlotId,
         from: usize,
     },
+}
+
+impl UndoEntry {
+    /// The queue the edit reached: the inverse edit, the undo-time view
+    /// lookups, and the undo bookkeeping all name it (design D7).
+    #[must_use]
+    pub(in crate::app) fn target(&self) -> QueueTarget {
+        match self {
+            Self::Remove { target, .. } | Self::Move { target, .. } => *target,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -231,7 +231,7 @@ impl App {
             .iter()
             .any(|slot_id| self.queue_slot_needs_active_confirm(link, *slot_id));
         if !still_needs {
-            self.remove_slots_from_queue(link, &live);
+            self.remove_slots_from_queue(self.queue_target(link), &live);
             return;
         }
         self.pending_delete_selection = Some(live);
