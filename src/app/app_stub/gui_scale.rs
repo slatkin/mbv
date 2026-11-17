@@ -36,8 +36,8 @@ impl App {
     }
 
     /// Make the Shows library the active destination with `series` as its
-    /// root level under the All mode: the stored mode is All, so the frame's
-    /// tree reads the root level's series and no mode load starts.
+    /// root level: the GUI paints the series list, so the frame's tree reads
+    /// the root level's series and no mode load starts.
     #[cfg(feature = "test")]
     pub fn seed_gui_tv_series_for_test(
         &mut self,
@@ -52,7 +52,6 @@ impl App {
         {
             level.items = series;
         }
-        self.gui_tv_shows.entry(0).or_default().mode = Some(mbv_queue::TvContentMode::All);
     }
 
     /// Record `album_id` as the pick of `group_id` in `lib_idx`, as the

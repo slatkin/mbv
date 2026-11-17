@@ -68,15 +68,7 @@ fn the_music_frame_carries_the_selected_collection_names() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
 
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
-
-    let music = music_list(&test.held()).expect("the Music destination is active");
+    let music = music_list(&seeded_frame(&mut test)).expect("the Music destination is active");
     assert_eq!(music.collection_names, ["Hip-Hop"]);
 }
 
@@ -87,15 +79,8 @@ fn the_music_frame_carries_the_selected_collection_names() {
 fn the_library_list_rides_only_a_changed_value() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
     assert!(
-        list_of(&test.held()).is_some(),
+        list_of(&seeded_frame(&mut test)).is_some(),
         "the first list rides its section"
     );
 
@@ -115,15 +100,8 @@ fn the_library_list_rides_only_a_changed_value() {
 fn a_pick_sends_the_detail_and_no_list() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
-    // Read the batches the select sent, so the pick's batch stands alone.
-    test.held();
+    // Read the seeded content's batch, so the pick's batch stands alone.
+    let _ = seeded_frame(&mut test);
 
     send_library(
         &mut test,
@@ -149,13 +127,7 @@ fn a_pick_sends_the_detail_and_no_list() {
 fn the_hero_art_rides_the_section_after_the_image_lands() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    let _selected = send_library_frame(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
+    let _ = seeded_frame(&mut test);
     let picked = send_library_frame(
         &mut test,
         GuiLibraryCommand::ShowDetail {

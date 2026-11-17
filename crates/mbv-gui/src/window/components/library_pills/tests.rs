@@ -229,8 +229,8 @@ fn paints_no_selected_count_or_clear_control() {
     );
 }
 
-/// Contract (`LibraryPills.test.ts`): a press on a pill selects it — the
-/// select-collection command with the row's library index and the pill's
+/// Contract (`LibraryPills.test.ts`): a press on a pill toggles it — the
+/// collection-toggle command with the row's library index and the pill's
 /// group id.
 #[test]
 fn a_press_selects_the_pressed_pill() {
@@ -240,9 +240,9 @@ fn a_press_selects_the_pressed_pill() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::SelectCollection {
-            lib_idx: 2,
-            group_id: "g3".to_owned(),
+        [mbv::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Music(2),
+            key: "g3".to_owned(),
         }]
     );
 }
@@ -258,9 +258,9 @@ fn a_pill_request_selects_that_pill() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::SelectCollection {
-            lib_idx: 2,
-            group_id: "g2".to_owned(),
+        [mbv::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Music(2),
+            key: "g2".to_owned(),
         }]
     );
 }

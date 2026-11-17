@@ -84,14 +84,13 @@ fn app_with_music_groups(http: &MockHttp) -> App {
     app
 }
 
-/// Select `group_id` for the stub's Music library (one group is always
-/// selected). The fetch it started lands through `land_one_group`, as a Client
-/// tick drains it.
+/// Select `group_id` for the stub's Music library as its one checked group
+/// (one group is always selected). The fetch it started lands through
+/// `land_one_group`, as a Client tick drains it. The selection installs
+/// directly, so these store tests read the one-group rule the collection
+/// commands build on.
 fn select_group(app: &mut App, group_id: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::SelectCollection {
-        lib_idx: 0,
-        group_id: group_id.to_string(),
-    });
+    app.install_gui_library_collection(0, GuiCollectionSet::Checked(vec![group_id.to_string()]));
 }
 
 /// One album as the store holds it, with the display artist and year the
@@ -274,6 +273,59 @@ fn the_selected_group_alone_fills_the_list() {
         shared,
         ["Licensed to Ill"],
         "the selected group's albums sit under the artist row, and no other group's"
+    );
+}
+
+/// The collection toggle checks two groups in turn (gui-collection-dropdown
+/// design D5): the Music destination toggles on the effective set and installs
+/// each change through its one selection entry, so two presses on two groups
+/// check both and the list unions their albums.
+#[test]
+fn a_collection_toggle_checks_two_groups() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![stored_album(
+            "alb-3ft",
+            "3 Feet High and Rising",
+            "De La Soul",
+            1989,
+        )],
+    );
+    app.gui_library_groups.remove(&0);
+
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Music(0),
+        key: HIPHOP.to_string(),
+    });
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Music(0),
+        key: SOUL.to_string(),
+    });
+
+    assert_eq!(
+        app.gui_library_groups.get(&0),
+        Some(&GuiCollectionSet::Checked(vec![
+            HIPHOP.to_string(),
+            SOUL.to_string(),
+        ])),
+        "two presses check two groups"
+    );
+    let projection = app.gui_music_projection(0);
+    let artists: Vec<&str> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(
+        artists,
+        ["Beastie Boys", "De La Soul"],
+        "the union lists both checked groups' artists"
     );
 }
 

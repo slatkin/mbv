@@ -369,10 +369,7 @@ fn carry_shows(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail)
     let mut sections = state.sections.clone();
     sections.apply_batch(&batch);
     let mut shows_ui = state.shows_ui;
-    shows_ui.with_mut(|ui| {
-        ui.pill_select = None;
-        ui.filter.clear();
-    });
+    shows_ui.with_mut(|ui| ui.filter.clear());
 }
 
 /// The filter facts the assertions read.
@@ -380,8 +377,8 @@ fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let shows = state.shows_ui.peek().clone();
     format!(
-        "filter_open={} shows_filter={:?} pill_select={:?}",
-        ui.filter_open, shows.filter, shows.pill_select,
+        "filter_open={} shows_filter={:?}",
+        ui.filter_open, shows.filter,
     )
 }
 

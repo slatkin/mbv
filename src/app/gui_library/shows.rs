@@ -1,18 +1,17 @@
-// The Shows destination's actions (add-gui-library-panel design D14): the
-// select, play, play-next, and add commands, and the item resolution they
-// share with the projection. The projection itself lives in
-// `shows_projection.rs`, as the other destinations split their data path
-// from their actions (`emby.rs` and `emby_projection.rs`).
+// The Shows destination's actions (add-gui-library-panel design D14;
+// gui-collection-dropdown design D8): the select, play, play-next, and add
+// commands, and the item resolution they share with the projection. The
+// projection itself lives in `shows_projection.rs`, as the other destinations
+// split their data path from their actions. The GUI Shows list is the series
+// list alone, so a select names a series.
 
-use super::shows_projection::{GuiShowsMode, gui_shows_mode_of};
 use crate::app::App;
 
 impl App {
-    /// Select a Shows row (design D12): the All series mode's select is the
-    /// series select — the Hero's series, the season reset, and the detail
-    /// load — and a flat mode's select stores the row the Hero shows. A
-    /// stale frame's row — no row of the active mode's list — is an ignored
-    /// command, so a stale select never replaces a good selection.
+    /// Select a Shows series (design D12, D8): the Hero's series, the season
+    /// reset, and the detail load. A stale frame's row — no series of the
+    /// library's root list — is an ignored command, so a stale select never
+    /// replaces a good selection.
     pub(in crate::app::gui_library) fn select_gui_shows_row(&mut self, lib_idx: usize, row: &str) {
         if !self.gui_tv_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -21,64 +20,18 @@ impl App {
             );
             return;
         }
-        let Some(tv_mode) = self.gui_tv_mode(lib_idx) else {
-            Self::log_ignored_library_command(
-                "showsSelect",
-                format_args!("the destination holds no view mode"),
-            );
-            return;
-        };
-        match gui_shows_mode_of(&tv_mode) {
-            GuiShowsMode::All => {
-                let unchanged = self
-                    .gui_tv_shows
-                    .get(&lib_idx)
-                    .and_then(|selection| selection.series_id.as_deref())
-                    == Some(row);
-                if !unchanged {
-                    // A pick move is library navigation: it closes the image
-                    // warm gate, so fast arrow traffic warms no neighbour art
-                    // (the TUI's own rule).
-                    self.stamp_navigation();
-                }
-                self.gui_tv_select_series(lib_idx, row);
-            }
-            GuiShowsMode::Latest | GuiShowsMode::Upcoming => {
-                if !self.gui_shows_flat_row_exists(lib_idx, row) {
-                    Self::log_stale_library_item("showsSelect", row);
-                    return;
-                }
-                let unchanged = self
-                    .gui_tv_shows
-                    .get(&lib_idx)
-                    .and_then(|selection| selection.flat_row.as_deref())
-                    == Some(row);
-                if unchanged {
-                    return;
-                }
-                self.gui_tv_shows.entry(lib_idx).or_default().flat_row = Some(row.to_string());
-                self.stamp_navigation();
-            }
+        let unchanged = self
+            .gui_tv_shows
+            .get(&lib_idx)
+            .and_then(|selection| selection.series_id.as_deref())
+            == Some(row);
+        if !unchanged {
+            // A pick move is library navigation: it closes the image warm
+            // gate, so fast arrow traffic warms no neighbour art (the TUI's
+            // own rule).
+            self.stamp_navigation();
         }
-    }
-
-    /// Whether the flat mode's list carries `row`: the root level's episode
-    /// ids in the Latest mode, the snapshot's premiere keys in the Upcoming
-    /// mode.
-    fn gui_shows_flat_row_exists(&self, lib_idx: usize, row: &str) -> bool {
-        if let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last())
-            && level.items.iter().any(|item| item.id == row)
-        {
-            return true;
-        }
-        let library_id = &self.libs[lib_idx].library.id;
-        self.tv_upcoming_snapshots
-            .get(library_id)
-            .is_some_and(|premieres| {
-                premieres
-                    .iter()
-                    .any(|premiere| premiere.stable_key() == row)
-            })
+        self.gui_tv_select_series(lib_idx, row);
     }
 
     /// Play the Shows episode a command names (design D12): the shared

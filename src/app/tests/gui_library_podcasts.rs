@@ -20,6 +20,21 @@ use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use mbv_ui_msg::PodcastEpisodeTarget;
 
+/// Press one show in the Podcasts destination's collection dropdown.
+fn toggle_show(app: &mut App, lib_idx: usize, show_id: &str) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Podcasts(lib_idx),
+        key: show_id.to_string(),
+    });
+}
+
+/// Press the All row of the Podcasts destination's collection dropdown.
+fn select_all_shows(app: &mut App, lib_idx: usize) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Podcasts(lib_idx),
+    });
+}
+
 /// The generation the event arms accept while the test's runtime holds none.
 fn generation() -> mbv_core::service_runtime::SetupGeneration {
     mbv_core::service_runtime::SetupGeneration::default()
@@ -165,19 +180,19 @@ fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
     );
 }
 
-/// All (the All pill's press) lands every listed show's episodes through the
-/// TUI's bounded fan-out (row 10.1, contract b; gui-collection-dropdown
-/// design D2): the All selection commits no show scope, so the fan-out
-/// requests both shows, and each landed completion caches that show's
-/// episodes on the App — the data the list's merged order is projected from.
+/// The All row lands every listed show's episodes through the TUI's bounded
+/// fan-out (row 10.1, contract b; gui-collection-dropdown design D2, D5): the
+/// All selection commits no show scope, so the fan-out requests both shows,
+/// and each landed completion caches that show's episodes on the App — the
+/// data the list's merged order is projected from.
 #[test]
-fn the_all_pill_lands_every_shows_episodes_through_the_fan_out() {
+fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = podcast_app();
     app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
     app.audiobookshelf_browse[1].total = 2;
 
-    app.gui_podcast_set_pill(1, None);
+    select_all_shows(&mut app, 1);
 
     assert_eq!(app.gui_podcast_effective_set(1), GuiCollectionSet::All);
     assert_eq!(
@@ -233,7 +248,7 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
     app.audiobookshelf_browse[1].total = 2;
 
-    app.gui_podcast_set_pill(1, Some("show-b"));
+    toggle_show(&mut app, 1, "show-b");
 
     assert_eq!(
         app.gui_podcast_effective_set(1),
@@ -245,7 +260,7 @@ fn a_checked_show_lands_only_that_shows_episodes() {
         "the single checked show scopes the fan-out"
     );
     let marks = detail_marks(&app);
-    assert_eq!(marks.len(), 1, "one show pill requests one show");
+    assert_eq!(marks.len(), 1, "one checked show requests one show");
     assert_eq!(marks[0].0, "show-b");
     consume_detail_completions(&mut app, 1);
 
@@ -516,7 +531,7 @@ fn a_checked_show_scopes_the_rows_to_that_show() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
-    app.gui_podcast_set_pill(1, Some("show-a"));
+    toggle_show(&mut app, 1, "show-a");
     let projection = app.gui_podcasts_projection(1);
 
     let titles: Vec<&str> = projection
@@ -545,8 +560,8 @@ fn two_checked_shows_merge_their_episodes_in_date_order() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
-    app.gui_podcast_set_pill(1, Some("show-a"));
-    app.gui_podcast_set_pill(1, Some("show-b"));
+    toggle_show(&mut app, 1, "show-a");
+    toggle_show(&mut app, 1, "show-b");
     let projection = app.gui_podcasts_projection(1);
 
     let titles: Vec<&str> = projection
@@ -602,7 +617,7 @@ fn the_oldest_order_puts_the_earliest_episode_first_with_undated_last() {
 fn a_vanished_checked_show_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.gui_podcast_set_pill(1, Some("show-a"));
+    toggle_show(&mut app, 1, "show-a");
     app.audiobookshelf_browse[1]
         .shows
         .retain(|show| show.library_item_id != "show-a");

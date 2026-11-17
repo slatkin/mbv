@@ -1,15 +1,9 @@
-//! Headless tests of the Shows mode pills (D16): the contracts of
-//! `LibraryShowsPills.test.ts` — the pills paint the core's single-select
-//! view mode with `aria-pressed` under the shared hook, and a press sends
-//! the set-mode command with that pill's mode. The IPC of the earlier client
-//! tests is the mock core link here; the asserted command is the same
-//! neutral shape. A headless document cannot fire a DOM click, so the press
-//! contract rides the state method the component's own handler calls one
-//! line each (the list's precedent). The core channel is a mock pair; no
+//! Headless tests of the Shows mode pills (D16; gui-collection-dropdown design
+//! D8): the GUI Shows destination paints the series list alone, so the core
+//! carries no pill and the mounted row paints none. The row itself goes away
+//! with the collection-dropdown units. The core channel is a mock pair; no
 //! test opens a window, sleeps, or reaches the core.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
 use blitz_dom::{Document as _, LocalName};
@@ -18,21 +12,20 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryShowsPills;
-use crate::bridge::frame::library::{GuiShowsList, GuiShowsModeFrame, GuiShowsPillFrame};
+use crate::bridge::frame::library::{GuiShowsList, GuiShowsPillFrame};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Shows pills and library index, the mock
-/// core sender, and the handle the test reads the store through.
+/// The harness's props: the carried Shows pills, the library index, and the
+/// mock core sender.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     pills: Vec<GuiShowsPillFrame>,
     lib_idx: usize,
-    handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
 /// The root: provides the Library store and paints the pills, as the panel
@@ -42,7 +35,6 @@ fn pills_app(props: FixtureProps) -> Element {
         sender,
         pills,
         lib_idx,
-        handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     let state = use_hook(move || {
@@ -56,8 +48,7 @@ fn pills_app(props: FixtureProps) -> Element {
             Arc::clone(&clock),
         )
     });
-    provide_context(state.clone());
-    handle.borrow_mut().replace(state);
+    provide_context(state);
     rsx! {
         LibraryShowsPills { pills, lib_idx }
     }
@@ -65,8 +56,6 @@ fn pills_app(props: FixtureProps) -> Element {
 
 struct Fixture {
     doc: DioxusDocument,
-    state: LibraryState,
-    receiver: mpsc::Receiver<CoreInput>,
 }
 
 impl Fixture {
@@ -79,13 +68,6 @@ impl Fixture {
             }
         }
         panic!("document did not become idle");
-    }
-
-    /// Run `f` inside the virtual dom's runtime, so the signal writes mark
-    /// their subscribers, and let the re-renders land.
-    fn in_runtime(&mut self, f: impl FnOnce() + 'static) {
-        self.doc.vdom.in_runtime(f);
-        self.poll_until_idle();
     }
 
     /// The painted pills' (key, pressed) pairs, in paint order.
@@ -106,24 +88,12 @@ impl Fixture {
             })
             .collect()
     }
-
-    /// The Library commands the core link received, in send order.
-    fn library_commands(&mut self) -> Vec<mbv::GuiLibraryCommand> {
-        self.receiver
-            .try_iter()
-            .filter_map(|input| match input {
-                CoreInput::Library(command) => Some(command),
-                _ => None,
-            })
-            .collect()
-    }
 }
 
 /// Build the document over the carried content and let the first render and
 /// effects land.
 fn built(list: &GuiShowsList) -> Fixture {
-    let (sender, receiver) = mpsc::channel::<CoreInput>();
-    let handle = Rc::new(RefCell::new(None));
+    let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
             pills_app,
@@ -131,7 +101,6 @@ fn built(list: &GuiShowsList) -> Fixture {
                 sender,
                 pills: list.pills.clone(),
                 lib_idx: list.lib_idx,
-                handle: Rc::clone(&handle),
             },
         ),
         DocumentConfig {
@@ -140,35 +109,17 @@ fn built(list: &GuiShowsList) -> Fixture {
         },
     );
     doc.initial_build();
-    let state = handle
-        .borrow_mut()
-        .take()
-        .expect("the root handed the store over");
-    let mut fixture = Fixture {
-        doc,
-        state,
-        receiver,
-    };
+    let mut fixture = Fixture { doc };
     fixture.poll_until_idle();
     fixture
 }
 
-/// The carried Shows content with `all` selected (design D12).
+/// The carried Shows content: the series list with no pill (design D8).
 fn shows_frame() -> GuiShowsList {
-    let pill = |mode, name: &str, selected| GuiShowsPillFrame {
-        mode,
-        name: name.to_owned(),
-        selected,
-        collection: false,
-    };
     GuiShowsList {
         lib_idx: 0,
-        pills: vec![
-            pill(GuiShowsModeFrame::Latest, "Latest", false),
-            pill(GuiShowsModeFrame::Upcoming, "Upcoming", false),
-            pill(GuiShowsModeFrame::All, "All series", true),
-        ],
-        collection_names: vec!["All series".to_owned()],
+        pills: Vec::new(),
+        collection_names: Vec::new(),
         loading: false,
         series: Vec::new(),
         upcoming_failed: false,
@@ -176,36 +127,12 @@ fn shows_frame() -> GuiShowsList {
     }
 }
 
-/// Contract (`LibraryShowsPills.test.ts`): the pills paint the core's
-/// selection and never none — every pill carries `aria-pressed`, and the
-/// selected one is the core's active mode.
+/// The GUI Shows destination carries no pill, so the mounted row paints none
+/// (gui-collection-dropdown design D8): the list paints the series tree and no
+/// mode selector.
 #[test]
-fn the_pills_paint_the_cores_selection_and_never_none() {
+fn no_shows_pill_paints() {
     let fixture = built(&shows_frame());
 
-    assert_eq!(
-        fixture.pressed(),
-        [
-            ("latest".to_owned(), "false".to_owned()),
-            ("upcoming".to_owned(), "false".to_owned()),
-            ("all".to_owned(), "true".to_owned()),
-        ]
-    );
-}
-
-/// Contract (`LibraryShowsPills.test.ts`): a press sends the set-mode
-/// command with the pill's mode.
-#[test]
-fn a_press_sends_the_set_mode_command_with_the_pills_mode() {
-    let mut fixture = built(&shows_frame());
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.select_shows_pill(0, GuiShowsModeFrame::Upcoming));
-
-    assert_eq!(
-        fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsSetMode {
-            lib_idx: 0,
-            mode: mbv::GuiShowsMode::Upcoming,
-        }]
-    );
+    assert_eq!(fixture.pressed(), []);
 }

@@ -37,6 +37,14 @@ const FIRST_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-old","Name":"Old Clip","
 /// so the merged list de-duplicates the shared row.
 const SECOND_FOLDER_BODY: &str = r#"{"Items":[{"Id":"vid-shared","Name":"Shared Clip","Type":"Video","DateCreated":"2022-06-01T10:00:00.0000000Z"},{"Id":"vid-new","Name":"New Clip","Type":"Video","DateCreated":"2026-01-01T10:00:00.0000000Z"}],"TotalRecordCount":2}"#;
 
+/// Press one folder in the Emby feed-view destination's collection dropdown.
+fn toggle_folder(app: &mut App, folder_id: &str) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::EmbyFeed(0),
+        key: folder_id.to_string(),
+    });
+}
+
 /// A browse level over `items`, hanging off `parent_id`.
 fn level(parent_id: &str, title: &str, items: Vec<EmbyItem>) -> BrowseLevel {
     BrowseLevel {
@@ -244,7 +252,7 @@ fn checking_a_feed_folder_loads_its_items_without_moving_the_tui_selection() {
         .push(level(FEED_ID, "YouTube", vec![folder]));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.gui_emby_set_feed_group(0, Some("folder-1"));
+    toggle_folder(&mut app, "folder-1");
     // A completion for a folder the checked set does not hold: the stale-drop
     // rule drops it whatever order it arrives in.
     let _ = app.channels.lib_tx.send(LibEvent::Browse(
@@ -305,8 +313,8 @@ fn two_checked_feed_folders_fetch_in_turn_and_merge_newest_first() {
     ));
     app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
 
-    app.gui_emby_set_feed_group(0, Some("folder-1"));
-    app.gui_emby_set_feed_group(0, Some("folder-2"));
+    toggle_folder(&mut app, "folder-1");
+    toggle_folder(&mut app, "folder-2");
     assert_eq!(
         app.libs[0].feed_home_video.as_ref().unwrap().fetching,
         Some(FeedHomeVideoSelection::Folder("folder-1".into())),

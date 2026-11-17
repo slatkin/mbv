@@ -1,13 +1,13 @@
-//! The Shows section of the Library frame (add-gui-library-panel design D14,
-//! which supersedes D12's first Shows design): the view-mode pills, the
-//! active mode's rows — the All series mode's tree, or the flat Latest and
-//! Upcoming lists — the core's selected row, and the Hero with its series
-//! Workspace. A command names a row, a season, or an episode by the stable
-//! Service id the frame carries, never by position.
+//! The Shows section of the Library frame (add-gui-library-panel design D14;
+//! gui-collection-dropdown design D8): the series list's tree, the core's
+//! selected series, and the Hero with its series Workspace. The GUI Shows
+//! destination paints the series list alone, and a command names a row, a
+//! season, or an episode by the stable Service id the frame carries, never by
+//! position.
 
 use mbv::{
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsSeasonNode, GuiShowsSeasonPill,
+    GuiShowsSeries, GuiShowsWorkspace,
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -15,30 +15,33 @@ use super::{GuiArtShapeFrame, GuiHomeRowStateFrame};
 use crate::art::GuiArtRef;
 
 /// The Shows destination's list part (add-gui-library-panel design D12, the
-/// USER-APPROVED GUI Shows design; `gui-change-driven-sections` design D8): the
-/// view-mode pills, the active mode's rows, and the load facts.
+/// USER-APPROVED GUI Shows design; `gui-change-driven-sections` design D8;
+/// gui-collection-dropdown design D8): the series list's tree and the load
+/// facts. The view-mode pills and flat rows keep their wire fields until the
+/// collection-dropdown units remove the Shows pill row; the core fills neither.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The three view-mode pills in the design's order (design D12).
+    /// The view-mode pills, which the core leaves empty while the GUI Shows
+    /// destination paints the series list alone (design D8).
     pub pills: Vec<GuiShowsPillFrame>,
-    /// The active mode's name, as the selected collection's name the Library
-    /// Status bar's location reads (design D10) — carried once for the whole
-    /// panel, as the Music section carries its names.
+    /// The destination's collection names, as the Library Status bar's
+    /// location reads them. The Shows list paints no collection selector, so it
+    /// carries none (design D8).
     pub collection_names: Vec<String>,
-    /// Whether the active mode's list has not landed yet.
+    /// Whether the series list has not landed yet.
     pub loading: bool,
-    /// The All series mode's tree (design D14): the series nodes with their
-    /// seasons and loaded episodes. Empty in the flat modes, whose list the
-    /// `rows` carry.
+    /// The series list's tree (design D14): the series nodes with their
+    /// seasons and loaded episodes.
     pub series: Vec<GuiShowsSeriesFrame>,
-    /// Whether the Upcoming mode's eager fetch failed after all its retries:
-    /// the list paints the TUI's failure line and the pill is the retry.
+    /// Whether the Upcoming mode's eager fetch failed after all its retries.
+    /// The GUI Shows destination paints no Upcoming mode, so the core clears it
+    /// until the collection-dropdown units remove the wire field.
     pub upcoming_failed: bool,
-    /// The active mode's rows in the list's order (the flat Latest and
-    /// Upcoming lists).
+    /// The flat Latest and Upcoming rows, which the core leaves empty while the
+    /// GUI Shows destination paints the series list alone (design D8).
     pub rows: Vec<GuiShowsRowFrame>,
 }
 
@@ -47,7 +50,7 @@ pub struct GuiShowsList {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsDetail {
     /// Whether the selected series' detail or the selected season's episodes
-    /// fetch has not landed yet (the All series mode only).
+    /// fetch has not landed yet.
     pub workspace_loading: bool,
     /// The core's selected row (design D2, D12), as the frame painted it:
     /// a select command sends it back. The first row is the Hero default.
@@ -65,16 +68,6 @@ pub enum GuiShowsModeFrame {
     Latest,
     Upcoming,
     All,
-}
-
-impl From<GuiShowsMode> for GuiShowsModeFrame {
-    fn from(mode: GuiShowsMode) -> Self {
-        match mode {
-            GuiShowsMode::Latest => Self::Latest,
-            GuiShowsMode::Upcoming => Self::Upcoming,
-            GuiShowsMode::All => Self::All,
-        }
-    }
 }
 
 /// One view-mode pill of the Shows destination (design D12): single-select,
@@ -219,11 +212,9 @@ impl GuiShowsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiShowsProjection) -> Self {
         Self {
             lib_idx,
-            pills: projection
-                .pills
-                .iter()
-                .map(GuiShowsPillFrame::from)
-                .collect(),
+            // The GUI Shows destination paints the series list alone: the pill
+            // row goes away with the collection-dropdown units.
+            pills: Vec::new(),
             collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             series: projection
@@ -231,8 +222,8 @@ impl GuiShowsList {
                 .iter()
                 .map(GuiShowsSeriesFrame::from)
                 .collect(),
-            upcoming_failed: projection.upcoming_failed,
-            rows: projection.rows.iter().map(GuiShowsRowFrame::from).collect(),
+            upcoming_failed: false,
+            rows: Vec::new(),
         }
     }
 }
@@ -274,29 +265,6 @@ impl From<&GuiShowsSeasonNode> for GuiShowsSeasonFrame {
                 .episodes
                 .as_ref()
                 .map(|episodes| episodes.iter().map(GuiShowsEpisodeRowFrame::from).collect()),
-        }
-    }
-}
-
-impl From<&GuiShowsPill> for GuiShowsPillFrame {
-    fn from(pill: &GuiShowsPill) -> Self {
-        Self {
-            mode: GuiShowsModeFrame::from(pill.mode),
-            name: pill.name.clone(),
-            selected: pill.selected,
-            collection: false,
-        }
-    }
-}
-
-impl From<&GuiShowsRow> for GuiShowsRowFrame {
-    fn from(row: &GuiShowsRow) -> Self {
-        Self {
-            id: row.id.clone(),
-            title: row.title.clone(),
-            subtitle: row.subtitle.clone(),
-            date: row.date.clone(),
-            sort_letter: row.sort_letter,
         }
     }
 }

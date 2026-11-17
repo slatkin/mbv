@@ -35,32 +35,46 @@ pub(in crate::app) struct GuiGroupAlbumsEvent {
 }
 
 impl App {
-    /// Select the one collection group of the Grouped Music library `lib_idx`
-    /// as a checked set of that one group (gui-collection-dropdown design
-    /// D1): the pill press's single-group path, which the dropdown's toggle
-    /// commands replace in a later unit. The store keeps the choice per
-    /// library and starts the groups' album fetches when the store holds no
-    /// list for them, so a group selected again fetches nothing.
-    pub(in crate::app) fn select_gui_library_collection(
-        &mut self,
-        lib_idx: usize,
-        group_id: String,
-    ) {
-        if let Some(reason) = self.gui_collection_reject_reason(lib_idx, &group_id) {
+    /// Check or uncheck one collection group of the Grouped Music library
+    /// `lib_idx` (gui-collection-dropdown design D5): the dropdown's toggle
+    /// reads the effective set, so a press never resurrects a checked group the
+    /// catalog dropped, and the change installs through the one selection entry
+    /// so the Hero's album carries across it (design D11). A group the
+    /// library's group list does not hold is a stale frame's key and changes
+    /// nothing.
+    pub(in crate::app) fn toggle_gui_music_collection(&mut self, lib_idx: usize, group_id: &str) {
+        if let Some(reason) = self.gui_collection_reject_reason(lib_idx, group_id) {
             App::log_ignored_library_command(
-                "selectCollection",
+                "collectionToggle",
                 format_args!("library {lib_idx}: {reason}"),
             );
             return;
         }
         tracing::info!(
-            name: "gui_library.collections.set",
+            name: "gui_library.collections.toggle",
             target: "gui_library",
             library_index = lib_idx,
             group = %group_id,
             "the selected collection changed"
         );
-        self.install_gui_library_collection(lib_idx, GuiCollectionSet::Checked(vec![group_id]));
+        let next = self.gui_effective_music_set(lib_idx).toggle(group_id);
+        self.install_gui_library_collection(lib_idx, next);
+    }
+
+    /// Select All for the Grouped Music library `lib_idx`
+    /// (gui-collection-dropdown design D5): the All row's press and the
+    /// dropdown's Clear, installed through the one selection entry so the
+    /// Hero's album carries across the change (design D11). A `lib_idx` that
+    /// names no Grouped Music library changes nothing.
+    pub(in crate::app) fn select_all_gui_music_collections(&mut self, lib_idx: usize) {
+        if let Some(reason) = self.gui_library_collection_target_reject_reason(lib_idx) {
+            App::log_ignored_library_command(
+                "collectionAll",
+                format_args!("library {lib_idx}: {reason}"),
+            );
+            return;
+        }
+        self.install_gui_library_collection(lib_idx, GuiCollectionSet::All);
     }
 
     /// Install the collection set of the Grouped Music library `lib_idx`
@@ -115,17 +129,28 @@ impl App {
         }
     }
 
-    /// Why the selected collection cannot apply to `lib_idx` (design D5, D6):
-    /// the library index names no tab, the destination is not a Grouped Music
-    /// library, or the library's group list holds no group `group_id` (a stale
-    /// frame's pick). A group list that has not landed yet admits the pick,
-    /// because the list is what would name it stale.
-    fn gui_collection_reject_reason(&self, lib_idx: usize, group_id: &str) -> Option<&'static str> {
+    /// Why a collection command cannot apply to `lib_idx` at all (design D5,
+    /// D6): the library index names no tab, or the destination is not a
+    /// Grouped Music library. The key-level rule is
+    /// [`Self::gui_collection_reject_reason`]'s own.
+    fn gui_library_collection_target_reject_reason(&self, lib_idx: usize) -> Option<&'static str> {
         if lib_idx >= self.libs.len() {
             return Some("the library index names no tab");
         }
         if !self.is_grouped_music_library(lib_idx) {
             return Some("the destination is not a Grouped Music library");
+        }
+        None
+    }
+
+    /// Why the collection group `group_id` cannot apply to `lib_idx` (design
+    /// D5, D6): the library itself cannot serve a collection command, or the
+    /// library's group list holds no group `group_id` (a stale frame's key).
+    /// A group list that has not landed yet admits the key, because the list
+    /// is what would name it stale.
+    fn gui_collection_reject_reason(&self, lib_idx: usize, group_id: &str) -> Option<&'static str> {
+        if let Some(reason) = self.gui_library_collection_target_reject_reason(lib_idx) {
+            return Some(reason);
         }
         let level = self.gui_music_group_level(lib_idx)?;
         if level.items.iter().any(|group| group.id == group_id) {

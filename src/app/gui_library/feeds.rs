@@ -79,35 +79,55 @@ impl App {
         self.ensure_gui_feeds_selection();
     }
 
-    /// Apply the interim pill press (row 11.1; gui-collection-dropdown
-    /// design D1, D2).
+    /// Check or uncheck one subscription (row 11.1; gui-collection-dropdown
+    /// design D2, D5).
     ///
     /// The selection the core owns, so the frame carries it back. No load
     /// starts, because every subscription's entries arrive from the one fetch.
-    /// `None` is the All pill's press and selects All; `Some(feed_id)`
-    /// toggles that subscription in the set, exactly as the dropdown's
-    /// collection press will. A subscription the tab no longer holds is a
-    /// stale frame's pill and changes nothing; a set of entries still landing
-    /// admits it, because the subscription list is what would name it stale.
-    pub fn gui_feeds_set_pill(&mut self, subscription_key: Option<&str>) {
+    /// The toggle reads the effective set, so a press never resurrects a
+    /// checked subscription the tab dropped. A subscription the tab no longer
+    /// holds is a stale frame's key and changes nothing; a set of entries still
+    /// landing admits it, because the subscription list is what would name it
+    /// stale.
+    pub fn toggle_gui_feeds_subscription(&mut self, subscription_key: &str) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command(
-                "feedsSetPill",
+                "collectionToggle",
                 format_args!("the feed tab is absent"),
             );
             return;
         }
-        if let Some(feed_id) = subscription_key
-            && !self.gui_feeds_subscription_known(feed_id)
-        {
-            Self::log_stale_library_item("feedsSetPill", feed_id);
+        if !self.gui_feeds_subscription_known(subscription_key) {
+            Self::log_stale_library_item("collectionToggle", subscription_key);
             return;
         }
-        let next = match subscription_key {
-            Some(feed_id) => self.gui_feeds_effective_set().toggle(feed_id),
-            None => GuiCollectionSet::All,
-        };
-        self.gui_feeds_selection.subscriptions = next;
+        self.gui_feeds_selection.subscriptions =
+            self.gui_feeds_effective_set().toggle(subscription_key);
+    }
+
+    /// Select All (row 11.1; gui-collection-dropdown design D5): the All row's
+    /// press and the dropdown's Clear. No load starts. A Client with no feed
+    /// tab changes nothing.
+    pub fn select_all_gui_feeds(&mut self) {
+        if !self.gui_feeds_present() {
+            Self::log_ignored_library_command(
+                "collectionAll",
+                format_args!("the feed tab is absent"),
+            );
+            return;
+        }
+        self.gui_feeds_selection.subscriptions = GuiCollectionSet::All;
+    }
+
+    /// Set the Feeds list's date order (gui-collection-dropdown design D4,
+    /// D5): the dropdown's order toggle. Newest is the launch default. A
+    /// Client with no feed tab changes nothing.
+    pub fn set_gui_feeds_date_order(&mut self, order: GuiDateOrder) {
+        if !self.gui_feeds_present() {
+            Self::log_ignored_library_command("dateOrder", format_args!("the feed tab is absent"));
+            return;
+        }
+        self.gui_feeds_selection.order = order;
     }
 
     /// Select the entry the Hero shows (row 11.1).

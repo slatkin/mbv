@@ -1,7 +1,7 @@
 //! Tests of the GUI Library's Feeds data path (add-gui-library-panel design
 //! D12, row 11.1): the merged All list and a checked subscription's list, two
 //! checked subscriptions, the Oldest order with an undated entry last, the
-//! presented Feeds tab and a saved Feeds location, and the pill and pick
+//! presented Feeds tab and a saved Feeds location, and the collection and pick
 //! commands' store and stale arms.
 //!
 //! The fetch boundary is the App's own result channel, so a test owns every
@@ -34,6 +34,14 @@ fn fetched_feeds_app() -> App {
     app.send_gui_feed_fetch_result_for_test(1, &[("b-mid", Some(200)), ("b-undated", None)]);
     assert!(app.drain_feed_tab_results(), "both results drained");
     app
+}
+
+/// Press one subscription in the Feeds destination's collection dropdown.
+fn toggle_subscription(app: &mut App, subscription: &str) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Feeds,
+        key: subscription.to_string(),
+    });
 }
 
 /// The entry guids the App's selected pill lists, in order.
@@ -69,7 +77,7 @@ fn all_lists_both_subscriptions_newest_first_with_undated_last() {
 fn a_checked_subscription_lists_only_that_subscriptions_entries() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
 
     assert_eq!(
         listed_guids(&app),
@@ -141,14 +149,14 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
 fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
     assert_eq!(
         app.gui_feeds_effective_set(),
         GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "the checked subscription is stored"
     );
 
-    app.gui_feeds_set_pill(Some("https://example.test/gone"));
+    toggle_subscription(&mut app, "https://example.test/gone");
     assert_eq!(
         app.gui_feeds_effective_set(),
         GuiCollectionSet::Checked(vec![FEED_B.into()]),
@@ -162,7 +170,7 @@ fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
 #[test]
 fn the_ensure_drops_the_checked_subscription_when_it_leaves() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
 
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
     app.ensure_gui_feeds_selection();
@@ -179,7 +187,7 @@ fn the_ensure_drops_the_checked_subscription_when_it_leaves() {
 #[test]
 fn an_entry_pick_is_stored_and_one_outside_the_selected_list_changes_nothing() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
 
     app.gui_feeds_select(&entry_id(FEED_B, "b-mid"));
     assert_eq!(
@@ -307,7 +315,7 @@ fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
 fn a_checked_subscription_scopes_the_rows_to_that_subscription() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
     let projection = app.gui_feeds_projection();
 
     assert_eq!(
@@ -341,7 +349,7 @@ fn a_checked_subscription_scopes_the_rows_to_that_subscription() {
 #[test]
 fn a_vanished_checked_subscription_falls_back_to_all() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_B);
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
     app.send_gui_feed_fetch_result_for_test(
         0,
@@ -383,8 +391,8 @@ fn a_vanished_checked_subscription_falls_back_to_all() {
 fn two_checked_subscriptions_merge_their_entries_in_date_order() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(Some(FEED_A));
-    app.gui_feeds_set_pill(Some(FEED_B));
+    toggle_subscription(&mut app, FEED_A);
+    toggle_subscription(&mut app, FEED_B);
     let projection = app.gui_feeds_projection();
 
     assert_eq!(
@@ -408,13 +416,18 @@ fn two_checked_subscriptions_merge_their_entries_in_date_order() {
 }
 
 /// The Oldest order puts the earliest entry first, with the undated entries
-/// last (gui-collection-dropdown design D4): the stored order sorts the
-/// merged list without a refetch.
+/// last (gui-collection-dropdown design D4, D5): the date-order command stores
+/// the order, and the projection sorts the merged list by it without a
+/// refetch.
 #[test]
-fn the_oldest_order_puts_the_earliest_entry_first_with_undated_last() {
+fn the_date_order_command_sets_the_oldest_order() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_selection.order = GuiDateOrder::Oldest;
+    app.apply_gui_library_command(GuiLibraryCommand::DateOrder {
+        target: GuiCollectionTarget::Feeds,
+        order: GuiDateOrder::Oldest,
+    });
 
+    assert_eq!(app.gui_feeds_date_order(), GuiDateOrder::Oldest);
     let projection = app.gui_feeds_projection();
 
     assert_eq!(

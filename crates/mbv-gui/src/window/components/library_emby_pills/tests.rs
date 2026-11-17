@@ -199,8 +199,8 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
     );
 }
 
-/// Contract (`LibraryEmbyPills.test.ts`): a press sends the set-feed-group
-/// command with the pill's group.
+/// Contract (`LibraryEmbyPills.test.ts`): a press sends the collection-toggle
+/// command with the pill's folder.
 #[test]
 fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
     let mut fixture = built(&emby_frame());
@@ -211,15 +211,15 @@ fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx: 3,
-            group: Some("folder-1".to_owned()),
+        [mbv::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::EmbyFeed(3),
+            key: "folder-1".to_owned(),
         }]
     );
 }
 
 /// Contract (`LibraryEmbyPills.test.ts`): the keys' pill request sends the
-/// set-feed-group command — the mounted effect consumes the request, so one
+/// collection-toggle command — the mounted effect consumes the request, so one
 /// key sends one command.
 #[test]
 fn the_keys_pill_request_sends_the_set_feed_group_command() {
@@ -234,9 +234,9 @@ fn the_keys_pill_request_sends_the_set_feed_group_command() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx: 3,
-            group: Some("folder-1".to_owned()),
+        [mbv::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::EmbyFeed(3),
+            key: "folder-1".to_owned(),
         }]
     );
 }

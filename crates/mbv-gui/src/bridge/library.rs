@@ -46,12 +46,8 @@ pub enum GuiLibraryCommand {
     HomePlayNext { row: GuiHomeRowId },
     /// Enqueue a Home row (design D12).
     HomeQueue { row: GuiHomeRowId },
-    /// Set the Shows destination's view mode (add-gui-library-panel design
-    /// D12, the USER-APPROVED GUI Shows design): the root level loads
-    /// through the TUI's own mode load.
-    ShowsSetMode { lib_idx: usize, mode: GuiShowsMode },
-    /// Select a Shows row (design D12): the row the Hero shows — the All
-    /// series mode's series, or a flat mode's episode or premiere row.
+    /// Select a Shows row (design D12, D8): the series the Hero shows. The GUI
+    /// Shows destination paints the series list alone.
     ShowsSelect { lib_idx: usize, row: String },
     /// Select the season whose episodes the Hero's Workspace shows (design
     /// D12).
@@ -231,26 +227,6 @@ impl From<&Option<String>> for GuiPodcastPill {
     }
 }
 
-/// One Shows view mode (design D12): the three single-select pills the
-/// Shows pill row paints. The TUI's letter-range buckets are not pills
-/// here — the All series list's letter rail replaces them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuiShowsMode {
-    Latest,
-    Upcoming,
-    All,
-}
-
-impl From<GuiShowsMode> for mbv::GuiShowsMode {
-    fn from(mode: GuiShowsMode) -> Self {
-        match mode {
-            GuiShowsMode::Latest => Self::Latest,
-            GuiShowsMode::Upcoming => Self::Upcoming,
-            GuiShowsMode::All => Self::All,
-        }
-    }
-}
-
 /// One feed-group pill of a feed-view Emby library (add-gui-library-panel
 /// design D12, row 8.1): `New` (the destination Latest view), `All`, or one
 /// root folder by its stable Service id.
@@ -277,9 +253,10 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
     fn from(command: GuiLibraryCommand) -> Self {
         match command {
             GuiLibraryCommand::OpenDestination { position } => Self::OpenDestination { position },
-            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
-                Self::SelectCollection { lib_idx, group_id }
-            }
+            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => Self::CollectionToggle {
+                target: mbv::GuiCollectionTarget::Music(lib_idx),
+                key: group_id,
+            },
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
@@ -292,10 +269,6 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
             GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext { row: row.into() },
             GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue { row: row.into() },
-            GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => Self::ShowsSetMode {
-                lib_idx,
-                mode: mbv::GuiShowsMode::from(mode),
-            },
             GuiLibraryCommand::ShowsSelect { lib_idx, row } => Self::ShowsSelect { lib_idx, row },
             GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
                 Self::ShowsSelectSeason { lib_idx, season_id }
@@ -310,15 +283,16 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::ShowsQueue { lib_idx, item_id }
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
-            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => Self::EmbySetFeedGroup {
-                lib_idx,
-                group: match group {
-                    // The core's interim press key: None is All, Some a
-                    // folder's stable id. The New pill's press presses All —
-                    // the row paints no New pill while the set replaces the
-                    // row.
-                    GuiEmbyFeedGroup::Latest | GuiEmbyFeedGroup::All => None,
-                    GuiEmbyFeedGroup::Folder(folder_id) => Some(folder_id),
+            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => match group {
+                // The interim press keys: None is All, Some a folder's stable
+                // id. The New pill's press presses All — the row paints no New
+                // pill while the set replaces the row.
+                GuiEmbyFeedGroup::Latest | GuiEmbyFeedGroup::All => Self::CollectionAll {
+                    target: mbv::GuiCollectionTarget::EmbyFeed(lib_idx),
+                },
+                GuiEmbyFeedGroup::Folder(folder_id) => Self::CollectionToggle {
+                    target: mbv::GuiCollectionTarget::EmbyFeed(lib_idx),
+                    key: folder_id,
                 },
             },
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
@@ -340,14 +314,16 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 chapter,
             },
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
-            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => Self::PodcastsSetPill {
-                lib_idx,
-                pill: match pill {
-                    // The core's interim press key: None is All, Some a
-                    // show's stable id. A state pill presses All — the row
-                    // paints no state pill while the set replaces the pill.
-                    GuiPodcastPill::Latest | GuiPodcastPill::State(_) => None,
-                    GuiPodcastPill::Show(show_id) => Some(show_id),
+            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => match pill {
+                // The interim press keys: None is All, Some a show's stable id.
+                // A state pill presses All — the row paints no state pill while
+                // the set replaces the pill.
+                GuiPodcastPill::Latest | GuiPodcastPill::State(_) => Self::CollectionAll {
+                    target: mbv::GuiCollectionTarget::Podcasts(lib_idx),
+                },
+                GuiPodcastPill::Show(show_id) => Self::CollectionToggle {
+                    target: mbv::GuiCollectionTarget::Podcasts(lib_idx),
+                    key: show_id,
                 },
             },
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
@@ -359,12 +335,15 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
                 Self::PodcastsQueue { lib_idx, item_id }
             }
-            GuiLibraryCommand::FeedsSetPill { pill } => Self::FeedsSetPill {
-                pill: match pill {
-                    // The core's interim press key: None is All, Some a
-                    // subscription's stable id.
-                    GuiFeedPill::Latest => None,
-                    GuiFeedPill::Subscription(feed_id) => Some(feed_id),
+            GuiLibraryCommand::FeedsSetPill { pill } => match pill {
+                // The interim press keys: None is All, Some a subscription's
+                // stable id.
+                GuiFeedPill::Latest => Self::CollectionAll {
+                    target: mbv::GuiCollectionTarget::Feeds,
+                },
+                GuiFeedPill::Subscription(feed_id) => Self::CollectionToggle {
+                    target: mbv::GuiCollectionTarget::Feeds,
+                    key: feed_id,
                 },
             },
             GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },

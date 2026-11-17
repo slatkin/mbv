@@ -6,28 +6,29 @@ use mbv::ClientTickHost;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 
-use super::{ALBUMS, TRACKS, music_core, send_library};
+use super::{TRACKS, music_core, send_library};
 
-/// The select-collection command stores the destination's one selected group
-/// (design D5, D6): the core keeps it, so the frame's pills paint the core's
-/// choice.
+/// The collection command toggles the destination's selection (design D5,
+/// D6): the seeded checked group is the only checked collection, so a press on
+/// it unchecks it, the selection falls back to All, and the frame paints the
+/// core's choice.
 #[test]
-fn the_select_collection_command_stores_the_selected_group() {
+fn a_press_on_the_checked_collection_returns_the_selection_to_all() {
     let http = MockHttp::new();
-    http.respond(200, ALBUMS);
     let (mut test, _cmd_rx) = music_core(&http);
 
     send_library(
         &mut test,
         GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_id: "grp-soul".into(),
+            group_id: "grp-hiphop".into(),
         },
     );
 
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        Some("grp-soul")
+        None,
+        "a press on the one checked group unchecks it and selects All"
     );
 }
 

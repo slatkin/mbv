@@ -202,9 +202,8 @@ fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::PodcastsSetPill {
-            lib_idx: 0,
-            pill: None,
+        [mbv::GuiLibraryCommand::CollectionAll {
+            target: mbv::GuiCollectionTarget::Podcasts(0),
         }]
     );
 }

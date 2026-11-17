@@ -1,7 +1,7 @@
 //! The GUI Library's Podcasts data path (add-gui-library-panel design D12,
 //! row 10.1): the per-podcast-library selection the core owns — the checked
-//! shows, the date order, and the picked episode — and the open, set-pill,
-//! select, and ensure actions the later core surface's commands apply. The
+//! shows, the date order, and the picked episode — and the open, toggle,
+//! All, and order actions the core's collection commands apply. The
 //! selection is All or a set of checked shows (gui-collection-dropdown
 //! design D1, D2), so the dropdown replaces the pill row in a later unit.
 //!
@@ -102,34 +102,64 @@ impl App {
         self.ensure_gui_podcast_selection(lib_idx);
     }
 
-    /// Apply the interim pill press (row 10.1; gui-collection-dropdown
-    /// design D1, D2): the selection the core owns, so the frame carries it
-    /// back, and the loads the selection needs start. `None` is the All
-    /// pill's press and selects All; `Some(show_id)` toggles that show in the
-    /// set, exactly as the dropdown's collection press will. The toggle reads
+    /// Check or uncheck one show of the Podcasts library `lib_idx`
+    /// (gui-collection-dropdown design D2, D5): the dropdown's toggle reads
     /// the effective set, so a press never resurrects a checked show the
-    /// catalog dropped. A show the published list does not carry is a stale
-    /// frame's pill and changes nothing; a list still landing admits it,
-    /// because the list is what would name it stale.
-    pub fn gui_podcast_set_pill(&mut self, lib_idx: usize, show_key: Option<&str>) {
+    /// catalog dropped, and the loads the selection needs start. A show the
+    /// published list does not carry is a stale frame's key and changes
+    /// nothing; a list still landing admits it, because the list is what would
+    /// name it stale.
+    pub fn toggle_gui_podcast_show(&mut self, lib_idx: usize, show_id: &str) {
         if !self.gui_podcast_library(lib_idx) {
             Self::log_ignored_library_command(
-                "podcastSetPill",
+                "collectionToggle",
                 format_args!("the destination is no Podcasts library"),
             );
             return;
         }
-        if let Some(show_id) = show_key
-            && !self.gui_podcast_show_known(lib_idx, show_id)
-        {
-            Self::log_stale_library_item("podcastSetPill", show_id);
+        if !self.gui_podcast_show_known(lib_idx, show_id) {
+            Self::log_stale_library_item("collectionToggle", show_id);
             return;
         }
-        let next = match show_key {
-            Some(show_id) => self.gui_podcast_effective_set(lib_idx).toggle(show_id),
-            None => GuiCollectionSet::All,
-        };
-        self.gui_podcast_libs.entry(lib_idx).or_default().shows = next;
+        let next = self.gui_podcast_effective_set(lib_idx).toggle(show_id);
+        self.install_gui_podcast_set(lib_idx, next);
+    }
+
+    /// Select All for the Podcasts library `lib_idx` (gui-collection-dropdown
+    /// design D5): the All row's press and the dropdown's Clear. The loads
+    /// every listed show needs start. A `lib_idx` that names no Podcasts
+    /// library changes nothing.
+    pub fn select_all_gui_podcast_shows(&mut self, lib_idx: usize) {
+        if !self.gui_podcast_library(lib_idx) {
+            Self::log_ignored_library_command(
+                "collectionAll",
+                format_args!("the destination is no Podcasts library"),
+            );
+            return;
+        }
+        self.install_gui_podcast_set(lib_idx, GuiCollectionSet::All);
+    }
+
+    /// Set the Podcasts library's list order (gui-collection-dropdown design
+    /// D4, D5): the dropdown's order toggle. Newest is the launch default. A
+    /// `lib_idx` that names no Podcasts library changes nothing.
+    pub fn set_gui_podcast_date_order(&mut self, lib_idx: usize, order: GuiDateOrder) {
+        if !self.gui_podcast_library(lib_idx) {
+            Self::log_ignored_library_command(
+                "dateOrder",
+                format_args!("the destination is no Podcasts library"),
+            );
+            return;
+        }
+        self.gui_podcast_libs.entry(lib_idx).or_default().order = order;
+    }
+
+    /// Store the Podcasts library's checked set and start the loads it needs
+    /// (gui-collection-dropdown design D2, D5): the one write both the
+    /// toggle and the All press take, so the frame carries the same selection
+    /// back however it changed.
+    fn install_gui_podcast_set(&mut self, lib_idx: usize, set: GuiCollectionSet) {
+        self.gui_podcast_libs.entry(lib_idx).or_default().shows = set;
         self.ensure_gui_podcast_selection(lib_idx);
     }
 
