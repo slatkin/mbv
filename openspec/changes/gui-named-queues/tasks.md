@@ -101,24 +101,24 @@ holds that change.
 
 ## 7. Client core: GUI queue controls (`src/app`)
 
-- [ ] 7.1 Delete the right column: `GuiRightColumn`, its state, `PanelIntent::ToggleQueueRightColumn`,
+- [x] 7.1 Delete the right column: `GuiRightColumn`, its state, `PanelIntent::ToggleQueueRightColumn`,
   its `PlaybackRequest`, `QueueEndOffsets.rows`, and their tests; keep `remaining`, `tail_secs`,
   and `QueueEndOffsets.tail` for the folded line (design D9, Non-Goals). Verify with `cargo check
   --workspace` and `rg -n "RightColumn|ends_after" src crates` finding nothing.
-- [ ] 7.2 Add the `GuiOverlay::QueueChooser` overlay with its cursor, Enter to show, `r` to open a
+- [x] 7.2 Add the `GuiOverlay::QueueChooser` overlay with its cursor, Enter to show, `r` to open a
   rename draft, Enter to send `NamedQueueRename`, and Esc; rebind `t` as `GuiQueueChooserToggle`
   and add `Ctrl+T` (`GuiNewQueue`) and `Ctrl+W` (`GuiCloseQueue`) as GUI-only literals gated on the
   Queue list box pointer target (design D8). Verify with core key tests for "Open the chooser by
   key", one rename by key, and one test that the TUI router does not bind the three chords.
-- [ ] 7.3 Make the new-queue control send `NamedQueueCreate` and, on the answering
+- [x] 7.3 Make the new-queue control send `NamedQueueCreate` and, on the answering
   `NamedQueueList`, show the new queue with its rename draft open (spec "Make a queue"). Verify with
   one core test.
-- [ ] 7.4 Make the close control act on the shown entry: close a resting queue and a stopped
+- [x] 7.4 Make the close control act on the shown entry: close a resting queue and a stopped
   current queue at once, ask through the core confirm prompt before closing the playing current
   queue, disconnect a peer, and do nothing while the shown queue is the only local queue (spec "The
   close control closes the shown entry"). Verify with tests for "Close the playing queue", "Close
   the stopped current queue", "Cancel the close", and "Close a peer entry".
-- [ ] 7.5 Add `total_secs`, `total_partial`, `marked_secs`, and `marked_partial` to
+- [x] 7.5 Add `total_secs`, `total_partial`, `marked_secs`, and `marked_partial` to
   `GuiQueueSummary` from `runtime_ticks` over the whole shown queue and its marks, and add `start`
   and `playing` to the queue projection, with `start` falling back to the observed active slot when
   the snapshot carries no start slot (design D9). Verify with one `#[case]` table test for the
