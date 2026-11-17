@@ -38,9 +38,11 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::icons::{ChevronDown, ListOrdered, Plus, Search, X};
 use crate::window::theme::canvas_var;
-use crate::window::truncate::{TextStyle, Truncate};
 
-/// The title the header paints while the shown entry has no name.
+/// The title the header paints while the shown entry has no name. The title
+/// paints as plain text, never through `Truncate`: its box is sized by its own
+/// text, so a measure that read a narrow first layout would cut a name such as
+/// `Default` and keep the cut.
 const DEFAULT_TITLE: &str = "Queue";
 
 /// The props of the Queue header (the `QueueHeader` props, plus the region
@@ -94,9 +96,10 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         class: "flex min-w-0 items-center",
                         style: "height: 44px; padding: 0 10px; gap: 8px; font-size: 13px; color: {canvas_var(\"heading\")};",
                         "data-queue-title": "",
-                        Truncate {
-                            text: title.clone(),
-                            style: TextStyle::sans(13.0, 500.0),
+                        span {
+                            class: "min-w-0 overflow-hidden whitespace-nowrap",
+                            style: "font-weight: 500;",
+                            "{title}"
                         }
                     }
                 } else {
@@ -115,9 +118,10 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                                     size: 16,
                                     color: "currentColor",
                                 }
-                                Truncate {
-                                    text: title.clone(),
-                                    style: TextStyle::sans(13.0, 500.0),
+                                span {
+                                    class: "min-w-0 overflow-hidden whitespace-nowrap",
+                                    style: "font-weight: 500;",
+                                    "{title}"
                                 }
                                 ChevronDown {
                                     size: 12,

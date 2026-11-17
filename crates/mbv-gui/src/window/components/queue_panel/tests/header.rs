@@ -101,7 +101,7 @@ fn the_active_filter_paints_its_text_and_the_caret() {
 /// title — the shown entry's name, `Queue` while that name is empty — even
 /// with one entry and so no chooser button.
 #[rstest]
-#[case::named("Kids", "Kids")]
+#[case::named("Default", "Default")]
 #[case::unnamed("", "Queue")]
 fn a_single_queue_header_always_paints_its_title(#[case] shown_name: &str, #[case] title: &str) {
     let summary = GuiQueueSummary {

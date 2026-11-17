@@ -711,23 +711,26 @@ pub fn QueuePanel() -> Element {
                             } }
                         }
                     }
-                    if let Some(scroll) = queue.scroll {
-                        // The scroll bar: a readout of the core's scroll over
-                        // the list's trailing padding, so it never covers a
-                        // row. The thumb is the viewport's share of the
-                        // list; the pointer passes through it.
-                        {
-                            let (thumb_top, thumb_length) = scroll.thumb_percent();
-                            rsx! {
+                }
+                if let Some(scroll) = queue.scroll {
+                    // The scroll bar: a readout of the core's scroll, set
+                    // halfway between the rows' end and the queue panel's
+                    // edge (the box's two-column inset, half of it outside
+                    // the box), so it never crowds a row. It spans the
+                    // list's rows, under the header and over the spacer.
+                    // The thumb is the viewport's share of the list; the
+                    // pointer passes through it.
+                    {
+                        let (thumb_top, thumb_length) = scroll.thumb_percent();
+                        rsx! {
+                            div {
+                                class: "pointer-events-none absolute",
+                                style: "top: var(--canvas-queue-header-height); bottom: var(--mbv-cell-row); right: calc(var(--mbv-cell-col) * -1 + 0.5px); width: 6px;",
+                                "data-scrollbar": "",
                                 div {
-                                    class: "pointer-events-none absolute",
-                                    style: "top: 0; bottom: 0; right: 1px; width: 6px;",
-                                    "data-scrollbar": "",
-                                    div {
-                                        class: "absolute",
-                                        style: "left: 0; right: 0; top: {thumb_top}%; height: {thumb_length}%; min-height: 16px; background: {role_var(GuiRole::Scrollbar)}; border-radius: 3px;",
-                                        "data-scrollbar-thumb": "",
-                                    }
+                                    class: "absolute",
+                                    style: "left: 0; right: 0; top: {thumb_top}%; height: {thumb_length}%; min-height: 16px; background: {role_var(GuiRole::Scrollbar)}; border-radius: 3px;",
+                                    "data-scrollbar-thumb": "",
                                 }
                             }
                         }
