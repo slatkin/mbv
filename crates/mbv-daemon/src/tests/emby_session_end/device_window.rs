@@ -371,6 +371,90 @@ fn a_removed_only_next_slot_stops_the_device_when_it_moves_to_it() {
     );
 }
 
+/// A Session that advertises Video only, so an audio slot in the queue is one
+/// the queue skips and the Owner never loads.
+fn video_only_session() -> SessionInfo {
+    SessionInfo {
+        playable_media_types: vec!["Video".to_string()],
+        ..idle_session()
+    }
+}
+
+/// An Emby item of `media_type` with a runtime, so the position estimate and the
+/// end rule have one to compare with.
+fn timed_kind(name: &str, media_type: &str, item_type: &str) -> QueueItem {
+    let mut emby = item(name, media_type, item_type);
+    emby.runtime_ticks = RUNTIME_TICKS;
+    QueueItem::Emby(Box::new(emby))
+}
+
+/// Contract: invariant 36 / design D14 "the queue corrects the device" — the
+/// corrected slot becomes the queue's start slot, not the completion's `next`,
+/// which may name a slot this output cannot play: a Play of the queue after a
+/// stop starts the item the device really plays.
+#[test]
+fn the_correction_makes_the_corrected_slot_the_start_slot() {
+    let fake = FakeSessionApi::with_sessions(vec![video_only_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(
+        fake,
+        vec![
+            timed("a", RUNTIME_TICKS),
+            timed_kind("b", "Audio", "Song"),
+            timed("c", RUNTIME_TICKS),
+            timed("d", RUNTIME_TICKS),
+        ],
+    );
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    // The load gave the device the active item and the next slot it can play,
+    // stepping past the audio one.
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "c"])],
+        "the load's window skips the slot the Session cannot play"
+    );
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    // The edit removes the queued slot, so the device's move to it is stale and
+    // the Owner corrects the device with the slot after the audio one.
+    remove_slot(&mut t, client_id, slots[2]);
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 2 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    script.set_sessions(vec![session_presenting_at("c", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "c"]), play(&["d"])],
+        "the correction loads the queue's next slot this Session can play"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        Some(slots[3]),
+        "the corrected slot is the observed active slot"
+    );
+    assert_eq!(
+        t.event_loop.shared_queue.start_slot(),
+        Some(slots[3]),
+        "the corrected slot is the start slot, not the audio slot the completion named"
+    );
+}
+
 /// Runs the owner's Shuffle through the ctrl dispatch path with the Owner's
 /// seeded rng (queue-content-shuffle design D1: tests inject a seeded one), so
 /// the permutation it produces is deterministic.

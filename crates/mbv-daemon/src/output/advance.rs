@@ -64,7 +64,9 @@ pub(crate) fn begin_advance(daemon: &mut DaemonLoop) {
     let Some(ended) = daemon.owner.output.loaded_slot() else {
         return;
     };
-    observe_slot(daemon, ended);
+    // The observed record alone: the completion below is what moves the start
+    // slot past the ended one.
+    record_observed_slot(daemon, ended);
     // The step target resolves while the ended slot is still in the queue:
     // the completion record's consume rules can remove it, and the shared
     // step funnel has no base to step from once the slot it observes is gone.
@@ -96,8 +98,10 @@ pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvan
         correct_stale_device_advance(daemon, advance, ended);
         return;
     }
-    // 1. The observed active slot: the queued slot the device started.
-    observe_slot(daemon, advance.queued);
+    // 1. The observed active slot: the queued slot the device started, which is
+    // also the queue's start slot — the completion of step 2 moves it on when
+    // the device moved after a natural end.
+    observe_active_slot(daemon, advance.queued);
     // 2. A natural end records the old slot's completion and its consume rules
     // (design D6's end row); a device next before the end margin records none.
     if advance.completes {
@@ -158,8 +162,10 @@ fn correct_stale_device_advance(
         return;
     };
     // The corrected slot is where the device plays from now: the observation
-    // comes before the window it is the base of.
-    observe_slot(daemon, slot);
+    // comes before the window it is the base of, and after the completion above,
+    // so the slot the queue really plays beats the completion's `next` — which
+    // may name a slot this output cannot play.
+    observe_active_slot(daemon, slot);
     let (after, after_stepped) = window(daemon, slot);
     let runtime_ticks = slot_runtime_ticks(&daemon.owner.core.queue, slot);
     let start_ticks =
@@ -454,10 +460,25 @@ pub(crate) fn clear_advance(daemon: &mut DaemonLoop) {
 }
 
 /// Records `slot` as the owner's observed active slot (the only path for that
-/// record) — the settle path's pattern.
-fn observe_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
+/// record) — the settle path's pattern. The record alone: [`observe_active_slot`]
+/// pairs it with the queue's start slot, which is what a reported slot the
+/// output holds does.
+fn record_observed_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
     let crate::core::DaemonPlayerOwner { core, .. } = &mut daemon.owner;
     core.note_observed_active_slot(Some(slot));
+}
+
+/// Records `slot` as the owner's observed active slot and as the queue's start
+/// slot: the output holds that item, so it is the slot a Play of the queue
+/// starts (invariant 36, gui-named-queues design D4). A device move and a
+/// correction both report a slot the output has taken, and neither settles a
+/// transition, so no other write site moves the start slot for them.
+fn observe_active_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
+    record_observed_slot(daemon, slot);
+    daemon.shared_queue.note_start_slot(
+        &daemon.owner.core.queue,
+        mbv_queue::StartSlotObservation::Active(slot),
+    );
 }
 
 /// Re-bases the shared step funnel on the slot the failed step targeted
@@ -477,7 +498,9 @@ fn rebase_on_failed_step(daemon: &mut DaemonLoop) {
         daemon.owner.output.set_advance(None);
         return;
     }
-    observe_slot(daemon, failed);
+    // The funnel's base, not an item the output holds: the step the funnel
+    // dispatches next is what moves the start slot.
+    record_observed_slot(daemon, failed);
 }
 
 /// Whether a failed resolve belonged to the advance's in-flight step (design

@@ -5,8 +5,9 @@ and `SharedQueueState::start_slot()` (`crates/mbv-daemon/src/core.rs`); the rule
 `mbv_queue::start_slot_after` (`crates/mbv-queue/src/start_slot.rs`); the
 observation sites in `event_loop/player_events.rs`,
 `core/transition_dispatch.rs`, `emby_session/adopt.rs`, `run.rs`
-(`record_completed_slot`, `apply_stopped_observation`), and
-`control/queue_edit.rs`; the resting-queue writer
+(`record_completed_slot`, `apply_stopped_observation`),
+`control/queue_edit.rs`, and `output/advance.rs` (the device advance and its
+stale-advance correction); the resting-queue writer
 `RestingNamedQueue::note_start_slot` and its removal, clear, and install call
 sites in `crates/mbv-daemon/src/core/named_queues.rs` and
 `control/named_queue.rs`; the swap sites `park_current` and `finish_swap`
@@ -69,12 +70,19 @@ handler compiles and passes every functional test.
   queue's start slot at run time, beside the startup seed. It reads the cell,
   applies `start_slot_after` to the queue as it stands after the observation,
   and stores the result.
-- The active-slot observation has three sources, one per output, each writing
-  `StartSlotObservation::Active`: the local run's `TrackChanged`
+- The active-slot observation has three run sources, one per output, each
+  writing `StartSlotObservation::Active`: the local run's `TrackChanged`
   (`handle_track_changed`, which resolves the slot against the canonical queue
   before it writes), a Cast receiver's or Emby Session's loaded slot
   (`settle_remote_transition`), and the queue-end adoption on a Session
-  (`commit_adoption`).
+  (`commit_adoption`). The advance module adds two more, both for a slot its
+  output already holds and neither of them a settled transition: a device
+  advance's queued slot (`apply_device_advance`) and a stale-advance correction's
+  corrected slot (`correct_stale_device_advance`, written after the completion
+  record so the slot the device really plays beats its `Completed { next }`).
+  Its funnel re-bases (`begin_advance`, `rebase_on_failed_step`) write the
+  observed record alone: the completion, or the load the funnel dispatches next,
+  moves the start slot there.
 - The completion funnel `record_completed_slot` writes
   `StartSlotObservation::Completed { next }`. It reads the completed slot's
   index before the consume rules run, then takes the slot after it, or the slot
@@ -133,23 +141,33 @@ handler compiles and passes every functional test.
   `play_a_resting_queue_starts_its_start_slot`,
   `play_a_row_of_a_resting_queue_while_another_queue_plays`, and
   `replace_of_a_resting_queue_installs_the_new_items`, and `restore.rs` holds
-  `a_restart_restores_every_named_queue`.
+  `a_restart_restores_every_named_queue`. Two more guard the install and the
+  correction: `a_replace_of_the_current_queue_moves_the_start_slot_to_its_playhead`
+  replaces the current queue with the incoming slot identities and asserts the
+  installed playhead is the start slot, and
+  `the_correction_makes_the_corrected_slot_the_start_slot`
+  (`tests/emby_session_end/device_window.rs`, where the correction's own tests
+  live) uncovers a Session's stale device move whose completion names a slot
+  that output cannot play and asserts the corrected slot is the start slot.
 
 ## Where it currently fails / how it could regress
 
-- A whole-queue replacement installs a new queue and leaves the start slot
-  alone. `PlaybackQueue::from_queue_items` mints new slot identities, so the old
-  start slot names nothing and a Play falls back to the first slot — but a
-  replacement that keeps the incoming slot identities (a Client's
-  `UnifiedQueueReplace`, ADR 0034) can leave the start slot naming the position
-  it used to hold. The spec does not decide where a replacement's start slot
-  points; a change that does should write it through `note_start_slot` with an
-  explicit observation rather than adding a second writer.
-- A new output or observation path that loads a slot without writing
-  `StartSlotObservation::Active` leaves the start slot behind until the next
-  `TrackChanged`. `note_observed_active_slot` and `note_start_slot` are two
-  calls at each site today; a site that makes only the first is silently
-  inconsistent.
+- A whole-queue replacement installs a new queue and writes its own
+  `Installed` observation on the current-queue path of `handle_queue_replace`
+  (`control/queue_setup.rs`): the playhead the replace installed is the start
+  slot, as `finish_swap` writes it for a swap. A replacement that keeps the
+  incoming slot identities (a Client's `UnifiedQueueReplace`, ADR 0034)
+  therefore no longer leaves the start slot naming the position it used to
+  hold. The fix settles where a replacement's start slot points; the spec does
+  not say it yet.
+- A new output or observation path that reports a slot its output holds must
+  write `StartSlotObservation::Active` beside `note_observed_active_slot`
+  (`output/advance.rs` `observe_active_slot` is the pair). A site that makes
+  only the first call leaves the start slot behind until the next load settles,
+  and a Play of the queue starts a slot nothing played. The two sites that write
+  the observed record alone (`begin_advance`, `rebase_on_failed_step`) do so
+  because their own record or the load they dispatch next moves the start slot,
+  not because the pair is optional.
 - The startup seed bypasses the rule (`gui-named-queues` tasks 5.5-5.7): it
   sets the current queue's and each resting queue's start slot at construction
   from the saved state file, so a save that wrote a wrong slot would restore
