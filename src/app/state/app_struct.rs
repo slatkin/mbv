@@ -336,8 +336,9 @@ pub struct App {
     pub(in crate::app) gui_abs_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiAudiobooksSelection>,
     /// The GUI Library's Podcasts selection (add-gui-library-panel design
-    /// D12, row 10.1): per podcast library, the selected pill (default
-    /// Latest) and the episode the Hero shows, by the provider's
+    /// D12, row 10.1; gui-collection-dropdown design D1, D2): per podcast
+    /// library, the checked shows (default All), the date order (default
+    /// Newest), and the episode the Hero shows, by the provider's
     /// `(library_item_id, episode_id)` identity. The browse state's
     /// `committed_show_pill` is the one write both Clients make — the bounded
     /// fan-out's scope reads it — while the browse state's own selected show
@@ -345,10 +346,11 @@ pub struct App {
     pub(in crate::app) gui_podcast_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiPodcastsSelection>,
     /// The GUI Library's Feeds selection (add-gui-library-panel design D12,
-    /// row 11.1): the selected pill (default Latest) and the entry the Hero
-    /// shows, by the entry's stable `guid`. One feed tab exists per Client, so
-    /// one store holds it. The TUI's feed group and Watched filter stay the
-    /// TUI owner's, and the TUI never reads this store.
+    /// row 11.1; gui-collection-dropdown design D1, D2): the checked
+    /// subscriptions (default All), the date order (default Newest), and the
+    /// entry the Hero shows, by the entry's stable `guid`. One feed tab exists
+    /// per Client, so one store holds it. The TUI's feed group and Watched
+    /// filter stay the TUI owner's, and the TUI never reads this store.
     pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
     /// The GUI Library's Search store (add-gui-library-panel design D12, row
     /// 12.1): the live query, whether its result is still out, whether it

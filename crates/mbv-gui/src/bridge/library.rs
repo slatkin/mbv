@@ -144,37 +144,45 @@ pub enum GuiLibraryCommand {
     OpenUrl { url: String },
 }
 
-/// One Feeds pill (add-gui-library-panel design D12, row 11.1): the merged
-/// Latest view, or one subscription by its URL. The pill row is single-select
-/// and the state pills are dropped.
+/// One Feeds pill (add-gui-library-panel design D12, row 11.1): the All
+/// pill, or one subscription by its URL. Until the collections frame
+/// replaces the pill row, the frame pills carry the collection set's keys
+/// (gui-collection-dropdown design D1); this DTO is the transitional wire
+/// shape the pill row paints until then.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiFeedPill {
+    /// The All pill: every subscription's entries, merged in the date order.
     Latest,
+    /// The merged view scoped to one subscription's entries.
     Subscription(String),
 }
 
-/// The pill's core form the pill row paints, the one conversion the
-/// bridge keeps for the Pill DTO: the set-pill command arm resolves the
-/// command's wire pill to the core form inline (the
-/// `GuiEmbyFeedGroup` arm's pattern), so the variant names are hand-written
-/// once per direction.
-impl From<&mbv::GuiFeedPill> for GuiFeedPill {
-    fn from(pill: &mbv::GuiFeedPill) -> Self {
-        match pill {
-            mbv::GuiFeedPill::Latest => Self::Latest,
-            mbv::GuiFeedPill::Subscription(feed_id) => Self::Subscription(feed_id.clone()),
+/// The pill's core key (`None` is All, `Some` a scope's stable Service id):
+/// the one conversion the frame's pill row keeps while the core's collection
+/// set replaces the pill DTO (gui-collection-dropdown design D1); the
+/// collections frame deletes it in a later unit.
+impl From<&Option<String>> for GuiFeedPill {
+    fn from(key: &Option<String>) -> Self {
+        match key {
+            None => Self::Latest,
+            Some(feed_id) => Self::Subscription(feed_id.clone()),
         }
     }
 }
 
-/// One Podcasts pill (design D12, row 10.1): the library's merged Latest view,
-/// one of the TUI's three state pills, or one show by its stable
-/// `library_item_id`. The pill row is single-select, as the TUI's one-valued
-/// `PillSelection` is.
+/// One Podcasts pill (design D12, row 10.1): the All pill, one of the TUI's
+/// three state pills, or one show by its stable `library_item_id`. Until the
+/// collections frame replaces the pill row, the frame pills carry the
+/// collection set's keys (gui-collection-dropdown design D1); this DTO is
+/// the transitional wire shape the pill row paints until then, and the row
+/// itself paints no state pill any more.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiPodcastPill {
+    /// The All pill: every listed show's episodes, merged in the date order.
     Latest,
-    /// A state pill: the episode's play state the view filters on.
+    /// A state pill: the episode's play state the view filters on. The row
+    /// paints none while the set replaces the pill; the arm stays for the
+    /// transitional conversion's exhaustiveness.
     State(GuiPodcastState),
     Show(String),
 }
@@ -209,17 +217,16 @@ impl From<mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter> for 
     }
 }
 
-/// The pill's core form the pill row paints, the one conversion the
-/// bridge keeps for the Pill DTO; the state pill's own pair below is the
-/// leaf arm both directions share. The set-pill command arm resolves the
-/// command's wire pill to the core form inline (the `GuiEmbyFeedGroup`
-/// arm's pattern), so the variant names are hand-written once per direction.
-impl From<&mbv::GuiPodcastPill> for GuiPodcastPill {
-    fn from(pill: &mbv::GuiPodcastPill) -> Self {
-        match pill {
-            mbv::GuiPodcastPill::Latest => Self::Latest,
-            mbv::GuiPodcastPill::State(state) => Self::State((*state).into()),
-            mbv::GuiPodcastPill::Show(show_id) => Self::Show(show_id.clone()),
+/// The pill's core key (`None` is All, `Some` a scope's stable Service id):
+/// the one conversion the frame's pill row keeps while the core's collection
+/// set replaces the pill DTO (gui-collection-dropdown design D1); the
+/// collections frame deletes it in a later unit. A state pill maps to All —
+/// the row paints none, so the arm is never exercised.
+impl From<&Option<String>> for GuiPodcastPill {
+    fn from(key: &Option<String>) -> Self {
+        match key {
+            None => Self::Latest,
+            Some(show_id) => Self::Show(show_id.clone()),
         }
     }
 }
@@ -333,9 +340,11 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => Self::PodcastsSetPill {
                 lib_idx,
                 pill: match pill {
-                    GuiPodcastPill::Latest => mbv::GuiPodcastPill::Latest,
-                    GuiPodcastPill::State(state) => mbv::GuiPodcastPill::State(state.into()),
-                    GuiPodcastPill::Show(show_id) => mbv::GuiPodcastPill::Show(show_id),
+                    // The core's interim press key: None is All, Some a
+                    // show's stable id. A state pill presses All — the row
+                    // paints no state pill while the set replaces the pill.
+                    GuiPodcastPill::Latest | GuiPodcastPill::State(_) => None,
+                    GuiPodcastPill::Show(show_id) => Some(show_id),
                 },
             },
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
@@ -349,8 +358,10 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             }
             GuiLibraryCommand::FeedsSetPill { pill } => Self::FeedsSetPill {
                 pill: match pill {
-                    GuiFeedPill::Latest => mbv::GuiFeedPill::Latest,
-                    GuiFeedPill::Subscription(feed_id) => mbv::GuiFeedPill::Subscription(feed_id),
+                    // The core's interim press key: None is All, Some a
+                    // subscription's stable id.
+                    GuiFeedPill::Latest => None,
+                    GuiFeedPill::Subscription(feed_id) => Some(feed_id),
                 },
             },
             GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },

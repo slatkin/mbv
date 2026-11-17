@@ -154,7 +154,7 @@ fn commanded_feed_guids(cmd_rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Vec<Stri
 }
 
 /// The frame carries the Feeds list after the open (row 11.1): the entries are
-/// in the TUI's date order with the undated ones last, the pill row is Latest
+/// in the date order with the undated ones last, the pill row is All
 /// first then each subscription by name, the first row is the Hero default,
 /// and the Hero carries that entry's title, its subscription, and the
 /// placeholder shape.
@@ -181,8 +181,8 @@ fn the_frame_carries_the_feed_list_after_the_open() {
             .iter()
             .map(|pill| (pill.name.as_str(), pill.selected))
             .collect::<Vec<_>>(),
-        [("Latest", true), ("Feed A", false), ("Feed B", false)],
-        "the pill row is Latest first, then each subscription by name"
+        [("All", true), ("Feed A", false), ("Feed B", false)],
+        "the pill row is All first, then each subscription by name"
     );
     assert_eq!(
         detail.selected.as_deref(),
@@ -199,8 +199,8 @@ fn the_frame_carries_the_feed_list_after_the_open() {
 }
 
 /// A pill command re-scopes the rows (row 11.1): the set-pill command's
-/// subscription leaves only that subscription's entries, and its pill is the
-/// selected one.
+/// subscription check leaves only that subscription's entries, and its pill
+/// is the checked one.
 #[test]
 fn the_pill_command_changes_the_rows() {
     let (mut test, _cmd_rx) = seeded_feeds_core();

@@ -1,6 +1,7 @@
 //! Tests of the GUI Library's Feeds data path (add-gui-library-panel design
-//! D12, row 11.1): the merged Latest list and a subscription's scoped list,
-//! the presented Feeds tab and a saved Feeds location, and the pill and pick
+//! D12, row 11.1): the merged All list and a checked subscription's list, two
+//! checked subscriptions, the Oldest order with an undated entry last, the
+//! presented Feeds tab and a saved Feeds location, and the pill and pick
 //! commands' store and stale arms.
 //!
 //! The fetch boundary is the App's own result channel, so a test owns every
@@ -49,35 +50,31 @@ fn entry_id(feed_id: &str, guid: &str) -> String {
     crate::app::gui_library::GuiFeedEntryId::new(feed_id.to_string(), guid.to_string()).encode()
 }
 
-fn feed_b_pill() -> crate::app::gui_library::GuiFeedPill {
-    crate::app::gui_library::GuiFeedPill::Subscription(FEED_B.into())
-}
-
-/// Latest merges both subscriptions' entries newest first, with the undated
+/// All merges both subscriptions' entries newest first, with the undated
 /// entries last (row 11.1, contract a).
 #[test]
-fn latest_lists_both_subscriptions_newest_first_with_undated_last() {
+fn all_lists_both_subscriptions_newest_first_with_undated_last() {
     let app = fetched_feeds_app();
 
     assert_eq!(
         listed_guids(&app),
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
-        "Latest merges both subscriptions newest first with nothing dated last"
+        "All merges both subscriptions newest first with nothing dated last"
     );
 }
 
-/// A subscription pill scopes the list to that subscription's entries
+/// A checked subscription lists only that subscription's entries
 /// (row 11.1, contract a).
 #[test]
-fn a_subscription_pill_lists_only_that_subscriptions_entries() {
+fn a_checked_subscription_lists_only_that_subscriptions_entries() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(feed_b_pill());
+    app.gui_feeds_set_pill(Some(FEED_B));
 
     assert_eq!(
         listed_guids(&app),
         ["b-mid", "b-undated"],
-        "the pill's own list, in the same order"
+        "the checked subscription's own list, in the same order"
     );
 }
 
@@ -105,10 +102,10 @@ fn the_presented_tabs_include_the_feeds_destination() {
     );
 }
 
-/// A saved Feeds location restores to the feed tab and applies no saved pill
-/// (row 11.1, contract b).
+/// A saved Feeds location restores to the feed tab and applies no saved
+/// checked set (row 11.1, contract b).
 #[test]
-fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_pill() {
+fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
     let mut app = fetched_feeds_app();
     app.tab = TabSelection::Home;
     let saved = GuiLaunchState {
@@ -132,54 +129,57 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_pill() {
         "the Feeds destination needs no retry"
     );
     assert_eq!(
-        app.gui_feeds_pill(),
-        crate::app::gui_library::GuiFeedPill::Latest,
-        "the launch file saves no pill, so the restored tab opens on Latest"
+        app.gui_feeds_effective_set(),
+        GuiCollectionSet::All,
+        "the launch file saves no collection, so the restored tab opens on All"
     );
 }
 
-/// A subscription pill is stored, and one the tab no longer holds changes
+/// A checked subscription is stored, and one the tab no longer holds changes
 /// nothing (row 11.1, contract c).
 #[test]
-fn a_subscription_pill_is_stored_and_a_stale_one_changes_nothing() {
+fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(feed_b_pill());
-    assert_eq!(app.gui_feeds_pill(), feed_b_pill(), "the pill is stored");
-
-    app.gui_feeds_set_pill(crate::app::gui_library::GuiFeedPill::Subscription(
-        "https://example.test/gone".into(),
-    ));
+    app.gui_feeds_set_pill(Some(FEED_B));
     assert_eq!(
-        app.gui_feeds_pill(),
-        feed_b_pill(),
+        app.gui_feeds_effective_set(),
+        GuiCollectionSet::Checked(vec![FEED_B.into()]),
+        "the checked subscription is stored"
+    );
+
+    app.gui_feeds_set_pill(Some("https://example.test/gone"));
+    assert_eq!(
+        app.gui_feeds_effective_set(),
+        GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "a subscription the tab does not hold changes nothing"
     );
 }
 
-/// The frame path's ensure falls back to Latest when the selected pill's
-/// subscription leaves the tab (row 11.1, contract c).
+/// The frame path's ensure drops a checked subscription that leaves the tab
+/// (row 11.1, contract c; gui-collection-dropdown design D1's vanish rule):
+/// the last checked subscription's drop returns the selection to All.
 #[test]
-fn the_ensure_falls_back_to_latest_when_the_subscription_leaves() {
+fn the_ensure_drops_the_checked_subscription_when_it_leaves() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(feed_b_pill());
+    app.gui_feeds_set_pill(Some(FEED_B));
 
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
     app.ensure_gui_feeds_selection();
 
     assert_eq!(
-        app.gui_feeds_pill(),
-        crate::app::gui_library::GuiFeedPill::Latest,
-        "a removed subscription's pill never paints"
+        app.gui_feeds_effective_set(),
+        GuiCollectionSet::All,
+        "a removed subscription's check never paints"
     );
 }
 
-/// An entry pick is stored, and one the selected pill's list does not carry
-/// changes nothing (row 11.1, contract c).
+/// An entry pick is stored, and one the checked subscriptions' list does not
+/// carry changes nothing (row 11.1, contract c).
 #[test]
 fn an_entry_pick_is_stored_and_one_outside_the_selected_list_changes_nothing() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(feed_b_pill());
+    app.gui_feeds_set_pill(Some(FEED_B));
 
     app.gui_feeds_select(&entry_id(FEED_B, "b-mid"));
     assert_eq!(
@@ -226,13 +226,13 @@ fn the_entry_row_id_round_trips_through_its_encoding() {
     );
 }
 
-/// Latest merges both subscriptions' entries in the TUI's date order with the
-/// pill row and the default Hero (row 11.1, contract a): newest first with the
-/// undated entries last, Latest first in the pill row and selected, the first
-/// row as the selected entry, and the Hero carrying that entry's title, its
-/// subscription name, and the Square placeholder shape with no artwork.
+/// All merges both subscriptions' entries in the date order with the pill row
+/// and the default Hero (row 11.1, contract a): newest first with the undated
+/// entries last, All first in the pill row and checked, the first row as the
+/// selected entry, and the Hero carrying that entry's title, its subscription
+/// name, and the Square placeholder shape with no artwork.
 #[test]
-fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero() {
+fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
     let app = fetched_feeds_app();
 
     let projection = app.gui_feeds_projection();
@@ -244,7 +244,7 @@ fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero(
             .map(|row| row.title.as_str())
             .collect::<Vec<_>>(),
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
-        "Latest merges both subscriptions newest first with nothing dated last"
+        "All merges both subscriptions newest first with nothing dated last"
     );
     assert_eq!(
         projection.rows[0].subtitle.as_deref(),
@@ -271,8 +271,8 @@ fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero(
             .iter()
             .map(|pill| (pill.name.as_str(), pill.selected))
             .collect::<Vec<_>>(),
-        [("Latest", true), ("Feed A", false), ("Feed B", false)],
-        "the pill row is Latest first, then each subscription by name"
+        [("All", true), ("Feed A", false), ("Feed B", false)],
+        "the pill row is All first, then each subscription by name"
     );
     assert_eq!(
         projection.selected.as_deref(),
@@ -300,14 +300,14 @@ fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero(
     );
 }
 
-/// A subscription pill scopes the list to that subscription (row 11.1,
+/// A checked subscription scopes the list to that subscription (row 11.1,
 /// contract a): only that subscription's entries ride the rows, and its pill
-/// is the selected one.
+/// is the one checked.
 #[test]
-fn a_subscription_pill_scopes_the_rows_to_that_subscription() {
+fn a_checked_subscription_scopes_the_rows_to_that_subscription() {
     let mut app = fetched_feeds_app();
 
-    app.gui_feeds_set_pill(feed_b_pill());
+    app.gui_feeds_set_pill(Some(FEED_B));
     let projection = app.gui_feeds_projection();
 
     assert_eq!(
@@ -335,13 +335,13 @@ fn a_subscription_pill_scopes_the_rows_to_that_subscription() {
     );
 }
 
-/// A subscription pill the tab no longer holds falls back to Latest (row
-/// 11.1): the projection paints Latest's merged rows and marks Latest
-/// selected.
+/// A checked subscription the tab no longer holds drops from the set
+/// (row 11.1; gui-collection-dropdown design D1's vanish rule): the projection
+/// paints All's merged rows and marks All checked.
 #[test]
-fn a_stale_subscription_pill_falls_back_to_latest() {
+fn a_vanished_checked_subscription_falls_back_to_all() {
     let mut app = fetched_feeds_app();
-    app.gui_feeds_set_pill(feed_b_pill());
+    app.gui_feeds_set_pill(Some(FEED_B));
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
     app.send_gui_feed_fetch_result_for_test(
         0,
@@ -371,13 +371,65 @@ fn a_stale_subscription_pill_falls_back_to_latest() {
             .filter(|pill| pill.selected)
             .map(|pill| pill.name.as_str())
             .collect::<Vec<_>>(),
-        ["Latest"],
-        "Latest paints as selected"
+        ["All"],
+        "All paints as checked"
+    );
+}
+
+/// Two checked subscriptions merge their entries (gui-collection-dropdown
+/// design D2): both pills stay checked, and the merged list keeps the date
+/// order with the undated entries last.
+#[test]
+fn two_checked_subscriptions_merge_their_entries_in_date_order() {
+    let mut app = fetched_feeds_app();
+
+    app.gui_feeds_set_pill(Some(FEED_A));
+    app.gui_feeds_set_pill(Some(FEED_B));
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>(),
+        ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
+        "the two checked subscriptions' entries merge in the date order"
+    );
+    assert_eq!(
+        projection
+            .pills
+            .iter()
+            .map(|pill| (pill.name.as_str(), pill.selected))
+            .collect::<Vec<_>>(),
+        [("All", false), ("Feed A", true), ("Feed B", true)],
+        "both subscriptions' pills stay checked and All does not"
+    );
+}
+
+/// The Oldest order puts the earliest entry first, with the undated entries
+/// last (gui-collection-dropdown design D4): the stored order sorts the
+/// merged list without a refetch.
+#[test]
+fn the_oldest_order_puts_the_earliest_entry_first_with_undated_last() {
+    let mut app = fetched_feeds_app();
+    app.gui_feeds_selection.order = GuiDateOrder::Oldest;
+
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>(),
+        ["a-old", "b-mid", "a-new", "a-undated", "b-undated"],
+        "Oldest sorts the earliest entry first and keeps nothing dated last"
     );
 }
 
 /// Two subscriptions that publish the same `guid` name different entries (row
-/// 11.1): both rows ride Latest with different ids, and picking the second one
+/// 11.1): both rows ride All with different ids, and picking the second one
 /// selects exactly that row, so the composite identity is what addresses one
 /// entry.
 #[test]

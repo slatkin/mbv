@@ -136,8 +136,8 @@ fn commanded_episode_id(cmd_rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> String {
 }
 
 /// The frame carries the Podcasts list after the open (row 10.1): the section
-/// names the podcast library, the episodes are in the TUI's date order with
-/// the undated one last, the pill row is Latest first then each show by title,
+/// names the podcast library, the episodes are in the date order with
+/// the undated one last, the pill row is All first then each show by title,
 /// the first row is the Hero default, and the Hero carries that episode's
 /// facts, description, and Square art shape.
 #[test]
@@ -162,8 +162,8 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
     let names: Vec<&str> = list.pills.iter().map(|pill| pill.name.as_str()).collect();
     assert_eq!(
         names,
-        ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
-        "the pill row carries the TUI's state pills between Latest and the shows"
+        ["All", "Show A", "Show B"],
+        "the pill row carries the All pill and one pill per show"
     );
     assert_eq!(
         detail.selected.as_deref(),
@@ -184,7 +184,7 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
 }
 
 /// A pill command re-scopes the rows (row 10.1): the set-pill command's show
-/// leaves only that show's episodes, and its pill is the selected one.
+/// check leaves only that show's episodes, and its pill is the checked one.
 #[test]
 fn the_pill_command_changes_the_rows() {
     let (mut test, _cmd_rx) = seeded_podcasts_core();

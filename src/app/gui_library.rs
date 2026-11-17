@@ -47,7 +47,7 @@ pub use self::emby_projection::{
     GuiEmbyRowKind,
 };
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow, GuiPillOption};
-pub use self::feeds::{GuiFeedPill, GuiFeedsSelection};
+pub use self::feeds::GuiFeedsSelection;
 pub use self::feeds_projection::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
 };
@@ -58,7 +58,7 @@ pub use self::home::{
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::marks::GuiPlayheadMarks;
-pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
+pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,
     GuiPodcastsRow,
@@ -207,13 +207,17 @@ pub enum GuiLibraryCommand {
     /// Add an Audiobooks book to the queue (design D12, row 9.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     AbsQueue { lib_idx: usize, item_id: String },
-    /// Set the Podcasts destination's pill (design D12, row 10.1): Latest, or
-    /// one show by its stable `library_item_id`. The pill row is single-select,
-    /// and the selected pill's own loads start through the TUI's own loaders.
-    /// A show the published show list no longer carries changes nothing.
+    /// Apply the Podcasts destination's interim pill press (design D12, row
+    /// 10.1; gui-collection-dropdown design D2): `None` is the All pill's
+    /// press, and `Some(show_id)` toggles that show by its stable
+    /// `library_item_id` in the checked set. The dropdown's collection
+    /// commands replace the variant in a later unit, and the checked set's
+    /// loads start through the TUI's own loaders. A show the published show
+    /// list no longer carries changes nothing.
     PodcastsSetPill {
         lib_idx: usize,
-        pill: podcasts::GuiPodcastPill,
+        /// `None` is All; `Some(id)` toggles that show in the set.
+        pill: Option<String>,
     },
     /// Select the Podcasts episode the Hero shows (design D12, row 10.1): a
     /// press on the row. The row id is the frame's opaque episode identity, so
@@ -227,11 +231,17 @@ pub enum GuiLibraryCommand {
     /// Add a Podcasts episode to the queue (design D12, row 10.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     PodcastsQueue { lib_idx: usize, item_id: String },
-    /// Set the Feeds destination's pill (design D12, row 11.1): Latest, or one
-    /// subscription by its URL. The pill row is single-select, the state pills
-    /// are dropped, and a subscription the tab no longer holds changes nothing.
-    /// A Client holds one feed tab, so no library index rides here.
-    FeedsSetPill { pill: feeds::GuiFeedPill },
+    /// Apply the Feeds destination's interim pill press (design D12, row 11.1;
+    /// gui-collection-dropdown design D2): `None` is the All pill's press, and
+    /// `Some(feed_id)` toggles that subscription by its URL in the checked
+    /// set. The dropdown's collection commands replace the variant in a later
+    /// unit, and no load starts — every subscription's entries arrive from the
+    /// one fetch. A subscription the tab no longer holds changes nothing. A
+    /// Client holds one feed tab, so no library index rides here.
+    FeedsSetPill {
+        /// `None` is All; `Some(url)` toggles that subscription in the set.
+        pill: Option<String>,
+    },
     /// Select the Feeds entry the Hero shows (design D12, row 11.1): a press
     /// on the row. The row id is the frame's opaque entry identity, so a stale
     /// frame's row changes nothing.
@@ -409,7 +419,7 @@ impl App {
                 self.enqueue_gui_abs_book(lib_idx, &item_id);
             }
             GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => {
-                self.gui_podcast_set_pill(lib_idx, pill);
+                self.gui_podcast_set_pill(lib_idx, pill.as_deref());
             }
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
                 self.select_gui_podcast_row(lib_idx, &row);
@@ -434,7 +444,9 @@ impl App {
     /// request silently.
     fn apply_gui_feeds_command(&mut self, command: GuiLibraryCommand) {
         match command {
-            GuiLibraryCommand::FeedsSetPill { pill } => self.gui_feeds_set_pill(pill),
+            GuiLibraryCommand::FeedsSetPill { pill } => {
+                self.gui_feeds_set_pill(pill.as_deref());
+            }
             GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
             GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
             GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),

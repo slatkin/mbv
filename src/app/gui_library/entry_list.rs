@@ -12,16 +12,22 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
-/// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1):
-/// Latest first, then one pill per scope in the destination's order. The
-/// pill row is single-select, as the TUI's one-valued `PillSelection` is.
+use super::collection::GuiCollectionSet;
+
+/// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1): the
+/// All pill first, then one pill per scope in the destination's order. Until
+/// the dropdown replaces the row, the interim pill carries the collection
+/// set's key: `None` for the All pill, and `Some(key)` for a scope's pill,
+/// with `selected` marking the set's membership (gui-collection-dropdown
+/// design D1).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiPillOption<P> {
-    /// The pill's selection: the set-pill command carries it back.
+    /// The pill's selection key: the set-pill command carries it back.
     pub pill: P,
-    /// The pill's label: `Latest`, or the scope's own name.
+    /// The pill's label: `All`, or the scope's own name.
     pub name: String,
-    /// Whether the core's stored pill is this one.
+    /// Whether the core's selection checks this pill: All while the
+    /// selection is All, a scope while the set holds its key.
     pub selected: bool,
 }
 
@@ -50,15 +56,15 @@ pub struct GuiEntryRow {
 }
 
 /// The pill-scoped entry-list projection a destination paints (rows 10.1,
-/// 11.1): the single-select pill row, the active pill's entry rows, the
+/// 11.1): the collection pill row, the selection's entry rows, the
 /// core's selected entry, and its Hero. No letter rail rides here — the
 /// lists are sorted by date — and no Workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEntryListProjection<P, H> {
-    /// The pill row in paint order: Latest first, then each scope in the
-    /// destination's order — the subscriptions for Feeds, the state pills and
-    /// the shows for Podcasts. The selected pill is the core's effective one;
-    /// a scope the destination no longer holds falls back to Latest.
+    /// The pill row in paint order: the All pill first, then each scope in
+    /// the destination's order — the subscriptions for Feeds, the shows for
+    /// Podcasts. The checked pills are the core's effective selection; a
+    /// scope the destination no longer holds drops from it.
     pub pills: Vec<GuiPillOption<P>>,
     /// Whether the active view's content is still landing: the feed tab's
     /// fetch for Feeds, the show catalog's pages and the active view's own
@@ -69,9 +75,9 @@ pub struct GuiEntryListProjection<P, H> {
     /// toast and keeps its previous entries — and the browse state's error
     /// for Podcasts, whose published episodes keep serving when they can.
     pub failed: bool,
-    /// The active pill's entry rows: a Latest pill merges every scope's
-    /// entries, and a scoped pill holds that one scope's, both newest first
-    /// with undated entries last.
+    /// The selection's entry rows: All merges every scope's entries, and a
+    /// checked set holds the checked scopes' — in the destination's date
+    /// order.
     pub rows: Vec<GuiEntryRow>,
     /// The core's selected entry (rows 10.1, 11.1), as the frame painted it:
     /// the pick the select command last named while the active list still
@@ -95,22 +101,24 @@ impl<P, H> Default for GuiEntryListProjection<P, H> {
     }
 }
 
-/// The pill row (rows 10.1, 11.1): `latest` first, then each scoped pill
-/// `scoped` yields in the destination's order, with the effective pill
-/// `selected` marked.
-pub(in crate::app::gui_library) fn pill_options<P: Clone + PartialEq>(
-    latest: &P,
-    selected: &P,
-    scoped: impl IntoIterator<Item = (P, String)>,
-) -> Vec<GuiPillOption<P>> {
+/// The interim collection pill row (rows 10.1, 11.1; gui-collection-dropdown
+/// design D1): the All pill first, then one pill per scope in the
+/// destination's order, each checked exactly when the selection holds its
+/// key — the dropdown replaces the row in a later unit.
+pub(in crate::app::gui_library) fn collection_pill_options(
+    set: &GuiCollectionSet,
+    scopes: impl IntoIterator<Item = (String, String)>,
+) -> Vec<GuiPillOption<Option<String>>> {
     let mut pills = vec![GuiPillOption {
-        pill: latest.clone(),
-        name: "Latest".to_string(),
-        selected: selected == latest,
+        pill: None,
+        name: "All".to_string(),
+        selected: set.is_all(),
     }];
-    pills.extend(scoped.into_iter().map(|(pill, name)| GuiPillOption {
-        selected: *selected == pill,
-        pill,
+    // All checks no scope's pill: All is the one checked pill, and the set's
+    // membership decides the rest (`checked_keys` is empty for All).
+    pills.extend(scopes.into_iter().map(|(key, name)| GuiPillOption {
+        selected: set.checked_keys().contains(&key),
+        pill: Some(key),
         name,
     }));
     pills

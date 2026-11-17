@@ -11,15 +11,16 @@ use mbv::{GuiEntryRow, GuiPillOption};
 use super::GuiHomeRowStateFrame;
 
 /// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1): the
-/// shared wire pill frame over the destination's pill DTO `P`. The pill row
-/// is single-select, as the TUI's one-valued `PillSelection` is.
+/// shared wire pill frame over the destination's pill DTO `P`. Until the
+/// collections frame replaces the row, the pills carry the collection set's
+/// keys and paint its membership (gui-collection-dropdown design D1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPillFrame<P> {
     /// The pill's selection: the set-pill command carries it back.
     pub pill: P,
-    /// The pill's label: `Latest`, or the scope's own name.
+    /// The pill's label: `All`, or the scope's own name.
     pub name: String,
-    /// Whether the core's stored pill is this one.
+    /// Whether the core's selection checks this pill.
     pub selected: bool,
     /// Whether the pill is a collection pill (multi-select) rather than a
     /// single-select one. Every pill-scoped destination's pills are

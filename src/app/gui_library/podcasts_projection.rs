@@ -1,16 +1,16 @@
 //! The GUI Library's Podcasts projection (add-gui-library-panel design D12,
-//! row 10.1): the single-select pill row of Latest and one pill per show, the
-//! active pill's episode list in the TUI's date order — newest first with
-//! undated episodes last — the core's selected episode, and its Hero. Latest
-//! merges every listed show's episodes; a show pill scopes the list to that
-//! one show. The list shows no letter rail, because it is sorted by date. The
-//! Hero is the shared `hero_content_abs_episode` producer's facts — the
-//! episode title, the show, the duration, and the publish date — its
-//! description, and the parent show's Square cover, which the Service-scoped
-//! cover chain caches. The order and the per-pill view are the TUI's own
-//! (`AudiobookshelfBrowseState::visible_episodes`,
-//! `visible_episodes_from`), so the two Clients cannot drift; the projection
-//! reads `App` data only.
+//! row 10.1): the interim collection pill row of All and one pill per show,
+//! the selection's episode list in the stored date order — the shared
+//! `compare_gui_date_order` rule, newest first with undated episodes last
+//! while Newest — the core's selected episode, and its Hero. All merges every
+//! listed show's episodes; a checked set merges the checked shows'. The list
+//! shows no letter rail, because it is sorted by date. The Hero is the shared
+//! `hero_content_abs_episode` producer's facts — the episode title, the show,
+//! the duration, and the publish date — its description, and the parent
+//! show's Square cover, which the Service-scoped cover chain caches. The
+//! per-show episode views are the TUI's own
+//! (`AudiobookshelfBrowseState::visible_episodes`, `visible_episodes_from`),
+//! so the two Clients cannot drift; the projection reads `App` data only.
 
 use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfProgress, AudiobookshelfShow,
@@ -25,11 +25,11 @@ use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
+use super::collection::{GuiCollectionSet, GuiDateOrder, compare_gui_date_order};
 use super::entry_list::{
-    GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
+    GuiEntryListProjection, GuiEntryRow, GuiPillOption, collection_pill_options, picked_or_first,
 };
 use super::home::{GuiArtShape, artwork_shape};
-use super::podcasts::GuiPodcastPill;
 use crate::app::App;
 use crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks_u64;
 use mbv_ui_model::meta::MetaSegment;
@@ -120,11 +120,12 @@ impl From<&PodcastEpisodeTarget> for GuiPodcastEpisodeId {
     }
 }
 
-/// One pill of the Podcasts pill row (row 10.1): Latest first, then one pill
-/// per show in the show list's title order — the shared pill option over the
-/// Podcasts pill. The pill row is single-select, as the TUI's one-valued
-/// `PillSelection` is; the state pills ride between the two.
-pub type GuiPodcastsPillOption = GuiPillOption<GuiPodcastPill>;
+/// One pill of the Podcasts pill row (row 10.1): All first, then one pill
+/// per show in the show list's title order — the interim collection pill
+/// over the show's `library_item_id` key (`None` is All). The pill row paints
+/// the collection set's membership; the dropdown replaces the row in a later
+/// unit.
+pub type GuiPodcastsPillOption = GuiPillOption<Option<String>>;
 
 /// One row of the Podcasts list (row 10.1) — the shared pill-scoped
 /// entry-list row. The identity is the episode's stable
@@ -165,25 +166,27 @@ pub struct GuiPodcastsHero {
 }
 
 /// The Podcasts projection the GUI Library panel paints (row 10.1) — the
-/// shared pill-scoped entry-list projection over the Podcasts pill and Hero:
-/// the single-select pill row, the active pill's episode rows, the core's
-/// selected episode, and its Hero. No letter rail rides here — the list is
-/// sorted by date — and no Workspace.
-pub type GuiPodcastsProjection = GuiEntryListProjection<GuiPodcastPill, GuiPodcastsHero>;
+/// shared pill-scoped entry-list projection over the collection pill row and
+/// Hero: the All and show pills with their checked state, the selection's
+/// episode rows, the core's selected episode, and its Hero. No letter rail
+/// rides here — the list is sorted by date — and no Workspace.
+pub type GuiPodcastsProjection = GuiEntryListProjection<Option<String>, GuiPodcastsHero>;
 
 impl App {
     /// The Podcasts projection the GUI Library panel paints (row 10.1): the
-    /// pill row, the active pill's episode rows, the selected episode, and its
-    /// Hero. A `lib_idx` that names no podcast library projects the empty
-    /// projection, as the frame's gate excludes that destination anyway.
+    /// collection pill row, the selection's episode rows in the stored date
+    /// order, the selected episode, and its Hero. A `lib_idx` that names no
+    /// podcast library projects the empty projection, as the frame's gate
+    /// excludes that destination anyway.
     #[must_use]
     pub fn gui_podcasts_projection(&mut self, lib_idx: usize) -> GuiPodcastsProjection {
         if !self.gui_podcast_library(lib_idx) {
             return GuiPodcastsProjection::default();
         }
-        let pill = self.gui_podcast_effective_pill(lib_idx);
-        let pills = self.gui_podcast_pills(lib_idx, &pill);
-        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &pill);
+        let set = self.gui_podcast_effective_set(lib_idx);
+        let order = self.gui_podcast_date_order(lib_idx);
+        let pills = self.gui_podcast_pills(lib_idx, &set);
+        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &set, order);
         let selected = self.gui_podcast_selected(lib_idx, &rows);
         let hero = selected
             .as_deref()
@@ -199,86 +202,73 @@ impl App {
         }
     }
 
-    /// The pill the list and the pill row paint (row 10.1): the core's stored
-    /// pill, with a show the published show list no longer carries falling
-    /// back to Latest. A show list that holds no show admits the pill — it is
-    /// still landing, and the list is what would name the pill stale.
-    fn gui_podcast_effective_pill(&self, lib_idx: usize) -> GuiPodcastPill {
-        let pill = self.gui_podcast_pill(lib_idx);
-        let GuiPodcastPill::Show(show_id) = &pill else {
-            return pill;
-        };
-        let stale = self
-            .audiobookshelf_browse
-            .get(lib_idx)
-            .is_some_and(|state| {
-                !state.shows.is_empty()
-                    && !state
-                        .shows
-                        .iter()
-                        .any(|show| &show.library_item_id == show_id)
-            });
-        if stale { GuiPodcastPill::Latest } else { pill }
-    }
-
-    /// The pill row (row 10.1): Latest first, then the TUI's three state pills,
-    /// then each listed show by title — the order the show list already holds —
-    /// with the effective pill selected.
+    /// The collection pill row (row 10.1): All first, then each listed show
+    /// by title — the order the show list already holds — each checked
+    /// exactly when the selection holds it.
     fn gui_podcast_pills(
         &self,
         lib_idx: usize,
-        pill: &GuiPodcastPill,
+        set: &GuiCollectionSet,
     ) -> Vec<GuiPodcastsPillOption> {
         let shows = self
             .audiobookshelf_browse
             .get(lib_idx)
             .map(|state| state.shows.as_slice())
             .unwrap_or_default();
-        pill_options(
-            &GuiPodcastPill::Latest,
-            pill,
-            AudiobookshelfEpisodeFilter::ALL
-                .into_iter()
-                .map(|filter| (GuiPodcastPill::State(filter), filter.label().to_string()))
-                .chain(shows.iter().map(|show| {
-                    (
-                        GuiPodcastPill::Show(show.library_item_id.clone()),
-                        show.title.clone(),
-                    )
-                })),
+        collection_pill_options(
+            set,
+            shows
+                .iter()
+                .map(|show| (show.library_item_id.clone(), show.title.clone())),
         )
     }
 
-    /// The active pill's episode rows with the view's loading and failure
-    /// states (row 10.1): Latest merges every listed show's cached episodes,
-    /// a show pill takes that show's, and both orders are the TUI's date order
-    /// — newest first, undated last. The loading state is the catalog's pages
-    /// in flight, plus the active view's own episode fetches, the TUI's
-    /// `pill_fetch_in_flight` rule.
+    /// The selection's episode rows with the view's loading and failure
+    /// states (row 10.1; gui-collection-dropdown design D2, D4): All merges
+    /// every listed show's cached episodes, and a checked set merges the
+    /// checked shows' — both sorted by the stored date order, newest first
+    /// with undated rows last while Newest. The loading state is the
+    /// catalog's pages in flight, plus the active view's own episode fetches,
+    /// the TUI's `pill_fetch_in_flight` rule.
     fn gui_podcast_rows(
         &self,
         lib_idx: usize,
-        pill: &GuiPodcastPill,
+        set: &GuiCollectionSet,
+        order: GuiDateOrder,
     ) -> (Vec<GuiPodcastsRow>, bool, bool) {
         let Some(state) = self.audiobookshelf_browse.get(lib_idx) else {
             return (Vec::new(), true, false);
         };
-        let episodes = match pill {
-            GuiPodcastPill::Latest => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
-            GuiPodcastPill::State(filter) => state.visible_episodes(*filter),
-            GuiPodcastPill::Show(show_id) => state
-                .detail_cache
-                .get(show_id)
-                .map(|episodes| {
-                    state.visible_episodes_from(episodes, AudiobookshelfEpisodeFilter::All)
-                })
-                .unwrap_or_default(),
-        };
-        let fetching = match pill {
-            GuiPodcastPill::Latest | GuiPodcastPill::State(_) => {
-                !state.detail_loading_ids.is_empty()
+        let mut episodes = match set {
+            GuiCollectionSet::All => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
+            GuiCollectionSet::Checked(keys) => {
+                let mut visible = Vec::new();
+                for show in &state.shows {
+                    if !keys.contains(&show.library_item_id) {
+                        continue;
+                    }
+                    if let Some(cached) = state.detail_cache.get(&show.library_item_id) {
+                        visible.extend(
+                            state.visible_episodes_from(cached, AudiobookshelfEpisodeFilter::All),
+                        );
+                    }
+                }
+                visible
             }
-            GuiPodcastPill::Show(show_id) => state.detail_loading_ids.contains_key(show_id),
+        };
+        episodes.sort_by(|left, right| {
+            compare_gui_date_order(
+                left.published_at.map(podcast_secs),
+                right.published_at.map(podcast_secs),
+                order,
+            )
+        });
+        let fetching = match set {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
+                let show_id = keys.first().map(String::as_str).unwrap_or_default();
+                state.detail_loading_ids.contains_key(show_id)
+            }
+            _ => !state.detail_loading_ids.is_empty(),
         };
         let rows = episodes
             .iter()
@@ -404,6 +394,13 @@ fn podcast_row(
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
     }
+}
+
+/// One episode's publish seconds as the comparison's `i64` (gui-collection-dropdown
+/// design D4): the provider carries `u64`, and a count past `i64::MAX` names
+/// no real date.
+fn podcast_secs(secs: u64) -> i64 {
+    i64::try_from(secs).unwrap_or(i64::MAX)
 }
 
 /// The parent show of `library_item_id` in the published show list.

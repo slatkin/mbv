@@ -193,7 +193,7 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
 }
 
 /// Contract (`LibraryFeedsPills.test.ts`): a press sends the set-pill
-/// command with the frame's pill object — the Latest pill's own object, as
+/// command with the frame's pill object — the All pill's own object, as
 /// the frame carries it.
 #[test]
 fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
@@ -203,8 +203,6 @@ fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::FeedsSetPill {
-            pill: mbv::GuiFeedPill::Latest,
-        }]
+        [mbv::GuiLibraryCommand::FeedsSetPill { pill: None }]
     );
 }
