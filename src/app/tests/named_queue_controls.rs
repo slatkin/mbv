@@ -5,9 +5,10 @@
 //! new-queue control makes and shows a queue", "The close control closes the
 //! shown entry", "The chooser lists local queues and connected peers").
 
+use super::named_queues::peer_link::gui_app_with_peer;
 use super::named_queues::{
-    current, gui_app_with_named_queues, gui_app_with_peer, inject_local_events, named_queue_list,
-    op_answer, resting, resting_snapshot,
+    current, gui_app_with_named_queues, inject_local_events, named_queue_list, op_answer, resting,
+    resting_snapshot,
 };
 use super::*;
 use crate::app::gui_client_state::GuiOverlay;
