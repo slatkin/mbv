@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use mbv_queue::{NamedQueueId, QueueItem, QueueLineage, QueueSlotId, QueueSource, QueueState};
+use mbv_queue::{ExecSlot, NamedQueueId, QueueLineage, QueueSlotId, QueueSource, QueueState};
 
 use crate::state::{load_json, load_stay_alive_queue_state_at, save_json_atomic};
 use crate::{
@@ -20,8 +20,9 @@ pub const DEFAULT_NAMED_QUEUE_NAME: &str = "Default";
 /// the same first identity, so both paths name their first queue alike.
 pub const FIRST_QUEUE_RAW_ID: u64 = 1;
 
-/// One Named queue as it is persisted: its slots with their stable identities,
-/// its name, its source, its lineage, and its start slot.
+/// One Named queue as it is persisted: its slots with their stable identities
+/// (`mbv-queue`'s `ExecSlot`, the same shape the owner queue persists), its
+/// name, its source, its lineage, and its start slot.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct NamedQueue {
     pub id: NamedQueueId,
@@ -32,14 +33,7 @@ pub struct NamedQueue {
     #[serde(default)]
     pub start_slot: Option<QueueSlotId>,
     #[serde(default)]
-    pub slots: Vec<NamedQueueSlot>,
-}
-
-/// One persisted slot: its owner-assigned identity and its media snapshot.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct NamedQueueSlot {
-    pub slot_id: QueueSlotId,
-    pub item: QueueItem,
+    pub slots: Vec<ExecSlot>,
 }
 
 /// Every Named queue the local Owner holds, and which one is current.
@@ -51,61 +45,50 @@ pub struct NamedQueuesState {
 }
 
 impl NamedQueuesState {
-    /// This state with every Service-owned resume position cleared, as
-    /// `save_stay_alive_queue_state_at` clears the owner queue.
+    /// This state with every Service-owned resume position cleared in place,
+    /// as `save_named_queues_state_at` writes it and
+    /// `load_named_queues_state_at` loads it. Consuming the state clears each
+    /// slot's item without cloning it.
     #[must_use]
-    pub fn without_service_positions(&self) -> Self {
-        Self {
-            current: self.current,
-            next_queue_id: self.next_queue_id,
-            queues: self
-                .queues
-                .iter()
-                .map(NamedQueue::without_service_positions)
-                .collect(),
+    pub fn into_without_service_positions(mut self) -> Self {
+        for queue in &mut self.queues {
+            for slot in &mut queue.slots {
+                slot.item.clear_service_positions();
+            }
         }
+        self
     }
 }
 
 impl NamedQueue {
-    fn without_service_positions(&self) -> Self {
-        Self {
-            id: self.id,
-            name: self.name.clone(),
-            source: self.source.clone(),
-            lineage: self.lineage,
-            start_slot: self.start_slot,
-            slots: self
-                .slots
-                .iter()
-                .map(|slot| {
-                    let mut item = slot.item.clone();
-                    item.clear_service_positions();
-                    NamedQueueSlot {
-                        slot_id: slot.slot_id,
-                        item,
-                    }
-                })
-                .collect(),
+    /// This queue with every Service-owned resume position in its slots
+    /// cleared in place: the Named-queue file holds no resume position, so a
+    /// restart lets each Service restore its own.
+    #[must_use]
+    pub fn into_without_service_positions(mut self) -> Self {
+        for slot in &mut self.slots {
+            slot.item.clear_service_positions();
         }
+        self
     }
 }
 
-pub fn save_named_queues_state_at(
-    path: &Path,
-    state: &NamedQueuesState,
-) -> Result<(), ConfigError> {
-    save_json_atomic(path, &state.without_service_positions(), "named queues")
+pub fn save_named_queues_state_at(path: &Path, state: NamedQueuesState) -> Result<(), ConfigError> {
+    save_json_atomic(
+        path,
+        &state.into_without_service_positions(),
+        "named queues",
+    )
 }
 
-pub fn save_named_queues_state(state: &NamedQueuesState) -> Result<(), ConfigError> {
+pub fn save_named_queues_state(state: NamedQueuesState) -> Result<(), ConfigError> {
     save_named_queues_state_at(&named_queues_state_path(), state)
 }
 
 #[must_use]
 pub fn load_named_queues_state_at(path: &Path) -> Option<NamedQueuesState> {
     let state: NamedQueuesState = load_json(path, "named queues state")?;
-    Some(state.without_service_positions())
+    Some(state.into_without_service_positions())
 }
 
 #[must_use]
@@ -153,7 +136,7 @@ pub fn converted_named_queues_state(stay_alive: StayAliveQueueState) -> NamedQue
     let mut next_slot_id = 1_u64;
     let mut slots = Vec::with_capacity(items.len());
     for item in items {
-        slots.push(NamedQueueSlot {
+        slots.push(ExecSlot {
             slot_id: QueueSlotId::from_raw(next_slot_id),
             item,
         });

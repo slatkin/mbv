@@ -21,8 +21,8 @@ use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId, StartSlotObserv
 use mbv_ws::WsEvent;
 
 mod named_queues;
-pub(crate) use named_queues::named_queues_state;
 pub use named_queues::{NamedQueueStore, NamedQueueTarget, RestingNamedQueue};
+pub(crate) use named_queues::{NamedQueuesSaved, named_queues_state};
 mod transition_dispatch;
 
 pub(super) use transition_dispatch::{

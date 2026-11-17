@@ -1,7 +1,8 @@
-//! The state file a restart reloads (design D6 of `gui-named-queues`): a change of
-//! the current queue writes every Named queue, and the restore rebuilds the
-//! current queue and the resting queues with their saved slot identities and
-//! start slots.
+//! The state file a restart reloads (design D6 of `gui-named-queues`): a change
+//! of the current queue writes every Named queue when the persisted content
+//! changes, a change that only clears away writes nothing, and the restore
+//! rebuilds the current queue and the resting queues with their saved slot
+//! identities and start slots.
 
 use super::*;
 
@@ -113,6 +114,54 @@ fn a_restart_restores_every_named_queue() {
 /// The slot identities of one queue, in queue order.
 fn slot_ids(queue: &PlaybackQueue) -> Vec<mbv_queue::QueueSlotId> {
     queue.slots().iter().map(|slot| slot.slot_id).collect()
+}
+
+/// Contract: design D6 — the event loop writes the Named-queue file only when
+/// the persisted content changes. The file holds no Service position, so a
+/// stop that only records a new position clears away to the same state, and a
+/// rewrite would clone and serialize every resting queue for nothing.
+#[test]
+fn a_stop_that_only_records_a_position_writes_the_named_queues_once() {
+    let mut t = crate::tests::r#loop::test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+        ],
+        1,
+    );
+    let second = t.event_loop.owner.core.queue.slots()[1].slot_id;
+    let run_identity = t
+        .event_loop
+        .player
+        .status
+        .lock()
+        .unwrap()
+        .sequence_generation;
+    let stopped = |position_ticks: i64| {
+        DaemonEvent::Player(PlayerEvent::Stopped {
+            slot_id: Some(second),
+            run_identity,
+            position_ticks,
+            played: false,
+            consume: false,
+            error: None,
+        })
+    };
+
+    t.event_loop.handle_event(stopped(600));
+    assert_eq!(
+        t.persisted_named.borrow().len(),
+        1,
+        "the first change writes the file"
+    );
+
+    t.event_loop.handle_event(stopped(900));
+    assert_eq!(
+        t.persisted_named.borrow().len(),
+        1,
+        "a second stop that records only a position writes nothing: the file holds no positions"
+    );
 }
 
 /// Contract: design D6 — an unreadable Named-queue file degrades to the earlier

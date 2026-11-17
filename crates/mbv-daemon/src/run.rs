@@ -101,7 +101,7 @@ fn spawn_queue_persistence_worker(
                     }
                 }
                 QueuePersistenceRequest::SaveNamedQueues(state) => {
-                    if let Err(error) = mbv_config::save_named_queues_state(&state) {
+                    if let Err(error) = mbv_config::save_named_queues_state(*state) {
                         tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
                     }
                 }
@@ -638,6 +638,7 @@ fn run_with_owner_outputs(
         last_queue_resync: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
         named_store: Box::new(|state| Ok(mbv_config::save_named_queues_state(state)?)),
+        named_queues_saved: None,
         queue_persist_tx: Some(queue_persist_tx),
         tray,
         pin_swap,

@@ -6,12 +6,12 @@
 use std::path::PathBuf;
 
 use mbv_config::{
-    NamedQueue, NamedQueueSlot, NamedQueuesState, StayAliveQueueState, load_named_queues_state_at,
+    NamedQueue, NamedQueuesState, StayAliveQueueState, load_named_queues_state_at,
     load_or_migrate_named_queues_state_at, save_named_queues_state_at,
     save_stay_alive_queue_state_at,
 };
 use mbv_queue::{
-    FeedEntry, FeedKind, NamedQueueId, QueueItem, QueueLineage, QueueSlotId, QueueSource,
+    ExecSlot, FeedEntry, FeedKind, NamedQueueId, QueueItem, QueueLineage, QueueSlotId, QueueSource,
     QueueState,
 };
 
@@ -69,11 +69,11 @@ fn two_queue_state() -> NamedQueuesState {
                 lineage: QueueLineage(7),
                 start_slot: Some(QueueSlotId::from_raw(2)),
                 slots: vec![
-                    NamedQueueSlot {
+                    ExecSlot {
                         slot_id: QueueSlotId::from_raw(1),
                         item: feed_item("a"),
                     },
-                    NamedQueueSlot {
+                    ExecSlot {
                         slot_id: QueueSlotId::from_raw(2),
                         item: feed_item("b"),
                     },
@@ -85,7 +85,7 @@ fn two_queue_state() -> NamedQueuesState {
                 source: QueueSource::Album,
                 lineage: QueueLineage(9),
                 start_slot: None,
-                slots: vec![NamedQueueSlot {
+                slots: vec![ExecSlot {
                     slot_id: QueueSlotId::from_raw(3),
                     item: feed_item("c"),
                 }],
@@ -122,14 +122,12 @@ fn two_named_queues_round_trip_with_their_slot_ids_and_start_slots() {
     let scratch = ScratchDir::new("round-trip");
     let path = scratch.join("named_queues_state.json");
     let state = two_queue_state();
+    let expected = serde_json::to_value(&state).unwrap();
 
-    save_named_queues_state_at(&path, &state).unwrap();
+    save_named_queues_state_at(&path, state).unwrap();
     let loaded = load_named_queues_state_at(&path).unwrap();
 
-    assert_eq!(
-        serde_json::to_value(&loaded).unwrap(),
-        serde_json::to_value(&state).unwrap()
-    );
+    assert_eq!(serde_json::to_value(&loaded).unwrap(), expected);
 }
 
 #[test]

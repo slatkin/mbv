@@ -90,7 +90,10 @@ pub struct NamedQueueStore {
     /// The identity the next new queue takes. Identities are never reused
     /// within one state file (design D3).
     pub next_queue_id: NamedQueueId,
-    /// The resting queues, in queue order (creation order).
+    /// The resting queues in store order: a new queue and a queue parked by a
+    /// swap both append, and a restore sorts by identity, so the order is
+    /// creation order only until a queue is parked. The persisted file sorts
+    /// by identity instead (`named_queues_state`).
     pub resting: Vec<RestingNamedQueue>,
 }
 
@@ -184,30 +187,27 @@ impl NamedQueueStore {
 
 /// The Owner's whole Named-queue state as `named_queues_state.json` holds it
 /// (design D6): the current queue from the Owner core, the resting queues from
-/// the store, and the next identity to mint.
+/// the store, and the next identity to mint. Queues are in identity order: a
+/// new queue's identity is the highest so far and a parked queue's is not, so
+/// each entry is inserted at its identity-ordered place instead of sorted.
 pub(crate) fn named_queues_state(
     owner: &DaemonPlayerOwner,
     shared_queue: &SharedQueueState,
 ) -> mbv_config::NamedQueuesState {
-    let mut queues = vec![mbv_config::NamedQueue {
-        id: owner.named_queues.current,
-        name: owner.named_queues.current_name.clone(),
-        source: owner.core.source.clone(),
-        lineage: *shared_queue.lineage.lock().unwrap(),
-        start_slot: shared_queue.start_slot(),
-        slots: slots_of(&owner.core.queue),
-    }];
+    let mut queues = Vec::with_capacity(owner.named_queues.resting.len().saturating_add(1));
+    queues.push(current_queue_entry(owner, shared_queue));
     for resting in &owner.named_queues.resting {
-        queues.push(mbv_config::NamedQueue {
+        let entry = mbv_config::NamedQueue {
             id: resting.id,
             name: resting.name.clone(),
             source: resting.source.clone(),
             lineage: resting.lineage,
             start_slot: resting.start_slot,
-            slots: slots_of(&resting.queue),
-        });
+            slots: resting.queue.slot_pairs(),
+        };
+        let at = queues.partition_point(|queue| queue.id < entry.id);
+        queues.insert(at, entry);
     }
-    queues.sort_by_key(|queue| queue.id);
     mbv_config::NamedQueuesState {
         current: owner.named_queues.current,
         next_queue_id: owner.named_queues.next_queue_id,
@@ -215,14 +215,107 @@ pub(crate) fn named_queues_state(
     }
 }
 
-/// The persisted slots of one queue, with their owner-assigned identities.
-fn slots_of(queue: &PlaybackQueue) -> Vec<mbv_config::NamedQueueSlot> {
-    queue
-        .slots()
-        .iter()
-        .map(|slot| mbv_config::NamedQueueSlot {
-            slot_id: slot.slot_id,
-            item: slot.item.clone(),
-        })
-        .collect()
+/// The current queue's persisted entry: its name, source, lineage, start slot,
+/// and slots with their identities, cloned from the Owner core.
+fn current_queue_entry(
+    owner: &DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+) -> mbv_config::NamedQueue {
+    mbv_config::NamedQueue {
+        id: owner.named_queues.current,
+        name: owner.named_queues.current_name.clone(),
+        source: owner.core.source.clone(),
+        lineage: *shared_queue.lineage.lock().unwrap(),
+        start_slot: shared_queue.start_slot(),
+        slots: owner.core.queue.slot_pairs(),
+    }
+}
+
+/// What the Named-queue file holds after the event loop's last write (design
+/// D6): the current queue's cleared entry as the file holds it, the next
+/// identity, and every resting queue's persisted fields with its queue
+/// revision. The loop keeps the last capture, so a dirty event that still
+/// matches it changed no persisted content and writes the file again only
+/// once its content changes.
+pub(crate) struct NamedQueuesSaved {
+    /// The current queue's persisted entry, cleared of Service positions, as
+    /// its serialized bytes: the persisted shape is the JSON, and `QueueItem`
+    /// has no `PartialEq` to compare the entries with.
+    current_entry_json: Vec<u8>,
+    next_queue_id: NamedQueueId,
+    resting: Vec<RestingSaved>,
+}
+
+/// One resting queue's persisted fields, with the queue revision that changes
+/// whenever its slots do: a resting queue sees no progress observation, so
+/// these fields carry its whole persisted content.
+#[derive(Debug, PartialEq)]
+struct RestingSaved {
+    id: NamedQueueId,
+    name: String,
+    source: QueueSource,
+    lineage: QueueLineage,
+    start_slot: Option<QueueSlotId>,
+    revision: u64,
+}
+
+impl RestingSaved {
+    fn of(resting: &RestingNamedQueue) -> Self {
+        Self {
+            id: resting.id,
+            name: resting.name.clone(),
+            source: resting.source.clone(),
+            lineage: resting.lineage,
+            start_slot: resting.start_slot,
+            revision: resting.queue.revision().raw(),
+        }
+    }
+}
+
+impl NamedQueuesSaved {
+    /// Captures what a write of the Owner's Named-queue state puts in the
+    /// file, so the next dirty event can compare against it.
+    pub(crate) fn capture(owner: &DaemonPlayerOwner, shared_queue: &SharedQueueState) -> Self {
+        Self {
+            current_entry_json: cleared_current_entry_json(owner, shared_queue),
+            next_queue_id: owner.named_queues.next_queue_id,
+            resting: owner
+                .named_queues
+                .resting
+                .iter()
+                .map(RestingSaved::of)
+                .collect(),
+        }
+    }
+
+    /// Whether `owner` still holds exactly the state this capture describes:
+    /// the current queue's persisted entry byte for byte, and every resting
+    /// queue's persisted fields with its revision. Reads the resting queues'
+    /// metadata only, so a match costs no resting slot clone.
+    pub(crate) fn matches(
+        &self,
+        owner: &DaemonPlayerOwner,
+        shared_queue: &SharedQueueState,
+    ) -> bool {
+        self.next_queue_id == owner.named_queues.next_queue_id
+            && self.resting
+                == owner
+                    .named_queues
+                    .resting
+                    .iter()
+                    .map(RestingSaved::of)
+                    .collect::<Vec<_>>()
+            && cleared_current_entry_json(owner, shared_queue) == self.current_entry_json
+    }
+}
+
+/// The current queue's persisted entry as the file holds it: Service
+/// positions cleared away, then serialized. An empty result compares unequal
+/// to every capture, so a serialization failure only ever writes again.
+fn cleared_current_entry_json(
+    owner: &DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+) -> Vec<u8> {
+    let entry = current_queue_entry(owner, shared_queue).into_without_service_positions();
+    serde_json::to_vec(&entry).unwrap_or_default()
 }

@@ -1,3 +1,4 @@
+use super::core::NamedQueuesSaved;
 use super::{
     AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
     EmbyOwnerContext, SharedQueueState, broadcast_queue_state, expire_and_redispatch,
@@ -59,7 +60,7 @@ pub(crate) type OwnerQueueStore =
 /// Injected Named-queue persistence hook, the owner-queue hook's counterpart:
 /// tests record the state instead of writing the real state file.
 pub(crate) type NamedQueuesStore =
-    Box<dyn FnMut(&mbv_config::NamedQueuesState) -> Result<(), crate::DaemonLibError>>;
+    Box<dyn FnMut(mbv_config::NamedQueuesState) -> Result<(), crate::DaemonLibError>>;
 
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).
@@ -88,6 +89,11 @@ pub(crate) struct DaemonLoop {
     /// Injected Named-queue persistence (gui-named-queues design D6), so tests
     /// can record the state instead of writing a real state file.
     pub(super) named_store: NamedQueuesStore,
+    /// What the Named-queue file holds after this loop's last write (design
+    /// D6): `None` until the first write. A dirty event that still matches it
+    /// changed no persisted Named-queue content, so the file is not written
+    /// again and its resting queues are not rebuilt.
+    pub(super) named_queues_saved: Option<NamedQueuesSaved>,
     pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
     /// Tray ownership reconciled against the live owner settings (design D4).
     pub(super) tray: TrayState,
@@ -328,8 +334,19 @@ impl DaemonLoop {
             return;
         }
         // The Named-queue file holds the current queue too (gui-named-queues
-        // design D6), so a change of the current queue is a change of the file.
-        self.save_named_queues(self.named_queues_snapshot());
+        // design D6), so a change of the current queue is a change of the
+        // file — but only of the content the file persists: it holds no
+        // Service position, so a dirty event that only recorded progress
+        // matches the last capture and writes nothing.
+        let named_queues_saved = self
+            .named_queues_saved
+            .as_ref()
+            .is_some_and(|saved| saved.matches(&self.owner, &self.shared_queue));
+        if !named_queues_saved {
+            self.save_named_queues(self.named_queues_snapshot());
+            self.named_queues_saved =
+                Some(NamedQueuesSaved::capture(&self.owner, &self.shared_queue));
+        }
         if let Some(tx) = &self.queue_persist_tx {
             let snapshot = super::stay_alive_owner_queue_snapshot(
                 &self.owner,
@@ -352,7 +369,7 @@ impl DaemonLoop {
     /// write is atomic and off the event-loop thread.
     fn save_named_queues(&mut self, state: mbv_config::NamedQueuesState) {
         let Some(tx) = &self.queue_persist_tx else {
-            if let Err(error) = (self.named_store)(&state) {
+            if let Err(error) = (self.named_store)(state) {
                 tracing::error!(name: "daemon.named_queues_persist.failed", target: "queue", error = %error, "failed to persist the Named queues");
             }
             return;
@@ -390,6 +407,6 @@ impl DaemonLoop {
     /// happen before the process exits.
     pub(super) fn persist_named_queues(&mut self) -> Result<(), crate::DaemonLibError> {
         let state = self.named_queues_snapshot();
-        (self.named_store)(&state)
+        (self.named_store)(state)
     }
 }

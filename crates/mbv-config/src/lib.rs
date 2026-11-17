@@ -82,7 +82,7 @@ pub(crate) use state::{load_last_remote_connection_at, save_last_remote_connecti
 mod named_queues;
 #[doc(inline)]
 pub use named_queues::{
-    DEFAULT_NAMED_QUEUE_NAME, FIRST_QUEUE_RAW_ID, NamedQueue, NamedQueueSlot, NamedQueuesState,
+    DEFAULT_NAMED_QUEUE_NAME, FIRST_QUEUE_RAW_ID, NamedQueue, NamedQueuesState,
     converted_named_queues_state, load_named_queues_state, load_named_queues_state_at,
     load_or_migrate_named_queues_state, load_or_migrate_named_queues_state_at,
     save_named_queues_state, save_named_queues_state_at,

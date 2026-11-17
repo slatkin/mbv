@@ -157,9 +157,10 @@ pub(super) fn test_loop_with_queue(
         named_store: Box::new(move |state| {
             recorded_named
                 .borrow_mut()
-                .push(serde_json::to_value(state).unwrap_or(serde_json::Value::Null));
+                .push(serde_json::to_value(&state).unwrap_or(serde_json::Value::Null));
             Ok(())
         }),
+        named_queues_saved: None,
         queue_persist_tx: None,
         tray: null_tray(),
         pin_swap,
