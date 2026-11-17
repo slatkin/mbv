@@ -9,8 +9,8 @@
 //! forwards like every other pointer event — the core resolves it against the
 //! hit map. The card anchors under the Queue header at the chooser button's
 //! leading edge and paints the row menu's own canvas chrome (the `Menus`
-//! artboard's fill, border, radius, shadow, and 13 px rows), so the two queue
-//! overlays read alike.
+//! artboard's fill, border, radius, shadow, and rows at the size the panel needs), so the two
+//! queue overlays read as one family.
 //!
 //! The marks: the shown entry leads with the canvas's check, the current queue —
 //! the one that holds the playhead — trails with a filled accent dot, or with
@@ -37,7 +37,7 @@ use crate::window::icons::{AudioLines, Check};
 use crate::window::theme::canvas_var;
 
 /// The current queue's mark: the accent dot's diameter in logical pixels.
-const CURRENT_MARK_PX: u16 = 6;
+const CURRENT_MARK_PX: u16 = 8;
 
 /// The props of the Queue chooser's dropdown: the core's cursor, the frame's
 /// entries in paint order, the rename draft while one is open, and the handles
@@ -86,18 +86,18 @@ fn entry_key(entry: &GuiQueueChooserEntry) -> String {
         .map_or_else(|| "peer".to_owned(), |raw| raw.to_string())
 }
 
-/// The Queue chooser's dropdown: one 30 px row per entry in canvas chrome, the
+/// The Queue chooser's dropdown: one 40 px row per entry in canvas chrome, the
 /// cursor row filled, the shown entry checked, the current queue dotted, the peer
 /// entry brand-marked, and the rename draft's caret after the text it edits.
 #[component]
 pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
     rsx! {
         div {
-            class: "absolute z-20 flex w-56 flex-col",
+            class: "absolute z-20 flex flex-col",
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: var(--canvas-queue-header-height); left: 16px; padding: 6px; gap: 2px; {MENU_CARD_STYLE}"
+                "top: var(--canvas-queue-header-height); left: 16px; width: calc(100% - 32px); max-width: 28rem; padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
             ),
             "data-queue-chooser-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {
@@ -110,7 +110,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                         canvas_var("text")
                     };
                     let row_style = format!(
-                        "height: 30px; padding: 0 10px; gap: 8px; border-radius: 4px; font-size: 13px; background: {}; color: {row_color};",
+                        "height: 40px; padding: 0 14px; gap: 10px; border-radius: 6px; font-size: 15px; background: {}; color: {row_color};",
                         if cursor { "var(--canvas-selected)" } else { "none" },
                     );
                     let label_align = if paint.draft { " justify-content: flex-end;" } else { "" };
@@ -143,14 +143,14 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                             },
                             div {
                                 class: "flex min-w-0 items-center",
-                                style: "gap: 6px;",
+                                style: "gap: 8px;",
                                 // The shown entry's check: the leading slot holds
                                 // every entry's mark, so the labels line up.
                                 span {
-                                    class: "flex w-4 shrink-0 justify-center",
+                                    class: "flex w-5 shrink-0 justify-center",
                                     "data-chooser-shown": "{shown}",
                                     if shown {
-                                        Check { size: 14, color: canvas_var("accent") }
+                                        Check { size: 18, color: canvas_var("accent") }
                                     }
                                 }
                                 // The entry's label, or the name open for edit:
@@ -163,7 +163,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                 // the row keeps its caret in view.
                                 div {
                                     class: "flex min-w-0 items-center overflow-hidden whitespace-nowrap",
-                                    style: "gap: 2px; font-size: 13px;{label_align}",
+                                    style: "gap: 2px; font-size: 15px;{label_align}",
                                     span {
                                         class: "shrink-0",
                                         style: "{label_style}",
@@ -173,7 +173,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                     if paint.draft && !paint.selected {
                                         span {
                                             class: "inline-block w-px shrink-0",
-                                            style: "height: 12px; background: {canvas_var(\"heading\")};",
+                                            style: "height: 16px; background: {canvas_var(\"heading\")};",
                                             "data-caret": "",
                                         }
                                     }
@@ -191,7 +191,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                         class: "flex items-center",
                                         title: "Playing",
                                         "data-chooser-playing": "",
-                                        AudioLines { size: 14, color: canvas_var("accent") }
+                                        AudioLines { size: 18, color: canvas_var("accent") }
                                     }
                                 } else if current {
                                     span {
@@ -205,7 +205,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                 // queue, so it trails with the direct-peer brand
                                 // icon the playback-target chooser paints for it.
                                 if peer {
-                                    TargetBrandIcon { brand: TargetBrand::DirectPeer, size: 14 }
+                                    TargetBrandIcon { brand: TargetBrand::DirectPeer, size: 18 }
                                 }
                             }
                         }
