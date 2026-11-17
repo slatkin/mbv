@@ -313,8 +313,17 @@ impl LibraryState {
 
     /// Close the collection dropdown and clear its filter text (design D7): a
     /// press outside it, Esc, a destination change, and a second press on the
-    /// trigger all land here.
+    /// trigger all land here. A press while it is closed already writes
+    /// nothing: the window's every-press path calls this on each press, and the
+    /// write would repaint the panel for no change.
     pub fn close_collections_dropdown(&self) {
+        let (open, filtered) = {
+            let ui = self.ui.peek();
+            (ui.collections.open, !ui.collections.filter.is_empty())
+        };
+        if !open && !filtered {
+            return;
+        }
         let mut ui = self.ui;
         ui.with_mut(|ui| {
             ui.collections.open = false;

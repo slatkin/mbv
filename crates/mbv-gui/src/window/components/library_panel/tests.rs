@@ -224,6 +224,28 @@ impl Fixture {
             .to_owned()
     }
 
+    /// The attribute of the first node the selector names.
+    fn attr_of(&self, selector: &str, attribute: LocalName) -> Option<String> {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_node(id)
+            .expect("the node is in the document")
+            .attr(attribute)
+            .map(str::to_owned)
+    }
+
+    /// Whether the first node the selector names clips its descendants, by its
+    /// `class` or its `style` attribute.
+    fn clips_overflow(&self, selector: &str) -> bool {
+        ["class", "style"].into_iter().any(|attribute| {
+            self.attr_of(selector, LocalName::from(attribute))
+                .is_some_and(|value| value.contains("overflow"))
+        })
+    }
+
     /// The laid-out client rect of the first node the selector names.
     fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
         let dom = self.doc.inner();

@@ -120,9 +120,14 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
     let all_library = library.clone();
     let all_collections = collections.clone();
 
+    // The outside press lands on the window root (the panel's own handler
+    // covers its subtree): the dropdown's region stops the presses that land on
+    // it, so they never reach either close, and the member's own guard keeps a
+    // press while it is closed from writing the store.
+
     rsx! {
         div {
-            class: "flex flex-none items-center overflow-hidden",
+            class: "flex flex-none items-center",
             role: "group",
             "aria-label": "Collections",
             "data-library-region": "pills",
@@ -139,16 +144,21 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                 style: "gap: 6px;",
                 // The trigger names the selection (design D6): All, the one
                 // checked collection, or the count with the destination's noun.
+                // Its own box clips a long name: the header paints no overflow
+                // clip, because that clip hid the whole open popover.
                 button {
                     "type": "button",
-                    class: "flex flex-none items-center whitespace-nowrap",
-                    style: "height: 32px; padding: 0 12px; border-radius: 16px; font-size: 14px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-text);",
+                    class: "flex flex-none items-center",
+                    style: "height: 32px; max-width: 18rem; padding: 0 12px; border-radius: 16px; font-size: 14px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-text);",
                     "aria-label": "Select collections",
                     "aria-haspopup": "menu",
                     "aria-expanded": "{open}",
                     "data-library-collections-trigger": "",
                     onclick: move |_| on_trigger.call(()),
-                    "{label}"
+                    span {
+                        style: "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+                        "{label}"
+                    }
                 }
                 // Clear selects All without opening the dropdown (design D6),
                 // and paints only while the selection is not All.
@@ -187,7 +197,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         "aria-label": "Collections",
                         "data-library-collections-menu": "",
                         style: format!(
-                            "top: 40px; left: 0; width: 20rem; padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
+                            "top: 40px; left: 0; width: 20rem; max-width: calc(100vw - 48px); padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
                         ),
                         label {
                             class: "flex flex-none items-center",

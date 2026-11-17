@@ -114,3 +114,30 @@ fn a_press_inside_the_panel_closes_the_open_collection_dropdown() {
     assert_eq!(fixture.library_commands(), []);
     assert!(!fixture.presents("[data-library-collections-menu]"));
 }
+
+/// Contract (gui-collection-dropdown design D6): the open popover paints
+/// below its trigger, fully, and no header of the selector row clips it. The
+/// selector row carried the pill row's `overflow: hidden`, which cut the
+/// popover to the row's 52 px box and hid every collection (review of
+/// 96f04ebef).
+#[test]
+fn the_open_dropdown_paints_below_its_trigger_unclipped() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::music_sections(None);
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_collections_dropdown());
+    fixture.lay_out();
+
+    let trigger = fixture.rect_of("[data-library-collections-trigger]");
+    let menu = fixture.rect_of("[data-library-collections-menu]");
+    assert!(
+        menu.y >= trigger.y + trigger.height,
+        "the popover paints below the trigger"
+    );
+    assert!(
+        !fixture.clips_overflow("[data-library-region=\"pills\"]"),
+        "the selector row clips the popover"
+    );
+}
