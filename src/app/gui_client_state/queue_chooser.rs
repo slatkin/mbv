@@ -19,8 +19,7 @@ impl App {
     #[must_use]
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
         let current = self.named_queues.current();
-        let local_status = self.local_queue_player().status_snapshot();
-        let local_plays = local_status.active && !local_status.paused;
+        let local_plays = self.local_owner_plays();
         let mut entries: Vec<QueueChooserEntryProjection> = self
             .named_queues
             .entries()

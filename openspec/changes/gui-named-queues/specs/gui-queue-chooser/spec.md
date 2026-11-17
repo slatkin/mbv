@@ -34,7 +34,7 @@ The Queue chooser SHALL list every Named queue of the local Owner in queue order
 - **WHEN** the user chooses `Kids` in the chooser
 - **THEN** the Queue panel shows `Kids` and `Default` keeps playing
 
-#### Scenario: The playing queue is marked
+#### Scenario: The current queue is marked while it plays
 
 - **GIVEN** `Default` is the current queue and plays, and `Kids` is shown
 - **WHEN** the user opens the chooser
