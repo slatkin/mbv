@@ -6,9 +6,11 @@ description: Safely prepare and publish an mbv release using the repository's re
 # Safe mbv Release
 
 Use the repository's `tools/release.sh` as the single source of truth for
-release preparation. The script runs the project checks, updates `Cargo.toml`
-and `Cargo.lock`, commits the release, and applies different behavior on
-`main` versus a feature branch. Do not reproduce those steps manually unless
+release preparation. The script runs the project checks (`cargo nextest run`,
+`cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`), updates
+`Cargo.toml`, `Cargo.lock`, and `PKGBUILD` (`pkgver`, `sha256sums='SKIP'` —
+build.yml fills the real hash when it builds the release tarball), commits the
+release, and applies different behavior on `main` versus a feature branch. Do not reproduce those steps manually unless
 the script is unavailable or the user explicitly asks to change it.
 
 ## Preflight
@@ -34,7 +36,9 @@ git tag --sort=-version:refname | head -10
 - A readiness question is read-only: inspect and report the preflight state but
   do not run the release script, commit, push, or tag unless the user asks to
   perform the release.
-- Stop on a dirty tree or detached `HEAD`.
+- Stop on uncommitted changes to *tracked* files or detached `HEAD`. Untracked
+  files never enter the release commit and are no reason to stop (the script
+  enforces the same distinction).
 - Do not bypass the script's checks or force a tag as a shortcut.
 
 ## Normal Release
