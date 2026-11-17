@@ -41,8 +41,12 @@ impl App {
             return;
         }
         self.collapse_pinned_view_after_play();
+        // The replacement started the shown owner's playback, so its mute gate
+        // is the shown owner's: a resting local queue replaces and starts on the
+        // local Owner, which a connected peer never mutes (design D7 of
+        // `gui-named-queues`).
         let _ = self
-            .player
+            .queue_owner_player(link)
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 

@@ -410,6 +410,77 @@ fn confirming_the_now_playing_local_selection_stops_the_local_owner_not_the_peer
     );
 }
 
+/// The track chips read the shown owner's status, so a chosen track reaches
+/// that owner: with a local queue shown beside a connected peer, both track
+/// switches reach the local Owner (design D7 of `gui-named-queues`).
+#[test]
+fn a_chosen_track_reaches_the_shown_owner_not_the_active_link() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(current());
+
+    app.set_audio_track(3);
+    app.set_subtitle_track(4);
+
+    assert!(
+        matches!(
+            home_cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::PlayerCmd(
+                mbv_ctrl::WireCommand::SetAudio(3)
+            ))
+        ),
+        "the audio track switch reaches the shown owner"
+    );
+    assert!(
+        matches!(
+            home_cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::SetSub(
+                4
+            )))
+        ),
+        "the subtitle track switch reaches the shown owner"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the peer's tracks are not the shown entry's"
+    );
+}
+
+/// A replacement that starts a shown resting local queue mutes the owner that
+/// starts playing it: the local Owner, never a connected peer (design D7 of
+/// `gui-named-queues`).
+#[test]
+fn a_resting_queue_play_mutes_the_shown_local_owner_not_the_peer() {
+    let (mut app, home_cmd_rx, peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(resting());
+    drain_commands(&home_cmd_rx);
+    app.mute_on = true;
+
+    app.execute_pending_queue_action(replacement_of(&make_items(2)));
+
+    assert_eq!(
+        sent_replace_queue(
+            &home_cmd_rx
+                .try_recv()
+                .expect("the replacement reaches the shown owner")
+        ),
+        Some(resting()),
+        "the replacement names the shown resting queue"
+    );
+    assert!(
+        matches!(
+            home_cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::PlayerCmd(
+                mbv_ctrl::WireCommand::SetMute(true)
+            ))
+        ),
+        "the owner that starts playing is the one muted"
+    );
+    assert!(
+        peer_cmd_rx.try_recv().is_err(),
+        "the peer is not the queue the replacement started"
+    );
+}
+
 /// The TUI Client keeps the connection rule for the panel and the transport
 /// too: with a peer connected, its status is the panel's and its playback is
 /// what the transport controls, and the connect records no shown entry.
