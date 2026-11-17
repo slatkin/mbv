@@ -111,6 +111,12 @@ pub enum GuiHomeRowIdFrame {
     Continue(String),
     /// A `Recently added` row's queue-item content id.
     Recent(QueueItemContentId),
+    /// A `Latest episodes` row's Emby item id
+    /// (gui-collection-dropdown design D9).
+    LatestEpisode(String),
+    /// An `Upcoming` row's premiere stable key. The row is display-only, so
+    /// it opens no menu and takes no select.
+    Upcoming(String),
 }
 
 /// The state one item row paints (design D12), from the shared
@@ -187,6 +193,8 @@ impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
         match id {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
+            GuiHomeRowId::LatestEpisode(item_id) => Self::LatestEpisode(item_id.clone()),
+            GuiHomeRowId::Upcoming(key) => Self::Upcoming(key.clone()),
         }
     }
 }
@@ -200,6 +208,8 @@ impl From<&GuiHomeRowIdFrame> for crate::bridge::library::GuiHomeRowId {
         match id {
             GuiHomeRowIdFrame::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowIdFrame::Recent(content_id) => Self::Recent(content_id.clone()),
+            GuiHomeRowIdFrame::LatestEpisode(item_id) => Self::LatestEpisode(item_id.clone()),
+            GuiHomeRowIdFrame::Upcoming(key) => Self::Upcoming(key.clone()),
         }
     }
 }

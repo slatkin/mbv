@@ -102,6 +102,7 @@ impl App {
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_shelf_requested: std::collections::HashSet::new(),
+            gui_home_tv_latest: std::collections::HashMap::new(),
             tv_upcoming_snapshots: std::collections::HashMap::new(),
             tv_upcoming_fetches: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),

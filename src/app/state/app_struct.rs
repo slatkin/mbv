@@ -297,6 +297,14 @@ pub struct App {
     /// to the first item row in the projection, so the Hero's default is
     /// never blank. The TUI never reads it.
     pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
+    /// The GUI Home's `Latest episodes` store (gui-collection-dropdown design
+    /// D9): each Emby TV library's latest episodes, keyed by the library id,
+    /// filled by the GUI launch's one worker fetch per library. The section
+    /// merges every library's list by `date_added`, newest first, and
+    /// de-duplicated by item id. It lives outside `nav_stack`, so the TUI's
+    /// own levels stay unchanged, and the TUI never reads it.
+    pub(in crate::app) gui_home_tv_latest:
+        std::collections::HashMap<String, Vec<mbv_emby_model::EmbyItem>>,
     /// The GUI Library's Shows selection (add-gui-library-panel design D12,
     /// the USER-APPROVED GUI Shows design): per Shows library, the active
     /// view mode (default from `resolve_tv_content_mode`), the selected

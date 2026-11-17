@@ -128,7 +128,9 @@ impl App {
         // `Continue` is Emby-only, so it resolves through the Continue
         // Watching snapshot. `Recent` looks up one row by content id
         // in the stored sources and the Feeds entries, without building the
-        // merged list (`openspec/specs/home-latest-sections`).
+        // merged list (`openspec/specs/home-latest-sections`); the GUI Home's
+        // `Latest episodes` rows resolve through the same arm, from their own
+        // store (gui-collection-dropdown design D9).
         match target {
             mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
                 .home_content
@@ -143,6 +145,7 @@ impl App {
                 .flatten()
                 .find(|item| item.content_id() == *content_id)
                 .cloned()
+                .or_else(|| self.gui_home_latest_item(content_id))
                 .or_else(|| self.home_recent_feed_entry(content_id)),
         }
     }

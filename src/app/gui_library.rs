@@ -48,6 +48,7 @@ pub use self::feeds::GuiFeedsSelection;
 pub use self::feeds_projection::{
     GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
 };
+pub(in crate::app) use self::home::GuiHomeLatestEvent;
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
@@ -535,6 +536,11 @@ impl App {
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
     fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
+        // An `Upcoming` row is display-only (gui-collection-dropdown design
+        // D9): a press changes nothing, so the Hero keeps its item.
+        if matches!(row, GuiHomeRowId::Upcoming(_)) {
+            return;
+        }
         self.gui_home_selection = Some(row.clone());
     }
 
@@ -543,8 +549,13 @@ impl App {
     /// stale frame's row, one whose item the App's Home data no longer
     /// holds, changes nothing, as every stale command's item arm does.
     fn play_gui_home_row(&mut self, row: &GuiHomeRowId) {
+        // An `Upcoming` row is display-only (gui-collection-dropdown design
+        // D9): it resolves no target, so nothing plays.
+        let Some(target) = row.clone().into_home_item_target() else {
+            return;
+        };
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+        if let Some(item) = self.home_stable_target(&target) {
             self.home_play_target(item, from_cw);
         } else {
             Self::log_stale_library_item("homePlay", &home_row_command_id("homePlay", row));
@@ -557,9 +568,14 @@ impl App {
     /// resolved row, never a direct queue mutation. `name` is the command's
     /// intent, for the stale-frame log the item arms share.
     fn enqueue_gui_home_row(&mut self, row: &GuiHomeRowId, name: &str) {
+        // An `Upcoming` row is display-only (gui-collection-dropdown design
+        // D9): it resolves no target, so nothing enqueues.
+        let Some(target) = row.clone().into_home_item_target() else {
+            return;
+        };
         let logged = home_row_command_id(name, row);
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+        if let Some(item) = self.home_stable_target(&target) {
             self.home_enqueue_target(item, from_cw);
         } else {
             Self::log_stale_library_item(name, &logged);

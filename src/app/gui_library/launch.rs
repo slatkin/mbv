@@ -45,7 +45,15 @@ impl App {
     /// user to a destination it did not name, and the caller finishes the
     /// restore instead of waiting for a destination that never lands.
     pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> GuiLaunchOpen {
-        let kind = match self.launch_destination(&state.destination) {
+        let resolved = self.launch_destination(&state.destination);
+        // The catalog has landed, so the GUI Home's two per-library sections
+        // are requested now, once per launch (gui-collection-dropdown design
+        // D9). Both requests are idempotent, so the retries a later catalog
+        // landing causes re-request nothing.
+        if !matches!(resolved, LaunchDestination::Pending) {
+            self.spawn_gui_home_sections();
+        }
+        let kind = match resolved {
             LaunchDestination::Pending => return GuiLaunchOpen::Retry,
             LaunchDestination::Unmatched => return GuiLaunchOpen::Unmatched,
             LaunchDestination::Open(kind) => kind,

@@ -247,6 +247,12 @@ pub enum GuiHomeRowId {
     Continue(String),
     /// A `Recently added` row's queue-item content id.
     Recent(QueueItemContentId),
+    /// A `Latest episodes` row's Emby item id
+    /// (gui-collection-dropdown design D9).
+    LatestEpisode(String),
+    /// An `Upcoming` row's premiere stable key. The row is display-only, so
+    /// the core holds no command that acts on it.
+    Upcoming(String),
 }
 
 impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
@@ -368,6 +374,8 @@ impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
         match row {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
+            GuiHomeRowId::LatestEpisode(item_id) => Self::LatestEpisode(item_id.clone()),
+            GuiHomeRowId::Upcoming(key) => Self::Upcoming(key.clone()),
         }
     }
 }

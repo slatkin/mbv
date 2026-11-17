@@ -136,6 +136,8 @@ pub fn home_row_key(id: &GuiHomeRowIdFrame) -> String {
             let (provider, value) = home_content_parts(content_id);
             format!("home-recent:{provider}:{value}")
         }
+        GuiHomeRowIdFrame::LatestEpisode(item_id) => format!("home-latest:{item_id}"),
+        GuiHomeRowIdFrame::Upcoming(key) => format!("home-upcoming:{key}"),
     }
 }
 
