@@ -1926,7 +1926,7 @@
     },
     {
       "additionalProperties": false,
-      "description": "Create one Named queue, resting and empty, and answer `op` with the\nnew `CtrlEvent::NamedQueueList` (design D3 of `gui-named-queues`).",
+      "description": "Create one Named queue, resting and empty. The Owner broadcasts\n`CtrlEvent::NamedQueueList` and answers `op` with the new queue's own\nsnapshot as `QueueOpResult::Applied`, whose data names the queue\n(design D3, D6 of `gui-named-queues`).",
       "properties": {
         "NamedQueueCreate": {
           "properties": {
@@ -1947,7 +1947,7 @@
     },
     {
       "additionalProperties": false,
-      "description": "Rename one Named queue after trimming surrounding whitespace.",
+      "description": "Rename one Named queue after trimming surrounding whitespace. The\nOwner answers `op` with the renamed queue's own snapshot as\n`QueueOpResult::Applied`.",
       "properties": {
         "NamedQueueRename": {
           "properties": {
@@ -1976,7 +1976,7 @@
     },
     {
       "additionalProperties": false,
-      "description": "Close one Named queue. The Owner refuses to close its last queue.",
+      "description": "Close one Named queue. The Owner refuses to close its last queue, and\nanswers `op` with the current queue's snapshot as\n`QueueOpResult::Applied`.",
       "properties": {
         "NamedQueueClose": {
           "properties": {
