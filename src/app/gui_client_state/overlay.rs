@@ -2,7 +2,7 @@
 //! execution rules: which overlay is open, how its keys consume or drop
 //! chords, and how a chosen entry executes.
 
-use mbv_queue::QueueSlotId;
+use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_ui_model::confirm::ConfirmModal;
 use mbv_ui_model::context_menu::ContextMenuEntry;
 use mbv_ui_model::daemon_lost::DaemonLostModal;
@@ -11,6 +11,7 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
 use super::confirm::confirm_button_key;
 use super::daemon_lost::daemon_lost_entry_index;
 use super::popover::track_popover_choices;
+use super::projection::QueueChooserEntryProjection;
 use crate::app::App;
 
 /// The open queue row's menu, held by the Client core while it is up. The
@@ -45,13 +46,36 @@ pub(in crate::app) struct TargetChooserState {
     pub(in crate::app) cursor: usize,
 }
 
+/// The open Queue chooser (gui-named-queues design D8): the cursor over its
+/// entries, and the name open for edit while one is. The entry list is the
+/// live projection — the local Owner's Named queues in queue order, then the
+/// connected peer — so the state carries no copy, and the cursor clamps
+/// against the list it reads.
+pub(in crate::app) struct QueueChooserState {
+    pub(in crate::app) cursor: usize,
+    /// The rename draft the chooser holds while a name is open for edit.
+    pub(in crate::app) renaming: Option<QueueRenameDraft>,
+}
+
+/// One open rename draft: the local Named queue it renames and the text the
+/// user typed. The queue is held, not the cursor's row, so a list change
+/// while the name is open cannot redirect the rename.
+pub(in crate::app) struct QueueRenameDraft {
+    pub(in crate::app) queue: NamedQueueId,
+    pub(in crate::app) text: String,
+}
+
 /// The GUI Client's open overlay (design D4a): the row menu, a track chip's
-/// popover, the playback-target chooser, the shared confirmation modal, or
-/// the daemon-lost recovery dialog. `App::gui_overlay` holds the open one.
+/// popover, the playback-target chooser, the Queue chooser, the shared
+/// confirmation modal, or the daemon-lost recovery dialog. `App::gui_overlay`
+/// holds the open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
     TrackPopover(TrackPopoverState),
     TargetChooser(TargetChooserState),
+    /// The Queue chooser (gui-named-queues design D8): the dropdown that
+    /// picks which queue the Queue panel shows.
+    QueueChooser(QueueChooserState),
     /// The shared confirmation modal (`App::ask_confirm` raised it): the
     /// same `ConfirmModal` the TUI's mounted Confirm component holds. The
     /// overlay owns the keyboard while it is up, and its buttons report
@@ -67,11 +91,18 @@ pub(in crate::app) enum GuiOverlay {
 }
 
 /// One key's outcome over the open overlay: consumed with nothing to run,
-/// dismissed, or executing the entry at an index.
+/// dismissed, executing the entry at an index, or confirming the rename the
+/// Queue chooser held.
 enum OverlayKeyOutcome {
     Consumed,
     Dismiss,
     Execute(usize),
+    /// The Queue chooser's confirmed name: the queue it renames and the text
+    /// the user typed, sent as one `NamedQueueRename`.
+    RenameQueue {
+        queue: NamedQueueId,
+        name: String,
+    },
 }
 
 impl GuiRowMenu {
@@ -168,10 +199,119 @@ fn move_overlay_cursor(cursor: &mut usize, down: bool, choices: usize) {
     };
 }
 
+impl QueueChooserState {
+    /// The Queue chooser's key rules (design D8, spec `gui-queue-chooser`
+    /// "The open chooser takes its keys"): unmodified Up/Down move the
+    /// wrapping cursor over `entries`, Enter shows the entry under the
+    /// cursor, `r` opens the name of the local queue under the cursor for
+    /// edit, `t` and Esc close the chooser, and every other chord is dropped —
+    /// the overlay owns the keyboard while it is open. While a name is open
+    /// for edit, Enter confirms it, Esc cancels the edit and keeps the
+    /// chooser open, and the typed text appends and pops as the Queue
+    /// filter's draft does.
+    fn apply_key(
+        &mut self,
+        key: KeyEvent,
+        entries: &[QueueChooserEntryProjection],
+    ) -> OverlayKeyOutcome {
+        if let Some(draft) = &mut self.renaming {
+            return match apply_rename_key(draft, key) {
+                RenameKeyOutcome::Keep => OverlayKeyOutcome::Consumed,
+                RenameKeyOutcome::Cancel => {
+                    self.renaming = None;
+                    OverlayKeyOutcome::Consumed
+                }
+                RenameKeyOutcome::Confirm { queue, name } => {
+                    OverlayKeyOutcome::RenameQueue { queue, name }
+                }
+            };
+        }
+        // The list is live, so a queue that closed since the last frame can
+        // leave the cursor past its end: it clamps before it is read.
+        self.cursor = self.cursor.min(entries.len().saturating_sub(1));
+        match key.code {
+            Key::Up if key.modifiers.is_empty() => {
+                move_overlay_cursor(&mut self.cursor, false, entries.len());
+                OverlayKeyOutcome::Consumed
+            }
+            Key::Down if key.modifiers.is_empty() => {
+                move_overlay_cursor(&mut self.cursor, true, entries.len());
+                OverlayKeyOutcome::Consumed
+            }
+            Key::Enter if key.modifiers.is_empty() => OverlayKeyOutcome::Execute(self.cursor),
+            Key::Char('r') if key.modifiers.is_empty() => {
+                self.open_rename_draft(entries);
+                OverlayKeyOutcome::Consumed
+            }
+            // The spec binds `t` to open and close the chooser, and the
+            // toggle it opened with is that same chord.
+            Key::Char('t') | Key::Esc if key.modifiers.is_empty() => OverlayKeyOutcome::Dismiss,
+            _ => OverlayKeyOutcome::Consumed,
+        }
+    }
+
+    /// Open the queue under the cursor for edit, keeping its current name as
+    /// the draft's text, so Enter accepts it and Backspace trims it. A peer
+    /// entry is not a queue of any owner with a name to change, so it opens
+    /// no draft.
+    fn open_rename_draft(&mut self, entries: &[QueueChooserEntryProjection]) {
+        let Some(entry) = entries.get(self.cursor) else {
+            return;
+        };
+        let Some(queue) = entry.queue else {
+            return;
+        };
+        self.renaming = Some(QueueRenameDraft {
+            queue,
+            text: entry.label.clone(),
+        });
+    }
+}
+
+/// One rename draft's key outcome: keep editing, cancel the edit, or confirm
+/// the name.
+enum RenameKeyOutcome {
+    Keep,
+    Cancel,
+    Confirm { queue: NamedQueueId, name: String },
+}
+
+/// One rename draft's key rules: Enter confirms a name that holds more than
+/// whitespace, Esc cancels the edit, Backspace pops, and unmodified and
+/// Shift-folded characters append — the Queue filter's draft pattern. Every
+/// other chord is consumed and dropped.
+fn apply_rename_key(draft: &mut QueueRenameDraft, key: KeyEvent) -> RenameKeyOutcome {
+    match key.code {
+        Key::Enter if key.modifiers.is_empty() => {
+            if draft.text.trim().is_empty() {
+                return RenameKeyOutcome::Keep;
+            }
+            RenameKeyOutcome::Confirm {
+                queue: draft.queue,
+                name: draft.text.clone(),
+            }
+        }
+        Key::Esc if key.modifiers.is_empty() => RenameKeyOutcome::Cancel,
+        Key::Backspace if key.modifiers.is_empty() => {
+            draft.text.pop();
+            RenameKeyOutcome::Keep
+        }
+        Key::Char(c)
+            if !key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT) =>
+        {
+            draft.text.push(c);
+            RenameKeyOutcome::Keep
+        }
+        _ => RenameKeyOutcome::Keep,
+    }
+}
+
 impl App {
     /// Whether an overlay holds the GUI Client's keyboard (the row menu, a
-    /// track popover, or the playback-target chooser). The GUI Client's core
-    /// reads it to dismiss the overlay on an outside press (row 6.5).
+    /// track popover, the playback-target chooser, or the Queue chooser). The
+    /// GUI Client's core reads it to dismiss the overlay on an outside press
+    /// (row 6.5).
     #[must_use]
     pub fn gui_overlay_is_open(&self) -> bool {
         self.gui_overlay.is_some()
@@ -182,6 +322,11 @@ impl App {
     /// and no surface sees a chord. Returns whether the Client's run should
     /// end, which only the daemon-lost dialog's quit choice asks for.
     pub(in crate::app) fn apply_gui_overlay_key(&mut self, key: KeyEvent) -> bool {
+        // The confirmation modal answers before the overlay borrow, because
+        // its answer replaces the overlay it reads.
+        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+            return self.apply_gui_confirm_key(key);
+        }
         // The popover's cursor clamps against its live choice list, read
         // before the overlay borrow so the two reads cannot interleave.
         let popover_chip = match &self.gui_overlay {
@@ -198,6 +343,13 @@ impl App {
         } else {
             0
         };
+        // The Queue chooser's cursor clamps against its live entry list — the
+        // same list the frame projects — read before the overlay borrow too.
+        let queue_choices = if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
+            self.queue_chooser_entries()
+        } else {
+            Vec::new()
+        };
         // The daemon-lost dialog's chords name its painted choices; read
         // before the overlay borrow, as the two cursors above are.
         let daemon_lost_entry = match &self.gui_overlay {
@@ -212,32 +364,10 @@ impl App {
             Some(GuiOverlay::TargetChooser(chooser)) => {
                 apply_overlay_list_key(&mut chooser.cursor, key, chooser_choices)
             }
-            Some(GuiOverlay::Confirm(modal)) => {
-                // The confirm's key rules mirror the TUI's Confirm component
-                // (`confirm_intent_for_key`): Enter accepts, Esc cancels, and
-                // the three-way dirty-playlist prompt's `d` discards. Every
-                // other chord is consumed and dropped — the modal stays up.
-                let action = modal.on_confirm.clone();
-                let answering = match key.code {
-                    Key::Enter => Some(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-                    Key::Esc => Some(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-                    Key::Char('d')
-                        if key.modifiers.is_empty()
-                            && matches!(
-                                action,
-                                mbv_ui_model::confirm::ConfirmAction::DiscardOrSaveDirtyPlaylist
-                            ) =>
-                    {
-                        Some(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE))
-                    }
-                    _ => None,
-                };
-                if let Some(key) = answering {
-                    self.gui_overlay = None;
-                    self.apply_confirm_action(action, key);
-                }
-                OverlayKeyOutcome::Consumed
-            }
+            Some(GuiOverlay::QueueChooser(chooser)) => chooser.apply_key(key, &queue_choices),
+            // The confirmation modal answered above, before the overlay
+            // borrow; this arm keeps the match exhaustive.
+            Some(GuiOverlay::Confirm(_)) => OverlayKeyOutcome::Consumed,
             // The daemon-lost dialog binds its three recovery choices and
             // nothing else: the TUI's component binds no default answer, and
             // the dialog blocks every other key until a choice runs
@@ -257,7 +387,41 @@ impl App {
                 false
             }
             OverlayKeyOutcome::Execute(index) => self.execute_gui_overlay_entry(index),
+            OverlayKeyOutcome::RenameQueue { queue, name } => {
+                self.rename_named_queue(queue, &name);
+                false
+            }
         }
+    }
+
+    /// The shared confirmation modal's key rules: Enter accepts, Esc
+    /// cancels, and the three-way dirty-playlist prompt's `d` discards — the
+    /// TUI's Confirm component (`confirm_intent_for_key`) rule for rule.
+    /// Every other chord is consumed and the modal stays up.
+    fn apply_gui_confirm_key(&mut self, key: KeyEvent) -> bool {
+        let Some(GuiOverlay::Confirm(modal)) = &self.gui_overlay else {
+            return false;
+        };
+        let action = modal.on_confirm.clone();
+        let answering = match key.code {
+            Key::Enter => Some(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+            Key::Esc => Some(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
+            Key::Char('d')
+                if key.modifiers.is_empty()
+                    && matches!(
+                        action,
+                        mbv_ui_model::confirm::ConfirmAction::DiscardOrSaveDirtyPlaylist
+                    ) =>
+            {
+                Some(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE))
+            }
+            _ => None,
+        };
+        if let Some(key) = answering {
+            self.gui_overlay = None;
+            self.apply_confirm_action(action, key);
+        }
+        false
     }
 
     /// Execute the open overlay's entry at `index`, then close the overlay —
@@ -309,6 +473,19 @@ impl App {
                     return false;
                 };
                 self.select_chooser_target(&choice.key);
+            }
+            // A Queue chooser Enter shows the entry under the cursor: the same
+            // show its press runs, and no playback starts, stops, or moves
+            // (spec `gui-queue-chooser` "The chooser lists local queues and
+            // connected peers").
+            GuiOverlay::QueueChooser(_) => {
+                let Some(entry) = self.queue_chooser_entries().into_iter().nth(index) else {
+                    return false;
+                };
+                match entry.queue {
+                    Some(queue) => self.show_named_queue(queue),
+                    None => self.show_peer_entry(),
+                }
             }
             // A confirm button's press runs the same execution the button's
             // key hint applies: resolve the hint to its chord and answer

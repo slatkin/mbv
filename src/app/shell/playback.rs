@@ -99,10 +99,9 @@ impl crate::app::App {
             // exhaustiveness.
             PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
             PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
-            // The canvas queue header's switch and filter controls (row
-            // 6.5): the same effects the `t` and `/` chords dispatch, so the
-            // header control and the chord run one path.
-            PlaybackRequest::ToggleQueueRightColumn => self.toggle_queue_right_column(),
+            // The canvas queue header's filter control (row 6.5): the same
+            // effect the `/` chord dispatches, so the header control and the
+            // chord run one path.
             PlaybackRequest::ActivateQueueFilter => self.activate_queue_filter(),
         }
     }

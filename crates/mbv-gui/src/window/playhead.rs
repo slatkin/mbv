@@ -368,19 +368,6 @@ pub fn queue_finish_text(finish: Option<PlayheadFinish>, tail_secs: Option<i64>)
     }
 }
 
-/// One row's "Ends at" clock (D10): the wall clock at the row's offset past
-/// the active item's end. The row ends paint the bare clock, as the
-/// transport's finish clock does.
-#[must_use]
-pub fn row_end_text(
-    finish: Option<PlayheadFinish>,
-    ends_after_secs: Option<i64>,
-) -> Option<String> {
-    let finish = finish?;
-    let ends_after_secs = ends_after_secs?;
-    Some(format_wall_clock(finish.finish_secs + ends_after_secs))
-}
-
 /// The local date `unix_secs` falls on, for the ` +1d` compare.
 fn local_date(unix_secs: i64) -> Option<time::Date> {
     OffsetDateTime::from_unix_timestamp(unix_secs)

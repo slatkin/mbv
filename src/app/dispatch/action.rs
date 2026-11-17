@@ -153,11 +153,22 @@ pub enum PanelIntent {
     /// The `q` toggle: fold the expanded panel's queue to its one-line
     /// summary. GUI-only, as the collapse toggle is.
     ToggleQueueFold,
-    /// The queue header's switch between the rows' Length and Ends-at
-    /// values. GUI-only: the TUI's queue paints the length value only.
-    ToggleQueueRightColumn,
     /// Focus the queue header's filter text entry (the GUI-only `/`).
     ActivateQueueFilter,
+    /// The Queue chooser's open and close (gui-named-queues design D8): the
+    /// GUI-only `t` chord and the header's chooser press. GUI-only: the TUI
+    /// Client has no Named queue to choose between.
+    ToggleQueueChooser,
+    /// The new-queue control (design D8): the GUI-only `Ctrl+T` chord and the
+    /// header's new-queue press. Its behaviour — the `NamedQueueCreate`
+    /// request and the rename draft the Owner's answer opens — lands with row
+    /// 7.3, so the intent reaches the dispatch seam and runs nothing yet.
+    RequestNewQueue,
+    /// The close control (design D8): the GUI-only `Ctrl+W` chord and the
+    /// header's close press. Its behaviour — closing the shown entry, with the
+    /// confirmation only the playing current queue asks for — lands with row
+    /// 7.4, so the intent reaches the dispatch seam and runs nothing yet.
+    RequestCloseQueue,
     /// The playback-target chooser (add-tauri-gui-client row 6.4): the GUI-
     /// only `r` chord's open/close of the Client-core overlay the header's
     /// target press also toggles. GUI-only: the TUI's counterpart is the
@@ -394,13 +405,19 @@ impl App {
             // Client never dispatches these arms.
             PanelIntent::TogglePanelCollapse => self.toggle_panel_collapse(),
             PanelIntent::ToggleQueueFold => self.toggle_queue_fold(),
-            PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
+            PanelIntent::ToggleQueueChooser => self.toggle_gui_queue_chooser(),
             PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
-            // The GUI router delivers the row move to the focused Queue leaf
-            // (`input/gui.rs`), which addresses the selection its surface
-            // paints; the App holds no cursor-free selection to move here.
-            PanelIntent::MoveQueueRow(_) => {}
+            // The new-queue and close controls land with rows 7.3 and 7.4: the
+            // GUI-only chords and the header presses reach this seam, which
+            // runs nothing yet. The row move's own seam is empty for the same
+            // reason it always was: the GUI router delivers it to the focused
+            // Queue leaf (`input/gui.rs`), which addresses the selection its
+            // surface paints, and the App holds no cursor-free selection to
+            // move here.
+            PanelIntent::RequestNewQueue
+            | PanelIntent::RequestCloseQueue
+            | PanelIntent::MoveQueueRow(_) => {}
         }
     }
 

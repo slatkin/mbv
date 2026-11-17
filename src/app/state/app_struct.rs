@@ -1,7 +1,6 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
 use crate::app::gui_client_state::GuiOverlay;
-use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
     DestinationLatestSource, HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
@@ -491,9 +490,6 @@ pub struct App {
     /// The `q` toggle: the expanded panel's queue folded to its one-line
     /// summary.
     pub(in crate::app) queue_folded: bool,
-    /// Which value the queue rows' right column paints: the queue header's
-    /// Length / Ends-at switch.
-    pub(in crate::app) queue_right_column: QueueRightColumn,
     /// The queue filter's text: it narrows the projected rows locally and
     /// never touches the canonical queue. Empty text filters nothing.
     pub(in crate::app) queue_filter: String,

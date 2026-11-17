@@ -8,10 +8,10 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
-use crate::bridge::frame::queue::{GuiMediaKind, GuiQueueRow, GuiRightColumn, GuiSemanticState};
+use crate::bridge::frame::queue::{GuiMediaKind, GuiQueueRow, GuiSemanticState};
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::Play;
-use crate::window::playhead::{Playhead, row_end_text};
+use crate::window::playhead::Playhead;
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -33,8 +33,6 @@ pub(super) struct ItemRow {
     ordinal: usize,
     primary: String,
     duration: Option<String>,
-    /// The row's end as seconds after the active item's end (design D5).
-    ends_after_secs: Option<i64>,
     kind: GuiMediaKind,
     state: GuiSemanticState,
     pub(super) striped: bool,
@@ -49,7 +47,6 @@ impl ItemRow {
                 ordinal,
                 primary,
                 duration,
-                ends_after_secs,
                 kind,
                 state,
                 striped,
@@ -59,7 +56,6 @@ impl ItemRow {
                 ordinal: *ordinal,
                 primary: primary.clone(),
                 duration: duration.clone(),
-                ends_after_secs: *ends_after_secs,
                 kind: *kind,
                 state: state.clone(),
                 striped: *striped,
@@ -142,27 +138,22 @@ fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     }
 }
 
-/// The row's right-column text under the summary's mode: "Length" paints the
-/// media row's duration; "Ends at" paints the wall clock at the row's offset
-/// past the active item's end (design D5).
-fn right_value(row: &ItemRow, mode: GuiRightColumn, playhead: &Playhead) -> Option<String> {
-    if mode == GuiRightColumn::EndsAt {
-        return row_end_text(playhead.finish.cloned(), row.ends_after_secs);
-    }
+/// The row's right-column text: the media row's duration. A collection row
+/// carries none.
+fn right_value(row: &ItemRow) -> Option<String> {
     if row.kind == GuiMediaKind::Media {
         return row.duration.clone();
     }
     None
 }
 
-/// The props of one row's cells: the item row, its tone, which chrome paints
-/// it, and the summary's right-column mode.
+/// The props of one row's cells: the item row, its tone, and which chrome
+/// paints it.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub(super) struct RowCellsProps {
     pub(super) row: ItemRow,
     pub(super) cell_tone: RowTone,
     pub(super) chrome: RowChrome,
-    pub(super) right_mode: GuiRightColumn,
 }
 
 /// One item row's canvas cells (the `rowCells` snippet): the padded queue
@@ -179,7 +170,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
     let progress = row_progress(row, &playhead);
     let progress_width = progress.map(|progress| progress.max(3));
     let right = if chrome == RowChrome::Row {
-        right_value(row, props.right_mode, &playhead)
+        right_value(row)
     } else {
         None
     };

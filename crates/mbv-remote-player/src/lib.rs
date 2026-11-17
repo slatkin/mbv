@@ -69,6 +69,7 @@ pub struct RemotePlayer {
 
 pub(crate) mod connect;
 mod error;
+mod named_queue;
 mod queue_op;
 #[doc(inline)]
 pub use error::RemotePlayerError;

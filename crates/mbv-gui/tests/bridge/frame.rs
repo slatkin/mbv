@@ -11,14 +11,12 @@ use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiQueueFooter;
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::playback::{GuiQueuePlayback, GuiScrubberHover};
-use mbv_gui::bridge::frame::queue::{
-    GuiQueue, GuiQueueRow, GuiQueueSummary, GuiRightColumn, GuiSemanticState,
-};
+use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueSummary, GuiSemanticState};
 use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
 use mbv_gui::sections::{SectionLedger, SectionSources};
-use mbv_queue::{QueueItem, QueueSlotId};
+use mbv_queue::QueueItem;
 use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_ui_model::queue_rows::queue_media_rows;
@@ -158,12 +156,7 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
     ));
     queue.set_cursor(&QueueCursorUpdate::Set(2));
 
-    let frame = GuiQueue::from_surface(
-        &queue,
-        2,
-        &app.queue_summary_projection(),
-        &app.gui_queue_end_offsets(),
-    );
+    let frame = GuiQueue::from_surface(&queue, 2, &app.queue_summary_projection());
 
     let painted: Vec<(&str, usize)> = frame
         .rows
@@ -182,7 +175,7 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
 /// summary counts no remaining slot and names no tail — no slot
 /// carries the playhead, so no end time is anchored — and the Client-core
 /// state the row 6.2 dispatches introduced rests at its defaults: the panel
-/// expanded and unfolded, the length column, no filter, and no overlay.
+/// expanded and unfolded, no filter, and no overlay.
 #[test]
 fn empty_queue_frame_carries_no_rows() {
     let mut app = stub_app_with_queue(0);
@@ -192,7 +185,6 @@ fn empty_queue_frame_carries_no_rows() {
     assert_eq!(frame.summary().remaining, 0);
     assert_eq!(frame.summary().next_title, None);
     assert_eq!(frame.summary().tail_secs, None);
-    assert_eq!(frame.summary().right_column, GuiRightColumn::Length);
     assert_eq!(frame.summary().filter, "");
     assert!(!frame.summary().filter_active);
     assert!(!frame.panel().collapsed);
@@ -231,12 +223,12 @@ fn slot_item(name: &str, runtime_ticks: i64, position_ticks: i64, played: bool) 
     QueueItem::Emby(Box::new(item))
 }
 
-/// A queue's rows carry their state and both right-column values (design
-/// D4): the active row marks now-playing, a slot with a stored resume
-/// position marks its bounded progress, a played slot marks watched — and
-/// every pending row carries its end offset, the queue's tail is the last
-/// pending row's, and the scrubber's finish clock is the active
-/// row's. The stub numbers its slots from 1 and the first one plays.
+/// A queue's rows carry their state (design D4): the active row marks
+/// now-playing, a slot with a stored resume position marks its bounded
+/// progress, and a played slot marks watched — while the queue's tail is the
+/// last pending row's runtime past the playhead, and the scrubber's finish
+/// clock is the active row's. The stub numbers its slots from 1 and the first
+/// one plays.
 ///
 /// The same stub queue drives the open row menu (the task row's "open
 /// popover"), whose frame section carries the canvas's entries with their
@@ -271,29 +263,11 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         ]
     );
 
-    let ends_after: Vec<Option<i64>> = frame
-        .queue()
-        .rows
-        .iter()
-        .map(|row| match row {
-            GuiQueueRow::Item {
-                ends_after_secs, ..
-            } => *ends_after_secs,
-            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => None,
-        })
-        .collect();
-    let (active_end, partial_end, watched_end) = match ends_after.as_slice() {
-        [Some(active), Some(partial), Some(watched)] => (*active, *partial, *watched),
-        _ => panic!("every pending row carries its end offset"),
-    };
-    // The queue's tail is the last pending row's; the offsets chain: each
-    // pending row ends one runtime after the row before it, so the partial
-    // row's end differs from the active row's.
-    assert_eq!(frame.summary().tail_secs, Some(watched_end));
-    assert_ne!(partial_end, active_end);
+    // The queue's tail is the sum of the pending runtimes after the playhead:
+    // the partial row's 10 minutes and the watched row's 10 minutes.
+    assert_eq!(frame.summary().tail_secs, Some(20 * 60));
 
     assert_eq!(frame.summary().remaining, 2);
-    assert_eq!(frame.summary().right_column, GuiRightColumn::Length);
 
     // The open row menu rides the same frame: the row it opened on, and the
     // canvas's five entries, each with the key hint that selects it
@@ -615,65 +589,6 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
     assert_eq!(hover.time_label, "15:00");
     assert_eq!(hover.chapter.as_deref(), Some("Middle"));
     assert_eq!(hover.chapter_number, Some(2));
-}
-
-/// The drag ghost carries the dragged row's end offset (review of
-/// add-tauri-gui-client row 6.5, finding P2-3): in Ends-at mode the ghost
-/// paints the same right column as the row it lifts.
-#[test]
-fn a_drag_ghost_carries_its_rows_end_offset_review_u65_p2_3() {
-    let minute = 60 * TICKS_PER_SECOND;
-    let mut app = stub_app_with_playing_items(vec![
-        slot_item("Playing", 20 * minute, 0, false),
-        slot_item("Pending", 10 * minute, 0, false),
-        slot_item("Later", 10 * minute, 0, false),
-    ]);
-    // The GUI Client's keys route only once the core thread enables it
-    // (5545eaf9b, #1013).
-    app.enable_gui_client();
-    let _ = app.route_gui_input(
-        mbv::GuiInput::Key(mbv_ui_msg::KeyEvent::new(
-            mbv_ui_msg::Key::Char('t'),
-            mbv_ui_msg::KeyModifiers::NONE,
-        )),
-        None,
-    );
-
-    let projection = app.queue_surface_projection();
-    let mut queue = QueueSurface::new();
-    queue.list_mut().set_content(queue_media_rows(
-        projection.slots.as_deref().unwrap_or_default(),
-        projection.playback,
-        projection.pending_slot,
-    ));
-    queue.set_cursor(&projection.cursor);
-    assert!(queue.begin_row_drag(QueueSlotId::from_raw(2)));
-
-    let summary = app.queue_summary_projection();
-    let offsets = app.gui_queue_end_offsets();
-    assert_eq!(
-        GuiRightColumn::from(summary.right_column),
-        GuiRightColumn::EndsAt,
-        "the frame paints the Ends-at column"
-    );
-    let frame = GuiQueue::from_surface(&queue, VIEWPORT_ROWS, &summary, &offsets);
-    let row_ends = frame.rows.iter().find_map(|row| match row {
-        GuiQueueRow::Item {
-            slot: 2,
-            ends_after_secs,
-            ..
-        } => *ends_after_secs,
-        _ => None,
-    });
-    assert!(row_ends.is_some(), "the pending row carries its end offset");
-    let drag = frame.drag.expect("the frame carries the drag");
-    let ghost_ends = match drag.ghost {
-        GuiQueueRow::Item {
-            ends_after_secs, ..
-        } => ends_after_secs,
-        GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => panic!("a drag holds an item row"),
-    };
-    assert_eq!(ghost_ends, row_ends);
 }
 
 /// The hover preview names the time under the pointer, and it carries no tile

@@ -2,7 +2,7 @@
 //! bridge's frame carries for the canvas panel's toggles and the open
 //! overlay, plus the `App` method that builds the overlay's projection.
 
-use mbv_queue::QueueSlotId;
+use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_msg::TrackChipKind;
 
@@ -76,6 +76,14 @@ pub enum GuiOverlayProjection {
         cursor: usize,
         choices: Vec<PlaybackTargetChoice>,
     },
+    /// The Queue chooser (gui-named-queues design D8): the cursor, the local
+    /// queues in queue order followed by the connected peer, and the rename
+    /// draft while one is open.
+    QueueChooser {
+        cursor: usize,
+        entries: Vec<QueueChooserEntryProjection>,
+        renaming: Option<QueueChooserRenameProjection>,
+    },
     /// The shared confirmation modal the App raised (`ask_confirm`): the
     /// message and the button row, as the frame carries them. The action
     /// stays in the core's held state (`GuiOverlay::Confirm`).
@@ -99,6 +107,31 @@ pub enum GuiOverlayProjection {
         restart_error: Option<String>,
         buttons: Vec<GuiConfirmButtonProjection>,
     },
+}
+
+/// One entry of the open Queue chooser (spec `gui-queue-chooser` "The chooser
+/// lists local queues and connected peers"): the label the dropdown paints,
+/// the local queue it shows (`None` for the connected peer), and the facts
+/// the dropdown marks it with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueChooserEntryProjection {
+    pub label: String,
+    /// The local Named queue the entry shows, or `None` for the connected
+    /// peer Player owner: a peer entry is marked as a peer and cannot be
+    /// renamed.
+    pub queue: Option<NamedQueueId>,
+    /// Whether this entry is the one the Queue panel shows.
+    pub shown: bool,
+    /// Whether this entry is the queue that holds the playhead.
+    pub current: bool,
+}
+
+/// The rename draft an open Queue chooser holds, as the frame carries it: the
+/// queue being renamed and the text the inline entry paints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueChooserRenameProjection {
+    pub queue: NamedQueueId,
+    pub text: String,
 }
 
 /// One button of the projected confirmation modal: the label, the key
@@ -170,6 +203,23 @@ impl App {
                 cursor: chooser.cursor,
                 choices: playback.target_choices.clone(),
             }),
+            // The Queue chooser's entries are the same live list its keys
+            // resolve against, so the rows it paints and the rows a press or
+            // a key addresses cannot disagree inside one frame.
+            Some(GuiOverlay::QueueChooser(chooser)) => {
+                let entries = self.queue_chooser_entries();
+                Some(GuiOverlayProjection::QueueChooser {
+                    cursor: chooser.cursor.min(entries.len().saturating_sub(1)),
+                    entries,
+                    renaming: chooser
+                        .renaming
+                        .as_ref()
+                        .map(|draft| QueueChooserRenameProjection {
+                            queue: draft.queue,
+                            text: draft.text.clone(),
+                        }),
+                })
+            }
             // The confirm's message and button row are the modal's own text:
             // the frame carries them verbatim, and the action stays in the
             // core's held state so a press or key answers what the window

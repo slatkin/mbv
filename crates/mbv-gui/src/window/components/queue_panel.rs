@@ -34,11 +34,9 @@
 //! installer — the core owns the gesture, the drop index, and the move
 //! request.
 //!
-//! The regions report in paint order: the header's Length / Ends-at switch
-//! and filter resolve to their `rightColumn` and `filter` targets first —
-//! the switch's inactive segment's mounted handle, by the summary's mode,
-//! and the filter's — then the rows resolve to their stable slots, then the
-//! hovered row's `rowGrip` and `rowActions`
+//! The regions report in paint order: the header's filter resolves to its
+//! `filter` target first, then the rows resolve to their stable slots, then
+//! the hovered row's `rowGrip` and `rowActions`
 //! — pushed after the row's `slot` region so the chrome wins where it paints
 //! over the row (the hit map's last push wins). The open row menu's entries
 //! (`QueueRowMenu`, presentation-only) report their `rowMenuEntry` indices
@@ -46,6 +44,9 @@
 //! the same technique `TrackChips` uses for its popover rows — so they land
 //! after every region the panel reports and win the hit map where the menu
 //! paints over a row beneath it.
+//!
+//! The Queue chooser, the new-queue control, and the close control are task
+//! 8.2's.
 //!
 //! The row paint is the canvas's (U4.2): its hexes come through the
 //! queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
@@ -66,7 +67,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiOverlayFrame;
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiRightColumn};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
 use crate::window::components::queue_header::QueueHeader;
@@ -209,12 +210,8 @@ pub fn QueuePanel() -> Element {
     let menu_key = use_hook(LayoutKey::next);
 
     let mut list_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The header's controls' handles: the two
-    // switch segments' mounted events, keyed by the mode each paints, and
-    // the filter control's mounted event. The panel picks the inactive
-    // segment's handle from the summary's mode.
-    let right_column_handles: Signal<Vec<(GuiRightColumn, Event<MountedData>)>> =
-        use_signal(Vec::new);
+    // The header's filter control's mounted event — the handle the `filter`
+    // region reads.
     let filter_handle: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     // The painted rows' mounted events, by their stable slot — the handles
     // the row regions read (the former client `querySelectorAll('[data-slot]')`).
@@ -274,16 +271,11 @@ pub fn QueuePanel() -> Element {
     // is open. The reporter dedupes an unchanged contribution, so a frame
     // that moves only the cursor sends nothing.
     let watch_queue = sections.queue;
-    let watch_summary = sections.summary;
     let watch_overlay = sections.overlay;
     use_effect(move || {
         // The effect reads its own handle to the queue, so a batch that wrote
         // the section re-reports while a render that read it again would not.
         let queue = watch_queue.cloned();
-        // The summary's changes move the header's controls: reading it keeps
-        // the re-report on their paint, and its mode picks which switch
-        // segment reports.
-        let summary = watch_summary.cloned();
         let overlay_open = watch_overlay.cloned();
         let _epoch = epoch.0.cloned();
         let list = list_mounted.cloned();
@@ -291,7 +283,6 @@ pub fn QueuePanel() -> Element {
         let grip = grip_mounted.cloned();
         let actions = actions_mounted.cloned();
         let menu_row_handles = menu_rows.cloned();
-        let right_column = right_column_handles.cloned();
         let filter = filter_handle.cloned();
         let menu = match overlay_open.as_ref() {
             Some(frame @ GuiOverlayFrame::RowMenu { .. }) => Some(frame.clone()),
@@ -309,18 +300,8 @@ pub fn QueuePanel() -> Element {
                 menu_rows.write().truncate(entry_count);
             }
             let mut regions: Vec<LayoutRegion> = Vec::new();
-            // The queue header's `rightColumn` and `filter` segments report
-            // first: the switch's inactive segment — the active one reports
-            // no target, a press on it would toggle away from the mode it
-            // shows — and the filter control.
-            if let Some((_, mounted)) = right_column
-                .iter()
-                .find(|(mode, _)| *mode != summary.right_column)
-            {
-                regions.extend(
-                    element_region(mounted, RegionTarget::Queue(QueueTargetId::RightColumn)).await,
-                );
-            }
+            // The queue header's `filter` segment reports first, then the
+            // rows, then the hovered row's chrome.
             if let Some(mounted) = filter.as_ref() {
                 regions.extend(
                     element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await,
@@ -420,7 +401,6 @@ pub fn QueuePanel() -> Element {
                 "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
-                    right_column: right_column_handles,
                     filter: filter_handle,
                 }
                 div {
@@ -499,7 +479,6 @@ pub fn QueuePanel() -> Element {
                                                     row: cells_row,
                                                     cell_tone: tone(&item, queue.hover),
                                                     chrome: if hovered { RowChrome::Hover } else { RowChrome::Row },
-                                                    right_mode: summary.right_column,
                                                 }
                                             }
                                             if active_row {
@@ -600,7 +579,6 @@ pub fn QueuePanel() -> Element {
                                 row: ghost_row.clone(),
                                 cell_tone: tone(ghost_row, queue.hover),
                                 chrome: RowChrome::Ghost,
-                                right_mode: summary.right_column,
                             }
                         }
                     }

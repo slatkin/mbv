@@ -1,7 +1,7 @@
 //! The Queue panel's row-paint contracts (`QueuePanel.test.ts`): the frame's
-//! viewport rows, the empty-queue state, the rows' right column under the
-//! summary's mode, the watched, active, and partial-progress states, the
-//! canvas one-liner, the four row looks, and the hovered row's chrome.
+//! viewport rows, the empty-queue state, the rows' right value, the watched,
+//! active, and partial-progress states, the canvas one-liner, the four row
+//! looks, and the hovered row's chrome.
 
 use blitz_dom::local_name;
 
@@ -45,40 +45,19 @@ fn an_empty_frame_renders_the_empty_queue_state() {
     assert_eq!(fixture.all("[data-slot]").len(), 0);
 }
 
-/// Contract (`QueuePanel.test.ts`): the right column paints the mode's value
-/// as a repeated time — the "Ends at" mode paints the wall clock at the
-/// row's end offset in the time token at the repeat opacity, and the
-/// "Length" mode paints the duration in the time token.
+/// Contract (`QueuePanel.test.ts`): the right value paints the media row's
+/// duration in the time token at the repeat opacity.
 #[test]
-fn the_right_column_paints_the_modes_value_as_a_repeated_time() {
-    let ends = built_with_frame(
-        queue_panel_app,
-        queue(vec![item(1)]),
-        ends_at_summary(),
-        None,
-    );
-    let expected = expected_row_end();
-    assert_eq!(fixture_text_of_row_value(&ends), expected);
-    // The header's finish clock also paints a time segment, so the row's
-    // own token reads from its slot's value.
-    let token = ends.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
+fn the_right_value_paints_the_duration_as_a_repeated_time() {
+    let fixture = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
+
+    assert_eq!(fixture.text_of("[data-right-value]"), "3:12");
+    let token = fixture.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
     assert!(token.contains("color: var(--canvas-type-time)"), "{token}");
     assert!(
         token.contains("opacity: var(--canvas-type-repeat-opacity)"),
         "{token}"
     );
-    assert!(!ends.text().contains("3:12"));
-
-    let length = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
-    assert!(length.text().contains("3:12"));
-    let token = length.style_of("[data-slot=\"1\"] [data-meta-kind=\"time\"]");
-    assert!(token.contains("color: var(--canvas-type-time)"), "{token}");
-}
-
-/// The right-column value of row 1 (the helper the repeated-time contract
-/// reads).
-fn fixture_text_of_row_value(fixture: &Fixture) -> String {
-    fixture.text_of("[data-slot=\"1\"] [data-right-value]")
 }
 
 /// Contract (`QueuePanel.test.ts`): the current row keeps its ink in the

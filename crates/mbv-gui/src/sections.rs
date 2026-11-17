@@ -347,12 +347,8 @@ impl SectionLedger {
         // The attached core clears the pre-attach state (design D4): `null`
         // rides the first batch, and no later build changes it.
         self.attach.adopt(None);
-        self.queue.adopt(GuiQueue::from_surface(
-            queue,
-            viewport_rows,
-            &summary,
-            &offsets,
-        ));
+        self.queue
+            .adopt(GuiQueue::from_surface(queue, viewport_rows, &summary));
         self.summary
             .adopt(GuiQueueSummary::build(&summary, &offsets));
         self.panel.adopt(GuiPanelToggles::new(

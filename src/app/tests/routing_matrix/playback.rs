@@ -5,7 +5,7 @@ use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest, TrackChipKind};
 
 #[test]
@@ -355,4 +355,29 @@ fn gui_context_popover_chords_command_only_in_the_gui_client() {
         ),
         RouterOutcome::FallThrough
     );
+}
+
+/// The GUI-only Queue controls (gui-named-queues design D8, spec
+/// `gui-queue-chooser` "The TUI keeps its keys"): `t`, `Ctrl+T`, and `Ctrl+W`
+/// reach the chooser and its controls only in the GUI Client, where the
+/// pointer target is the Queue list box. The TUI Client binds none of them, so
+/// no queue is chosen, made, or closed by them there.
+#[test]
+fn gui_queue_control_chords_are_unbound_in_the_tui_client() {
+    for chord in [
+        key(KeyCode::Char('t')),
+        key_mod(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        key_mod(KeyCode::Char('w'), KeyModifiers::CONTROL),
+    ] {
+        assert_eq!(
+            resolve_router_outcome_with_focused(
+                chord,
+                &active_snapshot(),
+                None,
+                &default_keybinds()
+            ),
+            RouterOutcome::FallThrough,
+            "{chord:?} must reach no command in the TUI Client"
+        );
+    }
 }

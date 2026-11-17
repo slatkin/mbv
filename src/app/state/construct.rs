@@ -272,7 +272,6 @@ impl App {
             prefix_armed: false,
             panel_collapsed: false,
             queue_folded: false,
-            queue_right_column: crate::app::queue_summary_projection::QueueRightColumn::Length,
             queue_filter: String::new(),
             queue_filter_active: false,
             gui_overlay: None,

@@ -219,8 +219,7 @@ fn measuring_app(props: MeasureProps) -> Element {
             let Some(mounted) = mounted else {
                 return;
             };
-            let region =
-                element_region(&mounted, RegionTarget::Queue(QueueTargetId::RightColumn)).await;
+            let region = element_region(&mounted, RegionTarget::Queue(QueueTargetId::Filter)).await;
             *regions.borrow_mut() = region;
         });
     });

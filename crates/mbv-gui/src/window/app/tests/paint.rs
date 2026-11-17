@@ -35,7 +35,7 @@ use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{
-    GuiMediaKind, GuiQueue, GuiQueueRow, GuiQueueSummary, GuiRightColumn, GuiSemanticState,
+    GuiMediaKind, GuiQueue, GuiQueueRow, GuiQueueSummary, GuiSemanticState,
 };
 use crate::bridge::layout::LayoutSize;
 use crate::core_thread::CoreInput;
@@ -143,21 +143,19 @@ fn row(slot: u64, state: GuiSemanticState) -> GuiQueueRow {
         secondary: None,
         trailing: None,
         duration: Some("3:12".to_owned()),
-        ends_after_secs: Some(40 * 60),
         kind: GuiMediaKind::Media,
         state,
         striped: slot.is_multiple_of(2),
     }
 }
 
-/// The queue summary the header paints: the remaining count, the tail offset,
-/// and the "Length" right column.
+/// The queue summary the header paints: the remaining count and the tail
+/// offset.
 fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
         next_title: Some("Track 2".to_owned()),
         tail_secs: Some(43 * 60),
-        right_column: GuiRightColumn::Length,
         filter: String::new(),
         filter_active: false,
     }

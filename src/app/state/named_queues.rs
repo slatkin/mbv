@@ -44,6 +44,13 @@ impl NamedQueueList {
         self.current
     }
 
+    /// Every Named queue in queue order, as the Owner last published the list:
+    /// the Queue chooser's local entries.
+    #[must_use]
+    pub(in crate::app) fn entries(&self) -> &[NamedQueueEntry] {
+        &self.entries
+    }
+
     /// Whether the Owner still holds `queue`, whichever of its queues is
     /// current. A list the Owner published before the queue existed answers
     /// false here, as it does for a queue the Owner closed.
@@ -198,10 +205,9 @@ impl App {
     /// from its snapshot, so the panel never paints the current queue's rows
     /// under another queue's name. Showing a queue starts, stops, and moves no
     /// playback; the current queue needs no subscription because its snapshots
-    /// arrive as `UnifiedQueueState` on the same link. The Queue chooser (row
-    /// 7.2) is this setter's live caller, so it is test-only until that row
-    /// lands.
-    #[cfg(test)]
+    /// arrive as `UnifiedQueueState` on the same link. The Queue chooser
+    /// dismisses itself on the entry it showed, so this setter is the one
+    /// place the shown queue and its subscription change together.
     pub(in crate::app) fn show_named_queue(&mut self, queue: NamedQueueId) {
         if !self.gui_client {
             return;

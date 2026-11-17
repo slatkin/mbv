@@ -1,9 +1,7 @@
-//! The Queue header (task 5.6, the port of `QueueHeader`): the
-//! `Up next · N` heading over the `queue ends HH:MM` line at the left, the
-//! "Length / Ends at" right-column switch and the filter control at the
-//! right. All of it paints the frame's `summary` section — the switch's
-//! mode, the filter's text, and the caret fact are Client-core state
-//! (design D4a), so the header holds none.
+//! The Queue header (task 5.6, the port of `QueueHeader`): the header band
+//! over the Queue filter control. It paints the frame's `summary` section —
+//! the filter's text and the caret fact are Client-core state (design D4a), so
+//! the header holds none.
 //!
 //! The header paints the canvas's own hexes through the queue-local
 //! `--canvas-*` tokens (U13): the canvas names no `mbv-theme` slot for
@@ -18,40 +16,22 @@
 //! inset — so its divider runs edge to edge like the tab bar's, the same
 //! stroke at the same colour.
 //!
-//! The switch and the filter each carry a pointer target: the switch's
-//! inactive segment and the filter report the `rightColumn` and `filter`
-//! regions through `QueuePanel`'s own report key, so a press resolves in
-//! the core to the `t` and `/` chords' requests — the control and the
-//! chord run one path. The active segment reports no target: pressing it
-//! would toggle away from the mode it already shows. The port hands the
-//! panel the two segments' mounted events (keyed by their mode, both set
-//! at the header's mount) and the filter's mounted event, and the panel
-//! picks the inactive segment's region from the summary's mode — the
-//! port of the former parent's `querySelectorAll` over the painted DOM.
+//! The filter control carries a pointer target: it reports the `filter`
+//! region through `QueuePanel`'s own report key, so a press resolves in the
+//! core to the `/` chord's request — the control and the chord run one path.
+//! The port hands the panel the filter's mounted event, and the panel picks
+//! the region from it.
+//!
+//! The chooser, the new-queue control, and the close control are task 8.2's.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiMetaKindFrame, GuiMetaSegmentFrame};
-use crate::bridge::frame::queue::{GuiQueueSummary, GuiRightColumn};
+use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::components::typed_text::TypedText;
 use crate::window::icons::Search;
 use crate::window::playhead::{Playhead, queue_finish_text};
 use crate::window::theme::canvas_var;
-
-/// The right-column switch's two modes in paint order.
-const MODES: [(GuiRightColumn, &str); 2] = [
-    (GuiRightColumn::Length, "Length"),
-    (GuiRightColumn::EndsAt, "Ends at"),
-];
-
-/// The wire name a mode paints in `data-mode` and
-/// `data-right-column-segment`, as the mode's camelCase wire name.
-fn mode_name(mode: GuiRightColumn) -> &'static str {
-    match mode {
-        GuiRightColumn::Length => "length",
-        GuiRightColumn::EndsAt => "endsAt",
-    }
-}
 
 /// The props of the Queue header (the `QueueHeader` props, plus the
 /// region handles the panel's report reads).
@@ -59,16 +39,12 @@ fn mode_name(mode: GuiRightColumn) -> &'static str {
 pub struct QueueHeaderProps {
     /// The queue summary the header paints.
     pub summary: GuiQueueSummary,
-    /// The two switch segments' mounted events, keyed by the mode each
-    /// paints — the handles the panel's `rightColumn` region reads.
-    pub right_column: Signal<Vec<(GuiRightColumn, Event<MountedData>)>>,
     /// The filter control's mounted event — the handle the `filter` region
     /// reads.
     pub filter: Signal<Option<Event<MountedData>>>,
 }
 
-/// The Queue header: the canvas's two heading lines over the switch and the
-/// filter control.
+/// The Queue header: the canvas's two heading lines over the filter control.
 #[component]
 pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     let playhead = consume_context::<Playhead>();
@@ -76,7 +52,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     // summary carries no tail (design D5).
     let queue_finish = queue_finish_text(playhead.finish.cloned(), props.summary.tail_secs);
     let summary = &props.summary;
-    let right_column = props.right_column;
     let filter = props.filter;
 
     rsx! {
@@ -130,54 +105,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
             div {
                 class: "flex items-center",
                 style: "gap: 4px;",
-                // The "Length / Ends at" switch: a recessed track the active
-                // segment fills, and a press on the inactive one runs the `t`
-                // chord's toggle in the core through the `rightColumn` region
-                // the segment reports.
-                div {
-                    class: "flex items-center",
-                    style: "background: {canvas_var(\"well\")}; border-radius: 6px; padding: 2px;",
-                    title: "Right column (t)",
-                    "data-right-column-switch": "",
-                    for (mode, label) in MODES {
-                        {
-                            let active = summary.right_column == mode;
-                            let mode_name = mode_name(mode);
-                            let segment_style = format!(
-                                "height: 28px; padding-inline: 10px; border-radius: 4px; font-size: 12px; background: {}; color: {};",
-                                if active {
-                                    canvas_var("segment-active")
-                                } else {
-                                    "transparent".to_owned()
-                                },
-                                if active {
-                                    canvas_var("heading")
-                                } else {
-                                    canvas_var("muted")
-                                },
-                            );
-                            let mut segment_right_column = right_column;
-                            rsx! {
-                                span {
-                                    key: "{mode_name}",
-                                    class: "flex items-center",
-                                    style: "{segment_style}",
-                                    "data-mode": "{mode_name}",
-                                    "data-active": active.then(|| "true".to_owned()),
-                                    // Only the inactive segment paints the press
-                                    // target's mark; the panel reads the attribute's
-                                    // holder from the summary's mode.
-                                    "data-right-column-segment": (!active)
-                                        .then(|| mode_name.to_owned()),
-                                    onmounted: move |event| {
-                                        segment_right_column.write().push((mode, event));
-                                    },
-                                    "{label}"
-                                }
-                            }
-                        }
-                    }
-                }
                 // The filter control: a magnifier button at rest, and the
                 // text entry with the block caret while the entry holds the
                 // keyboard (`filterActive`) or a filter narrows the rows. A

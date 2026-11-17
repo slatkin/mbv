@@ -42,7 +42,8 @@ pub use self::dispatch::action::{
 };
 pub use self::gui_client_state::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
-    RowMenuEntryProjection, TrackPopoverChoice,
+    QueueChooserEntryProjection, QueueChooserRenameProjection, RowMenuEntryProjection,
+    TrackPopoverChoice,
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
@@ -99,9 +100,7 @@ pub use self::queue_playback_projection::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid, TrickplayTile,
 };
-pub use self::queue_summary_projection::{
-    QueueEndOffsets, QueueRightColumn, QueueSummaryProjection,
-};
+pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;

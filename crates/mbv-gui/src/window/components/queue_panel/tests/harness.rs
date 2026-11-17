@@ -25,7 +25,7 @@ use crate::bridge::frame::playback::{
 };
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueInsertion, GuiQueueRow, GuiQueueSummary,
-    GuiRightColumn, GuiSemanticState, GuiTrailing,
+    GuiSemanticState, GuiTrailing,
 };
 use crate::bridge::frame::theme::GuiTheme;
 use crate::bridge::layout::{LayoutReport, RegionTarget};
@@ -39,7 +39,6 @@ use crate::window::layout::{LayoutEpoch, use_layout_reporter};
 use crate::window::playhead::{Playhead, Times};
 use crate::window::sections::{SectionRef, Sections};
 use crate::window::theme::theme_style_rule;
-use crate::window::time::format_wall_clock;
 
 pub(super) const SECOND: i64 = 10_000_000;
 
@@ -61,28 +60,19 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
 }
 
 /// The summary the fixture paints: two remaining rows, the queue's finish
-/// 43 minutes past the transport's finish, the "Length" mode, no filter.
+/// 43 minutes past the transport's finish, no filter.
 pub(super) fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
         next_title: None,
         tail_secs: Some(43 * 60),
-        right_column: GuiRightColumn::Length,
         filter: String::new(),
         filter_active: false,
     }
 }
 
-/// The summary in the "Ends at" mode.
-pub(super) fn ends_at_summary() -> GuiQueueSummary {
-    GuiQueueSummary {
-        right_column: GuiRightColumn::EndsAt,
-        ..summary()
-    }
-}
-
-/// One item row for `slot` (the TypeScript `item` helper): `Track <slot>` in
-/// the "Length" mode, ending 40 minutes after the transport's finish.
+/// One item row for `slot` (the TypeScript `item` helper): `Track <slot>`
+/// with a 3:12 duration.
 pub(super) fn item(slot: u64) -> GuiQueueRow {
     GuiQueueRow::Item {
         slot,
@@ -91,7 +81,6 @@ pub(super) fn item(slot: u64) -> GuiQueueRow {
         secondary: None,
         trailing: None,
         duration: Some("3:12".to_owned()),
-        ends_after_secs: Some(40 * 60),
         kind: GuiMediaKind::Media,
         state: GuiSemanticState::Ordinary,
         striped: false,
@@ -114,20 +103,7 @@ pub(super) fn in_state(mut row: GuiQueueRow, state: GuiSemanticState) -> GuiQueu
     row
 }
 
-/// The item row whose end offset is `secs` seconds past the active item's
-/// end, or none.
-pub(super) fn ending(mut row: GuiQueueRow, secs: Option<i64>) -> GuiQueueRow {
-    if let GuiQueueRow::Item {
-        ends_after_secs: field,
-        ..
-    } = &mut row
-    {
-        *field = secs;
-    }
-    row
-}
-
-/// The item row whose duration — the "Length" value — is gone.
+/// The item row with its duration gone.
 pub(super) fn untimed(mut row: GuiQueueRow) -> GuiQueueRow {
     if let GuiQueueRow::Item {
         duration: field, ..
@@ -189,15 +165,6 @@ pub(super) fn drag(ghost: GuiQueueRow, insertion: GuiQueueInsertion) -> GuiQueue
         drop_index: 2,
         insertion,
     }
-}
-
-/// The "Ends at" clock one fixture row paints: the wall clock at the row's
-/// 40-minute offset past the active item's end (design D5). The active item
-/// holds 140 s of its 200 s runtime at the frozen prediction, so its finish
-/// is the wall clock plus 140 s.
-pub(super) fn expected_row_end() -> String {
-    let finish_secs = WALL_MS.div_euclid(1000) + 140;
-    format_wall_clock(finish_secs + 40 * 60)
 }
 
 /// The times the tests drive: a frozen monotonic clock (the prediction stays

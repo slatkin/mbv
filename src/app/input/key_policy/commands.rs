@@ -47,7 +47,11 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
         KeyPolicyBinding::GuiCollapsePanel => Some(PanelIntent::TogglePanelCollapse.into()),
         KeyPolicyBinding::GuiFoldQueue => Some(PanelIntent::ToggleQueueFold.into()),
         KeyPolicyBinding::GuiCycleSubtitle => Some(PlaybackIntent::CycleOrToggleSubtitle.into()),
-        KeyPolicyBinding::GuiRightColumnToggle => Some(PanelIntent::ToggleQueueRightColumn.into()),
+        // The GUI-only Queue controls (design D8 of `gui-named-queues`): the
+        // chooser toggle and the two controls the canvas's header paints.
+        KeyPolicyBinding::GuiQueueChooserToggle => Some(PanelIntent::ToggleQueueChooser.into()),
+        KeyPolicyBinding::GuiNewQueue => Some(PanelIntent::RequestNewQueue.into()),
+        KeyPolicyBinding::GuiCloseQueue => Some(PanelIntent::RequestCloseQueue.into()),
         KeyPolicyBinding::GuiQueueFilterOpen => Some(PanelIntent::ActivateQueueFilter.into()),
         KeyPolicyBinding::GuiOpenTargetChooser => Some(PanelIntent::ToggleTargetChooser.into()),
         // The canvas queue's row moves (add-tauri-gui-client row 6.5): the

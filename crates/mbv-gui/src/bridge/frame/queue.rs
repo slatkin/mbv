@@ -1,7 +1,7 @@
 //! The Queue section: the rows inside the viewport, and the cursor,
 //! marks, and active slot (design D4). A slot id travels as its raw number, as
 //! `layout.rs` does. The summary section carries the queue header's remaining
-//! count, tail offset, right-column mode, and filter text.
+//! count, tail offset, and filter text.
 
 use mbv::{QueueEndOffsets, QueueSummaryProjection};
 use mbv_queue::QueueSlotId;
@@ -60,24 +60,17 @@ pub enum GuiQueueInsertion {
 
 impl GuiQueueDrag {
     /// Projects the Surface state's drag over the list's rows: the ghost is
-    /// the dragged row's own content — its Ends-at value included, so the
-    /// ghost paints the same right column as the row it lifts — so a drag of
-    /// a row outside the painted viewport still paints what it moves. `None`
-    /// when the rows no longer hold the dragged slot (a content refresh can
-    /// drop it).
-    fn from_surface(
-        queue: &QueueSurface,
-        drag: QueueRowDrag,
-        offsets: &QueueEndOffsets,
-    ) -> Option<Self> {
+    /// the dragged row's own content, so a drag of a row outside the painted
+    /// viewport still paints what it moves. `None` when the rows no longer
+    /// hold the dragged slot (a content refresh can drop it).
+    fn from_surface(queue: &QueueSurface, drag: QueueRowDrag) -> Option<Self> {
         let row = queue.rows().iter().find(
             |row| matches!(row, MediaListRow::Item { target, .. } if *target == drag.slot_id),
         )?;
         let ordinal = queue
             .item_index_of(drag.slot_id)
             .map_or(0, |index| index + 1);
-        let mut ghost = GuiQueueRow::from_painted(row, false, ordinal);
-        apply_ends_at(&mut ghost, offsets);
+        let ghost = GuiQueueRow::from_painted(row, false, ordinal);
         Some(Self {
             slot: drag.slot_id.raw(),
             ghost,
@@ -96,17 +89,15 @@ impl GuiQueueDrag {
 
 impl GuiQueue {
     /// Projects the Queue Surface state: the rows of a viewport `viewport_rows`
-    /// tall, with the cursor, marks, active slot, zebra parity, and each row's
-    /// end offset from `offsets` (design D5). The summary's filter text narrows
-    /// the projected rows locally — the library's one word-local acceptance rule
-    /// (`mbv-text`) decides what matches, and the Surface state and the
-    /// canonical queue stay whole.
+    /// tall, with the cursor, marks, active slot, and zebra parity. The
+    /// summary's filter text narrows the projected rows locally — the library's
+    /// one word-local acceptance rule (`mbv-text`) decides what matches, and the
+    /// Surface state and the canonical queue stay whole.
     #[must_use]
     pub fn from_surface(
         queue: &QueueSurface,
         viewport_rows: usize,
         summary: &QueueSummaryProjection,
-        offsets: &QueueEndOffsets,
     ) -> Self {
         let rows = queue.rows();
         let filter = summary.filter.as_str();
@@ -159,9 +150,7 @@ impl GuiQueue {
                     .selectable_target()
                     .and_then(|target| queue.item_index_of(*target))
                     .map_or(0, |index| index + 1);
-                let mut row = GuiQueueRow::from_painted(row, striped, ordinal);
-                apply_ends_at(&mut row, offsets);
-                row
+                GuiQueueRow::from_painted(row, striped, ordinal)
             })
             .collect();
         Self {
@@ -174,28 +163,8 @@ impl GuiQueue {
             hover: queue.hover().map(QueueSlotId::raw),
             drag: queue
                 .row_drag()
-                .and_then(|drag| GuiQueueDrag::from_surface(queue, drag, offsets)),
+                .and_then(|drag| GuiQueueDrag::from_surface(queue, drag)),
         }
-    }
-}
-
-/// Fill a row's Ends-at offset from the shown queue's end offsets (design
-/// D5): the row's end as seconds after the active item's end, which the
-/// window turns into a wall clock from its own playhead anchor. Shared by
-/// the painted rows and the drag ghost, so the ghost paints the same right
-/// column as the row it lifts.
-fn apply_ends_at(row: &mut GuiQueueRow, offsets: &QueueEndOffsets) {
-    if let GuiQueueRow::Item {
-        slot,
-        ends_after_secs,
-        ..
-    } = row
-    {
-        *ends_after_secs = offsets
-            .rows
-            .iter()
-            .find(|(offset_slot, _)| offset_slot.raw() == *slot)
-            .map(|(_, secs)| *secs);
     }
 }
 
@@ -264,12 +233,6 @@ pub enum GuiQueueRow {
         secondary: Option<String>,
         trailing: Option<GuiTrailing>,
         duration: Option<String>,
-        /// The row's end as seconds after the active item's end (design D5):
-        /// the right column's "Ends at" fact, which the window turns into a
-        /// wall clock from the playhead anchor. The "Length" value is
-        /// `duration`. `None` for a slot before the playhead and for a slot
-        /// whose end chain an unknown runtime broke.
-        ends_after_secs: Option<i64>,
         kind: GuiMediaKind,
         state: GuiSemanticState,
         /// The row's zebra parity: the TUI's alternation paints the odd
@@ -283,10 +246,10 @@ pub enum GuiQueueRow {
 }
 
 /// The queue summary the header paints (design D4): the remaining count, the
-/// queue's tail offset, the right column's mode, and the filter text with its
-/// caret fact. Mirrors `QueueSummaryProjection`'s remaining, next-item, and
-/// filter facts; the tail offset comes from the shown queue's end offsets
-/// (design D5), which the window turns into the finish wall clock.
+/// queue's tail offset, and the filter text with its caret fact. Mirrors
+/// `QueueSummaryProjection`'s remaining, next-item, and filter facts; the tail
+/// offset comes from the shown queue's end offsets (design D5), which the
+/// window turns into the finish wall clock.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueSummary {
     /// The rows that do not carry the playhead: the canvas's remaining count
@@ -305,8 +268,6 @@ pub struct GuiQueueSummary {
     /// clock now plus the active item's remaining time. `None` while no slot
     /// carries the playhead or a pending runtime in the chain is unknown.
     pub tail_secs: Option<i64>,
-    /// Which value the rows' right column paints.
-    pub right_column: GuiRightColumn,
     /// The queue filter's text, which narrows the projected rows locally.
     /// Empty text filters nothing.
     pub filter: String,
@@ -324,30 +285,8 @@ impl GuiQueueSummary {
             remaining: summary.remaining,
             next_title: summary.next_title.clone(),
             tail_secs: offsets.tail,
-            right_column: GuiRightColumn::from(summary.right_column),
             filter: summary.filter.clone(),
             filter_active: summary.filter_active,
-        }
-    }
-}
-
-/// Which value the queue rows' right column paints (design D4's "Length" /
-/// "Ends at" switch), mirroring `QueueRightColumn` variant for variant.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum GuiRightColumn {
-    /// Each row paints its total runtime.
-    #[default]
-    Length,
-    /// Each row paints the clock time at which it ends, from the current
-    /// position onward.
-    EndsAt,
-}
-
-impl From<mbv::QueueRightColumn> for GuiRightColumn {
-    fn from(mode: mbv::QueueRightColumn) -> Self {
-        match mode {
-            mbv::QueueRightColumn::Length => Self::Length,
-            mbv::QueueRightColumn::EndsAt => Self::EndsAt,
         }
     }
 }
@@ -374,7 +313,6 @@ impl GuiQueueRow {
                 secondary: secondary.clone(),
                 trailing: trailing.as_ref().map(GuiTrailing::from),
                 duration: duration.clone(),
-                ends_after_secs: None,
                 kind: GuiMediaKind::from(*kind),
                 state: GuiSemanticState::from(semantic_state),
                 striped,

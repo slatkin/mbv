@@ -23,7 +23,7 @@ use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary, GuiRightColumn};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::{GuiRole, GuiTheme};
 use crate::bridge::frame::{GuiAttachState, GuiPanelToggles};
@@ -266,7 +266,6 @@ fn fresh_summary() -> GuiQueueSummary {
         remaining: 0,
         next_title: None,
         tail_secs: None,
-        right_column: GuiRightColumn::Length,
         filter: String::new(),
         filter_active: false,
     }

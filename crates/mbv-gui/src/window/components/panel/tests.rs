@@ -27,7 +27,7 @@ use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::playback::{
     GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
 };
-use crate::bridge::frame::queue::{GuiQueueSummary, GuiRightColumn};
+use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::bridge::layout::{LayoutSize, QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -97,14 +97,12 @@ fn anchor() -> GuiPlayhead {
 }
 
 /// The summary the seeded tests paint: one remaining row, the queue's
-/// finish 43 minutes past the transport's finish, the "Length" mode, no
-/// filter.
+/// finish 43 minutes past the transport's finish, no filter.
 fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 1,
         next_title: None,
         tail_secs: Some(43 * 60),
-        right_column: GuiRightColumn::Length,
         filter: String::new(),
         filter_active: false,
     }

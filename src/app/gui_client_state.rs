@@ -1,7 +1,6 @@
 //! The GUI Client's Client-core presentation state (add-tauri-gui-client row
-//! 6.2): the canvas panel's collapse and queue-fold toggles, the queue rows'
-//! right column, the queue filter, and the open menu or popover (design
-//! D4a's "new core state" rows).
+//! 6.2): the canvas panel's collapse and queue-fold toggles, the queue filter,
+//! and the open menu or popover (design D4a's "new core state" rows).
 //!
 //! The Client core holds the interaction state (the `gui-client` spec), so
 //! every value here lives on the `App` — not in the window content — and a
@@ -17,17 +16,19 @@ mod daemon_lost;
 mod overlay;
 mod popover;
 mod projection;
+mod queue_chooser;
 mod row_menu;
 mod target;
 
 pub(in crate::app) use self::overlay::GuiOverlay;
 pub use self::projection::{
     GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
-    RowMenuEntryProjection, TrackPopoverChoice,
+    QueueChooserEntryProjection, QueueChooserRenameProjection, RowMenuEntryProjection,
+    TrackPopoverChoice,
 };
 
+use crate::app::App;
 use crate::app::state::app_struct::LaunchRestore;
-use crate::app::{App, queue_summary_projection::QueueRightColumn};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 impl App {
@@ -117,14 +118,6 @@ impl App {
     /// The `q` toggle (design D10): fold the expanded panel's queue.
     pub(in crate::app) fn toggle_queue_fold(&mut self) {
         self.queue_folded = !self.queue_folded;
-    }
-
-    /// The queue header's Length / Ends-at switch.
-    pub(in crate::app) fn toggle_queue_right_column(&mut self) {
-        self.queue_right_column = match self.queue_right_column {
-            QueueRightColumn::Length => QueueRightColumn::EndsAt,
-            QueueRightColumn::EndsAt => QueueRightColumn::Length,
-        };
     }
 
     /// Focus the queue header's filter text entry (the GUI-only `/`).

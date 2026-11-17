@@ -44,10 +44,6 @@ pub enum PlaybackRequest {
     /// The canvas header's queue-fold control: the `q` toggle's pointer
     /// dispatch. GUI-painted only, as `TogglePanelCollapse` is.
     ToggleQueueFold,
-    /// The canvas queue header's Length / Ends-at switch (add-tauri-gui-
-    /// client row 6.5): the `t` chord's toggle, pressed on the header
-    /// control. GUI-painted only, as `ToggleQueueFold` is.
-    ToggleQueueRightColumn,
     /// The canvas queue header's filter control (row 6.5): the `/` chord's
     /// text-entry focus, pressed on the header control. GUI-painted only.
     ActivateQueueFilter,

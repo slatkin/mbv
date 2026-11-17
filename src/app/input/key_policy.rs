@@ -91,8 +91,17 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// The GUI-only key context's cycle-subtitle chord: the canvas's `c`,
     /// which the TUI binds to `clear_queue_prompt_c`.
     GuiCycleSubtitle,
-    /// The GUI-only key context's queue-header Length/Ends-at switch.
-    GuiRightColumnToggle,
+    /// The GUI-only key context's Queue chooser toggle: the canvas's `t`,
+    /// which the TUI binds to nothing (its Sessions sidebar moves a queue
+    /// with the same letter inside the sidebar's own layer). It opens and
+    /// closes the Queue chooser (design D8 of `gui-named-queues`).
+    GuiQueueChooserToggle,
+    /// The GUI-only key context's new-queue control: the canvas's `Ctrl+T`.
+    /// The TUI binds nothing there, and the TUI Client has no Named queue.
+    GuiNewQueue,
+    /// The GUI-only key context's close control: the canvas's `Ctrl+W`, which
+    /// the TUI binds nothing to outside a text entry.
+    GuiCloseQueue,
     /// The GUI-only key context's queue-filter opener: the canvas's `/`,
     /// which the TUI binds to nothing (the library's inline search is a
     /// leaf-local `/`).
@@ -147,7 +156,13 @@ impl KeyPolicyBinding {
             Self::GuiCollapsePanel => chord.mods.is_empty() && chord.code == Key::Char('z'),
             Self::GuiFoldQueue => chord.mods.is_empty() && chord.code == Key::Char('q'),
             Self::GuiCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
-            Self::GuiRightColumnToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
+            Self::GuiQueueChooserToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
+            Self::GuiNewQueue => {
+                chord.mods == KeyModifiers::CONTROL && chord.code == Key::Char('t')
+            }
+            Self::GuiCloseQueue => {
+                chord.mods == KeyModifiers::CONTROL && chord.code == Key::Char('w')
+            }
             Self::GuiQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
             Self::GuiOpenTargetChooser => chord.mods.is_empty() && chord.code == Key::Char('r'),
             _ => false,
@@ -188,6 +203,12 @@ pub(in crate::app) enum KeyPolicyGate {
     /// overlay open and no text entry focused, so the open row menu or the
     /// filter's text entry keeps the chords it owns.
     GuiClient,
+    /// The GUI-only Queue controls (design D8 of `gui-named-queues`): the
+    /// Queue chooser's `t`, the new-queue `Ctrl+T`, and the close `Ctrl+W`
+    /// act on the Queue panel, so they route only while the pointer target is
+    /// the Queue list box — the GUI core sets its Panel focus from the key's
+    /// pointer target before every key.
+    GuiQueueTarget,
 }
 
 impl KeyPolicyGate {
@@ -217,6 +238,12 @@ impl KeyPolicyGate {
             Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
             Self::GuiClient => {
                 snapshot.gui_client
+                    && !snapshot.overlays.focus.blocking()
+                    && !snapshot.overlays.text_entry_focused
+            }
+            Self::GuiQueueTarget => {
+                snapshot.gui_client
+                    && snapshot.panel_focus == PanelFocus::Queue
                     && !snapshot.overlays.focus.blocking()
                     && !snapshot.overlays.text_entry_focused
             }
@@ -347,10 +374,24 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "gui_right_column_toggle",
+        name: "gui_queue_chooser_toggle",
         global: true,
-        binding: KeyPolicyBinding::GuiRightColumnToggle,
-        gate: KeyPolicyGate::GuiClient,
+        binding: KeyPolicyBinding::GuiQueueChooserToggle,
+        gate: KeyPolicyGate::GuiQueueTarget,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_new_queue",
+        global: true,
+        binding: KeyPolicyBinding::GuiNewQueue,
+        gate: KeyPolicyGate::GuiQueueTarget,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_close_queue",
+        global: true,
+        binding: KeyPolicyBinding::GuiCloseQueue,
+        gate: KeyPolicyGate::GuiQueueTarget,
         blocking: false,
     },
     KeyPolicyEntry {

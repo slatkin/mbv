@@ -179,12 +179,9 @@ impl<'a> QueueLeaf<'a> {
                 self.surface.begin_row_drag(target);
                 Some(self.select_row(target, selection))
             }
-            // The queue header's switch and filter controls (row 6.5): each
-            // press emits the request whose App-side effect the `t` and `/`
-            // chords dispatch, so the control and the chord run one path.
-            RegionTarget::Queue(QueueTargetId::RightColumn) => {
-                Some(Msg::Playback(PlaybackRequest::ToggleQueueRightColumn))
-            }
+            // The queue header's filter control (row 6.5): the press emits the
+            // request whose App-side effect the `/` chord dispatches, so the
+            // control and the chord run one path.
             RegionTarget::Queue(QueueTargetId::Filter) => {
                 Some(Msg::Playback(PlaybackRequest::ActivateQueueFilter))
             }
