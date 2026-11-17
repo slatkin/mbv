@@ -127,25 +127,25 @@ holds that change.
 
 ## 8. GUI window (`crates/mbv-gui`)
 
-- [ ] 8.1 Carry the new summary, queue, list, and overlay facts through the bridge frame sections
+- [x] 8.1 Carry the new summary, queue, list, and overlay facts through the bridge frame sections
   (`bridge/frame/queue.rs`, `bridge/frame/overlay.rs`) and delete `ends_after_secs` and
   `apply_ends_at`. Verify with the bridge frame tests in `crates/mbv-gui/tests/bridge/frame.rs`,
   updated for the removed fields and one new start-slot projection test.
-- [ ] 8.2 Rewrite `QueueHeader` to paint the chooser button (only with two or more entries), the
+- [x] 8.2 Rewrite `QueueHeader` to paint the chooser button (only with two or more entries), the
   filter control, the new control, and the close control (disabled on the only local queue), each
   reporting its pointer region (`queueChooser`, `newQueue`, `closeQueue`, `filter`). Verify with
   the queue panel header tests in `queue_panel/tests/header.rs` for "One queue and no peer" and
   "Several entries".
-- [ ] 8.3 Paint the Queue chooser dropdown from the overlay frame: local queues in order, then the
+- [x] 8.3 Paint the Queue chooser dropdown from the overlay frame: local queues in order, then the
   peer, with the shown, current, and peer marks, and the inline rename entry. Verify with one
   component test that a press on an entry reports the entry's region.
-- [ ] 8.4 Paint rows with no right column, the actions button at the row's end on hover, and the
+- [x] 8.4 Paint rows with no right column, the actions button at the row's end on hover, and the
   filled or outlined start mark from `start` and `playing`. Verify with the row tests for "A stopped
   queue marks its start slot" and "A row is hovered".
-- [ ] 8.5 Paint the footer totals at the right of `QueueFooter`, move the dirty mark beside the
+- [x] 8.5 Paint the footer totals at the right of `QueueFooter`, move the dirty mark beside the
   source text, and remove the owner label and liveness dot. Verify with one footer component test
   for "The footer totals the marked rows".
-- [ ] 8.6 Update `docs/architecture/gui-client.md` for the queue header, the Queue chooser, the
+- [x] 8.6 Update `docs/architecture/gui-client.md` for the queue header, the Queue chooser, the
   rows, the start mark, and the footer, and remove the right-column and owner-label text. Verify
   that `rg -n -i "Ends at|right column|owner label" docs/architecture/gui-client.md` finds no stale
   text.
