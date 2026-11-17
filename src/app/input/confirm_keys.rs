@@ -64,6 +64,12 @@ impl App {
             ConfirmAction::HandOffPlaybackToSession { device_id, name } => {
                 self.confirm_hand_off_playback_to_session(&device_id, &name, key);
             }
+            // The continue-playback confirm (confirm-output-handoff): Enter
+            // (Yes) runs the selection's hand-off; Esc and every other key
+            // cancel — nothing changes and the current output keeps playing.
+            ConfirmAction::ContinueOutputHandOff { target, name } => {
+                self.confirm_continue_output_hand_off(target.as_ref(), &name, key);
+            }
             // The close control's prompt (gui-named-queues design D8): Enter
             // sends the close to the local Owner, and any other answer — Esc
             // above all — changes nothing.

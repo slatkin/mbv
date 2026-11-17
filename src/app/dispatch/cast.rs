@@ -7,6 +7,7 @@
 use crate::app::App;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::CastEvent;
+use mbv_cast::discovery::CastReceiver;
 
 /// How long a single cast discovery browse is allowed to run when the F3
 /// panel opens (8.1). Runs concurrently with the `/Sessions` fetch on its
@@ -20,28 +21,47 @@ impl App {
     /// exclusive), then an Emby target either keeps Direct remote control or
     /// becomes the owner's Emby Session output (`activate_session_target`,
     /// design D12); a cast target sends `CtrlCmd::SelectPlaybackOutput(Cast)`
-    /// to the owner whose `playback-output` capability gated the row (D3). The
-    /// owner performs the hand-off itself — no `Stop` here, or the active slot
-    /// the new receiver must continue would be cleared (spec scenario "A
-    /// different cast target is selected while one is attached"). The Client
-    /// holds no receiver connection: the owner connects and broadcasts the
-    /// resulting `CtrlEvent::PlaybackOutput`.
+    /// to the owner whose `playback-output` capability gated the row (D3) —
+    /// after the shared continue-playback gate (confirm-output-handoff): a
+    /// selection that would hand off an active slot asks first, and No
+    /// cancels. The owner performs the hand-off itself — no `Stop` here, or
+    /// the active slot the new receiver must continue would be cleared (spec
+    /// scenario "A different cast target is selected while one is
+    /// attached"). The Client holds no receiver connection: the owner
+    /// connects and broadcasts the resulting `CtrlEvent::PlaybackOutput`.
     pub(in crate::app) fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
             PanelTarget::Emby(session) => self.activate_session_target(&session),
             PanelTarget::Cast(receiver) => {
-                self.sever_connections_without_output_change();
-                // Same panel-close-on-connect parity as the Emby path
-                // (`connect_to_session` dismisses the Sessions sidebar).
-                self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
-                self.select_playback_output(mbv_ctrl::OutputSelection::Cast {
-                    receiver_id: receiver.id,
-                    name: receiver.friendly_name,
-                    host: receiver.host,
-                    port: receiver.port,
-                });
+                if self.output_hand_off_applies(self.receiver_is_current_output(&receiver)) {
+                    self.ask_continue_output_hand_off(
+                        Some(mbv_ui_model::panel_targets::SessionTargetKey::Cast(
+                            receiver.id.clone(),
+                        )),
+                        receiver.friendly_name.clone(),
+                    );
+                    return;
+                }
+                self.select_cast_output(receiver);
             }
         }
+    }
+
+    /// The cast selection's body, shared by the immediate path (nothing
+    /// active, or the receiver already is the output) and the confirmed
+    /// continue-playback answer: sever, dismiss the panel, and send the
+    /// selection — the owner performs the hand-off itself.
+    pub(in crate::app) fn select_cast_output(&mut self, receiver: CastReceiver) {
+        self.sever_connections_without_output_change();
+        // Same panel-close-on-connect parity as the Emby path
+        // (`connect_to_session` dismisses the Sessions sidebar).
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
+        self.select_playback_output(mbv_ctrl::OutputSelection::Cast {
+            receiver_id: receiver.id,
+            name: receiver.friendly_name,
+            host: receiver.host,
+            port: receiver.port,
+        });
     }
 
     /// Browses for cast receivers on a background thread and reports the

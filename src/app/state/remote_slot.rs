@@ -89,9 +89,24 @@ impl App {
 
     /// Return the playback to this machine: disconnect a direct remote session,
     /// and hand a remote output back to Local. The Sessions sidebar's detach and
-    /// the chooser's local row share it. The owner tears the Cast receiver app or
+    /// the chooser's local row share it. The shared continue-playback gate
+    /// (confirm-output-handoff) asks first when the selection would hand off
+    /// an active slot — a remote output that holds one; No cancels and the
+    /// remote output keeps playing. The owner tears the Cast receiver app or
     /// the Emby Session down (design D12, D13).
     pub(in crate::app) fn detach_to_local(&mut self) {
+        if self.output_hand_off_applies(!self.local_owner_output_is_remote()) {
+            self.ask_continue_output_hand_off(None, mbv_emby::device_name());
+            return;
+        }
+        self.detach_to_local_confirmed();
+    }
+
+    /// The detach's body, shared by the immediate path (nothing active on the
+    /// remote output, or no remote output) and the confirmed continue-playback
+    /// answer: disconnect a direct remote session and hand a remote output
+    /// back to Local.
+    pub(in crate::app) fn detach_to_local_confirmed(&mut self) {
         let cast_output = self.output_is_cast();
         let session_output = self.output_is_emby_session();
         let remote_output = cast_output || session_output;

@@ -519,41 +519,38 @@ impl App {
     ///
     /// A switch never stops the prior playback as a side effect: severing
     /// hands no output back to Local, and when the owner could move the
-    /// active slot to the Session instead, the hand-off fork asks first
-    /// (user decision: switching sessions must present the hand-off option;
-    /// without it the prior playback continues).
+    /// active slot to the Session instead, the user is asked first
+    /// (confirm-output-handoff). A Session that advertises a direct endpoint
+    /// keeps the hand-off fork (both answers act: hand the slot off, or just
+    /// switch to the direct endpoint); one without it gets the
+    /// continue-playback prompt, whose No cancels.
     pub(in crate::app) fn activate_session_target(&mut self, sess: &mbv_emby::SessionInfo) {
         let has_direct_endpoint = self.session_direct_endpoint(sess).is_some();
-        if has_direct_endpoint && self.hand_off_fork_applies(sess) {
-            self.ask_hand_off_playback_to_session(sess);
+        if self.session_hand_off_applies(sess) {
+            if has_direct_endpoint {
+                self.ask_hand_off_playback_to_session(sess);
+            } else {
+                self.ask_continue_output_hand_off(
+                    Some(mbv_ui_model::panel_targets::SessionTargetKey::Emby(
+                        sess.id.clone(),
+                    )),
+                    session_display_name(sess),
+                );
+            }
             return;
         }
         self.activate_session_target_without_hand_off(sess);
     }
 
-    /// Whether activating `sess` can offer the hand-off fork: this Client is
-    /// attached to the local Owner, the Owner advertises
-    /// `emby-session-output`, and a slot is active on its current output —
-    /// selecting `sess` as the output then moves that slot to the Session
-    /// (spec "Selecting an output hands off the active slot"), while a direct
-    /// connect instead thin-clients the Session's own Owner. The Session's
-    /// device already being the output skips the fork: that selection is the
-    /// Owner's no-op hand-off. The decision reads the connection's retained
-    /// output state, the record the handshake fills at the cold seed
-    /// (cast-owner-output 8.2 fix).
-    fn hand_off_fork_applies(&self, sess: &mbv_emby::SessionInfo) -> bool {
-        if !self.is_local_daemon()
-            || !self.player.remote().supports_emby_session_output()
-            || !self.player.status_snapshot().active
-        {
-            return false;
-        }
-        self.player.remote().playback_output_state().is_none_or(|output| {
-            !matches!(
-                output,
-                mbv_ctrl::OutputState::EmbySession { device_id, .. } if *device_id == sess.device_id
-            )
-        })
+    /// Whether activating `sess` would hand off an active slot: the Owner
+    /// advertises `emby-session-output` (a selection it would reject hands
+    /// off nothing) and the shared continue-playback gate applies — a slot
+    /// is active on the local Owner's current output and the Session's
+    /// device is not that output (spec "Selecting an output hands off the
+    /// active slot").
+    fn session_hand_off_applies(&self, sess: &mbv_emby::SessionInfo) -> bool {
+        self.player.remote().supports_emby_session_output()
+            && self.output_hand_off_applies(self.session_is_current_output(sess))
     }
 
     /// Raise the shared hand-off fork: Enter selects the Session as the
@@ -626,12 +623,17 @@ impl App {
         }
     }
 
-    /// Activate a Session with no hand-off fork: a direct endpoint keeps the
+    /// Activate a Session with no hand-off gate: a direct endpoint keeps the
     /// Direct remote control path and severs only the control links — the
     /// prior playback continues (suspended behind the new attachment when
     /// this Client held the local Owner); without a direct endpoint the
-    /// owner's own session-to-Session selection is the hand-off.
-    fn activate_session_target_without_hand_off(&mut self, sess: &mbv_emby::SessionInfo) {
+    /// owner's own session-to-Session selection is the hand-off. The shared
+    /// gate's Yes answer and the hand-off fork's decline answer both land
+    /// here.
+    pub(in crate::app) fn activate_session_target_without_hand_off(
+        &mut self,
+        sess: &mbv_emby::SessionInfo,
+    ) {
         let has_direct_endpoint = self.session_direct_endpoint(sess).is_some();
         if has_direct_endpoint {
             self.sever_connections_without_output_change();

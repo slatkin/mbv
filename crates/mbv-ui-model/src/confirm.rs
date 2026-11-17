@@ -63,6 +63,20 @@ pub enum ConfirmAction {
         device_id: String,
         name: String,
     },
+    /// The continue-playback confirm (confirm-output-handoff change): the user
+    /// selected a playback target while a slot is active on the local Owner's
+    /// current output. Enter (Yes) runs the selection's hand-off — the Owner
+    /// stops the old output and continues the active slot on the target; Esc
+    /// (No) cancels: nothing changes and the current output keeps playing.
+    /// `Some` names a remote target by its kind-qualified identity, resolved
+    /// against the live target snapshot at answer time so a target that left
+    /// it acts on nothing; `None` is this machine's own output, whose answer
+    /// detaches the Owner's remote output back to Local. The name is the
+    /// label the prompt showed (for the no-longer-available notice).
+    ContinueOutputHandOff {
+        target: Option<SessionTargetKey>,
+        name: String,
+    },
     /// The GUI Client's close control on a local Named queue that plays
     /// (`gui-named-queues` spec `gui-queue-chooser` "The close control closes
     /// the shown entry"): only the playing current queue asks, because closing

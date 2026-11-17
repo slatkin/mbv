@@ -33,6 +33,7 @@ mod music_grouping;
 mod named_queue_controls;
 mod named_queues;
 mod narrow_browse_migration;
+mod output_handoff;
 mod panel_focus;
 mod pinned_view_toggle;
 mod podcast;
