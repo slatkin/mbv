@@ -11,6 +11,7 @@ use super::overlay::GuiOverlay;
 use super::popover::track_popover_choices;
 use crate::app::App;
 use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
+use crate::app::state::playback::ShownEntry;
 
 /// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
 /// "The queue header holds the chooser and its controls"): the number of
@@ -28,7 +29,8 @@ pub struct QueueHeaderProjection {
     /// the Owner's first queue list has not arrived, when no entry shows.
     pub shown_name: String,
     /// Whether the close control is disabled: the only local queue has no
-    /// close, and no entry has arrived to close yet.
+    /// close, and no entry has arrived to close yet. A shown peer entry is
+    /// always closable, because closing it disconnects.
     pub close_disabled: bool,
 }
 
@@ -188,8 +190,24 @@ impl App {
                 .find(|entry| entry.shown)
                 .map(|entry| entry.label.clone())
                 .unwrap_or_default(),
-            close_disabled: entries.len() < 2,
+            close_disabled: self.gui_close_disabled(),
             entries: entries.len(),
+        }
+    }
+
+    /// Whether the close control is disabled for the entry the panel shows
+    /// (spec `gui-queue-chooser` "The close control closes the shown entry"):
+    /// a shown local queue closes only while the local Owner holds another one
+    /// beside it, a shown peer entry always disconnects, and with no entry
+    /// shown the control has nothing to close. The local count is the Owner's
+    /// own list, never the chooser's, which carries the peer entry too — so a
+    /// connected peer never disables the only local queue's close.
+    #[must_use]
+    fn gui_close_disabled(&self) -> bool {
+        match self.gui_shown_entry {
+            Some(ShownEntry::Peer) => false,
+            Some(ShownEntry::Local(_)) => self.named_queues.entries().len() < 2,
+            None => true,
         }
     }
 

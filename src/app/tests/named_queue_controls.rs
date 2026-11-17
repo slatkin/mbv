@@ -16,6 +16,7 @@ use mbv_ctrl::{CtrlCmd, NamedQueueEntry, UnifiedQueueStateData};
 use mbv_queue::NamedQueueId;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PlaybackRequest};
+use rstest::rstest;
 
 /// The queue the Owner mints for the first new queue beside `Default`.
 fn new_queue() -> NamedQueueId {
@@ -320,6 +321,39 @@ fn a_resting_queue_shown_closes_without_a_prompt() {
         "a resting queue asks nothing"
     );
     assert_eq!(sent_close(&cmd_rx), Some(resting()));
+}
+
+/// Show the only local queue in the Queue panel, as a chooser press does.
+fn show_the_only_local_queue(app: &mut App) {
+    app.show_local_current_entry();
+}
+
+/// Show the connected peer's entry in the Queue panel, as a connect does.
+fn show_the_peer_entry(app: &mut App) {
+    app.show_peer_entry();
+}
+
+/// The header's close control follows the shown entry, not the chooser's entry
+/// count (spec `gui-queue-chooser` "The close control closes the shown entry":
+/// "The control SHALL be disabled on the only local queue"). With one local
+/// queue and a connected peer the chooser lists two entries, and the control is
+/// still disabled while that only local queue is shown — the close would send
+/// nothing. A shown peer entry stays closable, because closing it disconnects.
+#[rstest]
+#[case::only_local_queue_shown(show_the_only_local_queue, true)]
+#[case::peer_entry_shown(show_the_peer_entry, false)]
+fn the_close_control_follows_the_shown_entry_beside_a_peer(
+    #[case] show: fn(&mut App),
+    #[case] disabled: bool,
+) {
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+    show(&mut app);
+
+    let header = app.gui_queue_header_projection();
+
+    assert_eq!(header.entries, 2, "one local queue and the peer entry");
+    assert_eq!(header.close_disabled, disabled);
 }
 
 /// A press on a Queue chooser entry shows the entry the window painted and
