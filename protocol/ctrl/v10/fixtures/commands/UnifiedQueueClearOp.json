@@ -1,5 +1,6 @@
 {
   "UnifiedQueueClearOp": {
-    "op": 49
+    "op": 49,
+    "queue": null
   }
 }

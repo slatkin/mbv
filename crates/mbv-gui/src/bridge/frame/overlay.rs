@@ -6,7 +6,10 @@
 //! popover's choices and the track chips, and the chooser's choices and the
 //! header's target fact, cannot disagree inside one tick.
 
-use mbv::{GuiOverlayProjection, RowMenuEntryProjection, TrackPopoverChoice};
+use mbv::{
+    GuiOverlayProjection, QueueChooserEntryProjection, QueueChooserRenameProjection,
+    RowMenuEntryProjection, TrackPopoverChoice,
+};
 use mbv_ui_msg::TrackChipKind;
 
 use super::playback::GuiTargetChoice;
@@ -38,6 +41,14 @@ pub enum GuiOverlayFrame {
     TargetChooser {
         cursor: usize,
         choices: Vec<GuiTargetChoice>,
+    },
+    /// The Queue chooser (gui-named-queues design D8): the cursor, the local
+    /// queues in queue order followed by the connected peer, each with the
+    /// marks the dropdown paints, and the rename draft while one is open.
+    QueueChooser {
+        cursor: usize,
+        entries: Vec<GuiQueueChooserEntry>,
+        renaming: Option<GuiQueueChooserRename>,
     },
     /// The shared confirmation modal the App raised: the message and the
     /// button row, each with the key hint inside its pill and the tone the
@@ -104,6 +115,15 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
             GuiOverlayProjection::TargetChooser { cursor, choices } => Self::TargetChooser {
                 cursor: *cursor,
                 choices: choices.iter().map(GuiTargetChoice::from).collect(),
+            },
+            GuiOverlayProjection::QueueChooser {
+                cursor,
+                entries,
+                renaming,
+            } => Self::QueueChooser {
+                cursor: *cursor,
+                entries: entries.iter().map(GuiQueueChooserEntry::from).collect(),
+                renaming: renaming.as_ref().map(GuiQueueChooserRename::from),
             },
             GuiOverlayProjection::Confirm { message, buttons } => Self::Confirm {
                 message: message.clone(),
@@ -213,6 +233,55 @@ impl From<&TrackPopoverChoice> for GuiTrackPopoverChoice {
             label: choice.label.clone(),
             forced: choice.forced,
             chosen: choice.chosen,
+        }
+    }
+}
+
+/// One entry of the open Queue chooser: its label (`NamedQueueId::raw` for a
+/// local queue, `None` for the connected peer) and the marks the dropdown
+/// paints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuiQueueChooserEntry {
+    pub label: String,
+    /// The local Named queue the entry shows (`NamedQueueId::raw`), or `None`
+    /// for the connected peer Player owner.
+    pub queue: Option<u64>,
+    /// Whether this entry is the one the Queue panel shows.
+    pub shown: bool,
+    /// Whether this entry is the queue that holds the playhead.
+    pub current: bool,
+    /// Whether this entry is the current queue while the local Owner plays it.
+    pub playing: bool,
+}
+
+impl From<&QueueChooserEntryProjection> for GuiQueueChooserEntry {
+    fn from(entry: &QueueChooserEntryProjection) -> Self {
+        Self {
+            label: entry.label.clone(),
+            queue: entry.queue.map(mbv_queue::NamedQueueId::raw),
+            shown: entry.shown,
+            current: entry.current,
+            playing: entry.playing,
+        }
+    }
+}
+
+/// The rename draft an open Queue chooser holds: the queue it renames
+/// (`NamedQueueId::raw`) and the text its inline entry paints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuiQueueChooserRename {
+    pub queue: u64,
+    pub text: String,
+    /// Whether the whole text is selected: the entry paints it highlighted.
+    pub selected: bool,
+}
+
+impl From<&QueueChooserRenameProjection> for GuiQueueChooserRename {
+    fn from(draft: &QueueChooserRenameProjection) -> Self {
+        Self {
+            queue: draft.queue.raw(),
+            text: draft.text.clone(),
+            selected: draft.selected,
         }
     }
 }

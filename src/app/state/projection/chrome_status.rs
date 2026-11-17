@@ -153,15 +153,25 @@ impl App {
     /// session device name, connected endpoint host.
     pub(in crate::app) fn queue_owner_label(&self) -> String {
         if self.playing_queue_link() == QueueLink::Peer {
-            self.active_route
-                .as_ref()
-                .map(|name| format!("route:{name}"))
-                .or_else(|| self.direct_remote_label.clone())
-                .or_else(|| self.connected_player_endpoint_label())
-                .unwrap_or_else(mbv_emby::device_name)
+            self.peer_owner_label()
         } else {
             mbv_emby::device_name()
         }
+    }
+
+    /// The connected peer Player owner's name, as the Queue chooser's peer
+    /// entry paints it (gui-named-queues design D8): the route name, the
+    /// session device name, or the connected endpoint's host, with this
+    /// machine's device name only as the last fallback. The resolution mirrors
+    /// `remote_label`, and it does not depend on the shown entry, so the
+    /// chooser names the peer while a local queue is shown.
+    pub(in crate::app) fn peer_owner_label(&self) -> String {
+        self.active_route
+            .as_ref()
+            .map(|name| format!("route:{name}"))
+            .or_else(|| self.direct_remote_label.clone())
+            .or_else(|| self.connected_player_endpoint_label())
+            .unwrap_or_else(mbv_emby::device_name)
     }
 
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {

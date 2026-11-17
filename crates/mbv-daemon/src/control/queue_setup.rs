@@ -2,14 +2,16 @@ use super::{
     CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, EmbyItem, ExecSlot,
     PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
-    broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
-    submit_queue_slots_for_replace, twitch_queue_transport_rejection,
+    broadcast_queue_state, daemon_admits, mint_queue_lineage, named_queue, reject_command,
+    reset_slot_jumps, submit_queue_slots_for_replace, twitch_queue_transport_rejection,
 };
 use crate::AudiobookshelfOwnerContext;
 use crate::ctrl::CtrlClientId;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
+use mbv_queue::NamedQueueId;
 use std::collections::HashSet;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -37,6 +39,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                start_slot: ctx.shared_queue.start_slot(),
                 op: &ctx.op,
             },
             "daemon already has a queue; adoption skipped",
@@ -59,6 +62,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                start_slot: ctx.shared_queue.start_slot(),
                 op: &ctx.op,
             },
             &reason,
@@ -200,7 +204,17 @@ pub(super) fn handle_queue_source_update(
     lineage: mbv_queue::QueueLineage,
     new_source: mbv_queue::QueueSource,
     cmd_lineage: mbv_queue::QueueLineage,
+    named: Option<NamedQueueId>,
 ) {
+    // A resting queue keeps its own source and has no lineage to check against
+    // the current queue's (gui-named-queues design D1, D5).
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::set_source(ctx, index, new_source);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let supports_operation = ctx
         .ctrl_clients
@@ -222,6 +236,7 @@ pub(super) fn handle_queue_source_update(
                 queue: &ctx.owner.core.queue,
                 source: &ctx.owner.core.source,
                 lineage,
+                start_slot: ctx.shared_queue.start_slot(),
                 op: &ctx.op,
             },
             "queue source update rejected: owner queue lineage changed",
@@ -253,8 +268,10 @@ pub(super) fn handle_queue_source_update(
 /// Installs the replacement queue on the owner core (design D2): the queue
 /// is rebuilt from the admitted slots with the start slot active, the new
 /// source is recorded, the shared lineage is minted, and any in-flight slot
-/// jump is reset.
-fn install_replaced_queue(
+/// jump is reset. A swap installs a Named queue's own slots through it
+/// (`gui-named-queues` design D2), so the resting queue's slot identities
+/// survive becoming current.
+pub(super) fn install_replaced_queue(
     ctx: &mut CtrlContext<'_>,
     slots: Vec<(QueueSlotId, QueueItem)>,
     next_cursor: usize,
@@ -344,7 +361,14 @@ pub(super) fn handle_queue_replace(
     start_idx: Option<usize>,
     start_position_secs: Option<f64>,
     new_source: mbv_queue::QueueSource,
+    named: Option<NamedQueueId>,
 ) {
+    // A replace that names a resting queue swaps that queue in and installs the
+    // command's slots in place of its own (gui-named-queues design D2), so the
+    // replace never lands on a queue the Client did not name.
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
     let has_emby = ctx.has_emby();
     let (slots, next_cursor) =
         match prepare_replacement_slots(ctx, items, slots, start_idx, has_emby) {
@@ -355,7 +379,38 @@ pub(super) fn handle_queue_replace(
             }
         };
     let except_op_client = ctx.except_op_client();
+    // Nothing changes before every admission above passed, so a rejected replace
+    // leaves the current queue on its playhead.
+    if let Some(index) = resting {
+        named_queue::replace_with_resting(ctx, index);
+    }
     install_replaced_queue(ctx, slots, next_cursor, new_source);
+    if resting.is_some() {
+        named_queue::finish_swap(ctx);
+    } else {
+        // A replace of the current queue starts where it put the playhead
+        // (invariant 36): the installed queue's active slot becomes its start
+        // slot. Without it the start slot kept naming a pre-replace slot, and a
+        // replacement that keeps the incoming slot identities left a Play with
+        // no items starting the wrong one inside the settle window.
+        let start_slot = ctx.owner.core.queue.active_slot_id();
+        ctx.shared_queue.note_start_slot(
+            &ctx.owner.core.queue,
+            mbv_queue::StartSlotObservation::Installed { start_slot },
+        );
+    }
+    start_replaced_queue(ctx, except_op_client, next_cursor, start_position_secs);
+}
+
+/// Starts the queue [`install_replaced_queue`] just installed on the output that
+/// plays it (design D2): the Cast receiver and the Emby Session load only the
+/// start slot, and the local run takes the whole queue from it.
+pub(super) fn start_replaced_queue(
+    ctx: &mut CtrlContext<'_>,
+    except_op_client: Option<CtrlClientId>,
+    next_cursor: usize,
+    start_position_secs: Option<f64>,
+) {
     // A new queue invalidates the previous playback observation (design
     // D2): clear it on both the shared snapshot and the owner core so
     // Next/Previous fall back to the new queue's active slot until the
@@ -592,7 +647,20 @@ pub(super) fn handle_queue_append(
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
     before: Option<u64>,
+    named: Option<NamedQueueId>,
 ) {
+    // An append to a resting queue is admitted on the same terms as one to the
+    // current queue and lands in the store, with no output projection
+    // (gui-named-queues design D5).
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        if let Some(items) = admit_append_items(ctx, items, lineage) {
+            named_queue::append(ctx, index, items, before);
+        }
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     if items.is_empty() {
         return;

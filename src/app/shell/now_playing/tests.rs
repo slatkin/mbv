@@ -122,6 +122,8 @@ fn pending_book_app() -> App {
     );
     app.audiobookshelf_book_browse.push(state);
     let snapshot = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: Some(100),
         slots: vec![

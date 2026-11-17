@@ -9,8 +9,9 @@ use strum::IntoEnumIterator;
 
 use super::builders::{
     CAST_HOST, CAST_NAME, CAST_PORT, CAST_RECEIVER_ID, EMBY_DEVICE_ID, EMBY_DEVICE_NAME,
-    EMBY_ITEM_ID, GENERATION, REQUEST_ID, REVISION, START_POSITION_SECS, emby_queue_item,
-    feed_queue_item, progress_update, queue_source, unified_queue_replace_slots,
+    EMBY_ITEM_ID, GENERATION, NAMED_QUEUE_NAME, REQUEST_ID, REVISION, START_POSITION_SECS,
+    emby_queue_item, feed_queue_item, named_queue_id, progress_update, queue_source,
+    resting_queue_id, unified_queue_replace_slots,
 };
 use super::*;
 
@@ -21,7 +22,9 @@ use super::*;
 /// its arm, builder, fixture row, and fixture exist. `ServiceKind` and
 /// `OwnerAction` are production enums the iterator cannot construct, so
 /// their shapes are flattened to one variant per case: a new production
-/// variant still fails the exhaustive `shape_of` match.
+/// variant still fails the exhaustive `shape_of` match. The unified queue and
+/// Named queue commands are grouped into their own shape enums so no builder
+/// outgrows the `too_many_lines` threshold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
 enum CommandShape {
     Hello,
@@ -34,19 +37,8 @@ enum CommandShape {
     SwapPrepared,
     RunOwnerActionSwapPanel,
     RunOwnerActionOpenTerminal,
-    UnifiedQueueReplace,
-    UnifiedQueueReplaceWithStartPosition,
-    UnifiedQueueSourceUpdate,
-    UnifiedQueueAppend,
-    UnifiedQueueRemoveSlot,
-    UnifiedQueueRemoveSlots,
-    UnifiedQueueMoveSlot,
-    UnifiedQueueShuffle,
-    UnifiedQueuePlaySlot,
-    UnifiedQueueClear,
-    UnifiedQueueClearOp,
-    UnifiedQueueRefresh,
-    UnifiedQueueApplyProgress,
+    UnifiedQueue(UnifiedShape),
+    NamedQueue(NamedQueueShape),
     UnifiedAdoptQueue,
     SelectPlaybackOutput(OutputChoice),
 }
@@ -66,6 +58,12 @@ impl CommandShape {
                 CommandShape::PlaybackIntent(_) => {
                     shapes.extend(IntentAction::iter().map(CommandShape::PlaybackIntent));
                 }
+                CommandShape::UnifiedQueue(_) => {
+                    shapes.extend(UnifiedShape::iter().map(CommandShape::UnifiedQueue));
+                }
+                CommandShape::NamedQueue(_) => {
+                    shapes.extend(NamedQueueShape::iter().map(CommandShape::NamedQueue));
+                }
                 CommandShape::SelectPlaybackOutput(_) => {
                     shapes.extend(OutputChoice::iter().map(CommandShape::SelectPlaybackOutput));
                 }
@@ -77,19 +75,6 @@ impl CommandShape {
                 | CommandShape::SwapPrepared
                 | CommandShape::RunOwnerActionSwapPanel
                 | CommandShape::RunOwnerActionOpenTerminal
-                | CommandShape::UnifiedQueueReplace
-                | CommandShape::UnifiedQueueReplaceWithStartPosition
-                | CommandShape::UnifiedQueueSourceUpdate
-                | CommandShape::UnifiedQueueAppend
-                | CommandShape::UnifiedQueueRemoveSlot
-                | CommandShape::UnifiedQueueRemoveSlots
-                | CommandShape::UnifiedQueueMoveSlot
-                | CommandShape::UnifiedQueueShuffle
-                | CommandShape::UnifiedQueuePlaySlot
-                | CommandShape::UnifiedQueueClear
-                | CommandShape::UnifiedQueueClearOp
-                | CommandShape::UnifiedQueueRefresh
-                | CommandShape::UnifiedQueueApplyProgress
                 | CommandShape::UnifiedAdoptQueue => shapes.push(shape),
             }
         }
@@ -114,21 +99,8 @@ impl CommandShape {
             CommandShape::SwapPrepared => "SwapPrepared".into(),
             CommandShape::RunOwnerActionSwapPanel => "RunOwnerAction.SwapPanel".into(),
             CommandShape::RunOwnerActionOpenTerminal => "RunOwnerAction.OpenTerminal".into(),
-            CommandShape::UnifiedQueueReplace => "UnifiedQueueReplace".into(),
-            CommandShape::UnifiedQueueReplaceWithStartPosition => {
-                "UnifiedQueueReplace.WithStartPosition".into()
-            }
-            CommandShape::UnifiedQueueSourceUpdate => "UnifiedQueueSourceUpdate".into(),
-            CommandShape::UnifiedQueueAppend => "UnifiedQueueAppend".into(),
-            CommandShape::UnifiedQueueRemoveSlot => "UnifiedQueueRemoveSlot".into(),
-            CommandShape::UnifiedQueueRemoveSlots => "UnifiedQueueRemoveSlots".into(),
-            CommandShape::UnifiedQueueMoveSlot => "UnifiedQueueMoveSlot".into(),
-            CommandShape::UnifiedQueueShuffle => "UnifiedQueueShuffle".into(),
-            CommandShape::UnifiedQueuePlaySlot => "UnifiedQueuePlaySlot".into(),
-            CommandShape::UnifiedQueueClear => "UnifiedQueueClear".into(),
-            CommandShape::UnifiedQueueClearOp => "UnifiedQueueClearOp".into(),
-            CommandShape::UnifiedQueueRefresh => "UnifiedQueueRefresh".into(),
-            CommandShape::UnifiedQueueApplyProgress => "UnifiedQueueApplyProgress".into(),
+            CommandShape::UnifiedQueue(shape) => shape.name().into(),
+            CommandShape::NamedQueue(shape) => shape.name().into(),
             CommandShape::UnifiedAdoptQueue => "UnifiedAdoptQueue".into(),
             CommandShape::SelectPlaybackOutput(choice) => {
                 format!("SelectPlaybackOutput.{}", choice.name())
@@ -163,69 +135,8 @@ impl CommandShape {
             CommandShape::RunOwnerActionOpenTerminal => {
                 CtrlCmd::RunOwnerAction(OwnerAction::OpenTerminal)
             }
-            CommandShape::UnifiedQueueReplace => {
-                let slots = unified_queue_replace_slots();
-                // The legacy `items` payload mirrors the slots, as
-                // `CtrlCmd::unified_queue_replace` derives it.
-                let items = slots.iter().map(|slot| slot.item.clone()).collect();
-                CtrlCmd::UnifiedQueueReplace {
-                    items,
-                    slots,
-                    start_idx: Some(0),
-                    source: queue_source(),
-                    start_position_secs: None,
-                    op: Some(QueueOpId(41)),
-                }
-            }
-            CommandShape::UnifiedQueueReplaceWithStartPosition => {
-                let slots = unified_queue_replace_slots();
-                let items = slots.iter().map(|slot| slot.item.clone()).collect();
-                CtrlCmd::UnifiedQueueReplace {
-                    items,
-                    slots,
-                    start_idx: Some(0),
-                    source: queue_source(),
-                    start_position_secs: Some(START_POSITION_SECS),
-                    op: Some(QueueOpId(41)),
-                }
-            }
-            CommandShape::UnifiedQueueSourceUpdate => CtrlCmd::UnifiedQueueSourceUpdate {
-                source: queue_source(),
-                lineage: QueueLineage(2),
-                op: Some(QueueOpId(42)),
-            },
-            CommandShape::UnifiedQueueAppend => CtrlCmd::UnifiedQueueAppend {
-                items: vec![feed_queue_item()],
-                before: Some(2),
-                op: Some(QueueOpId(43)),
-            },
-            CommandShape::UnifiedQueueRemoveSlot => CtrlCmd::UnifiedQueueRemoveSlot {
-                slot_id: 3,
-                op: Some(QueueOpId(44)),
-            },
-            CommandShape::UnifiedQueueRemoveSlots => CtrlCmd::UnifiedQueueRemoveSlots {
-                slot_ids: vec![3, 4],
-                op: Some(QueueOpId(45)),
-            },
-            CommandShape::UnifiedQueueMoveSlot => CtrlCmd::UnifiedQueueMoveSlot {
-                slot_id: 4,
-                to_index: 1,
-                op: Some(QueueOpId(46)),
-            },
-            CommandShape::UnifiedQueueShuffle => CtrlCmd::UnifiedQueueShuffle {
-                op: Some(QueueOpId(47)),
-            },
-            CommandShape::UnifiedQueuePlaySlot => CtrlCmd::UnifiedQueuePlaySlot {
-                slot_id: 2,
-                op: Some(QueueOpId(48)),
-            },
-            CommandShape::UnifiedQueueClear => CtrlCmd::UnifiedQueueClear,
-            CommandShape::UnifiedQueueClearOp => CtrlCmd::UnifiedQueueClearOp { op: QueueOpId(49) },
-            CommandShape::UnifiedQueueRefresh => CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(50) },
-            CommandShape::UnifiedQueueApplyProgress => CtrlCmd::UnifiedQueueApplyProgress {
-                op: QueueOpId(51),
-                updates: vec![progress_update()],
-            },
+            CommandShape::UnifiedQueue(shape) => shape.build(),
+            CommandShape::NamedQueue(shape) => shape.build(),
             CommandShape::UnifiedAdoptQueue => CtrlCmd::UnifiedAdoptQueue {
                 items: vec![emby_queue_item()],
                 cursor: 1,
@@ -234,6 +145,195 @@ impl CommandShape {
             CommandShape::SelectPlaybackOutput(choice) => {
                 CtrlCmd::SelectPlaybackOutput(choice.build())
             }
+        }
+    }
+}
+
+/// The `CtrlCmd::UnifiedQueue*` shapes: one fixture row per variant, plus the
+/// defaulted `queue` field's populated case for the edit commands (design D3
+/// of `gui-named-queues`). `Default` exists only so `CommandShape::iter()`
+/// can construct the payload variant; the expansion discards it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
+enum UnifiedShape {
+    #[default]
+    Replace,
+    ReplaceWithStartPosition,
+    SourceUpdate,
+    Append,
+    /// The one representative row for the defaulted `queue` field every edit
+    /// command carries. The field and its type are shared across the nine
+    /// edit commands, so a copy per command would pin the same encode nine
+    /// times; each base row already pins the field's `null` case.
+    AppendToNamedQueue,
+    RemoveSlot,
+    RemoveSlots,
+    MoveSlot,
+    Shuffle,
+    PlaySlot,
+    Clear,
+    ClearOp,
+    Refresh,
+    ApplyProgress,
+}
+
+impl UnifiedShape {
+    /// The fixture stem. Exhaustive: a new shape fails this build until its
+    /// arm and fixture row exist.
+    fn name(self) -> &'static str {
+        match self {
+            UnifiedShape::Replace => "UnifiedQueueReplace",
+            UnifiedShape::ReplaceWithStartPosition => "UnifiedQueueReplace.WithStartPosition",
+            UnifiedShape::SourceUpdate => "UnifiedQueueSourceUpdate",
+            UnifiedShape::Append => "UnifiedQueueAppend",
+            UnifiedShape::AppendToNamedQueue => "UnifiedQueueAppend.NamedQueue",
+            UnifiedShape::RemoveSlot => "UnifiedQueueRemoveSlot",
+            UnifiedShape::RemoveSlots => "UnifiedQueueRemoveSlots",
+            UnifiedShape::MoveSlot => "UnifiedQueueMoveSlot",
+            UnifiedShape::Shuffle => "UnifiedQueueShuffle",
+            UnifiedShape::PlaySlot => "UnifiedQueuePlaySlot",
+            UnifiedShape::Clear => "UnifiedQueueClear",
+            UnifiedShape::ClearOp => "UnifiedQueueClearOp",
+            UnifiedShape::Refresh => "UnifiedQueueRefresh",
+            UnifiedShape::ApplyProgress => "UnifiedQueueApplyProgress",
+        }
+    }
+
+    /// The canonical `CtrlCmd` for one shape.
+    fn build(self) -> CtrlCmd {
+        match self {
+            UnifiedShape::Replace => unified_queue_replace(None),
+            UnifiedShape::ReplaceWithStartPosition => {
+                unified_queue_replace(Some(START_POSITION_SECS))
+            }
+            UnifiedShape::SourceUpdate => CtrlCmd::UnifiedQueueSourceUpdate {
+                source: queue_source(),
+                lineage: QueueLineage(2),
+                op: Some(QueueOpId(42)),
+                queue: None,
+            },
+            UnifiedShape::Append => unified_queue_append(None),
+            UnifiedShape::AppendToNamedQueue => unified_queue_append(Some(resting_queue_id())),
+            UnifiedShape::RemoveSlot => CtrlCmd::UnifiedQueueRemoveSlot {
+                slot_id: 3,
+                op: Some(QueueOpId(44)),
+                queue: None,
+            },
+            UnifiedShape::RemoveSlots => CtrlCmd::UnifiedQueueRemoveSlots {
+                slot_ids: vec![3, 4],
+                op: Some(QueueOpId(45)),
+                queue: None,
+            },
+            UnifiedShape::MoveSlot => CtrlCmd::UnifiedQueueMoveSlot {
+                slot_id: 4,
+                to_index: 1,
+                op: Some(QueueOpId(46)),
+                queue: None,
+            },
+            UnifiedShape::Shuffle => CtrlCmd::UnifiedQueueShuffle {
+                op: Some(QueueOpId(47)),
+                queue: None,
+            },
+            UnifiedShape::PlaySlot => CtrlCmd::UnifiedQueuePlaySlot {
+                slot_id: 2,
+                op: Some(QueueOpId(48)),
+                queue: None,
+            },
+            UnifiedShape::Clear => CtrlCmd::UnifiedQueueClear,
+            UnifiedShape::ClearOp => CtrlCmd::UnifiedQueueClearOp {
+                op: QueueOpId(49),
+                queue: None,
+            },
+            UnifiedShape::Refresh => CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(50) },
+            UnifiedShape::ApplyProgress => CtrlCmd::UnifiedQueueApplyProgress {
+                op: QueueOpId(51),
+                updates: vec![progress_update()],
+            },
+        }
+    }
+}
+
+/// The `start_position_secs` case of the replace command: `None` for the
+/// plain shape, the fixed position for the `WithStartPosition` row.
+fn unified_queue_replace(start_position_secs: Option<f64>) -> CtrlCmd {
+    let slots = unified_queue_replace_slots();
+    // The legacy `items` payload mirrors the slots, as
+    // `CtrlCmd::unified_queue_replace` derives it.
+    let items = slots.iter().map(|slot| slot.item.clone()).collect();
+    CtrlCmd::UnifiedQueueReplace {
+        items,
+        slots,
+        start_idx: Some(0),
+        source: queue_source(),
+        start_position_secs,
+        op: Some(QueueOpId(41)),
+        queue: None,
+    }
+}
+
+/// The append command, with or without the Named queue it names.
+fn unified_queue_append(queue: Option<mbv_queue::NamedQueueId>) -> CtrlCmd {
+    CtrlCmd::UnifiedQueueAppend {
+        items: vec![feed_queue_item()],
+        before: Some(2),
+        op: Some(QueueOpId(43)),
+        queue,
+    }
+}
+
+/// The `CtrlCmd::NamedQueue*` shapes (design D3 of `gui-named-queues`), with
+/// the no-slot and slot cases of `NamedQueuePlay`. `Default` exists only so
+/// `CommandShape::iter()` can construct the payload variant.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
+enum NamedQueueShape {
+    #[default]
+    Create,
+    Rename,
+    Close,
+    Play,
+    PlaySlot,
+    Show,
+}
+
+impl NamedQueueShape {
+    /// The fixture stem. Exhaustive: a new shape fails this build until its
+    /// arm and fixture row exist.
+    fn name(self) -> &'static str {
+        match self {
+            NamedQueueShape::Create => "NamedQueueCreate",
+            NamedQueueShape::Rename => "NamedQueueRename",
+            NamedQueueShape::Close => "NamedQueueClose",
+            NamedQueueShape::Play => "NamedQueuePlay",
+            NamedQueueShape::PlaySlot => "NamedQueuePlay.Slot",
+            NamedQueueShape::Show => "NamedQueueShow",
+        }
+    }
+
+    /// The canonical `CtrlCmd` for one shape.
+    fn build(self) -> CtrlCmd {
+        match self {
+            NamedQueueShape::Create => CtrlCmd::NamedQueueCreate { op: QueueOpId(52) },
+            NamedQueueShape::Rename => CtrlCmd::NamedQueueRename {
+                queue: named_queue_id(),
+                name: NAMED_QUEUE_NAME.to_owned(),
+                op: QueueOpId(53),
+            },
+            NamedQueueShape::Close => CtrlCmd::NamedQueueClose {
+                queue: named_queue_id(),
+                op: QueueOpId(54),
+            },
+            NamedQueueShape::Play => CtrlCmd::NamedQueuePlay {
+                queue: named_queue_id(),
+                slot: None,
+                op: QueueOpId(55),
+            },
+            NamedQueueShape::PlaySlot => CtrlCmd::NamedQueuePlay {
+                queue: named_queue_id(),
+                slot: Some(6),
+                op: QueueOpId(56),
+            },
+            NamedQueueShape::Show => CtrlCmd::NamedQueueShow {
+                queue: named_queue_id(),
+            },
         }
     }
 }
@@ -262,23 +362,44 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
         CtrlCmd::UnifiedQueueReplace {
             start_position_secs: Some(_),
             ..
-        } => CommandShape::UnifiedQueueReplaceWithStartPosition,
-        CtrlCmd::UnifiedQueueReplace { .. } => CommandShape::UnifiedQueueReplace,
-        CtrlCmd::UnifiedQueueSourceUpdate { .. } => CommandShape::UnifiedQueueSourceUpdate,
-        CtrlCmd::UnifiedQueueAppend { .. } => CommandShape::UnifiedQueueAppend,
-        CtrlCmd::UnifiedQueueRemoveSlot { .. } => CommandShape::UnifiedQueueRemoveSlot,
-        CtrlCmd::UnifiedQueueRemoveSlots { .. } => CommandShape::UnifiedQueueRemoveSlots,
-        CtrlCmd::UnifiedQueueMoveSlot { .. } => CommandShape::UnifiedQueueMoveSlot,
-        CtrlCmd::UnifiedQueueShuffle { .. } => CommandShape::UnifiedQueueShuffle,
-        CtrlCmd::UnifiedQueuePlaySlot { .. } => CommandShape::UnifiedQueuePlaySlot,
-        CtrlCmd::UnifiedQueueClear => CommandShape::UnifiedQueueClear,
-        CtrlCmd::UnifiedQueueClearOp { .. } => CommandShape::UnifiedQueueClearOp,
-        CtrlCmd::UnifiedQueueRefresh { .. } => CommandShape::UnifiedQueueRefresh,
-        CtrlCmd::UnifiedQueueApplyProgress { .. } => CommandShape::UnifiedQueueApplyProgress,
+        } => CommandShape::UnifiedQueue(UnifiedShape::ReplaceWithStartPosition),
+        CtrlCmd::UnifiedQueueReplace { .. } => CommandShape::UnifiedQueue(UnifiedShape::Replace),
+        CtrlCmd::UnifiedQueueSourceUpdate { .. } => {
+            CommandShape::UnifiedQueue(UnifiedShape::SourceUpdate)
+        }
+        CtrlCmd::UnifiedQueueAppend { queue: Some(_), .. } => {
+            CommandShape::UnifiedQueue(UnifiedShape::AppendToNamedQueue)
+        }
+        CtrlCmd::UnifiedQueueAppend { .. } => CommandShape::UnifiedQueue(UnifiedShape::Append),
+        CtrlCmd::UnifiedQueueRemoveSlot { .. } => {
+            CommandShape::UnifiedQueue(UnifiedShape::RemoveSlot)
+        }
+        CtrlCmd::UnifiedQueueRemoveSlots { .. } => {
+            CommandShape::UnifiedQueue(UnifiedShape::RemoveSlots)
+        }
+        CtrlCmd::UnifiedQueueMoveSlot { .. } => CommandShape::UnifiedQueue(UnifiedShape::MoveSlot),
+        CtrlCmd::UnifiedQueueShuffle { .. } => CommandShape::UnifiedQueue(UnifiedShape::Shuffle),
+        CtrlCmd::UnifiedQueuePlaySlot { .. } => CommandShape::UnifiedQueue(UnifiedShape::PlaySlot),
+        CtrlCmd::UnifiedQueueClear => CommandShape::UnifiedQueue(UnifiedShape::Clear),
+        CtrlCmd::UnifiedQueueClearOp { .. } => CommandShape::UnifiedQueue(UnifiedShape::ClearOp),
+        CtrlCmd::UnifiedQueueRefresh { .. } => CommandShape::UnifiedQueue(UnifiedShape::Refresh),
+        CtrlCmd::UnifiedQueueApplyProgress { .. } => {
+            CommandShape::UnifiedQueue(UnifiedShape::ApplyProgress)
+        }
         CtrlCmd::UnifiedAdoptQueue { .. } => CommandShape::UnifiedAdoptQueue,
         CtrlCmd::SelectPlaybackOutput(selection) => {
             CommandShape::SelectPlaybackOutput(output_of(selection))
         }
+        CtrlCmd::NamedQueueCreate { .. } => CommandShape::NamedQueue(NamedQueueShape::Create),
+        CtrlCmd::NamedQueueRename { .. } => CommandShape::NamedQueue(NamedQueueShape::Rename),
+        CtrlCmd::NamedQueueClose { .. } => CommandShape::NamedQueue(NamedQueueShape::Close),
+        CtrlCmd::NamedQueuePlay { slot: Some(_), .. } => {
+            CommandShape::NamedQueue(NamedQueueShape::PlaySlot)
+        }
+        CtrlCmd::NamedQueuePlay { slot: None, .. } => {
+            CommandShape::NamedQueue(NamedQueueShape::Play)
+        }
+        CtrlCmd::NamedQueueShow { .. } => CommandShape::NamedQueue(NamedQueueShape::Show),
     }
 }
 

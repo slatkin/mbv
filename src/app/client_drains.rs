@@ -167,11 +167,36 @@ impl App {
             return HomeEventDrain::Client(lifecycle);
         }
         match event {
-            PlayerEvent::UnifiedQueueUpdated(snapshot)
-            | PlayerEvent::QueueOpResult {
+            PlayerEvent::UnifiedQueueUpdated(snapshot) => self.adopt_home_snapshot(&snapshot),
+            PlayerEvent::QueueOpResult {
+                op,
                 outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
-                ..
-            } => self.adopt_home_snapshot(&snapshot),
+            } => {
+                // The new-queue control's own answer is not a queue snapshot
+                // (design D8): it ends that request and opens the queue it
+                // names.
+                if !self.take_new_queue_answer(op, Some(&snapshot)) {
+                    self.adopt_home_snapshot(&snapshot);
+                }
+            }
+            // The one home-link playback event the pending-delete path needs: a
+            // confirmed removal of the now-playing row stops the shown (local)
+            // owner and removes the slot from the `Stopped` that answers that
+            // stop. Every other playback event of the suspended link belongs to
+            // the local run's presentation, which the active link owns.
+            PlayerEvent::Stopped {
+                slot_id, consume, ..
+            } => self.finish_home_stop(slot_id, consume),
+            // A rejected answer ends the Named-queue command it answers and
+            // tells the user why (design D8); an edit's own rejection already
+            // flashed from the pump that waited for it, so an op that ends no
+            // Named-queue command stays silent.
+            PlayerEvent::QueueOpResult {
+                op,
+                outcome: mbv_ctrl::QueueOpOutcome::Rejected(reason),
+            } => {
+                self.report_named_queue_rejection(op, reason);
+            }
             PlayerEvent::RemoteDisconnected(_) => {
                 self.suspended_local = None;
                 self.drop_staged_queue_transfer_on_teardown();
@@ -183,6 +208,10 @@ impl App {
             PlayerEvent::PlaybackOutput(_) => {
                 tracing::debug!(name: "home_link.playback_output.ignored", target: "shell", "ignoring playback-output event from the suspended home link");
             }
+            // The suspended home link is the local Owner's link too, so the
+            // Named-queue traffic a GUI Client negotiated arrives here while a
+            // peer holds the active link (gui-named-queues design D7).
+            PlayerEvent::NamedQueue(event) => self.adopt_named_queue_event(event),
             _ => {}
         }
         HomeEventDrain::Consumed

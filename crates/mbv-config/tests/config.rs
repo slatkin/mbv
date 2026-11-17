@@ -13,6 +13,7 @@ mod config {
     mod keybinds;
     mod launch_state;
     mod library;
+    mod named_queues;
     mod paths_env;
     mod script_source;
     mod settings;

@@ -1,6 +1,8 @@
 //! Playback request type. Split from `msg.rs` (task 8.3) to keep the central
 //! `Msg` file below the 800-line cap.
 
+use mbv_queue::NamedQueueId;
+
 /// Playback effect requests emitted by Interactive Components. The shell
 /// resolves them through the existing `App::dispatch` path; the component
 /// owns the cursor and the user intent.
@@ -44,13 +46,28 @@ pub enum PlaybackRequest {
     /// The canvas header's queue-fold control: the `q` toggle's pointer
     /// dispatch. GUI-painted only, as `TogglePanelCollapse` is.
     ToggleQueueFold,
-    /// The canvas queue header's Length / Ends-at switch (add-tauri-gui-
-    /// client row 6.5): the `t` chord's toggle, pressed on the header
-    /// control. GUI-painted only, as `ToggleQueueFold` is.
-    ToggleQueueRightColumn,
     /// The canvas queue header's filter control (row 6.5): the `/` chord's
     /// text-entry focus, pressed on the header control. GUI-painted only.
     ActivateQueueFilter,
+    /// The canvas queue header's chooser control (design D8 of
+    /// `gui-named-queues`): the `t` chord's open and close, pressed on the
+    /// header control. GUI-painted only.
+    QueueChooserToggle,
+    /// The canvas queue header's new-queue control (design D8 of
+    /// `gui-named-queues`): the `Ctrl+T` chord's request, pressed on the header
+    /// control. GUI-painted only.
+    NewQueue,
+    /// The canvas queue header's close control (design D8 of `gui-named-queues`):
+    /// the `Ctrl+W` chord's request, pressed on the header control.
+    /// GUI-painted only.
+    CloseQueue,
+    /// One entry of the open Queue chooser (task 8.3 of `gui-named-queues`): the
+    /// entry's painted identity — a local Named queue, or `None` for the
+    /// connected peer Player owner — so the press shows what the window painted
+    /// and a queue that closed in between is not replaced by its neighbour. It
+    /// runs the same show the chooser's Enter applies: the entry is shown, and
+    /// no playback starts, stops, or moves.
+    QueueChooserEntry(Option<NamedQueueId>),
 }
 
 /// Which track chip a popover belongs to (add-tauri-gui-client row 6.2).

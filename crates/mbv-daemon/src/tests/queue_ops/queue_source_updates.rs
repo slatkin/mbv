@@ -15,6 +15,7 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
 
     run_queue_cmd_with_shared(
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![],
             slots: vec![
                 mbv_ctrl::UnifiedQueueSlot {
@@ -83,6 +84,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
 
     run_queue_cmd_with_shared(
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![],
             slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 77,
@@ -204,6 +206,7 @@ fn packaged_role_rejects_a_source_update_without_applying_it() {
     fx.dispatch_with_role(
         fx.client_id,
         CtrlCmd::UnifiedQueueSourceUpdate {
+            queue: None,
             source: QueueSource::Album,
             lineage: mbv_queue::QueueLineage(1),
             op: None,
@@ -231,6 +234,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     fx.dispatch(
         fx.client_id,
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![],
             slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 81,
@@ -272,6 +276,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     fx.dispatch(
         fx.client_id,
         CtrlCmd::UnifiedQueueSourceUpdate {
+            queue: None,
             source: QueueSource::Playlist {
                 id: Some("playlist-1".to_string()),
                 name: "Saved playlist".to_string(),
@@ -335,6 +340,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         fx.dispatch(
             client_id,
             CtrlCmd::UnifiedQueueReplace {
+                queue: None,
                 items: vec![],
                 slots: vec![mbv_ctrl::UnifiedQueueSlot {
                     slot_id,
@@ -376,6 +382,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     fx.dispatch(
         client_a,
         CtrlCmd::UnifiedQueueSourceUpdate {
+            queue: None,
             source: QueueSource::Playlist {
                 id: Some("stale".to_string()),
                 name: "Stale save".to_string(),

@@ -2,7 +2,7 @@
 //! bridge's frame carries for the canvas panel's toggles and the open
 //! overlay, plus the `App` method that builds the overlay's projection.
 
-use mbv_queue::QueueSlotId;
+use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_msg::TrackChipKind;
 
@@ -11,6 +11,28 @@ use super::overlay::GuiOverlay;
 use super::popover::track_popover_choices;
 use crate::app::App;
 use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackProjection};
+use crate::app::state::playback::ShownEntry;
+
+/// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
+/// "The queue header holds the chooser and its controls"): the number of
+/// entries the Queue chooser lists, the name the chooser button shows, and
+/// whether the close control is disabled. The header shows the chooser only
+/// with two or more entries, and the close control acts on the only local
+/// queue only through a disabled control, so both facts come from the same
+/// entry list the dropdown paints.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct QueueHeaderProjection {
+    /// Every entry the Queue chooser lists: the local Owner's Named queues in
+    /// queue order, then the connected peer Player owner when one is.
+    pub entries: usize,
+    /// The name of the shown entry: the chooser button's label. Empty while
+    /// the Owner's first queue list has not arrived, when no entry shows.
+    pub shown_name: String,
+    /// Whether the close control is disabled: the only local queue has no
+    /// close, and no entry has arrived to close yet. A shown peer entry is
+    /// always closable, because closing it disconnects.
+    pub close_disabled: bool,
+}
 
 /// The canvas panel's collapse and queue-fold facts (design D10): the front
 /// end picks the panel layout from its container size plus these two
@@ -76,6 +98,14 @@ pub enum GuiOverlayProjection {
         cursor: usize,
         choices: Vec<PlaybackTargetChoice>,
     },
+    /// The Queue chooser (gui-named-queues design D8): the cursor, the local
+    /// queues in queue order followed by the connected peer, and the rename
+    /// draft while one is open.
+    QueueChooser {
+        cursor: usize,
+        entries: Vec<QueueChooserEntryProjection>,
+        renaming: Option<QueueChooserRenameProjection>,
+    },
     /// The shared confirmation modal the App raised (`ask_confirm`): the
     /// message and the button row, as the frame carries them. The action
     /// stays in the core's held state (`GuiOverlay::Confirm`).
@@ -101,6 +131,38 @@ pub enum GuiOverlayProjection {
     },
 }
 
+/// One entry of the open Queue chooser (spec `gui-queue-chooser` "The chooser
+/// lists local queues and connected peers"): the label the dropdown paints,
+/// the local queue it shows (`None` for the connected peer), and the facts
+/// the dropdown marks it with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueChooserEntryProjection {
+    pub label: String,
+    /// The local Named queue the entry shows, or `None` for the connected
+    /// peer Player owner: a peer entry is marked as a peer and cannot be
+    /// renamed.
+    pub queue: Option<NamedQueueId>,
+    /// Whether this entry is the one the Queue panel shows.
+    pub shown: bool,
+    /// Whether this entry is the queue that holds the playhead.
+    pub current: bool,
+    /// Whether this entry is the current queue while the local Owner plays
+    /// it: playback is active and not paused. A stopped or paused current
+    /// queue still holds the playhead but is not marked as playing.
+    pub playing: bool,
+}
+
+/// The rename draft an open Queue chooser holds, as the frame carries it: the
+/// queue being renamed and the text the inline entry paints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueChooserRenameProjection {
+    pub queue: NamedQueueId,
+    pub text: String,
+    /// Whether the whole text is selected, so the entry paints it highlighted
+    /// and the next character replaces it.
+    pub selected: bool,
+}
+
 /// One button of the projected confirmation modal: the label, the key
 /// hint inside the pill (`"Enter"`, `"Esc"`), and the tone the canvas
 /// paints it in (the shared modal's own tones).
@@ -120,6 +182,42 @@ pub enum GuiConfirmButtonTone {
 }
 
 impl App {
+    /// The Queue header's chooser facts (spec `gui-queue-chooser` "The queue
+    /// header holds the chooser and its controls"): the chooser's entry count,
+    /// the shown entry's name, and whether the close control is disabled.
+    /// Read-only, and read from the same live entry list the chooser's keys
+    /// and presses resolve against, so the header and the dropdown cannot
+    /// disagree inside one tick.
+    #[must_use]
+    pub fn gui_queue_header_projection(&self) -> QueueHeaderProjection {
+        let entries = self.queue_chooser_entries();
+        QueueHeaderProjection {
+            shown_name: entries
+                .iter()
+                .find(|entry| entry.shown)
+                .map(|entry| entry.label.clone())
+                .unwrap_or_default(),
+            close_disabled: self.gui_close_disabled(),
+            entries: entries.len(),
+        }
+    }
+
+    /// Whether the close control is disabled for the entry the panel shows
+    /// (spec `gui-queue-chooser` "The close control closes the shown entry"):
+    /// a shown local queue closes only while the local Owner holds another one
+    /// beside it, a shown peer entry always disconnects, and with no entry
+    /// shown the control has nothing to close. The local count is the Owner's
+    /// own list, never the chooser's, which carries the peer entry too — so a
+    /// connected peer never disables the only local queue's close.
+    #[must_use]
+    fn gui_close_disabled(&self) -> bool {
+        match self.gui_shown_entry {
+            Some(ShownEntry::Peer) => false,
+            Some(ShownEntry::Local(_)) => self.named_queues.entries().len() < 2,
+            None => true,
+        }
+    }
+
     /// The open overlay as the frame carries it (design D4), built from the
     /// same playback projection read the frame carries, so the popover's
     /// choices and the track chips cannot disagree inside one frame.
@@ -170,6 +268,24 @@ impl App {
                 cursor: chooser.cursor,
                 choices: playback.target_choices.clone(),
             }),
+            // The Queue chooser's entries are the same live list its keys
+            // resolve against, so the rows it paints and the rows a press or
+            // a key addresses cannot disagree inside one frame.
+            Some(GuiOverlay::QueueChooser(chooser)) => {
+                let entries = self.queue_chooser_entries();
+                Some(GuiOverlayProjection::QueueChooser {
+                    cursor: chooser.cursor.min(entries.len().saturating_sub(1)),
+                    entries,
+                    renaming: chooser
+                        .renaming
+                        .as_ref()
+                        .map(|draft| QueueChooserRenameProjection {
+                            queue: draft.queue,
+                            text: draft.text.clone(),
+                            selected: draft.selected,
+                        }),
+                })
+            }
             // The confirm's message and button row are the modal's own text:
             // the frame carries them verbatim, and the action stays in the
             // core's held state so a press or key answers what the window

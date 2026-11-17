@@ -1,5 +1,6 @@
 use super::Model;
 use super::{PanelFocus, palette};
+use crate::app::dispatch::action::{AppCommand, PanelIntent};
 use mbv_components::PlaybackProjection;
 use mbv_ui_msg::PlaybackRequest;
 
@@ -36,7 +37,6 @@ impl crate::app::App {
     /// shell and the GUI Client both apply it here, so each transport control
     /// does one thing in both Clients.
     pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
-        use crate::app::dispatch::action::AppCommand;
         use crate::app::dispatch::action::PlaybackIntent;
         match request {
             PlaybackRequest::TogglePlayPause => {
@@ -99,12 +99,34 @@ impl crate::app::App {
             // exhaustiveness.
             PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
             PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
-            // The canvas queue header's switch and filter controls (row
-            // 6.5): the same effects the `t` and `/` chords dispatch, so the
-            // header control and the chord run one path.
-            PlaybackRequest::ToggleQueueRightColumn => self.toggle_queue_right_column(),
+            // The canvas queue header's filter control (row 6.5): the same
+            // effect the `/` chord dispatches, so the header control and the
+            // chord run one path.
             PlaybackRequest::ActivateQueueFilter => self.activate_queue_filter(),
+            // The canvas queue header's three queue controls (design D8 of
+            // `gui-named-queues`): each dispatches the same panel intent its
+            // GUI-only chord resolves to, so the control's press and the chord
+            // run one path. The TUI paints no such control; these arms are here
+            // for the shared dispatch's exhaustiveness.
+            PlaybackRequest::QueueChooserToggle => {
+                self.dispatch_panel(PanelIntent::ToggleQueueChooser);
+            }
+            PlaybackRequest::NewQueue => self.dispatch_panel(PanelIntent::RequestNewQueue),
+            PlaybackRequest::CloseQueue => self.dispatch_panel(PanelIntent::RequestCloseQueue),
+            // One Queue chooser entry's press (task 8.3 of `gui-named-queues`):
+            // the entry the window painted, shown through the same path the
+            // chooser's Enter runs. The TUI Client paints no Queue chooser, so
+            // no TUI leaf produces it.
+            PlaybackRequest::QueueChooserEntry(queue) => {
+                self.show_gui_queue_chooser_entry(*queue);
+            }
         }
+    }
+
+    /// Dispatch one panel intent from a GUI header control's press: the same
+    /// dispatch the intent's own chord takes.
+    fn dispatch_panel(&mut self, intent: PanelIntent) {
+        let _ = self.dispatch(&crate::app::dispatch::action::AppCommand::Panel(intent));
     }
 
     fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::AppCommand) {

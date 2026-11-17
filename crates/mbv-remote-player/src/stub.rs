@@ -51,6 +51,8 @@ impl RemotePlayer {
             .collect();
         let status = Self::stub_status(current_idx, slots.len());
         let unified_queue = mbv_ctrl::UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: status.clone(),
             active_slot: slots.get(current_idx).map(|slot| slot.slot_id),
             slots,

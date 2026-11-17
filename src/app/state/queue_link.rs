@@ -1,4 +1,6 @@
-use crate::app::{App, PendingQueueAction, QueueLink, QueueLinkResolution, QueueView, UndoEntry};
+use crate::app::{
+    App, PendingQueueAction, QueueLink, QueueLinkResolution, QueueTarget, QueueView, UndoEntry,
+};
 use mbv_queue::{QueueItem, QueueSlotId};
 
 impl App {
@@ -34,16 +36,45 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
-    /// The `PlayerProxy` whose link the shown queue's Player owner answers on:
-    /// the Local queue's link (the suspended home link while a peer
-    /// attachment is shown), else the peer attachment. The shown queue and
-    /// the player resolve to one link (ADR 0034), so the owner's liveness is
-    /// the same link's connection state.
-    pub(in crate::app) fn shown_queue_owner_player(&self) -> &mbv_player::PlayerProxy {
-        match self.playing_queue_link() {
+    /// The `PlayerProxy` that owns `link`'s queue and playback: the suspended
+    /// home link for `Local` while a peer attachment holds the active link,
+    /// else the active link's own proxy. Every status write and every owner
+    /// command names its link through this one accessor, so an answer that
+    /// arrives on one link never lands in the other link's mirror (design D7
+    /// of `gui-named-queues`).
+    pub(in crate::app) fn queue_owner_player(&self, link: QueueLink) -> &mbv_player::PlayerProxy {
+        match link {
             QueueLink::Local => self.local_queue_player(),
             QueueLink::Peer => &self.player,
         }
+    }
+
+    /// The link the active Player connection carries: the peer while a Direct
+    /// remote control connection exists, else the local Owner — whatever the
+    /// GUI Client shows. The active link's events arrive on this one, so a
+    /// drain that adopts one writes this link's state and view.
+    pub(in crate::app) fn active_queue_link(&self) -> QueueLink {
+        QueueLinkResolution::new(self.has_direct_remote_queue(), None).playback_target()
+    }
+
+    /// The `PlayerProxy` whose queue and playback the Queue panel shows and
+    /// controls: the Local queue's link (the suspended home link while a peer
+    /// attachment is shown), else the peer attachment. The shown queue and
+    /// the player panel resolve to one link (ADR 0034), so the owner's
+    /// liveness, its status, and the transport commands are all this link's.
+    pub(in crate::app) fn shown_queue_owner_player(&self) -> &mbv_player::PlayerProxy {
+        self.queue_owner_player(self.playing_queue_link())
+    }
+
+    /// The confirmed status the player panel shows: the shown entry's owner's
+    /// playback (design D7 of `gui-named-queues`, ADR 0041). Presentation and
+    /// transport gates read this, so the panel, its transport, its track
+    /// chips, and the queue edits all name one owner. The active Owner link's
+    /// own event handling keeps reading `self.player`, which is that link's
+    /// status whatever is shown.
+    #[must_use]
+    pub(in crate::app) fn shown_playback_status(&self) -> mbv_ctrl::player::PlayerStatus {
+        self.shown_queue_owner_player().status_snapshot()
     }
 
     pub(in crate::app) fn queue_for_link(&self, link: QueueLink) -> &QueueView {
@@ -81,7 +112,13 @@ impl App {
                 .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
                 .collect::<Vec<_>>();
             if !slot_ids.is_empty() {
-                self.queue_op(link, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+                // The slot identities come from `link`'s own view, so the edit
+                // names no Named queue: it clears the matches of the queue it
+                // read, which is the current queue on the local link.
+                self.queue_op(
+                    QueueTarget::current(link),
+                    mbv_remote_player::QueueOp::RemoveSlots { slot_ids },
+                );
             }
         }
     }
@@ -96,6 +133,35 @@ impl App {
         }
     }
 
+    /// The queue view `target` names (design D7): one path decides which view
+    /// an id maps to, for an edit of the shown queue, for an undone entry's
+    /// queue, and for the cursor an undo places alike. The peer link's queue
+    /// is the remote view; on the local link, a resting Named queue's own view
+    /// answers while the Client shows it, and the current queue's `local_view`
+    /// answers otherwise — the shown current queue's edits and the current
+    /// queue's edits alike. `None` for a resting queue the Client no longer
+    /// shows: it holds no Client-side view, so a position in it resolves
+    /// against nothing (the owner addresses it by identity instead).
+    pub(in crate::app) fn view_for(&mut self, target: QueueTarget) -> Option<&mut QueueView> {
+        match target.queue {
+            Some(queue) if self.named_queues.rests(queue) => {
+                let (shown, view) = self.shown_resting.as_mut()?;
+                (*shown == queue).then_some(view)
+            }
+            // The local link's current queue, and — `queue` being `None` —
+            // the peer link's whole queue: the link decides when no Named
+            // queue id does.
+            None => match target.link {
+                QueueLink::Peer => Some(self.queue_for_link_mut(QueueLink::Peer)),
+                QueueLink::Local => Some(&mut self.local_view),
+            },
+            // A Named queue that is current (or that the Owner no longer
+            // lists) is the current queue's view, whichever link is active:
+            // a peer edit never names one.
+            Some(_) => Some(&mut self.local_view),
+        }
+    }
+
     pub(in crate::app) fn undo_stack_for_link_mut(
         &mut self,
         link: QueueLink,
@@ -106,8 +172,17 @@ impl App {
         }
     }
 
+    /// How the shown queue and the playback target resolve to a link (ADR
+    /// 0034, amended by ADR 0041). Only a GUI Client's resolution reads a
+    /// shown entry: the TUI Client keeps the connection rule, whatever its
+    /// shown-entry field holds.
     fn queue_link_resolution(&self) -> QueueLinkResolution {
-        QueueLinkResolution::new(self.has_direct_remote_queue())
+        let gui_shown_entry = if self.gui_client {
+            self.gui_shown_entry
+        } else {
+            None
+        };
+        QueueLinkResolution::new(self.has_direct_remote_queue(), gui_shown_entry)
     }
 
     pub(in crate::app) fn local_queue_metadata_applies(&self, link: QueueLink) -> bool {
@@ -151,12 +226,35 @@ impl App {
         self.queue_link_resolution().playback_target()
     }
 
+    /// The queue the Client presents: the peer's queue on the peer link, and
+    /// on the local link the shown resting queue's own view when the GUI Client
+    /// shows one, else the current queue's `local_view` (design D7).
     pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
-        self.queue_for_link(self.playing_queue_link())
+        match self.playing_queue_link() {
+            QueueLink::Local => self.shown_local_queue(),
+            QueueLink::Peer => self.queue_for_link(QueueLink::Peer),
+        }
     }
 
+    /// The mutable displayed queue. Only presentation state (the cursor) is
+    /// written through here: a resting queue's slots change only in the
+    /// Owner's snapshots, which `adopt_named_queue_snapshot` adopts.
     pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
-        self.queue_for_link_mut(self.playing_queue_link())
+        match self.playing_queue_link() {
+            QueueLink::Local => match &mut self.shown_resting {
+                Some((queue, view)) if self.named_queues.rests(*queue) => view,
+                _ => &mut self.local_view,
+            },
+            QueueLink::Peer => self.queue_for_link_mut(QueueLink::Peer),
+        }
+    }
+
+    /// Position of `slot_id` in the Queue panel's shown queue: the slot
+    /// addressing every edit, move, and row activation resolves against, so a
+    /// row picked from a resting queue is never addressed in another queue
+    /// (design D7).
+    pub(in crate::app) fn displayed_slot_index(&self, slot_id: QueueSlotId) -> Option<usize> {
+        self.displayed_queue().slot_index(slot_id)
     }
 
     pub(in crate::app) fn playback_queue(&self) -> &QueueView {
@@ -186,7 +284,7 @@ impl App {
     /// `PlayerStatus::previous_idx`/`next_idx` fold in `active` and
     /// `queue_len`, so they answer both questions from the owner's status.
     pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {
-        let st = self.player.status_snapshot();
+        let st = self.shown_playback_status();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 

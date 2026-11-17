@@ -3,8 +3,8 @@
 //! within the repository's file-size limit.
 
 use super::{
-    App, EmbyItem, PlaylistMutation, QueueItem, QueueLink, SessionEvent, ToastSeverity,
-    is_playable, queue_op::QueueOpEdit,
+    App, EmbyItem, PlaylistMutation, QueueItem, QueueLink, QueueTarget, SessionEvent,
+    ToastSeverity, is_playable, queue_op::QueueOpEdit,
 };
 use crate::app::state::queue_owner::QueueOrigin;
 use mbv_emby::EmbyClient;
@@ -145,8 +145,11 @@ impl App {
         origin: QueueOrigin,
     ) -> bool {
         let lineage = origin.lineage;
+        // The source update carries the lineage the mutation was fenced
+        // against, which is the current queue's: it names no Named queue, so a
+        // shown resting queue is never the one that takes the new source.
         let sent = self.queue_op(
-            QueueLink::Local,
+            QueueTarget::current(QueueLink::Local),
             mbv_remote_player::QueueOp::SourceUpdate {
                 source: source.clone(),
                 lineage,
@@ -230,8 +233,7 @@ impl App {
             .into_iter()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let link = self.playing_queue_link();
-        self.append_on_owner(link, items, None);
+        self.append_on_owner(items, None);
     }
 
     /// Play an explicitly resolved library-view item next (add-gui-library-
@@ -256,8 +258,7 @@ impl App {
             return;
         }
         let before = self.play_next_anchor();
-        let link = self.playing_queue_link();
-        self.append_on_owner(link, vec![QueueItem::Emby(Box::new(item))], before);
+        self.append_on_owner(vec![QueueItem::Emby(Box::new(item))], before);
     }
 
     /// The owner slot a play-next append enters ahead of (add-gui-library-panel
@@ -266,7 +267,7 @@ impl App {
     /// land at the tail. Read from the queue as it is before the append: the
     /// append's own answer is what adds the new slots.
     fn play_next_anchor(&self) -> Option<u64> {
-        let queue = self.queue_for_link(self.playing_queue_link());
+        let queue = self.displayed_queue();
         let active = queue.slot_index(queue.active_slot_id()?)?;
         queue.slot_id_at(active + 1).map(mbv_ctrl::slot_id_to_u64)
     }
@@ -279,8 +280,7 @@ impl App {
     /// edit. The visible-queue mutation is the success confirmation; no
     /// enqueue success toast is emitted.
     pub(super) fn append_item_to_queue(&mut self, item: EmbyItem) {
-        let link = self.playing_queue_link();
-        self.append_on_owner(link, vec![QueueItem::Emby(Box::new(item))], None);
+        self.append_on_owner(vec![QueueItem::Emby(Box::new(item))], None);
     }
 }
 

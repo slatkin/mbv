@@ -1,7 +1,6 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
 use crate::app::gui_client_state::GuiOverlay;
-use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
     DestinationLatestSource, HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
@@ -100,6 +99,10 @@ pub struct App {
     /// `mbv` program it resolved, so an Owner restart never starts the GUI
     /// program as the Owner.
     pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
+    /// Which Client this process runs (gui-named-queues design D7): the Hello
+    /// claims every later App-side reconnect sends follow it. The Owner link
+    /// records it at attach time; it never changes during the session.
+    pub(in crate::app) client_kind: crate::ClientKind,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before
@@ -119,6 +122,32 @@ pub struct App {
     pub(in crate::app) libs: Vec<LibraryTab>,
     pub(in crate::app) local_view: QueueView,
     pub(in crate::app) remote_view: Option<QueueView>,
+    /// The local Owner's Named queues as the last `NamedQueueList` reported
+    /// them (gui-named-queues design D7). Empty unless this Client negotiated
+    /// `named-queues`, which only a GUI Client's local link does.
+    pub(in crate::app) named_queues: crate::app::state::named_queues::NamedQueueList,
+    /// The GUI Client's shown entry: the local Named queue or the connected
+    /// peer whose queue the Queue panel, the player panel, and the edits follow
+    /// (design D7, ADR 0041). `None` for the TUI Client, which keeps the
+    /// connection rule (ADR 0034).
+    pub(in crate::app) gui_shown_entry: Option<crate::app::state::playback::ShownEntry>,
+    /// The shown resting queue's own view, beside the current queue's
+    /// `local_view` (design D7): filled from `NamedQueueSnapshot` while the GUI
+    /// Client shows a queue that rests.
+    pub(in crate::app) shown_resting: Option<(mbv_queue::NamedQueueId, QueueView)>,
+    /// The `op` of the new-queue request the control sent and the Owner has
+    /// not answered yet (gui-named-queues design D8). The Owner answers it with
+    /// the new queue's own snapshot under this `op`, so the answer names the
+    /// queue that the control then shows with its name open for edit. `None`
+    /// while no request is in flight.
+    pub(in crate::app) pending_new_queue: Option<mbv_ctrl::QueueOpId>,
+    /// The `op` of every Named-queue command whose answer the Client does not
+    /// pump for — the close and the rename the Queue chooser sends, beside the
+    /// create the control holds in `pending_new_queue` (gui-named-queues design
+    /// D8). Each answer arrives in a drain, so this set is how a rejection
+    /// finds the request it answers and tells the user why; an op leaves the
+    /// set when its answer arrives, and a lost Owner clears it.
+    pub(in crate::app) pending_named_queue_ops: std::collections::HashSet<mbv_ctrl::QueueOpId>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
@@ -179,6 +208,10 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// One-shot presentation reset for the next queue sync: the shown entry
+    /// changed, so the Queue Surface drops its marks and viewport before it
+    /// adopts the start-slot cursor (design D7 of `gui-named-queues`).
+    pub(in crate::app) pending_queue_surface_reset: bool,
     /// Fingerprint of the queue projection `queue_surface_projection` last
     /// pushed to a Client's Queue Surface state. The projection runs once per
     /// Client tick; rebuilding the row vec (slot clone + per-row `format!`)
@@ -474,9 +507,6 @@ pub struct App {
     /// The `q` toggle: the expanded panel's queue folded to its one-line
     /// summary.
     pub(in crate::app) queue_folded: bool,
-    /// Which value the queue rows' right column paints: the queue header's
-    /// Length / Ends-at switch.
-    pub(in crate::app) queue_right_column: QueueRightColumn,
     /// The queue filter's text: it narrows the projected rows locally and
     /// never touches the canonical queue. Empty text filters nothing.
     pub(in crate::app) queue_filter: String,

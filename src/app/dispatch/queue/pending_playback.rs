@@ -30,25 +30,30 @@ impl App {
         // `start_idx`, and the Client adopts the resulting snapshot; the
         // Client holds no editable queue of its own.
         let link = self.playing_queue_link();
-        let sent = self.replace_emby_queue_on_owner(link, items, start_idx, source);
+        let sent =
+            self.replace_emby_queue_on_owner(self.queue_edit_target(), items, start_idx, source);
         if sent == QueueOpEdit::NotApplied {
             return;
         }
         self.collapse_pinned_view_after_play();
+        // The replacement started the shown owner's playback, so its mute gate
+        // is the shown owner's: a resting local queue replaces and starts on the
+        // local Owner, which a connected peer never mutes (design D7 of
+        // `gui-named-queues`).
         let _ = self
-            .player
+            .queue_owner_player(link)
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
     pub(super) fn execute_pending_queue_clear(&mut self) {
         let link = self.playing_queue_link();
-        let had_items = self.queue_for_link(link).total_queue_len() > 0;
+        let had_items = self.displayed_queue().total_queue_len() > 0;
         if had_items {
             // Row 5.3 (design D6): the clear reaches the viewed queue's owner
             // as an answered op (UnifiedQueueClearOp for a capable owner); the
             // owner stops its player, clears the canonical queue, and the
             // Client adopts the empty queue only from the answer.
-            let sent = self.queue_op(link, mbv_remote_player::QueueOp::Clear);
+            let sent = self.queue_op(self.queue_edit_target(), mbv_remote_player::QueueOp::Clear);
             if sent == QueueOpEdit::NotApplied {
                 return;
             }

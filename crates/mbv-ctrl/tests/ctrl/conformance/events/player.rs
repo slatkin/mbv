@@ -42,6 +42,7 @@ pub(crate) enum PlayerShape {
     AudiobookshelfProgress,
     AudiobookshelfBookProgress,
     PlaybackOutput,
+    NamedQueue,
 }
 
 impl PlayerShape {
@@ -77,6 +78,7 @@ impl PlayerShape {
             PlayerShape::AudiobookshelfProgress => "AudiobookshelfProgress",
             PlayerShape::AudiobookshelfBookProgress => "AudiobookshelfBookProgress",
             PlayerShape::PlaybackOutput => "PlaybackOutput",
+            PlayerShape::NamedQueue => "NamedQueue",
         }
     }
 
@@ -152,6 +154,10 @@ impl PlayerShape {
                 PlayerEvent::AudiobookshelfBookProgress(abs_book_progress_event())
             }
             PlayerShape::PlaybackOutput => PlayerEvent::PlaybackOutput(OutputState::Local),
+            PlayerShape::NamedQueue => PlayerEvent::NamedQueue(mbv_ctrl::NamedQueueEvent::List {
+                queues: named_queue_entries(),
+                current: named_queue_id(),
+            }),
         }
     }
 }
@@ -186,5 +192,6 @@ pub(crate) fn shape_of(event: &PlayerEvent) -> PlayerShape {
         PlayerEvent::AudiobookshelfProgress(_) => PlayerShape::AudiobookshelfProgress,
         PlayerEvent::AudiobookshelfBookProgress(_) => PlayerShape::AudiobookshelfBookProgress,
         PlayerEvent::PlaybackOutput(_) => PlayerShape::PlaybackOutput,
+        PlayerEvent::NamedQueue(_) => PlayerShape::NamedQueue,
     }
 }

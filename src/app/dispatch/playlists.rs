@@ -95,11 +95,10 @@ impl App {
 
     /// Appends to the viewed queue once and leaves the sidebar open.
     fn enqueue_playlist_items(&mut self, items: Vec<EmbyItem>) {
-        let items = items
+        let items: Vec<QueueItem> = items
             .into_iter()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let link = self.playing_queue_link();
-        self.append_on_owner(link, items, None);
+        self.append_on_owner(items, None);
     }
 }

@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
+use crate::app::{App, DaemonLostModal, QUIT_REQUESTED, QueueLink, QueueTarget};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
@@ -28,7 +28,7 @@ impl App {
             return;
         }
         let player_vol = {
-            let s = self.player.status_snapshot();
+            let s = self.shown_playback_status();
             s.active.then(|| {
                 u8::try_from(s.volume.clamp(0, 200)).expect("clamped player volume fits in u8")
             })
@@ -44,8 +44,23 @@ impl App {
     /// Handle a `PlayerEvent` received from the player thread.
     /// Returns [`PlayerEventFlow::RestartLoop`] if the caller's event loop
     /// should `continue` (skip render for this tick).
+    ///
+    /// The Owner's queue state is adopted here, and every arm is exhaustive
+    /// over `PlayerEvent` with no wildcard: a variant a drain must not act on
+    /// still gets its own documented no-op arm, so a new variant fails to
+    /// compile here instead of silently doing nothing.
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
         match ev {
+            // Named-queue traffic is Owner state the Client core adopts
+            // (gui-named-queues design D7), never a playback observation, and
+            // a queue snapshot's late answer changes no playhead.
+            PlayerEvent::UnifiedQueueUpdated(unified) => {
+                let link = self.active_queue_link();
+                flow_after(self.handle_unified_queue_updated(link, &unified))
+            }
+            PlayerEvent::QueueOpResult { op, outcome } => {
+                flow_after(self.route_queue_op_answer(self.active_queue_link(), op, outcome))
+            }
             PlayerEvent::Stopped { .. } => flow_after(self.handle_stopped_event(ev)),
             PlayerEvent::TrackCompleted { .. } => {
                 self.handle_track_completed_event(&ev);
@@ -63,10 +78,15 @@ impl App {
                 self.handle_output_started();
                 PlayerEventFlow::Proceed
             }
-            PlayerEvent::NextUpThreshold { .. } | PlayerEvent::IntroEnded => {
-                // No action: next-up thresholds are presentation-only; intro completion needs no handling.
-                PlayerEventFlow::Proceed
-            }
+            // No action: next-up thresholds are presentation-only and intro
+            // completion needs no handling. The shell drain intercepts both
+            // pin-swap events before they reach App dispatch (tray-pin-swap
+            // 4.4): the launch snapshot is a shell query and the exit kind is
+            // shell-owned. These arms only keep the match exhaustive.
+            PlayerEvent::NextUpThreshold { .. }
+            | PlayerEvent::IntroEnded
+            | PlayerEvent::SwapPrepare
+            | PlayerEvent::SwapQuit => PlayerEventFlow::Proceed,
             PlayerEvent::NextUpPlay => {
                 self.handle_next_up_play();
                 PlayerEventFlow::Proceed
@@ -74,21 +94,6 @@ impl App {
             PlayerEvent::QueueNextUp { next_idx } => {
                 self.handle_queue_next_up(next_idx);
                 PlayerEventFlow::Proceed
-            }
-            PlayerEvent::UnifiedQueueUpdated(unified) => {
-                flow_after(self.handle_unified_queue_updated(&unified))
-            }
-            PlayerEvent::QueueOpResult { outcome, .. } => {
-                // Late or unmatched answers (row 5.1): the pump adopts the
-                // matching answer inline, so anything arriving here missed
-                // its wait and is adopted like any other owner snapshot.
-                // A late `Rejected` reports nothing more -- the timeout
-                // already flashed.
-                if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
-                    flow_after(self.handle_unified_queue_updated(&snapshot))
-                } else {
-                    PlayerEventFlow::Proceed
-                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.handle_intro_started(intro_end_ticks);
@@ -143,12 +148,47 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::PlaybackOutput(state) => self.apply_playback_output(state),
-            PlayerEvent::SwapPrepare | PlayerEvent::SwapQuit => {
-                // The shell drain intercepts both pin-swap events before they
-                // reach App dispatch (tray-pin-swap 4.4): the launch snapshot
-                // is a shell query and the exit kind is shell-owned. This arm
-                // only keeps the match exhaustive.
+            PlayerEvent::NamedQueue(event) => {
+                self.adopt_named_queue_event(event);
                 PlayerEventFlow::Proceed
+            }
+        }
+    }
+
+    /// Route one owner answer that no pump waited for (row 5.1, design D8 of
+    /// `gui-named-queues`): the pump adopts the matching answer inline, so
+    /// anything arriving at a drain missed its wait and is adopted like any
+    /// other owner snapshot. A late `Rejected` reports nothing more unless it
+    /// answers a Named-queue command, whose request ends only here. The
+    /// answer to the new-queue control's own request is not a queue snapshot:
+    /// it ends that request and opens the queue it names — and that answer can
+    /// be the one that arrives while an edit's pump waits, so it must reach its
+    /// request instead of being adopted as background, or the control would
+    /// wait for it forever and the queue it made would never be shown. A
+    /// refused Named-queue command reports here too, because it has no pump of
+    /// its own. Returns whether the adopted snapshot ended the tick early (the
+    /// local generation fence); the pump is mid-answer and leaves it unread.
+    pub(in crate::app) fn route_queue_op_answer(
+        &mut self,
+        link: QueueLink,
+        op: mbv_ctrl::QueueOpId,
+        outcome: mbv_ctrl::QueueOpOutcome,
+    ) -> bool {
+        match outcome {
+            mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
+                if self.take_new_queue_answer(op, Some(&snapshot)) {
+                    return false;
+                }
+                self.adopt_queue_op_snapshot(link, &snapshot, false)
+            }
+            mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
+                // A Named-queue command has no pump to report its refusal, so
+                // this routing is where its request ends and the user learns
+                // why (design D8). An edit's own rejection already flashed from
+                // the pump that waited for it, so an op that ends no Named-queue
+                // command stays silent.
+                self.report_named_queue_rejection(op, reason);
+                false
             }
         }
     }
@@ -237,10 +277,11 @@ impl App {
         if self.player.is_remote_disconnected() {
             return self.handle_stopped_remote_disconnected();
         }
-        let deleted_slot = self.pending_delete_slot.take();
-        let deleted_selection = self.pending_delete_selection.take();
-        let is_delete =
-            deleted_slot.is_some() || deleted_selection.as_ref().is_some_and(|s| !s.is_empty());
+        let is_delete = self.pending_delete_slot.is_some()
+            || self
+                .pending_delete_selection
+                .as_ref()
+                .is_some_and(|s| !s.is_empty());
         match slot_id {
             Some(slot_id) => {
                 if !is_delete {
@@ -253,9 +294,49 @@ impl App {
         }
         self.next_up_item = None;
         self.status.clear();
-        self.finish_stopped_consumption(deleted_slot, deleted_selection, slot_id, consume);
+        let link = self.active_queue_link();
+        self.take_pending_removal_and_consume(link, slot_id, consume);
         self.refresh_after_stop();
         false
+    }
+
+    /// Take the confirmed-removal state a stop consumes and run the
+    /// delete-vs-consume tail on `link`: a confirmed removal sends its owner
+    /// edit from the `Stopped` that the removal deferred to, and with none
+    /// pending the stop runs its consume reaction. The active link's `Stopped`
+    /// and the suspended home link's deferred removal (`finish_home_stop`)
+    /// share this rule; they differ in how much of the stop around it runs,
+    /// because the home link's playback presentation belongs to the shown
+    /// owner, not to this drain (design D7 of `gui-named-queues`).
+    fn take_pending_removal_and_consume(
+        &mut self,
+        link: QueueLink,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+        consume: bool,
+    ) {
+        let deleted_slot = self.pending_delete_slot.take();
+        let deleted_selection = self.pending_delete_selection.take();
+        self.finish_stopped_consumption(link, deleted_slot, deleted_selection, slot_id, consume);
+    }
+
+    /// Complete a confirmed removal from the suspended home link's `Stopped`
+    /// (design D7 of `gui-named-queues`). The Client stopped the local Owner's
+    /// playback because a confirmed removal named its now-playing row, so the
+    /// local Owner's `Stopped` is where the removal reaches it. With no pending
+    /// removal the event changes nothing: the local run's presentation belongs
+    /// to the shown owner, not to this drain — so this entry stays a thin
+    /// consume-only front for [`Self::take_pending_removal_and_consume`] and
+    /// never runs the full `Stopped` path, which would clear the shown
+    /// owner's status and refresh for a stop the panel never saw.
+    pub(in crate::app) fn finish_home_stop(
+        &mut self,
+        slot_id: Option<mbv_queue::QueueSlotId>,
+        consume: bool,
+    ) {
+        if self.pending_delete_slot.is_none() && self.pending_delete_selection.is_none() {
+            return;
+        }
+        self.take_pending_removal_and_consume(crate::app::QueueLink::Local, slot_id, consume);
     }
 
     /// The remote-disconnect prefix of `handle_stopped_event` (task 7.2/7.4
@@ -315,9 +396,12 @@ impl App {
     }
 
     /// Delete-vs-consume tail of a normal `Stopped`: send a confirmed removal
-    /// to the Player owner, or run the consume reaction.
+    /// to `link`'s Player owner, or run the consume reaction. `link` is the
+    /// link the stop came from — the queue the run played — never the queue
+    /// the panel shows, so a stop on one link never edits the other's queue.
     fn finish_stopped_consumption(
         &mut self,
+        link: crate::app::QueueLink,
         deleted_slot: Option<mbv_queue::QueueSlotId>,
         deleted_selection: Option<Vec<mbv_queue::QueueSlotId>>,
         slot_id: Option<mbv_queue::QueueSlotId>,
@@ -331,7 +415,7 @@ impl App {
                 .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
             self.queue_op(
-                self.playing_queue_link(),
+                QueueTarget::current(link),
                 mbv_remote_player::QueueOp::RemoveSlots { slot_ids: raw },
             );
         } else if deleted_slot.is_some() {
@@ -339,7 +423,7 @@ impl App {
             // now asks the owner to remove the stable slot identity.
             if let Some(deleted_slot) = deleted_slot {
                 self.queue_op(
-                    self.playing_queue_link(),
+                    QueueTarget::current(link),
                     mbv_remote_player::QueueOp::RemoveSlot {
                         slot_id: mbv_ctrl::slot_id_to_u64(deleted_slot),
                     },
@@ -468,6 +552,20 @@ impl App {
         &mut self,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) {
+        // A snapshot that names a resting Named queue is that queue's own
+        // state here too (gui-named-queues design D3, D7): the answer to an
+        // edit of a resting queue arrives on the home link while a peer holds
+        // the active one, and it fills the shown resting view rather than the
+        // current queue's.
+        if let Some(queue) = unified.queue {
+            self.adopt_named_queue_snapshot(queue, unified);
+            return;
+        }
+        // The home link's status is its own proxy's, so the player panel, the
+        // transport gates, and the track chips read the local Owner's live
+        // playback while a local entry is shown (design D7). The active peer's
+        // mirror never takes it.
+        self.local_queue_player().set_status(unified.status.clone());
         self.local_view.adopt(
             unified,
             crate::app::state::queue_view::AdoptCause::Background {
@@ -480,17 +578,30 @@ impl App {
         self.adopt_owner_source(unified);
     }
 
-    /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
-    /// `handle_player_event`). Returns true when the local generation fence
-    /// ends the tick early.
+    /// Handle a `PlayerEvent::UnifiedQueueUpdated` from `link` (extracted from
+    /// `handle_player_event`). `link` is the link the event arrived on — the
+    /// active connection, or the link an answer pump read — so the adopted
+    /// status, the queue view, and the source all stay that link's facts while
+    /// another link is shown (design D7). Returns true when the local
+    /// generation fence ends the tick early.
     pub(in crate::app) fn handle_unified_queue_updated(
         &mut self,
+        link: crate::app::QueueLink,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) -> bool {
+        // A snapshot that names a resting Named queue is that queue's own
+        // state, never the current queue's (gui-named-queues design D3, D7):
+        // it fills the shown resting view and leaves the current queue's view
+        // and the playback status alone, because a resting queue holds no
+        // playhead and its status is a default.
+        if let Some(queue) = unified.queue {
+            self.adopt_named_queue_snapshot(queue, unified);
+            return false;
+        }
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
-        self.player.set_status(unified.status.clone());
-        let link = self.playing_queue_link();
+        self.queue_owner_player(link)
+            .set_status(unified.status.clone());
         let held = self.queue_cursor_held_by_user();
         self.queue_for_link_mut(link).adopt(
             unified,
@@ -505,6 +616,11 @@ impl App {
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     pub(in crate::app) fn raise_daemon_lost_modal(&mut self) {
+        // A new-queue request the lost link owed an answer will never receive
+        // it, so the control works again once an Owner is back. The same holds
+        // for every Named-queue command the link owed an answer.
+        self.pending_new_queue = None;
+        self.pending_named_queue_ops.clear();
         // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
         // arm calls `dismiss_blocking_modals`, which now also unmounts the
         // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,

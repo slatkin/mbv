@@ -2,7 +2,7 @@ use crate::app::state::queue_owner::QueueOrigin;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
-use mbv_queue::{QueueItem, QueueSlotId};
+use mbv_queue::{NamedQueueId, QueueItem, QueueSlotId};
 use mbv_ui_model::playback::QueueLink;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -10,22 +10,49 @@ use std::sync::mpsc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueLinkResolution {
     pub has_direct_remote_queue: bool,
+    /// The GUI Client's shown entry, and `None` for the TUI Client (design D7
+    /// of `gui-named-queues`). The TUI Client shows the current queue by its
+    /// connection rule (ADR 0034); the GUI Client shows the entry the Queue
+    /// chooser picked (ADR 0041).
+    pub gui_shown_entry: Option<ShownEntry>,
+}
+
+/// The entry the GUI Client's Queue panel shows (gui-named-queues design D7):
+/// one of the local Owner's Named queues, or the connected peer Player owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::app) enum ShownEntry {
+    /// The local Owner's Named queue with this identity: the current queue, or
+    /// one that rests.
+    Local(NamedQueueId),
+    /// The queue of the peer Player owner this Client is connected to.
+    Peer,
 }
 
 impl QueueLinkResolution {
     #[must_use]
-    pub fn new(has_direct_remote_queue: bool) -> Self {
+    pub fn new(has_direct_remote_queue: bool, gui_shown_entry: Option<ShownEntry>) -> Self {
         Self {
             has_direct_remote_queue,
+            gui_shown_entry,
         }
     }
 
+    /// The link both the shown queue and the playback target resolve to.
+    ///
+    /// The GUI Client follows its shown entry, whichever link the connection
+    /// would pick, so a local Named queue and the player panel still resolve to
+    /// one link (ADR 0034 stays true; ADR 0041 only changes the choice). A
+    /// peer entry exists only while a peer is connected — a disconnect removes
+    /// it — so an entry left behind by a dropped or absent peer resolves to the
+    /// local Owner's queue rather than to a link that holds no queue.
     #[must_use]
     pub fn playback_target(self) -> QueueLink {
-        if self.has_direct_remote_queue {
-            QueueLink::Peer
-        } else {
-            QueueLink::Local
+        if !self.has_direct_remote_queue {
+            return QueueLink::Local;
+        }
+        match self.gui_shown_entry {
+            Some(ShownEntry::Local(_)) => QueueLink::Local,
+            Some(ShownEntry::Peer) | None => QueueLink::Peer,
         }
     }
 
@@ -35,15 +62,61 @@ impl QueueLinkResolution {
     }
 }
 
+/// The queue one edit, view lookup, or undone edit names (design D7 of
+/// `gui-named-queues`): the Player-owner link it reaches and, on the local
+/// link, the Named queue it names. `None` names the link's current queue — on
+/// the wire and as the Client's `local_view` — and a GUI edit of the shown
+/// queue names the shown queue, whichever entry the panel shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct QueueTarget {
+    /// The Player-owner link the edit reaches: the suspended home link for
+    /// `Local` while a peer holds the active one, else the active link.
+    pub(in crate::app) link: QueueLink,
+    /// The Named queue the edit names, or `None` for the link's current queue.
+    pub(in crate::app) queue: Option<NamedQueueId>,
+}
+
+impl QueueTarget {
+    /// The target that names `link`'s current queue: the default for every
+    /// path that does not edit the GUI Client's shown queue (design D7).
+    #[must_use]
+    pub(in crate::app) fn current(link: QueueLink) -> Self {
+        Self { link, queue: None }
+    }
+}
+
 /// A reversible queue edit (design D7). Undo re-sends the inverse edit to
-/// the Player owner: `Remove` re-appends the removed item before the entry
-/// now at its former index (resolved at undo time), and `Move` moves the
+/// the queue the edit reached: `Remove` re-appends the removed item before the
+/// entry now at its former index (resolved at undo time), and `Move` moves the
 /// slot back to `from`. `slot_id` is the runtime queue occurrence that was
 /// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
-    Remove { item: Box<QueueItem>, index: usize },
-    Move { slot_id: QueueSlotId, from: usize },
+    Remove {
+        /// The queue the edit reached: the GUI Client's shown queue, or the
+        /// current queue. The inverse edit and the view lookups name it,
+        /// whichever entry the panel shows when the user undoes (design D7).
+        target: QueueTarget,
+        item: Box<QueueItem>,
+        index: usize,
+    },
+    Move {
+        /// The queue the edit reached, as `Remove` carries it.
+        target: QueueTarget,
+        slot_id: QueueSlotId,
+        from: usize,
+    },
+}
+
+impl UndoEntry {
+    /// The queue the edit reached: the inverse edit, the undo-time view
+    /// lookups, and the undo bookkeeping all name it (design D7).
+    #[must_use]
+    pub(in crate::app) fn target(&self) -> QueueTarget {
+        match self {
+            Self::Remove { target, .. } | Self::Move { target, .. } => *target,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

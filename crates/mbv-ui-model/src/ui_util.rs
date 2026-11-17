@@ -240,11 +240,11 @@ pub fn fmt_duration_hms(s: i64) -> String {
 
 /// Format a unix-seconds instant as `offset`'s zero-padded 24-hour wall
 /// clock: `"11:42"`, `"09:05"` — the finish-clock format the design canvas
-/// paints (the right column's "Ends at" mode, the queue and scrubber finish
-/// clocks). The caller resolves the offset once per projection pass, so a
-/// frame formats every clock against one zone. A seconds value beyond
-/// `time`'s range renders as the empty string rather than panicking (the
-/// same saturation the publish-date helpers use).
+/// paints (the queue and scrubber finish clocks). The caller resolves the
+/// offset once per projection pass, so a frame formats every clock against
+/// one zone. A seconds value beyond `time`'s range renders as the empty
+/// string rather than panicking (the same saturation the publish-date helpers
+/// use).
 #[must_use]
 pub fn fmt_wall_clock(secs: i64, offset: UtcOffset) -> String {
     let Ok(instant) = OffsetDateTime::from_unix_timestamp(secs) else {

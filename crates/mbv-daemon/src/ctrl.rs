@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use mbv_ctrl::{AttachedClients, AttachedClientsCell, CtrlEvent, DisconnectReason};
+use mbv_queue::NamedQueueId;
 
 pub(crate) type CtrlClientId = u64;
 pub(crate) type CtrlSender = mpsc::Sender<CtrlOutbound>;
@@ -87,15 +88,48 @@ pub(crate) struct QueueTransport {
     pub(crate) twitch: bool,
 }
 
+/// Whether one Hello advertised `named-queues` (gui-named-queues design D3).
+/// The capability is a state, not a trailing flag: a peer either holds several
+/// Named queues and reads the `NamedQueue*` events, or it holds one queue and
+/// receives no Named-queue event at all.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum NamedQueues {
+    /// The peer did not advertise `named-queues`.
+    #[default]
+    Unsupported,
+    /// The peer advertised `named-queues`.
+    Supported,
+}
+
+impl NamedQueues {
+    /// The capability a Hello advertised.
+    pub(crate) fn of(advertised: bool) -> Self {
+        if advertised {
+            Self::Supported
+        } else {
+            Self::Unsupported
+        }
+    }
+
+    /// Whether this peer reads the Named-queue events.
+    pub(crate) fn is_supported(self) -> bool {
+        self == Self::Supported
+    }
+}
+
 /// The optional per-peer capabilities negotiated at Hello beyond the
 /// Audiobookshelf progress pair, each independently advertised (see the
 /// `CTRL_CAP_*` docs): owner-queue source updates, the playback-output
-/// surfaces, and the per-item-kind queue transports ([`QueueTransport`]).
+/// surfaces, Named queues, and the per-item-kind queue transports
+/// ([`QueueTransport`]).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PeerHelloCapabilities {
     pub(crate) owner_queue_source_update: bool,
     pub(crate) playback_output: bool,
     pub(crate) emby_session_output: bool,
+    /// The Named-queue capability the peer advertised (design D3). A peer
+    /// without it never receives one of those events.
+    pub(crate) named_queues: NamedQueues,
     pub(crate) queue_transport: QueueTransport,
 }
 
@@ -107,6 +141,11 @@ struct CtrlClient {
     abs_progress: bool,
     abs_book_progress: bool,
     capabilities: PeerHelloCapabilities,
+    /// The resting Named queue this connection shows, kept current by its own
+    /// `CtrlCmd::NamedQueueShow` (gui-named-queues design D3). It lives with
+    /// the connection, so it ends with the connection; `None` while the peer
+    /// shows the current queue.
+    shows_named_queue: Option<NamedQueueId>,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
@@ -219,6 +258,7 @@ impl CtrlClients {
             abs_progress,
             abs_book_progress,
             capabilities,
+            shows_named_queue: None,
             role,
             swap_surface,
         });
@@ -300,6 +340,62 @@ impl CtrlClients {
             .find(|c| c.id == id)
             .map(|c| c.capabilities.queue_transport)
             .unwrap_or_default()
+    }
+
+    /// Records the resting Named queue connection `id` shows, or clears it with
+    /// `None` when the peer shows the current queue (gui-named-queues design D3).
+    /// An unknown id subscribes nothing.
+    pub(crate) fn show_named_queue(&mut self, id: CtrlClientId, queue: Option<NamedQueueId>) {
+        if let Some(client) = self.connection.iter_mut().find(|client| client.id == id) {
+            client.shows_named_queue = queue;
+        }
+    }
+
+    /// Drops every connection's subscription to `queue`: the queue is closed,
+    /// or it became the current queue and is read through the current-queue
+    /// snapshots from now on (gui-named-queues design D3).
+    pub(crate) fn drop_named_queue_shows(&mut self, queue: NamedQueueId) {
+        for client in &mut self.connection {
+            if client.shows_named_queue == Some(queue) {
+                client.shows_named_queue = None;
+            }
+        }
+    }
+
+    /// Sends one resting queue's snapshot to the connections that show it,
+    /// except `except`: `json_for` projects the event for one peer's negotiated
+    /// queue transports, and a `None` projection skips that peer (gui-named-queues
+    /// design D3). A peer that did not negotiate `named-queues`, or shows another
+    /// queue, gets nothing. Mirrors `broadcast_state_gated`'s drop-on-failed-send
+    /// behavior.
+    pub(crate) fn broadcast_named_queue_snapshot(
+        &mut self,
+        queue: NamedQueueId,
+        except: Option<CtrlClientId>,
+        mut json_for: impl FnMut(QueueTransport) -> Option<String>,
+    ) {
+        self.retain_clients(|client| {
+            if except == Some(client.id)
+                || !client.capabilities.named_queues.is_supported()
+                || client.shows_named_queue != Some(queue)
+            {
+                return true;
+            }
+            let Some(json) = json_for(client.capabilities.queue_transport) else {
+                return true;
+            };
+            client.tx.send(CtrlOutbound::Event(json)).is_ok()
+        });
+    }
+
+    /// Sends `json` to every connection that negotiated `named-queues`. A peer
+    /// without the capability keeps its connection and receives nothing
+    /// (gui-named-queues design D3: a Client without the capability receives
+    /// nothing new).
+    pub(crate) fn broadcast_named_queue_event(&mut self, json: &str) {
+        self.broadcast_gated(json, |client| {
+            client.capabilities.named_queues.is_supported()
+        });
     }
 
     /// Whether the client `id` advertised `owner-queue-load` support at

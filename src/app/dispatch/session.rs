@@ -5,6 +5,7 @@ pub(in crate::app) mod daemon_lost;
 pub(in crate::app) mod daemon_restart;
 pub(in crate::app) mod emby_service;
 pub(in crate::app) mod emby_service_completion;
+pub(in crate::app) mod output_handoff;
 pub(in crate::app) mod player_event;
 pub(in crate::app) mod service_startup;
 pub(in crate::app) mod services_settings;

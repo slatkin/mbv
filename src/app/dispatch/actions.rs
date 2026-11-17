@@ -190,7 +190,7 @@ impl App {
         // and the Client adopts the resulting snapshot; the Client holds no
         // editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_link(),
+            self.queue_edit_target(),
             items,
             start_idx,
             queue_source,
@@ -275,7 +275,7 @@ impl App {
         // Row 5.3 (design D6): the replacement is an answered owner
         // op; the Client holds no editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_link(),
+            self.queue_edit_target(),
             episodes,
             0,
             mbv_queue::QueueSource::Series,
@@ -301,7 +301,7 @@ impl App {
         // Row 5.3 (design D6): the replacement is an answered owner op; the
         // Client holds no editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_link(),
+            self.queue_edit_target(),
             vec![item],
             0,
             mbv_queue::QueueSource::Unknown,
@@ -369,9 +369,7 @@ impl App {
                 // queue's owner as one answered Append op; the Client holds
                 // no editable queue, so the entries appear only when the
                 // owner's answer is adopted.
-                let link = self.playing_queue_link();
                 self.append_on_owner(
-                    link,
                     items
                         .into_iter()
                         .map(|item| QueueItem::Emby(Box::new(item)))
@@ -409,9 +407,8 @@ impl App {
     ) -> bool {
         // The shown queue is always the playback target's queue (ADR 0034),
         // so both submit shapes target one link.
-        let link = self.playing_queue_link();
         if !start_playback {
-            return self.append_on_owner(link, vec![item], None);
+            return self.append_on_owner(vec![item], None);
         }
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -421,7 +418,7 @@ impl App {
             self.on_queue_replace_silent();
         }
         let answered = self
-            .queue_link(link)
+            .queue_link(self.playing_queue_link())
             .0
             .remote()
             .supports_answered_queue_ops();
@@ -430,8 +427,12 @@ impl App {
         // negotiates `answered-queue-ops` (which also cold-starts a run
         // when none is alive); legacy owners get the same replace in its
         // legacy wire form.
-        let sent =
-            self.replace_queue_on_owner(link, vec![item], 0, mbv_queue::QueueSource::Unknown);
+        let sent = self.replace_queue_on_owner(
+            self.queue_edit_target(),
+            vec![item],
+            0,
+            mbv_queue::QueueSource::Unknown,
+        );
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
@@ -447,22 +448,24 @@ impl App {
         true
     }
 
-    /// Append `items` to `link`'s owner queue: `before` names the owner slot
-    /// the items enter ahead of, and `None` admits them at the tail (the
-    /// play-next path carries the slot after the active one, add-gui-library-
-    /// panel design D8).
+    /// Append `items` to the owner queue the shown edit names: `before` names
+    /// the owner slot the items enter ahead of, and `None` admits them at the
+    /// tail (the play-next path carries the slot after the active one,
+    /// add-gui-library-panel design D8).
     pub(in crate::app) fn append_on_owner(
         &mut self,
-        link: crate::app::QueueLink,
         items: Vec<QueueItem>,
         before: Option<u64>,
     ) -> bool {
-        // Entries appear only when the owner's answered Append is adopted.
-        let sent = self.queue_op(link, mbv_remote_player::QueueOp::Append { items, before });
+        // Entries appear only when the owner's answered Append is adopted. The
+        // append names the shown queue, so an enqueue from the Library panel
+        // reaches the queue the panel shows (design D7 of `gui-named-queues`).
+        let target = self.queue_edit_target();
+        let sent = self.queue_op(target, mbv_remote_player::QueueOp::Append { items, before });
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
-        if self.local_queue_metadata_applies(link) {
+        if self.local_queue_metadata_applies(target.link) {
             self.queue_dirty = true;
         }
         self.advance_queue_epoch();

@@ -367,11 +367,12 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     // the visible queue is Local, so the Local undo entry is consumed and
     // its inverse edit is sent to the Local owner instead of flashing a
     // spurious remote-undo-unsupported error.
-    use crate::app::state::playback::UndoEntry;
+    use crate::app::state::playback::{QueueTarget, UndoEntry};
     let mut app = make_app_stub();
     let _cmd_rx = live_owner_channel(&mut app);
     app.local_view.adopt_queue_items(emby_items(2), 0);
     app.queue_undo_stack.push(UndoEntry::Remove {
+        target: QueueTarget::current(QueueLink::Local),
         index: 0,
         item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
             "restored", "Movie",
@@ -402,11 +403,12 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
 // it silently); the one `App` dispatch is the behaviour both now share.
 #[test]
 fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
-    use crate::app::state::playback::UndoEntry;
+    use crate::app::state::playback::{QueueTarget, UndoEntry};
     let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(2));
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     let mut app = app;
     app.remote_queue_undo_stack.push(UndoEntry::Move {
+        target: QueueTarget::current(QueueLink::Peer),
         slot_id: mbv_queue::QueueSlotId::from_raw(2),
         from: 0,
     });

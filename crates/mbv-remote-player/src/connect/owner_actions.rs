@@ -154,7 +154,7 @@ where
         &compatibility,
         load_control_token,
         HandshakeRole::OwnerAction,
-        None,
+        &crate::ClientHelloClaims::default(),
     )?;
     read_initial_state(reader).map(|_| ())
 }

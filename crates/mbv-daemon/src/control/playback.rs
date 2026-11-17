@@ -241,6 +241,14 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
     let intent_request_id = intent.request_id;
     let intent_generation = intent.generation;
     match intent.action {
+        // A Play with no items starts the current queue at its start slot
+        // (gui-named-queues design D4, spec `named-queues` "Play starts a queue
+        // at its start slot"). The item ids, start index, start ticks, and
+        // source it carries are unused: it starts the queue the Owner already
+        // holds, so nothing is replaced and no position is stored.
+        mbv_ctrl::PlaybackIntentAction::Play { item_ids, .. } if item_ids.is_empty() => {
+            play_from_start_slot(ctx, intent_request_id, intent_generation);
+        }
         mbv_ctrl::PlaybackIntentAction::Play {
             item_ids,
             start_idx,
@@ -305,6 +313,59 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
             step_to_neighbor_slot(ctx, &action, intent_request_id, intent_generation);
         }
     }
+}
+
+/// A Play with no items starts the current queue at its start slot, or at its
+/// first slot when the queue has none (gui-named-queues design D4). The start
+/// slot names a slot and stores no position, so the item that plays from it
+/// takes its position from its Resume source. An empty queue changes nothing,
+/// and the intent is rejected as an empty target so it cannot stay unresolved
+/// and coalesce the user's next press (invariant 28).
+fn play_from_start_slot(
+    ctx: &mut CtrlContext<'_>,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+) {
+    let target = ctx
+        .shared_queue
+        .start_slot()
+        .filter(|slot_id| ctx.owner.core.queue.slot(*slot_id).is_some())
+        .or_else(|| {
+            ctx.owner
+                .core
+                .queue
+                .slots()
+                .first()
+                .map(|slot| slot.slot_id)
+        });
+    let Some(target) = target else {
+        if let Some(event) = ctx.owner.intents.rejected_if_current(
+            ctx.client_id,
+            request_id,
+            generation,
+            mbv_ctrl::PlaybackIntentRejection::EmptyTarget,
+        ) {
+            send_to(ctx.reply_tx, &CtrlEvent::PlaybackIntent(event));
+        }
+        return;
+    };
+    // `dispatch_slot_jump` publishes the snapshot after accepting, so the
+    // start slot reaches Clients as the pending slot, and the run's own
+    // observation of the loaded slot settles this intent.
+    dispatch_slot_jump(
+        &mut DaemonOwnerContext {
+            player: ctx.player,
+            client: ctx.client,
+            owner: &mut *ctx.owner,
+            shared_queue: ctx.shared_queue,
+            ctrl_clients: ctx.ctrl_clients,
+            merged_tx: ctx.merged_tx,
+            audiobookshelf: ctx.audiobookshelf,
+        },
+        super::super::core::JumpOrigin::Ctrl(ctx.client_id),
+        mbv_player::transition::Transition::new(request_id, generation, target),
+        None,
+    );
 }
 
 /// `PlaybackIntentAction::Play`: resolve the intent's item ids against Emby

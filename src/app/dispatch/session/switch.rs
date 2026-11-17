@@ -68,8 +68,16 @@ impl App {
         let shown_before = self.playing_queue_link();
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_view);
+            // An attach to the local Owner shows its current queue in the GUI
+            // Client's Queue panel (gui-named-queues design D7).
+            self.show_local_current_entry();
         } else {
             self.remote_view = Some(daemon_view);
+            // A connect from the playback-target chooser shows the peer's
+            // entry in the GUI Client's Queue panel (gui-named-queues design
+            // D7). The TUI Client keeps the connection rule and records
+            // nothing.
+            self.show_peer_entry();
         }
         self.reanchor_queue_cursor_after_link_change(shown_before);
         self.advance_queue_epoch();
@@ -181,10 +189,8 @@ impl App {
                 }
             }
         }
-        let (remote, player_rx) = Self::try_daemon_route_connect(
-            &mbv_remote_player::DaemonEndpoint::Local,
-            "owner process",
-        )?;
+        let (remote, player_rx) = self
+            .try_daemon_route_connect(&mbv_remote_player::DaemonEndpoint::Local, "owner process")?;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         Ok(Some(SuspendedLocalSession {
             player: PlayerProxy::from_remote(remote, always_play_next),
@@ -244,6 +250,9 @@ impl App {
         self.direct_remote_label = None;
         self.direct_remote_session_id = None;
         self.active_route = None;
+        // The peer entry leaves the GUI Client's Queue panel and the current
+        // local queue shows (gui-named-queues design D7).
+        self.show_local_current_entry();
         self.next_up_item = None;
         self.rebind_mpris_to_current_player();
         self.flash(status, ToastSeverity::Warning);
@@ -342,7 +351,7 @@ impl App {
             // directly so "restore local mode" actually lands back on this
             // app's real baseline instead of leaving the player
             // disconnected.
-            match Self::try_daemon_route_connect(
+            match self.try_daemon_route_connect(
                 &mbv_remote_player::DaemonEndpoint::Local,
                 "owner process",
             ) {
@@ -411,7 +420,7 @@ impl App {
             self.restore_local_mode("Local playback restored");
             return;
         }
-        match Self::try_daemon_route_connect(endpoint, name) {
+        match self.try_daemon_route_connect(endpoint, name) {
             Ok((remote, remote_rx)) => {
                 self.switch_to_library_route(name, remote, remote_rx, endpoint);
             }
@@ -465,7 +474,7 @@ impl App {
             self.restore_local_mode("Local playback restored");
             return Ok(true);
         }
-        match Self::connect_direct_endpoint(&endpoint) {
+        match self.connect_direct_endpoint(&endpoint) {
             Ok((remote, remote_rx)) => {
                 self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
                 Ok(true)
@@ -510,41 +519,38 @@ impl App {
     ///
     /// A switch never stops the prior playback as a side effect: severing
     /// hands no output back to Local, and when the owner could move the
-    /// active slot to the Session instead, the hand-off fork asks first
-    /// (user decision: switching sessions must present the hand-off option;
-    /// without it the prior playback continues).
+    /// active slot to the Session instead, the user is asked first
+    /// (confirm-output-handoff). A Session that advertises a direct endpoint
+    /// keeps the hand-off fork (both answers act: hand the slot off, or just
+    /// switch to the direct endpoint); one without it gets the
+    /// continue-playback prompt, whose No cancels.
     pub(in crate::app) fn activate_session_target(&mut self, sess: &mbv_emby::SessionInfo) {
         let has_direct_endpoint = self.session_direct_endpoint(sess).is_some();
-        if has_direct_endpoint && self.hand_off_fork_applies(sess) {
-            self.ask_hand_off_playback_to_session(sess);
+        if self.session_hand_off_applies(sess) {
+            if has_direct_endpoint {
+                self.ask_hand_off_playback_to_session(sess);
+            } else {
+                self.ask_continue_output_hand_off(
+                    Some(mbv_ui_model::panel_targets::SessionTargetKey::Emby(
+                        sess.id.clone(),
+                    )),
+                    session_display_name(sess),
+                );
+            }
             return;
         }
         self.activate_session_target_without_hand_off(sess);
     }
 
-    /// Whether activating `sess` can offer the hand-off fork: this Client is
-    /// attached to the local Owner, the Owner advertises
-    /// `emby-session-output`, and a slot is active on its current output —
-    /// selecting `sess` as the output then moves that slot to the Session
-    /// (spec "Selecting an output hands off the active slot"), while a direct
-    /// connect instead thin-clients the Session's own Owner. The Session's
-    /// device already being the output skips the fork: that selection is the
-    /// Owner's no-op hand-off. The decision reads the connection's retained
-    /// output state, the record the handshake fills at the cold seed
-    /// (cast-owner-output 8.2 fix).
-    fn hand_off_fork_applies(&self, sess: &mbv_emby::SessionInfo) -> bool {
-        if !self.is_local_daemon()
-            || !self.player.remote().supports_emby_session_output()
-            || !self.player.status_snapshot().active
-        {
-            return false;
-        }
-        self.player.remote().playback_output_state().is_none_or(|output| {
-            !matches!(
-                output,
-                mbv_ctrl::OutputState::EmbySession { device_id, .. } if *device_id == sess.device_id
-            )
-        })
+    /// Whether activating `sess` would hand off an active slot: the Owner
+    /// advertises `emby-session-output` (a selection it would reject hands
+    /// off nothing) and the shared continue-playback gate applies — a slot
+    /// is active on the local Owner's current output and the Session's
+    /// device is not that output (spec "Selecting an output hands off the
+    /// active slot").
+    fn session_hand_off_applies(&self, sess: &mbv_emby::SessionInfo) -> bool {
+        self.player.remote().supports_emby_session_output()
+            && self.output_hand_off_applies(self.session_is_current_output(sess))
     }
 
     /// Raise the shared hand-off fork: Enter selects the Session as the
@@ -569,6 +575,10 @@ impl App {
     /// sever stops nothing and whose direct connect leaves the prior
     /// playback running. The Session resolves against the displayed target
     /// snapshot; a target the snapshot no longer holds acts on nothing.
+    /// Enter severs to the local Owner first: while this Client is
+    /// thin-client on a peer, the selection must land on the local Owner
+    /// whose slot the prompt offered to move, exactly as the cast and the
+    /// non-direct-endpoint paths sever before their selection.
     pub(in crate::app) fn confirm_hand_off_playback_to_session(
         &mut self,
         device_id: &str,
@@ -596,12 +606,13 @@ impl App {
                 };
                 let name = session_display_name(&sess);
                 tracing::info!(name: "sessions.output.handoff", target: "sessions", device = %name, device_id = %device_id, "handing the active slot off to the Session as the owner's playback output");
-                self.flash(format!("Handed off to {name}"), ToastSeverity::Success);
+                self.sever_connections_without_output_change();
                 self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
                 self.select_playback_output(mbv_ctrl::OutputSelection::EmbySession {
                     device_id: sess.device_id.clone(),
                     name: sess.device_name.clone(),
                 });
+                self.flash(format!("Handed off to {name}"), ToastSeverity::Success);
             }
             Key::Esc => {
                 let Some(sess) = resolve(&self.panel_targets) else {
@@ -617,12 +628,17 @@ impl App {
         }
     }
 
-    /// Activate a Session with no hand-off fork: a direct endpoint keeps the
+    /// Activate a Session with no hand-off gate: a direct endpoint keeps the
     /// Direct remote control path and severs only the control links — the
     /// prior playback continues (suspended behind the new attachment when
     /// this Client held the local Owner); without a direct endpoint the
-    /// owner's own session-to-Session selection is the hand-off.
-    fn activate_session_target_without_hand_off(&mut self, sess: &mbv_emby::SessionInfo) {
+    /// owner's own session-to-Session selection is the hand-off. The shared
+    /// gate's Yes answer and the hand-off fork's decline answer both land
+    /// here.
+    pub(in crate::app) fn activate_session_target_without_hand_off(
+        &mut self,
+        sess: &mbv_emby::SessionInfo,
+    ) {
         let has_direct_endpoint = self.session_direct_endpoint(sess).is_some();
         if has_direct_endpoint {
             self.sever_connections_without_output_change();

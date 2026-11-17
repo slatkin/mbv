@@ -16,7 +16,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, declare_gui_client, load_config};
+use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, load_config};
 use mbv_config::ensure_runtime_dir;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
@@ -154,9 +154,9 @@ pub fn spawn(sink: SectionSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandl
                 return;
             }
         };
-        // Declare the GUI Client before the first Owner connection (design
-        // D9): the campaign's connections send a plain Hello.
-        declare_gui_client();
+        // The GUI Client's attach passes `ClientKind::Gui`, which sends a
+        // plain Hello (design D9) and claims the local link's `named-queues`
+        // (gui-named-queues design D7) before the first Owner connection.
         let steps = LibraryOwnerSteps::new(&config);
         let outcome = {
             let mut campaign = AttachCampaign::new(&rx, &sink, &quit, &steps);
@@ -531,6 +531,19 @@ impl CoreThread {
         else {
             return false;
         };
+        // A press names the gesture it recognized and the region it landed
+        // on, so a click that does nothing (a double click that never plays)
+        // shows in the log where it stopped.
+        if matches!(event.kind, PointerKind::Press) {
+            let gesture_label = gesture_name(&gesture);
+            let region = self.regions.resolve(event.position);
+            tracing::info!(
+                name: "gui.pointer.press",
+                target: "gui_pointer",
+                { x = event.position.x, y = event.position.y, gesture = gesture_label, region = ?region },
+                "press recognized"
+            );
+        }
         // The row drag's motion and release address the Queue Surface state
         // directly (add-tauri-gui-client row 6.5, design D5): motion only
         // previews the drop, and the release emits the one move request. A
@@ -709,6 +722,11 @@ impl CoreThread {
     /// section that reads the Surface state builds.
     fn sync_queue_surface(&mut self) {
         let update = self.app.queue_surface_projection();
+        // The shown entry changed: drop the marks and the viewport before the
+        // start-slot cursor lands (design D7 of `gui-named-queues`).
+        if update.presentation_reset {
+            self.queue.reset_presentation();
+        }
         if let Some(slots) = update.slots {
             self.queue.list_mut().set_content(queue_media_rows(
                 &slots,
@@ -762,5 +780,17 @@ impl fmt::Debug for CoreThread {
             .field("pending", &self.pending.len())
             .field("painted", &self.painted)
             .finish_non_exhaustive()
+    }
+}
+
+/// The gesture's name for the press log.
+fn gesture_name(gesture: &PointerGesture<Position>) -> &'static str {
+    match gesture {
+        PointerGesture::Click { .. } => "click",
+        PointerGesture::DoubleClick(_) => "double-click",
+        PointerGesture::RightClick(_) => "right-click",
+        PointerGesture::Scroll { .. } => "scroll",
+        PointerGesture::Drag { .. } => "drag",
+        PointerGesture::DragEnd => "drag-end",
     }
 }

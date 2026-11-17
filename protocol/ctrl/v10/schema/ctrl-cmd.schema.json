@@ -573,6 +573,12 @@
       ],
       "type": "string"
     },
+    "NamedQueueId": {
+      "description": "The identity of one Named queue, minted by the Owner and persisted with it.\nIt is stable across renames and restarts and is never reused within one\nstate file (design D3 of `gui-named-queues`).",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
     "OutputSelection": {
       "description": "Playback output requested by `CtrlCmd::SelectPlaybackOutput`\n(cast-owner-output design D3, emby-session-owner-output design D3). The\nClient supplies the Cast address from its own discovery, and only the\nEmby device identity of an Emby Session; the Owner is the only authority\nover the resulting output state.",
       "oneOf": [
@@ -1394,6 +1400,18 @@
               ],
               "default": null
             },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
+            },
             "slots": {
               "default": [],
               "description": "Owner-assigned slot identities. Absent on legacy payloads.",
@@ -1457,6 +1475,18 @@
               ],
               "default": null
             },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
+            },
             "source": {
               "$ref": "#/$defs/QueueSource"
             }
@@ -1504,6 +1534,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             }
           },
           "required": [
@@ -1533,6 +1575,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             },
             "slot_id": {
               "format": "uint64",
@@ -1567,6 +1621,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             },
             "slot_ids": {
               "items": {
@@ -1604,6 +1670,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             },
             "slot_id": {
               "format": "uint64",
@@ -1644,6 +1722,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             }
           },
           "type": "object"
@@ -1670,6 +1760,18 @@
                 }
               ],
               "default": null
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             },
             "slot_id": {
               "format": "uint64",
@@ -1701,6 +1803,18 @@
           "properties": {
             "op": {
               "$ref": "#/$defs/QueueOpId"
+            },
+            "queue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NamedQueueId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The Named queue this edit addresses. `None` edits the current\nqueue (design D3 of `gui-named-queues`)."
             }
           },
           "required": [
@@ -1807,6 +1921,137 @@
       },
       "required": [
         "SelectPlaybackOutput"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Create one Named queue, resting and empty. The Owner broadcasts\n`CtrlEvent::NamedQueueList` and answers `op` with the new queue's own\nsnapshot as `QueueOpResult::Applied`, whose data names the queue\n(design D3, D6 of `gui-named-queues`).",
+      "properties": {
+        "NamedQueueCreate": {
+          "properties": {
+            "op": {
+              "$ref": "#/$defs/QueueOpId"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueCreate"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Rename one Named queue after trimming surrounding whitespace. The\nOwner answers `op` with the renamed queue's own snapshot as\n`QueueOpResult::Applied`.",
+      "properties": {
+        "NamedQueueRename": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "$ref": "#/$defs/QueueOpId"
+            },
+            "queue": {
+              "$ref": "#/$defs/NamedQueueId"
+            }
+          },
+          "required": [
+            "queue",
+            "name",
+            "op"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueRename"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Close one Named queue. The Owner refuses to close its last queue, and\nanswers `op` with the current queue's snapshot as\n`QueueOpResult::Applied`.",
+      "properties": {
+        "NamedQueueClose": {
+          "properties": {
+            "op": {
+              "$ref": "#/$defs/QueueOpId"
+            },
+            "queue": {
+              "$ref": "#/$defs/NamedQueueId"
+            }
+          },
+          "required": [
+            "queue",
+            "op"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueClose"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Make one Named queue current and play it, from `slot` or from its\nstart slot when no slot is given.",
+      "properties": {
+        "NamedQueuePlay": {
+          "properties": {
+            "op": {
+              "$ref": "#/$defs/QueueOpId"
+            },
+            "queue": {
+              "$ref": "#/$defs/NamedQueueId"
+            },
+            "slot": {
+              "default": null,
+              "description": "The slot to start; `None` starts the queue's start slot, or its\nfirst slot when it has none.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "queue",
+            "op"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueuePlay"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Ask to see one Named queue: the Owner answers with that queue's\n`CtrlEvent::NamedQueueSnapshot` on show and after each change of it.",
+      "properties": {
+        "NamedQueueShow": {
+          "properties": {
+            "queue": {
+              "$ref": "#/$defs/NamedQueueId"
+            }
+          },
+          "required": [
+            "queue"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "NamedQueueShow"
       ],
       "type": "object"
     }

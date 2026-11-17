@@ -187,7 +187,7 @@ impl App {
         name: &str,
         device: &str,
     ) -> Option<StagedQueueTransferLink> {
-        let (remote, remote_rx) = match Self::connect_direct_endpoint(endpoint) {
+        let (remote, remote_rx) = match self.connect_direct_endpoint(endpoint) {
             Ok(connect) => connect,
             Err(error) => {
                 tracing::warn!(

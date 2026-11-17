@@ -30,7 +30,10 @@ mod library_route;
 mod library_viewport_reach_tests;
 mod lifecycle;
 mod music_grouping;
+mod named_queue_controls;
+mod named_queues;
 mod narrow_browse_migration;
+mod output_handoff;
 mod panel_focus;
 mod pinned_view_toggle;
 mod podcast;
@@ -149,6 +152,8 @@ fn adopt_queue_view(
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus {
             current_idx: active_index.unwrap_or_default(),
             ..Default::default()
@@ -418,6 +423,8 @@ pub(crate) fn emby_unified_state(
         })
         .collect();
     mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,

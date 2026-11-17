@@ -1,9 +1,9 @@
 //! The Queue section: the rows inside the viewport, and the cursor,
-//! marks, and active slot (design D4). A slot id travels as its raw number, as
-//! `layout.rs` does. The summary section carries the queue header's remaining
-//! count, tail offset, right-column mode, and filter text.
+//! marks, active slot, and start slot (design D4). A slot id travels as its
+//! raw number, as `layout.rs` does. The summary section carries the queue
+//! header's chooser facts, tail offset, filter text, and totals.
 
-use mbv::{QueueEndOffsets, QueueSummaryProjection};
+use mbv::{QueueEndOffsets, QueueHeaderProjection, QueueStartProjection, QueueSummaryProjection};
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::{QueueRowDrag, QueueRowInsertion, QueueSurface};
 use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
@@ -28,8 +28,68 @@ pub struct GuiQueue {
     /// add-tauri-gui-client row 6.5): the window paints that row's grip and
     /// actions button. `None` while the pointer rests on no row.
     pub hover: Option<u64>,
+    /// The start slot of the shown queue (`QueueSlotId::raw`): the slot a play
+    /// of that queue starts at (gui-named-queues design D9). An owner that
+    /// reports no start slot — a peer without `named-queues` — carries its
+    /// observed active slot here instead, so it keeps the playing mark it
+    /// paints today.
+    pub start: Option<u64>,
+    /// Whether the shown queue is the queue that plays (gui-named-queues design
+    /// D9): the rows paint the start slot filled while it does and outlined
+    /// while the queue is stopped or resting.
+    pub playing: bool,
+    /// Whether the shown queue's owner reports [`Self::start`] as its start
+    /// slot (gui-named-queues design D9): only a reported start slot can carry
+    /// the outlined mark, so an owner without one paints the playing mark on
+    /// its observed active slot and no outlined mark.
+    pub start_slot_reported: bool,
     /// The row drag in progress, if any: the drag ghost and insertion line.
     pub drag: Option<GuiQueueDrag>,
+    /// The scroll position the window paints as a scroll bar, `None` while
+    /// every row fits the viewport. The core owns the scroll, so the bar is a
+    /// readout of it, never a control.
+    pub scroll: Option<GuiQueueScroll>,
+}
+
+/// The queue list's scroll position: the viewport's first row, the rows it
+/// shows, and the rows the list holds, structural rows included. The window
+/// draws the bar's thumb from the three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuiQueueScroll {
+    /// The first painted row's index in the projected rows.
+    pub offset: usize,
+    /// The rows the viewport shows.
+    pub visible: usize,
+    /// The projected rows the list holds.
+    pub total: usize,
+}
+
+impl GuiQueueScroll {
+    /// The position of a viewport over `total` rows, `None` when every row
+    /// fits so no bar is due.
+    fn of(offset: usize, visible: usize, total: usize) -> Option<Self> {
+        (total > visible).then_some(Self {
+            offset,
+            visible,
+            total,
+        })
+    }
+
+    /// The thumb's top edge and length as percentages of the track: the share
+    /// of the list above the viewport and the share the viewport shows. The
+    /// two stay inside the track, so a thumb at the end of the list ends at
+    /// the track's end.
+    #[must_use]
+    pub fn thumb_percent(&self) -> (f64, f64) {
+        let share = |rows: usize| {
+            let rows = f64::from(u32::try_from(rows).unwrap_or(u32::MAX));
+            let total = f64::from(u32::try_from(self.total).unwrap_or(u32::MAX).max(1));
+            (rows / total * 100.0).min(100.0)
+        };
+        let length = share(self.visible);
+        let top = share(self.offset).min(100.0 - length);
+        (top, length)
+    }
 }
 
 /// The row drag the window paints (add-tauri-gui-client row 6.5, design D5):
@@ -60,24 +120,17 @@ pub enum GuiQueueInsertion {
 
 impl GuiQueueDrag {
     /// Projects the Surface state's drag over the list's rows: the ghost is
-    /// the dragged row's own content — its Ends-at value included, so the
-    /// ghost paints the same right column as the row it lifts — so a drag of
-    /// a row outside the painted viewport still paints what it moves. `None`
-    /// when the rows no longer hold the dragged slot (a content refresh can
-    /// drop it).
-    fn from_surface(
-        queue: &QueueSurface,
-        drag: QueueRowDrag,
-        offsets: &QueueEndOffsets,
-    ) -> Option<Self> {
+    /// the dragged row's own content, so a drag of a row outside the painted
+    /// viewport still paints what it moves. `None` when the rows no longer
+    /// hold the dragged slot (a content refresh can drop it).
+    fn from_surface(queue: &QueueSurface, drag: QueueRowDrag) -> Option<Self> {
         let row = queue.rows().iter().find(
             |row| matches!(row, MediaListRow::Item { target, .. } if *target == drag.slot_id),
         )?;
         let ordinal = queue
             .item_index_of(drag.slot_id)
             .map_or(0, |index| index + 1);
-        let mut ghost = GuiQueueRow::from_painted(row, false, ordinal);
-        apply_ends_at(&mut ghost, offsets);
+        let ghost = GuiQueueRow::from_painted(row, false, ordinal);
         Some(Self {
             slot: drag.slot_id.raw(),
             ghost,
@@ -96,17 +149,18 @@ impl GuiQueueDrag {
 
 impl GuiQueue {
     /// Projects the Queue Surface state: the rows of a viewport `viewport_rows`
-    /// tall, with the cursor, marks, active slot, zebra parity, and each row's
-    /// end offset from `offsets` (design D5). The summary's filter text narrows
-    /// the projected rows locally — the library's one word-local acceptance rule
-    /// (`mbv-text`) decides what matches, and the Surface state and the
-    /// canonical queue stay whole.
+    /// tall, with the cursor, marks, active slot, and zebra parity. The
+    /// summary's filter text narrows the projected rows locally — the library's
+    /// one word-local acceptance rule (`mbv-text`) decides what matches, and the
+    /// Surface state and the canonical queue stay whole. `start` names the
+    /// shown queue's start slot, whether that queue plays, and whether its
+    /// owner reported the slot (design D9 of `gui-named-queues`).
     #[must_use]
     pub fn from_surface(
         queue: &QueueSurface,
         viewport_rows: usize,
         summary: &QueueSummaryProjection,
-        offsets: &QueueEndOffsets,
+        start: &QueueStartProjection,
     ) -> Self {
         let rows = queue.rows();
         let filter = summary.filter.as_str();
@@ -135,6 +189,7 @@ impl GuiQueue {
         // fill and do not flip. The parity rides the row so the stripe stays
         // stable while the viewport moves; under a filter it re-seeds over
         // the kept rows, whose list the window paints.
+        let scroll = GuiQueueScroll::of(viewport.0, viewport.1, kept.len());
         let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));
@@ -159,9 +214,7 @@ impl GuiQueue {
                     .selectable_target()
                     .and_then(|target| queue.item_index_of(*target))
                     .map_or(0, |index| index + 1);
-                let mut row = GuiQueueRow::from_painted(row, striped, ordinal);
-                apply_ends_at(&mut row, offsets);
-                row
+                GuiQueueRow::from_painted(row, striped, ordinal)
             })
             .collect();
         Self {
@@ -172,30 +225,14 @@ impl GuiQueue {
             // not: it is the playback fact, not the filter's.
             active: rows.iter().find_map(active_slot),
             hover: queue.hover().map(QueueSlotId::raw),
+            start: start.start,
+            playing: start.playing,
+            start_slot_reported: start.start_slot_reported,
             drag: queue
                 .row_drag()
-                .and_then(|drag| GuiQueueDrag::from_surface(queue, drag, offsets)),
+                .and_then(|drag| GuiQueueDrag::from_surface(queue, drag)),
+            scroll,
         }
-    }
-}
-
-/// Fill a row's Ends-at offset from the shown queue's end offsets (design
-/// D5): the row's end as seconds after the active item's end, which the
-/// window turns into a wall clock from its own playhead anchor. Shared by
-/// the painted rows and the drag ghost, so the ghost paints the same right
-/// column as the row it lifts.
-fn apply_ends_at(row: &mut GuiQueueRow, offsets: &QueueEndOffsets) {
-    if let GuiQueueRow::Item {
-        slot,
-        ends_after_secs,
-        ..
-    } = row
-    {
-        *ends_after_secs = offsets
-            .rows
-            .iter()
-            .find(|(offset_slot, _)| offset_slot.raw() == *slot)
-            .map(|(_, secs)| *secs);
     }
 }
 
@@ -264,12 +301,6 @@ pub enum GuiQueueRow {
         secondary: Option<String>,
         trailing: Option<GuiTrailing>,
         duration: Option<String>,
-        /// The row's end as seconds after the active item's end (design D5):
-        /// the right column's "Ends at" fact, which the window turns into a
-        /// wall clock from the playhead anchor. The "Length" value is
-        /// `duration`. `None` for a slot before the playhead and for a slot
-        /// whose end chain an unknown runtime broke.
-        ends_after_secs: Option<i64>,
         kind: GuiMediaKind,
         state: GuiSemanticState,
         /// The row's zebra parity: the TUI's alternation paints the odd
@@ -282,11 +313,13 @@ pub enum GuiQueueRow {
     Spacer,
 }
 
-/// The queue summary the header paints (design D4): the remaining count, the
-/// queue's tail offset, the right column's mode, and the filter text with its
-/// caret fact. Mirrors `QueueSummaryProjection`'s remaining, next-item, and
-/// filter facts; the tail offset comes from the shown queue's end offsets
-/// (design D5), which the window turns into the finish wall clock.
+/// The queue summary the header and the folded line paint (design D4): the
+/// remaining count and the queue's tail offset the folded queue keeps, the
+/// Queue chooser facts the header's controls read (design D9 of
+/// `gui-named-queues`), the filter text with its caret fact, and the totals
+/// the footer shows. Mirrors `QueueSummaryProjection`'s remaining, next-item,
+/// total, and filter facts; the tail offset comes from the shown queue's end
+/// offsets (design D5), which the window turns into the finish wall clock.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueSummary {
     /// The rows that do not carry the playhead: the canvas's remaining count
@@ -305,49 +338,77 @@ pub struct GuiQueueSummary {
     /// clock now plus the active item's remaining time. `None` while no slot
     /// carries the playhead or a pending runtime in the chain is unknown.
     pub tail_secs: Option<i64>,
-    /// Which value the rows' right column paints.
-    pub right_column: GuiRightColumn,
     /// The queue filter's text, which narrows the projected rows locally.
     /// Empty text filters nothing.
     pub filter: String,
     /// Whether the filter's text entry holds the keyboard: the caret fact
     /// the filter control paints.
     pub filter_active: bool,
+    /// The shown queue's total time in seconds: every slot's known runtime
+    /// added up, which the footer paints at the right of its line. The filter
+    /// narrows no total (design D9 of `gui-named-queues`).
+    pub total_secs: i64,
+    /// Whether a slot of the shown queue has an unknown runtime, so
+    /// [`Self::total_secs`] is only a lower bound.
+    pub total_partial: bool,
+    /// The marked rows' total time in seconds, or `None` while no row of the
+    /// shown queue is marked: the footer then shows the queue's total alone.
+    pub marked_secs: Option<i64>,
+    /// Whether a marked row has an unknown runtime, so [`Self::marked_secs`]
+    /// is only a lower bound.
+    pub marked_partial: bool,
+    /// The Queue chooser facts the header's controls read (design D9 of
+    /// `gui-named-queues`). They travel as one group because each of the
+    /// header's four controls is a function of them: the chooser button's
+    /// presence and label, and the close control's state.
+    pub header: GuiQueueHeaderFacts,
+}
+
+/// The Queue header's chooser facts for one frame (design D9 of
+/// `gui-named-queues`, spec `gui-queue-chooser` "The queue header holds the
+/// chooser and its controls"): what the header's controls paint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuiQueueHeaderFacts {
+    /// Every entry the Queue chooser lists: the local Owner's Named queues in
+    /// queue order, then the connected peer Player owner when one is. The
+    /// header shows the chooser only with two or more entries.
+    pub entries: usize,
+    /// The name of the shown entry: the chooser button's label. Empty while
+    /// no entry shows.
+    pub shown_name: String,
+    /// Whether the close control is disabled: the only local queue has no
+    /// close (spec `gui-queue-chooser` "The close control closes the shown
+    /// entry").
+    pub close_disabled: bool,
 }
 
 impl GuiQueueSummary {
-    /// The summary section from the projection's remaining, next-item, and
-    /// filter facts, and the shown queue's end offsets' tail (design D5).
+    /// The summary section from the projection's remaining, next-item, total,
+    /// and filter facts, the shown queue's end offsets' tail (design D5), and
+    /// the header's chooser facts (design D9 of `gui-named-queues`). Consumes
+    /// `summary`: the frame reads it once, so its owned strings move instead
+    /// of a second clone.
     #[must_use]
-    pub fn build(summary: &QueueSummaryProjection, offsets: &QueueEndOffsets) -> Self {
+    pub fn build(
+        summary: QueueSummaryProjection,
+        offsets: &QueueEndOffsets,
+        header: &QueueHeaderProjection,
+    ) -> Self {
         Self {
             remaining: summary.remaining,
-            next_title: summary.next_title.clone(),
+            next_title: summary.next_title,
             tail_secs: offsets.tail,
-            right_column: GuiRightColumn::from(summary.right_column),
-            filter: summary.filter.clone(),
+            filter: summary.filter,
             filter_active: summary.filter_active,
-        }
-    }
-}
-
-/// Which value the queue rows' right column paints (design D4's "Length" /
-/// "Ends at" switch), mirroring `QueueRightColumn` variant for variant.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum GuiRightColumn {
-    /// Each row paints its total runtime.
-    #[default]
-    Length,
-    /// Each row paints the clock time at which it ends, from the current
-    /// position onward.
-    EndsAt,
-}
-
-impl From<mbv::QueueRightColumn> for GuiRightColumn {
-    fn from(mode: mbv::QueueRightColumn) -> Self {
-        match mode {
-            mbv::QueueRightColumn::Length => Self::Length,
-            mbv::QueueRightColumn::EndsAt => Self::EndsAt,
+            total_secs: summary.total_secs,
+            total_partial: summary.total_partial,
+            marked_secs: summary.marked_secs,
+            marked_partial: summary.marked_partial,
+            header: GuiQueueHeaderFacts {
+                entries: header.entries,
+                shown_name: header.shown_name.clone(),
+                close_disabled: header.close_disabled,
+            },
         }
     }
 }
@@ -374,7 +435,6 @@ impl GuiQueueRow {
                 secondary: secondary.clone(),
                 trailing: trailing.as_ref().map(GuiTrailing::from),
                 duration: duration.clone(),
-                ends_after_secs: None,
                 kind: GuiMediaKind::from(*kind),
                 state: GuiSemanticState::from(semantic_state),
                 striped,

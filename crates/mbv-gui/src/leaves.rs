@@ -17,7 +17,7 @@
 //! painted choice or nothing.
 
 use mbv::GuiSurfaceLeaf;
-use mbv_queue::QueueSlotId;
+use mbv_queue::{NamedQueueId, QueueSlotId};
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::{MediaListOperation, RowIntent};
 use mbv_surfaces::queue::{QueueRowInsertionSide, QueueSurface};
@@ -179,14 +179,42 @@ impl<'a> QueueLeaf<'a> {
                 self.surface.begin_row_drag(target);
                 Some(self.select_row(target, selection))
             }
-            // The queue header's switch and filter controls (row 6.5): each
-            // press emits the request whose App-side effect the `t` and `/`
-            // chords dispatch, so the control and the chord run one path.
-            RegionTarget::Queue(QueueTargetId::RightColumn) => {
-                Some(Msg::Playback(PlaybackRequest::ToggleQueueRightColumn))
-            }
+            // The queue header's filter control (row 6.5): the press emits the
+            // request whose App-side effect the `/` chord dispatches, so the
+            // control and the chord run one path.
             RegionTarget::Queue(QueueTargetId::Filter) => {
                 Some(Msg::Playback(PlaybackRequest::ActivateQueueFilter))
+            }
+            // The queue header's Queue chooser button (gui-named-queues design
+            // D9): the press emits the request the GUI-only `t` chord
+            // dispatches, so the control and the chord run one path.
+            RegionTarget::Queue(QueueTargetId::QueueChooser) => {
+                Some(Msg::Playback(PlaybackRequest::QueueChooserToggle))
+            }
+            // The queue header's new-queue control (design D9): the same
+            // request `Ctrl+T` dispatches.
+            RegionTarget::Queue(QueueTargetId::NewQueue) => {
+                Some(Msg::Playback(PlaybackRequest::NewQueue))
+            }
+            // The queue header's close control (design D9): the same request
+            // `Ctrl+W` dispatches. A disabled control reports no region, so a
+            // press never reaches this arm.
+            RegionTarget::Queue(QueueTargetId::CloseQueue) => {
+                Some(Msg::Playback(PlaybackRequest::CloseQueue))
+            }
+            // One entry of the open Queue chooser (task 8.3): the press shows
+            // the queue the painted entry named, through the same request the
+            // chooser's Enter resolves to, so the press and the key run one
+            // path. The region carries the entry's own queue identity, so a
+            // list change between the paint and the press shows the painted
+            // queue or nothing, never its neighbour.
+            RegionTarget::Queue(QueueTargetId::QueueChooserEntry(raw)) => Some(Msg::Playback(
+                PlaybackRequest::QueueChooserEntry(Some(NamedQueueId::from_raw(*raw))),
+            )),
+            // The open Queue chooser's peer entry (task 8.3): the peer owns no
+            // Named queue, so the entry's identity is the peer itself.
+            RegionTarget::Queue(QueueTargetId::QueueChooserPeer) => {
+                Some(Msg::Playback(PlaybackRequest::QueueChooserEntry(None)))
             }
             // The footer's playlist pill is informational in the GUI (its
             // layout report carries no `playlistPill` region — the GUI

@@ -114,7 +114,7 @@ impl App {
         // own statement, exactly as the TUI's arbitration does, so no
         // temporary inside the snapshot literal can hold the lock while the
         // snapshot's other initializers run.
-        let player_active = self.player.status_snapshot().active;
+        let player_active = self.shown_playback_status().active;
         let snapshot = RouterSnapshot {
             playback: RouterPlaybackState {
                 player_active,
@@ -290,7 +290,7 @@ impl App {
             | QueueIntent::Navigate { .. } => {}
             QueueIntent::PlayNow => {
                 let (active, current_idx) = {
-                    let status = self.player.status_snapshot();
+                    let status = self.shown_playback_status();
                     (status.active, status.current_idx)
                 };
                 if active {

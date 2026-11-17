@@ -79,6 +79,8 @@ pub(super) fn peer_snapshot(
     playing: bool,
 ) -> UnifiedQueueStateData {
     UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: PlayerStatus {
             active: playing,
             paused: !playing,

@@ -1,0 +1,21 @@
+{
+  "Player": {
+    "NamedQueue": {
+      "List": {
+        "current": 1,
+        "queues": [
+          {
+            "id": 1,
+            "len": 4,
+            "name": "Default"
+          },
+          {
+            "id": 3,
+            "len": 1,
+            "name": "Conformance Queue"
+          }
+        ]
+      }
+    }
+  }
+}

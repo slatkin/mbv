@@ -6,6 +6,7 @@
     "target_slot": 2
   },
   "lineage": 2,
+  "queue": null,
   "queued_latest_transition": {
     "generation": 4,
     "request_id": 8,
@@ -119,6 +120,7 @@
     "name": "Conformance Playlist",
     "type": "playlist"
   },
+  "start_slot": null,
   "status": {
     "active": true,
     "album": "Conformance Album",

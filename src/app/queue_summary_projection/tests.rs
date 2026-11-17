@@ -1,9 +1,10 @@
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
+use rstest::rstest;
 use time::UtcOffset;
 
-use super::{playback_finish_epoch, queue_end_offsets, queue_finish_clock};
+use super::{playback_finish_epoch, queue_end_tail, queue_finish_clock};
 use crate::app::QueueView;
 use crate::app::tests::make_app_stub;
 
@@ -28,6 +29,8 @@ fn app_with_queue(items: Vec<QueueItem>, active_idx: usize) -> crate::app::App {
         })
         .collect();
     let state = mbv_ctrl::UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: None,
         slots,
@@ -67,7 +70,7 @@ fn remaining_counts_a_watched_row_before_the_playhead() {
         ],
         1,
     );
-    assert_eq!(app.queue_summary_projection().remaining, 2);
+    assert_eq!(app.queue_summary_projection(&[]).remaining, 2);
 }
 
 /// The queue finish clock carries the canvas's ` +1d` suffix only when the
@@ -116,55 +119,92 @@ fn playback_finish_epoch_resolves_the_active_item_end_from_the_runtime() {
     );
 }
 
-/// The chain's offsets give the active slot `0`, and each later slot ends one
-/// runtime after the slot before it — the window adds the anchor, which
-/// already carries the active slot's remaining time, so each later slot's own
-/// runtime is the span that extends the chain.
+/// The tail is the sum of the pending slots' runtimes after the active one:
+/// the active slot already ends at the window's anchor, so its own runtime
+/// does not extend the tail, and a playhead on the last slot has no tail.
 #[test]
-fn queue_end_offsets_chain_each_pending_slot_after_the_one_before_it() {
+fn queue_end_tail_sums_the_pending_runtimes_after_the_playhead() {
     let slots = [
-        slot(1, 0),
+        slot(1, 20 * 60 * TICKS_PER_SECOND),
         slot(2, 10 * 60 * TICKS_PER_SECOND),
         slot(3, 5 * 60 * TICKS_PER_SECOND),
     ];
-    let (offsets, tail) = queue_end_offsets(&slots, 1);
-    assert_eq!(
-        offsets,
-        vec![
-            (QueueSlotId::from_raw(2), 0),
-            (QueueSlotId::from_raw(3), 5 * 60)
-        ]
-    );
-    assert_eq!(tail, Some(5 * 60));
+    assert_eq!(queue_end_tail(&slots, 0), Some(15 * 60));
+    assert_eq!(queue_end_tail(&slots, 1), Some(5 * 60));
+    assert_eq!(queue_end_tail(&slots, 2), Some(0));
 }
 
-/// The active slot itself ends at the anchor — the playback projection's
-/// finish clock — so the chain's first offset is `0`, and the tail is the
-/// last pending slot's offset.
+/// A pending slot with an unknown runtime breaks the chain: the queue tail
+/// stays unknown, because the end time is unknowable past the break. The
+/// codebase's unknown-runtime marker is a zero runtime (a Twitch item, a feed
+/// entry with no duration), so the marker is the break, not a known-empty
+/// span.
 #[test]
-fn queue_end_offsets_name_the_active_slot_zero() {
-    let slots = [
-        slot(1, 20 * 60 * TICKS_PER_SECOND),
-        slot(2, 600 * TICKS_PER_SECOND),
-    ];
-    let (offsets, tail) = queue_end_offsets(&slots, 0);
-    assert_eq!(offsets[0], (QueueSlotId::from_raw(1), 0));
-    assert_eq!(tail, Some(600));
-}
-
-/// A pending slot with an unknown runtime breaks the chain: it and every
-/// later slot name no end, and the queue tail stays unknown — the end time is
-/// unknowable past the break. The codebase's unknown-runtime marker is a zero
-/// runtime (a Twitch item, a feed entry with no duration), so the marker is
-/// the break, not a known-empty span.
-#[test]
-fn queue_end_offsets_stop_at_the_first_unknown_pending_runtime() {
+fn queue_end_tail_stops_at_the_first_unknown_pending_runtime() {
     let slots = [
         slot(1, 600 * TICKS_PER_SECOND),
         slot(2, 0),
         slot(3, 600 * TICKS_PER_SECOND),
     ];
-    let (offsets, tail) = queue_end_offsets(&slots, 0);
-    assert_eq!(offsets, vec![(QueueSlotId::from_raw(1), 0)]);
-    assert_eq!(tail, None);
+    assert_eq!(queue_end_tail(&slots, 0), None);
+}
+
+/// One app whose shown queue holds one slot per entry of `runtime_minutes`,
+/// carrying 1-based slot identities, with the Queue filter's text set.
+fn app_with_runtimes(runtime_minutes: &[i64], filter: &str) -> crate::app::App {
+    let items = runtime_minutes
+        .iter()
+        .enumerate()
+        .map(|(index, minutes)| {
+            item(
+                &format!("Totals {index}"),
+                minutes * 60 * TICKS_PER_SECOND,
+                false,
+            )
+        })
+        .collect();
+    let mut app = app_with_queue(items, 0);
+    app.queue_filter = filter.to_string();
+    app
+}
+
+/// The marked slots `raw` names, as the Queue Surface reports its marks.
+fn marks(raw: &[u64]) -> Vec<QueueSlotId> {
+    raw.iter().copied().map(QueueSlotId::from_raw).collect()
+}
+
+/// The footer's totals: the queue's covers every slot of the shown queue, the
+/// marked total covers the marked rows alone, a zero runtime is an unknown
+/// runtime that makes its total a lower bound, and the filter narrows neither
+/// (spec `gui-client` "The footer totals the marked rows", "No row is marked",
+/// "A runtime is unknown", "The filter narrows the rows").
+#[rstest]
+#[case::the_footer_totals_the_marked_rows(
+    &[10, 20, 30, 5],
+    &[1, 3, 4],
+    "",
+    (65 * 60, false, Some(45 * 60), false)
+)]
+#[case::no_row_is_marked(&[10, 20, 30, 5], &[], "", (65 * 60, false, None, false))]
+#[case::a_runtime_is_unknown(&[10, 0, 30], &[1, 2], "", (40 * 60, true, Some(10 * 60), true))]
+#[case::the_filter_narrows_the_rows(&[10, 20, 30, 5], &[], "Totals 3", (65 * 60, false, None, false))]
+fn queue_summary_totals_cover_the_shown_queue(
+    #[case] runtime_minutes: &[i64],
+    #[case] marked_slots: &[u64],
+    #[case] filter: &str,
+    #[case] expected: (i64, bool, Option<i64>, bool),
+) {
+    let app = app_with_runtimes(runtime_minutes, filter);
+
+    let summary = app.queue_summary_projection(&marks(marked_slots));
+
+    assert_eq!(
+        (
+            summary.total_secs,
+            summary.total_partial,
+            summary.marked_secs,
+            summary.marked_partial,
+        ),
+        expected
+    );
 }

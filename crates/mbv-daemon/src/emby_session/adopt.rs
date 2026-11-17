@@ -266,6 +266,12 @@ fn commit_adoption(daemon: &mut DaemonLoop, item_id: &str, item: QueueItem) -> b
     let runtime_ticks = item.as_emby().map_or(0, |item| item.runtime_ticks);
     let slot = daemon.owner.core.queue.append(item);
     daemon.owner.core.note_observed_active_slot(Some(slot));
+    // The adopted item is what the queue plays now, so it is the queue's start
+    // slot too (gui-named-queues design D4).
+    daemon.shared_queue.note_start_slot(
+        &daemon.owner.core.queue,
+        mbv_queue::StartSlotObservation::Active(slot),
+    );
     output.loaded = Some(EmbySessionLoadedItem {
         slot,
         item_id: item_id.to_owned(),

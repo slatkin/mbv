@@ -266,6 +266,7 @@ fn playing_an_audiobookshelf_book_on_cast_loads_nothing_and_reports() {
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -362,6 +363,7 @@ fn an_expired_jump_promotes_the_queued_jump_with_its_origin_so_the_failure_is_re
     // uncastable c, with the issuing client as its origin.
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(target),
             op: None,
         },
@@ -509,6 +511,7 @@ fn a_resolve_that_lands_after_its_transition_expired_loads_nothing() {
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -589,6 +592,7 @@ fn a_replace_with_a_start_position_loads_the_start_slot_at_the_carried_position(
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueReplace {
+            queue: None,
             items: vec![],
             slots,
             start_idx: Some(1),

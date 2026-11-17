@@ -3,6 +3,7 @@
 //! the copy there, stops local playback only once the peer reports the
 //! handed-off slot playing, and stays connected.
 
+use crate::app::QueueTarget;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::queue_transfer::{
@@ -190,8 +191,11 @@ impl App {
             slots = slots.len(),
             "sending the handed-off queue copy to the peer"
         );
+        // The hand-off replaces the peer's queue with the copy of the run, so
+        // the replacement names no Named queue (design D7: the transfer is a
+        // hand-off of the run, not an edit of the shown queue).
         let sent = self.queue_op(
-            QueueLink::Peer,
+            QueueTarget::current(QueueLink::Peer),
             mbv_remote_player::QueueOp::Replace {
                 items: slots,
                 start_idx: Some(start_idx),

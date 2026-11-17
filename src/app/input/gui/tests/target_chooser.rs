@@ -62,31 +62,49 @@ fn open_sessions_request_toggles_the_target_chooser() {
     assert!(app.gui_overlay.is_none());
 }
 
-// The chooser's local row returns a remote output to this machine: the same
-// hand-back the Sessions sidebar's detach sends, reached from the chooser.
+// The chooser's local row returns a remote output to this machine, asked
+// first: the receiver holds the stub's active slot, so the shared
+// continue-playback gate raises the confirm (confirm-output-handoff
+// "Selecting local playback asks while a remote output plays"), and the
+// confirm's Yes sends the same hand-back the Sessions sidebar's detach
+// sends.
 #[test]
 fn the_local_chooser_row_returns_a_cast_output_to_local() {
     let (mut app, cmd_rx) = cast_target_app();
-    app.playback_output = Some(mbv_ctrl::OutputState::Cast {
+    // The Owner's connection record reports the Cast output — the fact the
+    // detach's gate and body read (the drained mirror lags it one tick);
+    // the chooser's attach check still reads the mirror.
+    let output = mbv_ctrl::OutputState::Cast {
         receiver_id: "receiver-1".to_string(),
         name: "Living Room".to_string(),
         connection: mbv_ctrl::OutputConnection::Connected,
-    });
+    };
+    app.player
+        .remote()
+        .update_playback_output_for_test(output.clone());
+    app.playback_output = Some(output);
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
         mbv_ui_model::panel_targets::ChooserTargetKey::Local,
     ))));
 
-    let selections: Vec<_> = cmd_rx
-        .try_iter()
-        .filter(|cmd| matches!(cmd, CtrlCmd::SelectPlaybackOutput(_)))
-        .collect();
-    assert!(matches!(
-        selections.as_slice(),
-        [CtrlCmd::SelectPlaybackOutput(
-            mbv_ctrl::OutputSelection::Local
-        )]
-    ));
+    assert!(
+        output_selections(&cmd_rx).is_empty(),
+        "the gate asks before anything is sent"
+    );
+    // The GUI drain presents the raised request as the canvas's own
+    // blocking overlay.
+    super::present_pending_modal(&mut app);
+    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+        None,
+    );
+
+    let selections = output_selections(&cmd_rx);
+    assert_eq!(selections.len(), 1);
+    assert!(matches!(selections[0], mbv_ctrl::OutputSelection::Local));
+    assert!(app.gui_overlay.is_none());
 }
 
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
@@ -115,10 +133,11 @@ fn gui_context_r_opens_the_target_chooser() {
 
 // A chooser Enter selects the cursor choice's output through the same
 // dispatch the TUI's Sessions sidebar applies: the cast receiver's stable
-// key resolves against the target snapshot and the Owner receives the
-// `SelectPlaybackOutput` the F3 selection sends (add-tauri-gui-client row
-// 6.4). The cursor starts on the local row, so the test moves it to the cast
-// receiver first.
+// key resolves against the target snapshot, and the shared continue-playback
+// gate asks first — the stub owner plays, so Enter raises the confirm, and
+// the confirm's Yes sends the `SelectPlaybackOutput` the F3 selection sends
+// (confirm-output-handoff). The cursor starts on the local row, so the test
+// moves it to the cast receiver first.
 #[test]
 fn target_chooser_enter_selects_the_cursor_choice() {
     let (mut app, cmd_rx) = cast_target_app();
@@ -128,6 +147,19 @@ fn target_chooser_enter_selects_the_cursor_choice() {
         None,
     );
 
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+        None,
+    );
+
+    assert!(
+        output_selections(&cmd_rx).is_empty(),
+        "the gate asks before anything is sent"
+    );
+    // The GUI drain presents the raised request as the canvas's own
+    // blocking overlay.
+    super::present_pending_modal(&mut app);
+    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
         None,
@@ -144,8 +176,9 @@ fn target_chooser_enter_selects_the_cursor_choice() {
 
 // A chooser row's press emits the `SelectSession` request the TUI's
 // Sessions sidebar sends for its selected row: the dispatch resolves the
-// stable key, selects the output, and closes the chooser
-// (add-tauri-gui-client row 6.4).
+// stable key, the shared continue-playback gate asks first (the stub owner
+// plays), and the confirm's Yes selects the output and closes the chooser
+// (confirm-output-handoff).
 #[test]
 fn select_session_request_selects_the_output_and_closes() {
     let (mut app, cmd_rx) = cast_target_app();
@@ -154,6 +187,17 @@ fn select_session_request_selects_the_output_and_closes() {
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectSession(
         mbv_ui_model::panel_targets::SessionTargetKey::Cast("receiver-1".to_string()),
     ))));
+
+    assert!(
+        output_selections(&cmd_rx).is_empty(),
+        "the gate asks before anything is sent"
+    );
+    super::present_pending_modal(&mut app);
+    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+        None,
+    );
 
     let selections = output_selections(&cmd_rx);
     assert_eq!(selections.len(), 1);

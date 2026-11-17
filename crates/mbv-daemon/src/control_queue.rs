@@ -96,12 +96,19 @@ pub(crate) fn project_queue_state(
 /// (twitch-url-playback design D6); when a slot is dropped, `active_slot` is
 /// cleared too if the active slot was itself dropped, so a peer never
 /// receives an `active_slot` pointing at a slot missing from `slots`.
+/// `start_slot` is the current queue's start slot (gui-named-queues design D4)
+/// and is dropped on the same terms, so a start slot the Owner no longer holds
+/// never reaches a peer. `named_queue` names the queue this snapshot describes
+/// when it is a resting Named queue, and is `None` for the current queue
+/// (design D3).
 pub(crate) fn unified_queue_state_for_peer(
+    named_queue: Option<mbv_queue::NamedQueueId>,
     status: &mbv_ctrl::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
     observed_active_slot: Option<mbv_queue::QueueSlotId>,
+    start_slot: Option<mbv_queue::QueueSlotId>,
     in_flight_transition: Option<mbv_ctrl::TransitionSummary>,
     queued_latest_transition: Option<mbv_ctrl::TransitionSummary>,
     queue_transport: QueueTransport,
@@ -132,7 +139,12 @@ pub(crate) fn unified_queue_state_for_peer(
         .or_else(|| status.active.then(|| queue.active_slot_id()).flatten())
         .map(mbv_ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
+    let start_slot = start_slot
+        .map(mbv_ctrl::slot_id_to_u64)
+        .filter(|start_id| slots.iter().any(|s| s.slot_id == *start_id));
     CtrlEvent::UnifiedQueueState(mbv_ctrl::UnifiedQueueStateData {
+        queue: named_queue,
+        start_slot,
         status: status.clone(),
         slots,
         active_slot,
@@ -158,6 +170,7 @@ pub(crate) fn broadcast_queue_state(
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
+    let start_slot = shared_queue.start_slot();
     let lineage = *shared_queue.lineage.lock().unwrap();
 
     // ── Unified-queue peers, gate ABS episodes, books, and Twitch
@@ -171,11 +184,13 @@ pub(crate) fn broadcast_queue_state(
                 .entry(queue_transport)
                 .or_insert_with(|| {
                     serialize_ctrl_event(&unified_queue_state_for_peer(
+                        None,
                         &status,
                         queue,
                         source,
                         lineage,
                         observed_active_slot,
+                        start_slot,
                         in_flight.clone(),
                         queued_latest.clone(),
                         queue_transport,

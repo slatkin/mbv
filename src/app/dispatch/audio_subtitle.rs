@@ -114,16 +114,23 @@ impl App {
     /// Send the Owner a switch to the audio track with this mpv id (the
     /// track popover's chosen choice, add-tauri-gui-client row 6.2). A
     /// direct choice carries no mute dance and persists nothing, exactly as
-    /// the cycle path's switch does not.
+    /// the cycle path's switch does not. The shown owner receives it, because
+    /// the chips the choice was made from read that owner's status (design D7
+    /// of `gui-named-queues`).
     pub(in crate::app) fn set_audio_track(&mut self, id: i64) {
-        let _ = self.player.send_command(PlayerCommand::SetAudio(id));
+        let _ = self
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SetAudio(id));
     }
 
     /// Send the Owner a switch to the subtitle track with this mpv id; id 0
     /// is subtitles off. The direct choice persists the picked track, as
-    /// `cycle_sub`'s switch does.
+    /// `cycle_sub`'s switch does, and it reaches the shown owner for the same
+    /// reason as `set_audio_track`.
     pub(in crate::app) fn set_subtitle_track(&mut self, id: i64) {
-        let _ = self.player.send_command(PlayerCommand::SetSub(id));
+        let _ = self
+            .shown_queue_owner_player()
+            .send_command(PlayerCommand::SetSub(id));
         self.save_prefs();
     }
 }

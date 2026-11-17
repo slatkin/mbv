@@ -6,9 +6,11 @@ use super::harness::*;
 use crate::bridge::layout::{ListId, ListRows, QueueTargetId, RegionTarget};
 
 /// Contract (`QueuePanel.test.ts`): the regions carry the header, slot,
-/// grip, actions, and menu-entry ids, menu last — the header's
-/// `rightColumn` and `filter` targets lead, the rows follow, the hovered
-/// row's chrome trails them, and the menu's entries report last.
+/// grip, actions, and menu-entry ids, menu last — the header's controls lead in
+/// paint order (the filter and the new-queue control, with one local queue so
+/// no chooser and no acting close control), the rows follow, the hovered row's
+/// chrome trails them, and the
+/// menu's entries report last.
 #[test]
 fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last() {
     let rows = vec![item(1), item(2)];
@@ -19,8 +21,8 @@ fn the_regions_carry_the_header_slot_grip_actions_and_menu_entry_ids_menu_last()
     assert_eq!(
         fixture.last_reported_targets(),
         vec![
-            RegionTarget::Queue(QueueTargetId::RightColumn),
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
             RegionTarget::Queue(QueueTargetId::Slot(2)),
             RegionTarget::Queue(QueueTargetId::RowGrip(2)),
@@ -43,7 +45,7 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
     // The zero viewport lays the list out at zero height: the capacity is
     // its zero-height value.
     let mut fixture = built_unsized(queue_panel_app);
-    fixture.show(queue(vec![untimed(ending(item(7), None))]), summary(), None);
+    fixture.show(queue(vec![untimed(item(7))]), summary(), None);
 
     let report = fixture.last_report().expect("the paint reports");
     // The capacity is the shared whole-rows rule over the list box's
@@ -72,8 +74,8 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
             .map(|region| region.target)
             .collect::<Vec<_>>(),
         vec![
-            RegionTarget::Queue(QueueTargetId::RightColumn),
             RegionTarget::Queue(QueueTargetId::Filter),
+            RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(7)),
         ]
     );

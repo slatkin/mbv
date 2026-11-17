@@ -231,6 +231,13 @@ pub(crate) fn settle_remote_transition(
     };
     let mut ctx = crate::cast::owner_context(daemon);
     ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
+    // A remote output's loaded slot is the queue's active slot, so it is the
+    // queue's start slot while the queue plays as well (gui-named-queues design
+    // D4).
+    ctx.shared_queue.note_start_slot(
+        &ctx.owner.core.queue,
+        mbv_queue::StartSlotObservation::Active(loaded_slot),
+    );
     settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
     // The guarded play intent the load registered under settles with its
     // transition; without this a remote play would sit unresolved and coalesce

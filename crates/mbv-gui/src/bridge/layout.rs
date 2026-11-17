@@ -110,7 +110,13 @@ impl RegionTarget {
                 | QueuePlaybackTargetId::SubtitleChip
                 | QueuePlaybackTargetId::PlaybackTarget,
             )
-            | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_))
+            | Self::Queue(
+                QueueTargetId::RowMenuEntry(_)
+                | QueueTargetId::RowActions(_)
+                | QueueTargetId::QueueChooser
+                | QueueTargetId::QueueChooserEntry(_)
+                | QueueTargetId::QueueChooserPeer,
+            )
             | Self::Confirm(_)
             | Self::DaemonLost(_) => true,
             Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
@@ -181,12 +187,31 @@ pub enum QueueTargetId {
     /// One entry of the open row menu: the entry's index in the section's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),
-    /// The queue header's Length / Ends-at switch: a press runs the `t`
-    /// chord's toggle (add-tauri-gui-client row 6.5).
-    RightColumn,
     /// The queue header's filter control: a press runs the `/` chord's text
     /// entry (add-tauri-gui-client row 6.5).
     Filter,
+    /// The queue header's Queue chooser button (gui-named-queues design D9): a
+    /// press toggles the Queue chooser dropdown open or closed, as the GUI-only
+    /// `t` chord does. The button paints only while the chooser lists two or
+    /// more entries.
+    QueueChooser,
+    /// The queue header's new-queue control (gui-named-queues design D9): a
+    /// press asks the local Owner for a new Named queue, as `Ctrl+T` does.
+    NewQueue,
+    /// The queue header's close control (gui-named-queues design D9): a press
+    /// closes the shown entry, as `Ctrl+W` does. The control reports no region
+    /// while it is disabled — the only local queue has no close.
+    CloseQueue,
+    /// One entry of the open Queue chooser that is a local Named queue
+    /// (gui-named-queues task 8.3): the number is `NamedQueueId::raw`. A press
+    /// shows that queue, as the chooser's Enter does, and starts, stops, and
+    /// moves no playback.
+    QueueChooserEntry(u64),
+    /// The open Queue chooser's peer entry (gui-named-queues task 8.3): a press
+    /// shows the connected peer Player owner's queue, as the chooser's Enter
+    /// does. The entry carries no queue id of its own, so it needs its own
+    /// target.
+    QueueChooserPeer,
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.

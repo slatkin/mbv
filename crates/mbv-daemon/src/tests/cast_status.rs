@@ -63,6 +63,7 @@ fn casting_fixture(t: &mut TestLoop, status: CastStatus) -> (u64, mpsc::Receiver
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -289,6 +290,7 @@ fn settled_casting_fixture(
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },
@@ -656,6 +658,7 @@ fn an_unsettled_loads_natural_end_advances_past_it_not_back_onto_it() {
     // Play x and let its confirming status settle it.
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slots[0]),
             op: None,
         },
@@ -671,6 +674,7 @@ fn an_unsettled_loads_natural_end_advances_past_it_not_back_onto_it() {
     // never recorded as the observed active slot.
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slots[1]),
             op: None,
         },

@@ -17,9 +17,12 @@ use mbv_ctrl::{
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::Player;
-use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId};
+use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId, StartSlotObservation};
 use mbv_ws::WsEvent;
 
+mod named_queues;
+pub use named_queues::{NamedQueueStore, NamedQueueTarget, RestingNamedQueue};
+pub(crate) use named_queues::{NamedQueuesSaved, named_queues_state};
 mod transition_dispatch;
 
 pub(super) use transition_dispatch::{
@@ -48,6 +51,10 @@ pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
 
 pub(super) enum QueuePersistenceRequest {
     Save(mbv_config::StayAliveQueueState),
+    /// The whole Named-queue state (gui-named-queues design D6): every queue's
+    /// name, source, lineage, start slot, and slots with their identities, and
+    /// the current queue's identity.
+    SaveNamedQueues(Box<mbv_config::NamedQueuesState>),
     Flush(mpsc::SyncSender<()>),
 }
 
@@ -77,6 +84,16 @@ pub(super) enum DaemonEvent {
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),
     QueuePersistenceFailed(String),
+    /// A ctrl handler changed the Named-queue state (gui-named-queues design
+    /// D6). The event loop snapshots the live state at handling time — never
+    /// a payload taken earlier, which a change handled ahead of the request
+    /// could outrun — and writes it through the persistence worker, so the
+    /// write never happens on the ctrl path.
+    NamedQueuesDirty,
+    /// The persistence worker failed to write a Named-queue snapshot. The
+    /// event loop unsets its capture, so the next dirty event retries the
+    /// write.
+    NamedQueuesPersistFailed(String),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
@@ -421,6 +438,10 @@ pub(super) struct DaemonPlayerOwner {
     /// Shuffle draws its permutation from the Owner's own rng, so a test seeds
     /// this field and drives the dispatch path deterministically.
     pub(super) rng: rand::rngs::SmallRng,
+    /// The Named queues that rest while another queue is current
+    /// (gui-named-queues design D1). The current queue's slots, source,
+    /// lineage, and run stay in `core`; this store holds the other queues.
+    pub(super) named_queues: NamedQueueStore,
 }
 
 impl Default for DaemonPlayerOwner {
@@ -434,6 +455,7 @@ impl Default for DaemonPlayerOwner {
             pending_emby_session_select: None,
             pending_cast_resolve: None,
             rng: rand::rngs::SmallRng::from_rng(&mut rand::rng()),
+            named_queues: NamedQueueStore::first_start(),
         }
     }
 }
@@ -485,11 +507,97 @@ pub(crate) struct SharedQueueState {
     /// authority. `cast/connect.rs` `broadcast_output_change` is the single
     /// write site: any new output transition must update it there.
     pub(super) playback_output: Arc<Mutex<mbv_ctrl::OutputState>>,
+    /// The current queue's start slot (gui-named-queues design D4): the slot a
+    /// Play of the queue starts, stored with no position. It sits beside the
+    /// observed active slot because the run observations are what move it.
+    /// [`SharedQueueState::note_start_slot`] is its single write site.
+    pub(super) start_slot: Arc<Mutex<Option<QueueSlotId>>>,
+    /// The Named-queue list as last published, read by the ctrl accept path to
+    /// seed a newly-connecting Client that negotiated `named-queues`
+    /// (gui-named-queues design D3: the list is sent on attach). The accept
+    /// thread cannot reach the Owner's store, so the owner thread deposits the
+    /// list here at startup and at every list change
+    /// ([`SharedQueueState::note_named_queue_list`]). `None` on a packaged
+    /// Owner, which holds one queue and publishes no list.
+    pub(super) named_queue_list: Arc<Mutex<Option<NamedQueueListSeed>>>,
+}
+
+/// The Named-queue list a newly-attaching Client is seeded with
+/// (gui-named-queues design D3, "sent on attach"): the queues in queue order
+/// and the current queue.
+#[derive(Clone, Debug)]
+pub(crate) struct NamedQueueListSeed {
+    pub(crate) queues: Vec<mbv_ctrl::NamedQueueEntry>,
+    pub(crate) current: mbv_queue::NamedQueueId,
+}
+
+impl NamedQueueListSeed {
+    /// The list the store and the current queue's length make (design D3):
+    /// every Named queue in creation order, which is identity order because
+    /// identities are minted in it, with the current queue named.
+    #[must_use]
+    pub(crate) fn new(store: &NamedQueueStore, current_len: usize) -> Self {
+        let mut queues = vec![mbv_ctrl::NamedQueueEntry {
+            id: store.current,
+            name: store.current_name.clone(),
+            len: current_len,
+        }];
+        for resting in &store.resting {
+            queues.push(mbv_ctrl::NamedQueueEntry {
+                id: resting.id,
+                name: resting.name.clone(),
+                len: resting.queue.len(),
+            });
+        }
+        queues.sort_by_key(|entry| entry.id);
+        Self {
+            queues,
+            current: store.current,
+        }
+    }
+
+    /// The `NamedQueueList` event this seed carries (design D3).
+    #[must_use]
+    pub(crate) fn event(&self) -> mbv_ctrl::CtrlEvent {
+        mbv_ctrl::CtrlEvent::NamedQueueList {
+            queues: self.queues.clone(),
+            current: self.current,
+        }
+    }
 }
 
 impl SharedQueueState {
     pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
         *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
+    }
+
+    /// The current queue's start slot as last observed (gui-named-queues design
+    /// D4). `None` when the queue has none, so a Play starts its first slot.
+    pub(crate) fn start_slot(&self) -> Option<QueueSlotId> {
+        *self.start_slot.lock().unwrap()
+    }
+
+    /// The one write site for the current queue's start slot (gui-named-queues
+    /// design D4): every run or queue-edit observation that moves it comes
+    /// through here, and `mbv_queue::start_slot_after` owns the rule. `queue`
+    /// is the queue as it stands after `observation`.
+    pub(crate) fn note_start_slot(&self, queue: &PlaybackQueue, observation: StartSlotObservation) {
+        let mut start_slot = self.start_slot.lock().unwrap();
+        *start_slot = mbv_queue::start_slot_after(queue, *start_slot, observation);
+    }
+
+    /// The Named-queue list as last published (gui-named-queues design D3), or
+    /// `None` before the Owner has published one.
+    pub(crate) fn named_queue_list(&self) -> Option<NamedQueueListSeed> {
+        self.named_queue_list.lock().unwrap().clone()
+    }
+
+    /// The one write site for the Named-queue list a newly-attaching Client is
+    /// seeded with (gui-named-queues design D3): the Owner deposits the list it
+    /// is about to broadcast, so the accept thread's seed is never older than
+    /// the last broadcast.
+    pub(crate) fn note_named_queue_list(&self, seed: NamedQueueListSeed) {
+        *self.named_queue_list.lock().unwrap() = Some(seed);
     }
 }
 

@@ -83,6 +83,7 @@ impl App {
     }
 
     pub(in crate::app) fn connect_direct_endpoint(
+        &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> Result<
         (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
@@ -95,7 +96,7 @@ impl App {
 
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            crate::pin::pin_swap_hello().as_ref(),
+            &crate::client_kind::client_hello_claims(self.client_kind, endpoint),
         )
     }
 
@@ -110,6 +111,7 @@ impl App {
     /// lifecycle (ADR 0014 supersedes ADR 0003).
     ///
     fn connect_daemon_route_endpoint(
+        &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> Result<
         (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
@@ -123,7 +125,7 @@ impl App {
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
         mbv_remote_player::RemotePlayer::connect_endpoint(
             endpoint,
-            crate::pin::pin_swap_hello().as_ref(),
+            &crate::client_kind::client_hello_claims(self.client_kind, endpoint),
         )
     }
 
@@ -147,6 +149,7 @@ impl App {
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
     pub(in crate::app) fn try_daemon_route_connect(
+        &self,
         endpoint: &mbv_remote_player::DaemonEndpoint,
         route_label: &str,
     ) -> Result<
@@ -154,7 +157,7 @@ impl App {
         mbv_remote_player::RemotePlayerError,
     > {
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", route = %route_label, endpoint = %endpoint, "daemon route connection started");
-        Self::connect_daemon_route_endpoint(endpoint)
+        self.connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
                 tracing::info!(name: "daemon_route.connect.succeeded", target: "daemon_route", route = %route_label, endpoint = %endpoint, "daemon route connection succeeded");
             })
@@ -198,7 +201,7 @@ impl App {
         // and short so an unreachable daemon cannot wedge the UI.
         let mut backoff = Duration::from_millis(300);
         for attempt in 0..3 {
-            match Self::connect_daemon_route_endpoint(&endpoint) {
+            match self.connect_daemon_route_endpoint(&endpoint) {
                 Ok((remote, remote_rx)) => {
                     self.attach_reattached_daemon(remote, remote_rx, &endpoint, attempt);
                     return true;
@@ -309,7 +312,7 @@ impl App {
             self.restore_local_mode("Local playback restored");
             return;
         }
-        match Self::try_daemon_route_connect(&endpoint, &name) {
+        match self.try_daemon_route_connect(&endpoint, &name) {
             Ok((remote, remote_rx)) => {
                 self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
             }

@@ -61,6 +61,7 @@ impl Model {
         self.app.pending_series_handoff = None;
         self.app.pending_track_selection = None;
         self.app.pending_queue_cursor_reanchor = None;
+        self.app.pending_queue_surface_reset = false;
         self.app.pending_overlay = None;
         self.app.confirm_logout = false;
         // Prefix capture: the armed bit and the core focus stack's hold lift

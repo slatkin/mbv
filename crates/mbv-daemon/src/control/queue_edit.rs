@@ -1,8 +1,42 @@
 use super::{
-    CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlayerCommand, PlayerOwnerState,
-    QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump, mint_queue_lineage,
-    reject_command, reset_slot_jumps,
+    CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlaybackQueue, PlayerCommand,
+    PlayerOwnerState, QueueSlotId, RejectContext, SharedQueueState, broadcast_queue_state,
+    dispatch_slot_jump, mint_queue_lineage, named_queue, reject_command, reset_slot_jumps,
 };
+use mbv_queue::NamedQueueId;
+use std::ops::ControlFlow;
+
+/// Tracks the current queue's start slot through a removal (gui-named-queues
+/// design D4, spec `named-queues` "Each queue has a start slot"): when the
+/// removed slot was the start slot, the slot now at its position becomes the
+/// start slot, and `None` when no slot remains there.
+/// `start_slot_removed_at` is that position, read before the removal, and is
+/// `None` when the removal took another slot.
+fn note_start_slot_after_removal(
+    shared_queue: &SharedQueueState,
+    queue: &PlaybackQueue,
+    start_slot_removed_at: Option<usize>,
+) {
+    if let Some(index) = start_slot_removed_at {
+        shared_queue.note_start_slot(
+            queue,
+            mbv_queue::StartSlotObservation::StartSlotRemoved { index },
+        );
+    }
+}
+
+/// The position `removed` occupies when it is the queue's start slot.
+pub(super) fn start_slot_position(
+    queue: &PlaybackQueue,
+    start_slot: Option<QueueSlotId>,
+    removed: QueueSlotId,
+) -> Option<usize> {
+    if start_slot == Some(removed) {
+        queue.slot_index(removed)
+    } else {
+        None
+    }
+}
 
 /// `CtrlCmd::UnifiedQueueRemoveSlot`: remove the slot identified by
 /// `slot_id`, handing off playback when it was the active slot.
@@ -10,7 +44,17 @@ pub(super) fn handle_queue_remove_slot(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
+    named: Option<NamedQueueId>,
 ) {
+    // A resting queue's removal applies in the store, with no playhead to hand
+    // off (gui-named-queues design D5).
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::remove_slot(ctx, index, slot_id);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -24,6 +68,7 @@ pub(super) fn handle_queue_remove_slot(
         ..
     } = &mut *ctx.owner;
     let sid = QueueSlotId::from_raw(slot_id);
+    let start_slot_removed_at = start_slot_position(queue, ctx.shared_queue.start_slot(), sid);
     if queue.slot(sid).is_none() {
         reject_command(
             &RejectContext {
@@ -34,12 +79,14 @@ pub(super) fn handle_queue_remove_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                start_slot: ctx.shared_queue.start_slot(),
                 op: &ctx.op,
             },
             "slot not found; remove skipped",
         );
     } else if queue.active_slot_id() == Some(sid) {
         queue.remove_active_slot_confirmed(sid);
+        note_start_slot_after_removal(ctx.shared_queue, queue, start_slot_removed_at);
         broadcast_queue_state(
             ctx.ctrl_clients,
             ctx.player,
@@ -68,6 +115,7 @@ pub(super) fn handle_queue_remove_slot(
         }
     } else {
         queue.remove_slot(sid);
+        note_start_slot_after_removal(ctx.shared_queue, queue, start_slot_removed_at);
         broadcast_queue_state(
             ctx.ctrl_clients,
             ctx.player,
@@ -84,7 +132,18 @@ pub(super) fn handle_queue_remove_slot(
 /// `CtrlCmd::UnifiedQueueRemoveSlots`: remove every listed slot as one queue
 /// edit, so a client that selected a range never observes the queue shrinking
 /// one row per round trip.
-pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec<u64>) {
+pub(super) fn handle_queue_remove_slots(
+    ctx: &mut CtrlContext<'_>,
+    slot_ids: Vec<u64>,
+    named: Option<NamedQueueId>,
+) {
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::remove_slots(ctx, index, slot_ids);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -107,12 +166,14 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         if queue.slot(sid).is_none() {
             continue;
         }
+        let start_slot_removed_at = start_slot_position(queue, ctx.shared_queue.start_slot(), sid);
         if queue.active_slot_id() == Some(sid) {
             queue.remove_active_slot_confirmed(sid);
             removed_active = true;
         } else {
             queue.remove_slot(sid);
         }
+        note_start_slot_after_removal(ctx.shared_queue, queue, start_slot_removed_at);
         removed.push(sid);
     }
     if removed.is_empty() {
@@ -158,7 +219,14 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
 /// permutation comes from the Owner's own rng (queue-content-shuffle design
 /// D1), so a test seeds `owner.rng` and drives this dispatch path
 /// deterministically.
-pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>) {
+pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, named: Option<NamedQueueId>) {
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::shuffle(ctx, index);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -225,7 +293,15 @@ pub(super) fn handle_queue_move_slot(
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
     to_index: usize,
+    named: Option<NamedQueueId>,
 ) {
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::move_slot(ctx, index, slot_id, to_index);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -248,6 +324,7 @@ pub(super) fn handle_queue_move_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                start_slot: ctx.shared_queue.start_slot(),
                 op: &ctx.op,
             },
             "slot not found; move skipped",
@@ -274,7 +351,18 @@ pub(super) fn handle_queue_play_slot(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
+    named: Option<NamedQueueId>,
 ) {
+    // Playing a row of a resting queue swaps that queue in and starts the row
+    // (gui-named-queues design D2): the swap parks the queue that was current,
+    // so the row that plays is the one the Client named.
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::play_resting(ctx, index, QueueSlotId::from_raw(slot_id));
+        return;
+    }
     let except_op_client = ctx.except_op_client();
     let sid = QueueSlotId::from_raw(slot_id);
     // No client request id on this command, so the owner mints
@@ -347,10 +435,26 @@ pub(super) fn handle_queue_apply_progress(
 }
 
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
-pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
+pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>, named: Option<NamedQueueId>) {
+    let ControlFlow::Continue(resting) = named_queue::edit_target(ctx, named) else {
+        return;
+    };
+    if let Some(index) = resting {
+        named_queue::clear(ctx, index);
+        return;
+    }
     let except_op_client = ctx.except_op_client();
-    // Clearing installs a new lineage: the whole-queue replacement.
-    ctx.owner.core.queue.clear();
+    // Clearing removes every slot, the start slot among them: the removal rule
+    // leaves the queue with none (gui-named-queues design D4).
+    let start_slot_removed_at = named_queue::clear_noting_start_slot(
+        &mut ctx.owner.core.queue,
+        ctx.shared_queue.start_slot(),
+    );
+    note_start_slot_after_removal(
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        start_slot_removed_at,
+    );
     ctx.owner.core.source = mbv_queue::QueueSource::Unknown;
     mint_queue_lineage(ctx.shared_queue);
     ctx.player.advance_sequence_generation();

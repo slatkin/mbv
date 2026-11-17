@@ -368,6 +368,45 @@ fn a_reattached_device_under_a_new_session_id_reconnects_and_commands_use_it() {
     );
 }
 
+/// Contract (user request on PR 1019, after a load that never presented left no
+/// trace): the Owner logs what the device reports when it changes, and logs
+/// nothing for a poll that reads the same as the one before.
+#[test]
+fn a_poll_that_reads_the_same_logs_no_observation() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let (mut t, _calls) = session_output(fake);
+    let mut paused = session("device-1", "session-1");
+    paused.is_paused = true;
+    let t0 = std::time::Instant::now();
+
+    let mut poll_lines = |at: std::time::Instant| {
+        t.event_loop.tick(at);
+        let DaemonEvent::EmbySession(EmbySessionEvent::Sessions { poll_id, .. }) =
+            t.merged_rx.recv().expect("the poll reports")
+        else {
+            panic!("the poll result is the returned event");
+        };
+        let reading = DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+            poll_id,
+            result: Ok(vec![paused.clone()]),
+        });
+        mbv_core::applog::test_support::capture_log_lines(|| {
+            t.event_loop.handle_event(reading);
+        })
+    };
+    let changed = poll_lines(t0);
+    let same = poll_lines(t0 + EMBY_SESSION_POLL_INTERVAL);
+
+    let observed = |lines: &[String]| {
+        lines
+            .iter()
+            .filter(|line| line.contains("event=daemon.emby_session_output.observed"))
+            .count()
+    };
+    assert_eq!(observed(&changed), 1, "{changed:?}");
+    assert_eq!(observed(&same), 0, "{same:?}");
+}
+
 /// Contract: row 3.3 / design D5 — a late result carrying an old poll id is
 /// ignored: it adds no miss, leaves the new poll in flight, and changes no
 /// state that the current poll's own result then applies.
@@ -697,6 +736,7 @@ fn playing_an_audiobookshelf_slot_on_the_session_loads_nothing_and_reports() {
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(slot),
             op: None,
         },

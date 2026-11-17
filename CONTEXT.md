@@ -207,6 +207,22 @@ Queue shuffle:
 The one-time random reordering of the slots of a Bound queue, offered by the Shuffle entry of every Queue row. The slot that plays stays first and keeps playing. Every other slot is reordered at random. It is one queue edit, so it persists with the queue and reaches every Client in one snapshot. It is not the `Shuffle` Queue source value, which records how a queue was made. It is not the library Shuffle entry, which replaces the queue.
 _Avoid_: shuffle play, shuffle mode, play order, upcoming pick
 
+Named queue:
+A durable, user-named queue that the local Owner process holds. It has a stable Owner-minted identity, a user-visible name, its own slots, its own Queue source, its own QueueLineage, and its own start slot. It persists across a restart. Exactly one Named queue is the current queue; the others rest. Packaged mbvd holds no Named queue.
+_Avoid_: playlist, saved queue, named list, queue profile
+
+Current queue:
+The one Named queue that holds the playhead. It drives the Playback run, reaches the Playback outputs, consumes, and saves on consume. Every Client without the Queue chooser shows only it. Play of a resting queue makes that queue current and stops the queue that played before.
+_Avoid_: active queue, live queue, playing queue
+
+Start slot:
+The one slot of a Named queue where Play starts that queue. It is the active slot while the queue plays. A stop keeps it. A natural completion moves it to the next slot. It never stores a position; the started item takes its position from its Resume source.
+_Avoid_: start index, resume slot, first slot, anchor slot
+
+Queue chooser:
+The GUI-only dropdown in the queue header. It lists one entry for each Named queue of the local Owner, then one entry for each connected peer, and the user picks the shown entry in it. Choosing an entry shows it and moves no playback. It is not a Tab and not the retired Queue scope. The TUI has no Queue chooser.
+_Avoid_: queue tab, tab strip, queue scope, queue switcher
+
 Consume:
 Removal of an item from the queue after it finishes playing, as in ncmpcpp. It is only a queue operation. It says nothing about the queue origin. It never edits anything on the server. Only the authoritative Player owner playback lifecycle drives it. That owner is the local Owner process or a directly controlled remote Player owner. An Emby Session output consumes through the Owner, as every output does. Consume addresses canonical slot identity. It removes only the consumed occurrence.
 _Avoid_: auto-remove, playlist consume, consume-and-save, remote consume
@@ -224,7 +240,7 @@ The stage in which a Player owner holds a queue. Contents obey the rules of that
 _Avoid_: active queue, live queue, running queue, attached queue
 
 Owner-held queue and source:
-The Owner process holds the only authoritative local Bound queue and Queue source and stores them. Attached Clients are readers. They display owner-accepted snapshots. They never stage, store, or seed a queue of their own. Packaged mbvd keeps its separate behavior.
+The Owner process holds the only authoritative local Bound queue and Queue source and stores them. Attached Clients are readers. They display owner-accepted snapshots. They never stage, store, or seed a queue of their own. Packaged mbvd keeps its separate behavior. The Owner holds every Named queue; exactly one of them is the current queue, and each Named queue carries its own start slot.
 _Avoid_: client-owned queue, thin-client seeding, staged local queue
 
 QueueLineage:
@@ -337,7 +353,7 @@ A library-scoped search capability inside the selected searchable Emby destinati
 _Avoid_: global search, Search sidebar, search overlay
 
 Tab selection:
-The one selected destination in the left panel. It is Home, EmbyLibrary(index), AudiobookshelfLibrary(index), or Feeds. Tab positions are count-aware. Home is 0, Emby N libraries take 1 through N, Audiobookshelf M libraries follow, and Feeds is always last. This prevents Emby and Audiobookshelf from sharing the same numeric position.
+The one selected destination in the left panel. It is Home, EmbyLibrary(index), AudiobookshelfLibrary(index), or Feeds. Tab positions are count-aware. Home is 0, Emby N libraries take 1 through N, Audiobookshelf M libraries follow, and Feeds is always last. This prevents Emby and Audiobookshelf from sharing the same numeric position. The Queue chooser is not a Tab and does not change Tab selection.
 _Avoid_: library tab, browse tab, panel tab
 
 Service browse dispatch / Browse target:
@@ -713,7 +729,7 @@ The code-facing name (`queue_transfer`, `PendingQueueTransfer`) for the pending 
 _Avoid_: queue sync, queue move
 
 Queue scope:
-Retired term. Each Player owner keeps its own queue. The queue panel shows the queue of the connected Player owner, or the local Owner queue when no peer is connected. Connect moves control only; *Queue handoff* and *Take* copy a queue.
+Retired term. Each Player owner keeps its own queue. The queue panel shows the queue of the connected Player owner, or the local Owner queue when no peer is connected. Connect moves control only; *Queue handoff* and *Take* copy a queue. In the GUI the Queue chooser now picks the shown entry; it is not a Queue scope.
 _Avoid_: split view, pill state, Local scope, Remote scope, scope pill, scope switching, Queue scope
 
 Library route:

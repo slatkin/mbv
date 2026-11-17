@@ -12,7 +12,7 @@ use mbv_ctrl::{
     PlaybackIntentOutcome, PlaybackRequestId,
 };
 use mbv_ids::ItemId;
-use mbv_queue::QueueSlotId;
+use mbv_queue::{QueueSlotId, StartSlotObservation};
 use std::time::{Duration, Instant};
 
 /// The minimum gap between two canonical-queue resubmits: a drift burst
@@ -39,6 +39,12 @@ impl DaemonLoop {
             tracing::warn!(name: "daemon.queue_track_change.discarded", target: "queue", slot = ?slot_id, "discarding track change for unknown slot");
             return EventOutcome::CONTINUE;
         };
+        // While the queue plays, its active slot is its start slot
+        // (gui-named-queues design D4, spec "Each queue has a start slot").
+        self.shared_queue.note_start_slot(
+            &self.owner.core.queue,
+            StartSlotObservation::Active(resolved_slot_id),
+        );
         broadcast(
             &self.ctrl_clients,
             &CtrlEvent::Player(PlayerEvent::TrackChanged {
@@ -65,13 +71,22 @@ impl DaemonLoop {
         }
         self.shared_queue.publish_observed(&self.owner.core);
         self.broadcast_owner_queue_state();
-        // Settle playback intent if the reported slot matches.
+        // Settle playback intent if the reported slot matches. A Play that
+        // named items settles on the item it named; a Play with no items
+        // started the queue at its start slot under this intent's transition
+        // identity, so the run reporting that transition settles it
+        // (gui-named-queues design D4).
         if let Some((connection_id, request_id, generation)) = self
             .owner
             .intents
             .current
             .as_ref()
             .filter(|current| match &current.action {
+                PlaybackIntentAction::Play { item_ids, .. } if item_ids.is_empty() => transition
+                    .is_some_and(|(transition_request_id, transition_generation)| {
+                        current.request_id == transition_request_id
+                            && current.generation == transition_generation
+                    }),
                 PlaybackIntentAction::Play { item_ids, .. } => self
                     .owner
                     .core
@@ -242,6 +257,7 @@ impl DaemonLoop {
 
         apply_stopped_observation(
             &mut self.owner,
+            &self.shared_queue,
             &self.player,
             *run_identity,
             *slot_id,

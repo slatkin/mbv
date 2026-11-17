@@ -611,4 +611,20 @@ impl QueueItem {
             Self::Audiobookshelf(item) => item.playlist_item_id(),
         }
     }
+
+    /// Clear every Service-owned resume position: the Emby
+    /// `playback_position_ticks` and the Audiobookshelf episode or book
+    /// `position_ticks`. A Feed entry keeps its locally recorded position and
+    /// a Twitch item keeps no playback state. Persisted queue state applies
+    /// this, so no Service position is written to or restored from disk.
+    pub fn clear_service_positions(&mut self) {
+        match self {
+            Self::Emby(item) => item.playback_position_ticks = 0,
+            Self::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
+                episode.position_ticks = 0;
+            }
+            Self::Audiobookshelf(AudiobookshelfItem::Book(book)) => book.position_ticks = 0,
+            Self::Feed(_) | Self::Twitch(_) => {}
+        }
+    }
 }

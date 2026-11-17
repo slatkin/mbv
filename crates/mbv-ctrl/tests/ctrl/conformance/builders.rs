@@ -7,7 +7,7 @@
 use mbv_emby_model::{EmbyImageTags, EmbyItem};
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, FeedKind,
-    QueueItem, QueueItemContentId, QueueLineage, QueueSource, TwitchItem,
+    NamedQueueId, QueueItem, QueueItemContentId, QueueLineage, QueueSource, TwitchItem,
 };
 
 use super::*;
@@ -46,6 +46,18 @@ pub(crate) const QUEUED_REQUEST_ID: u64 = 8;
 /// The queued transition's generation, distinct from `GENERATION` for the
 /// same reason.
 pub(crate) const QUEUED_GENERATION: u64 = 4;
+/// The current queue's id in the Named-queue fixtures.
+pub(crate) fn named_queue_id() -> NamedQueueId {
+    NamedQueueId::from_raw(1)
+}
+/// The resting queue's id: the queue a snapshot or an edit names.
+pub(crate) fn resting_queue_id() -> NamedQueueId {
+    NamedQueueId::from_raw(3)
+}
+/// The name the rename command and the queue list carry.
+pub(crate) const NAMED_QUEUE_NAME: &str = "Conformance Queue";
+/// The start slot the resting-queue snapshot carries.
+pub(crate) const START_SLOT_ID: u64 = 1;
 
 // ── Queue payload builders ───────────────────────────────────────────────
 
@@ -219,7 +231,47 @@ pub(crate) fn unified_queue_state() -> UnifiedQueueStateData {
         lineage: QueueLineage(2),
         in_flight_transition: None,
         queued_latest_transition: None,
+        queue: None,
+        start_slot: None,
     }
+}
+
+/// The canonical snapshot of a resting Named queue: one slot, nothing active,
+/// its Named queue id, and its start slot — the populated case of both
+/// defaulted fields (design D3 of `gui-named-queues`).
+pub(crate) fn named_queue_state() -> UnifiedQueueStateData {
+    UnifiedQueueStateData {
+        status: PlayerStatus::default(),
+        slots: vec![UnifiedQueueSlot {
+            slot_id: START_SLOT_ID,
+            item: emby_queue_item(),
+        }],
+        active_slot: None,
+        revision: 12,
+        source: queue_source(),
+        lineage: QueueLineage(4),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+        queue: Some(resting_queue_id()),
+        start_slot: Some(START_SLOT_ID),
+    }
+}
+
+/// The Named queue list the list event carries: the current queue first, then
+/// the resting queue under the carried name.
+pub(crate) fn named_queue_entries() -> Vec<NamedQueueEntry> {
+    vec![
+        NamedQueueEntry {
+            id: named_queue_id(),
+            name: "Default".to_owned(),
+            len: 4,
+        },
+        NamedQueueEntry {
+            id: resting_queue_id(),
+            name: NAMED_QUEUE_NAME.to_owned(),
+            len: 1,
+        },
+    ]
 }
 
 /// The canonical `UnifiedQueueStateData` with both transition fields set: a

@@ -5,7 +5,7 @@ fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
     let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.ctrl_compatibility.supports_answered_queue_ops = true;
     let op = remote
-        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, None)
         .unwrap();
     let Some(expected) = op else {
         panic!("current peer advertises answered queue operations");
@@ -15,7 +15,8 @@ fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueRemoveSlot {
             slot_id: 17,
-            op: Some(id)
+            op: Some(id),
+            queue: None,
         }) if id == expected
     ));
 }
@@ -26,7 +27,7 @@ fn legacy_queue_op_sends_without_an_operation_id() {
     remote.ctrl_compatibility.supports_answered_queue_ops = false;
     assert_eq!(
         remote
-            .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+            .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, None)
             .unwrap(),
         None
     );
@@ -34,7 +35,8 @@ fn legacy_queue_op_sends_without_an_operation_id() {
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueRemoveSlot {
             slot_id: 17,
-            op: None
+            op: None,
+            queue: None,
         })
     ));
 }
@@ -60,6 +62,8 @@ fn inbound_queue_op_result_follows_prior_state_event() {
         },
     ];
     let mut state = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(2, 3),
         slots,
         active_slot: Some(30),
@@ -348,6 +352,8 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     let pending_playback = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     let reconnect_snapshot = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(0, 2),
         slots: vec![
             UnifiedQueueSlot {
@@ -427,6 +433,8 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     let f3 = make_feed_entry("f3");
 
     let unified = UnifiedQueueStateData {
+        queue: None,
+        start_slot: None,
         status: status_with_idx_and_len(1, 4),
         slots: vec![
             UnifiedQueueSlot {
@@ -515,17 +523,53 @@ fn replace_start_position_is_sent_only_to_an_owner_that_advertises_the_capabilit
         .supports_queue_replace_start_position = advertises;
 
     remote
-        .send_queue_op(QueueOp::Replace {
-            items: Vec::new(),
-            start_idx: Some(2),
-            source: QueueSource::Unknown,
-            start_position_secs: Some(95.5),
-        })
+        .send_queue_op(
+            QueueOp::Replace {
+                items: Vec::new(),
+                start_idx: Some(2),
+                source: QueueSource::Unknown,
+                start_position_secs: Some(95.5),
+            },
+            None,
+        )
         .unwrap();
 
     assert!(matches!(
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueReplace { start_position_secs, .. })
             if start_position_secs == expected
+    ));
+}
+
+/// A Named queue edit carries the queue it reaches, and the play names its
+/// queue in the command (design D3, D7 of `gui-named-queues`).
+#[test]
+fn a_named_queue_operation_names_its_queue_on_the_wire() {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.ctrl_compatibility.supports_answered_queue_ops = true;
+    let queue = mbv_queue::NamedQueueId::from_raw(7);
+
+    remote
+        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 }, Some(queue))
+        .unwrap();
+    remote
+        .send_queue_op(QueueOp::PlayQueue { slot: Some(17) }, Some(queue))
+        .unwrap();
+
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueRemoveSlot {
+            slot_id: 17,
+            queue: Some(sent),
+            ..
+        }) if sent == queue
+    ));
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::NamedQueuePlay {
+            queue: sent,
+            slot: Some(17),
+            ..
+        }) if sent == queue
     ));
 }

@@ -1,5 +1,6 @@
 {
   "UnifiedQueueShuffle": {
-    "op": 47
+    "op": 47,
+    "queue": null
   }
 }

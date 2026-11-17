@@ -96,7 +96,7 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     );
     let mut rows_frame = queue(vec![item(1), item(2), item(3)]);
     rows_frame.drag = Some(drag(ghost, GuiQueueInsertion::After { slot: 2 }));
-    let fixture = built_with_frame(queue_panel_app, rows_frame, ends_at_summary(), None);
+    let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
     let ghost_style = fixture.style_of("[data-ghost]");
     assert!(fixture.text().contains("Dragged track"));
@@ -118,9 +118,8 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
         "{ghost_title}"
     );
     assert!(
-        !fixture
-            .text_of("[data-ghost]")
-            .contains(&expected_row_end())
+        !fixture.presents("[data-ghost] svg"),
+        "the ghost paints no start mark"
     );
 
     let line = fixture.style_of("[data-insertion]");

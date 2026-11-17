@@ -361,11 +361,12 @@ impl App {
         };
         let result = {
             let (player, _) = self.queue_link(crate::app::QueueLink::Local);
-            player
-                .remote()
-                .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {
+            player.remote().send_queue_op(
+                mbv_remote_player::QueueOp::ApplyProgress {
                     updates: vec![update],
-                })
+                },
+                None,
+            )
         };
         if let Err(error) = result {
             self.flash(error.to_string(), ToastSeverity::Warning);

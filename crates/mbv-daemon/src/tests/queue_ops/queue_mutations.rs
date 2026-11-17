@@ -42,6 +42,7 @@ fn unified_queue_append_adds_slots_and_forwards_to_player() {
     let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![
                 emby_qi("b", "Video", "Movie"),
                 emby_qi("c", "Video", "Movie"),
@@ -104,6 +105,7 @@ fn unified_playback_queue_edits_are_answered_before_the_next_input_append_before
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![emby_qi("inserted", "Video", "Movie")],
             before: Some(anchor.raw()),
             op: Some(mbv_ctrl::QueueOpId(44)),
@@ -160,6 +162,7 @@ fn unified_playback_queue_edits_are_answered_before_the_next_input_stale_append_
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![emby_qi("inserted", "Video", "Movie")],
             before: Some(u64::MAX),
             op: Some(mbv_ctrl::QueueOpId(45)),
@@ -196,6 +199,7 @@ fn unified_queue_append_rejects_when_nothing_is_admissible() {
     let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![emby_qi("b", "Video", "Movie")],
             before: None,
             op: None,
@@ -238,6 +242,7 @@ fn unified_queue_move_slot_reorders_canonically_and_forwards_to_player() {
     let c_slot = owner.core.queue.slots()[2].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueMoveSlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(c_slot),
             to_index: 0,
             op: None,
@@ -281,6 +286,7 @@ fn unified_queue_move_unknown_slot_is_rejected_without_mutation() {
     let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
     run_queue_cmd(
         CtrlCmd::UnifiedQueueMoveSlot {
+            queue: None,
             slot_id: 999_999,
             to_index: 0,
             op: None,
@@ -315,6 +321,7 @@ fn unified_queue_remove_unknown_slot_is_rejected() {
     let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
+            queue: None,
             slot_id: 999_999,
             op: None,
         },
@@ -356,6 +363,7 @@ fn unified_queue_remove_non_active_slot_keeps_active_and_forwards_removal() {
     let b_slot = owner.core.queue.slots()[1].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(b_slot),
             op: None,
         },
@@ -410,6 +418,7 @@ fn unified_queue_remove_slots_applies_the_range_and_publishes_one_snapshot() {
     let c_slot = owner.core.queue.slots()[2].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
+            queue: None,
             slot_ids: vec![
                 mbv_ctrl::slot_id_to_u64(b_slot),
                 mbv_ctrl::slot_id_to_u64(c_slot),
@@ -469,6 +478,7 @@ fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
     let a_slot = owner.core.queue.slots()[0].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
+            queue: None,
             slot_ids: vec![999_999],
             op: None,
         },
@@ -489,6 +499,7 @@ fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
     // An active slot in the batch is removed with the rest.
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
+            queue: None,
             slot_ids: vec![mbv_ctrl::slot_id_to_u64(a_slot), 999_999],
             op: None,
         },
@@ -529,6 +540,7 @@ fn unified_queue_remove_active_slot_keeps_queue_when_others_remain() {
     let a_slot = owner.core.queue.slots()[0].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(a_slot),
             op: None,
         },
@@ -569,6 +581,7 @@ fn unified_queue_remove_last_slot_clears_the_player_queue() {
     let a_slot = owner.core.queue.slots()[0].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(a_slot),
             op: None,
         },
@@ -649,6 +662,7 @@ fn unified_playback_queue_edits_are_answered_before_the_next_input_sender_gets_r
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![emby_qi("b", "Video", "Movie")],
             before: None,
             op: Some(mbv_ctrl::QueueOpId(42)),
@@ -688,6 +702,7 @@ fn unified_playback_queue_edits_are_answered_before_the_next_input_empty_set_rem
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
+            queue: None,
             slot_ids: Vec::new(),
             op: Some(mbv_ctrl::QueueOpId(43)),
         },
@@ -722,6 +737,7 @@ fn unified_playback_queue_edits_are_answered_before_the_next_input_legacy_comman
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueueAppend {
+            queue: None,
             items: vec![emby_qi("b", "Video", "Movie")],
             before: None,
             op: None,

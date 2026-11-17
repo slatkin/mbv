@@ -89,19 +89,41 @@ impl App {
 
     /// Return the playback to this machine: disconnect a direct remote session,
     /// and hand a remote output back to Local. The Sessions sidebar's detach and
-    /// the chooser's local row share it. The owner tears the Cast receiver app or
+    /// the chooser's local row share it. The shared continue-playback gate
+    /// (confirm-output-handoff) asks first when the selection would hand off
+    /// an active slot — a remote output that holds one; No cancels and the
+    /// remote output keeps playing. The owner tears the Cast receiver app or
     /// the Emby Session down (design D12, D13).
     pub(in crate::app) fn detach_to_local(&mut self) {
-        let cast_output = self.output_is_cast();
-        let session_output = self.output_is_emby_session();
-        let remote_output = cast_output || session_output;
-        // Skip disconnect_remote's "No session selected" toast when a remote
-        // output is the detach target; the output hand-back below is the real
-        // action in that case.
-        if self.can_disconnect_remote() || !remote_output {
-            self.disconnect_remote();
+        if self.output_hand_off_applies(!self.local_owner_output_is_remote()) {
+            self.ask_continue_output_hand_off(None, mbv_emby::device_name());
+            return;
         }
+        self.detach_to_local_confirmed();
+    }
+
+    /// The detach's body, shared by the immediate path (nothing active on the
+    /// remote output, or no remote output) and the confirmed continue-playback
+    /// answer: disconnect a direct remote session and hand a remote output
+    /// back to Local. The detach decision reads the same fact the gate read
+    /// (`local_owner_output`, the local Owner's connection record) — never the
+    /// drained `playback_output` mirror, which while thin-client describes the
+    /// peer and before the drain lags the record one tick.
+    pub(in crate::app) fn detach_to_local_confirmed(&mut self) {
+        let owner_output = self.local_owner_output();
+        let cast_output = matches!(&owner_output, Some(mbv_ctrl::OutputState::Cast { .. }));
+        let session_output = matches!(
+            &owner_output,
+            Some(mbv_ctrl::OutputState::EmbySession { .. })
+        );
+        let remote_output = cast_output || session_output;
         if remote_output {
+            // The hand-back targets the local Owner's remote output: sever to
+            // the local Owner first while thin-client, so the selection lands
+            // on the owner that holds the slot (a no-op when this Client
+            // already holds it). The sever stops no playback; the Owner tears
+            // the Cast receiver or the Emby Session down (design D12, D13).
+            self.sever_connections_without_output_change();
             self.select_playback_output(mbv_ctrl::OutputSelection::Local);
             let message = if cast_output {
                 "Detached from cast target"
@@ -109,6 +131,8 @@ impl App {
                 "Detached from Emby Session"
             };
             self.flash(message.to_string(), ToastSeverity::Success);
+        } else {
+            self.disconnect_remote();
         }
     }
 

@@ -11,20 +11,18 @@ impl App {
     /// resolves the click column against its own painted `seekbar_area`, so the
     /// shell never reads that component-owned geometry.
     pub(in crate::app) fn seek_to_fraction(&mut self, fraction: f64) {
-        let runtime_ticks = self.player.status_snapshot().runtime_ticks;
+        let status = self.shown_playback_status();
+        let runtime_ticks = status.runtime_ticks;
         if runtime_ticks == 0 {
             return;
         }
         let target_secs = fraction * mbv_emby_model::ticks_to_seconds(runtime_ticks);
         let _ = self
-            .player
+            .shown_queue_owner_player()
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).
-        let active_index = {
-            let status = self.player.status_snapshot();
-            status.active.then_some(status.current_idx)
-        };
+        let active_index = status.active.then_some(status.current_idx);
         if let Some(slot) = active_index.and_then(|index| self.playback_queue().slots().get(index))
             && matches!(&slot.item, mbv_queue::QueueItem::Feed(e) if e.feed_id.is_some())
         {

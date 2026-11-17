@@ -29,6 +29,13 @@ impl App {
         self.owner_exe = owner_exe;
     }
 
+    /// Record which Client this process runs (gui-named-queues design D7):
+    /// the Hello claims every later App-side reconnect sends follow it. The
+    /// Owner link sets it at attach time.
+    pub(crate) fn set_client_kind(&mut self, kind: crate::ClientKind) {
+        self.client_kind = kind;
+    }
+
     /// Start this machine's Owner process from the Client's `mbv` program and
     /// wait until its control socket accepts connections. Every App-side
     /// Owner start goes through here so a GUI Client never starts itself as

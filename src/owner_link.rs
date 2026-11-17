@@ -83,10 +83,10 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
 /// `owner_exe` is the `mbv` program this Client starts an Owner from when
 /// none runs, and again after an Owner restart: `None` for the TUI Client,
 /// which is `mbv` itself; the `mbv` program the GUI Client resolved, so the
-/// Owner is never the GUI program (design D9). The Pin-swap advertisement
-/// every connection sends follows the Client kind this process declared at
-/// start-up ([`declare_gui_client`]): the TUI Client advertises `pin-swap`,
-/// the GUI Client sends a plain Hello.
+/// Owner is never the GUI program (design D9). The Hello claims every
+/// connection sends follow `kind` and this process's Pin-swap participation
+/// claim: the TUI Client advertises `pin-swap`, the GUI Client sends a plain
+/// Hello and claims `named-queues` on its local link.
 ///
 /// The Owner link starts MPRIS from `App` construction (#160, moved there from
 /// `startup` in #175 so `App` owns the resulting handle and can `rebind` it
@@ -103,12 +103,19 @@ pub fn attach_owner(
     config: &Config,
     owner_exe: Option<&Path>,
     image_decode: mbv_images::ImageDecode,
+    kind: crate::ClientKind,
 ) -> Result<App, RemotePlayerError> {
+    // The GUI Client never takes part in Pin swap (design D9 of
+    // `extract-client-core`): it is neither a terminal Client nor a pinned
+    // panel, and the swap's launch snapshot is a TUI shell query it cannot
+    // produce. Claimed before the connect below, so this process's first and
+    // every later connection advertises alike.
+    if matches!(kind, crate::ClientKind::Gui) {
+        crate::pin::claim_pin_swap_participant(false);
+    }
     let client = cached_emby_client(config);
-    let (remote, player_rx) = RemotePlayer::connect_endpoint(
-        &DaemonEndpoint::Local,
-        crate::pin::pin_swap_hello().as_ref(),
-    )?;
+    let claims = crate::client_kind::client_hello_claims(kind, &DaemonEndpoint::Local);
+    let (remote, player_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, &claims)?;
     let mut app = App::new_remote_optional_with_config(
         client,
         remote,
@@ -118,6 +125,7 @@ pub fn attach_owner(
         image_decode,
     );
     app.set_owner_exe(owner_exe.map(Path::to_path_buf));
+    app.set_client_kind(kind);
     Ok(app)
 }
 
@@ -156,17 +164,6 @@ pub fn exclusive_owner_refusal_text(error: &RemotePlayerError) -> String {
          mbv: only one terminal may use playback while stay-alive is off.\n\
          mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
     )
-}
-
-/// Declare this process the GUI Client (design D9 of `extract-client-core`).
-/// Its Owner-link connections — the initial attach and every later App-side
-/// reconnect — send a plain Client Hello, so the Owner never picks this
-/// Client as a Pin-swap target: the GUI program is neither a terminal Client
-/// nor a pinned panel, and the swap's launch snapshot is a TUI shell query
-/// it cannot produce. Call once at start-up, before the first Owner
-/// connection. The TUI Client is the default and always takes part.
-pub fn declare_gui_client() {
-    crate::pin::claim_pin_swap_participant(false);
 }
 
 /// The cached Emby client the shell starts from: the saved credential and the

@@ -62,6 +62,11 @@ impl Model {
             && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
         {
             queue.set_pending_slot(update.pending_slot);
+            // The shown entry changed: drop the marks and the viewport before
+            // the start-slot cursor lands (design D7 of `gui-named-queues`).
+            if update.presentation_reset {
+                queue.reset_presentation();
+            }
             if let Some(slots) = update.slots {
                 queue.set_rows(&slots, update.playback);
             } else if let Some((target, row)) = update.patch {

@@ -30,6 +30,7 @@ fn play_slot_on_a_cold_owner_starts_the_queue_at_the_target_slot() {
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(target),
             op: None,
         },
@@ -78,6 +79,7 @@ fn play_slot_with_a_live_run_still_jumps_instead_of_resubmitting() {
 
     run_queue_cmd(
         CtrlCmd::UnifiedQueuePlaySlot {
+            queue: None,
             slot_id: mbv_ctrl::slot_id_to_u64(target),
             op: None,
         },

@@ -11,51 +11,10 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
-use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
+use mbv_ctrl::{BuildInfo, CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_queue::{QueueItem, QueueLineage, QueueSource};
-
-/// An owner-authoritative queue operation sent over ctrl.
-#[derive(Clone, Debug)]
-pub enum QueueOp {
-    Replace {
-        items: Vec<mbv_ctrl::UnifiedQueueSlot>,
-        start_idx: Option<usize>,
-        source: QueueSource,
-        /// One-time start position for the start slot, in seconds. Sent only
-        /// to an owner that advertises `queue-replace-start-position`; the
-        /// owner otherwise ignores the field and would start at the wrong
-        /// position (queue-handoff-and-take design D4).
-        start_position_secs: Option<f64>,
-    },
-    Append {
-        items: Vec<QueueItem>,
-        before: Option<u64>,
-    },
-    RemoveSlot {
-        slot_id: u64,
-    },
-    RemoveSlots {
-        slot_ids: Vec<u64>,
-    },
-    MoveSlot {
-        slot_id: u64,
-        to_index: usize,
-    },
-    PlaySlot {
-        slot_id: u64,
-    },
-    Clear,
-    SourceUpdate {
-        source: QueueSource,
-        lineage: QueueLineage,
-    },
-    Refresh,
-    ApplyProgress {
-        updates: Vec<mbv_ctrl::ProgressUpdate>,
-    },
-}
+use mbv_queue::QueueItem;
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +69,8 @@ pub struct RemotePlayer {
 
 pub(crate) mod connect;
 mod error;
+mod named_queue;
+mod queue_op;
 #[doc(inline)]
 pub use error::RemotePlayerError;
 
@@ -118,6 +79,9 @@ mod stub;
 
 #[cfg(test)]
 mod tests;
+
+#[doc(inline)]
+pub use queue_op::QueueOp;
 
 #[cfg(any(test, feature = "test"))]
 #[doc(inline)]
@@ -134,10 +98,10 @@ pub(crate) use mbv_net::stream::SocketStream;
 /// D2): the `pin-swap` capability makes the Client a swap target that answers
 /// `SwapPrepared`, `pinned` adds the `pinned-surface` capability, and
 /// `swap_token` marks the Hello of an Owner-launched swap replacement.
-/// `None` at [`RemotePlayer::connect_endpoint`] sends a plain Client Hello,
-/// so the Owner never picks that Client as a swap target — the GUI Client,
-/// which is neither a terminal Client nor a pinned panel and cannot produce
-/// the swap's TUI launch snapshot, connects that way.
+/// `None` in [`ClientHelloClaims::pin_swap`] sends a plain Client Hello, so
+/// the Owner never picks that Client as a swap target — the GUI Client, which
+/// is neither a terminal Client nor a pinned panel and cannot produce the
+/// swap's TUI launch snapshot, connects that way.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PinSwapHello {
     /// Advertise `pinned-surface`: this Client runs in the pinwin panel.
@@ -146,16 +110,31 @@ pub struct PinSwapHello {
     pub swap_token: Option<String>,
 }
 
+/// What one Client connection claims in its Hello beyond the standard Client
+/// capabilities (gui-named-queues design D7). The Client kind that makes a
+/// claim decides the value, so this crate holds no global Client state.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ClientHelloClaims {
+    /// The Pin-swap advertisement (tray-pin-swap design D2): `Some` for a
+    /// Client that takes part in Pin swap, `None` for a plain Client Hello.
+    pub pin_swap: Option<PinSwapHello>,
+    /// Advertise `named-queues`: this Client reads the local Owner's Named
+    /// queues and shows one of them at a time (gui-named-queues design D3,
+    /// D7). Only the GUI Client's link to the local Owner claims it; the TUI
+    /// Client shows the current queue by its connection rule and never does.
+    pub named_queues: bool,
+}
+
 impl RemotePlayer {
-    /// Connect to `endpoint` as a control Client. `Some(pin_swap)` advertises
-    /// the Pin-swap capabilities and token (tray-pin-swap design D2/D6); the
-    /// TUI Client always connects that way. `None` sends a plain Client
-    /// Hello, so the Owner never picks this Client as a swap target.
+    /// Connect to `endpoint` as a control Client, advertising `claims` in the
+    /// Client Hello. The TUI Client advertises Pin swap (tray-pin-swap design
+    /// D2/D6); the GUI Client sends a plain Hello and claims `named-queues` on
+    /// its link to the local Owner.
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
-        pin_swap: Option<&PinSwapHello>,
+        claims: &ClientHelloClaims,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-        connect::connect_endpoint(endpoint, pin_swap)
+        connect::connect_endpoint(endpoint, claims)
     }
 
     #[must_use]
@@ -555,86 +534,6 @@ impl RemotePlayer {
     #[must_use]
     pub fn supports_twitch_queue(&self) -> bool {
         self.ctrl_compatibility.supports_twitch_queue
-    }
-
-    /// Send an owner queue operation, using answered correlation when negotiated.
-    pub fn send_queue_op(
-        &self,
-        operation: QueueOp,
-    ) -> Result<Option<QueueOpId>, RemotePlayerError> {
-        let op = self
-            .supports_answered_queue_ops()
-            .then(|| QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed)));
-        let command = match operation {
-            QueueOp::Replace {
-                items,
-                start_idx,
-                source,
-                start_position_secs,
-            } => {
-                // An owner without the capability ignores the field and would
-                // start the slot at its resume source instead — never send it
-                // there (queue-handoff-and-take spec, owner without the
-                // capability).
-                let start_position_secs =
-                    start_position_secs.filter(|_| self.supports_queue_replace_start_position());
-                CtrlCmd::UnifiedQueueReplace {
-                    items: items.iter().map(|slot| slot.item.clone()).collect(),
-                    slots: items,
-                    start_idx,
-                    source,
-                    start_position_secs,
-                    op,
-                }
-            }
-            QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend { items, before, op },
-            QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op },
-            QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op },
-            QueueOp::MoveSlot { slot_id, to_index } => CtrlCmd::UnifiedQueueMoveSlot {
-                slot_id,
-                to_index,
-                op,
-            },
-            QueueOp::PlaySlot { slot_id } => CtrlCmd::UnifiedQueuePlaySlot { slot_id, op },
-            QueueOp::Clear => match op {
-                Some(op) => CtrlCmd::UnifiedQueueClearOp { op },
-                None => CtrlCmd::UnifiedQueueClear,
-            },
-            QueueOp::SourceUpdate { source, lineage } => {
-                if !self.supports_owner_queue_source_update() {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support owner queue source updates",
-                    ));
-                }
-                CtrlCmd::UnifiedQueueSourceUpdate {
-                    source,
-                    lineage,
-                    op,
-                }
-            }
-            QueueOp::Refresh => {
-                let Some(op) = op else {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support answered queue refresh",
-                    ));
-                };
-                CtrlCmd::UnifiedQueueRefresh { op }
-            }
-            QueueOp::ApplyProgress { updates } => {
-                let Some(op) = op else {
-                    return Err(RemotePlayerError::queue_operation(
-                        "daemon does not support answered queue progress",
-                    ));
-                };
-                CtrlCmd::UnifiedQueueApplyProgress { op, updates }
-            }
-        };
-        if !self.send_ctrl_cmd(command) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send queue operation to Player owner",
-            ));
-        }
-        Ok(op)
     }
 
     /// Snapshot of the owner-reported playback state. Locks internally and

@@ -12,6 +12,10 @@ pub struct QueueView {
     queue: PlaybackQueue,
     source: QueueSource,
     lineage: QueueLineage,
+    /// The slot a play of this queue starts, as the owner last named it (design
+    /// D4): `None` when the queue has none and on an owner without
+    /// `named-queues`.
+    start_slot: Option<QueueSlotId>,
     pending_playback_slot: Option<QueueSlotId>,
     revision_mint: Arc<QueueRevisionMint>,
 }
@@ -32,6 +36,7 @@ impl Default for QueueView {
             queue: PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
             source: QueueSource::Unknown,
             lineage: QueueLineage::default(),
+            start_slot: None,
             pending_playback_slot: None,
             revision_mint,
         }
@@ -67,6 +72,7 @@ impl QueueView {
         };
         self.source = state.source.clone();
         self.lineage = state.lineage;
+        self.start_slot = state.start_slot.map(QueueSlotId::from_raw);
         self.pending_playback_slot = pending_playback_slot(state);
     }
 
@@ -158,6 +164,24 @@ impl QueueView {
     pub fn cursor(&self) -> usize {
         self.cursor
     }
+
+    /// The slot a play of this queue starts, when the queue still holds it
+    /// (design D4): `None` on an owner that reports no start slot, such as a
+    /// peer without `named-queues`.
+    #[must_use]
+    pub fn start_slot_id(&self) -> Option<QueueSlotId> {
+        self.start_slot
+            .filter(|slot_id| self.queue.slot(*slot_id).is_some())
+    }
+
+    /// The index of the queue's start slot, when the queue still holds it
+    /// (design D4, D7): the row a play of the queue starts, and the active row
+    /// the Queue panel rests on when the entry is shown.
+    #[must_use]
+    pub fn start_index(&self) -> Option<usize> {
+        self.start_slot_id()
+            .and_then(|slot_id| self.slot_index(slot_id))
+    }
 }
 
 fn queue_from_snapshot(
@@ -202,6 +226,8 @@ mod tests {
     fn snapshot(ids: &[u64], active: Option<u64>, lineage: u64) -> UnifiedQueueStateData {
         let items = crate::app::tests::make_items(ids.len());
         UnifiedQueueStateData {
+            queue: None,
+            start_slot: None,
             status: mbv_ctrl::player::PlayerStatus::default(),
             slots: ids
                 .iter()

@@ -22,6 +22,7 @@ use super::control_queue::{
     unified_queue_state_for_peer,
 };
 
+mod named_queue;
 mod playback;
 mod queue_edit;
 mod queue_setup;
@@ -105,6 +106,7 @@ impl CtrlContext<'_> {
             queue: &self.owner.core.queue,
             source: &self.owner.core.source,
             lineage,
+            start_slot: self.shared_queue.start_slot(),
             op: &self.op,
         }
     }
@@ -126,6 +128,7 @@ struct RejectContext<'a> {
     queue: &'a PlaybackQueue,
     source: &'a mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
+    start_slot: Option<QueueSlotId>,
     op: &'a std::cell::Cell<Option<QueueOpId>>,
 }
 
@@ -140,6 +143,7 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
         queue,
         source,
         lineage,
+        start_slot,
         op,
     } = *ctx;
     if let Some(op) = op.take() {
@@ -161,11 +165,13 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
     send_to(
         reply_tx,
         &unified_queue_state_for_peer(
+            None,
             &status,
             queue,
             source,
             lineage,
             queue.active_slot_id(),
+            start_slot,
             None,
             None,
             queue_transport,
@@ -186,6 +192,10 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
         mbv_ctrl::OwnerGateRejection::QueueSourceUpdate => reject_command(
             ctx,
             "queue source updates are supported only by the Stay-alive owner",
+        ),
+        mbv_ctrl::OwnerGateRejection::NamedQueues => reject_command(
+            ctx,
+            "named queues are supported only by the Stay-alive owner",
         ),
     }
 }
@@ -327,12 +337,20 @@ fn queue_op_id(cmd: &CtrlCmd) -> Option<QueueOpId> {
         | CtrlCmd::UnifiedQueueRemoveSlot { op, .. }
         | CtrlCmd::UnifiedQueueRemoveSlots { op, .. }
         | CtrlCmd::UnifiedQueueMoveSlot { op, .. }
-        | CtrlCmd::UnifiedQueueShuffle { op }
+        | CtrlCmd::UnifiedQueueShuffle { op, .. }
         | CtrlCmd::UnifiedQueuePlaySlot { op, .. }
         | CtrlCmd::UnifiedQueueSourceUpdate { op, .. } => *op,
-        CtrlCmd::UnifiedQueueClearOp { op }
+        CtrlCmd::UnifiedQueueClearOp { op, .. }
         | CtrlCmd::UnifiedQueueRefresh { op }
-        | CtrlCmd::UnifiedQueueApplyProgress { op, .. } => Some(*op),
+        | CtrlCmd::UnifiedQueueApplyProgress { op, .. }
+        // A Named-queue command always carries an `op`, and its handler
+        // answers it with the queue the command made, renamed, closed, or
+        // edited (gui-named-queues design D3, D5) — so the answer is not the
+        // current queue's state the way an edit's answer is.
+        | CtrlCmd::NamedQueueCreate { op }
+        | CtrlCmd::NamedQueueRename { op, .. }
+        | CtrlCmd::NamedQueueClose { op, .. }
+        | CtrlCmd::NamedQueuePlay { op, .. } => Some(*op),
         _ => None,
     }
 }
@@ -345,11 +363,13 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
         clients.queue_transport(ctx.client_id)
     };
     let event = unified_queue_state_for_peer(
+        None,
         &status,
         &ctx.owner.core.queue,
         &ctx.owner.core.source,
         *ctx.shared_queue.lineage.lock().unwrap(),
         *ctx.shared_queue.observed_active_slot.lock().unwrap(),
+        ctx.shared_queue.start_slot(),
         in_flight,
         queued_latest,
         queue_transport,
@@ -398,20 +418,7 @@ fn dispatch_ctrl_command(
             cursor,
             source: new_source,
         } => queue_setup::handle_adopt_queue(ctx, queue_lineage, items, cursor, new_source),
-        // Stale index-addressed jump from a cross-version peer. Slot-id +
-        // request-identity JumpTo is now the only jump path, so an ordinal
-        // index carries no evidence about which slot was intended: reject it
-        // visibly via the existing command-rejection path (design D6).
-        CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::JumpTo(_)) => {
-            send_to(
-                ctx.reply_tx,
-                &CtrlEvent::CommandRejected(
-                    "index-addressed queue jump is no longer supported; use unified queue commands"
-                        .to_string(),
-                ),
-            );
-        }
-        CtrlCmd::PlayerCmd(pc) => crate::cast::route_player_cmd(ctx, pc),
+        CtrlCmd::PlayerCmd(pc) => route_player_command(ctx, pc),
         CtrlCmd::Stop => handle_stop(ctx),
         CtrlCmd::PlaybackIntent(intent) => playback::handle_playback_intent(ctx, intent),
         CtrlCmd::RequestShutdown => {
@@ -427,20 +434,26 @@ fn dispatch_ctrl_command(
         // and the Cast connector lives on the loop for `SelectPlaybackOutput`
         // (cast-owner-output task 3.2). Direct callers that bypass the loop
         // have no swap machine, owner-action path, or connector to consult.
-        CtrlCmd::SwapPrepared => {
-            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
-        }
-        CtrlCmd::RunOwnerAction(_) => {
-            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
-        }
-        CtrlCmd::SelectPlaybackOutput(_) => {
-            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
-        }
+        CtrlCmd::SwapPrepared => log_swap_prepared_outside_loop(),
+        CtrlCmd::RunOwnerAction(_) => log_owner_action_outside_loop(),
+        CtrlCmd::SelectPlaybackOutput(_) => log_select_output_outside_loop(),
+        cmd @ (CtrlCmd::NamedQueueCreate { .. }
+        | CtrlCmd::NamedQueueRename { .. }
+        | CtrlCmd::NamedQueueClose { .. }
+        | CtrlCmd::NamedQueuePlay { .. }
+        | CtrlCmd::NamedQueueShow { .. }) => dispatch_named_queue_command(cmd, ctx),
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: new_source,
             lineage: cmd_lineage,
+            queue,
             ..
-        } => queue_setup::handle_queue_source_update(ctx, queue_lineage, new_source, cmd_lineage),
+        } => queue_setup::handle_queue_source_update(
+            ctx,
+            queue_lineage,
+            new_source,
+            cmd_lineage,
+            queue,
+        ),
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace {
             items,
@@ -448,6 +461,7 @@ fn dispatch_ctrl_command(
             start_idx,
             source: new_source,
             start_position_secs,
+            queue,
             ..
         } => queue_setup::handle_queue_replace(
             ctx,
@@ -457,35 +471,106 @@ fn dispatch_ctrl_command(
             start_idx,
             start_position_secs,
             new_source,
+            queue,
         ),
-        CtrlCmd::UnifiedQueueAppend { items, before, .. } => {
-            queue_setup::handle_queue_append(ctx, queue_lineage, items, before);
+        CtrlCmd::UnifiedQueueAppend {
+            items,
+            before,
+            queue,
+            ..
+        } => {
+            queue_setup::handle_queue_append(ctx, queue_lineage, items, before, queue);
         }
         CtrlCmd::UnifiedQueueRefresh { .. } => queue_setup::handle_queue_refresh(ctx),
-        CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } => {
-            queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id);
+        CtrlCmd::UnifiedQueueRemoveSlot { slot_id, queue, .. } => {
+            queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id, queue);
         }
-        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, .. } => {
-            queue_edit::handle_queue_remove_slots(ctx, slot_ids);
+        CtrlCmd::UnifiedQueueRemoveSlots {
+            slot_ids, queue, ..
+        } => {
+            queue_edit::handle_queue_remove_slots(ctx, slot_ids, queue);
         }
         CtrlCmd::UnifiedQueueMoveSlot {
-            slot_id, to_index, ..
+            slot_id,
+            to_index,
+            queue,
+            ..
         } => {
-            queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index);
+            queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index, queue);
         }
-        CtrlCmd::UnifiedQueueShuffle { .. } => {
-            queue_edit::handle_queue_shuffle(ctx);
+        CtrlCmd::UnifiedQueueShuffle { queue, .. } => {
+            queue_edit::handle_queue_shuffle(ctx, queue);
         }
-        CtrlCmd::UnifiedQueuePlaySlot { slot_id, .. } => {
-            queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id);
+        CtrlCmd::UnifiedQueuePlaySlot { slot_id, queue, .. } => {
+            queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id, queue);
         }
-        CtrlCmd::UnifiedQueueClear | CtrlCmd::UnifiedQueueClearOp { .. } => {
-            queue_edit::handle_queue_clear(ctx);
-        }
+        CtrlCmd::UnifiedQueueClear => queue_edit::handle_queue_clear(ctx, None),
+        CtrlCmd::UnifiedQueueClearOp { queue, .. } => queue_edit::handle_queue_clear(ctx, queue),
         CtrlCmd::UnifiedQueueApplyProgress { updates, .. } => {
             queue_edit::handle_queue_apply_progress(ctx, updates);
         }
     }
+}
+
+/// Dispatches one Named-queue command (gui-named-queues design D3, D5). The
+/// caller hands this function the five `NamedQueue*` variants only, so the
+/// fallthrough arm is unreachable: a new Named-queue command first needs a
+/// dispatcher arm, which is where the compiler stops it.
+fn dispatch_named_queue_command(cmd: CtrlCmd, ctx: &mut CtrlContext<'_>) {
+    match cmd {
+        CtrlCmd::NamedQueueCreate { .. } => named_queue::handle_create(ctx),
+        CtrlCmd::NamedQueueRename { queue, name, .. } => {
+            named_queue::handle_rename(ctx, queue, &name);
+        }
+        CtrlCmd::NamedQueueClose { queue, .. } => named_queue::handle_close(ctx, queue),
+        CtrlCmd::NamedQueuePlay { queue, slot, .. } => {
+            named_queue::handle_play(ctx, queue, slot);
+        }
+        CtrlCmd::NamedQueueShow { queue } => named_queue::handle_show(ctx, queue),
+        _ => {}
+    }
+}
+
+/// Routes one player command from a peer to the active output. An
+/// index-addressed `JumpTo` is a stale cross-version request and is rejected
+/// visibly (design D6); every other command is the output's.
+fn route_player_command(ctx: &mut CtrlContext<'_>, command: mbv_ctrl::WireCommand) {
+    match command {
+        mbv_ctrl::WireCommand::JumpTo(_) => reject_stale_index_jump(ctx),
+        other => crate::cast::route_player_cmd(ctx, other),
+    }
+}
+
+/// Rejects one stale index-addressed jump from a cross-version peer. Slot-id +
+/// request-identity `JumpTo` is now the only jump path, so an ordinal index
+/// carries no evidence about which slot was intended: it is rejected visibly
+/// through the existing command-rejection path (design D6).
+fn reject_stale_index_jump(ctx: &CtrlContext<'_>) {
+    send_to(
+        ctx.reply_tx,
+        &CtrlEvent::CommandRejected(
+            "index-addressed queue jump is no longer supported; use unified queue commands"
+                .to_string(),
+        ),
+    );
+}
+
+/// Documented no-op: the swap machine on the event loop takes `SwapPrepared`,
+/// so a direct caller that bypasses the loop has none to hand it to.
+fn log_swap_prepared_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
+}
+
+/// Documented no-op: the event loop's owner-action handler takes
+/// `RunOwnerAction`.
+fn log_owner_action_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
+}
+
+/// Documented no-op: the Cast connector lives on the event loop, which
+/// `CtrlContext` does not carry.
+fn log_select_output_outside_loop() {
+    tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
 }
 
 fn log_unexpected_hello_after_negotiation() {

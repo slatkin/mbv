@@ -60,9 +60,9 @@ mod paths;
 pub use paths::{
     RuntimeDirError, RuntimeDirErrorReason, ScriptSource, config_path, control_socket_path,
     data_dir_system_or_local, default_audio_pipe_path, ensure_runtime_dir, home_latest_launch_path,
-    library_position_state_path, mpv_config_dir, mpv_ipc_path, osc_fonts_dir, osc_fonts_source,
-    osc_script_source, owner_lock_path, prefs_path, queue_state_path, resolve_script_source,
-    stay_alive_queue_state_path, token_cache_path,
+    library_position_state_path, mpv_config_dir, mpv_ipc_path, named_queues_state_path,
+    osc_fonts_dir, osc_fonts_source, osc_script_source, owner_lock_path, prefs_path,
+    queue_state_path, resolve_script_source, stay_alive_queue_state_path, token_cache_path,
 };
 #[cfg(test)]
 pub(crate) use paths::{checkout_fonts_dir, checkout_scripts_entry};
@@ -79,6 +79,14 @@ pub use state::{
 };
 #[cfg(test)]
 pub(crate) use state::{load_last_remote_connection_at, save_last_remote_connection_at};
+mod named_queues;
+#[doc(inline)]
+pub use named_queues::{
+    DEFAULT_NAMED_QUEUE_NAME, FIRST_QUEUE_RAW_ID, NamedQueue, NamedQueuesState,
+    converted_named_queues_state, load_named_queues_state, load_named_queues_state_at,
+    load_or_migrate_named_queues_state, load_or_migrate_named_queues_state_at,
+    save_named_queues_state, save_named_queues_state_at,
+};
 #[doc(inline)]
 pub use ui_state_reset::clear_saved_ui_presentation_state;
 mod credentials;

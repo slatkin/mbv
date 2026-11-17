@@ -31,7 +31,7 @@ pub(crate) use core::PlaybackIntentState;
 pub(crate) use core::{
     DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, QueuePersistenceRequest, SharedQueueState,
     TogglePanelHook, audio_only_rejection, broadcast, dispatch_slot_jump, expire_and_redispatch,
-    reset_slot_jumps, settle_and_redispatch, submit_queue_slots_for_replace,
+    named_queues_state, reset_slot_jumps, settle_and_redispatch, submit_queue_slots_for_replace,
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, LocalOutputHooks, SwapDirection};
@@ -67,6 +67,8 @@ pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, record_completed_slot,
 };
+#[cfg(test)]
+pub(crate) use run::{StartupQueues, restored_state_at};
 #[doc(inline)]
 pub use run::{run_local_with_options, run_with_options};
 mod event_loop;

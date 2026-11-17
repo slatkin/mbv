@@ -119,6 +119,8 @@ pub fn shared_queue_state() -> SharedQueueState {
         lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
+        start_slot: Arc::new(Mutex::new(None)),
+        named_queue_list: Arc::new(Mutex::new(None)),
     }
 }
 

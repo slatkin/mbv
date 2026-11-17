@@ -11,6 +11,10 @@ use std::time::Instant;
 
 pub(super) type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
 
+/// The Named-queue states the loop persisted, as the state file holds them: each
+/// write recorded as its JSON value, so a test can reload it as a restart does.
+pub(super) type PersistedNamed = Rc<RefCell<Vec<serde_json::Value>>>;
+
 /// Cloneable projection of a persisted snapshot (`StayAliveQueueState` is not
 /// `Clone`), holding the fields these tests assert on.
 pub(super) struct RecordedSnapshot {
@@ -42,6 +46,7 @@ impl RecordedSnapshot {
 pub(super) struct TestLoop {
     pub(super) event_loop: DaemonLoop,
     pub(super) persisted: Persisted,
+    pub(super) persisted_named: PersistedNamed,
     pub(super) settings: Arc<Mutex<OwnerSettings>>,
     pub(super) merged_rx: mpsc::Receiver<DaemonEvent>,
     /// Counts the pinned-panel toggle requests the loop ran.
@@ -111,6 +116,8 @@ pub(super) fn test_loop_with_queue(
 ) -> TestLoop {
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
+    let persisted_named: PersistedNamed = Rc::new(RefCell::new(Vec::new()));
+    let recorded_named = Rc::clone(&persisted_named);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let settings = Arc::new(Mutex::new(OwnerSettings::default()));
     let current_settings = Arc::clone(&settings);
@@ -147,6 +154,13 @@ pub(super) fn test_loop_with_queue(
             recorded.borrow_mut().push(RecordedSnapshot::of(state));
             Ok(())
         }),
+        named_store: Box::new(move |state| {
+            recorded_named
+                .borrow_mut()
+                .push(serde_json::to_value(&state).unwrap_or(serde_json::Value::Null));
+            Ok(())
+        }),
+        named_queues_saved: None,
         queue_persist_tx: None,
         tray: null_tray(),
         pin_swap,
@@ -160,6 +174,7 @@ pub(super) fn test_loop_with_queue(
     TestLoop {
         event_loop,
         persisted,
+        persisted_named,
         settings,
         merged_rx,
         panel_toggles,

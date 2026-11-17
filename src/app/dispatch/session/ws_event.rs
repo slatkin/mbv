@@ -1,4 +1,4 @@
-use crate::app::{App, LibEvent, ModelContentEvent, dispatch::notify::ToastSeverity};
+use crate::app::{App, LibEvent, ModelContentEvent, QueueTarget, dispatch::notify::ToastSeverity};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ws::WsEvent;
 
@@ -130,8 +130,10 @@ impl App {
         if start_position_ticks > 0 {
             items[start_idx].playback_position_ticks = start_position_ticks;
         }
+        // A remote Play replaces the Owner's current queue: it is not a user
+        // edit of the Queue panel's shown queue, so it names no Named queue.
         self.replace_emby_queue_on_owner(
-            self.playing_queue_link(),
+            QueueTarget::current(self.playing_queue_link()),
             items,
             start_idx,
             mbv_queue::QueueSource::Remote,
