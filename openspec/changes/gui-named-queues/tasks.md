@@ -152,9 +152,9 @@ holds that change.
 
 ## 9. Integration checks
 
-- [ ] 9.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+- [x] 9.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   and `cargo nextest run --workspace`, and fix every failure.
-- [ ] 9.2 Run `openspec validate gui-named-queues --strict` and `make check-code-file-lines`, and
+- [x] 9.2 Run `openspec validate gui-named-queues --strict` and `make check-code-file-lines`, and
   split any file over 800 lines along its responsibility seam.
 
 ## Workflow follow-up
