@@ -711,6 +711,27 @@ pub fn QueuePanel() -> Element {
                             } }
                         }
                     }
+                    if let Some(scroll) = queue.scroll {
+                        // The scroll bar: a readout of the core's scroll over
+                        // the list's trailing padding, so it never covers a
+                        // row. The thumb is the viewport's share of the
+                        // list; the pointer passes through it.
+                        {
+                            let (thumb_top, thumb_length) = scroll.thumb_percent();
+                            rsx! {
+                                div {
+                                    class: "pointer-events-none absolute",
+                                    style: "top: 0; bottom: 0; right: 1px; width: 6px;",
+                                    "data-scrollbar": "",
+                                    div {
+                                        class: "absolute",
+                                        style: "left: 0; right: 0; top: {thumb_top}%; height: {thumb_length}%; min-height: 16px; background: {role_var(GuiRole::Scrollbar)}; border-radius: 3px;",
+                                        "data-scrollbar-thumb": "",
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 if let (Some(top), Some(ghost_row)) = (ghost_top, ghost.as_ref()) {
                     // The drag ghost (the Menus artboard): the dragged row's

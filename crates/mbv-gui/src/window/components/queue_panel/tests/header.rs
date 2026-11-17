@@ -4,8 +4,10 @@
 //! the chooser and its controls", and the active filter's text and caret.
 
 use blitz_dom::local_name;
+use rstest::rstest;
 
 use super::harness::*;
+use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::layout::{QueueTargetId, RegionTarget};
 
 /// Contract (spec `gui-queue-chooser` "One queue and no peer"): with only
@@ -93,4 +95,24 @@ fn the_active_filter_paints_its_text_and_the_caret() {
 
     assert_eq!(fixture.text_of("[data-filter]"), "amb");
     assert!(fixture.presents("[data-caret]"));
+}
+
+/// Contract (user request 2026-11-17): the header always paints the queue's
+/// title — the shown entry's name, `Queue` while that name is empty — even
+/// with one entry and so no chooser button.
+#[rstest]
+#[case::named("Kids", "Kids")]
+#[case::unnamed("", "Queue")]
+fn a_single_queue_header_always_paints_its_title(#[case] shown_name: &str, #[case] title: &str) {
+    let summary = GuiQueueSummary {
+        header: GuiQueueHeaderFacts {
+            shown_name: shown_name.to_owned(),
+            ..summary().header
+        },
+        ..summary()
+    };
+    let fixture = built_with_frame(queue_panel_app, queue(Vec::new()), summary, None);
+
+    assert_eq!(fixture.text_of("[data-queue-title]"), title);
+    assert!(!fixture.presents("[data-queue-chooser]"));
 }

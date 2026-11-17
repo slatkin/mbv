@@ -11,7 +11,9 @@ use mbv_gui::bridge::frame::GuiPanelToggles;
 use mbv_gui::bridge::frame::chrome::GuiQueueFooter;
 use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::playback::{GuiQueuePlayback, GuiScrubberHover};
-use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueSummary, GuiSemanticState};
+use mbv_gui::bridge::frame::queue::{
+    GuiQueue, GuiQueueRow, GuiQueueScroll, GuiQueueSummary, GuiSemanticState,
+};
 use mbv_gui::bridge::frame::settings::GuiSettingsFrame;
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -190,6 +192,53 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
         })
         .collect();
     assert_eq!(painted, [("Item 1", 2), ("Item 2", 3)]);
+}
+
+/// The queue frame carries the list's scroll position while the rows outrun
+/// the viewport (user request 2026-11-17): the window draws its scroll bar
+/// from it. A viewport scrolled to its second row of four reads offset 1.
+#[test]
+fn a_long_queue_frame_carries_its_scroll_position() {
+    let frame = scrolled_queue_frame(2);
+
+    assert_eq!(
+        frame.scroll,
+        Some(GuiQueueScroll {
+            offset: 1,
+            visible: 2,
+            total: 4,
+        })
+    );
+}
+
+/// A queue whose rows all fit the viewport carries no scroll position, so the
+/// window paints no bar.
+#[test]
+fn a_queue_frame_that_fits_carries_no_scroll_position() {
+    assert_eq!(scrolled_queue_frame(10).scroll, None);
+}
+
+/// The frame of a four-item queue with the cursor on its third item, painted
+/// through a viewport `viewport_rows` tall.
+fn scrolled_queue_frame(viewport_rows: usize) -> GuiQueue {
+    let items: Vec<QueueItem> = (0..4)
+        .map(|i| slot_item(&format!("Item {i}"), 10 * TICKS_PER_SECOND, 0, false))
+        .collect();
+    let mut app = stub_app_with_playing_items(items);
+    let projection = app.queue_surface_projection();
+    let mut queue = QueueSurface::new();
+    queue.list_mut().set_content(queue_media_rows(
+        projection.slots.as_deref().unwrap_or_default(),
+        projection.playback,
+        projection.pending_slot,
+    ));
+    queue.set_cursor(&QueueCursorUpdate::Set(2));
+    GuiQueue::from_surface(
+        &queue,
+        viewport_rows,
+        &app.queue_summary_projection(&[]),
+        &app.gui_queue_start_projection(),
+    )
 }
 
 /// An empty queue's frame carries no rows and no active slot, and its

@@ -1,8 +1,11 @@
 //! The Queue header (task 5.6, the port of `QueueHeader`; rewritten by task
 //! 8.2 of `gui-named-queues`): the header band over the Queue rows. It paints
-//! the Queue chooser button, the filter control, the new-queue control, and
-//! the close control, and nothing else (spec `gui-queue-chooser` "The queue
-//! header holds the chooser and its controls"). Every fact the controls paint
+//! the Queue title (with the chooser button around it while two or more
+//! entries exist), the filter control, the new-queue control, and the close
+//! control, and nothing else (spec `gui-queue-chooser` "The queue header
+//! holds the chooser and its controls"). The title always paints: the shown
+//! entry's name, or `Queue` while that name is empty (user decision
+//! 2026-11-17). Every fact the controls paint
 //! is the frame's; the filter's text and the caret are Client-core state
 //! (design D4a), so the header holds none.
 //!
@@ -24,7 +27,8 @@
 //! `filter`, the new-queue control `newQueue`, and the close control
 //! `closeQueue` — so a press resolves in the core to the request the matching
 //! GUI-only chord dispatches, and the control and the chord run one path. The
-//! chooser paints only while the Queue chooser lists two or more entries, and
+//! chooser button paints only while the Queue chooser lists two or more
+//! entries (a single entry paints the title as plain text), and
 //! the close control reports no region while it is disabled (the only local
 //! queue has no close): an absent or disabled control claims no pointer, so
 //! the panel reads neither handle then.
@@ -35,6 +39,9 @@ use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::icons::{ChevronDown, ListOrdered, Plus, Search, X};
 use crate::window::theme::canvas_var;
 use crate::window::truncate::{TextStyle, Truncate};
+
+/// The title the header paints while the shown entry has no name.
+const DEFAULT_TITLE: &str = "Queue";
 
 /// The props of the Queue header (the `QueueHeader` props, plus the region
 /// handles the panel's report reads).
@@ -65,6 +72,11 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     let filter = props.filter;
     let new_queue = props.new_queue;
     let close = props.close;
+    let title = if summary.header.shown_name.is_empty() {
+        DEFAULT_TITLE.to_owned()
+    } else {
+        summary.header.shown_name.clone()
+    };
 
     rsx! {
         div {
@@ -74,10 +86,20 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
             div {
                 class: "flex min-w-0 items-center",
                 // The Queue chooser button (design D8, D9): it names the shown
-                // entry and opens the dropdown. The chooser is absent while
-                // the list holds exactly one entry, so a single local queue
-                // paints no button at all.
-                if summary.header.entries >= 2 {
+                // entry and opens the dropdown. The button is absent while
+                // the list holds exactly one entry; the title then paints
+                // alone, so the header always names the queue.
+                if summary.header.entries < 2 {
+                    span {
+                        class: "flex min-w-0 items-center",
+                        style: "height: 44px; padding: 0 10px; gap: 8px; font-size: 13px; color: {canvas_var(\"heading\")};",
+                        "data-queue-title": "",
+                        Truncate {
+                            text: title.clone(),
+                            style: TextStyle::sans(13.0, 500.0),
+                        }
+                    }
+                } else {
                     {
                         let mut chooser_slot = chooser;
                         rsx! {
@@ -94,7 +116,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                                     color: "currentColor",
                                 }
                                 Truncate {
-                                    text: summary.header.shown_name.clone(),
+                                    text: title.clone(),
                                     style: TextStyle::sans(13.0, 500.0),
                                 }
                                 ChevronDown {

@@ -65,6 +65,7 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
         // slot, so the fixture's rows carry no mark either way.
         start_slot_reported: true,
         drag: None,
+        scroll: None,
     }
 }
 

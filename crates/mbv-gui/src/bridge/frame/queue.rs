@@ -45,6 +45,51 @@ pub struct GuiQueue {
     pub start_slot_reported: bool,
     /// The row drag in progress, if any: the drag ghost and insertion line.
     pub drag: Option<GuiQueueDrag>,
+    /// The scroll position the window paints as a scroll bar, `None` while
+    /// every row fits the viewport. The core owns the scroll, so the bar is a
+    /// readout of it, never a control.
+    pub scroll: Option<GuiQueueScroll>,
+}
+
+/// The queue list's scroll position: the viewport's first row, the rows it
+/// shows, and the rows the list holds, structural rows included. The window
+/// draws the bar's thumb from the three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuiQueueScroll {
+    /// The first painted row's index in the projected rows.
+    pub offset: usize,
+    /// The rows the viewport shows.
+    pub visible: usize,
+    /// The projected rows the list holds.
+    pub total: usize,
+}
+
+impl GuiQueueScroll {
+    /// The position of a viewport over `total` rows, `None` when every row
+    /// fits so no bar is due.
+    fn of(offset: usize, visible: usize, total: usize) -> Option<Self> {
+        (total > visible).then_some(Self {
+            offset,
+            visible,
+            total,
+        })
+    }
+
+    /// The thumb's top edge and length as percentages of the track: the share
+    /// of the list above the viewport and the share the viewport shows. The
+    /// two stay inside the track, so a thumb at the end of the list ends at
+    /// the track's end.
+    #[must_use]
+    pub fn thumb_percent(&self) -> (f64, f64) {
+        let share = |rows: usize| {
+            let rows = f64::from(u32::try_from(rows).unwrap_or(u32::MAX));
+            let total = f64::from(u32::try_from(self.total).unwrap_or(u32::MAX).max(1));
+            (rows / total * 100.0).min(100.0)
+        };
+        let length = share(self.visible);
+        let top = share(self.offset).min(100.0 - length);
+        (top, length)
+    }
 }
 
 /// The row drag the window paints (add-tauri-gui-client row 6.5, design D5):
@@ -144,6 +189,7 @@ impl GuiQueue {
         // fill and do not flip. The parity rides the row so the stripe stays
         // stable while the viewport moves; under a filter it re-seeds over
         // the kept rows, whose list the window paints.
+        let scroll = GuiQueueScroll::of(viewport.0, viewport.1, kept.len());
         let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));
@@ -185,6 +231,7 @@ impl GuiQueue {
             drag: queue
                 .row_drag()
                 .and_then(|drag| GuiQueueDrag::from_surface(queue, drag)),
+            scroll,
         }
     }
 }

@@ -10,13 +10,13 @@ its controls, and what follows the shown queue.
 
 ### Requirement: The queue header holds the chooser and its controls
 
-The GUI queue header SHALL show the Queue chooser, the Queue filter control, a control that makes a new queue, and a control that closes the shown entry. The Queue chooser SHALL be a dropdown list, not a row of tabs. It SHALL show the name of the shown entry and SHALL be absent while the list holds exactly one entry. The header SHALL show nothing else.
+The GUI queue header SHALL show the Queue chooser, the Queue filter control, a control that makes a new queue, and a control that closes the shown entry. The Queue chooser SHALL be a dropdown list, not a row of tabs. The header SHALL always show the queue title: the name of the shown entry, or `Queue` while that name is empty. The chooser SHALL hold the title and SHALL be absent while the list holds exactly one entry, so the title then shows as plain text. The header SHALL show nothing else.
 
 #### Scenario: One queue and no peer
 
 - **GIVEN** the local Owner holds only `Default` and the GUI Client is connected to no peer
 - **WHEN** the queue header paints
-- **THEN** it shows the Queue filter control and the new-queue control, and no chooser
+- **THEN** it shows the queue title as plain text, the Queue filter control, and the new-queue control, and no chooser
 
 #### Scenario: Several entries
 

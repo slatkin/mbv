@@ -7,7 +7,7 @@ use blitz_dom::local_name;
 use rstest::rstest;
 
 use super::harness::*;
-use crate::bridge::frame::queue::{GuiQueueRow, GuiSemanticState};
+use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueScroll, GuiSemanticState};
 
 /// Contract (`QueuePanel.test.ts`): a frame with slots renders its rows — the
 /// item rows' titles and the structural heading among them, and one
@@ -265,4 +265,38 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
     assert!(row_style.contains("border-radius: 4px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");
     assert!(title.contains("color: var(--canvas-heading)"), "{title}");
+}
+
+/// Contract (user request 2026-11-17): a list longer than its viewport paints
+/// a scroll bar whose thumb is the viewport's share of the list and sits at
+/// the viewport's offset.
+#[test]
+fn a_long_list_paints_a_scroll_bar_thumb_at_the_viewport() {
+    let long = GuiQueue {
+        scroll: Some(GuiQueueScroll {
+            offset: 5,
+            visible: 5,
+            total: 20,
+        }),
+        ..queue((6..=10).map(item).collect())
+    };
+    let fixture = built_with_frame(queue_panel_app, long, summary(), None);
+
+    let thumb = fixture.style_of("[data-scrollbar-thumb]");
+    assert!(thumb.contains("top: 25%"), "{thumb}");
+    assert!(thumb.contains("height: 25%"), "{thumb}");
+}
+
+/// Contract (user request 2026-11-17): a list that fits its viewport paints no
+/// scroll bar.
+#[test]
+fn a_list_that_fits_paints_no_scroll_bar() {
+    let fixture = built_with_frame(
+        queue_panel_app,
+        queue((1..=3).map(item).collect()),
+        summary(),
+        None,
+    );
+
+    assert!(!fixture.presents("[data-scrollbar]"));
 }

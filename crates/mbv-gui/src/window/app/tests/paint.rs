@@ -134,6 +134,7 @@ fn queue() -> GuiQueue {
         playing: true,
         start_slot_reported: true,
         drag: None,
+        scroll: None,
     }
 }
 
