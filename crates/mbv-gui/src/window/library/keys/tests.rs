@@ -14,9 +14,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::route_library_key;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame,
-    GuiMusicTrackFrame,
+    GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicList, GuiMusicTrackFrame,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -295,22 +295,27 @@ fn route_in(
     );
 }
 
-/// The two group pills the Music fixture carries: one selected, one not.
-fn pills() -> Vec<GuiMusicPillFrame> {
-    vec![
-        GuiMusicPillFrame {
-            group_id: "g1".to_owned(),
-            name: "Rock".to_owned(),
-            selected: true,
-            collection: true,
-        },
-        GuiMusicPillFrame {
-            group_id: "g2".to_owned(),
-            name: "Jazz".to_owned(),
-            selected: false,
-            collection: true,
-        },
-    ]
+/// The Music fixture's collection selector: the one Rock group checked
+/// (design D6).
+fn collections() -> GuiCollectionsFrame {
+    GuiCollectionsFrame {
+        target: mbv::GuiCollectionTarget::Music(0),
+        all: false,
+        entries: vec![
+            GuiCollectionEntry {
+                key: "g1".to_owned(),
+                name: "Rock".to_owned(),
+                checked: true,
+            },
+            GuiCollectionEntry {
+                key: "g2".to_owned(),
+                name: "Jazz".to_owned(),
+                checked: false,
+            },
+        ],
+        noun: mbv::GuiCollectionNoun::Groups,
+        order: None,
+    }
 }
 
 /// The Beastie Boys artist: one album with a cached tracklist, one without.
@@ -386,8 +391,9 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The carried Music content: two group pills, one selected, the union the
-/// list keys move through, and the Hero's facts while an album is picked.
+/// The carried Music content: the collection selector with one checked group,
+/// the union the list keys move through, and the Hero's facts while an album
+/// is picked.
 fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
     GuiLibraryList {
         tabs: vec![GuiLibraryTabFrame {
@@ -397,7 +403,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            pills: pills(),
+            collections: Some(collections()),
             collection_names: vec!["Rock".to_owned()],
             loading: false,
             failure: None,

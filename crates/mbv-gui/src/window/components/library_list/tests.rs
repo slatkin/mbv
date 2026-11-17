@@ -306,7 +306,7 @@ fn brand() -> GuiMusicArtistFrame {
 fn music(collection_names: &[&str]) -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        pills: Vec::new(),
+        collections: None,
         collection_names: collection_names
             .iter()
             .copied()

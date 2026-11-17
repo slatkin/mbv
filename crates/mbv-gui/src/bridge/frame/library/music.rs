@@ -1,6 +1,6 @@
 //! The Music destination's Library content (add-gui-library-panel design D5,
-//! D6, D7): the group pills, the artist and album tree, and the Hero of the
-//! picked album. `gui-change-driven-sections` design D8 splits the destination
+//! D6, D7): the group collection selector, the artist and album tree, and the
+//! Hero of the picked album. `gui-change-driven-sections` design D8 splits the destination
 //! into a list part ([`GuiMusicList`]) and a detail part ([`GuiMusicDetail`]).
 //! Both ride the `libraryList` and `libraryDetail` sections.
 
@@ -11,19 +11,22 @@ use mbv::{
 use mbv_ui_model::music_grouping::ArtistKey;
 
 use super::GuiMusicMenuEntryFrame;
+use super::collections::GuiCollectionsFrame;
 use crate::art::GuiArtRef;
 
-/// The Music destination's list part (design D8): the group pills, the union
-/// of the selected groups' artists with their albums and cached tracklists,
-/// and the load facts.
+/// The Music destination's list part (design D8): the group selector, the
+/// union of the selected groups' artists with their albums and cached
+/// tracklists, and the load facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiMusicList {
-    /// The Grouped Music library index the set-collections command names
-    /// (design D2, D6): the library whose group pills these are.
+    /// The Grouped Music library index the collection commands name
+    /// (design D2, D6): the library whose groups these are.
     pub lib_idx: usize,
-    /// The group pills in the group level's order (design D6).
-    pub pills: Vec<GuiMusicPillFrame>,
-    /// The selected collection names in pill order (design D6): the names
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): All, every group in the group level's order, the Groups noun, and
+    /// no date order.
+    pub collections: Option<GuiCollectionsFrame>,
+    /// The selected collection names in selector order (design D6): the names
     /// the list header and the Library Status bar location read, carried
     /// once for the whole panel. The Hero header's own copy rides in
     /// `hero.collections`, present exactly when the Hero is.
@@ -60,16 +63,10 @@ impl GuiMusicList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiMusicProjection) -> Self {
         Self {
             lib_idx,
-            pills: projection
-                .pills
-                .iter()
-                .map(|pill| GuiMusicPillFrame {
-                    group_id: pill.group_id.clone(),
-                    name: pill.name.clone(),
-                    selected: pill.selected,
-                    collection: true,
-                })
-                .collect(),
+            collections: projection
+                .collections
+                .as_ref()
+                .map(GuiCollectionsFrame::from),
             collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             failure: projection.failure.clone(),
@@ -104,21 +101,6 @@ impl GuiMusicDetail {
             playing_track_id,
         }
     }
-}
-
-/// One group pill of the Music destination (design D6).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiMusicPillFrame {
-    /// The group's stable Service id: the set-collections command and the
-    /// collection store key it.
-    pub group_id: String,
-    /// The pill's label.
-    pub name: String,
-    /// Whether the core's stored selection holds the group.
-    pub selected: bool,
-    /// Whether the pill is a collection pill (multi-select) rather than a
-    /// single-select one. Every Music pill is a collection pill.
-    pub collection: bool,
 }
 
 /// One artist row of the Music list (design D7).
@@ -187,7 +169,7 @@ pub struct GuiMusicTrackTotalFrame {
 pub struct GuiMusicHeroFrame {
     /// The picked album's artist.
     pub artist: String,
-    /// The selected collection names in pill order.
+    /// The selected collection names in selector order.
     pub collections: Vec<String>,
     /// The artist's album count in the union.
     pub album_count: usize,

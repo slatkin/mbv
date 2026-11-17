@@ -1,63 +1,59 @@
-//! The Library pill row (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryPills`; add-gui-library-panel design D6): the group pills
-//! of the active Grouped Music library. One group is always selected, as the
-//! TUI's Grouped Music pill is, so a press selects its pill and the others
-//! deselect. The pills paint the core's carried choice, so the row and the
-//! list cannot disagree; a press sends the select-collection command (design
-//! D1). A pill request (design D3) becomes the same command.
+//! The Music destination's collection pills (`replace-tauri-with-blitz` task
+//! 7.4, the port of `LibraryPills`; add-gui-library-panel design D6;
+//! gui-collection-dropdown design D6): the All row and one pill per group over
+//! the destination's collections frame. A press sends the core's collection
+//! command the frame names — All, or a toggle of one group — and the pills
+//! paint the core's carried selection back, so the row and the list cannot
+//! disagree.
 //!
-//! The row itself is the shared `LibraryPillRow` the other destinations
-//! paint too (design D15), so the canvas's pill form has one owner.
+//! The row is the transitional seam: `LibraryCollectionDropdown` (design D6)
+//! replaces it, and this component and the shared `LibraryPillRow` go with it.
+//! The row itself is the shared `LibraryPillRow` (design D15), so the canvas's
+//! pill form has one owner.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiMusicPillFrame;
-use crate::window::components::library_pill_row::{LibraryPill, library_pills_bound};
+use crate::bridge::frame::library::GuiCollectionsFrame;
+use crate::window::components::library_pill_row::{
+    LibraryPill, collection_pills, library_pills_bound,
+};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Music pills (the `LibraryPills` props, narrowed
-/// to what the pills read): the carried pills and the library index the
-/// select-collection command names (design D2, D6). The panel passes these
-/// alone, so a panel repaint never clones the list's rows for the pills.
+/// The props of the Music pills (the `LibraryPills` props, narrowed to what
+/// the pills read): the destination's collections frame (design D6). The
+/// panel passes this alone, so a panel repaint never clones the list's rows
+/// for the pills.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryPillsProps {
-    /// The carried group pills in painted order (design D6).
-    pub pills: Vec<GuiMusicPillFrame>,
-    /// The Grouped Music library index the select-collection command names.
-    pub lib_idx: usize,
+    /// The carried collections frame: All, the groups in group-level order,
+    /// and the checked membership.
+    pub collections: GuiCollectionsFrame,
 }
 
-/// The Music destination's pills: the carried group pills over the shared
-/// pill row, with the keys' pill request turned into the select-collection
-/// command.
+/// The Music destination's pills: the carried collections over the shared pill
+/// row, with a press turned into the collection command the frame names.
 #[component]
 pub fn LibraryPills(props: LibraryPillsProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The pills the row paints, keyed by the group id the command names.
-    let pills: Vec<LibraryPill> = props
-        .pills
-        .iter()
-        .map(|pill| LibraryPill {
-            key: pill.group_id.clone(),
-            name: pill.name.clone(),
-            selected: pill.selected,
-        })
-        .collect();
+    // The pills the row paints: All, then each group (design D6).
+    let pills: Vec<LibraryPill> = collection_pills(&props.collections);
 
-    // Press a pill: select it (design D6).
+    // Press a pill: send the collection command the frame names.
+    let collections = props.collections.clone();
     let press_library = library.clone();
-    let lib_idx = props.lib_idx;
-    let on_press =
-        Callback::new(move |key: String| press_library.select_library_pill(lib_idx, key));
+    let on_press = Callback::new(move |key: String| {
+        press_library.press_collection_pill(&collections, &key);
+    });
 
     // The keys' pill request applies the same command (design D6).
     let watch_ui = library.ui;
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
+    let apply_collections = props.collections;
 
     library_pills_bound(pills, "Collections", None, on_press, intent, move || {
-        apply_library.apply_library_pill_select(lib_idx);
+        apply_library.apply_library_pill_select(&apply_collections);
     })
 }
 

@@ -1,71 +1,56 @@
-//! The plain Emby-library destination's pills
-//! (`replace-tauri-with-blitz` task 7.4, the port of
-//! `LibraryEmbyPills`; add-gui-library-panel design D12, row 8.1): in
-//! the feed-group mode, the latest scope, `All`, and each root folder that
-//! holds items; in a plain library, the latest scope and `All`. A press
-//! selects its group and the core loads that group's items. The pills paint
-//! the core's carried choice, so the row and the list cannot disagree; a
-//! press sends the set-feed-group command (design D1). The keys' Space and
-//! Enter intent (design D3) becomes the same command.
+//! The plain Emby-library destination's collection pills
+//! (`replace-tauri-with-blitz` task 7.4, the port of `LibraryEmbyPills`;
+//! add-gui-library-panel design D12, row 8.1; gui-collection-dropdown design
+//! D6): in the feed-group mode, the All row and one pill per root folder over
+//! the destination's collections frame, multi-select. A press sends the core's
+//! collection command the frame names — All, or a toggle of one folder — and
+//! the pills paint the core's carried selection back, so the row and the list
+//! cannot disagree. The keys' Space and Enter intent (design D3) becomes the
+//! same command. A plain library carries no collections frame, so the panel
+//! mounts no row there.
 //!
-//! The row itself is the shared `LibraryPillRow` (design D15), so the
-//! canvas's pill form has one owner.
+//! The row is the transitional seam: `LibraryCollectionDropdown` (design D6)
+//! replaces it, and this component and the shared `LibraryPillRow` go with it.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiEmbyPillFrame;
-use crate::window::components::library_pill_row::{LibraryPill, library_pills_bound};
-use crate::window::library::emby_list::emby_group_key;
+use crate::bridge::frame::library::GuiCollectionsFrame;
+use crate::window::components::library_pill_row::{
+    LibraryPill, collection_pills, library_pills_bound,
+};
 use crate::window::library::state::LibraryState;
 
-/// The props of the Emby pills (the `LibraryEmbyPills` props,
-/// narrowed to what the pills read): the carried pills and the library index
-/// the set-feed-group command names (row 8.1). The panel passes these alone,
-/// so a panel repaint never clones the list's rows for the pills.
+/// The props of the Emby pills (the `LibraryEmbyPills` props, narrowed to what
+/// the pills read): the destination's collections frame (design D6).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryEmbyPillsProps {
-    /// The carried group pills in painted order (row 8.1).
-    pub pills: Vec<GuiEmbyPillFrame>,
-    /// The plain Emby-library index the set-feed-group command names.
-    pub lib_idx: usize,
+    /// The carried collections frame: All, the root folders in listing order,
+    /// and the checked membership.
+    pub collections: GuiCollectionsFrame,
 }
 
-/// The feed-group Emby library's pills: the carried group pills over the
-/// shared pill row, with the keys' pill request turned into the
-/// set-feed-group command.
+/// The feed-group Emby library's pills: the carried collections over the
+/// shared pill row, with a press turned into the collection command the frame
+/// names.
 #[component]
 pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    // The pills the row paints, keyed by the group key the command's pill
-    // resolves.
-    let pills: Vec<LibraryPill> = props
-        .pills
-        .iter()
-        .map(|pill| LibraryPill {
-            key: emby_group_key(&pill.group),
-            name: pill.name.clone(),
-            selected: pill.selected,
-        })
-        .collect();
+    // The pills the row paints: All, then each root folder (design D6).
+    let pills: Vec<LibraryPill> = collection_pills(&props.collections);
 
-    // Press a pill: select its group (row 8.1).
+    // Press a pill: send the collection command the frame names.
+    let collections = props.collections.clone();
     let press_library = library.clone();
-    let carried_pills = props.pills.clone();
-    let lib_idx = props.lib_idx;
     let on_press = Callback::new(move |key: String| {
-        if let Some(pill) = carried_pills
-            .iter()
-            .find(|candidate| emby_group_key(&candidate.group) == key)
-        {
-            press_library.select_emby_pill(lib_idx, pill.group.clone());
-        }
+        press_library.press_collection_pill(&collections, &key);
     });
 
     // The keys' pill request applies the same command (row 8.1).
     let watch_ui = library.emby_ui;
     let intent = use_memo(move || watch_ui.cloned().pill_select);
     let apply_library = library.clone();
+    let apply_collections = props.collections;
 
     library_pills_bound(
         pills,
@@ -73,7 +58,7 @@ pub fn LibraryEmbyPills(props: LibraryEmbyPillsProps) -> Element {
         Some("emby"),
         on_press,
         intent,
-        move || apply_library.apply_emby_pill_select(lib_idx),
+        move || apply_library.apply_emby_pill_select(&apply_collections),
     )
 }
 

@@ -1,7 +1,8 @@
 //! Headless tests of the Music pills (D16): the contracts of
 //! `LibraryPills.test.ts` — the pill row paints the core's carried selection
 //! with `aria-pressed` and no check glyph, paints no clear control, a press
-//! sends the select-collection command, the keys' Space request becomes the
+//! sends the collection command the collections frame names
+//! (gui-collection-dropdown design D6), the keys' Space request becomes the
 //! same command, and the focus marks the pill the keys hold and sends
 //! nothing for it. The IPC of the earlier tests is the mock core link
 //! here; the asserted commands are the same neutral shapes. A headless
@@ -21,20 +22,19 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryPills;
-use crate::bridge::frame::library::{GuiMusicList, GuiMusicPillFrame};
+use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame, GuiMusicList};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Music content, the mock core sender, and
-/// the handle the test reads the store through.
+/// The harness's props: the carried Music collections, the mock core sender,
+/// and the handle the test reads the store through.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    pills: Vec<GuiMusicPillFrame>,
-    lib_idx: usize,
+    collections: GuiCollectionsFrame,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -43,8 +43,7 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        pills,
-        lib_idx,
+        collections,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -62,7 +61,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryPills { pills, lib_idx }
+        LibraryPills { collections }
     }
 }
 
@@ -131,8 +130,10 @@ fn built(list: &GuiMusicList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
+                collections: list
+                    .collections
+                    .clone()
+                    .expect("the Music destination carries its collections"),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -155,31 +156,27 @@ fn built(list: &GuiMusicList) -> Fixture {
     fixture
 }
 
-/// The carried Music content: Hip-Hop selected, Jazz and Soul clear, in a
+/// The carried Music content: Hip-Hop checked, Jazz and Soul clear, in a
 /// Grouped Music library.
 fn music() -> GuiMusicList {
+    let entry = |key: &str, name: &str, checked| GuiCollectionEntry {
+        key: key.to_owned(),
+        name: name.to_owned(),
+        checked,
+    };
     GuiMusicList {
         lib_idx: 2,
-        pills: vec![
-            GuiMusicPillFrame {
-                group_id: "g1".to_owned(),
-                name: "Hip-Hop".to_owned(),
-                selected: true,
-                collection: true,
-            },
-            GuiMusicPillFrame {
-                group_id: "g2".to_owned(),
-                name: "Jazz".to_owned(),
-                selected: false,
-                collection: true,
-            },
-            GuiMusicPillFrame {
-                group_id: "g3".to_owned(),
-                name: "Soul".to_owned(),
-                selected: false,
-                collection: true,
-            },
-        ],
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Music(2),
+            all: false,
+            entries: vec![
+                entry("g1", "Hip-Hop", true),
+                entry("g2", "Jazz", false),
+                entry("g3", "Soul", false),
+            ],
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        }),
         collection_names: vec!["Hip-Hop".to_owned()],
         loading: false,
         failure: None,
@@ -236,7 +233,10 @@ fn paints_no_selected_count_or_clear_control() {
 fn a_press_selects_the_pressed_pill() {
     let mut fixture = built(&music());
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.select_library_pill(2, "g3".to_owned()));
+    let collections = music()
+        .collections
+        .expect("the Music destination carries its collections");
+    fixture.in_runtime(move || state.press_collection_pill(&collections, "g3"));
 
     assert_eq!(
         fixture.library_commands(),

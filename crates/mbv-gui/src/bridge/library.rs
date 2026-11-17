@@ -5,6 +5,7 @@
 //! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
+use mbv::{GuiCollectionTarget, GuiDateOrder};
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
@@ -16,8 +17,24 @@ pub enum GuiLibraryCommand {
     /// Open the destination at `position`: the tab position the section's
     /// destination tabs carry, where 0 is Home.
     OpenDestination { position: usize },
-    /// Select the one collection group of the Grouped Music library `libIdx`.
-    SelectCollection { lib_idx: usize, group_id: String },
+    /// Check or uncheck one collection of `target` (gui-collection-dropdown
+    /// design D5): a press on an unchecked collection checks it and clears
+    /// All, a press on a checked one unchecks it, and the selection falls back
+    /// to All when none stays checked. The key is the collection's stable
+    /// Service id the collections frame carries.
+    CollectionToggle {
+        target: GuiCollectionTarget,
+        key: String,
+    },
+    /// Select All for `target` (design D5): the All row's press.
+    CollectionAll { target: GuiCollectionTarget },
+    /// Set the list order of a feed-based `target` (design D4, D5): Newest or
+    /// Oldest. The Music destination sorts by name, so the core's arm changes
+    /// nothing there.
+    DateOrder {
+        target: GuiCollectionTarget,
+        order: GuiDateOrder,
+    },
     /// Show the item's detail in the Hero.
     ShowDetail { item_id: String },
     /// Open the album node: load its tracks when the cache does not hold
@@ -63,13 +80,6 @@ pub enum GuiLibraryCommand {
     /// row 8.1): the row the Hero shows. A row the active list no longer
     /// holds changes nothing.
     EmbySelect { lib_idx: usize, row: String },
-    /// Set the feed-view library's selected group (row 8.1): the TUI's own
-    /// selection path. Feed-group mode only; a library that presents none
-    /// changes nothing.
-    EmbySetFeedGroup {
-        lib_idx: usize,
-        group: GuiEmbyFeedGroup,
-    },
     /// Play a plain Emby-library row (row 8.1): Enter on the row, or the
     /// double-click a window sends with this same command. A folder or a
     /// boxset plays through the TUI's folder-play rule, so no nested list
@@ -97,13 +107,6 @@ pub enum GuiLibraryCommand {
     },
     /// Add an Audiobooks book to the queue (row 9.1).
     AbsQueue { lib_idx: usize, item_id: String },
-    /// Set the Podcasts destination's pill (add-gui-library-panel design D12,
-    /// row 10.1): Latest, or one show by its stable `library_item_id`. The
-    /// selected pill's own loads start through the TUI's own loaders.
-    PodcastsSetPill {
-        lib_idx: usize,
-        pill: GuiPodcastPill,
-    },
     /// Select the Podcasts episode the Hero shows (row 10.1): the row id the
     /// window carried — the episode's opaque identity.
     PodcastsSelect { lib_idx: usize, row: String },
@@ -112,10 +115,6 @@ pub enum GuiLibraryCommand {
     PodcastsPlay { lib_idx: usize, item_id: String },
     /// Add a Podcasts episode to the queue (row 10.1).
     PodcastsQueue { lib_idx: usize, item_id: String },
-    /// Set the Feeds destination's pill (add-gui-library-panel design D12,
-    /// row 11.1): Latest, or one subscription by its URL. A Client holds one
-    /// feed tab, so no library index rides here.
-    FeedsSetPill { pill: GuiFeedPill },
     /// Select the Feeds entry the Hero shows (row 11.1): the row id the window
     /// carried — the entry's opaque identity.
     FeedsSelect { row: String },
@@ -140,103 +139,6 @@ pub enum GuiLibraryCommand {
     OpenUrl { url: String },
 }
 
-/// One Feeds pill (add-gui-library-panel design D12, row 11.1): the All
-/// pill, or one subscription by its URL. Until the collections frame
-/// replaces the pill row, the frame pills carry the collection set's keys
-/// (gui-collection-dropdown design D1); this DTO is the transitional wire
-/// shape the pill row paints until then.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GuiFeedPill {
-    /// The All pill: every subscription's entries, merged in the date order.
-    Latest,
-    /// The merged view scoped to one subscription's entries.
-    Subscription(String),
-}
-
-/// The pill's core key (`None` is All, `Some` a scope's stable Service id):
-/// the one conversion the frame's pill row keeps while the core's collection
-/// set replaces the pill DTO (gui-collection-dropdown design D1); the
-/// collections frame deletes it in a later unit.
-impl From<&Option<String>> for GuiFeedPill {
-    fn from(key: &Option<String>) -> Self {
-        match key {
-            None => Self::Latest,
-            Some(feed_id) => Self::Subscription(feed_id.clone()),
-        }
-    }
-}
-
-/// One Podcasts pill (design D12, row 10.1): the All pill, one of the TUI's
-/// three state pills, or one show by its stable `library_item_id`. Until the
-/// collections frame replaces the pill row, the frame pills carry the
-/// collection set's keys (gui-collection-dropdown design D1); this DTO is
-/// the transitional wire shape the pill row paints until then, and the row
-/// itself paints no state pill any more.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GuiPodcastPill {
-    /// The All pill: every listed show's episodes, merged in the date order.
-    Latest,
-    /// A state pill: the episode's play state the view filters on. The row
-    /// paints none while the set replaces the pill; the arm stays for the
-    /// transitional conversion's exhaustiveness.
-    State(GuiPodcastState),
-    Show(String),
-}
-
-/// One state pill (design D12, row 10.1), mirroring the TUI's
-/// `AudiobookshelfEpisodeFilter` by name on the wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuiPodcastState {
-    All,
-    Unplayed,
-    Played,
-}
-
-impl From<GuiPodcastState> for mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter {
-    fn from(state: GuiPodcastState) -> Self {
-        match state {
-            GuiPodcastState::All => Self::All,
-            GuiPodcastState::Unplayed => Self::Unplayed,
-            GuiPodcastState::Played => Self::Played,
-        }
-    }
-}
-
-impl From<mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter> for GuiPodcastState {
-    fn from(state: mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter) -> Self {
-        use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
-        match state {
-            AudiobookshelfEpisodeFilter::All => Self::All,
-            AudiobookshelfEpisodeFilter::Unplayed => Self::Unplayed,
-            AudiobookshelfEpisodeFilter::Played => Self::Played,
-        }
-    }
-}
-
-/// The pill's core key (`None` is All, `Some` a scope's stable Service id):
-/// the one conversion the frame's pill row keeps while the core's collection
-/// set replaces the pill DTO (gui-collection-dropdown design D1); the
-/// collections frame deletes it in a later unit. A state pill maps to All —
-/// the row paints none, so the arm is never exercised.
-impl From<&Option<String>> for GuiPodcastPill {
-    fn from(key: &Option<String>) -> Self {
-        match key {
-            None => Self::Latest,
-            Some(show_id) => Self::Show(show_id.clone()),
-        }
-    }
-}
-
-/// One feed-group pill of a feed-view Emby library (add-gui-library-panel
-/// design D12, row 8.1): `New` (the destination Latest view), `All`, or one
-/// root folder by its stable Service id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GuiEmbyFeedGroup {
-    Latest,
-    All,
-    Folder(String),
-}
-
 /// One Home row's stable identity (design D12): the identity the Home
 /// paths resolve, addressed by Service ids and never by a row position.
 /// `Recent` carries the queue item's content id, whose own wire form is
@@ -259,10 +161,11 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
     fn from(command: GuiLibraryCommand) -> Self {
         match command {
             GuiLibraryCommand::OpenDestination { position } => Self::OpenDestination { position },
-            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => Self::CollectionToggle {
-                target: mbv::GuiCollectionTarget::Music(lib_idx),
-                key: group_id,
-            },
+            GuiLibraryCommand::CollectionToggle { target, key } => {
+                Self::CollectionToggle { target, key }
+            }
+            GuiLibraryCommand::CollectionAll { target } => Self::CollectionAll { target },
+            GuiLibraryCommand::DateOrder { target, order } => Self::DateOrder { target, order },
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
@@ -289,18 +192,6 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 Self::ShowsQueue { lib_idx, item_id }
             }
             GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
-            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => match group {
-                // The interim press keys: None is All, Some a folder's stable
-                // id. The New pill's press presses All — the row paints no New
-                // pill while the set replaces the row.
-                GuiEmbyFeedGroup::Latest | GuiEmbyFeedGroup::All => Self::CollectionAll {
-                    target: mbv::GuiCollectionTarget::EmbyFeed(lib_idx),
-                },
-                GuiEmbyFeedGroup::Folder(folder_id) => Self::CollectionToggle {
-                    target: mbv::GuiCollectionTarget::EmbyFeed(lib_idx),
-                    key: folder_id,
-                },
-            },
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
             GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
                 Self::EmbyPlayNext { lib_idx, item_id }
@@ -320,18 +211,6 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 chapter,
             },
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
-            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => match pill {
-                // The interim press keys: None is All, Some a show's stable id.
-                // A state pill presses All — the row paints no state pill while
-                // the set replaces the pill.
-                GuiPodcastPill::Latest | GuiPodcastPill::State(_) => Self::CollectionAll {
-                    target: mbv::GuiCollectionTarget::Podcasts(lib_idx),
-                },
-                GuiPodcastPill::Show(show_id) => Self::CollectionToggle {
-                    target: mbv::GuiCollectionTarget::Podcasts(lib_idx),
-                    key: show_id,
-                },
-            },
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
                 Self::PodcastsSelect { lib_idx, row }
             }
@@ -341,17 +220,6 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
                 Self::PodcastsQueue { lib_idx, item_id }
             }
-            GuiLibraryCommand::FeedsSetPill { pill } => match pill {
-                // The interim press keys: None is All, Some a subscription's
-                // stable id.
-                GuiFeedPill::Latest => Self::CollectionAll {
-                    target: mbv::GuiCollectionTarget::Feeds,
-                },
-                GuiFeedPill::Subscription(feed_id) => Self::CollectionToggle {
-                    target: mbv::GuiCollectionTarget::Feeds,
-                    key: feed_id,
-                },
-            },
             GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },
             GuiLibraryCommand::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
             GuiLibraryCommand::FeedsQueue { item_id } => Self::FeedsQueue { item_id },

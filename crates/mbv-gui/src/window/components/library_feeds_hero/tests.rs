@@ -257,7 +257,7 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                     tabs: Vec::new(),
                     current_tab: Some(2),
                     destination: GuiDestinationList::Feeds(GuiFeedsList {
-                        pills: Vec::new(),
+                        collections: None,
                         loading: false,
                         failed: false,
                         rows,

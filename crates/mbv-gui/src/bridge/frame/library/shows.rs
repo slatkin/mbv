@@ -17,16 +17,13 @@ use crate::art::GuiArtRef;
 /// The Shows destination's list part (add-gui-library-panel design D12, the
 /// USER-APPROVED GUI Shows design; `gui-change-driven-sections` design D8;
 /// gui-collection-dropdown design D8): the series list's tree and the load
-/// facts. The view-mode pills and flat rows keep their wire fields until the
-/// collection-dropdown units remove the Shows pill row; the core fills neither.
+/// facts. The GUI Shows destination paints the series list alone, so it carries
+/// no collection selector (design D6) and no view-mode pills.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The view-mode pills, which the core leaves empty while the GUI Shows
-    /// destination paints the series list alone (design D8).
-    pub pills: Vec<GuiShowsPillFrame>,
     /// The destination's collection names, as the Library Status bar's
     /// location reads them. The Shows list paints no collection selector, so it
     /// carries none (design D8).
@@ -58,31 +55,6 @@ pub struct GuiShowsDetail {
     /// The selected row's Hero facts; `None` in the Upcoming mode and while
     /// no row is selected.
     pub hero: Option<GuiShowsHeroFrame>,
-}
-
-/// One view mode of the Shows destination's pill row (design D12). The
-/// TUI's letter-range buckets are not pills here — the All series list's
-/// letter rail replaces them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuiShowsModeFrame {
-    Latest,
-    Upcoming,
-    All,
-}
-
-/// One view-mode pill of the Shows destination (design D12): single-select,
-/// the selected one the core's active mode.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiShowsPillFrame {
-    /// The mode the pill selects: the set-mode command carries it back.
-    pub mode: GuiShowsModeFrame,
-    /// The pill's label.
-    pub name: String,
-    /// Whether the core's active mode is this one.
-    pub selected: bool,
-    /// Whether the pill is a collection pill (multi-select) rather than a
-    /// single-select one. Every Shows pill is single-select (design D12).
-    pub collection: bool,
 }
 
 /// One series node of the All series tree (design D14), the Music artist
@@ -212,9 +184,6 @@ impl GuiShowsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiShowsProjection) -> Self {
         Self {
             lib_idx,
-            // The GUI Shows destination paints the series list alone: the pill
-            // row goes away with the collection-dropdown units.
-            pills: Vec::new(),
             collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             series: projection

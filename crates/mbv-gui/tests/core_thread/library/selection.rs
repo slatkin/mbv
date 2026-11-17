@@ -19,9 +19,9 @@ fn a_press_on_the_checked_collection_returns_the_selection_to_all() {
 
     send_library(
         &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
+        GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Music(0),
+            key: "grp-hiphop".into(),
         },
     );
 

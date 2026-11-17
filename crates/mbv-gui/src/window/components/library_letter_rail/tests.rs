@@ -210,7 +210,7 @@ fn brand() -> GuiMusicArtistFrame {
 fn music() -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        pills: Vec::new(),
+        collections: None,
         collection_names: Vec::new(),
         loading: false,
         failure: None,

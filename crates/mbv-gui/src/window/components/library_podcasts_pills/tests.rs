@@ -1,8 +1,8 @@
 //! Headless tests of the Podcasts pills (D16): the contracts of
-//! `LibraryPodcastsPills.test.ts` — the pills paint the core's single-select
-//! view with `aria-pressed` under the shared hook, and a press sends the
-//! set-pill command with that pill's object, as the frame carries it and
-//! never a stringified pill. The IPC of the earlier tests is the mock
+//! `LibraryPodcastsPills.test.ts` — the pills paint the core's selection
+//! with `aria-pressed` under the shared hook, and a press sends the
+//! collection command the collections frame names (gui-collection-dropdown
+//! design D6). The IPC of the earlier tests is the mock
 //! core link here; the asserted command is the same neutral shape. A
 //! headless document cannot fire a DOM click, so the press contract rides
 //! the state method the component's own handler calls one line each (the
@@ -19,21 +19,19 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryPodcastsPills;
-use crate::bridge::frame::library::{GuiPillFrame, GuiPodcastsList};
-use crate::bridge::library::GuiPodcastPill;
+use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame, GuiPodcastsList};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Podcasts pills and library index, the
-/// mock core sender, and the handle the test reads the store through.
+/// The harness's props: the carried Podcasts collections, the mock core
+/// sender, and the handle the test reads the store through.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    pills: Vec<GuiPillFrame<GuiPodcastPill>>,
-    lib_idx: usize,
+    collections: GuiCollectionsFrame,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -42,8 +40,7 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        pills,
-        lib_idx,
+        collections,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -61,7 +58,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryPodcastsPills { pills, lib_idx }
+        LibraryPodcastsPills { collections }
     }
 }
 
@@ -131,8 +128,10 @@ fn built(list: &GuiPodcastsList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
+                collections: list
+                    .collections
+                    .clone()
+                    .expect("the Podcasts destination carries its collections"),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -155,20 +154,21 @@ fn built(list: &GuiPodcastsList) -> Fixture {
     fixture
 }
 
-/// The carried Podcasts content with the show view selected (design D12).
+/// The carried Podcasts content with the one show checked (design D6).
 fn frame() -> GuiPodcastsList {
-    let pill = |pill, name: &str, selected| GuiPillFrame {
-        pill,
-        name: name.to_owned(),
-        selected,
-        collection: false,
-    };
     GuiPodcastsList {
         lib_idx: 0,
-        pills: vec![
-            pill(GuiPodcastPill::Latest, "Latest", false),
-            pill(GuiPodcastPill::Show("sh1".to_owned()), "Show One", true),
-        ],
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Podcasts(0),
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "sh1".to_owned(),
+                name: "Show One".to_owned(),
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Shows,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
         loading: false,
         failed: false,
         rows: Vec::new(),
@@ -177,7 +177,7 @@ fn frame() -> GuiPodcastsList {
 
 /// Contract (`LibraryPodcastsPills.test.ts`): the pills paint the core's
 /// selection and never none — every pill carries `aria-pressed`, keyed by
-/// the pill's paint key.
+/// the row's paint key, with All under the empty key.
 #[test]
 fn the_pills_paint_the_cores_selection_and_never_none() {
     let fixture = built(&frame());
@@ -185,25 +185,28 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
     assert_eq!(
         fixture.pressed(),
         [
-            ("latest".to_owned(), "false".to_owned()),
-            ("show:sh1".to_owned(), "true".to_owned()),
+            (String::new(), "false".to_owned()),
+            ("sh1".to_owned(), "true".to_owned()),
         ]
     );
 }
 
-/// Contract (`LibraryPodcastsPills.test.ts`): a press sends the set-pill
-/// command with the frame's pill object — the All pill's own object, as
-/// the frame carries it.
+/// Contract (`LibraryPodcastsPills.test.ts`): a press on a show's row sends
+/// the collection-toggle command the frame names.
 #[test]
-fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
+fn a_press_sends_the_collection_toggle_command_with_the_entrys_key() {
     let mut fixture = built(&frame());
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.select_podcasts_pill(0, GuiPodcastPill::Latest));
+    let collections = frame()
+        .collections
+        .expect("the Podcasts destination carries its collections");
+    fixture.in_runtime(move || state.press_collection_pill(&collections, "sh1"));
 
     assert_eq!(
         fixture.library_commands(),
-        [mbv::GuiLibraryCommand::CollectionAll {
+        [mbv::GuiLibraryCommand::CollectionToggle {
             target: mbv::GuiCollectionTarget::Podcasts(0),
+            key: "sh1".to_owned(),
         }]
     );
 }

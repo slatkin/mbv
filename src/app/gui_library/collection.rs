@@ -124,6 +124,90 @@ pub enum GuiCollectionTarget {
     EmbyFeed(usize),
 }
 
+/// The noun a destination's collections take (design D6): the trigger label
+/// reads "2 groups", "2 shows", "2 subscriptions", or "2 folders".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuiCollectionNoun {
+    Groups,
+    Shows,
+    Subscriptions,
+    Folders,
+}
+
+impl GuiCollectionNoun {
+    /// The noun the selector's count label reads (design D6): "2 groups",
+    /// "2 shows", "2 subscriptions", or "2 folders".
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Groups => "groups",
+            Self::Shows => "shows",
+            Self::Subscriptions => "subscriptions",
+            Self::Folders => "folders",
+        }
+    }
+}
+
+/// One collection entry of a destination's dropdown (design D6): its stable
+/// Service id, its label, and whether the selection checks it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiCollectionEntry {
+    /// The collection's stable Service id: the toggle command carries it.
+    pub key: String,
+    /// The collection's display name, the row's label.
+    pub name: String,
+    /// Whether the selection checks this collection.
+    pub checked: bool,
+}
+
+/// One destination's whole collection selector (design D6): the target its
+/// commands name, the All state, every collection in catalog order with its
+/// checked flag, the destination's noun, and the date order a feed-based
+/// destination sorts by. Music has no date order, so its `order` is `None`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiCollections {
+    /// The destination the toggle, All, and date-order commands name.
+    pub target: GuiCollectionTarget,
+    /// Whether the selection is All.
+    pub all: bool,
+    /// The catalog's collections in its own order.
+    pub entries: Vec<GuiCollectionEntry>,
+    /// The noun the trigger label and the Clear control read.
+    pub noun: GuiCollectionNoun,
+    /// The list's date order on a feed-based destination; `None` on Music,
+    /// which sorts by name.
+    pub order: Option<GuiDateOrder>,
+}
+
+impl GuiCollections {
+    /// The selector for `target` (design D6) over `set`, with `scopes` — each
+    /// collection's stable key and name, in catalog order — as its entries,
+    /// and the destination's list `order`.
+    #[must_use]
+    pub fn new(
+        target: GuiCollectionTarget,
+        set: &GuiCollectionSet,
+        noun: GuiCollectionNoun,
+        scopes: impl IntoIterator<Item = (String, String)>,
+        order: Option<GuiDateOrder>,
+    ) -> Self {
+        Self {
+            target,
+            all: set.is_all(),
+            entries: scopes
+                .into_iter()
+                .map(|(key, name)| GuiCollectionEntry {
+                    checked: set.checked_keys().contains(&key),
+                    key,
+                    name,
+                })
+                .collect(),
+            noun,
+            order,
+        }
+    }
+}
+
 /// Compare two epoch-second dates in `order` (design D4): Newest puts the
 /// later date first, Oldest the earlier first, and a row with no date stays
 /// last in both orders. The one owner of the "undated last" rule, so the

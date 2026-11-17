@@ -1,7 +1,7 @@
 //! The Library list section (`gui-change-driven-sections` design D8): the
 //! destination tabs the top bar paints, and the active destination's list part
-//! (its pills, rows or tree, and load facts). The detail part rides
-//! `libraryDetail` (see `detail.rs`).
+//! (its collection selector, rows or tree, and load facts). The detail part
+//! rides `libraryDetail` (see `detail.rs`).
 
 use super::{
     GuiAudiobooksList, GuiEmbyList, GuiFeedsList, GuiHomeList, GuiLibraryTabFrame, GuiMusicList,

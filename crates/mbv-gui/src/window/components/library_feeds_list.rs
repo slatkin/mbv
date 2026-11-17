@@ -14,6 +14,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiCollectionsFrame;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -66,16 +67,11 @@ pub fn LibraryFeedsList() -> Element {
     let feeds_ui = library.feeds_ui.cloned();
     let scroll = library.scrolls.feeds.cloned();
 
-    // The header's selection label (design D15): the active pill's name.
+    // The header's selection label (design D15, D6): the collections frame's
+    // label — All, the one checked name, or the count with the noun.
     let selection_label = frame
-        .and_then(|frame| {
-            frame
-                .pills
-                .iter()
-                .find(|pill| pill.selected)
-                .map(|pill| pill.name.clone())
-        })
-        .unwrap_or_else(|| "Latest".to_owned());
+        .and_then(|frame| frame.collections.as_ref())
+        .map_or_else(|| "All".to_owned(), GuiCollectionsFrame::label);
 
     // The painted rows of the flat list (row 11.1): the same model
     // [`crate::window::library::feeds`] builds from the carried content,

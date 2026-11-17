@@ -19,7 +19,10 @@ use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
-use super::collection::{GuiCollectionSet, GuiDateOrder, compare_gui_date_order};
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
+    compare_gui_date_order,
+};
 use super::entry_list::{
     GuiEntryListProjection, GuiEntryRow, GuiPillOption, collection_pill_options, picked_or_first,
 };
@@ -153,6 +156,15 @@ impl App {
         let set = self.gui_feeds_effective_set();
         let order = self.gui_feeds_date_order();
         let pills = self.gui_feeds_pills(&set);
+        let collections = Some(GuiCollections::new(
+            GuiCollectionTarget::Feeds,
+            &set,
+            GuiCollectionNoun::Subscriptions,
+            pills
+                .iter()
+                .filter_map(|pill| pill.pill.clone().map(|key| (key, pill.name.clone()))),
+            Some(order),
+        ));
         let rows = self.gui_feeds_rows(order);
         let selected = self.gui_feeds_selected(&rows);
         let hero = selected
@@ -161,6 +173,7 @@ impl App {
             .and_then(|entry| self.gui_feeds_hero(&entry));
         GuiFeedsProjection {
             pills,
+            collections,
             loading: self.feed_tab.loading,
             failed: false,
             rows,

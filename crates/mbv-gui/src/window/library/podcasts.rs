@@ -21,7 +21,8 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::library::{GuiLibraryCommand, GuiPodcastPill, GuiPodcastState};
+use crate::bridge::frame::library::GuiCollectionsFrame;
+use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_podcasts_list;
 use crate::window::library::podcasts_list::PodcastsItemRow;
@@ -31,35 +32,13 @@ use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Podcasts list's interaction state: the shared pill-list state over the
-/// Podcasts pill (design D12).
-pub type PodcastsUiState = PillListUiState<GuiPodcastPill>;
+/// show selector (gui-collection-dropdown design D6).
+pub type PodcastsUiState = PillListUiState;
 
 /// The state a freshly mounted Podcasts list starts with.
 #[must_use]
 pub fn initial_podcasts_ui() -> PodcastsUiState {
     PillListUiState::initial()
-}
-
-/// The pill's stable key: the each-block's identity and the pill row's focus
-/// key, over the pill object the frame carries (design D12).
-#[must_use]
-pub fn podcast_pill_key(pill: &GuiPodcastPill) -> String {
-    match pill {
-        GuiPodcastPill::Latest => "latest".to_owned(),
-        GuiPodcastPill::State(state) => format!("state:{}", podcast_state_key(*state)),
-        GuiPodcastPill::Show(id) => format!("show:{id}"),
-    }
-}
-
-/// The state pill's stable key segment (design D12, row 10.1): the filter the
-/// pill names, as the wire pill's id spells it.
-#[must_use]
-pub fn podcast_state_key(state: GuiPodcastState) -> &'static str {
-    match state {
-        GuiPodcastState::All => "all",
-        GuiPodcastState::Unplayed => "unplayed",
-        GuiPodcastState::Played => "played",
-    }
 }
 
 impl LibraryState {
@@ -203,32 +182,23 @@ impl LibraryState {
         set_scroll_top(self.scrolls.podcasts, &rows, held.scroll_top);
     }
 
-    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
-    /// request into the set-pill command.
-    pub fn request_podcasts_pill_select(&self, pill: GuiPodcastPill) {
+    /// Ask for a collection pill to be selected (design D6): the pill row
+    /// turns the request into the collection command, and the key is the paint
+    /// key the row carries.
+    pub fn request_podcasts_pill_select(&self, key: String) {
         let mut podcasts_ui = self.podcasts_ui;
-        podcasts_ui.with_mut(|ui| ui.pill_select = Some(pill));
+        podcasts_ui.with_mut(|ui| ui.pill_select = Some(key));
     }
 
-    /// Select the view pill `pill` of the Podcasts library `lib_idx` (design
-    /// D12, row 10.1): one pill is always selected, and Latest is the default
-    /// (design D6). The core stores the choice and loads the pill's episodes,
-    /// and the pills paint the core's choice back, so the row and the list
-    /// cannot disagree.
-    pub fn select_podcasts_pill(&self, lib_idx: usize, pill: GuiPodcastPill) {
-        self.link
-            .library(GuiLibraryCommand::PodcastsSetPill { lib_idx, pill });
-    }
-
-    /// Turn the keys' pill request into the set-pill command the pill sends
-    /// (design D12). The intent is consumed here, so one key sends one
+    /// Turn the keys' pill request into the collection command the pill row
+    /// sends (design D6). The intent is consumed here, so one key sends one
     /// command.
-    pub fn apply_podcasts_pill_select(&self, lib_idx: usize) {
-        let pill = self.podcasts_ui.peek().pill_select.clone();
-        if let Some(pill) = pill {
+    pub fn apply_podcasts_pill_select(&self, collections: &GuiCollectionsFrame) {
+        let key = self.podcasts_ui.peek().pill_select.clone();
+        if let Some(key) = key {
             let mut podcasts_ui = self.podcasts_ui;
             podcasts_ui.with_mut(|ui| ui.pill_select = None);
-            self.select_podcasts_pill(lib_idx, pill);
+            self.press_collection_pill(collections, &key);
         }
     }
 }

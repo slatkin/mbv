@@ -2,9 +2,9 @@
 //! `LibraryShowsList`; add-gui-library-panel design D14): the Music
 //! tree over the TUI's TV node kinds — series nodes, their seasons, and each
 //! season's episodes — under the letter headings of the first series of each
-//! letter, with the A–Z rail beside them, and the Latest and Upcoming modes'
-//! flat rows with their date gutter and no rail. The list header is the
-//! Music list's: the `Series` title, the active mode as the selection label,
+//! letter, with the A–Z rail beside them. The GUI Shows destination paints this
+//! series list alone (gui-collection-dropdown design D8). The list header is
+//! the Music list's: the `Series` title, the selection as the selection label,
 //! and the `/` filter field.
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::shows_list`]
@@ -13,7 +13,7 @@
 //! window content's own in [`crate::window::library::shows`] (design D1); the
 //! scroll offset and the viewport are the Shows list's scroll store (design
 //! D9). A press on a node opens or closes it and selects it for the Hero, a
-//! press on a leaf or a flat row selects it, a double-click on an episode plays
+//! press on a leaf selects it, a double-click on an episode plays
 //! it, and a right-click opens the item menu, as the Music list's rows do. The
 //! list keeps no cursor: the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2).
@@ -22,8 +22,8 @@ use std::fmt::Write as _;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiShowsList, GuiShowsModeFrame};
-use crate::window::components::library_item_row::{LibraryItemRow, LibraryTrailPart, mark};
+use crate::bridge::frame::library::GuiShowsList;
+use crate::window::components::library_item_row::mark;
 use crate::window::components::library_letter_heading::LibraryLetterHeading;
 use crate::window::components::library_letter_rail::LibraryLetterRail;
 use crate::window::components::library_list_header::LibraryListHeader;
@@ -31,9 +31,7 @@ use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::input::f32_from_f64;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
-use crate::window::library::shows_list::{
-    ShowsListRow, active_shows_mode, shows_letter_rail, shows_series_mode,
-};
+use crate::window::library::shows_list::{ShowsListRow, shows_letter_rail};
 use crate::window::library::shows_workspace::is_played_episode;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -48,12 +46,10 @@ fn row_source_id(row: &ShowsListRow) -> Option<&str> {
         ShowsListRow::Series(series) => Some(&series.source_id),
         ShowsListRow::Season(season) => Some(&season.source_id),
         ShowsListRow::Episode(episode) => Some(&episode.source_id),
-        ShowsListRow::Flat(flat) => Some(&flat.row.id),
     }
 }
 
-/// Whether the row is the core's selected one: the series the Hero shows, or
-/// the flat row it shows.
+/// Whether the row is the core's selected one: the series the Hero shows.
 fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
     row_source_id(row).is_some_and(|source_id| Some(source_id) == selected)
 }
@@ -62,7 +58,7 @@ fn is_selected_row(row: &ShowsListRow, selected: Option<&str>) -> bool {
 /// own inset, the season under it, the episode under the season.
 fn row_inset(row: &ShowsListRow) -> &'static str {
     match row {
-        ShowsListRow::Series(_) | ShowsListRow::Flat(_) => "4px",
+        ShowsListRow::Series(_) => "4px",
         ShowsListRow::Season(_) => "22px",
         ShowsListRow::Episode(_) => "40px",
         ShowsListRow::Heading(_) => "8px",
@@ -326,46 +322,11 @@ fn paint_shows_row(
             paint_shows_node(row, library, shows, selected)
         }
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
-        ShowsListRow::Flat(flat) => {
-            let selected_row = is_selected_row(row, selected);
-            let press_row = row.clone();
-            let press_library = library.clone();
-            let play_id = flat.row.id.clone();
-            let play_library = library.clone();
-            let menu_id = flat.row.id.clone();
-            let menu_library = library.clone();
-            rsx! {
-                LibraryItemRow {
-                    attr: "shows",
-                    kind: "flat".to_owned(),
-                    id: flat.id.clone(),
-                    height: flat.height,
-                    title: flat.row.title.clone(),
-                    subtitle: flat.row.subtitle.clone(),
-                    trail: flat.row.date.clone(),
-                    trail_part: LibraryTrailPart::Date,
-                    title_color: canvas_var("text"),
-                    background: row_background(row, selected),
-                    selected: selected_row,
-                    progress: None,
-                    on_press: Callback::new(move |()| press_library.press_shows_row(&press_row)),
-                    on_play: Callback::new(move |()| play_library.play_shows_row(&play_id)),
-                    on_context: Some(Callback::new(
-                        move |(x, y): (f32, f32)| menu_library.open_row_menu_at(
-                            Some(menu_id.clone()),
-                            x,
-                            y,
-                        ),
-                    )),
-                }
-            }
-        }
     }
 }
 
-/// The Shows list: the header,
-/// the load and failure lines, the rows over native scroll, and the All
-/// series mode's letter rail.
+/// The Shows list: the header, the load and failure lines, the rows over
+/// native scroll, and the series list's letter rail.
 #[component]
 pub fn LibraryShowsList() -> Element {
     let library = consume_context::<LibraryState>();
@@ -384,30 +345,24 @@ pub fn LibraryShowsList() -> Element {
     let shows_ui = library.shows_ui.cloned();
     let scroll = library.scrolls.shows.cloned();
 
-    // The active view mode: the pill the core marked.
-    let mode = frame.map(active_shows_mode);
-
-    // The painted rows (design D14): the tree in the All mode, the flat rows
-    // in the Latest and Upcoming modes, narrowed by the filter's text.
+    // The painted rows (design D14): the series tree, narrowed by the
+    // filter's text. The GUI Shows destination paints this list alone (design
+    // D8).
     let rows = library.shows_rows();
 
-    // The rail's A–Z letters over the painted rows: the All series mode
-    // paints it, and the flat modes paint none.
+    // The rail's A–Z letters over the painted rows.
     let rail = shows_letter_rail(&rows);
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
-    // The header's right line, in the Music list's shape: the active mode
-    // and its sort rule. The All mode is sorted by name, the flat modes by
-    // date.
-    let first_collection = frame
-        .and_then(|frame| frame.collection_names.first().cloned())
-        .unwrap_or_else(|| "All".to_owned());
-    let selection_label = if mode == Some(GuiShowsModeFrame::All) {
-        format!("{first_collection} · sort name")
-    } else {
-        first_collection
-    };
+    // The header's right line, in the Music list's shape: the selection and
+    // its sort rule. The series list is sorted by name.
+    let selection_label = format!(
+        "{} · sort name",
+        frame
+            .and_then(|frame| frame.collection_names.first().cloned())
+            .unwrap_or_else(|| "All".to_owned())
+    );
 
     // The filter field's placeholder, naming the selection as the Music list
     // does.
@@ -438,9 +393,8 @@ pub fn LibraryShowsList() -> Element {
         },
     );
 
-    // The All series mode paints the rail (design D12); the flat modes paint
-    // none.
-    let paints_rail = mode.is_some_and(shows_series_mode);
+    // The series list paints the rail (design D12).
+    let paints_rail = frame.is_some();
 
     // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();
@@ -468,10 +422,9 @@ pub fn LibraryShowsList() -> Element {
                 }
             }
             if let Some(frame) = frame {
-                // The active mode's list has not landed yet, or the Upcoming
-                // mode's eager fetch failed (design D14): one line per state,
-                // and the failure line only over a landed list — the pill is
-                // the retry.
+                // The series list has not landed yet, or the Upcoming mode's
+                // eager fetch failed (design D14): one line per state, and the
+                // failure line only over a landed list.
                 ListFrameNotices {
                     loading: frame.loading.then(|| {
                         ListFrameNoticeLine::loading("data-library-shows-loading")

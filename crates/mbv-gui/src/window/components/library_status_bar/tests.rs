@@ -13,13 +13,12 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::{LibraryStatusBar, LibraryStatusBarProps};
 use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiEntryRowFrame,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame, GuiPillFrame,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiCollectionEntry,
+    GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
     GuiPodcastsDetail, GuiPodcastsList,
 };
-use crate::bridge::library::GuiPodcastPill;
 use crate::window::sections::SectionRef;
 
 /// The frame's Status bar facts: nothing armed and no live toast.
@@ -48,16 +47,21 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The Music list part: one selected collection.
+/// The Music list part: one checked collection.
 fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
         lib_idx: 0,
-        pills: vec![GuiMusicPillFrame {
-            group_id: "g1".to_owned(),
-            name: "Hip-Hop".to_owned(),
-            selected: true,
-            collection: true,
-        }],
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Music(0),
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "g1".to_owned(),
+                name: "Hip-Hop".to_owned(),
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        }),
         collection_names: vec!["Hip-Hop".to_owned()],
         loading: false,
         failure: None,
@@ -235,7 +239,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Emby(GuiEmbyList {
         lib_idx: 2,
         library_name: "Movies".to_owned(),
-        pills: Vec::new(),
+        collections: None,
         collection_names: Vec::new(),
         feed_group: false,
         loading: false,
@@ -279,25 +283,22 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
     (list, detail)
 }
 
-/// The carried Podcasts list part: one selected show pill and one selected
-/// episode row.
+/// The carried Podcasts list part: one checked show and one selected episode
+/// row.
 fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Podcasts(GuiPodcastsList {
         lib_idx: 1,
-        pills: vec![
-            GuiPillFrame {
-                pill: GuiPodcastPill::Latest,
-                name: "Latest".to_owned(),
-                selected: false,
-                collection: false,
-            },
-            GuiPillFrame {
-                pill: GuiPodcastPill::Show("show1".to_owned()),
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Podcasts(1),
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "show1".to_owned(),
                 name: "Bits and Bites".to_owned(),
-                selected: true,
-                collection: false,
-            },
-        ],
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Shows,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {

@@ -25,7 +25,10 @@ use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
-use super::collection::{GuiCollectionSet, GuiDateOrder, compare_gui_date_order};
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
+    compare_gui_date_order,
+};
 use super::entry_list::{
     GuiEntryListProjection, GuiEntryRow, GuiPillOption, collection_pill_options, picked_or_first,
 };
@@ -186,6 +189,15 @@ impl App {
         let set = self.gui_podcast_effective_set(lib_idx);
         let order = self.gui_podcast_date_order(lib_idx);
         let pills = self.gui_podcast_pills(lib_idx, &set);
+        let collections = Some(GuiCollections::new(
+            GuiCollectionTarget::Podcasts(lib_idx),
+            &set,
+            GuiCollectionNoun::Shows,
+            pills
+                .iter()
+                .filter_map(|pill| pill.pill.clone().map(|key| (key, pill.name.clone()))),
+            Some(order),
+        ));
         let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &set, order);
         let selected = self.gui_podcast_selected(lib_idx, &rows);
         let hero = selected
@@ -194,6 +206,7 @@ impl App {
             .and_then(|episode| self.gui_podcast_hero(lib_idx, &episode));
         GuiPodcastsProjection {
             pills,
+            collections,
             loading,
             failed,
             rows,

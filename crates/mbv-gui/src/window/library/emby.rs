@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiEmbyFeedGroupFrame;
+use crate::bridge::frame::library::GuiCollectionsFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::emby_list::{EmbyItemRow, EmbyListRow, emby_letter_rail};
 use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
@@ -33,9 +33,8 @@ use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
 /// The Emby list's interaction state: the shared pill-list state over the
-/// feed-group pill, whose focus the pill row keeps as the group's stable key
-/// (`embyGroupKey`) rather than the group itself (design D6, row 8.1).
-pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame>;
+/// feed-group mode's folder selector (gui-collection-dropdown design D6).
+pub type EmbyUiState = PillListUiState;
 
 /// The state a freshly mounted Emby list starts with.
 #[must_use]
@@ -210,33 +209,23 @@ impl LibraryState {
         set_scroll_top(self.scrolls.emby, &rows, held.scroll_top);
     }
 
-    /// Ask for a pill to be selected (row 8.1): the pill row turns the request
-    /// into the set-feed-group command.
-    pub fn request_emby_pill_select(&self, group: GuiEmbyFeedGroupFrame) {
+    /// Ask for a collection pill to be selected (design D6): the pill row
+    /// turns the request into the collection command, and the key is the paint
+    /// key the row carries.
+    pub fn request_emby_pill_select(&self, key: String) {
         let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.pill_select = Some(group));
+        emby_ui.with_mut(|ui| ui.pill_select = Some(key));
     }
 
-    /// Select the feed group `group` of the plain Emby library `lib_idx` (row
-    /// 8.1): one group is always selected, and a press on a pill loads that
-    /// group's items. The core stores the choice, and the pills paint it back,
-    /// so the row and the list cannot disagree.
-    pub fn select_emby_pill(&self, lib_idx: usize, group: GuiEmbyFeedGroupFrame) {
-        self.link.library(GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx,
-            group: group.into(),
-        });
-    }
-
-    /// Turn the keys' pill request into the set-feed-group command the pill
-    /// sends (row 8.1). The intent is consumed here, so one key sends one
+    /// Turn the keys' pill request into the collection command the pill row
+    /// sends (design D6). The intent is consumed here, so one key sends one
     /// command.
-    pub fn apply_emby_pill_select(&self, lib_idx: usize) {
-        let group = self.emby_ui.peek().pill_select.clone();
-        if let Some(group) = group {
+    pub fn apply_emby_pill_select(&self, collections: &GuiCollectionsFrame) {
+        let key = self.emby_ui.peek().pill_select.clone();
+        if let Some(key) = key {
             let mut emby_ui = self.emby_ui;
             emby_ui.with_mut(|ui| ui.pill_select = None);
-            self.select_emby_pill(lib_idx, group);
+            self.press_collection_pill(collections, &key);
         }
     }
 }

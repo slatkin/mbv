@@ -21,7 +21,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_shows_list;
 use crate::window::library::scroll::set_scroll_top;
-use crate::window::library::shows_list::{ShowsListRow, active_shows_mode, shows_letter_rail};
+use crate::window::library::shows_list::{ShowsListRow, shows_letter_rail};
 
 use super::state::LibraryState;
 
@@ -70,15 +70,8 @@ impl LibraryState {
         };
         let revision = self.sections.library_list_revision();
         let ui = self.shows_ui.peek();
-        self.shows_rows_memo.rows(
-            revision,
-            &shows.series,
-            &shows.rows,
-            active_shows_mode(shows),
-            &ui.filter,
-            &ui.open,
-            &ui.closed,
-        )
+        self.shows_rows_memo
+            .rows(revision, &shows.series, &ui.filter, &ui.open, &ui.closed)
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries
@@ -133,10 +126,6 @@ impl LibraryState {
             ShowsListRow::Season(season) => GuiLibraryCommand::ShowsSelectSeason {
                 lib_idx,
                 season_id: season.source_id.clone(),
-            },
-            ShowsListRow::Flat(flat) => GuiLibraryCommand::ShowsSelect {
-                lib_idx,
-                row: flat.row.id.clone(),
             },
         };
         self.link.library(command);

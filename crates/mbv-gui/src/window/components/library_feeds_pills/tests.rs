@@ -1,9 +1,9 @@
 //! Headless tests of the Feeds pills (D16): the contracts of
-//! `LibraryFeedsPills.test.ts` — the pills paint the core's single-select
-//! view with `aria-pressed` under the shared hook, and a press sends the
-//! set-pill command with that pill's object, as the frame carries it and
-//! never a stringified pill. The IPC of the earlier tests is the mock
-//! core link here; the asserted command is the same neutral shape. A
+//! `LibraryFeedsPills.test.ts` — the pills paint the core's selection with
+//! `aria-pressed` under the shared hook, and a press sends the collection
+//! command the collections frame names (gui-collection-dropdown design D6).
+//! The IPC of the earlier tests is the mock core link here; the asserted
+//! command is the same neutral shape. A
 //! headless document cannot fire a DOM click, so the press contract rides
 //! the state method the component's own handler calls one line each (the
 //! list's precedent). The core channel is a mock pair; no test opens a
@@ -19,20 +19,19 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryFeedsPills;
-use crate::bridge::frame::library::{GuiFeedsList, GuiPillFrame};
-use crate::bridge::library::GuiFeedPill;
+use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame, GuiFeedsList};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Feeds pills, the mock core sender, and
-/// the handle the test reads the store through.
+/// The harness's props: the carried Feeds collections, the mock core sender,
+/// and the handle the test reads the store through.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    pills: Vec<GuiPillFrame<GuiFeedPill>>,
+    collections: GuiCollectionsFrame,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -41,7 +40,7 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        pills,
+        collections,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -59,7 +58,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryFeedsPills { pills }
+        LibraryFeedsPills { collections }
     }
 }
 
@@ -129,7 +128,10 @@ fn built(list: &GuiFeedsList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                pills: list.pills.clone(),
+                collections: list
+                    .collections
+                    .clone()
+                    .expect("the Feeds destination carries its collections"),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -152,24 +154,20 @@ fn built(list: &GuiFeedsList) -> Fixture {
     fixture
 }
 
-/// The carried Feeds content with the subscription view selected (design
-/// D12).
+/// The carried Feeds content with the one subscription checked (design D6).
 fn frame() -> GuiFeedsList {
-    let pill = |pill, name: &str, selected| GuiPillFrame {
-        pill,
-        name: name.to_owned(),
-        selected,
-        collection: false,
-    };
     GuiFeedsList {
-        pills: vec![
-            pill(GuiFeedPill::Latest, "Latest", false),
-            pill(
-                GuiFeedPill::Subscription("https://sub.one".to_owned()),
-                "Sub One",
-                true,
-            ),
-        ],
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Feeds,
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "https://sub.one".to_owned(),
+                name: "Sub One".to_owned(),
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Subscriptions,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
         loading: false,
         failed: false,
         rows: Vec::new(),
@@ -178,7 +176,7 @@ fn frame() -> GuiFeedsList {
 
 /// Contract (`LibraryFeedsPills.test.ts`): the pills paint the core's
 /// selection and never none — every pill carries `aria-pressed`, keyed by
-/// the pill's paint key.
+/// the row's paint key, with All under the empty key.
 #[test]
 fn the_pills_paint_the_cores_selection_and_never_none() {
     let fixture = built(&frame());
@@ -186,20 +184,24 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
     assert_eq!(
         fixture.pressed(),
         [
-            ("latest".to_owned(), "false".to_owned()),
-            ("subscription:https://sub.one".to_owned(), "true".to_owned()),
+            (String::new(), "false".to_owned()),
+            ("https://sub.one".to_owned(), "true".to_owned()),
         ]
     );
 }
 
-/// Contract (`LibraryFeedsPills.test.ts`): a press sends the set-pill
-/// command with the frame's pill object — the All pill's own object, as
-/// the frame carries it.
+/// Contract (`LibraryFeedsPills.test.ts`): a press on the All row sends the
+/// collection-all command the frame names.
 #[test]
-fn a_press_sends_the_set_pill_command_with_the_frames_pill_object() {
+fn a_press_on_all_sends_the_collection_all_command() {
     let mut fixture = built(&frame());
     let state = fixture.state.clone();
-    fixture.in_runtime(move || state.select_feeds_pill(GuiFeedPill::Latest));
+    let collections = frame()
+        .collections
+        .expect("the Feeds destination carries its collections");
+    fixture.in_runtime(move || {
+        state.press_collection_pill(&collections, GuiCollectionsFrame::ALL_KEY);
+    });
 
     assert_eq!(
         fixture.library_commands(),

@@ -105,7 +105,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            pills: Vec::new(),
+            collections: None,
             collection_names: vec!["Rock".to_owned()],
             loading: false,
             failure: None,

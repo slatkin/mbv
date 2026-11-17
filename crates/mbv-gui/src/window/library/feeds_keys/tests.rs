@@ -17,12 +17,11 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame,
-    GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMetaKindFrame, GuiMetaSegmentFrame, GuiPillFrame,
+    GuiArtShapeFrame, GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList,
+    GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
-use crate::bridge::library::GuiFeedPill;
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
@@ -242,29 +241,28 @@ fn entry(
     }
 }
 
-/// The Latest pill and two subscription pills, with the frame carrying
-/// `selected` (design D12).
-fn pills(selected: PillSelection) -> Vec<GuiPillFrame<GuiFeedPill>> {
-    vec![
-        GuiPillFrame {
-            pill: GuiFeedPill::Latest,
-            name: "Latest".to_owned(),
-            selected: selected == PillSelection::Latest,
-            collection: false,
-        },
-        GuiPillFrame {
-            pill: GuiFeedPill::Subscription("https://sub.one".to_owned()),
-            name: "Sub One".to_owned(),
-            selected: selected == PillSelection::Subscription,
-            collection: false,
-        },
-        GuiPillFrame {
-            pill: GuiFeedPill::Subscription("https://sub.two".to_owned()),
-            name: "Sub Two".to_owned(),
-            selected: false,
-            collection: false,
-        },
-    ]
+/// The All selection or the one-subscription selection, over the two
+/// subscriptions (design D6).
+fn collections(selected: PillSelection) -> GuiCollectionsFrame {
+    let entry = |key: &str, name: &str, checked| GuiCollectionEntry {
+        key: key.to_owned(),
+        name: name.to_owned(),
+        checked,
+    };
+    GuiCollectionsFrame {
+        target: mbv::GuiCollectionTarget::Feeds,
+        all: selected == PillSelection::Latest,
+        entries: vec![
+            entry(
+                "https://sub.one",
+                "Sub One",
+                selected == PillSelection::Subscription,
+            ),
+            entry("https://sub.two", "Sub Two", false),
+        ],
+        noun: mbv::GuiCollectionNoun::Subscriptions,
+        order: Some(mbv::GuiDateOrder::Newest),
+    }
 }
 
 /// A Feeds Hero over the feed `parent`, with its entries in the list band.
@@ -282,7 +280,7 @@ fn feeds_hero(parent: &str) -> GuiFeedsHeroFrame {
     }
 }
 
-/// The pill selection the fixtures name.
+/// The collection selection the fixtures name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PillSelection {
     Latest,
@@ -290,8 +288,8 @@ enum PillSelection {
 }
 
 /// The carried content while the Feeds destination is active (design D12):
-/// no other destination's content, the pill row, and `hero` the caller
-/// picks. The frame carries `selected` — the first row's, as the TS default
+/// no other destination's content, the collection selector, and `hero` the
+/// caller picks. The frame carries `selected` — the first row's, as the TS default
 /// does.
 fn feeds_content(
     pill_selection: PillSelection,
@@ -328,7 +326,7 @@ fn feeds_content_selected(
         ],
         current_tab: Some(2),
         destination: GuiDestinationList::Feeds(GuiFeedsList {
-            pills: pills(pill_selection),
+            collections: Some(collections(pill_selection)),
             loading: false,
             failed: false,
             rows: rows.to_owned(),

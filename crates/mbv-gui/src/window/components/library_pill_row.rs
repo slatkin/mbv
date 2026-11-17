@@ -18,6 +18,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiCollectionsFrame;
 use crate::window::components::library_attr::library_attr;
 use crate::window::components::library_pill_button::LibraryPillButton;
 
@@ -32,6 +33,26 @@ pub struct LibraryPill {
     pub name: String,
     /// Whether the core carries the pill as the selected one.
     pub selected: bool,
+}
+
+/// The pills the interim collection row paints over `collections`
+/// (gui-collection-dropdown design D6): the All row first, then one pill per
+/// entry in catalog order, each checked per membership. The row is the
+/// transitional seam the collection dropdown replaces; it keeps one key space
+/// by painting All under [`GuiCollectionsFrame::ALL_KEY`].
+#[must_use]
+pub fn collection_pills(collections: &GuiCollectionsFrame) -> Vec<LibraryPill> {
+    let mut pills = vec![LibraryPill {
+        key: GuiCollectionsFrame::ALL_KEY.to_owned(),
+        name: "All".to_owned(),
+        selected: collections.all,
+    }];
+    pills.extend(collections.entries.iter().map(|entry| LibraryPill {
+        key: entry.key.clone(),
+        name: entry.name.clone(),
+        selected: entry.checked,
+    }));
+    pills
 }
 
 /// The props of the pill row (the `LibraryPillRow` props, in order).

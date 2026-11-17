@@ -5,7 +5,6 @@
 //! column hook.
 
 use super::{built, fixtures, seed_idle_status};
-use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::window::arrangement::GuiArrangement;
 
 /// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7):
@@ -74,18 +73,14 @@ fn the_home_content_mounts_the_home_list_and_hero_and_no_pills() {
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 7.1): while
 /// the Shows content is present (design D12, the destinations are
 /// exclusive), the panel mounts the Shows painters in place of the Music and
-/// Home ones — its mode pills, its list, and the series Hero.
+/// Home ones — no collection selector, its list, and the series Hero.
 #[test]
-fn the_shows_content_mounts_the_mode_pills_the_shows_list_and_the_series_hero() {
+fn the_shows_content_mounts_the_shows_list_and_the_series_hero() {
     let mut fixture = built(GuiArrangement::Wide);
-    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::All);
+    let (list, detail) = fixtures::shows_sections();
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
-    assert!(
-        fixture.presents("[data-library-region=\"pills\"]"),
-        "the mode pills mount"
-    );
     assert!(
         fixture.presents("[data-library-shows-list-column]"),
         "the Shows list's painter mounts"
@@ -98,29 +93,6 @@ fn the_shows_content_mounts_the_mode_pills_the_shows_list_and_the_series_hero() 
         !fixture.presents("[data-library-list-column]")
             && !fixture.presents("[data-library-home-list-column]"),
         "no other destination's list mounts"
-    );
-}
-/// Contract (`LibraryPanel.test.ts`): the Upcoming mode carries no Hero
-/// (design D12) — the panel paints its flat list and no Hero in the Narrow
-/// arrangement.
-#[test]
-fn the_upcoming_shows_content_paints_no_hero() {
-    let mut fixture = built(GuiArrangement::Narrow);
-    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::Upcoming);
-    fixture.carry(list, detail);
-    seed_idle_status(&mut fixture);
-
-    assert!(
-        fixture.presents("[data-library-shows-list-column]"),
-        "the Shows list's painter mounts"
-    );
-    assert!(
-        !fixture.presents("[data-library-shows-hero]"),
-        "no Hero paints"
-    );
-    assert!(
-        !fixture.presents("[data-library-region=\"heroOverlay\"]"),
-        "no overlay mounts"
     );
 }
 /// Contract (`LibraryPanel.test.ts`, add-gui-library-panel row 8.1): while

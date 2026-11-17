@@ -181,8 +181,8 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "the frame names the library the commands carry"
     );
     assert!(
-        list.pills.is_empty(),
-        "the GUI Shows destination paints no mode selector"
+        list.collection_names.is_empty(),
+        "the GUI Shows destination paints no collection selector"
     );
     assert!(
         list.series.is_empty() && list.rows.is_empty() && detail.hero.is_none(),

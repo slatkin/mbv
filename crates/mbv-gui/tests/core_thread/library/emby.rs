@@ -87,7 +87,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     );
     assert!(!list.feed_group, "the Movies library is the plain mode");
     assert!(
-        list.pills.is_empty() && list.rows.is_empty() && detail.hero.is_none(),
+        list.collections.is_none() && list.rows.is_empty() && detail.hero.is_none(),
         "the root list has not landed rows yet"
     );
     // The no-URL stub client's root-list fetch fails; the frame names the
@@ -141,26 +141,32 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        |list, _| list.pills.len() == 2 && !list.loading,
-        "the folder pill",
+        |list, _| {
+            list.collections
+                .as_ref()
+                .is_some_and(|collections| collections.entries.len() == 1)
+                && !list.loading
+        },
+        "the folder entry",
     );
 
     send_library(
         &mut test,
-        GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx: 0,
-            group: mbv_gui::bridge::library::GuiEmbyFeedGroup::Folder("folder-1".into()),
+        GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::EmbyFeed(0),
+            key: "folder-1".into(),
         },
     );
     pump_until_emby(
         &mut test,
         |list, _| {
             list.rows.iter().any(|row| row.id == "vid-1")
-                && list
-                    .pills
-                    .iter()
-                    .find(|pill| pill.selected)
-                    .is_some_and(|pill| pill.name == "Channel 1")
+                && list.collections.as_ref().is_some_and(|collections| {
+                    collections
+                        .entries
+                        .iter()
+                        .any(|entry| entry.key == "folder-1" && entry.checked)
+                })
         },
         "the switched group's items",
     );

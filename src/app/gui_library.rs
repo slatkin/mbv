@@ -36,7 +36,8 @@ pub use self::audiobooks_projection::{
     GuiAudiobooksWorkspace,
 };
 pub use self::collection::{
-    GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
+    GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
+    GuiDateOrder, compare_gui_date_order,
 };
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};

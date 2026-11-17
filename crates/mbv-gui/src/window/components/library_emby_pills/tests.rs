@@ -1,8 +1,9 @@
 //! Headless tests of the feed-group Emby pills (D16): the contracts of
-//! `LibraryEmbyPills.test.ts` — the pills paint the core's single-select
-//! group with `aria-pressed` under the destination's own hook, a press sends
-//! the set-feed-group command with that pill's group, and the keys' pill
-//! request becomes the same command. The IPC of the earlier tests is
+//! `LibraryEmbyPills.test.ts` — the pills paint the core's selection with
+//! `aria-pressed` under the destination's own hook, a press sends the
+//! collection command the collections frame names (gui-collection-dropdown
+//! design D6), and the keys' pill request becomes the same command. The IPC
+//! of the earlier tests is
 //! the mock core link here; the asserted commands are the same neutral
 //! shapes. A headless document cannot fire a DOM click, so the press
 //! contract rides the state method the component's own handler calls one
@@ -20,20 +21,19 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryEmbyPills;
-use crate::bridge::frame::library::{GuiEmbyFeedGroupFrame, GuiEmbyList, GuiEmbyPillFrame};
+use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame, GuiEmbyList};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Emby pills and library index, the mock
-/// core sender, and the handle the test reads the store through.
+/// The harness's props: the carried Emby collections, the mock core sender,
+/// and the handle the test reads the store through.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    pills: Vec<GuiEmbyPillFrame>,
-    lib_idx: usize,
+    collections: GuiCollectionsFrame,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -42,8 +42,7 @@ struct FixtureProps {
 fn pills_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
-        pills,
-        lib_idx,
+        collections,
         handle,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
@@ -61,7 +60,7 @@ fn pills_app(props: FixtureProps) -> Element {
     provide_context(state.clone());
     handle.borrow_mut().replace(state);
     rsx! {
-        LibraryEmbyPills { pills, lib_idx }
+        LibraryEmbyPills { collections }
     }
 }
 
@@ -131,8 +130,10 @@ fn built(list: &GuiEmbyList) -> Fixture {
             pills_app,
             FixtureProps {
                 sender,
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
+                collections: list
+                    .collections
+                    .clone()
+                    .expect("the feed-group destination carries its collections"),
                 handle: Rc::clone(&handle),
             },
         ),
@@ -161,20 +162,17 @@ fn emby_frame() -> GuiEmbyList {
     GuiEmbyList {
         lib_idx: 3,
         library_name: "Movies".to_owned(),
-        pills: vec![
-            GuiEmbyPillFrame {
-                group: GuiEmbyFeedGroupFrame::All,
-                name: "All".to_owned(),
-                selected: true,
-                collection: false,
-            },
-            GuiEmbyPillFrame {
-                group: GuiEmbyFeedGroupFrame::Folder("folder-1".to_owned()),
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::EmbyFeed(3),
+            all: true,
+            entries: vec![GuiCollectionEntry {
+                key: "folder-1".to_owned(),
                 name: "Family".to_owned(),
-                selected: false,
-                collection: false,
-            },
-        ],
+                checked: false,
+            }],
+            noun: mbv::GuiCollectionNoun::Folders,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
         collection_names: vec!["All".to_owned()],
         feed_group: true,
         loading: false,
@@ -193,8 +191,8 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
     assert_eq!(
         fixture.pressed(),
         [
-            ("all".to_owned(), "true".to_owned()),
-            ("folder:folder-1".to_owned(), "false".to_owned()),
+            (String::new(), "true".to_owned()),
+            ("folder-1".to_owned(), "false".to_owned()),
         ]
     );
 }
@@ -205,8 +203,11 @@ fn the_pills_paint_the_cores_selection_and_never_none() {
 fn a_press_sends_the_set_feed_group_command_with_the_pills_group() {
     let mut fixture = built(&emby_frame());
     let state = fixture.state.clone();
+    let collections = emby_frame()
+        .collections
+        .expect("the feed-group destination carries its collections");
     fixture.in_runtime(move || {
-        state.select_emby_pill(3, GuiEmbyFeedGroupFrame::Folder("folder-1".to_owned()));
+        state.press_collection_pill(&collections, "folder-1");
     });
 
     assert_eq!(
@@ -228,7 +229,7 @@ fn the_keys_pill_request_sends_the_set_feed_group_command() {
     fixture.in_runtime(move || {
         let mut emby_ui = state.emby_ui;
         emby_ui.with_mut(|ui| {
-            ui.pill_select = Some(GuiEmbyFeedGroupFrame::Folder("folder-1".to_owned()));
+            ui.pill_select = Some("folder-1".to_owned());
         });
     });
 

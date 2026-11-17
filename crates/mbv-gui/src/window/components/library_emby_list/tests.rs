@@ -321,7 +321,7 @@ fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
     GuiEmbyList {
         lib_idx: 3,
         library_name: "Movies".to_owned(),
-        pills: Vec::new(),
+        collections: None,
         collection_names: Vec::new(),
         feed_group,
         loading: false,

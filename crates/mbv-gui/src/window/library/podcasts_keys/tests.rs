@@ -17,11 +17,11 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryTabFrame, GuiPillFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame, GuiPodcastsList,
+    GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList, GuiEntryRowFrame,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPodcastsDetail,
+    GuiPodcastsHeroFrame, GuiPodcastsList,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
-use crate::bridge::library::GuiPodcastPill;
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
@@ -223,32 +223,27 @@ fn episode(
     }
 }
 
-/// The Latest pill and two show pills, with the frame carrying `selected`
-/// (design D12).
-fn pills(selected: PillSelection) -> Vec<GuiPillFrame<GuiPodcastPill>> {
-    vec![
-        GuiPillFrame {
-            pill: GuiPodcastPill::Latest,
-            name: "Latest".to_owned(),
-            selected: selected == PillSelection::Latest,
-            collection: false,
-        },
-        GuiPillFrame {
-            pill: GuiPodcastPill::Show("sh1".to_owned()),
-            name: "Show One".to_owned(),
-            selected: selected == PillSelection::Show,
-            collection: false,
-        },
-        GuiPillFrame {
-            pill: GuiPodcastPill::Show("sh2".to_owned()),
-            name: "Show Two".to_owned(),
-            selected: false,
-            collection: false,
-        },
-    ]
+/// The All selection or the one-show selection, over the two shows (design
+/// D6).
+fn collections(selected: PillSelection) -> GuiCollectionsFrame {
+    let entry = |key: &str, name: &str, checked| GuiCollectionEntry {
+        key: key.to_owned(),
+        name: name.to_owned(),
+        checked,
+    };
+    GuiCollectionsFrame {
+        target: mbv::GuiCollectionTarget::Podcasts(0),
+        all: selected == PillSelection::Latest,
+        entries: vec![
+            entry("sh1", "Show One", selected == PillSelection::Show),
+            entry("sh2", "Show Two", false),
+        ],
+        noun: mbv::GuiCollectionNoun::Shows,
+        order: Some(mbv::GuiDateOrder::Newest),
+    }
 }
 
-/// The pill selection the fixtures name.
+/// The collection selection the fixtures name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PillSelection {
     Latest,
@@ -256,8 +251,9 @@ enum PillSelection {
 }
 
 /// The carried content while Podcasts is active (design D12): no other
-/// destination's content, the pill row, and `hero` the caller picks. The
-/// frame carries `selected` — the first row's, as the TS default does.
+/// destination's content, the collection selector, and `hero` the caller
+/// picks. The frame carries `selected` — the first row's, as the TS default
+/// does.
 fn podcasts_content(
     pill_selection: PillSelection,
     rows: &[GuiEntryRowFrame],
@@ -278,7 +274,7 @@ fn podcasts_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Podcasts(GuiPodcastsList {
             lib_idx: 0,
-            pills: pills(pill_selection),
+            collections: Some(collections(pill_selection)),
             loading: false,
             failed: false,
             rows: rows.to_owned(),

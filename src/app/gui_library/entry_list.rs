@@ -12,7 +12,7 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
-use super::collection::GuiCollectionSet;
+use super::collection::{GuiCollectionSet, GuiCollections};
 
 /// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1): the
 /// All pill first, then one pill per scope in the destination's order. Until
@@ -66,6 +66,11 @@ pub struct GuiEntryListProjection<P, H> {
     /// Podcasts. The checked pills are the core's effective selection; a
     /// scope the destination no longer holds drops from it.
     pub pills: Vec<GuiPillOption<P>>,
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): All, every scope in the destination's order with its checked
+    /// flag, the destination's noun, and its date order. `None` in the empty
+    /// projection a destination that is not this one paints.
+    pub collections: Option<GuiCollections>,
     /// Whether the active view's content is still landing: the feed tab's
     /// fetch for Feeds, the show catalog's pages and the active view's own
     /// episode fetches for Podcasts.
@@ -92,6 +97,7 @@ impl<P, H> Default for GuiEntryListProjection<P, H> {
     fn default() -> Self {
         Self {
             pills: Vec::new(),
+            collections: None,
             loading: false,
             failed: false,
             rows: Vec::new(),

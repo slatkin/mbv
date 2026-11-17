@@ -12,30 +12,22 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryShowsPills;
-use crate::bridge::frame::library::{GuiShowsList, GuiShowsPillFrame};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
 use crate::window::library::state::LibraryState;
 use crate::window::sections::Sections;
 
-/// The harness's props: the carried Shows pills, the library index, and the
-/// mock core sender.
+/// The harness's props: the mock core sender.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    pills: Vec<GuiShowsPillFrame>,
-    lib_idx: usize,
 }
 
-/// The root: provides the Library store and paints the pills, as the panel
+/// The root: provides the Library store and paints the row, as the panel
 /// composes them.
 fn pills_app(props: FixtureProps) -> Element {
-    let FixtureProps {
-        sender,
-        pills,
-        lib_idx,
-    } = props;
+    let FixtureProps { sender } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     let state = use_hook(move || {
         // The playhead position the interaction state reads: none — the
@@ -50,7 +42,7 @@ fn pills_app(props: FixtureProps) -> Element {
     });
     provide_context(state);
     rsx! {
-        LibraryShowsPills { pills, lib_idx }
+        LibraryShowsPills {}
     }
 }
 
@@ -90,19 +82,11 @@ impl Fixture {
     }
 }
 
-/// Build the document over the carried content and let the first render and
-/// effects land.
-fn built(list: &GuiShowsList) -> Fixture {
+/// Build the document and let the first render and effects land.
+fn built() -> Fixture {
     let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
-        VirtualDom::new_with_props(
-            pills_app,
-            FixtureProps {
-                sender,
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            },
-        ),
+        VirtualDom::new_with_props(pills_app, FixtureProps { sender }),
         DocumentConfig {
             viewport: Some(Viewport::new(1200, 900, 1.0, ColorScheme::Light)),
             ..DocumentConfig::default()
@@ -114,25 +98,12 @@ fn built(list: &GuiShowsList) -> Fixture {
     fixture
 }
 
-/// The carried Shows content: the series list with no pill (design D8).
-fn shows_frame() -> GuiShowsList {
-    GuiShowsList {
-        lib_idx: 0,
-        pills: Vec::new(),
-        collection_names: Vec::new(),
-        loading: false,
-        series: Vec::new(),
-        upcoming_failed: false,
-        rows: Vec::new(),
-    }
-}
-
-/// The GUI Shows destination carries no pill, so the mounted row paints none
-/// (gui-collection-dropdown design D8): the list paints the series tree and no
-/// mode selector.
+/// The GUI Shows destination carries no collections, so the mounted row paints
+/// none (gui-collection-dropdown design D6, D8): the list paints the series
+/// tree and no selector.
 #[test]
 fn no_shows_pill_paints() {
-    let fixture = built(&shows_frame());
+    let fixture = built();
 
     assert_eq!(fixture.pressed(), []);
 }

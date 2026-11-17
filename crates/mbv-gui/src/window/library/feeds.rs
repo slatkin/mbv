@@ -22,8 +22,9 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiCollectionsFrame;
 use crate::bridge::frame::library::GuiEntryRowFrame;
-use crate::bridge::library::{GuiFeedPill, GuiLibraryCommand};
+use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::feeds_list::FeedsItemRow;
 use crate::window::library::list::{ListMove, scroll_step};
 use crate::window::library::parts::library_feeds_list;
@@ -35,22 +36,12 @@ use super::state::LibraryState;
 
 /// The Feeds list's interaction state: the shared pill-list state over the
 /// Feeds pill (design D12).
-pub type FeedsUiState = PillListUiState<GuiFeedPill>;
+pub type FeedsUiState = PillListUiState;
 
 /// The state a freshly mounted Feeds list starts with.
 #[must_use]
 pub fn initial_feeds_ui() -> FeedsUiState {
     PillListUiState::initial()
-}
-
-/// The pill's stable key: the each-block's identity, over the pill object the
-/// frame carries (design D12).
-#[must_use]
-pub fn feed_pill_key(pill: &GuiFeedPill) -> String {
-    match pill {
-        GuiFeedPill::Latest => "latest".to_owned(),
-        GuiFeedPill::Subscription(id) => format!("subscription:{id}"),
-    }
 }
 
 impl LibraryState {
@@ -198,30 +189,23 @@ impl LibraryState {
         set_scroll_top(self.scrolls.feeds, &rows, held.scroll_top);
     }
 
-    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
-    /// request into the set-pill command.
-    pub fn request_feeds_pill_select(&self, pill: GuiFeedPill) {
+    /// Ask for a collection pill to be selected (design D6): the pill row
+    /// turns the request into the collection command, and the key is the paint
+    /// key the row carries.
+    pub fn request_feeds_pill_select(&self, key: String) {
         let mut feeds_ui = self.feeds_ui;
-        feeds_ui.with_mut(|ui| ui.pill_select = Some(pill));
+        feeds_ui.with_mut(|ui| ui.pill_select = Some(key));
     }
 
-    /// Set the Feeds destination's pill `pill` (design D12, row 11.1): one
-    /// pill is always selected, and Latest is the default (design D6). The
-    /// core stores the choice and loads the pill's entries, and the pills
-    /// paint the core's choice back, so the row and the list cannot disagree.
-    pub fn select_feeds_pill(&self, pill: GuiFeedPill) {
-        self.link.library(GuiLibraryCommand::FeedsSetPill { pill });
-    }
-
-    /// Turn the keys' pill request into the set-pill command the pill sends
-    /// (design D12). The intent is consumed here, so one key sends one
+    /// Turn the keys' pill request into the collection command the pill row
+    /// sends (design D6). The intent is consumed here, so one key sends one
     /// command.
-    pub fn apply_feeds_pill_select(&self) {
-        let pill = self.feeds_ui.peek().pill_select.clone();
-        if let Some(pill) = pill {
+    pub fn apply_feeds_pill_select(&self, collections: &GuiCollectionsFrame) {
+        let key = self.feeds_ui.peek().pill_select.clone();
+        if let Some(key) = key {
             let mut feeds_ui = self.feeds_ui;
             feeds_ui.with_mut(|ui| ui.pill_select = None);
-            self.select_feeds_pill(pill);
+            self.press_collection_pill(collections, &key);
         }
     }
 }

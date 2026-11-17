@@ -10,10 +10,10 @@ use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiEmbyDetail, GuiEmbyList,
-    GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail, GuiLibraryList,
-    GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicDetail, GuiMusicList, GuiPodcastsDetail,
-    GuiPodcastsList, GuiShowsDetail, GuiShowsList,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail,
+    GuiEmbyList, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail,
+    GuiLibraryList, GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicDetail, GuiMusicList,
+    GuiPodcastsDetail, GuiPodcastsList, GuiShowsDetail, GuiShowsList,
 };
 
 /// The three Library sections one gated pass builds (design D8). The list and
@@ -198,17 +198,40 @@ pub(crate) fn log_built(
     );
 }
 
-/// The destination's kind word, its pill count, and its row count, for the log.
+/// The destination's kind word, its collection count, and its row count, for
+/// the log.
 fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
     match list {
-        GuiDestinationList::Music(list) => ("music", list.pills.len(), list.artists.len()),
+        GuiDestinationList::Music(list) => (
+            "music",
+            collection_count(list.collections.as_ref()),
+            list.artists.len(),
+        ),
         GuiDestinationList::Home(list) => ("home", 0, list.rows.len()),
-        GuiDestinationList::Shows(list) => ("shows", list.pills.len(), list.rows.len()),
-        GuiDestinationList::Emby(list) => ("emby", list.pills.len(), list.rows.len()),
+        GuiDestinationList::Shows(list) => ("shows", 0, list.rows.len()),
+        GuiDestinationList::Emby(list) => (
+            "emby",
+            collection_count(list.collections.as_ref()),
+            list.rows.len(),
+        ),
         GuiDestinationList::Audiobooks(list) => ("audiobooks", 0, list.rows.len()),
-        GuiDestinationList::Podcasts(list) => ("podcasts", list.pills.len(), list.rows.len()),
-        GuiDestinationList::Feeds(list) => ("feeds", list.pills.len(), list.rows.len()),
+        GuiDestinationList::Podcasts(list) => (
+            "podcasts",
+            collection_count(list.collections.as_ref()),
+            list.rows.len(),
+        ),
+        GuiDestinationList::Feeds(list) => (
+            "feeds",
+            collection_count(list.collections.as_ref()),
+            list.rows.len(),
+        ),
     }
+}
+
+/// The collections a destination's selector offers, for the log: none while
+/// the destination paints no selector.
+fn collection_count(collections: Option<&GuiCollectionsFrame>) -> usize {
+    collections.map_or(0, |collections| collections.entries.len())
 }
 
 /// Whether the detail carries a Hero, for the log.

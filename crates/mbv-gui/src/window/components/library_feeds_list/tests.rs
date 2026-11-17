@@ -21,10 +21,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryFeedsList;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
-    GuiLibraryDetail, GuiLibraryList, GuiPillFrame,
+    GuiCollectionsFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
 };
-use crate::bridge::library::GuiFeedPill;
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
@@ -296,12 +295,13 @@ fn entries() -> Vec<GuiEntryRowFrame> {
 /// sets it (design D12).
 fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool) -> GuiFeedsList {
     GuiFeedsList {
-        pills: vec![GuiPillFrame {
-            pill: GuiFeedPill::Latest,
-            name: "Latest".to_owned(),
-            selected: true,
-            collection: false,
-        }],
+        collections: Some(GuiCollectionsFrame {
+            target: mbv::GuiCollectionTarget::Feeds,
+            all: true,
+            entries: Vec::new(),
+            noun: mbv::GuiCollectionNoun::Subscriptions,
+            order: Some(mbv::GuiDateOrder::Newest),
+        }),
         loading,
         failed: false,
         rows,
@@ -481,11 +481,10 @@ fn a_loading_tab_paints_its_line_and_no_row() {
     );
 }
 
-/// Contract (`LibraryFeedsList.test.ts`, design D15): the Feeds column
-/// carries the Music list's header, naming the active pill as the carried
-/// scope.
+/// Contract (`LibraryFeedsList.test.ts`, design D15, D6): the Feeds column
+/// carries the Music list's header, naming the collection selector's label.
 #[test]
-fn the_list_paints_the_feeds_header_with_the_active_pill_as_its_label() {
+fn the_list_paints_the_feeds_header_with_the_collections_label() {
     let mut fixture = built(frame(Vec::new(), false), detail(None));
     fixture.measure(300.0);
 
@@ -496,8 +495,8 @@ fn the_list_paints_the_feeds_header_with_the_active_pill_as_its_label() {
     );
     assert_eq!(
         fixture.text_of("[data-library-feeds-selection-label]"),
-        "Latest",
-        "the active pill is the carried scope"
+        "All",
+        "the selector's label is All while the selection is All"
     );
 }
 

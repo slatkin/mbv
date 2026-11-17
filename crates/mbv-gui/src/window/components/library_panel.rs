@@ -108,38 +108,39 @@ fn pair_has_hero(pair: &LibraryPair) -> bool {
 /// The active destination's pill row (design D6, D12), with the pills region
 /// the arrangement paints it in. Home and a plain Emby library paint no pill
 /// row at all — the rail replaces it — so their pair names none. The
-/// painters take the pills and the library index alone (the port review's
-/// repaint-clone finding): the pills read nothing else, so a panel repaint
-/// never clones the carried list's rows for them.
+/// painters take the destination's collections frame alone (the interim row is
+/// the transitional seam the collection dropdown replaces): the row reads
+/// nothing else, so a panel repaint never clones the carried list's rows for
+/// it.
 fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
     match pair {
-        Some(LibraryPair::Music(list, _)) => Some(rsx! {
-            LibraryPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
+        Some(LibraryPair::Music(list, _)) => {
+            let collections = list.collections.clone()?;
+            Some(rsx! {
+                LibraryPills { collections }
+            })
+        }
+        Some(LibraryPair::Shows(..)) => Some(rsx! {
+            LibraryShowsPills {}
         }),
-        Some(LibraryPair::Shows(list, _)) => Some(rsx! {
-            LibraryShowsPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Emby(list, _)) if list.feed_group => Some(rsx! {
-            LibraryEmbyPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Podcasts(list, _)) => Some(rsx! {
-            LibraryPodcastsPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Feeds(list, _)) => Some(rsx! {
-            LibraryFeedsPills { pills: list.pills.clone() }
-        }),
+        Some(LibraryPair::Emby(list, _)) if list.feed_group => {
+            let collections = list.collections.clone()?;
+            Some(rsx! {
+                LibraryEmbyPills { collections }
+            })
+        }
+        Some(LibraryPair::Podcasts(list, _)) => {
+            let collections = list.collections.clone()?;
+            Some(rsx! {
+                LibraryPodcastsPills { collections }
+            })
+        }
+        Some(LibraryPair::Feeds(list, _)) => {
+            let collections = list.collections.clone()?;
+            Some(rsx! {
+                LibraryFeedsPills { collections }
+            })
+        }
         _ => None,
     }
 }

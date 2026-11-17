@@ -5,12 +5,12 @@
 //! move.
 //!
 //! The core owns the data selection (which collections are selected, the picked
-//! item), so nothing here mirrors it: the pill toggle the keys request is an
-//! intent the pill row turns into the set-collections command (design D6).
+//! item), so nothing here mirrors it: the collection toggle the keys request is
+//! an intent the pill row turns into the collection command (design D6).
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList};
+use crate::bridge::frame::library::{GuiCollectionsFrame, GuiLibraryDetail, GuiLibraryList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
@@ -45,8 +45,9 @@ pub struct LibraryUiState {
     /// The filter's text: the `/` field types it, and it narrows the list
     /// without case (design D7).
     pub filter: String,
-    /// The pill selection a press asked for (design D6). The pill row turns it
-    /// into the select-collection command.
+    /// The collection pill a press asked for (design D6), by the paint key
+    /// the interim pill row carries. The pill row turns it into the
+    /// collection command.
     pub pill_select: Option<String>,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
@@ -261,32 +262,33 @@ impl LibraryState {
         ui.with_mut(|ui| ui.filter_open = false);
     }
 
-    /// Ask for a pill to be selected (design D6): the pill row turns the request
-    /// into the select-collection command.
-    pub fn request_library_pill_select(&self, group_id: String) {
+    /// Ask for a collection pill to be selected (design D6): the pill row
+    /// turns the request into the collection command. The key is the paint
+    /// key the row carries — `GuiCollectionsFrame::ALL_KEY` for All.
+    pub fn request_library_pill_select(&self, key: String) {
         let mut ui = self.ui;
-        ui.with_mut(|ui| ui.pill_select = Some(group_id));
+        ui.with_mut(|ui| ui.pill_select = Some(key));
     }
 
-    /// Select the collection pill `group_id` of the Grouped Music library
-    /// `lib_idx` (design D6): one group is always selected, as in the TUI. The
-    /// core stores the choice per destination and loads the group, and the pills
-    /// paint the core's choice back, so the row and the list cannot disagree.
-    pub fn select_library_pill(&self, lib_idx: usize, group_id: String) {
-        self.link
-            .library(GuiLibraryCommand::SelectCollection { lib_idx, group_id });
+    /// Send the collection command a press on the pill painted with `key`
+    /// asks for (gui-collection-dropdown design D5): the All row selects All,
+    /// and every other key toggles its collection. The frame names the
+    /// destination, so every collection destination shares this one press
+    /// path.
+    pub fn press_collection_pill(&self, collections: &GuiCollectionsFrame, key: &str) {
+        self.link.library(collections.pressed(key));
     }
 
-    /// Turn the keys' pill request into the select-collection command the pill
+    /// Turn the keys' pill request into the collection command the pill row
     /// sends (design D6). The intent is consumed here, so one key sends one
     /// command.
-    pub fn apply_library_pill_select(&self, lib_idx: usize) {
-        let Some(pill_select) = self.ui.peek().pill_select.clone() else {
+    pub fn apply_library_pill_select(&self, collections: &GuiCollectionsFrame) {
+        let Some(key) = self.ui.peek().pill_select.clone() else {
             return;
         };
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.pill_select = None);
-        self.select_library_pill(lib_idx, pill_select);
+        self.press_collection_pill(collections, &key);
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):

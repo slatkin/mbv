@@ -5,12 +5,10 @@
 
 use super::*;
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiEmbyDetail, GuiEmbyFeedGroupFrame, GuiEmbyList,
-    GuiEmbyPillFrame, GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail,
-    GuiHomeHeroFrame, GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicList,
-    GuiMusicPillFrame, GuiShowsDetail, GuiShowsList, GuiShowsModeFrame, GuiShowsPillFrame,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionEntry, GuiEmbyDetail, GuiEmbyList,
+    GuiEmbyRowKindFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeHeroFrame,
+    GuiHomeList, GuiMusicAlbumFrame, GuiMusicDetail, GuiMusicList, GuiShowsDetail, GuiShowsList,
 };
-use crate::bridge::library::GuiFeedPill;
 
 /// The fixture's tabs: Music at place 1, Audiobooks at place 2.
 fn tabs() -> Vec<GuiLibraryTabFrame> {
@@ -44,28 +42,25 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The Music list part: the pills disagree with the carried names, so the
-/// line proves it reads the core's one derivation (design D6).
+/// The Music list part: the selector's checked groups and the carried names
+/// the line reads (design D6).
 fn music_list() -> GuiLibraryList {
     GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            pills: vec![
-                GuiMusicPillFrame {
-                    group_id: "g1".to_owned(),
-                    name: "Jazz".to_owned(),
-                    selected: true,
-                    collection: true,
-                },
-                GuiMusicPillFrame {
-                    group_id: "g2".to_owned(),
+            collections: Some(GuiCollectionsFrame {
+                target: mbv::GuiCollectionTarget::Music(0),
+                all: false,
+                entries: vec![GuiCollectionEntry {
+                    key: "g1".to_owned(),
                     name: "Hip-Hop".to_owned(),
-                    selected: false,
-                    collection: true,
-                },
-            ],
+                    checked: true,
+                }],
+                noun: mbv::GuiCollectionNoun::Groups,
+                order: None,
+            }),
             collection_names: vec!["Hip-Hop".to_owned(), "Soul".to_owned()],
             loading: false,
             failure: None,
@@ -103,7 +98,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
         destination: GuiDestinationList::Emby(GuiEmbyList {
             lib_idx: 2,
             library_name: "Movies".to_owned(),
-            pills: Vec::new(),
+            collections: None,
             collection_names: Vec::new(),
             feed_group: false,
             loading: false,
@@ -129,20 +124,17 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
         destination: GuiDestinationList::Emby(GuiEmbyList {
             lib_idx: 2,
             library_name: "Movies".to_owned(),
-            pills: vec![
-                GuiEmbyPillFrame {
-                    group: GuiEmbyFeedGroupFrame::All,
-                    name: "All".to_owned(),
-                    selected: false,
-                    collection: false,
-                },
-                GuiEmbyPillFrame {
-                    group: GuiEmbyFeedGroupFrame::Folder("f1".to_owned()),
+            collections: Some(GuiCollectionsFrame {
+                target: mbv::GuiCollectionTarget::EmbyFeed(2),
+                all: false,
+                entries: vec![GuiCollectionEntry {
+                    key: "f1".to_owned(),
                     name: "Home videos".to_owned(),
-                    selected: true,
-                    collection: false,
-                },
-            ],
+                    checked: true,
+                }],
+                noun: mbv::GuiCollectionNoun::Folders,
+                order: Some(mbv::GuiDateOrder::Newest),
+            }),
             collection_names: vec!["Home videos".to_owned()],
             feed_group: true,
             loading: false,
@@ -206,20 +198,17 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Feeds(GuiFeedsList {
-            pills: vec![
-                GuiPillFrame {
-                    pill: GuiFeedPill::Latest,
-                    name: "Latest".to_owned(),
-                    selected: false,
-                    collection: false,
-                },
-                GuiPillFrame {
-                    pill: GuiFeedPill::Subscription("sub1".to_owned()),
+            collections: Some(GuiCollectionsFrame {
+                target: mbv::GuiCollectionTarget::Feeds,
+                all: false,
+                entries: vec![GuiCollectionEntry {
+                    key: "sub1".to_owned(),
                     name: "Bits and Bites".to_owned(),
-                    selected: true,
-                    collection: false,
-                },
-            ],
+                    checked: true,
+                }],
+                noun: mbv::GuiCollectionNoun::Subscriptions,
+                order: Some(mbv::GuiDateOrder::Newest),
+            }),
             loading: false,
             failed: false,
             rows: vec![GuiEntryRowFrame {
@@ -270,27 +259,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
             lib_idx: 0,
-            pills: vec![
-                GuiShowsPillFrame {
-                    mode: GuiShowsModeFrame::Latest,
-                    name: "Latest".to_owned(),
-                    selected: false,
-                    collection: false,
-                },
-                GuiShowsPillFrame {
-                    mode: GuiShowsModeFrame::Upcoming,
-                    name: "Upcoming".to_owned(),
-                    selected: false,
-                    collection: false,
-                },
-                GuiShowsPillFrame {
-                    mode: GuiShowsModeFrame::All,
-                    name: "All series".to_owned(),
-                    selected: true,
-                    collection: false,
-                },
-            ],
-            collection_names: vec!["All series".to_owned()],
+            collection_names: Vec::new(),
             loading: false,
             series: Vec::new(),
             upcoming_failed: false,
@@ -442,13 +411,14 @@ fn the_location_reads_home_and_the_home_hero_title() {
     );
 }
 
-// On Shows the location reads the destination tab's label, the active view
-// mode's name, and the selected row's title (design D10, D12, row 7.1).
+// On Shows the location reads the destination tab's label and the selected
+// row's title: the destination paints no collection selector (design D10,
+// D12, D8).
 #[test]
-fn the_location_reads_the_shows_destination_the_view_mode_and_the_selected_row() {
+fn the_location_reads_the_shows_destination_and_the_selected_row() {
     let (list, detail) = shows_content();
     assert_eq!(
         library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
-        "Shows › All series › The Bear"
+        "Shows › The Bear"
     );
 }

@@ -1,8 +1,8 @@
 //! Headless tests of the Shows keys (D16): the contracts of
 //! `shows-keys.test.ts`, on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2) — the movement keys scroll the list
-//! under the pointer, Enter selects a series row and plays a flat row, `n` and
-//! `a` act on a flat row only, and `/` is taken. The router under test is the
+//! under the pointer, Enter selects a series row, `n` and `a` act on a
+//! Workspace episode only, and `/` is taken. The router under test is the
 //! panel's one routing site, [`super::super::keys::route_library_key`], so these
 //! assertions cover the Shows dispatch it hands to
 //! [`super::route_shows_panel_key`]. The harness builds a `DioxusDocument`
@@ -15,12 +15,10 @@ use blitz_dom::Document as _;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use crate::bridge::frame::library::GuiShowsModeFrame as Mode;
 use crate::bridge::frame::library::{
     GuiArtShapeFrame, GuiDestinationList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList,
-    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeasonPillFrame,
-    GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
+    GuiShowsSeasonFrame, GuiShowsSeasonPillFrame, GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -217,46 +215,6 @@ fn workspace_episodes() -> Vec<GuiShowsEpisodeRowFrame> {
     ]
 }
 
-/// The series rows the All series mode's list moves through, as the flat rows
-/// the frame carries beside the tree.
-fn series_rows() -> Vec<GuiShowsRowFrame> {
-    vec![
-        GuiShowsRowFrame {
-            id: "s1".to_owned(),
-            title: "Atlanta".to_owned(),
-            subtitle: None,
-            date: None,
-            sort_letter: Some('A'),
-        },
-        GuiShowsRowFrame {
-            id: "s2".to_owned(),
-            title: "The Bear".to_owned(),
-            subtitle: None,
-            date: None,
-            sort_letter: Some('B'),
-        },
-    ]
-}
-
-/// One flat newest-episode row the Latest mode paints.
-fn flat_row(id: &str, title: &str, date: &str) -> GuiShowsRowFrame {
-    GuiShowsRowFrame {
-        id: id.to_owned(),
-        title: title.to_owned(),
-        subtitle: Some("S3E4 · Sabrosito".to_owned()),
-        date: Some(date.to_owned()),
-        sort_letter: None,
-    }
-}
-
-/// The flat newest-episode rows the Latest mode paints.
-fn episode_rows() -> Vec<GuiShowsRowFrame> {
-    vec![
-        flat_row("e1", "Atlanta", "12 May"),
-        flat_row("e2", "The Bear", "9 May"),
-    ]
-}
-
 /// One episode row of a season, as the frame carries it.
 fn episode(id: &str, name: &str) -> GuiShowsEpisodeRowFrame {
     GuiShowsEpisodeRowFrame {
@@ -293,31 +251,13 @@ fn shows_tree() -> Vec<GuiShowsSeriesFrame> {
     ]
 }
 
-/// The three view modes' pills, with `mode` selected (design D12).
-fn shows_pills(mode: Mode) -> Vec<GuiShowsPillFrame> {
-    [
-        (Mode::Latest, "Latest"),
-        (Mode::Upcoming, "Upcoming"),
-        (Mode::All, "All series"),
-    ]
-    .into_iter()
-    .map(|(pill_mode, name)| GuiShowsPillFrame {
-        mode: pill_mode,
-        name: name.to_owned(),
-        selected: pill_mode == mode,
-        collection: false,
-    })
-    .collect()
-}
-
-/// The carried content while Shows is active (design D12): no Music and no
-/// Home content, the mode's rows, and the Hero the mode paints.
+/// The carried content while Shows is active (design D12, D8): no Music and
+/// no Home content, the series list, and the Hero.
 fn shows_content(
-    mode: Mode,
-    rows: Vec<GuiShowsRowFrame>,
+    series: Vec<GuiShowsSeriesFrame>,
     hero: Option<GuiShowsHeroFrame>,
 ) -> (GuiLibraryList, GuiLibraryDetail) {
-    let selected = rows.first().map(|row| row.id.clone());
+    let selected = series.first().map(|node| node.id.clone());
     let list = GuiLibraryList {
         tabs: vec![
             GuiLibraryTabFrame {
@@ -332,16 +272,11 @@ fn shows_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
             lib_idx: 0,
-            pills: shows_pills(mode),
-            collection_names: vec!["All series".to_owned()],
+            collection_names: Vec::new(),
             loading: false,
-            series: if mode == Mode::All {
-                shows_tree()
-            } else {
-                Vec::new()
-            },
+            series,
             upcoming_failed: false,
-            rows,
+            rows: Vec::new(),
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
@@ -416,7 +351,7 @@ fn series_hero() -> GuiShowsHeroFrame {
 // Enter on a series row selects it for the Hero, and opens the node.
 #[test]
 fn enter_on_a_series_row_selects_it_for_the_hero() {
-    let content = shows_content(Mode::All, series_rows(), None);
+    let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
 
@@ -432,30 +367,11 @@ fn enter_on_a_series_row_selects_it_for_the_hero() {
     );
 }
 
-// Enter on a flat row plays the episode.
-#[test]
-fn enter_on_a_flat_row_plays_the_episode() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone());
-
-        route_on_row(state, facts, "enter", "Enter", "e2");
-    });
-    assert_eq!(facts, ["enter=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [mbv::GuiLibraryCommand::ShowsPlay {
-            lib_idx: 0,
-            item_id: "e2".to_owned(),
-        }]
-    );
-}
-
 // A series row is not playable (row 7.1): its `n` and `a` send nothing, so
 // the keys never act on a row the core refuses.
 #[test]
 fn n_and_a_on_a_series_row_send_nothing() {
-    let content = shows_content(Mode::All, series_rows(), None);
+    let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
 
@@ -466,37 +382,11 @@ fn n_and_a_on_a_series_row_send_nothing() {
     assert_eq!(commands(&rx), []);
 }
 
-// `n` and `a` on a flat row play the episode next and queue it.
-#[test]
-fn n_and_a_on_a_flat_row_play_the_episode_next_and_queue_it() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
-    let (facts, rx) = run(move |state, facts| {
-        carry_shows(state, content.clone());
-
-        route_on_row(state, facts, "n", "n", "e1");
-        route_on_row(state, facts, "a", "a", "e1");
-    });
-    assert_eq!(facts, ["n=Handled", "a=Handled"]);
-    assert_eq!(
-        commands(&rx),
-        [
-            mbv::GuiLibraryCommand::ShowsPlayNext {
-                lib_idx: 0,
-                item_id: "e1".to_owned(),
-            },
-            mbv::GuiLibraryCommand::ShowsQueue {
-                lib_idx: 0,
-                item_id: "e1".to_owned(),
-            },
-        ]
-    );
-}
-
 // Down over the Shows list scrolls the list by the height of the row at the top
 // edge (design D6) and changes no selection.
 #[test]
 fn down_over_the_shows_list_scrolls_it_by_one_row() {
-    let content = shows_content(Mode::All, series_rows(), None);
+    let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
         state.measure_shows_list(40.0);
@@ -514,7 +404,7 @@ fn down_over_the_shows_list_scrolls_it_by_one_row() {
 // (design D2, D6): the Workspace keeps no cursor.
 #[test]
 fn down_over_the_workspace_is_consumed_and_moves_nothing() {
-    let content = shows_content(Mode::All, series_rows(), Some(series_hero()));
+    let content = shows_content(shows_tree(), Some(series_hero()));
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
         state.measure_shows_list(40.0);
@@ -531,7 +421,7 @@ fn down_over_the_workspace_is_consumed_and_moves_nothing() {
 // (design D2): the Hero names no cursor, so the marker is the row.
 #[test]
 fn enter_n_and_a_on_the_workspace_name_the_hovered_episode() {
-    let content = shows_content(Mode::All, series_rows(), Some(series_hero()));
+    let content = shows_content(shows_tree(), Some(series_hero()));
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
 
@@ -562,7 +452,7 @@ fn enter_n_and_a_on_the_workspace_name_the_hovered_episode() {
 // A marker that names no painted episode sends nothing.
 #[test]
 fn enter_on_the_workspace_with_no_hovered_episode_sends_nothing() {
-    let content = shows_content(Mode::All, series_rows(), Some(series_hero()));
+    let content = shows_content(shows_tree(), Some(series_hero()));
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
 
@@ -576,7 +466,7 @@ fn enter_on_the_workspace_with_no_hovered_episode_sends_nothing() {
 // rail's keyboard path, and the Queue filter never sees the key.
 #[test]
 fn slash_opens_the_shows_filter_and_sends_no_key() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
+    let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
 
@@ -593,7 +483,7 @@ fn slash_opens_the_shows_filter_and_sends_no_key() {
 // destination's.
 #[test]
 fn esc_closes_the_shows_filter_and_drops_its_text() {
-    let content = shows_content(Mode::Latest, episode_rows(), None);
+    let content = shows_content(shows_tree(), None);
     let (facts, rx) = run(move |state, facts| {
         carry_shows(state, content.clone());
         let mut shows_ui = state.shows_ui;

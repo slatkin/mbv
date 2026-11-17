@@ -1,38 +1,41 @@
 //! The Podcasts section of the Library frame (add-gui-library-panel design
-//! D12, row 10.1): the single-select pill row of Latest and one pill per show,
-//! the active pill's episode rows in the date gutter, the core's selected
-//! episode, and the Hero with the parent show's Square cover. A command names
-//! an episode by the opaque identity the row carries — the provider's
-//! `(library_item_id, episode_id)` pair encoded in one place — never by
-//! position. The pill and row frames are the shared entry-list ones
-//! (`entry_list.rs`); the Hero and the frame struct are the destination's own.
+//! D12, row 10.1): the show collection selector, the selected shows' episode
+//! rows in the date gutter, the core's selected episode, and the Hero with the
+//! parent show's Square cover. A command names an episode by the opaque
+//! identity the row carries — the provider's `(library_item_id, episode_id)`
+//! pair encoded in one place — never by position. The selector frame is the
+//! shared `GuiCollectionsFrame` (gui-collection-dropdown design D6) and the row
+//! frame the shared entry-list one (`entry_list.rs`); the Hero and the frame
+//! struct are the destination's own.
 
 use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
 
 use super::GuiArtShapeFrame;
-use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+use super::collections::GuiCollectionsFrame;
+use super::entry_list::GuiEntryRowFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
-use crate::bridge::library::GuiPodcastPill;
 
 /// The Podcasts destination's list part (add-gui-library-panel design D12, row
-/// 10.1; `gui-change-driven-sections` design D8): the pill row and the active
-/// pill's episode rows, with the load facts.
+/// 10.1; `gui-change-driven-sections` design D8): the show selector and the
+/// selected shows' episode rows, with the load facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiPodcastsList {
     /// The Podcasts library index the Podcasts commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The pill row in paint order: Latest, then each show by title.
-    pub pills: Vec<GuiPillFrame<GuiPodcastPill>>,
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): All, every listed show in title order, the Shows noun, and the
+    /// list's date order.
+    pub collections: Option<GuiCollectionsFrame>,
     /// Whether the active view's episodes are still landing: the show
     /// catalog's pages or that view's own episode fetches.
     pub loading: bool,
     /// Whether the catalog fetch failed.
     pub failed: bool,
-    /// The active pill's episode rows: Latest merges every listed show's
-    /// episodes, a show pill holds that one show's, both newest first with
-    /// undated episodes last.
+    /// The selected shows' episode rows (design D1, D2): All merges every
+    /// listed show's episodes, a checked set merges the checked shows', both
+    /// in the stored date order with undated episodes last.
     pub rows: Vec<GuiEntryRowFrame>,
 }
 
@@ -82,7 +85,10 @@ impl GuiPodcastsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
         Self {
             lib_idx,
-            pills: projection.pills.iter().map(GuiPillFrame::from).collect(),
+            collections: projection
+                .collections
+                .as_ref()
+                .map(GuiCollectionsFrame::from),
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),

@@ -127,7 +127,7 @@ fn hero_app(props: FixtureProps) -> Element {
             current_tab: None,
             destination: GuiDestinationList::Music(GuiMusicList {
                 lib_idx: 0,
-                pills: Vec::new(),
+                collections: None,
                 collection_names: vec!["Hip-Hop".to_owned()],
                 loading: false,
                 failure: None,

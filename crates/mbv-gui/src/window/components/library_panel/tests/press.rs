@@ -5,7 +5,6 @@
 //! document cannot fire a DOM press.
 
 use super::{Fixture, built, fixtures, press_outside_menu, seed_idle_status};
-use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::window::arrangement::GuiArrangement;
 use dioxus_native::prelude::*;
 
@@ -64,7 +63,7 @@ fn the_wide_list_region_ends_left_of_the_hero_region() {
 /// Carry a Shows list and open its item menu at `x, y`, as the core's
 /// right-click frame does.
 fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {
-    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::All);
+    let (list, detail) = fixtures::shows_sections();
     fixture.carry(list, detail);
     seed_idle_status(fixture);
     let state = fixture.state.clone();

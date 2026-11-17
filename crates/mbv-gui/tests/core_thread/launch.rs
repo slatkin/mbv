@@ -126,9 +126,9 @@ fn the_window_close_saves_the_launch_location_once() {
 
     send_library(
         &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-soul".into(),
+        GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Music(0),
+            key: "grp-soul".into(),
         },
     );
     assert!(

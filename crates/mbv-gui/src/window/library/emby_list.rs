@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiEmbyFeedGroupFrame, GuiEmbyRowFrame};
+use crate::bridge::frame::library::GuiEmbyRowFrame;
 use crate::window::library::list::{
     FlatItem, GeometryRow, LETTER_ROW_HEIGHT, RailLetter, build_flat_rows, filter_match,
     letter_rail_by,
@@ -182,18 +182,6 @@ pub fn emby_letter_rail(rows: &[EmbyListRow]) -> Vec<RailLetter> {
         EmbyListRow::Item(item) => item.row.sort_letter,
         EmbyListRow::Heading { .. } => None,
     })
-}
-
-/// The stable key a feed-group pill is focused and pressed by (row 8.1): the
-/// group's own identity, so the pill row and the keys agree on it without a row
-/// position.
-#[must_use]
-pub fn emby_group_key(group: &GuiEmbyFeedGroupFrame) -> String {
-    match group {
-        GuiEmbyFeedGroupFrame::Latest => "latest".to_owned(),
-        GuiEmbyFeedGroupFrame::All => "all".to_owned(),
-        GuiEmbyFeedGroupFrame::Folder(id) => format!("folder:{id}"),
-    }
 }
 
 /// The rows the memo handed back last, with the cheap key and the interaction

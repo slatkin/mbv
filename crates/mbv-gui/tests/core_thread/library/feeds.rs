@@ -1,8 +1,9 @@
 //! The Feeds destination's contracts (add-gui-library-panel design D12, row
 //! 11.1): one background fetch's completion lands on the App through the GUI
 //! tick's own drain, so the destination's list reads the same App data the TUI
-//! shell reads; the frame carries the pill row and the active pill's entry
-//! rows once the destination opens; a pill command re-scopes the rows; a
+//! shell reads; the frame carries the collection selector and the selected
+//! subscriptions' entry rows once the destination opens; a collection command
+//! re-scopes the rows; a
 //! select moves the Hero; and the play and queue commands reach the Owner
 //! through the TUI's feed paths. The fetch boundary is the App's own result
 //! channel, so no request leaves the process and no worker outlives the
@@ -13,7 +14,6 @@ use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiFeedsDetail, GuiFeedsList, GuiLibraryDetail,
 };
-use mbv_gui::bridge::library::GuiFeedPill;
 use mbv_queue::FeedEntry;
 use mbv_ui_model::tab_selection::TabSelection;
 
@@ -176,13 +176,18 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
         "Latest merges both subscriptions newest first with nothing dated last"
     );
+    let collections = list
+        .collections
+        .expect("the Feeds destination carries its collections");
+    assert!(collections.all, "the selection is All");
     assert_eq!(
-        list.pills
+        collections
+            .entries
             .iter()
-            .map(|pill| (pill.name.as_str(), pill.selected))
+            .map(|entry| (entry.name.as_str(), entry.checked))
             .collect::<Vec<_>>(),
-        [("All", true), ("Feed A", false), ("Feed B", false)],
-        "the pill row is All first, then each subscription by name"
+        [("Feed A", false), ("Feed B", false)],
+        "the entries are each subscription in the tab's order"
     );
     assert_eq!(
         detail.selected.as_deref(),
@@ -209,21 +214,25 @@ fn the_pill_command_changes_the_rows() {
 
     send_library(
         &mut test,
-        mbv_gui::bridge::library::GuiLibraryCommand::FeedsSetPill {
-            pill: GuiFeedPill::Subscription(FEED_B.into()),
+        mbv_gui::bridge::library::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Feeds,
+            key: FEED_B.into(),
         },
     );
 
     let (list, _) = feeds_parts(&newest_frame(&mut test));
     let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["b-mid", "b-undated"]);
-    let selected: Vec<&str> = list
-        .pills
+    let collections = list
+        .collections
+        .expect("the Feeds destination carries its collections");
+    let checked: Vec<&str> = collections
+        .entries
         .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.as_str())
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.as_str())
         .collect();
-    assert_eq!(selected, ["Feed B"]);
+    assert_eq!(checked, ["Feed B"]);
 }
 
 /// A select command moves the Hero (row 11.1): the second row's opaque id

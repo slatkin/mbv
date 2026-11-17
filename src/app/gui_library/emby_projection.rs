@@ -15,7 +15,10 @@ use mbv_render::effective_sort_str;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
-use super::collection::{GuiCollectionSet, compare_gui_date_order};
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
+    compare_gui_date_order,
+};
 use super::entry_list::{GuiPillOption, collection_pill_options};
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
@@ -120,6 +123,12 @@ pub struct GuiEmbyProjection {
     /// plain mode, whose rail replaces the TUI's letter-range pill row. The
     /// dropdown replaces the row in a later unit; the New pill is gone.
     pub pills: Vec<GuiPillOption<Option<String>>>,
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): `Some` in the feed-group mode, with All, every root folder in
+    /// listing order with its checked flag, the Folders noun, and the list's
+    /// date order; `None` in plain mode, whose rail replaces the collection
+    /// selector.
+    pub collections: Option<GuiCollections>,
     /// The selected collection's name the Library Status bar's location
     /// reads (design D10), as the Shows projection carries its mode's name:
     /// the selection's pill name in the feed-group mode, and nothing in
@@ -245,6 +254,7 @@ impl App {
         GuiEmbyProjection {
             library_name: self.gui_emby_library_name(lib_idx),
             pills: Vec::new(),
+            collections: None,
             collection_names: Vec::new(),
             feed_group: false,
             loading,
@@ -263,6 +273,13 @@ impl App {
         let set = self.gui_emby_feed_effective_set(lib_idx);
         let folders = self.gui_root_folder_names(lib_idx);
         let pills = self.gui_emby_feed_pills(lib_idx, &set);
+        let collections = Some(GuiCollections::new(
+            GuiCollectionTarget::EmbyFeed(lib_idx),
+            &set,
+            GuiCollectionNoun::Folders,
+            folders.iter().cloned(),
+            Some(self.gui_emby_feed_order(lib_idx)),
+        ));
         let collection_names = feed_collection_names(&set, &folders);
         let (items, loading) = self.gui_emby_feed_items(lib_idx);
         let rows: Vec<GuiEmbyRow> = items
@@ -278,6 +295,7 @@ impl App {
         GuiEmbyProjection {
             library_name: self.gui_emby_library_name(lib_idx),
             pills,
+            collections,
             collection_names,
             feed_group: true,
             loading,

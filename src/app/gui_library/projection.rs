@@ -13,7 +13,7 @@ use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiGroupAlbums;
-use super::collection::GuiCollectionSet;
+use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 use crate::app::App;
 
 /// One group pill of the Music destination (add-gui-library-panel design D5,
@@ -117,6 +117,11 @@ pub struct GuiMusicHero {
 pub struct GuiMusicProjection {
     /// The group pills in the group level's order (design D5, D6).
     pub pills: Vec<GuiMusicPill>,
+    /// The destination's collection selector (design D6): All, every group in
+    /// the group level's order with its checked flag, the Groups noun, and no
+    /// date order — Music sorts by name. The bridge's collections frame rides
+    /// here.
+    pub collections: Option<GuiCollections>,
     /// The selected collection names in pill order (design D6): the one
     /// derivation of the names the frame carries, so the list header, the
     /// Status bar location, and the Hero header cannot disagree.
@@ -168,12 +173,22 @@ impl App {
         let set = self.gui_effective_music_set(lib_idx);
         let pills = self.gui_music_pills(lib_idx, &set);
         let collection_names = selected_collection_names(&set, &pills);
+        let collections = Some(GuiCollections::new(
+            GuiCollectionTarget::Music(lib_idx),
+            &set,
+            GuiCollectionNoun::Groups,
+            pills
+                .iter()
+                .map(|pill| (pill.group_id.clone(), pill.name.clone())),
+            None,
+        ));
         let selected_groups = self.gui_selected_groups(lib_idx);
         let union = self.gui_music_union(lib_idx, &selected_groups);
         let artists = self.gui_music_artists(&union);
         let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
         let projection = GuiMusicProjection {
             pills,
+            collections,
             collection_names,
             loading: union.loading,
             failure: failure_line(&union.failed),

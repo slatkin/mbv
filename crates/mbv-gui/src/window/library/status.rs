@@ -6,8 +6,9 @@
 //! part narrow on their kind.
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame, GuiPillFrame, GuiShowsRowFrame,
+    GuiAudiobooksRowFrame, GuiCollectionsFrame, GuiDestinationList, GuiEmbyRowFrame,
+    GuiEntryRowFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame,
+    GuiShowsRowFrame,
 };
 
 /// The current destination's label: the tab whose position the frame marks
@@ -102,14 +103,21 @@ fn detail_selected(detail: Option<&GuiLibraryDetail>) -> Option<&str> {
     }
 }
 
-/// The location line's middle segment a pill row names (design D10, D12): the
-/// selected pill's own name. A pill row with no selected pill leaves the
-/// segment out.
-fn selected_pill<P>(pills: &[GuiPillFrame<P>]) -> Option<String> {
-    pills
+/// The location line's middle segment a collection selector names (design
+/// D10, D6): the checked collections' names, or `All` while the selection is
+/// All. A destination with no selector leaves the segment out.
+fn selected_collection(collections: Option<&GuiCollectionsFrame>) -> Option<String> {
+    let collections = collections?;
+    if collections.all {
+        return Some("All".to_owned());
+    }
+    let names: Vec<String> = collections
+        .entries
         .iter()
-        .find(|pill| pill.selected)
-        .map(|pill| pill.name.clone())
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.clone())
+        .collect();
+    (!names.is_empty()).then(|| names.join(", "))
 }
 
 /// The plain Emby-library location's middle segment (design D10, D12, row
@@ -179,7 +187,7 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_pill(&podcasts.pills),
+                selected_collection(podcasts.collections.as_ref()),
                 selected_title(selected, &podcasts.rows),
             ]
         }
@@ -187,7 +195,7 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_pill(&feeds.pills),
+                selected_collection(feeds.collections.as_ref()),
                 selected_title(selected, &feeds.rows),
             ]
         }

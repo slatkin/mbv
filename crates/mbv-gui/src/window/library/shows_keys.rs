@@ -94,7 +94,6 @@ impl PanelKeys for ShowsKeys<'_> {
     fn item_id(&self, item: &ShowsListRow) -> Option<String> {
         match item {
             ShowsListRow::Series(_) | ShowsListRow::Season(_) | ShowsListRow::Heading(_) => None,
-            ShowsListRow::Flat(flat) => Some(flat.row.id.clone()),
             ShowsListRow::Episode(episode) => Some(episode.source_id.clone()),
         }
     }
