@@ -12,6 +12,7 @@ impl App {
 
     pub(in crate::app) fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
         if self.action_touches_local_queue(&action)
+            && self.replacement_targets_current_queue()
             && self.queue_dirty
             && self.queue_is_saved_playlist()
         {
@@ -31,17 +32,34 @@ impl App {
         }
     }
 
-    /// Design D6 predicate: executing `action` would replace a populated
-    /// playback-target queue (local or directly controlled remote), so the
-    /// caller must confirm before the replacement runs. An empty target queue
-    /// needs no confirmation. Only a `PlayItems` payload is gated; a bare
-    /// clear already owns its own confirmation flow.
+    /// Whether a replacement targets the local Owner's current queue. The
+    /// save gate below reads state that describes that queue alone:
+    /// `queue_dirty`, the saved-playlist source, its name, and the queue
+    /// `save_playlist_to_emby` saves. A replacement of a resting Named queue
+    /// replaces a queue that state does not describe, so it skips the gate
+    /// rather than offer to save another queue's edits.
+    fn replacement_targets_current_queue(&self) -> bool {
+        !self.shows_resting_local_queue()
+    }
+
+    /// Design D6 predicate: executing `action` would replace a populated shown
+    /// queue (local or directly controlled remote), so the caller must confirm
+    /// before the replacement runs. An empty target queue needs no
+    /// confirmation. Only a `PlayItems` payload is gated; a bare clear already
+    /// owns its own confirmation flow.
+    ///
+    /// The populated queue is the shown one, never the playhead's: the
+    /// replacement reaches the shown queue, so a populated resting queue asks
+    /// while the current queue is empty, and an empty resting queue does not
+    /// ask while a populated current queue plays on (spec `gui-queue-chooser`
+    /// "The confirmation before a populated queue is replaced SHALL apply to
+    /// the shown queue").
     pub(in crate::app) fn queue_replacement_needs_confirmation(
         &self,
         action: &PendingQueueAction,
     ) -> bool {
         matches!(action, PendingQueueAction::PlayItems { .. })
-            && self.playback_queue().total_queue_len() > 0
+            && self.displayed_queue().total_queue_len() > 0
     }
 
     /// Design D6 entry point for a resolved queue replacement: an empty target

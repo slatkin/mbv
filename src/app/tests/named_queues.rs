@@ -698,3 +698,104 @@ fn sent_move_target(cmd: &mbv_ctrl::CtrlCmd) -> Option<(usize, Option<NamedQueue
         _ => None,
     }
 }
+
+/// One replacement payload: `items` played from the front, as a Library Play
+/// resolves it before the queue-replacement gates run.
+fn replacement_of(items: &[EmbyItem]) -> PendingQueueAction {
+    PendingQueueAction::PlayItems {
+        items: items.to_vec(),
+        start_idx: 0,
+        source: mbv_queue::QueueSource::Unknown,
+    }
+}
+
+/// The GUI Client shows a populated resting `Kids` while the current `Default`
+/// queue is empty, so a replacement asks before it discards the shown rows
+/// (spec `gui-queue-chooser` "The confirmation before a populated queue is
+/// replaced SHALL apply to the shown queue").
+#[test]
+fn a_populated_resting_queue_asks_before_the_replacement() {
+    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
+    adopt_current_queue(&mut app, &emby_unified_state(&[], 0));
+
+    app.request_queue_replacement(replacement_of(&make_items(1)), ReplacementExecutor::Pending);
+
+    assert!(
+        matches!(
+            &app.pending_overlay,
+            Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
+                if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
+        ),
+        "the shown resting queue's rows are about to go, so the replacement asks first"
+    );
+    assert!(app.queue_deferrals.has_gated_replacement());
+}
+
+/// The GUI Client shows an empty resting `Kids` while a populated `Default`
+/// holds the playhead, so the replacement runs without asking: the current
+/// queue's rows are not the ones it discards (spec `gui-queue-chooser`, the
+/// same requirement).
+#[test]
+fn an_empty_resting_queue_takes_the_replacement_without_asking() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&[]));
+    adopt_current_queue(&mut app, &emby_unified_state(&make_items(3), 0));
+    drain_commands(&cmd_rx);
+
+    app.request_queue_replacement(replacement_of(&make_items(1)), ReplacementExecutor::Pending);
+
+    assert!(
+        app.pending_overlay.is_none(),
+        "an empty shown queue needs no confirmation"
+    );
+    assert!(!app.queue_deferrals.has_gated_replacement());
+    let sent = cmd_rx
+        .try_recv()
+        .expect("the confirmed-empty replacement reaches the shown queue");
+    assert_eq!(
+        sent_replace_queue(&sent),
+        Some(resting()),
+        "the replacement names the shown resting queue, not the populated current one"
+    );
+}
+
+/// A dirty saved playlist holding the playhead does not raise its save prompt
+/// for a replacement of another queue: the save would take the current queue's
+/// edits and the replacement discards the shown resting queue instead.
+#[test]
+fn a_resting_queue_replacement_skips_the_current_queue_save_prompt() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&[]));
+    adopt_current_queue(&mut app, &emby_unified_state(&make_items(3), 0));
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl-mix".to_string()),
+            name: "Mix".to_string(),
+        });
+    app.queue_dirty = true;
+    drain_commands(&cmd_rx);
+
+    app.request_queue_replacement(replacement_of(&make_items(1)), ReplacementExecutor::Pending);
+
+    assert!(
+        !app.queue_deferrals.is_save_deferred(),
+        "the current queue's unsaved edits are not the ones the replacement discards"
+    );
+    assert!(app.pending_overlay.is_none());
+    let sent = cmd_rx
+        .try_recv()
+        .expect("the replacement runs instead of prompting to save");
+    assert_eq!(sent_replace_queue(&sent), Some(resting()));
+}
+
+/// The Named queue one sent queue replacement carries.
+fn sent_replace_queue(cmd: &mbv_ctrl::CtrlCmd) -> Option<NamedQueueId> {
+    match cmd {
+        mbv_ctrl::CtrlCmd::UnifiedQueueReplace { queue, .. } => *queue,
+        _ => None,
+    }
+}
