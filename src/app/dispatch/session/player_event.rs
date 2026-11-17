@@ -78,10 +78,15 @@ impl App {
                 self.handle_output_started();
                 PlayerEventFlow::Proceed
             }
-            PlayerEvent::NextUpThreshold { .. } | PlayerEvent::IntroEnded => {
-                // No action: next-up thresholds are presentation-only; intro completion needs no handling.
-                PlayerEventFlow::Proceed
-            }
+            // No action: next-up thresholds are presentation-only and intro
+            // completion needs no handling. The shell drain intercepts both
+            // pin-swap events before they reach App dispatch (tray-pin-swap
+            // 4.4): the launch snapshot is a shell query and the exit kind is
+            // shell-owned. These arms only keep the match exhaustive.
+            PlayerEvent::NextUpThreshold { .. }
+            | PlayerEvent::IntroEnded
+            | PlayerEvent::SwapPrepare
+            | PlayerEvent::SwapQuit => PlayerEventFlow::Proceed,
             PlayerEvent::NextUpPlay => {
                 self.handle_next_up_play();
                 PlayerEventFlow::Proceed
@@ -145,13 +150,6 @@ impl App {
             PlayerEvent::PlaybackOutput(state) => self.apply_playback_output(state),
             PlayerEvent::NamedQueue(event) => {
                 self.adopt_named_queue_event(event);
-                PlayerEventFlow::Proceed
-            }
-            PlayerEvent::SwapPrepare | PlayerEvent::SwapQuit => {
-                // The shell drain intercepts both pin-swap events before they
-                // reach App dispatch (tray-pin-swap 4.4): the launch snapshot
-                // is a shell query and the exit kind is shell-owned. This arm
-                // only keeps the match exhaustive.
                 PlayerEventFlow::Proceed
             }
         }
