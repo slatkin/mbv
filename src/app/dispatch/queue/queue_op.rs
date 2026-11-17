@@ -149,13 +149,13 @@ impl App {
     }
 
     /// Pump `link`'s link receiver until `QueueOpResult{op: id}` or `bound`.
-    /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`. The
-    /// new-queue control's answer is routed to its own request when it is the
-    /// foreign op that arrives first (design D8 of `gui-named-queues`).
-    /// Deferred to the next tick's source-link drain: every other event.
-    /// Returns whether the matching answer was `Applied`; a late or unmatched
-    /// `Applied` is adopted as a background snapshot, a late `Rejected`
-    /// reports nothing more.
+    /// Adopted inline: `UnifiedQueueUpdated`, the local link's Named-queue
+    /// traffic, and the matching `Applied`. The new-queue control's answer is
+    /// routed to its own request when it is the foreign op that arrives first
+    /// (design D8 of `gui-named-queues`). Deferred to the next tick's
+    /// source-link drain: every other event. Returns whether the matching
+    /// answer was `Applied`; a late or unmatched `Applied` is adopted as a
+    /// background snapshot, a late `Rejected` reports nothing more.
     fn pump_queue_op_answer(&mut self, link: QueueLink, id: QueueOpId, bound: Duration) -> bool {
         let deferred_home = link == QueueLink::Local && self.suspended_local.is_some();
         let deadline = Instant::now() + bound;
@@ -195,6 +195,16 @@ impl App {
                     if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
                         self.adopt_queue_op_snapshot(link, &snapshot, false);
                     }
+                }
+                Ok(PlayerEvent::NamedQueue(event)) if link == QueueLink::Local => {
+                    // Owner Named-queue state, adopted inline like a snapshot:
+                    // the queue list must not wait behind the deferred drain,
+                    // because the create answer that follows it shows the new
+                    // queue. A stale list leaves that show with no resting
+                    // view and no subscription, so the panel would paint the
+                    // current queue's rows under the new queue's name (design
+                    // D7, D8).
+                    self.adopt_named_queue_event(event);
                 }
                 Ok(other) => {
                     if deferred_home {

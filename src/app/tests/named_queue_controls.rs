@@ -70,6 +70,13 @@ fn sent_create(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<mbv_ctrl::Queu
     })
 }
 
+/// Whether `rx` holds a `NamedQueueShow` for `queue`, among the commands the
+/// Client sent.
+fn sent_show(rx: &std::sync::mpsc::Receiver<CtrlCmd>, queue: NamedQueueId) -> bool {
+    rx.try_iter()
+        .any(|cmd| matches!(cmd, CtrlCmd::NamedQueueShow { queue: shown } if shown == queue))
+}
+
 /// The `queue` of one `NamedQueueClose` in `rx`, or `None` when the Owner is
 /// sent none.
 fn sent_close(rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> Option<NamedQueueId> {
@@ -121,11 +128,13 @@ fn the_new_queue_control_shows_the_new_queue_with_its_name_open() {
 }
 
 /// An edit dispatched while the new-queue request still waits: every queue edit
-/// pumps the link for its own answer, so the pump can meet the create's answer
-/// first. That answer must still reach its request — the new queue is shown with
-/// its name open, and the control works again — instead of being adopted as a
-/// background snapshot the drain never sees (spec `gui-queue-chooser` "The
-/// new-queue control makes and shows a queue").
+/// pumps the link for its own answer, so the pump can meet the list and the
+/// create's answer first. Those events must land in order — the list updates
+/// the control's queue list, so the create's answer shows the new queue as a
+/// resting queue and subscribes to it — and the create's answer must still
+/// reach its request instead of being adopted as a background snapshot the
+/// drain never sees (spec `gui-queue-chooser` "The new-queue control makes and
+/// shows a queue").
 #[test]
 fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
@@ -134,9 +143,14 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
     let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
     // The Owner publishes the list, then answers the create with the new
-    // queue's own snapshot. The stub mints the edit's `op` next, so both
-    // answers are already waiting when the edit's pump starts.
-    app.adopt_named_queue_list(list_with_new_queue(), current());
+    // queue's own snapshot. The stub mints the edit's `op` next, so all three
+    // events are already waiting when the edit's pump starts — the ordering a
+    // real Owner produces.
+    tx.send(PlayerEvent::NamedQueue(mbv_ctrl::NamedQueueEvent::List {
+        queues: list_with_new_queue(),
+        current: current(),
+    }))
+    .unwrap();
     tx.send(op_answer(created.0, new_queue_snapshot())).unwrap();
     tx.send(op_answer(created.0 + 1, new_queue_with(&make_items(1))))
         .unwrap();
@@ -161,9 +175,23 @@ fn an_edit_pump_that_meets_the_create_answer_still_opens_the_new_queue() {
         "the Queue panel shows the queue the Owner made"
     );
     assert_eq!(
+        app.shown_resting_queue_id(),
+        Some(new_queue()),
+        "the new queue is shown as the resting queue it is, never as the current one"
+    );
+    assert!(
+        sent_show(&cmd_rx, new_queue()),
+        "the Client subscribes to the queue it shows"
+    );
+    assert_eq!(
         app.displayed_queue().slots().len(),
         1,
         "the shown queue holds the appended item"
+    );
+    assert_eq!(
+        app.local_view.slots().len(),
+        3,
+        "the current queue's rows are never the shown queue's"
     );
     let Some(GuiOverlay::QueueChooser(chooser)) = &app.gui_overlay else {
         panic!("the new queue's name is open for edit");
