@@ -45,6 +45,22 @@ fn the_item_menu_opens_at_the_pointer_in_viewport_pixels() {
     assert_ne!(list.x, 0.0, "the list column is offset from the origin");
 }
 
+/// Contract (gui-swap-queue-and-library-sides, the scenario "The Wide list is
+/// at the left window edge"): in a Wide fixture with a picked item, the list
+/// region's box ends at or left of the Hero region's box start — the list is
+/// at the left window edge and the Hero pane to its right.
+#[test]
+fn the_wide_list_region_ends_left_of_the_hero_region() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+
+    let list_box = fixture.rect_of("[data-library-region=\"list\"]");
+    let hero_box = fixture.rect_of("[data-library-region=\"hero\"]");
+    assert!(list_box.x + list_box.width <= hero_box.x);
+}
+
 /// Carry a Shows list and open its item menu at `x, y`, as the core's
 /// right-click frame does.
 fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {

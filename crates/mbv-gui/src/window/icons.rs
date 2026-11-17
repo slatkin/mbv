@@ -230,16 +230,16 @@ pub fn ChevronRight(props: IconProps) -> Element {
     )
 }
 
-/// The Lucide `chevrons-right` icon.
+/// The Lucide `chevrons-left` icon.
 #[component]
-pub fn ChevronsRight(props: IconProps) -> Element {
+pub fn ChevronsLeft(props: IconProps) -> Element {
     icon_shell(
-        "chevrons-right",
+        "chevrons-left",
         &[],
         &props,
         rsx! {
-            path { d: "m6 17 5-5-5-5" }
-            path { d: "m13 17 5-5-5-5" }
+            path { d: "m11 17-5-5 5-5" }
+            path { d: "m18 17-5-5 5-5" }
         },
     )
 }

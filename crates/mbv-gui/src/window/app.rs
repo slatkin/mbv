@@ -215,6 +215,20 @@ pub(crate) fn mini_shows_queue(arrangement: GuiArrangement) -> bool {
     arrangement == GuiArrangement::Mini
 }
 
+/// The Queue column's class for its one root slot. Two columns pin its width;
+/// a queue-only expanded panel fills the window; a queue-only collapsed rail
+/// fills the window's height but end-aligns its 72 px to the right edge.
+#[must_use]
+fn queue_column_class(two_columns: bool, collapsed: bool) -> &'static str {
+    if two_columns {
+        "flex h-full min-h-0 flex-col flex-none"
+    } else if collapsed {
+        "flex h-full min-h-0 flex-col flex-1 items-end"
+    } else {
+        "flex h-full min-h-0 flex-col flex-1"
+    }
+}
+
 /// Fold one frame's `uiResetEpoch` into the window's presentation (D14, the
 /// port of `reset.ts`): a changed value resets the panel widths, the Library
 /// interaction stores, and the Settings interaction state on the same fact.
@@ -393,11 +407,8 @@ pub fn App() -> Element {
     let container_size = container.cloned();
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
     let arrangement = library_arrangement(container_size, widths.queue);
-    // The Settings screen's own measure: its sidebar is the canvas's fixed
-    // 260 px in the Queue column's place, so the screen's Mini threshold is
-    // the window width minus that width, never the dragged Queue column's
-    // (design D11; `App`'s
-    // `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`).
+    // The Settings screen's own measure: its fixed 260 px sidebar, never the
+    // dragged Queue column's width (design D11).
     let settings_screen_arrangement = settings_arrangement(container_size);
     // The Library panel's one presence fact (design D2, D10, D12): the
     // window holds the active destination's content, whose painters the
@@ -514,23 +525,13 @@ pub fn App() -> Element {
                         // from the Library panel's own arrangement.
                         SettingsScreen { arrangement: settings_screen_arrangement }
                     } else {
-                        if queue_visible {
-                            div {
-                                class: if two_columns {
-                                    "flex h-full min-h-0 flex-col flex-none"
-                                } else {
-                                    "flex h-full min-h-0 flex-col flex-1"
-                                },
-                                "data-queue-column": "",
-                                style: if two_columns {
-                                    format!("width: {}px;", widths.queue)
-                                } else {
-                                    String::new()
-                                },
-                                Panel {
-                                    container: container.cloned(),
-                                    library_visible,
-                                }
+                        // Paint order, left to right: Library panel, Queue
+                        // divider, Queue column (design D1).
+                        if library_visible && has_library_list {
+                            LibraryPanel {
+                                arrangement,
+                                list_width: widths.list,
+                                library_column: widths.library_column,
                             }
                         }
                         if two_columns && !panel.collapsed {
@@ -539,7 +540,7 @@ pub fn App() -> Element {
                             // Library column the arrangement measures; a
                             // double-click returns the canvas width.
                             PanelDivider {
-                                side: DividerSide::Left,
+                                side: DividerSide::Right,
                                 name: DividerName::Queue,
                                 width: widths.queue,
                                 on_drag: move |width| {
@@ -551,11 +552,19 @@ pub fn App() -> Element {
                                 },
                             }
                         }
-                        if library_visible && has_library_list {
-                            LibraryPanel {
-                                arrangement,
-                                list_width: widths.list,
-                                library_column: widths.library_column,
+                        if queue_visible {
+                            div {
+                                class: queue_column_class(two_columns, panel.collapsed),
+                                "data-queue-column": "",
+                                style: if two_columns {
+                                    format!("width: {}px;", widths.queue)
+                                } else {
+                                    String::new()
+                                },
+                                Panel {
+                                    container: container.cloned(),
+                                    library_visible,
+                                }
                             }
                         }
                     }

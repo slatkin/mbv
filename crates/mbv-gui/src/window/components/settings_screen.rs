@@ -1,7 +1,7 @@
 //! The Settings screen (`replace-tauri-with-blitz` task 8.3, the port of
 //! `SettingsScreen`; add-gui-settings-screen design D11, D13, ADR
-//! 0037): the sidebar in the Queue column's place and the shown section's
-//! content in the Library column's place, with the status line closing the
+//! 0037): the sidebar at the left window edge and the shown section's
+//! content in the rest of the window, with the status line closing the
 //! screen. The sidebar is the canvas's fixed 260 px, independent of the
 //! Queue column's dragged width and its collapse toggle, and paints no
 //! divider. Below the `libraryArrangement` Mini threshold only the pane that

@@ -358,48 +358,15 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             }
             div {
                 class: "relative flex min-h-0 flex-1",
-                if wide {
-                    // The Wide arrangement's Hero pane, to the left of the
-                    // list as the canvas orders it, with the active
-                    // destination's Hero inside.
-                    div {
-                        "data-library-region": "hero",
-                        class: "flex min-h-0 min-w-0 flex-1 flex-col",
-                        style: "background: var(--canvas-library-column); overflow-y: auto;",
-                        if pair_paints_hero {
-                            if let Some(hero) =
-                                hero_painter(list_section.as_ref(), detail_section.as_ref())
-                            {
-                                { hero }
-                            }
-                        }
-                    }
-                }
-                if wide {
-                    // The Wide list column's divider (design D4): dragging it
-                    // resizes the list column, a double-click returns the
-                    // canvas width.
-                    PanelDivider {
-                        side: DividerSide::Right,
-                        name: DividerName::List,
-                        width: props.list_width,
-                        on_drag: move |width| {
-                            drag_widths.drag_list_width(width, props.library_column);
-                        },
-                        on_reset: move |()| {
-                            reset_widths.reset_list_width();
-                        },
-                    }
-                }
                 // The list column: the canvas's index in Wide, the whole
                 // Library column in Mini and Narrow. Rows 7.2 and 7.7 paint
                 // the destination lists here. Wide paints the session's width
-                // (design D4), and its divider sits between the list and the
-                // Hero pane.
+                // (design D4) at the left edge; its divider and the Hero pane
+                // sit to its right.
                 div {
                     "data-library-region": "list",
                     class: if wide {
-                        "flex min-h-0 flex-col flex-none border-l"
+                        "flex min-h-0 flex-col flex-none border-r"
                     } else {
                         "flex min-h-0 flex-col min-w-0 flex-1"
                     },
@@ -415,6 +382,35 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                         { list_painter(pair) }
                     }
                 }
+                if wide {
+                    // The Wide list column's divider (design D4): dragging it
+                    // resizes the list column, a double-click returns the
+                    // canvas width.
+                    PanelDivider {
+                        side: DividerSide::Left,
+                        name: DividerName::List,
+                        width: props.list_width,
+                        on_drag: move |width| {
+                            drag_widths.drag_list_width(width, props.library_column);
+                        },
+                        on_reset: move |()| {
+                            reset_widths.reset_list_width();
+                        },
+                    }
+                    // The Wide Hero pane, with the active destination's Hero inside.
+                    div {
+                        "data-library-region": "hero",
+                        class: "flex min-h-0 min-w-0 flex-1 flex-col",
+                        style: "background: var(--canvas-library-column); overflow-y: auto;",
+                        if pair_paints_hero {
+                            if let Some(hero) =
+                                hero_painter(list_section.as_ref(), detail_section.as_ref())
+                            {
+                                { hero }
+                            }
+                        }
+                    }
+                }
                 if overlay_open {
                     // The Narrow Hero overlay (design D4): picking an item
                     // paints the Hero over the list, through the same painter
@@ -422,10 +418,13 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                     // backdrop press and Esc close it (design D3), so a picked
                     // item never leaves an overlay no input dismisses; the
                     // card scrolls its own content and swallows the presses
-                    // that land on it.
+                    // that land on it. The overlay sits at `z-20`, above
+                    // the root's Queue divider (`z-10`), whose band overlaps
+                    // the Library column's edge by 3 px: a press there closes
+                    // the overlay, it never starts a Queue resize.
                     div {
                         "data-library-region": "heroOverlay",
-                        class: "absolute inset-0 z-10 flex",
+                        class: "absolute inset-0 z-20 flex",
                         style: "background: rgba(0, 0, 0, 0.45);",
                         button {
                             "type": "button",

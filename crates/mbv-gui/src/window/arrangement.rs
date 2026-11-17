@@ -15,10 +15,11 @@ pub const QUEUE_PANEL_WIDTH_PX: f32 = 400.0;
 /// The Queue panel's collapsed width: the `z` toggle's 72 px rail.
 pub const QUEUE_RAIL_WIDTH_PX: f32 = 72.0;
 
-/// The Settings screen's sidebar width: the canvas's 260 px nav. It replaces
-/// the Queue column's expanded width, so it takes neither the session's drag
-/// nor the collapse toggle, and the screen's Mini check subtracts it from the
-/// window width (the `gui-settings-screen` design's width decisions).
+/// The Settings screen's sidebar width: the canvas's 260 px nav. The sidebar
+/// sits fixed at the left window edge, in the Queue column's former place,
+/// and takes neither the session's drag nor the collapse toggle; the screen's
+/// Mini check subtracts it from the window width (the `gui-settings-screen`
+/// design's width decisions).
 pub const SETTINGS_SIDEBAR_WIDTH_PX: f32 = 260.0;
 
 /// The Library column width below which only the Queue panel shows: the
@@ -95,12 +96,9 @@ pub fn library_arrangement(container: LayoutSize, queue_width: f32) -> GuiArrang
     GuiArrangement::Narrow
 }
 
-/// The arrangement the Settings screen paints (the former client
-/// `libraryArrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)`): the Library
-/// column's measurement with the screen's fixed 260 px sidebar in the Queue
-/// column's place. The sidebar takes neither the session's dragged Queue
-/// width nor the collapse toggle, so the screen's Mini threshold is the
-/// window width minus 260 px.
+/// The arrangement the Settings screen paints: `library_arrangement` with the
+/// fixed 260 px sidebar, which ignores the dragged Queue width and the collapse
+/// toggle, so the Mini threshold is the window width minus 260 px.
 #[must_use]
 pub fn settings_arrangement(container: LayoutSize) -> GuiArrangement {
     library_arrangement(container, SETTINGS_SIDEBAR_WIDTH_PX)

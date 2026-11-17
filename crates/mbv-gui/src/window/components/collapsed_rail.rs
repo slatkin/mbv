@@ -19,7 +19,7 @@ use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::arrangement::QUEUE_RAIL_WIDTH_PX;
 use crate::window::components::art_image::ArtImage;
-use crate::window::icons::{ChevronsRight, Pause, Play, SkipForward};
+use crate::window::icons::{ChevronsLeft, Pause, Play, SkipForward};
 use crate::window::layout::{
     LayoutContribution, LayoutEpoch, LayoutKey, LayoutReporter, element_region,
 };
@@ -124,9 +124,10 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
     let next_glyph = glyph_color(playback.availability.next, GuiRole::TextStrong);
 
     rsx! {
-        // The rail: one narrow column at the column's leading edge, the
-        // ring and the transport centred, the remaining time under them, and
-        // the expand control at the bottom.
+        // The rail: the 72 px rail at the right window edge (design D1 of
+        // `gui-swap-queue-and-library-sides`), the ring and the transport
+        // centred, the remaining time under them, and the expand control at
+        // the bottom.
         div {
             class: "flex h-full shrink-0 flex-col items-center",
             style: "width: {QUEUE_RAIL_WIDTH_PX}px; padding: var(--mbv-cell-row) 0; gap: var(--mbv-cell-row); background: var(--canvas-dim);",
@@ -243,7 +244,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
                 "aria-label": "Expand panel",
                 title: "Expand panel (z)",
                 onmounted: move |event| expand_mounted.set(Some(event)),
-                ChevronsRight {
+                ChevronsLeft {
                     size: 16,
                     color: role_var(GuiRole::TextMuted),
                 }
