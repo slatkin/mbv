@@ -63,12 +63,12 @@ pub(crate) use step::next_up_slot;
 mod run_shutdown;
 pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;
-#[cfg(test)]
-pub(crate) use run::StartupQueues;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, record_completed_slot,
 };
+#[cfg(test)]
+pub(crate) use run::{StartupQueues, restored_state_at};
 #[doc(inline)]
 pub use run::{run_local_with_options, run_with_options};
 mod event_loop;

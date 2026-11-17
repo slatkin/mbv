@@ -10,6 +10,7 @@ use mbv_queue::{
     NamedQueueId, PlaybackQueue, QueueItem, QueueLineage, QueueRevisionMint, QueueSlotId,
     QueueSource,
 };
+use std::path::Path;
 use std::sync::Arc;
 
 /// The queues the Owner holds when it starts serving its first Client.
@@ -96,20 +97,35 @@ pub(crate) fn startup_queues(role: DaemonRole, mint: &Arc<QueueRevisionMint>) ->
 /// only; the Owner's next save writes the new file, so the earlier files stay as
 /// they are (design D6).
 fn restored_state() -> Option<NamedQueuesState> {
-    let owner_path = mbv_config::stay_alive_queue_state_path();
-    mbv_config::load_or_migrate_named_queues_state_at(
+    restored_state_at(
         &mbv_config::named_queues_state_path(),
-        &owner_path,
+        &mbv_config::stay_alive_queue_state_path(),
     )
-    .or_else(|| {
-        (!owner_path.exists())
-            .then(mbv_config::load_queue_state)
-            .flatten()
-            .and_then(|queue| {
-                mbv_config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
-            })
-            .map(mbv_config::converted_named_queues_state)
-    })
+}
+
+/// `restored_state` against explicit paths, so a test drives the file choice
+/// without a real state directory.
+pub(crate) fn restored_state_at(
+    named_queues_path: &Path,
+    owner_path: &Path,
+) -> Option<NamedQueuesState> {
+    mbv_config::load_or_migrate_named_queues_state_at(named_queues_path, owner_path)
+        // An existing but unreadable Named-queue file degrades to the earlier
+        // single-queue owner file, so one corrupt file cannot reset every queue
+        // the file held.
+        .or_else(|| {
+            mbv_config::load_stay_alive_queue_state_at(owner_path)
+                .map(mbv_config::converted_named_queues_state)
+        })
+        .or_else(|| {
+            (!owner_path.exists())
+                .then(mbv_config::load_queue_state)
+                .flatten()
+                .and_then(|queue| {
+                    mbv_config::legacy_queue_for_owner_if_absent(owner_path, Some(queue))
+                })
+                .map(mbv_config::converted_named_queues_state)
+        })
 }
 
 /// The identity the next new queue takes: the saved one, raised above every

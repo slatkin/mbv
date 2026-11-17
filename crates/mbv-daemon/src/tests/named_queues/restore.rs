@@ -114,3 +114,63 @@ fn a_restart_restores_every_named_queue() {
 fn slot_ids(queue: &PlaybackQueue) -> Vec<mbv_queue::QueueSlotId> {
     queue.slots().iter().map(|slot| slot.slot_id).collect()
 }
+
+/// Contract: design D6 — an unreadable Named-queue file degrades to the earlier
+/// single-queue owner file, so one corrupt file cannot reset every queue it
+/// held. The restore reads only; it never rewrites either file.
+#[test]
+fn a_corrupt_named_file_restores_the_current_queue_from_the_single_queue_file() {
+    let scratch = mbv_config::TestTempDir::new();
+    let named_path = scratch.join("named_queues_state.json");
+    let owner_path = scratch.join("stay_alive_queue_state.json");
+    std::fs::write(&named_path, "{ not a named-queue state").unwrap();
+    let queue = PlaybackQueue::from_queue_items(
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+            emby_qi("c", "Video", "Movie"),
+        ],
+        Some(1),
+        revision_mint(),
+    );
+    mbv_config::save_stay_alive_queue_state_at(
+        &owner_path,
+        &StayAliveQueueState {
+            queue: crate::project_queue_state(
+                &queue,
+                &QueueSource::Album,
+                &PlayerStatus::default(),
+            ),
+            lineage: mbv_queue::QueueLineage(4),
+        },
+    )
+    .unwrap();
+    let written = std::fs::read(&named_path).unwrap();
+
+    let state = restored_state_at(&named_path, &owner_path)
+        .expect("the earlier single-queue file restores the current queue");
+
+    assert_eq!(state.queues.len(), 1);
+    let restored = state.queues.first().expect("one queue restores");
+    assert_eq!(restored.id, state.current);
+    assert_eq!(restored.name, "Default");
+    assert_eq!(restored.source, QueueSource::Album);
+    assert_eq!(
+        restored
+            .slots
+            .iter()
+            .map(|slot| slot.item.id())
+            .collect::<Vec<_>>(),
+        vec!["a", "b", "c"]
+    );
+    assert_eq!(
+        restored.start_slot,
+        Some(mbv_queue::QueueSlotId::from_raw(2)),
+        "the position the earlier Owner saved becomes the start slot"
+    );
+    assert_eq!(
+        std::fs::read(&named_path).unwrap(),
+        written,
+        "the corrupt file is left as it was"
+    );
+}

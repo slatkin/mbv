@@ -31,7 +31,7 @@ pub(super) use observations::{
 };
 mod restore;
 #[cfg(test)]
-pub(crate) use restore::StartupQueues;
+pub(crate) use restore::{StartupQueues, restored_state_at};
 
 pub(super) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
