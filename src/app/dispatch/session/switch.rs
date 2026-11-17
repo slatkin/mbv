@@ -575,6 +575,10 @@ impl App {
     /// sever stops nothing and whose direct connect leaves the prior
     /// playback running. The Session resolves against the displayed target
     /// snapshot; a target the snapshot no longer holds acts on nothing.
+    /// Enter severs to the local Owner first: while this Client is
+    /// thin-client on a peer, the selection must land on the local Owner
+    /// whose slot the prompt offered to move, exactly as the cast and the
+    /// non-direct-endpoint paths sever before their selection.
     pub(in crate::app) fn confirm_hand_off_playback_to_session(
         &mut self,
         device_id: &str,
@@ -602,12 +606,13 @@ impl App {
                 };
                 let name = session_display_name(&sess);
                 tracing::info!(name: "sessions.output.handoff", target: "sessions", device = %name, device_id = %device_id, "handing the active slot off to the Session as the owner's playback output");
-                self.flash(format!("Handed off to {name}"), ToastSeverity::Success);
+                self.sever_connections_without_output_change();
                 self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
                 self.select_playback_output(mbv_ctrl::OutputSelection::EmbySession {
                     device_id: sess.device_id.clone(),
                     name: sess.device_name.clone(),
                 });
+                self.flash(format!("Handed off to {name}"), ToastSeverity::Success);
             }
             Key::Esc => {
                 let Some(sess) = resolve(&self.panel_targets) else {

@@ -46,8 +46,12 @@ impl App {
     /// link's record while it is thin-client on a peer. Each connection's
     /// reader fills its record at the handshake cold seed and on every
     /// `CtrlEvent::PlaybackOutput` since (cast-owner-output 8.2 fix), so the
-    /// decision never waits for the Client's event drain.
-    fn local_owner_output(&self) -> Option<mbv_ctrl::OutputState> {
+    /// decision never waits for the Client's event drain. Every gate that
+    /// raises a hand-off prompt and the body that runs its Yes answer MUST
+    /// read this same fact — never the drained `playback_output` mirror,
+    /// which while thin-client describes the peer and before the drain lags
+    /// this record one tick.
+    pub(in crate::app) fn local_owner_output(&self) -> Option<mbv_ctrl::OutputState> {
         if self.is_local_daemon() {
             self.player.remote().playback_output_state()
         } else {

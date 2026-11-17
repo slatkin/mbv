@@ -62,31 +62,49 @@ fn open_sessions_request_toggles_the_target_chooser() {
     assert!(app.gui_overlay.is_none());
 }
 
-// The chooser's local row returns a remote output to this machine: the same
-// hand-back the Sessions sidebar's detach sends, reached from the chooser.
+// The chooser's local row returns a remote output to this machine, asked
+// first: the receiver holds the stub's active slot, so the shared
+// continue-playback gate raises the confirm (confirm-output-handoff
+// "Selecting local playback asks while a remote output plays"), and the
+// confirm's Yes sends the same hand-back the Sessions sidebar's detach
+// sends.
 #[test]
 fn the_local_chooser_row_returns_a_cast_output_to_local() {
     let (mut app, cmd_rx) = cast_target_app();
-    app.playback_output = Some(mbv_ctrl::OutputState::Cast {
+    // The Owner's connection record reports the Cast output — the fact the
+    // detach's gate and body read (the drained mirror lags it one tick);
+    // the chooser's attach check still reads the mirror.
+    let output = mbv_ctrl::OutputState::Cast {
         receiver_id: "receiver-1".to_string(),
         name: "Living Room".to_string(),
         connection: mbv_ctrl::OutputConnection::Connected,
-    });
+    };
+    app.player
+        .remote()
+        .update_playback_output_for_test(output.clone());
+    app.playback_output = Some(output);
 
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
         mbv_ui_model::panel_targets::ChooserTargetKey::Local,
     ))));
 
-    let selections: Vec<_> = cmd_rx
-        .try_iter()
-        .filter(|cmd| matches!(cmd, CtrlCmd::SelectPlaybackOutput(_)))
-        .collect();
-    assert!(matches!(
-        selections.as_slice(),
-        [CtrlCmd::SelectPlaybackOutput(
-            mbv_ctrl::OutputSelection::Local
-        )]
-    ));
+    assert!(
+        output_selections(&cmd_rx).is_empty(),
+        "the gate asks before anything is sent"
+    );
+    // The GUI drain presents the raised request as the canvas's own
+    // blocking overlay.
+    super::present_pending_modal(&mut app);
+    assert!(matches!(app.gui_overlay, Some(GuiOverlay::Confirm(_))));
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+        None,
+    );
+
+    let selections = output_selections(&cmd_rx);
+    assert_eq!(selections.len(), 1);
+    assert!(matches!(selections[0], mbv_ctrl::OutputSelection::Local));
+    assert!(app.gui_overlay.is_none());
 }
 
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
