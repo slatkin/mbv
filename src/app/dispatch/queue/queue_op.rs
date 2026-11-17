@@ -235,9 +235,12 @@ impl App {
             return;
         }
         if own_answer {
-            if link == self.playing_queue_link() {
-                self.player.set_status(unified.status.clone());
-            }
+            // The answer's status belongs to the link that answered, whatever
+            // the Client shows: an edit of the local link while a peer holds
+            // the active one must never write the local Owner's status into
+            // the peer's mirror (design D7 of `gui-named-queues`).
+            self.queue_owner_player(link)
+                .set_status(unified.status.clone());
             self.queue_for_link_mut(link).adopt(
                 unified,
                 crate::app::state::queue_view::AdoptCause::OwnAnswer,
@@ -248,7 +251,7 @@ impl App {
         } else if link == QueueLink::Local && self.suspended_local.is_some() {
             self.adopt_home_snapshot(unified);
         } else {
-            let _ = self.handle_unified_queue_updated(unified);
+            let _ = self.handle_unified_queue_updated(link, unified);
         }
     }
 }

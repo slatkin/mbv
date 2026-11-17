@@ -54,7 +54,8 @@ impl App {
             // Named-queue traffic is Owner state the Client core adopts
             // (gui-named-queues design D7), never a playback observation.
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                flow_after(self.handle_unified_queue_updated(&unified))
+                let link = self.active_queue_link();
+                flow_after(self.handle_unified_queue_updated(link, &unified))
             }
             PlayerEvent::QueueOpResult { op, outcome } => self.handle_queue_op_result(op, outcome),
             ev => self.handle_playback_event(ev),
@@ -77,7 +78,7 @@ impl App {
                 if self.take_new_queue_answer(op, Some(&snapshot)) {
                     return PlayerEventFlow::Proceed;
                 }
-                flow_after(self.handle_unified_queue_updated(&snapshot))
+                flow_after(self.handle_unified_queue_updated(self.active_queue_link(), &snapshot))
             }
             mbv_ctrl::QueueOpOutcome::Rejected(_) => {
                 self.take_new_queue_answer(op, None);
@@ -519,6 +520,11 @@ impl App {
             self.adopt_named_queue_snapshot(queue, unified);
             return;
         }
+        // The home link's status is its own proxy's, so the player panel, the
+        // transport gates, and the track chips read the local Owner's live
+        // playback while a local entry is shown (design D7). The active peer's
+        // mirror never takes it.
+        self.local_queue_player().set_status(unified.status.clone());
         self.local_view.adopt(
             unified,
             crate::app::state::queue_view::AdoptCause::Background {
@@ -531,11 +537,15 @@ impl App {
         self.adopt_owner_source(unified);
     }
 
-    /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
-    /// `handle_player_event`). Returns true when the local generation fence
-    /// ends the tick early.
+    /// Handle a `PlayerEvent::UnifiedQueueUpdated` from `link` (extracted from
+    /// `handle_player_event`). `link` is the link the event arrived on — the
+    /// active connection, or the link an answer pump read — so the adopted
+    /// status, the queue view, and the source all stay that link's facts while
+    /// another link is shown (design D7). Returns true when the local
+    /// generation fence ends the tick early.
     pub(in crate::app) fn handle_unified_queue_updated(
         &mut self,
+        link: crate::app::QueueLink,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) -> bool {
         // A snapshot that names a resting Named queue is that queue's own
@@ -549,8 +559,8 @@ impl App {
         }
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
-        self.player.set_status(unified.status.clone());
-        let link = self.playing_queue_link();
+        self.queue_owner_player(link)
+            .set_status(unified.status.clone());
         let held = self.queue_cursor_held_by_user();
         self.queue_for_link_mut(link).adopt(
             unified,

@@ -52,7 +52,8 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
         in_flight_transition: None,
         queued_latest_transition: None,
     };
-    app.handle_unified_queue_updated(&snapshot);
+    let link = app.active_queue_link();
+    app.handle_unified_queue_updated(link, &snapshot);
 
     app.pending_queue_transfer = Some(PendingQueueTransfer {
         direction: QueueTransferDirection::HandOff,

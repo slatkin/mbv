@@ -34,16 +34,34 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
+    /// The `PlayerProxy` that owns `link`'s queue and playback: the suspended
+    /// home link for `Local` while a peer attachment holds the active link,
+    /// else the active link's own proxy. Every status write and every owner
+    /// command names its link through this one accessor, so an answer that
+    /// arrives on one link never lands in the other link's mirror (design D7
+    /// of `gui-named-queues`).
+    pub(in crate::app) fn queue_owner_player(&self, link: QueueLink) -> &mbv_player::PlayerProxy {
+        match link {
+            QueueLink::Local => self.local_queue_player(),
+            QueueLink::Peer => &self.player,
+        }
+    }
+
+    /// The link the active Player connection carries: the peer while a Direct
+    /// remote control connection exists, else the local Owner — whatever the
+    /// GUI Client shows. The active link's events arrive on this one, so a
+    /// drain that adopts one writes this link's state and view.
+    pub(in crate::app) fn active_queue_link(&self) -> QueueLink {
+        QueueLinkResolution::new(self.has_direct_remote_queue(), None).playback_target()
+    }
+
     /// The `PlayerProxy` whose queue and playback the Queue panel shows and
     /// controls: the Local queue's link (the suspended home link while a peer
     /// attachment is shown), else the peer attachment. The shown queue and
     /// the player panel resolve to one link (ADR 0034), so the owner's
     /// liveness, its status, and the transport commands are all this link's.
     pub(in crate::app) fn shown_queue_owner_player(&self) -> &mbv_player::PlayerProxy {
-        match self.playing_queue_link() {
-            QueueLink::Local => self.local_queue_player(),
-            QueueLink::Peer => &self.player,
-        }
+        self.queue_owner_player(self.playing_queue_link())
     }
 
     /// The confirmed status the player panel shows: the shown entry's owner's

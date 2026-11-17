@@ -173,6 +173,72 @@ fn pause_intent(paused: bool) -> impl Fn(&mbv_ctrl::CtrlCmd) -> bool {
     }
 }
 
+/// The local Owner's answered status position, distinct from both links'
+/// starting positions: a status write that lands on the wrong proxy is visible.
+const ANSWERED_POSITION: i64 = 99;
+
+/// A GUI Client that shows a local Named queue reads the local Owner's own
+/// status: the suspended home link's snapshot fills its proxy, and the peer's
+/// mirror never takes the local Owner's playback (design D7, spec
+/// `gui-queue-chooser` "The player panel follows the shown entry's owner").
+#[test]
+fn a_local_edit_answer_updates_the_local_owner_status_and_not_the_peer() {
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(current());
+    let tx = inject_home_events(&mut app);
+    let mut answered = emby_unified_state(&make_items(3), 0);
+    answered.status.position_ticks = ANSWERED_POSITION;
+    tx.send(op_answer(1, answered)).unwrap();
+
+    let adopted = app.await_queue_op_with_bound(
+        QueueLink::Local,
+        mbv_ctrl::QueueOpId(1),
+        std::time::Duration::from_secs(1),
+    );
+
+    assert!(adopted, "the local Owner's answer applies");
+    assert_eq!(
+        app.shown_playback_status().position_ticks,
+        ANSWERED_POSITION,
+        "the panel reads the local Owner's own status"
+    );
+    assert_eq!(
+        app.player.status_snapshot().position_ticks,
+        PEER_POSITION,
+        "the peer's mirror never takes the local Owner's status"
+    );
+}
+
+/// A peer that publishes its own queue while a local queue is shown fills the
+/// peer's view only: the shown local rows and their source stay the local
+/// Owner's (design D7, ADR 0041).
+#[test]
+fn a_peer_snapshot_never_fills_the_shown_local_queue() {
+    let (mut app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    app.show_named_queue(current());
+    app.local_view.adopt_source(mbv_queue::QueueSource::Album);
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(&make_items(1), 0),
+    )));
+
+    assert_eq!(
+        app.local_view.slots().len(),
+        3,
+        "the shown local queue keeps its own rows"
+    );
+    assert_eq!(
+        app.queue_for_link(QueueLink::Peer).slots().len(),
+        1,
+        "the peer's queue takes the peer's snapshot"
+    );
+    assert_eq!(
+        app.local_view.source(),
+        &mbv_queue::QueueSource::Album,
+        "the peer's source never replaces the local Owner's"
+    );
+}
+
 /// A resting local queue shown while the local Owner plays: the panel and the
 /// transport follow the local Owner, so pause pauses its playback and the
 /// connected peer's playback is untouched (design D7, spec
@@ -319,6 +385,18 @@ fn answered_local_daemon_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::Ctrl
 pub(crate) fn inject_local_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
     let (tx, rx) = std::sync::mpsc::channel();
     app.player_rx = rx;
+    tx
+}
+
+/// Replace the suspended home link's event receiver with an injected one, so a
+/// test can deliver the local Owner's events while a peer holds the active
+/// link. Keep the sender alive to deliver them.
+pub(crate) fn inject_home_events(app: &mut App) -> std::sync::mpsc::Sender<PlayerEvent> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.suspended_local
+        .as_mut()
+        .expect("a suspended home link")
+        .player_rx = rx;
     tx
 }
 
