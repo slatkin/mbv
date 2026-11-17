@@ -388,3 +388,33 @@ fn a_chooser_entry_press_shows_the_painted_queue() {
         "the show sends no playback command"
     );
 }
+
+/// A press on a Queue chooser entry whose queue the Owner no longer holds —
+/// another Client closed it between the paint and the press — shows the current
+/// local queue instead, so the panel never shows a queue with no name and no
+/// edits (spec `gui-queue-chooser` "The close control closes the shown entry":
+/// after a close the Queue panel shows the current local queue).
+#[test]
+fn a_chooser_entry_press_on_a_closed_queue_shows_the_current_queue() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.toggle_gui_queue_chooser();
+    app.adopt_named_queue_list(vec![named_queue_list()[0].clone()], current());
+    while cmd_rx.try_recv().is_ok() {}
+
+    app.handle_playback_request(&PlaybackRequest::QueueChooserEntry(Some(resting())));
+
+    assert_eq!(
+        app.gui_shown_entry,
+        Some(ShownEntry::Local(current())),
+        "the panel falls back to the current local queue"
+    );
+    assert!(
+        !app.gui_overlay_is_open(),
+        "the chooser dismisses on the entry it pressed"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the closed queue is asked for nothing"
+    );
+}

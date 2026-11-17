@@ -68,12 +68,16 @@ impl App {
     /// dismisses the chooser on the entry it showed, so a press and Enter leave
     /// one state; the show starts, stops, and moves no playback (spec
     /// `gui-queue-chooser` "The chooser lists local queues and connected
-    /// peers").
+    /// peers"). A queue the Owner no longer holds — another Client closed it
+    /// between the paint and the press — is not shown: the panel falls back to
+    /// the current queue, as it does after a close, so the shown entry never
+    /// names a queue with no label and no edits.
     pub(in crate::app) fn show_gui_queue_chooser_entry(&mut self, queue: Option<NamedQueueId>) {
         if matches!(self.gui_overlay, Some(GuiOverlay::QueueChooser(_))) {
             self.gui_overlay = None;
         }
         match queue {
+            Some(queue) if !self.named_queues.holds(queue) => self.show_local_current_entry(),
             Some(queue) => self.show_named_queue(queue),
             None => self.show_peer_entry(),
         }
