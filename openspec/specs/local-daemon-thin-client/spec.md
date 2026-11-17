@@ -67,7 +67,7 @@ A newly started Client SHALL restore only the bounded TUI launch-state snapshot:
 
 ### Requirement: A live daemon queue is never overwritten by the saved queue snapshot
 
-The local daemon SHALL hold the authoritative queue and queue source, persist them on accepted queue-changing operations and on graceful shutdown, and reload them at startup. A Client attaching to the local daemon SHALL adopt that owner's live queue and SHALL NOT replace it with a saved Client snapshot. An empty queue SHALL persist as empty: a persisted empty queue SHALL NOT be replaced by an older saved snapshot. No Client SHALL persist, restore, or seed a queue: queue persistence belongs only to the Player owner.
+The local daemon SHALL hold every authoritative Named queue with its name, queue source, slot identities, and start slot, and which queue is current. It SHALL persist them on accepted queue-changing operations, on create, rename, and close, and on graceful shutdown, and reload them at startup. A single-queue state file from an earlier version SHALL load as one current queue named `Default`. A Client attaching to the local daemon SHALL adopt that owner's live queues and SHALL NOT replace them with a saved Client snapshot. An empty queue SHALL persist as empty: a persisted empty queue SHALL NOT be replaced by an older saved snapshot. No Client SHALL persist, restore, or seed a queue: queue persistence belongs only to the Player owner.
 
 #### Scenario: Attaching to a daemon that is playing
 
@@ -87,6 +87,19 @@ The local daemon SHALL hold the authoritative queue and queue source, persist th
 - **WHEN** the local daemon restarts after holding a queue
 - **THEN** it SHALL reload that queue and its source before serving Clients
 - **AND** attached Clients SHALL display the reloaded queue
+
+#### Scenario: Restart restores every named queue
+
+- **GIVEN** the local daemon holds `Default`, current and stopped with its third slot as its start slot, and the resting `Kids`
+- **WHEN** the local daemon restarts
+- **THEN** it SHALL reload both queues with their names, sources, slot identities, and start slots
+- **AND** `Default` SHALL be current
+
+#### Scenario: An earlier single-queue state loads
+
+- **GIVEN** the state directory holds only the single-queue state file of an earlier version
+- **WHEN** the local daemon starts
+- **THEN** it SHALL hold one current Named queue named `Default` with that queue's slots and source
 
 #### Scenario: Quitting with stay-alive off preserves the queue
 
@@ -130,7 +143,7 @@ setting alone SHALL govern this persistence.
 
 ### Requirement: Every local Client shows the owner's accepted queue
 
-A Client attached to the local daemon SHALL use that owner's Bound queue, queue source, and playback status as its displayed Local queue state in every state, including while an attached Session or cast receiver is the playback target. An attached Session or cast is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
+A Client attached to the local daemon SHALL use that owner's Named queues, queue sources, and playback status as its displayed Local queue state in every state, including while an attached Session or cast receiver is the playback target. A TUI Client SHALL display the current queue; a GUI Client SHALL display the Named queue its Queue chooser shows. An attached Session or cast is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
 
 #### Scenario: Two Clients see a load
 
@@ -161,6 +174,12 @@ A Client attached to the local daemon SHALL use that owner's Bound queue, queue 
 - **WHEN** a Client attached to the local daemon is watching an attached Emby Session or casting to a receiver
 - **THEN** its displayed Local queue SHALL remain the owner's Bound queue
 - **AND** queue edits SHALL still be accepted by that owner rather than becoming a private queue
+
+#### Scenario: The TUI and the GUI show different queues
+
+- **GIVEN** a TUI Client and a GUI Client are attached, `Default` is current, and the GUI Client shows `Kids`
+- **WHEN** both Clients paint their queue
+- **THEN** the TUI Client shows `Default` and the GUI Client shows `Kids`
 
 ### Requirement: A client shows when playback outlives it
 While stay-alive is enabled, a client SHALL show an indicator that playback is hosted by a local
