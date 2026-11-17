@@ -167,6 +167,73 @@ fn a_play_with_no_items_starts_the_start_slot() {
     }
 }
 
+/// Contract: invariant 36 (design D2) — a replace of the current queue starts
+/// where it put the playhead: the installed queue's active slot becomes its
+/// start slot, even when the incoming slots keep a slot identity the
+/// pre-replace start slot named. Without the install's own observation the
+/// start slot kept naming that kept identity, so a Play with no items inside
+/// the settle window started a slot the replace did not put the playhead on.
+#[test]
+fn a_replace_of_the_current_queue_moves_the_start_slot_to_its_playhead() {
+    let player = cold_player();
+    let client = queue_client();
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_with(
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+        ],
+        1,
+    );
+    let pairs = owner.core.queue.slot_pairs();
+    let playhead = pairs[0].slot_id;
+    let pre_replace_start = pairs[1].slot_id;
+    shared_queue.note_start_slot(
+        &owner.core.queue,
+        mbv_queue::StartSlotObservation::Active(pre_replace_start),
+    );
+    let submitted: Vec<mbv_ctrl::UnifiedQueueSlot> = pairs
+        .into_iter()
+        .map(|slot| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: slot.slot_id.raw(),
+            item: slot.item,
+        })
+        .collect();
+
+    let _merged_rx = run_named_command(
+        CtrlCmd::UnifiedQueueReplace {
+            queue: None,
+            items: Vec::new(),
+            slots: submitted,
+            start_idx: Some(0),
+            source: QueueSource::Unknown,
+            start_position_secs: None,
+            op: Some(mbv_ctrl::QueueOpId(81)),
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &shared_queue,
+        &registry,
+    );
+
+    assert_eq!(
+        owner.core.queue.slots()[1].slot_id,
+        pre_replace_start,
+        "the replacement keeps the slot identity the start slot named"
+    );
+    assert_eq!(
+        shared_queue.start_slot(),
+        Some(playhead),
+        "the installed queue's playhead is its start slot"
+    );
+}
+
 /// An Emby-configured client, so an Emby item is admissible.
 fn queue_client() -> Arc<Mutex<EmbyClient>> {
     let mut client = EmbyClient::new(Config::default());

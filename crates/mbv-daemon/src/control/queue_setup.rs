@@ -390,6 +390,17 @@ pub(super) fn handle_queue_replace(
     install_replaced_queue(ctx, slots, next_cursor, new_source);
     if resting.is_some() {
         named_queue::finish_swap(ctx);
+    } else {
+        // A replace of the current queue starts where it put the playhead
+        // (invariant 36): the installed queue's active slot becomes its start
+        // slot. Without it the start slot kept naming a pre-replace slot, and a
+        // replacement that keeps the incoming slot identities left a Play with
+        // no items starting the wrong one inside the settle window.
+        let start_slot = ctx.owner.core.queue.active_slot_id();
+        ctx.shared_queue.note_start_slot(
+            &ctx.owner.core.queue,
+            mbv_queue::StartSlotObservation::Installed { start_slot },
+        );
     }
     start_replaced_queue(ctx, except_op_client, next_cursor, start_position_secs);
 }
