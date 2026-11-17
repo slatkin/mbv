@@ -35,8 +35,8 @@
 
 ## 6. Docs
 
-- [ ] 6.1 Update `CONTEXT.md`: replace the *Collection pill* term with *Collection dropdown* (D12) and update the *Library Status bar* term. Verify with `rg -n "Collection pill" CONTEXT.md` returning only the Avoid line.
-- [ ] 6.2 Update `docs/architecture/gui-client.md` and `docs/architecture/interactive-surface-ledger.md` where they name the GUI pill row. Verify with `rg -n -i "pill row" docs/architecture/gui-client.md` returning no GUI pill-row description.
+- [x] 6.1 Update `CONTEXT.md`: replace the *Collection pill* term with *Collection dropdown* (D12) and update the *Library Status bar* term. Verify with `rg -n "Collection pill" CONTEXT.md` returning only the Avoid line.
+- [x] 6.2 Update `docs/architecture/gui-client.md` and `docs/architecture/interactive-surface-ledger.md` where they name the GUI pill row. Verify with `rg -n -i "pill row" docs/architecture/gui-client.md` returning no GUI pill-row description.
 
 ## 7. Integration
 
