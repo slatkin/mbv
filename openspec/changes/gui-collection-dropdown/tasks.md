@@ -23,7 +23,7 @@
 
 ## 4. Bridge frame
 
-- [ ] 4.1 Replace `GuiMusicPillFrame`, `GuiPillFrame<P>`, the Emby pill frame, and the Shows pill frame with `GuiCollectionsFrame` and `GuiCollectionEntry` in `crates/mbv-gui/src/bridge/frame/library/` (D6), and the set-pill bridge commands in `bridge/library.rs` with the three D5 commands. Verify with `cargo check -p mbv-gui` and the bridge frame tests updated.
+- [x] 4.1 Replace `GuiMusicPillFrame`, `GuiPillFrame<P>`, the Emby pill frame, and the Shows pill frame with `GuiCollectionsFrame` and `GuiCollectionEntry` in `crates/mbv-gui/src/bridge/frame/library/` (D6), and the set-pill bridge commands in `bridge/library.rs` with the three D5 commands. Verify with `cargo check -p mbv-gui` and the bridge frame tests updated.
 
 ## 5. Window dropdown
 
