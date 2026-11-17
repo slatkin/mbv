@@ -156,7 +156,7 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
     ));
     queue.set_cursor(&QueueCursorUpdate::Set(2));
 
-    let frame = GuiQueue::from_surface(&queue, 2, &app.queue_summary_projection());
+    let frame = GuiQueue::from_surface(&queue, 2, &app.queue_summary_projection(&[]));
 
     let painted: Vec<(&str, usize)> = frame
         .rows

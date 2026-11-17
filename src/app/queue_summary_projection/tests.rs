@@ -1,6 +1,7 @@
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
+use rstest::rstest;
 use time::UtcOffset;
 
 use super::{playback_finish_epoch, queue_end_tail, queue_finish_clock};
@@ -69,7 +70,7 @@ fn remaining_counts_a_watched_row_before_the_playhead() {
         ],
         1,
     );
-    assert_eq!(app.queue_summary_projection().remaining, 2);
+    assert_eq!(app.queue_summary_projection(&[]).remaining, 2);
 }
 
 /// The queue finish clock carries the canvas's ` +1d` suffix only when the
@@ -146,4 +147,64 @@ fn queue_end_tail_stops_at_the_first_unknown_pending_runtime() {
         slot(3, 600 * TICKS_PER_SECOND),
     ];
     assert_eq!(queue_end_tail(&slots, 0), None);
+}
+
+/// One app whose shown queue holds one slot per entry of `runtime_minutes`,
+/// carrying 1-based slot identities, with the Queue filter's text set.
+fn app_with_runtimes(runtime_minutes: &[i64], filter: &str) -> crate::app::App {
+    let items = runtime_minutes
+        .iter()
+        .enumerate()
+        .map(|(index, minutes)| {
+            item(
+                &format!("Totals {index}"),
+                minutes * 60 * TICKS_PER_SECOND,
+                false,
+            )
+        })
+        .collect();
+    let mut app = app_with_queue(items, 0);
+    app.queue_filter = filter.to_string();
+    app
+}
+
+/// The marked slots `raw` names, as the Queue Surface reports its marks.
+fn marks(raw: &[u64]) -> Vec<QueueSlotId> {
+    raw.iter().copied().map(QueueSlotId::from_raw).collect()
+}
+
+/// The footer's totals: the queue's covers every slot of the shown queue, the
+/// marked total covers the marked rows alone, a zero runtime is an unknown
+/// runtime that makes its total a lower bound, and the filter narrows neither
+/// (spec `gui-client` "The footer totals the marked rows", "No row is marked",
+/// "A runtime is unknown", "The filter narrows the rows").
+#[rstest]
+#[case::the_footer_totals_the_marked_rows(
+    &[10, 20, 30, 5],
+    &[1, 3, 4],
+    "",
+    (65 * 60, false, Some(45 * 60), false)
+)]
+#[case::no_row_is_marked(&[10, 20, 30, 5], &[], "", (65 * 60, false, None, false))]
+#[case::a_runtime_is_unknown(&[10, 0, 30], &[1, 2], "", (40 * 60, true, Some(10 * 60), true))]
+#[case::the_filter_narrows_the_rows(&[10, 20, 30, 5], &[], "Totals 3", (65 * 60, false, None, false))]
+fn queue_summary_totals_cover_the_shown_queue(
+    #[case] runtime_minutes: &[i64],
+    #[case] marked_slots: &[u64],
+    #[case] filter: &str,
+    #[case] expected: (i64, bool, Option<i64>, bool),
+) {
+    let app = app_with_runtimes(runtime_minutes, filter);
+
+    let summary = app.queue_summary_projection(&marks(marked_slots));
+
+    assert_eq!(
+        (
+            summary.total_secs,
+            summary.total_partial,
+            summary.marked_secs,
+            summary.marked_partial,
+        ),
+        expected
+    );
 }

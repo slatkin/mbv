@@ -576,3 +576,86 @@ fn a_closed_shown_queue_returns_to_the_current_queue() {
         "the Queue Surface drops its marks"
     );
 }
+
+/// One resting queue's snapshot: its start slot at `start_index` and no
+/// playhead, because a resting queue holds no run (design D4, D7).
+fn resting_state_with_start(items: &[EmbyItem], start_index: usize) -> UnifiedQueueStateData {
+    let mut state = queue_with_start(items, start_index);
+    state.active_slot = None;
+    state
+}
+
+/// A resting queue is shown while the current queue plays its first slot. The
+/// shown queue carries no playhead of its own, so its rows take the start mark
+/// from its own snapshot and never the playing queue's index (design D7, D9;
+/// spec `gui-client` "A stopped queue marks its start slot").
+#[test]
+fn a_resting_queue_never_marks_the_playing_queue_s_index() {
+    let (mut app, _cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &resting_state_with_start(&make_items(3), 2));
+
+    let playback = app.displayed_queue_playback_state();
+    assert!(
+        !playback.active,
+        "the shown resting queue carries no playhead"
+    );
+    assert_eq!(playback.active_idx, None);
+    let start = app.gui_queue_start_projection();
+    assert!(!start.playing, "a resting queue does not play");
+    assert_eq!(
+        start.start,
+        app.displayed_queue()
+            .slots()
+            .get(2)
+            .map(|slot| slot.slot_id.raw()),
+        "the start mark is the resting queue's own start slot"
+    );
+    app.focus_queue_initial_item();
+    assert_eq!(
+        app.displayed_queue().cursor(),
+        2,
+        "the playing queue's active index never moves the resting queue's row"
+    );
+}
+
+/// A peer that reports no start slot marks its playing row: `start` falls back
+/// to the observed active slot, so the row keeps the playing mark and no row
+/// carries an outlined start mark (design D9, spec `gui-client` "A peer queue
+/// marks its playing row").
+#[test]
+fn a_peer_queue_marks_its_playing_row() {
+    let (app, _home_cmd_rx, _peer_cmd_rx) = gui_app_with_peer();
+    let queue = app.displayed_queue();
+    assert!(
+        queue.start_slot_id().is_none(),
+        "the peer reports no start slot"
+    );
+
+    let start = app.gui_queue_start_projection();
+
+    assert_eq!(
+        start.start,
+        queue.active_slot_id().map(mbv_queue::QueueSlotId::raw),
+        "the observed active slot stands in for the missing start slot"
+    );
+    assert!(start.playing, "the peer's queue plays");
+}
+
+/// A Play-next move inside a resting queue has no anchor: the playing queue's
+/// active index names none of its rows, so the Owner receives no move (design
+/// D7, D9).
+#[test]
+fn a_resting_queue_has_no_play_next_anchor() {
+    let (mut app, cmd_rx) = gui_app_with_named_queues();
+    app.show_named_queue(resting());
+    app.adopt_named_queue_snapshot(resting(), &resting_state_with_start(&make_items(3), 2));
+    while cmd_rx.try_recv().is_ok() {}
+
+    app.play_queue_item_next(2);
+
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the resting queue's rows do not move after another queue's playhead"
+    );
+}

@@ -12,7 +12,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use mbv_emby_model::TICKS_PER_SECOND;
-use mbv_queue::QueueSlot;
+use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_ui_model::ui_util::fmt_wall_clock;
 use time::{OffsetDateTime, UtcOffset};
 
@@ -47,16 +47,36 @@ pub struct QueueSummaryProjection {
     /// suppresses the global bindings while the user types, and the caret
     /// fact the GUI's filter control paints.
     pub filter_active: bool,
+    /// The shown queue's total time in seconds: every slot's known runtime
+    /// added up, which the footer paints at the right of its line. The filter
+    /// narrows no total (design D9 of `gui-named-queues`).
+    pub total_secs: i64,
+    /// Whether a slot of the shown queue has an unknown runtime, so
+    /// [`Self::total_secs`] is only a lower bound.
+    pub total_partial: bool,
+    /// The marked rows' total time in seconds, or `None` while no row of the
+    /// shown queue is marked: the footer then shows the queue's total alone.
+    pub marked_secs: Option<i64>,
+    /// Whether a marked row has an unknown runtime, so [`Self::marked_secs`]
+    /// is only a lower bound.
+    pub marked_partial: bool,
 }
 
 impl App {
     /// Project the queue summary (design D4a's derived rows). Read-only.
+    ///
+    /// `marks` are the Queue Surface's marked slots (`QueueSlotId::raw` as
+    /// they come): the marked total covers those rows alone, while the queue's
+    /// total always covers every slot of the shown queue.
     #[must_use]
-    pub fn queue_summary_projection(&self) -> QueueSummaryProjection {
+    pub fn queue_summary_projection(&self, marks: &[QueueSlotId]) -> QueueSummaryProjection {
         let slots = self.playback_queue().slots();
         let state = self.displayed_playback_state();
         let filter = self.queue_filter.clone();
         let filter_active = self.queue_filter_active;
+        let shown = self.displayed_queue().slots();
+        let (total_secs, total_partial) = runtime_totals(shown.iter());
+        let (marked_secs, marked_partial) = marked_totals(shown, marks);
         let active_index = self.displayed_active_index(slots);
         let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
         let Some(index) = active_index else {
@@ -66,6 +86,10 @@ impl App {
                 finish_clock: None,
                 filter,
                 filter_active,
+                total_secs,
+                total_partial,
+                marked_secs,
+                marked_partial,
             };
         };
         let next_title = self.next_slot_title(slots, index);
@@ -78,6 +102,10 @@ impl App {
                 finish_clock: None,
                 filter,
                 filter_active,
+                total_secs,
+                total_partial,
+                marked_secs,
+                marked_partial,
             };
         };
         let finish = finish_chain(slots, index, anchor);
@@ -87,6 +115,10 @@ impl App {
             finish_clock: finish.map(|secs| queue_finish_clock(secs, now, offset)),
             filter,
             filter_active,
+            total_secs,
+            total_partial,
+            marked_secs,
+            marked_partial,
         }
     }
 
@@ -137,6 +169,40 @@ pub struct QueueEndOffsets {
     /// the end of the active item. `None` when a pending runtime breaks the
     /// chain, or no slot carries the playhead.
     pub tail: Option<i64>,
+}
+
+/// The total time of `slots` in seconds, and whether any runtime is unknown.
+/// A zero runtime is the codebase's unknown marker, so it adds nothing and
+/// makes the total a lower bound (design D9 of `gui-named-queues`).
+#[must_use]
+fn runtime_totals<'a>(slots: impl Iterator<Item = &'a QueueSlot>) -> (i64, bool) {
+    let mut secs = 0;
+    let mut partial = false;
+    for slot in slots {
+        let runtime_secs = slot.item.runtime_ticks() / TICKS_PER_SECOND;
+        if runtime_secs <= 0 {
+            partial = true;
+        } else {
+            secs += runtime_secs;
+        }
+    }
+    (secs, partial)
+}
+
+/// The marked rows' total time and partial flag: `None` while `marks` names no
+/// slot of `slots`, so a queue with no marked row carries no marked total
+/// (design D9).
+#[must_use]
+fn marked_totals(slots: &[QueueSlot], marks: &[QueueSlotId]) -> (Option<i64>, bool) {
+    let marked: Vec<&QueueSlot> = slots
+        .iter()
+        .filter(|slot| marks.contains(&slot.slot_id))
+        .collect();
+    if marked.is_empty() {
+        return (None, false);
+    }
+    let (secs, partial) = runtime_totals(marked.into_iter());
+    (Some(secs), partial)
 }
 
 /// The wall-clock epoch at which the playhead's item ends, from `now_secs`:

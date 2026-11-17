@@ -101,7 +101,7 @@ pub use self::queue_playback_projection::{
     TrackChips, TrackChoice, TrickplayGrid, TrickplayTile,
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
-pub use self::queue_surface::QueueSurfaceProjection;
+pub use self::queue_surface::{QueueStartProjection, QueueSurfaceProjection};
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;

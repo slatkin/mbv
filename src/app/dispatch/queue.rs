@@ -232,8 +232,13 @@ impl App {
     /// The move is the owner's slot move, so the queue edit follows the same
     /// request path a drag or a `Shift+Arrow` move does. A playhead-less
     /// queue has no next position, and the playing row and the row already
-    /// next to it are no-ops.
+    /// next to it are no-ops. A resting queue the GUI shows is playhead-less
+    /// whatever the playing queue does: the playing queue's index names none
+    /// of its rows (design D7, D9 of `gui-named-queues`).
     pub(in crate::app) fn play_queue_item_next(&mut self, index: usize) {
+        if self.shows_resting_local_queue() {
+            return;
+        }
         let link = self.playing_queue_link();
         let len = self.displayed_queue().total_queue_len();
         let active = self

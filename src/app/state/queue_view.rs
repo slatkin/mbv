@@ -165,12 +165,22 @@ impl QueueView {
         self.cursor
     }
 
+    /// The slot a play of this queue starts, when the queue still holds it
+    /// (design D4): `None` on an owner that reports no start slot, such as a
+    /// peer without `named-queues`.
+    #[must_use]
+    pub fn start_slot_id(&self) -> Option<QueueSlotId> {
+        self.start_slot
+            .filter(|slot_id| self.queue.slot(*slot_id).is_some())
+    }
+
     /// The index of the queue's start slot, when the queue still holds it
     /// (design D4, D7): the row a play of the queue starts, and the active row
     /// the Queue panel rests on when the entry is shown.
     #[must_use]
     pub fn start_index(&self) -> Option<usize> {
-        self.start_slot.and_then(|slot_id| self.slot_index(slot_id))
+        self.start_slot_id()
+            .and_then(|slot_id| self.slot_index(slot_id))
     }
 }
 

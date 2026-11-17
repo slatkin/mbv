@@ -339,7 +339,7 @@ impl SectionLedger {
         // so they cannot disagree.
         let playback = app.queue_playback_projection();
         self.deadlines.sample(app, &playback, now, &mut marked);
-        let summary = app.queue_summary_projection();
+        let summary = app.queue_summary_projection(queue.multi_selection());
         // The queue's end offsets (design D5): the duration facts the summary
         // and queue sections carry in place of the clock strings the window
         // now derives from the playhead anchor.

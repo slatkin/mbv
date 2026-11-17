@@ -122,6 +122,14 @@ impl App {
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
     ) -> mbv_ui_model::playback::PlaybackState {
+        // A shown resting Named queue is not the run's queue: the local
+        // Owner's playback names slots of the current queue, so reading its
+        // index against the resting queue's rows would mark a row the run
+        // never reached (design D7, D9 of `gui-named-queues`). The Queue
+        // panel paints such a queue with no playhead and its own start mark.
+        if self.shows_resting_local_queue() {
+            return mbv_ui_model::playback::PlaybackState::default();
+        }
         // ADR 0034: each Player owner keeps its own queue and the shown
         // queue follows the connection, so the shown queue is always the
         // playback target's queue — there is no idle fallback to paint.
