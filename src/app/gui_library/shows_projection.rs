@@ -458,9 +458,17 @@ impl App {
     }
 
     /// Whether the frame path must start the Shows root load: no root level
-    /// yet, or an empty settled root that is not yet the All series list. A
-    /// root already loading, and an empty All list whose load has settled, are
-    /// left alone so a repaint never starts a second request.
+    /// yet, or a settled root that is not the All series list. A root already
+    /// loading is left alone so a repaint never starts a second request, and
+    /// a settled All list is left alone — landed rows or not — because the
+    /// All series list is exactly what the destination presents. Any other
+    /// settled mode must be reloaded as All: the shared landing path's
+    /// default-mode resolution (`maybe_capture_library_total_and_apply_default_pill`)
+    /// replaces the first landed root with the Latest episodes list
+    /// (`resolve_tv_content_mode`'s any-size Latest default), whose episodes
+    /// project no series row and leave the tree blank (the live defect of
+    /// 2026-11-18: a launch restored onto Shows painted nothing until a
+    /// destination click forced the All list).
     fn gui_shows_root_needs_load(&self, lib_idx: usize) -> bool {
         if !self.gui_tv_library(lib_idx) {
             return false;
@@ -468,9 +476,10 @@ impl App {
         let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
             return true;
         };
-        level.items.is_empty()
-            && !level.loading
-            && self.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
+        if level.loading {
+            return false;
+        }
+        self.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
     }
 
     /// The Shows library's selection, as the TUI's empty selection reads.
