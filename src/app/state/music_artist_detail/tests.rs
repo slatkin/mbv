@@ -164,11 +164,11 @@ fn artist_groups_follow_settled_album_order_with_duplicate_album_titles() {
             .iter()
             .map(|group| group.album_id.as_str())
             .collect::<Vec<_>>(),
-        ["album-1", "album-2"],
+        ["album-2", "album-1"],
         "groups follow settled album order even with equal titles"
     );
-    assert_eq!(detail.track_groups[0].tracks[0].id, "track-a");
-    assert_eq!(detail.track_groups[1].tracks[0].id, "track-b");
+    assert_eq!(detail.track_groups[0].tracks[0].id, "track-b");
+    assert_eq!(detail.track_groups[1].tracks[0].id, "track-a");
 }
 
 /// The `ArtistIds` Audio query is user-scoped and omits `AlbumId`, so a
@@ -211,7 +211,7 @@ fn empty_album_id_artist_tracks_never_cross_into_same_titled_groups() {
         .collect();
     assert_eq!(
         groups,
-        vec![vec!["track-a"], vec!["track-b"]],
+        vec![vec!["track-b"], vec!["track-a"]],
         "each same-titled album keeps only its own ID-matched track, and \
          the empty-album-ID track is never projected"
     );

@@ -1,20 +1,8 @@
-use crate::{natural_sort_key, strip_article};
 use mbv_ui_model::music_grouping::{
     ArtistKey, GroupedAlbumCatalog, derive_album_artist, derive_album_display_name,
 };
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-
-/// Sorted album display order for a set of `(artist, year, name)` info
-/// triples: indices ordered by the artist's natural sort key (articles
-/// stripped). Mirrors the catalog builder's sort so the fallback path
-/// (no settled catalog yet) matches the settled ordering exactly.
-#[must_use]
-pub fn sorted_group_album_order(album_info: &[(String, String, String)]) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..album_info.len()).collect();
-    order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
-    order
-}
 
 /// Resolves the display artist for an album item in the grouped music views
 /// synchronously, given the album-artist cache. Mirrors

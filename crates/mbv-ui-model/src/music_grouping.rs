@@ -56,8 +56,9 @@ pub enum ArtistKey {
 pub struct GroupedAlbumCatalog {
     pub revision: SourceRevision,
     pub parent_id: String,
-    /// Entries sorted by `sort_key`; `entries[i].album_index` indexes the
-    /// raw `items` slice the catalog was built from.
+    /// Entries sorted by artist, displayed release year, then album name;
+    /// `entries[i].album_index` indexes the raw `items` slice the catalog was
+    /// built from.
     pub entries: Vec<GroupedAlbumEntry>,
     /// raw album index -> position in `entries`.
     pub index_to_entry: HashMap<usize, usize>,
@@ -134,6 +135,46 @@ pub fn derive_album_display_name(item: &EmbyItem) -> (String, String) {
     }
 }
 
+/// Extracts the four-digit year shown on an album row from its year text.
+///
+/// The first four ASCII digits win, whatever hidden or odd characters sit
+/// among them, so a tag quirk cannot turn a dated album into an undated one.
+fn parse_displayed_year(year: &str) -> Option<u32> {
+    let mut value = 0_u32;
+    let mut digits = 0_u8;
+    for ch in year.chars().filter(char::is_ascii_digit).take(4) {
+        value = value * 10 + ch.to_digit(10)?;
+        digits += 1;
+    }
+    (digits == 4 && value > 0).then_some(value)
+}
+
+/// One grouped album's full display order key; undated albums sort last.
+fn group_album_sort_key(artist: &str, year: &str, name: &str) -> (String, (bool, u32), String) {
+    let year = parse_displayed_year(year);
+    (
+        natural_sort_key(strip_article(artist)),
+        (year.is_none(), year.unwrap_or_default()),
+        natural_sort_key(name),
+    )
+}
+
+/// Orders grouped album facts by artist, displayed release year, then album name.
+///
+/// The input triples are `(artist, year, album_name)`. The year is the same
+/// text the row paints, so a provider order or tag quirk cannot disagree with
+/// the displayed year. Undated albums follow dated ones; equal years fall
+/// back to the album name, then to the input order.
+#[must_use]
+pub fn sorted_group_album_order(album_info: &[(String, String, String)]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..album_info.len()).collect();
+    order.sort_by_key(|&index| {
+        let (artist, year, name) = &album_info[index];
+        group_album_sort_key(artist, year, name)
+    });
+    order
+}
+
 /// Resolves an album's stable artist grouping key from its payload
 /// `ArtistItems` pairs against the settled display artist. Pure: no app
 /// state, no network.
@@ -165,7 +206,7 @@ pub fn build_grouped_album_catalog<S: std::hash::BuildHasher>(
             name,
         });
     }
-    entries.sort_by_key(|e| e.sort_key.clone());
+    entries.sort_by_key(|entry| group_album_sort_key(&entry.artist, &entry.year, &entry.name));
 
     let mut index_to_entry = HashMap::with_capacity(entries.len());
     let mut id_to_entry = HashMap::with_capacity(entries.len());

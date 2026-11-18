@@ -104,14 +104,14 @@ pub use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 #[doc(inline)]
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
+#[doc(inline)]
+pub use mbv_ui_model::music_grouping::sorted_group_album_order;
 pub use mbv_ui_model::sort_filter::{
     LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, initial_group_artist_sort_key,
 };
 pub use mbv_ui_model::sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
 };
-#[doc(inline)]
-pub use screens::album_plan::sorted_group_album_order;
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
@@ -120,4 +120,3 @@ pub use screens::album_plan::sorted_group_album_order;
 // part of the wider `pub(crate)` role list above.
 
 use mbv_theme as palette;
-use mbv_ui_model::ui_util::natural_sort_key;
