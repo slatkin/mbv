@@ -19,7 +19,6 @@ pub use self::app_stub::{
 };
 mod infra;
 mod input;
-mod playback_metadata;
 mod queue_card_artwork;
 mod queue_footer_projection;
 mod queue_playback_projection;
@@ -91,12 +90,10 @@ pub use self::input::key_policy::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
 };
 pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
-pub use self::playback_metadata::PlaybackDecorations;
 pub use self::queue_card_artwork::QueueCardArtwork;
 pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
 pub use self::queue_playback_projection::{
-    PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
-    TrackChips, TrackChoice, TrickplayGrid, TrickplayTile,
+    PlaybackTargetChoice, QueuePlaybackProjection, TrackChip, TrackChips, TrackChoice,
 };
 pub use self::queue_summary_projection::{QueueEndOffsets, QueueSummaryProjection};
 pub use self::queue_surface::{QueueStartProjection, QueueSurfaceProjection};

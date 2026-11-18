@@ -523,9 +523,8 @@ fn a_route_devices_command_fills_the_library_device_candidates() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let http = mbv_net::mock_http::MockHttp::new();
     // Every request answers by path (never a consumed script): the frame's
-    // playback-metadata workers fetch chapters, segments, and trickplay
-    // grids in no fixed interleaving with the section's own loads, so a
-    // count script runs dry and the unscripted request stalls the step.
+    // section loads run in no fixed order, so a count script runs dry and
+    // the unscripted request stalls the step.
     http.respond_when("/Sessions", 200, PEER_SESSIONS);
     http.respond_when(" /", 200, MUSIC_VIEWS);
     let mut test = test_core_with(stub_app_with_queue(2));
@@ -573,8 +572,7 @@ fn the_library_section_projects_no_library_routes_row() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let http = mbv_net::mock_http::MockHttp::new();
     // Every request answers by path (see the routeDevices arm's test): the
-    // section's loads interleave with the frame's metadata workers, so a
-    // count script cannot cover them both.
+    // section's loads interleave, so a count script cannot cover them all.
     http.respond_when(" /", 200, MUSIC_VIEWS);
     let mut test = test_core_with(stub_app_with_queue(2));
     // The client lands after the core's construction, as the playlist arm's
