@@ -27,8 +27,10 @@ Current state:
     `Ascending`, both by `DateCreated`.
   - Shows: `GuiShowsMode { Latest, Upcoming, All }`. Latest loads into the library's `nav_stack`
     (`spawn_tv_latest`); Upcoming reads `tv_upcoming_snapshots`, keyed by library id.
-- The GUI launch state (`crates/mbv-config/src/gui_launch_state.rs`) saves Music as
-  `GuiDestinationCollections { group_ids: Vec<String>, picks }`. The list shape is already there.
+- The GUI launch state (`crates/mbv-config/src/gui_launch_state.rs`) saves one
+  `GuiDestinationCollections { destination, target, group_ids, order, picks }` per collection
+  destination whose selection the session changed. An older entry has no `target` or `order`; it
+  loads as a Music group selection.
 - The window holds the Library panel's interaction state; the core holds the data selection (spec
   "The window content holds the Library panel's interaction state"). The GUI Library panel takes its
   own keys in the window (ADR 0036). The pills are pointer-only now ("no key SHALL select a pill").
@@ -214,13 +216,13 @@ snapshot) stay, because the TUI and Home use them.
   `HomeSelect`, `HomePlay`, `HomePlayNext`, and `HomeQueue` on an `Upcoming` id are documented no-op
   arms, so the Hero keeps its item.
 
-### D10. Music save format does not change
+### D10. One saved entry per collection destination
 
-`group_ids` holds the checked groups; an empty list means All. The save writes an entry only for a
-library whose selection the session changed, as today. Restore drops vanished group ids through
-`retain_present`, which falls back to All. An old file always holds one group, so it restores as
-that one checked group. The kept album per group (`picks`) keeps its format; D11 says when a pick is
-written.
+`group_ids` holds the checked ids of the entry's target; an empty list means All. The save writes
+an entry only for a destination whose selection the session changed, as today. Restore drops
+vanished ids through `retain_present`, which falls back to All. An old Music-only entry still
+restores its checked groups. The kept album per group (`picks`) keeps its format; D11 says when a
+pick is written. D13 names the shared path that writes and restores every target.
 
 ### D11. When a Music pick is kept
 
@@ -236,6 +238,17 @@ narrows the list to one or more content sets that the Service holds: Music group
 Feeds subscriptions, or Emby feed-group folders. Its selection is All or a set of checked
 collections. _Avoid_: multi-pill, filter pill, collection pill." The *Library Status bar* term names
 the checked collections.
+
+### D13. Every collection target shares the launch save path
+
+One `GuiDestinationCollections` entry holds the stable destination identity, a `target` kind
+(`music`, `podcasts`, `feeds`, or `emby_feed`), the checked ids in press order, the date order where
+the site stores one, and the Music picks. Music groups, Podcast shows, Feeds subscriptions, and
+Emby feed folders all write and restore through this shape. Restore matches both the destination
+and the target, so saved ids never land in another dropdown. An entry written before `target`
+existed holds Music groups, so a missing `target` defaults to Music; a missing `order` means no
+saved order. The shared site trait supplies each destination's set, order, and picks, and refuses
+to overwrite a selection the session made before the restore completed.
 
 ## Risks / Trade-offs
 
@@ -254,5 +267,6 @@ the checked collections.
 
 ## Migration Plan
 
-No data migration. The launch-state file keeps its format (D10). Rollback is a revert: an older
-build reads a multi-group `group_ids` and selects its first present group.
+No file rewrite: an entry without `target` loads as Music and one without `order` has no saved
+order (D13). An older build ignores the added fields and reads `group_ids` and `picks` as before.
+Rollback is a revert.

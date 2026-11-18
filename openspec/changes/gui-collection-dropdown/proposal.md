@@ -33,9 +33,9 @@ no way to read their list oldest first.
   and **Upcoming**. Each merges every TV library.
 - Upcoming rows on Home are display-only: a press does not select them, they do not play or enqueue,
   and the Hero keeps its item.
-- Music keeps its save across a restart, now for the checked set or All, through the existing GUI
-  launch location. YouTube, Podcasts, and Feeds selections and every sort order are session memory
-  only.
+- Every collection destination keeps its selection across a restart through the same GUI launch
+  entry: Music groups, Podcast shows, Feeds subscriptions, and YouTube folders, with the date order
+  where one is held. An old Music-only entry still loads.
 - The Library Status bar location names All, or the checked collections joined.
 
 ## Capabilities
@@ -64,6 +64,7 @@ None.
 - `crates/mbv-gui/src/window/`: a new collection dropdown component replaces `LibraryPillRow` and
   the five destination pill components; the window holds the dropdown's open state and filter text.
 - `CONTEXT.md`: the *Collection pill* term becomes *Collection dropdown*.
-- `crates/mbv-config` GUI launch state: no format change. `group_ids` is already a list; an empty
-  list now means All.
+- `crates/mbv-config` GUI launch state: each entry adds a collection `target` and an optional date
+  `order`; `group_ids` is still a list and an empty list means All. An entry without the new fields
+  loads as Music.
 - No new dependency.

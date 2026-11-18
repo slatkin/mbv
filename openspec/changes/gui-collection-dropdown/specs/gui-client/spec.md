@@ -149,7 +149,7 @@ its `DateOrder` command.
 
 ### Requirement: The collection selection persists per destination
 
-Each destination SHALL keep its own selection while the GUI Client runs. A Grouped Music library's selection, All or the checked groups, SHALL also persist across a restart of the GUI Client through its launch location. The Podcasts, Feeds, and Emby feed-group selections SHALL start on All at every launch and save nothing.
+Each destination SHALL keep its own selection while the GUI Client runs. Every collection dropdown selection and its date order, where one is held, SHALL persist across a restart through the same launch-location entry, keyed by collection target: Music groups, Podcast shows, Feeds subscriptions, or Emby feed-group folders. An entry written before targets existed SHALL load as Music. A destination with no saved selection SHALL start on All.
 
 #### Scenario: The user changes destination and returns
 
@@ -169,9 +169,27 @@ Each destination SHALL keep its own selection while the GUI Client runs. A Group
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens on All
 
-#### Scenario: Podcasts and Feeds start on All
+#### Scenario: Non-Music selections survive a restart
 
-- **GIVEN** the GUI Client quit with a show checked in Podcasts and a subscription checked in Feeds
+- **GIVEN** the GUI Client quit with a show checked in Podcasts, a subscription checked in Feeds, and a folder checked in an Emby feed-group library
+- **WHEN** the GUI Client starts again
+- **THEN** Podcasts, Feeds, and that Emby library open with those collections checked
+
+#### Scenario: Saved ids restore to their own dropdown
+
+- **GIVEN** a launch entry names the Feeds target with a saved subscription
+- **WHEN** the GUI Client starts again
+- **THEN** Feeds opens with that subscription checked and no other dropdown reads it
+
+#### Scenario: An old launch entry loads as Music
+
+- **GIVEN** the GUI Client quit with Soul and Jazz saved as Music groups before launch entries named a collection target
+- **WHEN** the GUI Client starts again
+- **THEN** Music opens with Soul and Jazz checked
+
+#### Scenario: A destination with no saved selection starts on All
+
+- **GIVEN** the GUI Client quit with no saved Podcasts or Feeds selection
 - **WHEN** the GUI Client starts again
 - **THEN** Podcasts and Feeds open on All
 
@@ -318,8 +336,8 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 
 ### Requirement: The pill selection persists per destination
 
-**Reason**: Replaced by "The collection selection persists per destination", which saves the Music checked set.
-**Migration**: The GUI launch location's saved group list now holds the checked groups; an empty list means All.
+**Reason**: Replaced by "The collection selection persists per destination", which saves the checked set of every collection target.
+**Migration**: The GUI launch location's saved list holds each target's checked collections; an empty list means All, and an entry without a target loads as Music.
 
 ### Requirement: Each collection pill keeps its last picked album
 

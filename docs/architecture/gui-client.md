@@ -1398,10 +1398,14 @@ The GUI keeps its own launch location (design D9). Its `App` starts with
 `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab,
 and the GUI never writes the TUI file. The GUI file
 (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
-destination and the selected collections of each destination with the album
-each collection last showed, as stable Service identities. The core reads it once before the first step, saves
-it at orderly exit before `client_exit_teardown`, and never while the window
-is open.
+destination and one entry per collection destination whose selection the
+session changed: the checked Music groups, Podcast shows, Feeds subscriptions,
+or Emby feed-group folders, the date order where one is held, and the album
+each Music group last showed. Each entry names its collection `target`, so
+saved ids restore only to their own dropdown; an entry written before the
+target field loads as Music. The core reads it once before the first step,
+saves it at orderly exit before `client_exit_teardown`, and never while the
+window is open.
 
 The restore runs in two phases (`GuiLaunchRestore`,
 `CoreThread::restore_launch_location`). The first phase opens the saved
@@ -1415,9 +1419,11 @@ its Home destination resolves to the first presented one, with no saved
 collection choice, so the Library panel is
 reachable from the first launch. The
 second phase applies the saved
-collection choice once the destination's group list lands: the first saved
-group the library still holds is selected, and a saved group the library
-no longer held, or no saved entry, leaves the first group selected. The
+collection choice once the destination's collection catalog lands: it matches
+the saved destination and target, retains only the saved ids the catalog still
+holds, and installs the checked set and date order through the shared
+collection path. An emptied set, a saved All, or no saved entry leaves All
+selected. The
 restore applies to a destination that holds no choice and never clobbers one
 the session already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and
