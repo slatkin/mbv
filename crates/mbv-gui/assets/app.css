@@ -185,6 +185,32 @@
 	--canvas-type-repeat-opacity: 0.65; /* a time or date repeated down a list */
 }
 
+/* The Queue column's Everforest Dark Hard tokens (gui-queue-panel-redesign
+   design D1): the values the redesign's canvas names, under the `--ef-`
+   prefix the canvas uses. The Queue column's components read these tokens;
+   the Library column is out of scope and keeps the `--canvas-*` set, whose
+   names describe the roles they held before this change. */
+:root {
+	--ef-player: #15191b; /* the player backdrop */
+	--ef-bg-dim: #1e2326; /* the queue list, recessed */
+	--ef-bg0: #272e33; /* the title block, the footer, a hovered row */
+	--ef-bg1: #2e383c; /* the queue header bar, the count chip */
+	--ef-bg2: #374145; /* the switcher at rest, the menu, the row progress track */
+	--ef-bg3: #414b50; /* rules, a hovered control, the active row, an active or hovered menu item */
+	--ef-bg4: #495156; /* the controls' borders */
+	--ef-bg5: #4f5b58; /* a hovered border, the strike line */
+	--ef-bg-green: #3c4841; /* the now-playing row */
+	--ef-bg-red: #4c3743; /* a hovered close control */
+	--ef-fg: #d3c6aa; /* the primary text */
+	--ef-grey0: #7a8478; /* the open switcher's border */
+	--ef-grey1: #859289; /* the row numbers, a watched title */
+	--ef-grey2: #9da9a0; /* the secondary text, the glyphs, the seek track's base */
+	--ef-green: #a7c080; /* the played fill, the play button, the now-playing text, a check */
+	--ef-aqua: #83c092; /* the playing mark in the menu */
+	--ef-orange: #e69875; /* the partial-progress fill */
+	--ef-red: #e67e80; /* the parent line, a destructive entry */
+}
+
 @theme inline {
 	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;
 	--font-mono: 'JetBrains Mono', monospace;
