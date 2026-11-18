@@ -14,15 +14,12 @@ The GUI Queue panel stacks the album art, the title, the progress bar, a centred
 - The track chips (video label, audio, subtitles) move to a top-left overlay on the image. They always show. Auto-hide does not apply to them.
 - The season and episode badge moves to the top right of the image.
 - The title and the parent line stay under the image, outside the overlays.
-- The bottom overlay shows at all times by default. The auto-hide tickbox (a small box with a tooltip and no text label) lets the user turn on auto-hide. With auto-hide on, the bottom overlay hides while an item plays and the pointer is not over the image. It shows while the pointer is over the image, while the playback is paused, and while the player is stopped.
+- The bottom overlay shows at all times by default. The auto-hide tickbox (a small box with a tooltip and no text label) lets the user turn on auto-hide. With auto-hide on, the bottom overlay hides while an item plays and the pointer is not over the image. It shows while the pointer is over the image, and while the playback is paused.
 - The auto-hide choice persists across launches.
 - While the image loads, the panel keeps an image box of the expected size and paints the overlays on it, as if the image were there.
 - When the item has no image, no image box paints. Under the panel header, one line holds the track chips at the left and the badge at the right, then the two control rows, then the title line. Auto-hide does nothing in that case, but the tickbox still shows and keeps its setting.
-- In the stopped state (an item is in the queue but nothing plays), the bottom overlay shows the buttons. The progress bar paints an empty track and the track chips paint nothing. A press on play/pause starts the shown queue, as it does today.
+- In the stopped state (a shown local queue holds slots but nothing plays), the panel shows only the two control rows under the panel header, with an empty progress bar. It shows no art, no title, and no track chips, as today's stopped panel shows none of them. A press on play/pause starts the shown queue, as it does today. A shown peer queue that is stopped shows no control rows, because play/pause cannot start it.
 - **Removed:** the placeholder art of the expanded panel (the fixed-height box with the bundled placeholder image and the `[source]` caption). The collapsed rail and the compact strip keep their own art paint.
-
-Assumption recorded: "stopped" counts as "not playing", so auto-hide keeps the bottom overlay on screen in the stopped state, the same as while paused.
-
 ## Capabilities
 
 ### New Capabilities

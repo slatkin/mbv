@@ -110,7 +110,7 @@ In the expanded panel, the player controls SHALL paint over the bottom of the ar
 
 ### Requirement: The player controls auto-hide when the user turns it on
 
-The player controls over the artwork SHALL show at all times by default. The auto-hide control SHALL turn auto-hide on and off. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork, while the playback is paused, and while the player is stopped. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
+The player controls over the artwork SHALL show at all times by default. The auto-hide control SHALL turn auto-hide on and off. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
 
 #### Scenario: Auto-hide is off
 
@@ -160,13 +160,19 @@ When the active item has no image, the expanded panel SHALL paint no artwork box
 
 ### Requirement: The stopped player shows its buttons
 
-While an item is in the shown queue and nothing plays, the expanded panel SHALL show the player controls' buttons. The scrubber SHALL show an empty track that resolves no seek, and the track chips SHALL be absent. A press on play/pause SHALL start the shown queue.
+While a shown local queue holds slots and nothing plays, the expanded panel SHALL show the two control rows under the header, with an empty scrubber that resolves no seek. The panel SHALL show no artwork, no title, and no track chips. A press on play/pause SHALL start the shown queue.
 
 #### Scenario: Play from the stopped state
 
-- **GIVEN** the shown queue holds slots and nothing plays
+- **GIVEN** a shown local queue holds slots and nothing plays
 - **WHEN** the user presses play/pause in the player controls
 - **THEN** the shown queue starts from its start slot
+
+#### Scenario: A shown peer queue is stopped
+
+- **GIVEN** the shown queue is a peer's queue and nothing plays
+- **WHEN** the expanded panel paints
+- **THEN** the panel paints no control rows
 
 ## REMOVED Requirements
 

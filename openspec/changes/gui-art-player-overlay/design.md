@@ -51,7 +51,7 @@ The stage carries `data-auto-hide` (from the frame) and `data-playing` (from `pl
 .stage[data-auto-hide][data-playing]:hover > .bottom   { opacity: 1 }
 ```
 
-Paused and stopped are "not playing", so the controls show. The bottom layer stays laid out while hidden, so its regions still report. A press can reach a hidden control only with the pointer over the stage, and then the controls show. The window holds no hover state.
+Each attribute is on the stage only while its fact holds. It is absent otherwise, never `"false"`, because the selectors test presence. Paused is "not playing", so the controls show. The bottom layer stays laid out while hidden, so its regions still report. A press can reach a hidden control only with the pointer over the stage, and then the controls show. The window holds no hover state.
 
 *Alternative:* a core-owned hover fact in the frame, as `GuiQueue.hover`. Rejected: more frame traffic, and nothing in the core needs it.
 
@@ -95,7 +95,11 @@ The no-image column paints, under the header: the chips-and-badge line, the two 
 
 ### D7. The stopped state
 
-The two control rows paint whenever `now_playing_title` is `Some`, not only behind `show_controls`. With `show_controls` false the scrubber paints an empty track (the core already resolves no seek then) and `TrackChips` paints nothing (`track_chips` is `None`). Play/pause already starts the shown queue when nothing plays (`LocalPlaybackTarget::toggle_play_pause`).
+In the stopped state the frame carries `now_playing_title: None`, `artwork: None`, `show_controls: false`, and `status: Idle` (`now_playing_title_parts` returns `None` while inactive; `queue_card_artwork` returns `Hidden` while idle). So the gate cannot be the title.
+
+The section build adds `GuiQueuePlayback.can_start: bool` from `App::shown_queue_play_request().is_some()` (`src/app/state/named_queues.rs`). That is exactly the case where play/pause starts the shown queue (`LocalPlaybackTarget::toggle_play_pause`). It is true only for a shown local queue that holds slots while nothing plays. A shown peer queue gives `false`, because play/pause cannot start it.
+
+The two control rows paint when `can_start || now_playing_title.is_some()`. In the stopped case (`can_start` true, title `None`) the panel paints, under `HeaderRow`, only the two control rows at scale 1.0: no stage, no chips-and-badge line, no title. The scrubber paints its empty track (the core resolves no seek, because `seek_to_fraction` does nothing at `runtime_ticks == 0`). No auto-hide attribute applies, because there is no stage.
 
 ### D8. Module split
 
