@@ -110,11 +110,14 @@ pub(super) fn menu_top(queue: &GuiQueue, anchor_slot: u64) -> String {
 }
 
 /// The whole rows a list box of `height` CSS pixels fits (the former client
-/// report's `wholeRows`): the capacity the core's queue viewport reads. A row
-/// binds its stride, so a box that ends inside a row's gap fits the rows
-/// above it only.
+/// report's `wholeRows`): the capacity the core's queue viewport reads. N rows
+/// need `N` row heights and the `N - 1` gaps between them, so a box fits
+/// `floor((height + gap) / stride)` of them — 70 px holds two 34 px rows and
+/// their 2 px gap, and only a box shorter than a row fits none.
 pub(super) fn whole_rows(height: f32) -> usize {
     let stride = f32::from(ROW_STRIDE_PX);
-    let rows = mbv_emby_model::saturating_i64_from_f64(f64::from((height / stride).floor()));
+    let gap = f32::from(ROW_GAP_PX);
+    let rows =
+        mbv_emby_model::saturating_i64_from_f64(f64::from(((height + gap) / stride).floor()));
     usize::try_from(rows).unwrap_or(0)
 }
