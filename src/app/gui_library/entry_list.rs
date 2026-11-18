@@ -1,33 +1,22 @@
-//! The GUI Library's one pill-scoped entry-list projection (row 7C.4, from
-//! the /simplify review of PR 993): the pill option, entry row, and
-//! projection frame the Feeds (row 11.1) and Podcasts (row 10.1)
-//! destinations share, the row-state arm both of their row builders apply,
-//! and the select-by-id arm the Audiobooks destination (row 9.1) shares with
-//! them. Each destination's own module keeps what is truly its own — the
-//! pill scopes' sources, the row builder, the Hero, and the loads — so the
-//! share carries only the vocabulary every list paints and the fallback
-//! rules every list applies. Audiobooks has no pill row (its letter rail
-//! replaces the TUI's surname buckets) and a book row of its own fields, so
-//! it takes the selection arm only.
+//! The GUI Library's one collection-scoped entry-list projection (row 7C.4,
+//! from the /simplify review of PR 993): the entry row and projection frame
+//! the Feeds (row 11.1) and Podcasts (row 10.1) destinations share, the
+//! row-state arm both of their row builders apply, and the select-by-id arm the
+//! Audiobooks destination (row 9.1) shares with them. Each destination's own
+//! module keeps what is truly its own — the collection catalogs, the row
+//! builder, the Hero, and the loads — so the share carries only the vocabulary
+//! every list paints and the fallback rules every list applies. Audiobooks has
+//! no collection selector (its letter rail replaces the TUI's surname buckets)
+//! and a book row of its own fields, so it takes the selection arm only.
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
-/// One pill of a pill-scoped destination's pill row (rows 10.1, 11.1):
-/// Latest first, then one pill per scope in the destination's order. The
-/// pill row is single-select, as the TUI's one-valued `PillSelection` is.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiPillOption<P> {
-    /// The pill's selection: the set-pill command carries it back.
-    pub pill: P,
-    /// The pill's label: `Latest`, or the scope's own name.
-    pub name: String,
-    /// Whether the core's stored pill is this one.
-    pub selected: bool,
-}
+use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 
-/// One row of a pill-scoped destination's entry list (rows 10.1, 11.1). The
-/// identity is the entry's stable Service identity, encoded as one opaque
-/// string a select, play, or enqueue command sends, never a row position.
+/// One row of a collection-scoped destination's entry list (rows 10.1,
+/// 11.1). The identity is the entry's stable Service identity, encoded as one
+/// opaque string a select, play, or enqueue command sends, never a row
+/// position.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiEntryRow {
     /// The entry identity, as the destination's id encoding writes it.
@@ -49,17 +38,16 @@ pub struct GuiEntryRow {
     pub state: MediaSemanticState,
 }
 
-/// The pill-scoped entry-list projection a destination paints (rows 10.1,
-/// 11.1): the single-select pill row, the active pill's entry rows, the
-/// core's selected entry, and its Hero. No letter rail rides here — the
+/// The collection-scoped entry-list projection a destination paints (rows 10.1,
+/// 11.1): the destination's collection selector, the selection's entry rows,
+/// the core's selected entry, and its Hero. No letter rail rides here — the
 /// lists are sorted by date — and no Workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiEntryListProjection<P, H> {
-    /// The pill row in paint order: Latest first, then each scope in the
-    /// destination's order — the subscriptions for Feeds, the state pills and
-    /// the shows for Podcasts. The selected pill is the core's effective one;
-    /// a scope the destination no longer holds falls back to Latest.
-    pub pills: Vec<GuiPillOption<P>>,
+pub struct GuiEntryListProjection<H> {
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): All, every scope in the destination's order with its checked
+    /// flag, the destination's noun, and its date order.
+    pub collections: GuiCollections,
     /// Whether the active view's content is still landing: the feed tab's
     /// fetch for Feeds, the show catalog's pages and the active view's own
     /// episode fetches for Podcasts.
@@ -69,9 +57,9 @@ pub struct GuiEntryListProjection<P, H> {
     /// toast and keeps its previous entries — and the browse state's error
     /// for Podcasts, whose published episodes keep serving when they can.
     pub failed: bool,
-    /// The active pill's entry rows: a Latest pill merges every scope's
-    /// entries, and a scoped pill holds that one scope's, both newest first
-    /// with undated entries last.
+    /// The selection's entry rows: All merges every scope's entries, and a
+    /// checked set holds the checked scopes' — in the destination's date
+    /// order.
     pub rows: Vec<GuiEntryRow>,
     /// The core's selected entry (rows 10.1, 11.1), as the frame painted it:
     /// the pick the select command last named while the active list still
@@ -82,10 +70,20 @@ pub struct GuiEntryListProjection<P, H> {
     pub hero: Option<H>,
 }
 
-impl<P, H> Default for GuiEntryListProjection<P, H> {
+impl<H> Default for GuiEntryListProjection<H> {
+    /// The empty projection: All with no collections. The Feeds target is the
+    /// one value the shared shape can carry — only a destination whose frame
+    /// gate excludes it (a non-podcast library, a Feeds tab with no
+    /// subscriptions) paints it, and no painter then reads the selector.
     fn default() -> Self {
         Self {
-            pills: Vec::new(),
+            collections: GuiCollections::new(
+                GuiCollectionTarget::Feeds,
+                &GuiCollectionSet::All,
+                GuiCollectionNoun::Subscriptions,
+                std::iter::empty::<(String, String)>(),
+                None,
+            ),
             loading: false,
             failed: false,
             rows: Vec::new(),
@@ -93,27 +91,6 @@ impl<P, H> Default for GuiEntryListProjection<P, H> {
             hero: None,
         }
     }
-}
-
-/// The pill row (rows 10.1, 11.1): `latest` first, then each scoped pill
-/// `scoped` yields in the destination's order, with the effective pill
-/// `selected` marked.
-pub(in crate::app::gui_library) fn pill_options<P: Clone + PartialEq>(
-    latest: &P,
-    selected: &P,
-    scoped: impl IntoIterator<Item = (P, String)>,
-) -> Vec<GuiPillOption<P>> {
-    let mut pills = vec![GuiPillOption {
-        pill: latest.clone(),
-        name: "Latest".to_string(),
-        selected: selected == latest,
-    }];
-    pills.extend(scoped.into_iter().map(|(pill, name)| GuiPillOption {
-        selected: *selected == pill,
-        pill,
-        name,
-    }));
-    pills
 }
 
 /// The row the Hero shows (rows 9.1, 10.1, 11.1): the core's pick while the

@@ -62,9 +62,20 @@ impl App {
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
             LibEvent::GuiEmbyRootItems(event) => self.handle_gui_emby_root_items(event),
-            // The GUI Library's destination-Latest store owns this event (row
-            // 8.1); the TUI never starts one.
-            LibEvent::GuiEmbyLatestItems(event) => self.handle_gui_emby_latest_items(event),
+            // The GUI Shows New list's store owns this event
+            // (gui-collection-dropdown design D9); only the GUI Client's launch
+            // starts one, so the TUI never receives it.
+            LibEvent::GuiShowsNew(event) => self.handle_gui_shows_new(event),
+            // A feed-group target's failed fetch (gui-collection-dropdown
+            // design D3): the GUI Library's store records the terminal failure
+            // mark its shown pass honours, and the shared in-flight mark
+            // retires. The library error cleanup runs first, so a deferred
+            // navigation is disarmed and the failure shows one toast, exactly
+            // as the `LibEvent::Error` arm this fetch used to send did.
+            LibEvent::FeedHomeVideoSelectionFailed(event) => {
+                self.handle_error(&event.error);
+                self.handle_feed_home_video_selection_failed(event);
+            }
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and
             // the shell drain joins only its projection work after it.

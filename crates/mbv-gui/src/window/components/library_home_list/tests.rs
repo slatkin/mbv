@@ -423,6 +423,8 @@ fn the_list_paints_only_the_rows_in_view() {
     );
 }
 
+/// The four sections' rows in paint order (gui-collection-dropdown design
+/// D9): `Continue watching`, `Recently added`, `Latest episodes`, then
 /// Contract (`LibraryHomeList.test.ts`): a press sends the select command
 /// with the row's opaque id. The press that sends it is the handler function
 /// the component's own handler calls one line each (a headless document

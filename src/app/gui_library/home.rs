@@ -258,24 +258,31 @@ impl App {
             .as_ref()
             .and_then(|selected| self.home_hero(&items, selected));
 
-        // The flat rows in paint order: the two sections' heading rows, each
+        // The flat rows in paint order: the sections' heading rows, each
         // omitted when it has no rows, and the spacer only between two
         // non-empty sections.
+        let sections: [(&str, Vec<GuiHomeRow>); 2] = [
+            (
+                "Continue watching",
+                continue_rows.iter().map(GuiHomeItem::flat_row).collect(),
+            ),
+            (
+                "Recently added",
+                recent_rows.iter().map(GuiHomeItem::flat_row).collect(),
+            ),
+        ];
         let mut rows = Vec::new();
-        if !continue_rows.is_empty() {
-            rows.push(GuiHomeRow::Heading {
-                text: "Continue watching".to_string(),
-            });
-            rows.extend(continue_rows.iter().map(GuiHomeItem::flat_row));
-        }
-        if !recent_rows.is_empty() {
-            if !continue_rows.is_empty() {
+        for (heading, section_rows) in sections {
+            if section_rows.is_empty() {
+                continue;
+            }
+            if !rows.is_empty() {
                 rows.push(GuiHomeRow::Spacer);
             }
             rows.push(GuiHomeRow::Heading {
-                text: "Recently added".to_string(),
+                text: heading.to_string(),
             });
-            rows.extend(recent_rows.iter().map(GuiHomeItem::flat_row));
+            rows.extend(section_rows);
         }
         GuiHomeProjection {
             loading: self.home_content.loading,

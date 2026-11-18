@@ -47,26 +47,26 @@ pub use self::gui_client_state::{
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
-    GuiArtShape, GuiEntryListProjection, GuiEntryRow, GuiHomeHero, GuiHomeItemRow,
-    GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiPillOption,
+    GuiArtShape, GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
+    GuiCollectionTarget, GuiCollections, GuiDateOrder, GuiEntryListProjection, GuiEntryRow,
+    GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
+    compare_gui_date_order,
 };
 pub use self::gui_library::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
     GuiAudiobooksWorkspace,
 };
 pub use self::gui_library::{
-    GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill,
-    GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode,
-    GuiShowsPill, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill,
-    GuiShowsSeries, GuiShowsWorkspace,
+    GuiDestinationKind, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
+    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
 pub use self::gui_library::{
-    GuiFeedEntryId, GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
-    GuiFeedsSelection, GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu,
-    GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId,
-    GuiPodcastPill, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
-    GuiSearchProjection, GuiSearchRow,
+    GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow, GuiFeedsSelection,
+    GuiLaunchOpen, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab,
+    GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastsHero,
+    GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow,
 };
 pub use self::gui_settings::{
     GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,

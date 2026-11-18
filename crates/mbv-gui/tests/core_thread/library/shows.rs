@@ -129,12 +129,12 @@ fn shows_command_core(http: &MockHttp) -> TestCore {
     test
 }
 
-/// Opening the Shows library in the All series mode lands the series root
-/// rows on the App through the GUI tick (row 7.1, contract a): the open and
-/// set-mode actions run the TUI's own mode load, and the tick's
-/// `drain_lib_event` applies the refresh completion's App arm. The mock
-/// answers each request by its own path, so the open's eager Upcoming
-/// snapshot and the mode's load cannot take each other's answer.
+/// Opening the Shows library lands the series root rows on the App through
+/// the GUI tick (row 7.1, contract a; gui-collection-dropdown design D8): the
+/// open runs the TUI's own All series load, and the tick's `drain_lib_event`
+/// applies the refresh completion's App arm. The mock answers each request by
+/// its own path, so the open's eager Upcoming snapshot and the series load
+/// cannot take each other's answer.
 #[test]
 fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
     let http = MockHttp::new();
@@ -144,7 +144,6 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
 
     let app = test.core.app_mut();
     app.gui_tv_open(0);
-    app.gui_tv_set_mode(0, &mbv_queue::TvContentMode::All);
     pump_until_root_rows(&mut test);
 
     assert_eq!(
@@ -156,10 +155,10 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
 
 /// The mocked bootstrap's catalog presents the Shows destination, and the
 /// open that follows it (the restore's own first-presented open, or the
-/// open-destination command) finds the Shows frame (row 7.1, design D12):
-/// the three view-mode pills with the resolved default selected, and — the
-/// default mode's root load still under way or failed against the
-/// no-URL stub client — no rows and no Hero yet.
+/// open-destination command) finds the Shows frame (row 7.1, design D12;
+/// gui-collection-dropdown design D8): the GUI paints the series list alone,
+/// so no mode pill rides the frame, and — the series load still under way or
+/// failed against the no-URL stub client — no series and no Hero yet.
 #[test]
 fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
     let view = mbv_emby_model::EmbyItem::folder(
@@ -181,26 +180,9 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         list.lib_idx, 0,
         "the frame names the library the commands carry"
     );
-    let names: Vec<&str> = list.pills.iter().map(|pill| pill.name.as_str()).collect();
-    assert_eq!(names, ["New", "Upcoming", "All"]);
-    let selected: Vec<&str> = list
-        .pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.as_str())
-        .collect();
-    assert_eq!(
-        selected,
-        ["New"],
-        "one mode pill is selected, the resolved default"
-    );
     assert!(
-        !list.pills.iter().any(|pill| pill.collection),
-        "the mode pills are single-select"
-    );
-    assert!(
-        list.rows.is_empty() && detail.hero.is_none(),
-        "the default mode's root load has not landed rows yet"
+        list.series.is_empty() && list.rows.is_empty() && detail.hero.is_none(),
+        "the series load has not landed series or a Hero yet"
     );
 }
 
@@ -283,13 +265,6 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
     let mut test = shows_command_core(&http);
 
     open_shows_destination(&mut test, 2, 1);
-    send_library(
-        &mut test,
-        mbv_gui::bridge::library::GuiLibraryCommand::ShowsSetMode {
-            lib_idx: 1,
-            mode: mbv_gui::bridge::library::GuiShowsMode::All,
-        },
-    );
     pump_until_series_hero(&mut test, "series-a", "Alfred");
     pump_until_workspace(&mut test, "s1-a", "ep-a1", "the default series' Workspace");
 

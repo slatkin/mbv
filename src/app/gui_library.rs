@@ -8,6 +8,8 @@
 mod artwork;
 mod audiobooks;
 mod audiobooks_projection;
+mod collection;
+mod collection_command;
 mod emby;
 mod emby_projection;
 mod entry_list;
@@ -21,9 +23,11 @@ mod marks;
 mod podcasts;
 mod podcasts_projection;
 mod projection;
+mod request;
 mod search;
 mod shows;
 mod shows_projection;
+mod shows_view;
 mod store;
 mod tabs;
 mod tv;
@@ -34,19 +38,21 @@ pub use self::audiobooks_projection::{
     GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
     GuiAudiobooksWorkspace,
 };
+pub use self::collection::{
+    GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
+    GuiCollectionTarget, GuiCollections, GuiDateOrder, compare_gui_date_order,
+};
+use self::collection_command::CollectionOp;
+use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
-pub(in crate::app) use self::emby::{
-    GuiEmbyLatestItems, GuiEmbyLatestItemsEvent, GuiEmbyRootItems, GuiEmbyRootItemsEvent,
-};
+pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind,
+    GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
-pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow, GuiPillOption};
-pub use self::feeds::{GuiFeedPill, GuiFeedsSelection};
-pub use self::feeds_projection::{
-    GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
-};
+pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
+use self::feeds::GuiFeedsCollectionSite;
+pub use self::feeds::GuiFeedsSelection;
+pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
@@ -54,21 +60,25 @@ pub use self::home::{
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::marks::GuiPlayheadMarks;
-pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
+use self::podcasts::GuiPodcastsCollectionSite;
+pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
-    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,
-    GuiPodcastsRow,
+    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
 };
 pub use self::projection::{
-    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
+pub(in crate::app) use self::request::GuiSectionRequest;
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
+pub(in crate::app) use self::shows::GuiShowsNewEvent;
 pub use self::shows_projection::{
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
+    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
+pub use self::shows_view::GuiShowsView;
+use self::store::GuiMusicCollectionSite;
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
@@ -90,9 +100,29 @@ pub enum GuiLibraryCommand {
     /// frame's tabs carry can name only a painted tab, and a stale frame must
     /// not activate a destination the top bar does not carry.
     OpenDestination { position: usize },
-    /// Select the one collection group of the Grouped Music library `lib_idx`
-    /// (design D5, D6): one group is always selected, as in the TUI.
-    SelectCollection { lib_idx: usize, group_id: String },
+    /// Check or uncheck one collection of `target` (design D5): a press on an
+    /// unchecked collection checks it and clears All, a press on a checked one
+    /// unchecks it, and the selection falls back to All when none stays
+    /// checked. The Music destination installs the change through its one
+    /// selection entry, so the Hero's album carries across it (design D11).
+    CollectionToggle {
+        target: GuiCollectionTarget,
+        /// The collection's stable Service id.
+        key: String,
+    },
+    /// Select All for `target` (design D5): the All row's press and the
+    /// dropdown's Clear.
+    CollectionAll { target: GuiCollectionTarget },
+    /// Set the list order of a feed-based `target` (design D4, D5): Newest or
+    /// Oldest. The Music destination sorts by name, so a Music target
+    /// changes nothing.
+    DateOrder {
+        target: GuiCollectionTarget,
+        order: GuiDateOrder,
+    },
+    /// Select the Shows destination's single view (design D8): All, New, or
+    /// Upcoming. This is a view choice, not a collection command.
+    ShowsSetView { lib_idx: usize, view: GuiShowsView },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -133,17 +163,9 @@ pub enum GuiLibraryCommand {
     /// Enqueue a Home row (design D12): `a` on the row, through the Home
     /// flat list's enqueue path.
     HomeQueue { row: home::GuiHomeRowId },
-    /// Set the Shows destination's view mode (design D12, the USER-APPROVED
-    /// GUI Shows design): the root level loads through the TUI's own mode
-    /// load. A `lib_idx` that names no Shows library changes nothing.
-    ShowsSetMode {
-        lib_idx: usize,
-        mode: shows_projection::GuiShowsMode,
-    },
-    /// Select a Shows row (design D12): the row the Hero shows — the All
-    /// series mode's series (whose select runs the series-detail load), or a
-    /// flat mode's episode or premiere row. A row the active mode's list no
-    /// longer holds changes nothing.
+    /// Select a Shows row (design D12, D8): the series the Hero shows, whose
+    /// select runs the series-detail load. A row the series list no longer
+    /// holds changes nothing.
     ShowsSelect { lib_idx: usize, row: String },
     /// Select the season whose episodes the Hero's Workspace shows (design
     /// D12): the season-episodes load starts when the cache does not hold
@@ -161,14 +183,6 @@ pub enum GuiLibraryCommand {
     /// Select a plain Emby-library row (design D12, row 8.1): the row the
     /// Hero shows. A row the active list no longer holds changes nothing.
     EmbySelect { lib_idx: usize, row: String },
-    /// Set the feed-view library's selected group (design D12, row 8.1):
-    /// the TUI's own selection path, so the session cache, the stale-drop,
-    /// and the lazy fetch behave as the TUI pill's press does. A `lib_idx`
-    /// that names no feed-view library changes nothing.
-    EmbySetFeedGroup {
-        lib_idx: usize,
-        group: emby_projection::GuiEmbyFeedGroup,
-    },
     /// Play a plain Emby-library row (design D12, row 8.1): Enter on the
     /// row, or the double-click a window sends with this same command.
     /// A folder or a boxset plays through the TUI's folder-play rule, so no
@@ -203,14 +217,6 @@ pub enum GuiLibraryCommand {
     /// Add an Audiobooks book to the queue (design D12, row 9.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     AbsQueue { lib_idx: usize, item_id: String },
-    /// Set the Podcasts destination's pill (design D12, row 10.1): Latest, or
-    /// one show by its stable `library_item_id`. The pill row is single-select,
-    /// and the selected pill's own loads start through the TUI's own loaders.
-    /// A show the published show list no longer carries changes nothing.
-    PodcastsSetPill {
-        lib_idx: usize,
-        pill: podcasts::GuiPodcastPill,
-    },
     /// Select the Podcasts episode the Hero shows (design D12, row 10.1): a
     /// press on the row. The row id is the frame's opaque episode identity, so
     /// a stale frame's row changes nothing.
@@ -223,11 +229,6 @@ pub enum GuiLibraryCommand {
     /// Add a Podcasts episode to the queue (design D12, row 10.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     PodcastsQueue { lib_idx: usize, item_id: String },
-    /// Set the Feeds destination's pill (design D12, row 11.1): Latest, or one
-    /// subscription by its URL. The pill row is single-select, the state pills
-    /// are dropped, and a subscription the tab no longer holds changes nothing.
-    /// A Client holds one feed tab, so no library index rides here.
-    FeedsSetPill { pill: feeds::GuiFeedPill },
     /// Select the Feeds entry the Hero shows (design D12, row 11.1): a press
     /// on the row. The row id is the frame's opaque entry identity, so a stale
     /// frame's row changes nothing.
@@ -276,8 +277,17 @@ impl App {
             GuiLibraryCommand::OpenDestination { position } => {
                 self.open_gui_library_position(position);
             }
-            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
-                self.select_gui_library_collection(lib_idx, group_id);
+            GuiLibraryCommand::CollectionToggle { target, key } => {
+                self.apply_collection(&target, CollectionOp::Toggle { key });
+            }
+            GuiLibraryCommand::CollectionAll { target } => {
+                self.apply_collection(&target, CollectionOp::All);
+            }
+            GuiLibraryCommand::DateOrder { target, order } => {
+                self.apply_collection(&target, CollectionOp::Order(order));
+            }
+            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
+                self.set_gui_shows_view(lib_idx, view);
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
@@ -309,9 +319,6 @@ impl App {
                 self.enqueue_gui_home_row(&row, "homePlayNext");
             }
             GuiLibraryCommand::HomeQueue { row } => self.enqueue_gui_home_row(&row, "homeQueue"),
-            GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => {
-                self.gui_tv_set_mode(lib_idx, &mbv_queue::TvContentMode::from(mode));
-            }
             GuiLibraryCommand::ShowsSelect { lib_idx, row } => {
                 self.select_gui_shows_row(lib_idx, &row);
             }
@@ -330,9 +337,6 @@ impl App {
             GuiLibraryCommand::EmbySelect { lib_idx, row } => {
                 self.gui_emby_select(lib_idx, &row);
             }
-            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => {
-                self.gui_emby_set_feed_group(lib_idx, &group);
-            }
             GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
                 self.play_gui_emby_item(lib_idx, &item_id);
             }
@@ -348,7 +352,6 @@ impl App {
             command @ (GuiLibraryCommand::AbsPlay { .. }
             | GuiLibraryCommand::AbsPlayChapter { .. }
             | GuiLibraryCommand::AbsQueue { .. }
-            | GuiLibraryCommand::PodcastsSetPill { .. }
             | GuiLibraryCommand::PodcastsSelect { .. }
             | GuiLibraryCommand::PodcastsPlay { .. }
             | GuiLibraryCommand::PodcastsQueue { .. }) => {
@@ -356,8 +359,7 @@ impl App {
             }
             // The Feeds destination's own commands (row 11.1): the one feed
             // tab the Client holds, so no library index rides them.
-            command @ (GuiLibraryCommand::FeedsSetPill { .. }
-            | GuiLibraryCommand::FeedsSelect { .. }
+            command @ (GuiLibraryCommand::FeedsSelect { .. }
             | GuiLibraryCommand::FeedsPlay { .. }
             | GuiLibraryCommand::FeedsQueue { .. }) => {
                 self.apply_gui_feeds_command(command);
@@ -404,9 +406,6 @@ impl App {
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
                 self.enqueue_gui_abs_book(lib_idx, &item_id);
             }
-            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => {
-                self.gui_podcast_set_pill(lib_idx, pill);
-            }
             GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
                 self.select_gui_podcast_row(lib_idx, &row);
             }
@@ -430,7 +429,6 @@ impl App {
     /// request silently.
     fn apply_gui_feeds_command(&mut self, command: GuiLibraryCommand) {
         match command {
-            GuiLibraryCommand::FeedsSetPill { pill } => self.gui_feeds_set_pill(pill),
             GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
             GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
             GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
@@ -479,12 +477,12 @@ impl App {
     }
 
     /// The open step the active destination's kind needs (design D12): the
-    /// Shows destination seeds its mode selection with the TUI default
-    /// rule's resolution and starts its root load when the stack holds no
-    /// level, the plain Emby-library destination starts its root-list load
-    /// (row 8.1), and the Feeds destination settles its stored pill (row
-    /// 11.1, whose entries the shared startup fetch already fills). The other
-    /// destinations' loads ride the tab settlement and the frame path.
+    /// Shows destination forces its one view mode and starts its root load
+    /// when the stack holds no level, the plain Emby-library destination
+    /// starts its root-list load (row 8.1), and the Feeds destination settles
+    /// its stored selection (row 11.1, whose entries the shared startup fetch
+    /// already fills). The other destinations' loads ride the tab settlement
+    /// and the frame path.
     fn open_gui_active_destination(&mut self) {
         match self.gui_active_destination() {
             Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
@@ -508,8 +506,9 @@ impl App {
     /// stale frame's row, one whose item the App's Home data no longer
     /// holds, changes nothing, as every stale command's item arm does.
     fn play_gui_home_row(&mut self, row: &GuiHomeRowId) {
+        let target = row.clone().into_home_item_target();
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+        if let Some(item) = self.home_stable_target(&target) {
             self.home_play_target(item, from_cw);
         } else {
             Self::log_stale_library_item("homePlay", &home_row_command_id("homePlay", row));
@@ -522,9 +521,10 @@ impl App {
     /// resolved row, never a direct queue mutation. `name` is the command's
     /// intent, for the stale-frame log the item arms share.
     fn enqueue_gui_home_row(&mut self, row: &GuiHomeRowId, name: &str) {
+        let target = row.clone().into_home_item_target();
         let logged = home_row_command_id(name, row);
         let from_cw = row.is_continue();
-        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+        if let Some(item) = self.home_stable_target(&target) {
             self.home_enqueue_target(item, from_cw);
         } else {
             Self::log_stale_library_item(name, &logged);

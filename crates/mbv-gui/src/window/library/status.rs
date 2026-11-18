@@ -5,9 +5,11 @@
 //! composes no state of its own: the active destination's list part and detail
 //! part narrow on their kind.
 
+use mbv::GuiCollections;
+
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame, GuiPillFrame, GuiShowsRowFrame,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame, GuiShowsRowFrame,
 };
 
 /// The current destination's label: the tab whose position the frame marks
@@ -102,24 +104,13 @@ fn detail_selected(detail: Option<&GuiLibraryDetail>) -> Option<&str> {
     }
 }
 
-/// The location line's middle segment a pill row names (design D10, D12): the
-/// selected pill's own name. A pill row with no selected pill leaves the
+/// The location line's middle segment a collection selector names (design
+/// D10, D6): the checked collections' names, or `All` while the selection is
+/// All, joined as one segment. A destination with no selector leaves the
 /// segment out.
-fn selected_pill<P>(pills: &[GuiPillFrame<P>]) -> Option<String> {
-    pills
-        .iter()
-        .find(|pill| pill.selected)
-        .map(|pill| pill.name.clone())
-}
-
-/// The plain Emby-library location's middle segment (design D10, D12, row
-/// 8.1): the selected feed pill's name in feed-group mode, and nothing in
-/// plain mode, whose letter rail replaces the pill row.
-fn emby_selected_group(feed_group: bool, collection_names: &[String]) -> Option<String> {
-    if !feed_group {
-        return None;
-    }
-    collection_names.first().cloned()
+fn selected_collection(collections: Option<&GuiCollections>) -> Option<String> {
+    let names = collections?.selected_names();
+    (!names.is_empty()).then(|| names.join(", "))
 }
 
 /// The Home detail's Hero title (design D10, D12): the selected row's Hero
@@ -157,19 +148,19 @@ fn segments_of(
             vec![Some("Home".to_owned()), home_hero_title(detail)]
         }
         GuiDestinationList::Shows(shows) => {
+            // The series list is the whole library (design D8): Shows paints
+            // no collection selector, so the line names no collection.
             let selected = detail_selected(detail);
-            let mut segments = vec![label];
-            segments.extend(shows.collection_names.iter().cloned().map(Some));
-            segments.push(selected_title(selected, &shows.rows));
-            segments
+            vec![label, selected_title(selected, &shows.rows)]
         }
         GuiDestinationList::Emby(emby) => {
             let selected = detail_selected(detail);
-            vec![
-                label,
-                emby_selected_group(emby.feed_group, &emby.collection_names),
-                selected_title(selected, &emby.rows),
-            ]
+            let mut segments = vec![label];
+            if emby.feed_group {
+                segments.extend(emby.collection_names.iter().cloned().map(Some));
+            }
+            segments.push(selected_title(selected, &emby.rows));
+            segments
         }
         GuiDestinationList::Audiobooks(audiobooks) => {
             let selected = detail_selected(detail);
@@ -179,7 +170,7 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_pill(&podcasts.pills),
+                selected_collection(Some(&podcasts.collections)),
                 selected_title(selected, &podcasts.rows),
             ]
         }
@@ -187,13 +178,13 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_pill(&feeds.pills),
+                selected_collection(Some(&feeds.collections)),
                 selected_title(selected, &feeds.rows),
             ]
         }
         GuiDestinationList::Music(music) => {
             let mut segments = vec![label];
-            segments.extend(music.collection_names.iter().cloned().map(Some));
+            segments.extend(music.collections.selected_names().into_iter().map(Some));
             segments.push(picked_name(music_hero(detail)));
             segments
         }
@@ -202,17 +193,17 @@ fn segments_of(
 
 /// The location line's segments in canvas order. On Home the line reads
 /// `Home`, then the selected row's Hero title (design D10, D12). On Shows it
-/// reads the destination tab's label, the active view mode's name, and the
-/// selected row's title (row 7.1). On a plain Emby library it reads the
-/// destination tab's label, the selected feed pill in feed-group mode, and the
-/// selected row's title (row 8.1). On an Audiobooks library it reads the
-/// destination tab's label and the selected book's title (row 9.1). On a
-/// Podcasts library it reads the destination tab's label, the selected pill,
-/// and the selected episode's title (row 10.1). On a Feeds destination it
-/// reads the destination tab's label, the selected pill, and the selected
-/// entry's title (row 11.1). A segment the content does not fill drops, so an
-/// unpicked Hero leaves the destination and the collections, and a destination
-/// outside the tabs leaves the rest.
+/// reads the destination tab's label and the selected row's title, because
+/// the series list carries no collection selector (design D8). On a plain Emby
+/// library it reads the destination tab's label and the selected row's title
+/// (row 8.1), and in feed-group mode the checked folder names in between. On an
+/// Audiobooks library it reads the destination tab's label and the selected
+/// book's title (row 9.1). On a Podcasts library it reads the destination tab's
+/// label, the checked shows, and the selected episode's title (row 10.1). On a
+/// Feeds destination it reads the destination tab's label, the checked
+/// subscriptions, and the selected entry's title (row 11.1). A segment the
+/// content does not fill drops, so an unpicked Hero leaves the destination and
+/// the collections, and a destination outside the tabs leaves the rest.
 #[must_use]
 pub fn library_location_segments(
     tabs: &[GuiLibraryTabFrame],

@@ -1,9 +1,12 @@
 //! The GUI Library's Music projection (add-gui-library-panel design D5): the
-//! group pills, the union of the selected groups' artists by `ArtistKey` in
-//! artist sort-name order, their albums with the cached tracklists, and the
-//! Hero's facts for the picked album. The projection reads `App` data only, so
-//! the TUI's own projections and paint do not change.
+//! group collection selector, the union of the selected groups' artists by
+//! `ArtistKey` in artist sort-name order, their albums with the cached
+//! tracklists, and the Hero's facts for the picked album. The selection is All
+//! or a set of checked groups (gui-collection-dropdown design D1, D2, D11).
+//! The projection reads `App` data only, so the TUI's own projections and paint
+//! do not change.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
@@ -11,22 +14,10 @@ use mbv_ui_model::music_grouping::ArtistKey;
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
-use super::GuiGroupAlbums;
+use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
+use super::collection_command::GuiCollectionSite;
+use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::app::App;
-
-/// One group pill of the Music destination (design D5, D6): a Grouped Music
-/// library's collections are its groups, so every Music pill is a collection
-/// pill.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiMusicPill {
-    /// The group's stable Service id: the set-collections command and the
-    /// collection store key it.
-    pub group_id: String,
-    /// The group's display name, the pill's label.
-    pub name: String,
-    /// Whether the core's selection holds the group.
-    pub selected: bool,
-}
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
 /// its albums, in artist sort-name order.
@@ -109,15 +100,14 @@ pub struct GuiMusicHero {
 }
 
 /// The Music projection the GUI Library panel paints (design D5): the group
-/// pills with their selected state, the artist union, and the Hero's facts.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// collection selector, the artist union, and the Hero's facts.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiMusicProjection {
-    /// The group pills in the group level's order (design D5, D6).
-    pub pills: Vec<GuiMusicPill>,
-    /// The selected collection names in pill order (design D6): the one
-    /// derivation of the names the frame carries, so the list header, the
-    /// Status bar location, and the Hero header cannot disagree.
-    pub collection_names: Vec<String>,
+    /// The destination's collection selector (design D6): All, every group in
+    /// the group level's order with its checked flag, the Groups noun, and no
+    /// date order — Music sorts by name. The bridge's collections frame rides
+    /// here.
+    pub collections: GuiCollections,
     /// Whether one of the selected groups' album lists has not landed yet.
     pub loading: bool,
     /// The failure line naming every selected group whose album list failed
@@ -157,19 +147,21 @@ impl App {
     }
 
     /// The Music projection the GUI Library panel paints (design D5): the
-    /// Grouped Music library's pills, the union of the selected groups'
+    /// Grouped Music library's pills, the union of the checked groups'
     /// artists with their albums and cached tracklists, and the Hero's facts
-    /// for the picked album.
+    /// for the picked album (gui-collection-dropdown design D1, D2, D11).
     #[must_use]
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
-        let pills = self.gui_music_pills(lib_idx);
-        let collection_names = selected_collection_names(&pills);
-        let union = self.gui_music_union(lib_idx, &pills);
+        // The one effective-set read the frame takes: the helpers read the
+        // set it borrows, so the frame never recomputes the retention.
+        let set = self.gui_effective_music_set(lib_idx);
+        let collections = self.gui_collections(GuiCollectionTarget::Music(lib_idx));
+        let selected_groups = self.gui_selected_groups(lib_idx, set.as_ref());
+        let union = self.gui_music_union(lib_idx, &selected_groups);
         let artists = self.gui_music_artists(&union);
-        let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
+        let hero = self.gui_music_hero(lib_idx, set.as_ref(), &artists, &collections);
         let projection = GuiMusicProjection {
-            pills,
-            collection_names,
+            collections,
             loading: union.loading,
             failure: failure_line(&union.failed),
             artists,
@@ -205,51 +197,80 @@ impl App {
         });
     }
 
-    /// The Grouped Music library's group pills in the group level's order
-    /// (design D5): the group level is the library's own level in
-    /// `nav_stack`, and the pills paint the core's stored selection.
-    fn gui_music_pills(&self, lib_idx: usize) -> Vec<GuiMusicPill> {
+    /// The Grouped Music library's groups as the collection selector's catalog
+    /// in the group level's order (design D5, D6): each group's stable Service
+    /// id and its display name. The group level is the library's own level in
+    /// `nav_stack`.
+    pub(in crate::app::gui_library) fn gui_music_groups(
+        &self,
+        lib_idx: usize,
+    ) -> Vec<(String, String)> {
         if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
             return Vec::new();
         }
         let Some(group_level) = self.gui_music_group_level(lib_idx) else {
             return Vec::new();
         };
-        let selected = self.gui_selected_group(lib_idx);
         group_level
             .items
             .iter()
-            .map(|group| GuiMusicPill {
-                group_id: group.id.clone(),
-                name: group.name.clone(),
-                selected: selected.as_deref() == Some(group.id.as_str()),
-            })
+            .map(|group| (group.id.clone(), group.name.clone()))
             .collect()
     }
 
-    /// The group the Music destination shows (design D6): the stored choice
-    /// while the library still holds it, else the first group in pill order.
-    /// One group is always selected, as in the TUI. `None` while the group
-    /// list has not landed or the library holds no group.
-    #[must_use]
-    pub(in crate::app::gui_library) fn gui_selected_group(&self, lib_idx: usize) -> Option<String> {
-        let groups = &self.gui_music_group_level(lib_idx)?.items;
-        match self.gui_library_groups.get(&lib_idx) {
-            Some(stored) if groups.iter().any(|group| group.id == *stored) => Some(stored.clone()),
-            _ => groups.first().map(|group| group.id.clone()),
+    /// The Grouped Music library's effective selection (design D1): the
+    /// stored set, or All when none is stored. A checked set whose keys the
+    /// library no longer holds falls back to All (the spec's vanish rule); a
+    /// group list that has not landed admits the stored set as it is, since
+    /// the list is what would name its keys stale. A set nothing drops is
+    /// returned borrowed, so a per-frame reader clones nothing.
+    pub(in crate::app) fn gui_effective_music_set(
+        &self,
+        lib_idx: usize,
+    ) -> Cow<'_, GuiCollectionSet> {
+        GuiMusicCollectionSite(lib_idx).effective_set(self)
+    }
+
+    /// The groups the Music destination shows, in pill order (design D1, D2):
+    /// every group of the library for All, and the checked groups for a
+    /// checked set. `None`'s case — the group list has not landed or the
+    /// library holds no group — shows no group, so the frame path starts no
+    /// fetch until the list lands. The ids are borrowed from the group
+    /// level, so the union reads them without cloning.
+    pub(in crate::app::gui_library) fn gui_selected_groups(
+        &self,
+        lib_idx: usize,
+        set: &GuiCollectionSet,
+    ) -> Vec<&str> {
+        let Some(group_level) = self.gui_music_group_level(lib_idx) else {
+            return Vec::new();
+        };
+        match set {
+            GuiCollectionSet::All => group_level
+                .items
+                .iter()
+                .map(|group| group.id.as_str())
+                .collect(),
+            GuiCollectionSet::Checked(keys) => group_level
+                .items
+                .iter()
+                .filter(|group| keys.contains(&group.id))
+                .map(|group| group.id.as_str())
+                .collect(),
         }
     }
 
-    /// The albums of the selected group (design D5): its whole album list,
-    /// with the `(artist, year, name)` facts and stable `ArtistKey` that
-    /// `mbv_render::group_album_plan` derives from `album_artist_cache`. One
-    /// group is always selected (design D6), so the union is that one list; a
-    /// failed fetch names the group in the failure line.
-    fn gui_music_union(&self, lib_idx: usize, pills: &[GuiMusicPill]) -> GuiMusicUnion<'_> {
+    /// The albums of the checked groups (design D1, D2): each checked
+    /// group's whole album list, with the `(artist, year, name)` facts and
+    /// stable `ArtistKey` that `mbv_render::group_album_plan` derives from
+    /// `album_artist_cache`. All is every group's list; a failed fetch names
+    /// the group in the failure line.
+    fn gui_music_union(&self, lib_idx: usize, group_ids: &[&str]) -> GuiMusicUnion<'_> {
         let mut union = GuiMusicUnion::default();
         let mut seen: HashSet<&str> = HashSet::new();
-        for pill in pills.iter().filter(|pill| pill.selected) {
-            let Some(state) = self.gui_music_albums.get(&(lib_idx, pill.group_id.clone())) else {
+        let groups = self.gui_music_albums.get(&lib_idx);
+        for group_id in group_ids {
+            let Some(state) = groups.and_then(|groups| groups.get(*group_id)) else {
                 union.loading = true;
                 continue;
             };
@@ -257,11 +278,25 @@ impl App {
                 GuiGroupAlbums::Loaded(albums) => {
                     self.extend_gui_music_union(&mut union, &mut seen, albums);
                 }
-                GuiGroupAlbums::Failed => union.failed.push(pill.name.clone()),
+                GuiGroupAlbums::Failed => union.failed.push(self.gui_group_name(lib_idx, group_id)),
                 GuiGroupAlbums::Loading => union.loading = true,
             }
         }
         union
+    }
+
+    /// The display name the group's failure line paints (design D5): the
+    /// group's name in the group level, or the id when the level holds none.
+    fn gui_group_name(&self, lib_idx: usize, group_id: &str) -> String {
+        self.gui_music_group_level(lib_idx)
+            .and_then(|level| {
+                level
+                    .items
+                    .iter()
+                    .find(|group| group.id == group_id)
+                    .map(|group| group.name.clone())
+            })
+            .unwrap_or_else(|| group_id.to_string())
     }
 
     /// Append one loaded group's albums to the union, de-duplicated by album
@@ -333,17 +368,35 @@ impl App {
         }
     }
 
-    /// The picked album id for the selected group (design D13): the group's
-    /// last pick while the union holds it, else the union's first album in list
-    /// order. `None` while the union holds no album.
-    fn gui_picked_album_id(&self, lib_idx: usize, artists: &[GuiMusicArtist]) -> Option<String> {
-        let group_id = self.gui_selected_group(lib_idx)?;
+    /// The picked album id under the selection (gui-collection-dropdown
+    /// design D11): one checked group's kept pick while the union holds it;
+    /// All or several groups' session union pick while the union holds it;
+    /// else the union's first album in list order. `None` while the union
+    /// holds no album. The group's pick is read through its borrowed id, so
+    /// the per-frame Hero clones nothing for the lookup.
+    fn gui_picked_album_id(
+        &self,
+        lib_idx: usize,
+        set: &GuiCollectionSet,
+        artists: &[GuiMusicArtist],
+    ) -> Option<String> {
         let holds = |album_id: &str| {
             artists
                 .iter()
                 .any(|artist| artist.albums.iter().any(|album| album.album_id == album_id))
         };
-        if let Some(pick) = self.gui_library_picks.get(&(lib_idx, group_id))
+        let single_group = match set {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().map(String::as_str),
+            _ => None,
+        };
+        if let Some(group_id) = single_group
+            && let Some(pick) = self.gui_library_group_pick(lib_idx, group_id)
+            && holds(pick.as_str())
+        {
+            return Some(pick.clone());
+        }
+        if single_group.is_none()
+            && let Some(pick) = self.gui_music_union_picks.get(&lib_idx)
             && holds(pick.as_str())
         {
             return Some(pick.clone());
@@ -354,6 +407,17 @@ impl App {
             .map(|album| album.album_id.clone())
     }
 
+    /// The kept pick of one checked group (design D11): the pick the launch
+    /// file saves, that the group's album list keeps. The pick map is keyed
+    /// by the owned id pair, so the lookup scans its few entries against the
+    /// borrowed id instead of cloning the id for a key.
+    fn gui_library_group_pick(&self, lib_idx: usize, group_id: &str) -> Option<&String> {
+        self.gui_library_picks
+            .iter()
+            .find(|((idx, id), _)| *idx == lib_idx && id == group_id)
+            .map(|(_, pick)| pick)
+    }
+
     /// The Hero's facts for the picked album (design D5, D13): the artist header
     /// from the album's union row, and the album block with its tracklist. The
     /// picked album is the selected group's pick, or its first album, so the
@@ -361,10 +425,11 @@ impl App {
     fn gui_music_hero(
         &self,
         lib_idx: usize,
+        set: &GuiCollectionSet,
         artists: &[GuiMusicArtist],
-        collection_names: &[String],
+        collections: &GuiCollections,
     ) -> Option<GuiMusicHero> {
-        let picked = self.gui_picked_album_id(lib_idx, artists)?;
+        let picked = self.gui_picked_album_id(lib_idx, set, artists)?;
         let (artist, album) = artists.iter().find_map(|artist| {
             artist
                 .albums
@@ -374,7 +439,7 @@ impl App {
         })?;
         Some(GuiMusicHero {
             artist: artist.name.clone(),
-            collections: collection_names.to_vec(),
+            collections: collections.selected_names(),
             album_count: artist.albums.len(),
             artist_tracks: self.gui_artist_tracks(artist),
             album: album.clone(),
@@ -396,17 +461,6 @@ impl App {
             duration: fmt_duration_short(ticks / TICKS_PER_SECOND),
         })
     }
-}
-
-/// The selected pills' names in pill order (design D6): the one derivation
-/// of the names the projection carries, so every painter that names the
-/// selected collections reads the same fact.
-fn selected_collection_names(pills: &[GuiMusicPill]) -> Vec<String> {
-    pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.clone())
-        .collect()
 }
 
 /// The album's tracklist rows (design D5, D7).

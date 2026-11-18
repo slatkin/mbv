@@ -12,6 +12,16 @@ pub enum FeedHomeVideoSelection {
     All,
     Folder(String),
 }
+
+/// Which list a caller reads the feed home-video cache with, borrowed: the
+/// one `All` list, or one root folder named by its stable id. The owned
+/// [`FeedHomeVideoSelection`] is the cache's key; this is its borrowing
+/// probe, so a per-frame reader names a target without cloning folder ids.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeedHomeVideoTarget<'a> {
+    All,
+    Folder(&'a str),
+}
 #[derive(Clone, Debug, Default)]
 pub struct FeedHomeVideoState {
     /// The selection whose items the view paints; the key into `items` and
@@ -32,8 +42,8 @@ pub struct FeedHomeVideoState {
     /// loading state until its fetch returns") from the seed/listing-pending
     /// `loading` the listing completion hands off. Set at the fetch spawn,
     /// cleared when that selection's result event lands — applied or
-    /// stale-dropped. A fetch that fails reports through `LibEvent::Error`
-    /// and leaves the mark until the next result for the same selection.
+    /// stale-dropped — or when its targeted `FeedHomeVideoSelectionFailed`
+    /// event lands, so a user press can retry the failed target.
     pub fetching: Option<FeedHomeVideoSelection>,
     /// Per-root-folder video counts. The count fan-out fills this; pill
     /// membership reads it alongside the root listing. A full refresh clears
@@ -61,6 +71,23 @@ impl FeedHomeVideoState {
     #[must_use]
     pub fn selected_len(&self) -> usize {
         self.items.get(&self.selection).map_or(0, Vec::len)
+    }
+
+    /// The loaded items `target` names, through the borrowed probe: `All`'s
+    /// own entry, or the folder entry whose id matches. `None` while the
+    /// target has no cache entry — the fetch that loads it is still owed.
+    #[must_use]
+    pub fn items_for(&self, target: FeedHomeVideoTarget<'_>) -> Option<&Vec<EmbyItem>> {
+        match target {
+            FeedHomeVideoTarget::All => self.items.get(&FeedHomeVideoSelection::All),
+            FeedHomeVideoTarget::Folder(id) => self
+                .items
+                .iter()
+                .find(|(selection, _)| {
+                    matches!(selection, FeedHomeVideoSelection::Folder(known) if known == id)
+                })
+                .map(|(_, items)| items),
+        }
     }
 
     /// The pill index to persist at the `LibraryPosition` save boundary: a

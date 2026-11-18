@@ -1,6 +1,7 @@
 use crate::gui_launch_state::{load_gui_launch_state_at, save_gui_launch_state_at};
 use crate::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, TabIdentity, TestTempDir,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
+    GuiLaunchShowsView, GuiLaunchState, TabIdentity, TestTempDir,
 };
 use mbv_queue::ServiceKind;
 
@@ -25,9 +26,12 @@ fn two_group_location() -> GuiLaunchState {
         destination: music_destination(),
         collections: vec![GuiDestinationCollections {
             destination: music_destination(),
+            target: GuiLaunchCollectionTarget::Music,
             group_ids: vec!["grp-hiphop".to_string(), "grp-soul".to_string()],
+            order: None,
             picks: Vec::new(),
         }],
+        shows_view: GuiLaunchShowsView::All,
     }
 }
 
@@ -53,21 +57,27 @@ fn gui_launch_state_wrong_version_loads_none() {
     assert_eq!(load_gui_launch_state_at(&path), None);
 }
 
-/// A file written before the group picks existed still loads: the selection
-/// survives the upgrade, and the picks start empty (design D13).
+/// An entry written before collections other than Music existed still loads:
+/// the missing target means Music, the missing order means none, and the
+/// checked groups and picks survive.
 #[test]
-fn gui_launch_state_without_picks_loads_with_none() {
+fn gui_launch_state_without_target_or_order_loads_as_music() {
     let scratch = TestTempDir::new();
     let path = scratch.join("gui_launch_state.json");
     let mut value = serde_json::to_value(two_group_location()).unwrap();
-    value["collections"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("picks");
+    let entry = value["collections"][0].as_object_mut().unwrap();
+    entry.remove("target");
+    entry.remove("order");
+    entry.remove("picks");
     std::fs::write(&path, value.to_string()).unwrap();
 
     let loaded = load_gui_launch_state_at(&path).expect("the old file loads");
 
+    assert_eq!(
+        loaded.collections[0].target,
+        GuiLaunchCollectionTarget::Music
+    );
+    assert_eq!(loaded.collections[0].order, None);
     assert_eq!(loaded.collections[0].picks, Vec::new());
     assert_eq!(
         loaded.collections[0].group_ids,

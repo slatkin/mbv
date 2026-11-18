@@ -17,8 +17,9 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyPillFrame,
-    GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
+    GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::GuiSectionBatch;
@@ -260,26 +261,17 @@ fn emby_content(
         destination: GuiDestinationList::Emby(GuiEmbyList {
             lib_idx: 3,
             library_name: "Movies".to_owned(),
-            pills: if feed_group {
-                vec![
-                    GuiEmbyPillFrame {
-                        group: crate::bridge::frame::library::GuiEmbyFeedGroupFrame::All,
-                        name: "All".to_owned(),
-                        selected: true,
-                        collection: false,
-                    },
-                    GuiEmbyPillFrame {
-                        group: crate::bridge::frame::library::GuiEmbyFeedGroupFrame::Folder(
-                            "folder-1".to_owned(),
-                        ),
-                        name: "Family".to_owned(),
-                        selected: false,
-                        collection: false,
-                    },
-                ]
-            } else {
-                Vec::new()
-            },
+            collections: feed_group.then(|| GuiCollections {
+                target: mbv::GuiCollectionTarget::EmbyFeed(3),
+                all: true,
+                entries: vec![GuiCollectionEntry {
+                    key: "folder-1".to_owned(),
+                    name: "Family".to_owned(),
+                    checked: false,
+                }],
+                noun: mbv::GuiCollectionNoun::Folders,
+                order: Some(mbv::GuiDateOrder::Newest),
+            }),
             collection_names: if feed_group {
                 vec!["All".to_owned()]
             } else {
@@ -316,7 +308,6 @@ fn carry_emby(state: &LibraryState, content: (GuiLibraryList, GuiLibraryDetail))
     sections.apply_batch(&batch);
     let mut emby_ui = state.emby_ui;
     emby_ui.with_mut(|ui| {
-        ui.pill_select = None;
         ui.filter.clear();
     });
 }
@@ -326,8 +317,8 @@ fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     let emby = state.emby_ui.peek().clone();
     format!(
-        "filter_open={} emby_filter={:?} pill_select={:?}",
-        ui.filter_open, emby.filter, emby.pill_select,
+        "filter_open={} emby_filter={:?}",
+        ui.filter_open, emby.filter,
     )
 }
 

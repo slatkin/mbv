@@ -113,14 +113,3 @@ fn the_feed_group_rows_carry_no_letter_so_every_rail_letter_is_disabled() {
 
     assert!(rail.iter().all(|letter| letter.row_id.is_none()));
 }
-
-// A pill keys on its group, never on a row position.
-#[test]
-fn a_pill_keys_on_its_group_never_on_a_row_position() {
-    assert_eq!(emby_group_key(&GuiEmbyFeedGroupFrame::Latest), "latest");
-    assert_eq!(emby_group_key(&GuiEmbyFeedGroupFrame::All), "all");
-    assert_eq!(
-        emby_group_key(&GuiEmbyFeedGroupFrame::Folder("folder-1".to_owned())),
-        "folder:folder-1"
-    );
-}

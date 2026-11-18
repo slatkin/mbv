@@ -430,6 +430,10 @@ pub fn App() -> Element {
     // Every handler holds its own link to the core (D4).
     let key_link = CoreLink::clone(&link);
     let press_link = CoreLink::clone(&link);
+    // The press path's Library store (gui-collection-dropdown design D7): a
+    // press anywhere in the window outside the collection dropdown closes it,
+    // and the dropdown's own region stops the presses that land on it.
+    let press_library = library.clone();
     let release_link = CoreLink::clone(&link);
     let move_link = CoreLink::clone(&link);
     let wheel_link = CoreLink::clone(&link);
@@ -472,6 +476,11 @@ pub fn App() -> Element {
                 input::on_keydown(&event, &router, &key_link);
             },
             onpointerdown: move |event: PointerEvent| {
+                // A press outside the collection dropdown closes it and clears
+                // its filter text, wherever in the window the press lands
+                // (gui-collection-dropdown design D7). The close changes no
+                // pointer fact, so the press still reaches the core.
+                press_library.close_collections_dropdown();
                 input::on_pointer(DomPointerKind::Press, &event.data, &press_link);
             },
             onpointerup: move |event: PointerEvent| {

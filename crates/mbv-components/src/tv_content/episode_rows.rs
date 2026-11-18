@@ -77,7 +77,10 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
 }
 
 /// "S02:E07", "S02" or "E07"; "no number" when the notice carries neither.
-fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
+/// The one owner of the premiere number's text: the TUI's upcoming rows and
+/// the GUI Client's Home `Upcoming` rows both paint it.
+#[must_use]
+pub fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
     match (premiere.season, premiere.episode) {
         (Some(season), Some(episode)) => format!("S{season:02}:E{episode:02}"),
         (Some(season), None) => format!("S{season:02}"),

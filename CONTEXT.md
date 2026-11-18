@@ -498,16 +498,16 @@ Settings screen:
 The GUI Client's one Settings screen: the full-window arrangement that replaces the player panel and the *Library panel* while it is open, with a sidebar of sections (Services, labelled Sources, Playback, Display, Session, Library, Queue, Mpv, Feeds, Actions, Keys, Sessions, Playlists) and the selected section's content. The GUI front end holds its interaction state (sidebar cursor, keyboard position, form drafts, choice marks, capture state); the *Client core* holds the open section, the section's data, and the actions (ADR 0037). The rebindable function-key open actions reach it through the core's Keyboard Router. It is not the TUI's *Settings sidebar*, and it is not the *Services view* the TUI sidebar presents.
 _Avoid_: Settings sidebar (for the GUI's), settings overlay, F2 screen, settings page
 
-Collection pill:
-A *GUI Library panel* pill that narrows the list to one content set that the Service holds: a Music group, a Podcast show, a Feeds subscription, or an Emby feed group. Collection pills are multi-select; the list is the de-duplicated union of the selected collections. Latest, filter, and letter-bucket pills are single pills.
-_Avoid_: multi-pill, filter pill (for a collection)
+Collection dropdown:
+A *GUI Library panel* dropdown that narrows the list to one or more content sets that the Service holds: Music groups, Podcast shows, Feeds subscriptions, or Emby feed-group folders. Its selection is All or a set of checked collections. The list is the de-duplicated union of them.
+_Avoid_: multi-pill, filter pill, collection pill
 
 Letter rail:
 The A to Z column beside a name-sorted *GUI Library panel* list. A press jumps the list to the first row of that letter. A letter with no rows is disabled.
 _Avoid_: alphabet bar, jump bar
 
 Library Status bar:
-The *GUI Library panel*'s bottom bar: the canvas key hints on the left and the location (destination, selected collections, picked item) on the right. The shared prefix state and toasts replace the hints while active. It is not the TUI's *Status bar panel*.
+The *GUI Library panel*'s bottom bar: the canvas key hints on the left and the location on the right: the destination, `All` or the names of the checked collections, and the picked item. The shared prefix state and toasts replace the hints while active. It is not the TUI's *Status bar panel*.
 _Avoid_: footer (for this bar), breadcrumb bar
 
 Library Hero overlay:

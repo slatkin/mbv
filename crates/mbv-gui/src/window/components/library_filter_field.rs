@@ -10,6 +10,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::library::state::LibraryState;
 
 /// The props of the filter field (the `LibraryFilterField` props, in
@@ -37,17 +38,8 @@ pub struct LibraryFilterFieldProps {
 pub fn LibraryFilterField(props: LibraryFilterFieldProps) -> Element {
     let library = consume_context::<LibraryState>();
 
-    let mut filter_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let watch_ui = library.ui;
-    use_effect(move || {
-        let open = watch_ui.cloned().filter_open;
-        let mounted = filter_mounted.cloned();
-        spawn(async move {
-            if let Some(event) = mounted {
-                let _ = event.set_focus(open).await;
-            }
-        });
-    });
+    let open_library = library.clone();
+    let mut filter_mounted = use_focus_while(move || open_library.ui.cloned().filter_open);
 
     let focus_library = library.clone();
     let on_input = props.on_input;

@@ -13,13 +13,12 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::{LibraryStatusBar, LibraryStatusBarProps};
 use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiDestinationList,
-    GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiEntryRowFrame,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame, GuiPillFrame,
-    GuiPodcastsDetail, GuiPodcastsList,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiCollectionEntry,
+    GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
+    GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
 };
-use crate::bridge::library::GuiPodcastPill;
 use crate::window::sections::SectionRef;
 
 /// The frame's Status bar facts: nothing armed and no live toast.
@@ -48,17 +47,21 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The Music list part: one selected collection.
+/// The Music list part: one checked collection.
 fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
         lib_idx: 0,
-        pills: vec![GuiMusicPillFrame {
-            group_id: "g1".to_owned(),
-            name: "Hip-Hop".to_owned(),
-            selected: true,
-            collection: true,
-        }],
-        collection_names: vec!["Hip-Hop".to_owned()],
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Music(0),
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "g1".to_owned(),
+                name: "Hip-Hop".to_owned(),
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        },
         loading: false,
         failure: None,
         artists: Vec::new(),
@@ -235,7 +238,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Emby(GuiEmbyList {
         lib_idx: 2,
         library_name: "Movies".to_owned(),
-        pills: Vec::new(),
+        collections: None,
         collection_names: Vec::new(),
         feed_group: false,
         loading: false,
@@ -279,25 +282,22 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
     (list, detail)
 }
 
-/// The carried Podcasts list part: one selected show pill and one selected
-/// episode row.
+/// The carried Podcasts list part: one checked show and one selected episode
+/// row.
 fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Podcasts(GuiPodcastsList {
         lib_idx: 1,
-        pills: vec![
-            GuiPillFrame {
-                pill: GuiPodcastPill::Latest,
-                name: "Latest".to_owned(),
-                selected: false,
-                collection: false,
-            },
-            GuiPillFrame {
-                pill: GuiPodcastPill::Show("show1".to_owned()),
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Podcasts(1),
+            all: false,
+            entries: vec![GuiCollectionEntry {
+                key: "show1".to_owned(),
                 name: "Bits and Bites".to_owned(),
-                selected: true,
-                collection: false,
-            },
-        ],
+                checked: true,
+            }],
+            noun: mbv::GuiCollectionNoun::Shows,
+            order: Some(mbv::GuiDateOrder::Newest),
+        },
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {
@@ -364,6 +364,59 @@ fn the_bar_paints_the_audiobooks_location_for_the_carried_content() {
     assert_eq!(
         text_of(&doc, "[data-library-status-location]"),
         "Audiobooks › Dune"
+    );
+    assert_eq!(hint_texts(&doc).len(), 5);
+}
+
+/// The carried Feeds list part: two checked subscriptions and one selected
+/// entry (spec "The Library Status bar shows hints and the location").
+fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
+    let list = GuiDestinationList::Feeds(GuiFeedsList {
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Feeds,
+            all: false,
+            entries: vec![
+                GuiCollectionEntry {
+                    key: "sub1".to_owned(),
+                    name: "Tifo Football".to_owned(),
+                    checked: true,
+                },
+                GuiCollectionEntry {
+                    key: "sub2".to_owned(),
+                    name: "Off Menu".to_owned(),
+                    checked: true,
+                },
+            ],
+            noun: mbv::GuiCollectionNoun::Subscriptions,
+            order: Some(mbv::GuiDateOrder::Newest),
+        },
+        loading: false,
+        failed: false,
+        rows: vec![GuiEntryRowFrame {
+            id: "sub1:guid12".to_owned(),
+            title: "The Long Road Home".to_owned(),
+            subtitle: Some("Tifo Football".to_owned()),
+            date: Some("08 Oct".to_owned()),
+            state: GuiHomeRowStateFrame::Ordinary,
+        }],
+    });
+    let detail = GuiLibraryDetail::Feeds(GuiFeedsDetail {
+        selected: Some("sub1:guid12".to_owned()),
+        hero: None,
+    });
+    (list, detail)
+}
+
+/// Contract (spec "The Library Status bar shows hints and the location"): two
+/// checked subscriptions both name in the location, between the destination
+/// and the picked entry.
+#[test]
+fn the_bar_names_every_checked_subscription_in_the_location() {
+    let doc = built(destination_props("Feeds", feeds_content()));
+
+    assert_eq!(
+        text_of(&doc, "[data-library-status-location]"),
+        "Feeds › Tifo Football, Off Menu › The Long Road Home"
     );
     assert_eq!(hint_texts(&doc).len(), 5);
 }

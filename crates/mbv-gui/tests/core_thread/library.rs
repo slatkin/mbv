@@ -71,9 +71,6 @@ fn pump_until(test: &mut TestCore, want: impl Fn(&Held) -> bool, what: &str) {
     }
 }
 
-/// One group's album listing, as the mock transport returns it.
-const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;
-
 /// One album's playable tracks, as the album expansion's fetch returns them.
 const TRACKS: &str = r#"{"Items":[{"Id":"trk-1","Name":"Rhymin & Stealin","Type":"Audio","MediaType":"Audio","RunTimeTicks":2160000000},{"Id":"trk-2","Name":"The New Style","Type":"Audio","MediaType":"Audio","RunTimeTicks":2100000000}],"TotalRecordCount":2}"#;
 
@@ -90,6 +87,11 @@ fn music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     // restore's own application skip this destination, so the mock answers
     // serve the test's commands alone.
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
+    // Both groups' album lists are loaded, so a selection change covers only
+    // groups that need no fetch and the mock's scripted answers belong to the
+    // test's own commands.
+    core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[]);
+    core.seed_gui_music_albums_for_test(0, "grp-soul", &[]);
     (test, cmd_rx)
 }
 

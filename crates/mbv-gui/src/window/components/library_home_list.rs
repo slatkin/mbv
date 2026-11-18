@@ -37,7 +37,9 @@ use crate::window::truncate::{TextStyle, Truncate};
 /// The item id a row's right-click menu opens for (design D8, D15): the
 /// `Continue watching` row's Emby item id, which the core resolves for the
 /// shared menu. A `Recently added` row's queue-item content id names no
-/// single Service item the menu resolves, so it opens no menu.
+/// single Service item the menu resolves, so it opens no menu. An `Upcoming`
+/// row is display-only (gui-collection-dropdown design D9), so it opens no
+/// menu even though its key is a string.
 fn home_menu_item_id(id: &GuiHomeRowIdFrame) -> Option<String> {
     match id {
         GuiHomeRowIdFrame::Continue(item_id) => Some(item_id.clone()),

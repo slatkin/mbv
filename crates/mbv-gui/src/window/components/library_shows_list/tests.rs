@@ -1,10 +1,8 @@
 //! Headless tests of the Shows list (D16): the contracts of
-//! `LibraryShowsList.test.ts` — the All series mode paints its letter
-//! headings and series tree with the A–Z rail beside them,
-//! a press on a series node opens it and selects it, the flat modes paint
-//! their date-ordered rows with their date gutter and no rail, a press sends
-//! the select command with the row's stable id, and a double-click on a flat
-//! row plays the episode. The IPC of the earlier tests is the mock core
+//! `LibraryShowsList.test.ts` — the series list paints its letter headings and
+//! series tree with the A–Z rail beside them, a press on a series node opens
+//! it and selects it, and a press sends the select command with the row's
+//! stable id. The IPC of the earlier tests is the mock core
 //! link here; a headless document cannot fire a DOM click, so the press,
 //! play, and jump contracts ride the state methods the component's own
 //! handlers call one line each. The core channel is a mock pair; no test
@@ -22,8 +20,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryShowsList;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiShowsDetail, GuiShowsList,
-    GuiShowsModeFrame, GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonFrame,
-    GuiShowsSeriesFrame,
+    GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -158,20 +155,6 @@ impl Fixture {
         matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
     }
 
-    /// The trimmed text of the first node the selector names.
-    fn text_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .text_content()
-            .trim()
-            .to_owned()
-    }
-
     /// The attribute of the first node the selector names.
     fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
         let dom = self.doc.inner();
@@ -265,59 +248,29 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
     fixture
 }
 
-/// The pills the frame carries, with `mode` selected (design D12).
-fn pills(mode: GuiShowsModeFrame) -> Vec<GuiShowsPillFrame> {
-    [
-        (GuiShowsModeFrame::Latest, "Latest"),
-        (GuiShowsModeFrame::Upcoming, "Upcoming"),
-        (GuiShowsModeFrame::All, "All series"),
-    ]
-    .into_iter()
-    .map(|(pill_mode, name)| GuiShowsPillFrame {
-        mode: pill_mode,
-        name: name.to_owned(),
-        selected: pill_mode == mode,
-        collection: false,
-    })
-    .collect()
-}
-
-/// The carried Shows content in `mode` over `rows` and `tree` (design D14).
-fn shows_frame(
-    mode: GuiShowsModeFrame,
-    rows: Vec<GuiShowsRowFrame>,
-    tree: Vec<GuiShowsSeriesFrame>,
-) -> GuiShowsList {
+/// The carried Shows content over `tree` (design D14, D8): the series list,
+/// and no collection selector.
+fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
+        view: mbv::GuiShowsView::All,
         lib_idx: 0,
-        pills: pills(mode),
-        collection_names: vec![mode_name(mode).to_owned()],
         loading: false,
         series: tree,
         upcoming_failed: false,
-        rows,
+        rows: Vec::new(),
     }
 }
 
-/// The mode's own name, as the fixtures' collection name.
-fn mode_name(mode: GuiShowsModeFrame) -> &'static str {
-    match mode {
-        GuiShowsModeFrame::Latest => "latest",
-        GuiShowsModeFrame::Upcoming => "upcoming",
-        GuiShowsModeFrame::All => "all",
-    }
-}
-
-/// The Shows detail part: the first row selected, and no Hero painted here.
-fn shows_detail(rows: &[GuiShowsRowFrame]) -> GuiShowsDetail {
+/// The Shows detail part over `selected`, with no Hero painted here.
+fn shows_detail(selected: Option<&str>) -> GuiShowsDetail {
     GuiShowsDetail {
         workspace_loading: false,
-        selected: rows.first().map(|row| row.id.clone()),
+        selected: selected.map(str::to_owned),
         hero: None,
     }
 }
 
-/// The All series mode's tree (design D14): Atlanta with one season, then
+/// The series list's tree (design D14): Atlanta with one season, then
 /// Better Call Saul under a second heading. Atlanta's season has no episodes
 /// yet, so its open asks the core for them.
 fn tree() -> Vec<GuiShowsSeriesFrame> {
@@ -339,26 +292,6 @@ fn tree() -> Vec<GuiShowsSeriesFrame> {
             sort_letter: 'B',
             expandable: true,
             seasons: Vec::new(),
-        },
-    ]
-}
-
-/// The Latest mode's rows: the flat newest episodes with their dates.
-fn episodes() -> Vec<GuiShowsRowFrame> {
-    vec![
-        GuiShowsRowFrame {
-            id: "e1".to_owned(),
-            title: "Atlanta".to_owned(),
-            subtitle: Some("S3E4 · Sabrosito".to_owned()),
-            date: Some("12 May".to_owned()),
-            sort_letter: None,
-        },
-        GuiShowsRowFrame {
-            id: "e2".to_owned(),
-            title: "The Bear".to_owned(),
-            subtitle: Some("S2E1 · Beef".to_owned()),
-            date: Some("9 May".to_owned()),
-            sort_letter: None,
         },
     ]
 }
@@ -393,10 +326,7 @@ fn press_row(fixture: &mut Fixture, id: &str) {
 /// enabled because a painted series row carries it.
 #[test]
 fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
-        shows_detail(&[]),
-    );
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
     let letters = fixture.all_attrs("[data-library-shows-letter]", "data-library-shows-letter");
@@ -416,14 +346,56 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
     );
 }
 
+/// The New view's flat rows (design D8): one episode row, date-sorted, carrying
+/// no rail letter.
+fn new_view_rows() -> Vec<GuiShowsRowFrame> {
+    vec![GuiShowsRowFrame {
+        id: "new:e1".to_owned(),
+        title: "Pilot".to_owned(),
+        subtitle: Some("Atlanta".to_owned()),
+        date: Some("2026-11-18".to_owned()),
+        sort_letter: None,
+        display_only: false,
+    }]
+}
+
+/// Contract (spec "The letter rail jumps a name-sorted list"): a list sorted
+/// by date shows no rail, so the New view's flat rows paint without one.
+#[test]
+fn the_date_sorted_view_paints_no_rail() {
+    let frame = GuiShowsList {
+        view: mbv::GuiShowsView::New,
+        rows: new_view_rows(),
+        ..shows_frame(Vec::new())
+    };
+    let mut fixture = built(frame, shows_detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(painted_rows(&fixture), ["new:e1".to_owned()]);
+    assert!(
+        !fixture.presents("[data-library-region=\"rail\"]"),
+        "the date-sorted view paints no rail"
+    );
+}
+
+/// Contract (design D14, user override): the Shows header paints no selection
+/// label — the UI is not verbose.
+#[test]
+fn the_shows_header_paints_no_selection_label() {
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+    fixture.measure(300.0);
+
+    assert!(
+        !fixture.presents("[data-library-selection-label]"),
+        "the Shows header paints no selection label"
+    );
+}
+
 /// Contract: an expandable node paints its open
 /// state as `aria-expanded` — `false` while closed, `true` once opened.
 #[test]
 fn an_expandable_node_paints_its_open_state_as_aria_expanded() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
-        shows_detail(&[]),
-    );
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
     assert_eq!(
@@ -458,10 +430,7 @@ fn a_node_that_does_not_open_paints_no_aria_expanded() {
         expandable: false,
         seasons: Vec::new(),
     };
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::All, Vec::new(), vec![series]),
-        shows_detail(&[]),
-    );
+    let mut fixture = built(shows_frame(vec![series]), shows_detail(None));
     fixture.measure(300.0);
 
     assert_eq!(
@@ -479,10 +448,7 @@ fn a_node_that_does_not_open_paints_no_aria_expanded() {
 /// the Hero.
 #[test]
 fn a_press_on_a_series_node_opens_it_and_selects_it() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
-        shows_detail(&[]),
-    );
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
     press_row(&mut fixture, "shows-series:s1");
@@ -506,41 +472,12 @@ fn a_press_on_a_series_node_opens_it_and_selects_it() {
     );
 }
 
-/// Contract (`LibraryShowsList.test.ts`): the Latest and Upcoming modes paint
-/// the flat rows with their date gutter and no rail and no heading.
-#[test]
-fn the_flat_modes_paint_the_date_gutter_and_no_rail() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::Latest, episodes(), Vec::new()),
-        shows_detail(&episodes()),
-    );
-    fixture.measure(300.0);
-
-    assert_eq!(painted_rows(&fixture), ["e1".to_owned(), "e2".to_owned()]);
-    assert!(
-        !fixture.presents("[data-library-shows-letter]"),
-        "the flat modes paint no heading"
-    );
-    assert!(
-        !fixture.presents("[data-library-region=\"rail\"]"),
-        "the flat modes paint no rail"
-    );
-    assert_eq!(
-        fixture.text_of("[data-library-shows-row-id=\"e1\"] [data-library-shows-date]"),
-        "12 May",
-        "the date gutter paints"
-    );
-}
-
 /// Contract (`LibraryShowsList.test.ts`): a press sends the select command
 /// with the row id. The press rides the handler function (a headless
 /// document cannot fire a DOM click).
 #[test]
 fn a_press_sends_the_select_command_with_the_row_id() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::All, Vec::new(), tree()),
-        shows_detail(&[]),
-    );
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
     fixture.measure(300.0);
 
     press_row(&mut fixture, "shows-series:s3");
@@ -552,28 +489,5 @@ fn a_press_sends_the_select_command_with_the_row_id() {
             row: "s3".to_owned(),
         }],
         "the select command names the row id"
-    );
-}
-
-/// Contract (`LibraryShowsList.test.ts`): a double-click on a flat row plays
-/// the episode. The double-click rides the handler function (a headless
-/// document cannot fire a DOM click).
-#[test]
-fn a_double_click_on_a_flat_row_plays_the_episode() {
-    let mut fixture = built(
-        shows_frame(GuiShowsModeFrame::Latest, episodes(), Vec::new()),
-        shows_detail(&episodes()),
-    );
-
-    let state = fixture.state.clone();
-    fixture.in_runtime(move || state.play_shows_row("e2"));
-
-    assert_eq!(
-        fixture.library_commands(),
-        [mbv::GuiLibraryCommand::ShowsPlay {
-            lib_idx: 0,
-            item_id: "e2".to_owned(),
-        }],
-        "the play command names the episode id"
     );
 }

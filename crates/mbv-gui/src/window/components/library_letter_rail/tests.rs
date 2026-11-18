@@ -18,7 +18,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryLetterRail;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
+    GuiCollections, GuiDestinationList, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
     GuiMusicArtistFrame, GuiMusicList,
 };
 use crate::core_thread::CoreInput;
@@ -210,8 +210,13 @@ fn brand() -> GuiMusicArtistFrame {
 fn music() -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        pills: Vec::new(),
-        collection_names: Vec::new(),
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Music(0),
+            all: true,
+            entries: Vec::new(),
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        },
         loading: false,
         failure: None,
         artists: vec![beastie(), brand()],

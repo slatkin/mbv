@@ -1,18 +1,19 @@
 //! Tests of the GUI Library's Shows projection (add-gui-library-panel
-//! design D14, which supersedes D12's first Shows design): the All series
-//! mode's tree — the series nodes with their rail letters, their seasons, and
-//! each season's episodes or `None` while unloaded — the series Hero from the
-//! TUI's series producer with its season pills and Workspace, the flat Latest
-//! mode's rows and episode Hero, the Upcoming mode's premiere rows with no
-//! Hero, and the stale selection's first-row fallback. The projection reads
-//! the seeded `App` data alone, so no Service, worker, or mock transport runs.
+//! design D14; gui-collection-dropdown design D8): the series list's tree —
+//! the series nodes with their rail letters, their seasons, and each season's
+//! episodes or `None` while unloaded — the series Hero from the TUI's series
+//! producer with its season pills and Workspace, and the stale selection's
+//! first-row fallback. The projection reads the seeded `App` data alone, so no
+//! Service, worker, or mock transport runs.
 
 use super::*;
+use crate::app::gui_library::{GuiSectionRequest, GuiShowsNewEvent};
 use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
+use rstest::rstest;
 
-/// A series row of the All series root level, with its sort name.
+/// A series row of the series list, with its sort name.
 fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
     let mut item = make_item(name, "Series");
     item.id = id.to_string();
@@ -20,17 +21,8 @@ fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
     item
 }
 
-/// An episode row of the Latest root level, with its show and date.
-fn episode_item(id: &str, series_name: &str, name: &str, date_added: &str) -> EmbyItem {
-    let mut item = make_item(name, "Episode");
-    item.id = id.to_string();
-    item.series_name = series_name.to_string();
-    item.date_added = date_added.to_string();
-    item
-}
-
-/// A browse level over `items`, in `mode`.
-fn level(mode: &TvContentMode, items: Vec<EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
+/// A browse level over `items`, as the series list's root level.
+fn level(items: Vec<EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
     mbv_ui_model::browse::BrowseLevel {
         parent_id: "lib-tv".to_string(),
         title: "Shows".to_string(),
@@ -44,29 +36,28 @@ fn level(mode: &TvContentMode, items: Vec<EmbyItem>) -> mbv_ui_model::browse::Br
         loading: false,
         all_items: None,
         letter_filter: None,
-        tv_content_mode: Some(mode.clone()),
+        tv_content_mode: None,
         music_grouping: None,
     }
 }
 
-/// A stub `App` whose Shows library is the active destination, with the
-/// root level `mode`'s list and the selection storing that mode.
-fn shows_app(mode: TvContentMode, items: Vec<EmbyItem>) -> App {
+/// A stub `App` whose Shows library is the active destination, with no root
+/// level yet — the shape a launch restored onto Shows presents.
+fn empty_shows_app() -> App {
     let mut app = make_app_stub();
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
-    let mut tab = crate::app::LibraryTab::new(library);
-    tab.nav_stack.push(level(&mode, items));
-    app.libs.push(tab);
+    app.libs.push(crate::app::LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
-    app.gui_tv_shows.insert(
-        0,
-        crate::app::gui_library::GuiTvShowsSelection {
-            mode: Some(mode),
-            ..Default::default()
-        },
-    );
+    app
+}
+
+/// A stub `App` whose Shows library is the active destination, with the
+/// series list's root level.
+fn shows_app(items: Vec<EmbyItem>) -> App {
+    let mut app = empty_shows_app();
+    app.libs[0].nav_stack.push(level(items));
     app
 }
 
@@ -81,7 +72,7 @@ fn series_tree_app() -> App {
     first.end_year = 2022;
     first.studios = vec!["FX".into()];
     let second = series_item("series-b", "Bridgerton", "Bridgerton");
-    let mut app = shows_app(TvContentMode::All, vec![first, second]);
+    let mut app = shows_app(vec![first, second]);
     let mut played = make_item("Pilot", "Episode");
     played.id = "ep-1".into();
     played.index_number = 1;
@@ -118,10 +109,6 @@ fn the_series_mode_projects_the_tree() {
 
     let projection = app.gui_shows_projection(0);
 
-    assert!(
-        projection.rows.is_empty(),
-        "the All series mode's list is the tree, not the flat rows"
-    );
     let ids: Vec<&str> = projection
         .series
         .iter()
@@ -163,6 +150,32 @@ fn the_series_mode_projects_the_tree() {
     assert!(
         projection.series[1].seasons.is_empty() && projection.series[1].expandable,
         "a series without a cached detail paints closed and expandable"
+    );
+}
+
+/// PR 1021 regression: presenting Shows with an empty root starts the series
+/// root load from the frame ensure, without the `OpenDestination` click that was
+/// the only trigger. A launch restored onto Shows paints an empty list until
+/// that click. Two frame passes must leave one loading root, so the trigger
+/// does not fire again while the request is in flight.
+#[test]
+fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_destination_click() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+
+    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_shows_workspace(0);
+
+    assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
+    let root = &app.libs[0].nav_stack[0];
+    assert!(
+        root.loading,
+        "the root level is loading, so the next frame does not re-request it"
+    );
+    assert_eq!(
+        root.tv_content_mode.as_ref(),
+        Some(&TvContentMode::All),
+        "the root load is the All series list the Shows destination presents"
     );
 }
 
@@ -221,114 +234,17 @@ fn the_series_hero_carries_the_tui_producers_facts_and_the_workspace() {
     );
 }
 
-/// The flat Latest mode's rows and episode Hero (row 7.1, contract b): the
-/// rows are the root level's newest episodes in the server's `DateCreated`
-/// descending order, each with the split show/episode labels and the
-/// provider-date gutter and no rail letter, and the Hero is the selected
-/// episode's facts with no Workspace.
-#[test]
-fn the_latest_mode_projects_flat_rows_and_the_episode_hero() {
-    let _guard = TestStateDirGuard::new();
-    let mut episode = episode_item("ep-new", "Alfred", "The New Case", "2026-11-08T10:00:00Z");
-    episode.image_tags.series_thumb = "tag".into();
-    let mut app = shows_app(TvContentMode::Latest, vec![episode.clone()]);
-
-    let projection = app.gui_shows_projection(0);
-
-    assert_eq!(projection.rows.len(), 1);
-    let row = &projection.rows[0];
-    assert_eq!(row.id, "ep-new");
-    assert_eq!(row.title, "Alfred", "the show's name leads the row");
-    assert_eq!(row.subtitle.as_deref(), Some("The New Case"));
-    assert!(row.date.is_some(), "the provider date rides the gutter");
-    assert_eq!(row.sort_letter, None, "the date-sorted list shows no rail");
-    assert_eq!(
-        projection.selected.as_deref(),
-        Some("ep-new"),
-        "the first episode row is the Hero default"
-    );
-    let hero = projection.hero.expect("the episode Hero paints");
-    assert_eq!(hero.title, "The New Case");
-    assert_eq!(
-        hero.parent.as_deref(),
-        Some("Alfred"),
-        "the series is the largest unit, so it rides as the Hero's parent"
-    );
-    assert_eq!(
-        hero.art_shape,
-        crate::app::gui_library::GuiArtShape::Landscape,
-        "a thumb-declared episode takes the landscape arm"
-    );
-    assert!(hero.workspace.is_none(), "the Latest Hero has no Workspace");
-}
-
-/// The Upcoming mode's rows and missing Hero (row 7.1, contract c): the rows
-/// are the snapshot's premieres with the series' name, the season/episode
-/// label, and the premiere date, and the Upcoming mode projects no Hero at
-/// all.
-#[test]
-fn the_upcoming_mode_projects_premiere_rows_and_no_hero() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = shows_app(TvContentMode::Upcoming, Vec::new());
-    let premieres = vec![
-        mbv_emby_model::UpcomingPremiere {
-            series_id: mbv_ids::ItemId::new("series-a".to_string()),
-            series_name: "Alfred".into(),
-            season: Some(2),
-            episode: Some(7),
-            title: "The Reveal".into(),
-            premiere_date: "2026-12-01T00:00:00.000Z".into(),
-        },
-        mbv_emby_model::UpcomingPremiere {
-            series_id: mbv_ids::ItemId::new("series-b".to_string()),
-            series_name: "Bridgerton".into(),
-            season: None,
-            episode: None,
-            title: "Special".into(),
-            premiere_date: String::new(),
-        },
-    ];
-    app.tv_upcoming_snapshots
-        .insert("lib-tv".to_string(), premieres.clone());
-
-    let projection = app.gui_shows_projection(0);
-
-    assert_eq!(projection.rows.len(), 2);
-    assert_eq!(
-        projection.rows[0].id,
-        premieres[0].stable_key(),
-        "a premiere row's identity is its stable key"
-    );
-    assert_eq!(projection.rows[0].title, "Alfred");
-    assert_eq!(
-        projection.rows[0].subtitle.as_deref(),
-        Some("S02:E07 — The Reveal")
-    );
-    assert!(projection.rows[0].date.is_some());
-    assert_eq!(
-        projection.rows[1].subtitle.as_deref(),
-        Some("no number — Special")
-    );
-    assert!(
-        projection.hero.is_none(),
-        "the Upcoming mode paints no Hero"
-    );
-}
-
 /// A stale selection falls back to the first row (design D2, D12): a stored
-/// id the active mode's list no longer carries selects the list's first row,
-/// so the Hero never names a row the frame did not paint.
+/// id the series list no longer carries selects the list's first series, so
+/// the Hero never names a row the frame did not paint.
 #[test]
 fn a_stale_selection_falls_back_to_the_first_row() {
     let _guard = TestStateDirGuard::new();
-    let mut app = shows_app(
-        TvContentMode::All,
-        vec![
-            series_item("series-a", "Alfred", "Alfred"),
-            series_item("series-b", "Bridgerton", "Bridgerton"),
-        ],
-    );
-    app.gui_tv_shows.get_mut(&0).unwrap().series_id = Some("series-gone".into());
+    let mut app = shows_app(vec![
+        series_item("series-a", "Alfred", "Alfred"),
+        series_item("series-b", "Bridgerton", "Bridgerton"),
+    ]);
+    app.gui_tv_shows.entry(0).or_default().series_id = Some("series-gone".into());
 
     let projection = app.gui_shows_projection(0);
 
@@ -346,28 +262,26 @@ fn a_stale_selection_falls_back_to_the_first_row() {
 
 /// The Hero's art box follows the fetched image's own pixels, not only the
 /// policy's declared arm (design D5's painted-shape rule, which the TUI's
-/// `HeroArtwork::painted_shape` re-arms on). A thumb-declared episode declares
-/// the landscape arm, and when its Primary image is a portrait poster the box
-/// must take the image's arm: otherwise the Hero paints a poster inside a 16:9
-/// band, which is the GUI/TUI divergence this guards.
+/// `HeroArtwork::painted_shape` re-arms on). A series declares the portrait
+/// arm, and when its Primary image is a landscape still the box must take the
+/// image's arm: otherwise the Hero paints a landscape still inside a 3:4 box,
+/// which is the GUI/TUI divergence this guards.
 #[test]
-fn the_episode_heroes_art_box_follows_the_fetched_images_own_aspect() {
+fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
     let _guard = TestStateDirGuard::new();
-    let mut episode = episode_item("ep-new", "Alfred", "The New Case", "2026-11-08T10:00:00Z");
-    episode.image_tags.thumb = "tag".into();
-    let mut app = shows_app(TvContentMode::Latest, vec![episode]);
-    // The Primary image, seeded with a portrait poster: the policy's arm is
-    // Landscape, the fetched image's own aspect is Portrait.
-    let poster = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-        300,
+    let mut first = series_item("series-a", "Alfred", "Alfred");
+    first.image_tags.thumb = "tag".into();
+    let mut app = shows_app(vec![first]);
+    let still = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
         450,
+        300,
         image::Rgba([20, 40, 60, 255]),
     ));
     app.images.insert_image(
-        "ep-new:Primary".to_string(),
+        mbv_images::series_image_cache_key("series-a", &["Primary"]),
         mbv_images::CachedImage {
-            source: Some(crate::app::queue_card_artwork::test_source(&poster)),
-            img: Some(poster),
+            source: Some(crate::app::queue_card_artwork::test_source(&still)),
+            img: Some(still),
             protocols: std::collections::HashMap::new(),
             cover_box: None,
             applied_logo_key: None,
@@ -376,11 +290,166 @@ fn the_episode_heroes_art_box_follows_the_fetched_images_own_aspect() {
 
     let projection = app.gui_shows_projection(0);
 
-    let hero = projection.hero.expect("the episode Hero paints");
+    let hero = projection.hero.expect("the series Hero paints");
     assert!(hero.art.is_some(), "the seeded image is the Hero's art");
     assert_eq!(
         hero.art_shape,
-        crate::app::gui_library::GuiArtShape::Portrait,
-        "the box follows the fetched poster's 3:4 pixels, not the declared landscape arm"
+        crate::app::gui_library::GuiArtShape::Landscape,
+        "the box follows the fetched still's 3:2 pixels, not the declared portrait arm"
     );
+}
+
+/// One episode of a TV library's New list, dated by `date_added` as the TV
+/// Latest fetch returns it.
+fn new_episode(id: &str, name: &str, date_added: &str) -> EmbyItem {
+    let mut item = make_item(name, "Episode");
+    item.id = id.to_string();
+    item.series_name = "Show".into();
+    item.date_added = date_added.into();
+    item
+}
+
+/// One Upcoming premiere of a TV library.
+fn premiere(
+    series_id: &str,
+    series_name: &str,
+    premiere_date: &str,
+) -> mbv_emby_model::UpcomingPremiere {
+    mbv_emby_model::UpcomingPremiere {
+        series_id: mbv_ids::ItemId::new(series_id),
+        series_name: series_name.into(),
+        season: Some(1),
+        episode: Some(2),
+        title: "The Episode".into(),
+        premiere_date: premiere_date.into(),
+    }
+}
+
+/// Contract (design D8): a press on one view replaces the active choice, and
+/// the collection stores have no Shows entry.
+#[test]
+fn one_shows_view_is_active_at_a_time() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+
+    assert_eq!(app.gui_shows_view(0), GuiShowsView::All);
+    for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
+        app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView { lib_idx: 0, view });
+        assert_eq!(app.gui_shows_view(0), view);
+    }
+    assert!(app.gui_shows_views.contains_key(&0));
+}
+
+/// Contract (design D9): New paints the merged latest episodes, newest first,
+/// with the title split and Hero the old Home section carried.
+#[test]
+fn the_new_view_paints_the_merged_latest_episodes() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.gui_shows_new.insert(
+        "lib-a".into(),
+        GuiSectionRequest::Landed(vec![
+            new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
+            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+        ]),
+    );
+    app.gui_shows_new.insert(
+        "lib-b".into(),
+        GuiSectionRequest::Landed(vec![
+            new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
+            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+        ]),
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::New,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, ["ep-new", "ep-mid", "ep-old"]);
+    assert!(projection.rows.iter().all(|row| !row.display_only));
+    assert_eq!(projection.rows[0].title, "Show");
+    assert_eq!(projection.rows[0].subtitle.as_deref(), Some("New"));
+    assert_eq!(projection.selected.as_deref(), Some("ep-new"));
+    assert_eq!(projection.hero.expect("the Hero paints").title, "New");
+}
+
+/// Contract (design D9): Upcoming paints the merged premieres, soonest first,
+/// and every row is display-only.
+#[test]
+fn the_upcoming_view_paints_display_only_premieres() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    let later = premiere("series-a", "Show A", "2026-12-01T00:00:00.0000000Z");
+    let sooner = premiere("series-b", "Show B", "2026-11-20T00:00:00.0000000Z");
+    app.tv_upcoming_snapshots
+        .insert("lib-a".into(), vec![later.clone()]);
+    app.tv_upcoming_snapshots
+        .insert("lib-b".into(), vec![sooner.clone()]);
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::Upcoming,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, [sooner.stable_key(), later.stable_key()]);
+    assert!(projection.rows.iter().all(|row| row.display_only));
+    assert_eq!(projection.rows[0].title, "Show B");
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("S01:E02 — The Episode")
+    );
+}
+
+/// Contract (design D9): a play or enqueue command on an Upcoming row acts on
+/// nothing, so the Owner's queue stays untouched.
+#[test]
+fn an_upcoming_row_resolves_no_playable_item() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.tv_upcoming_snapshots.insert(
+        "lib-a".into(),
+        vec![premiere(
+            "series-a",
+            "Show A",
+            "2026-11-20T00:00:00.0000000Z",
+        )],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::Upcoming,
+    });
+    let id = app.gui_shows_projection(0).rows[0].id.clone();
+
+    assert_eq!(app.gui_shows_item(0, &id), None);
+}
+
+/// PR 1021 regression: a New fetch that lands with no rows — whether the
+/// Service returned an empty list or the worker failed — paints the empty
+/// state, not `loading`, and needs no re-request to get there.
+#[rstest]
+#[case::empty(Ok(Vec::new()))]
+#[case::failed(Err(mbv_emby::EmbyError::resolve("latest episodes failed")))]
+fn an_empty_or_failed_new_fetch_paints_the_empty_state(
+    #[case] result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+) {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::New,
+    });
+    app.handle_gui_shows_new(GuiShowsNewEvent {
+        library_id: "lib-tv".into(),
+        result,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    assert!(!projection.loading, "the landed fetch is not loading");
+    assert!(projection.rows.is_empty(), "the list paints no rows");
 }

@@ -293,20 +293,22 @@ pub fn LibraryList() -> Element {
         reveal_library.reveal_picked_album(list, detail);
     });
 
-    // The selected collection names in pill order (design D6): the core's
-    // one derivation, carried on the Music frame so the list header and the
-    // Status bar location cannot disagree. An empty selection is the whole
-    // library: the header names it `All` instead of an empty label.
-    let collection_names = frame.map_or(&[][..], |frame| frame.collection_names.as_slice());
-    let selection_label = match collection_names {
-        [] => "All".to_owned(),
-        [one] => format!("{one} · sort name"),
-        names => names.join(" + "),
-    };
+    // The selected collection names in selector order (design D6): the
+    // core's one derivation, `GuiCollections::selected_names` over the carried
+    // selector, so the filter's placeholder names the selection the Status
+    // bar's location names too.
+    let collection_names = frame
+        .map(|frame| frame.collections.selected_names())
+        .unwrap_or_default();
+
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the destination's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it.
+    let collections = frame.map(|frame| frame.collections.clone());
 
     // The filter field's placeholder, naming the selection as the canvas
     // does.
-    let filter_placeholder = match collection_names {
+    let filter_placeholder = match collection_names.as_slice() {
         [] => "Filter All".to_owned(),
         names => format!("Filter {}", names.join(" + ")),
     };
@@ -341,7 +343,10 @@ pub fn LibraryList() -> Element {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
                     title: "Artists".to_owned(),
-                    label: selection_label,
+                    // The carried selector names the selection itself, so the
+                    // header paints no selection label (design D6a).
+                    label: String::new(),
+                    collections,
                     filter: ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter artists".to_owned(),

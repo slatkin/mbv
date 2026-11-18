@@ -9,6 +9,7 @@
 use super::*;
 use crate::config::TestStateDirGuard;
 use mbv_config::FeedSubscription;
+use mbv_emby_model::UpcomingPremiere;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
@@ -113,6 +114,29 @@ fn row_labels(row: &GuiHomeRow) -> (&str, Option<&str>) {
     (item.title.as_str(), item.subtitle.as_deref())
 }
 
+/// Seed both TV list sources, which now belong to Shows, so the Home
+/// projection's two-section contract is checked against populated sources.
+fn seed_relocated_tv_lists(app: &mut App) {
+    app.gui_shows_new.insert(
+        "lib-tv".into(),
+        crate::app::gui_library::GuiSectionRequest::Landed(vec![make_item(
+            "An episode",
+            "Episode",
+        )]),
+    );
+    app.tv_upcoming_snapshots.insert(
+        "lib-tv".into(),
+        vec![UpcomingPremiere {
+            series_id: mbv_ids::ItemId::new("series-a"),
+            series_name: "Show A".into(),
+            season: Some(1),
+            episode: Some(2),
+            title: "A premiere".into(),
+            premiere_date: "2026-11-20T00:00:00.0000000Z".into(),
+        }],
+    );
+}
+
 #[test]
 fn the_seeded_sections_project_as_heading_rows_in_order() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -126,6 +150,7 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
         continue_item("cw-second", "Movie Two", 0, 0),
     ]);
     seed_recently_added(&mut app);
+    seed_relocated_tv_lists(&mut app);
 
     let projection = app.gui_home_projection();
 

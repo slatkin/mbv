@@ -4,23 +4,27 @@
 
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList, GuiAudiobooksRowFrame,
-    GuiAudiobooksWorkspaceFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyFeedGroupFrame,
-    GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiAudiobooksWorkspaceFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList,
+    GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
     GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeDetail,
     GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
     GuiHomeRowKindFrame, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicAlbumFrame, GuiMusicDetail,
-    GuiMusicHeroFrame, GuiMusicList, GuiPillFrame, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList,
-    GuiShowsModeFrame, GuiShowsPillFrame, GuiShowsRowFrame,
+    GuiMusicHeroFrame, GuiMusicList, GuiShowsDetail, GuiShowsHeroFrame, GuiShowsList,
+    GuiShowsRowFrame,
 };
-use crate::bridge::library::GuiFeedPill;
 
 /// The carried Music list part with no album picked.
 pub(super) fn music_list() -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        pills: Vec::new(),
-        collection_names: Vec::new(),
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Music(0),
+            all: true,
+            entries: Vec::new(),
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        },
         loading: false,
         failure: None,
         artists: Vec::new(),
@@ -117,43 +121,17 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
     )
 }
 
-/// The carried Shows list part of `mode`: the three mode pills and one row.
-pub(super) fn shows_list(mode: GuiShowsModeFrame) -> GuiShowsList {
-    let selected = |pill_mode| pill_mode == mode;
+/// The carried Shows list part: the series list, and no collection selector
+/// (gui-collection-dropdown design D6, D8).
+pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
+        view: mbv::GuiShowsView::All,
         lib_idx: 0,
-        pills: vec![
-            GuiShowsPillFrame {
-                mode: GuiShowsModeFrame::Latest,
-                name: "Latest".to_owned(),
-                selected: selected(GuiShowsModeFrame::Latest),
-                collection: false,
-            },
-            GuiShowsPillFrame {
-                mode: GuiShowsModeFrame::Upcoming,
-                name: "Upcoming".to_owned(),
-                selected: selected(GuiShowsModeFrame::Upcoming),
-                collection: false,
-            },
-            GuiShowsPillFrame {
-                mode: GuiShowsModeFrame::All,
-                name: "All series".to_owned(),
-                selected: selected(GuiShowsModeFrame::All),
-                collection: false,
-            },
-        ],
-        collection_names: vec![
-            match mode {
-                GuiShowsModeFrame::Latest => "latest",
-                GuiShowsModeFrame::Upcoming => "upcoming",
-                GuiShowsModeFrame::All => "all",
-            }
-            .to_owned(),
-        ],
         loading: false,
         series: Vec::new(),
         upcoming_failed: false,
         rows: vec![GuiShowsRowFrame {
+            display_only: false,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
             subtitle: None,
@@ -163,13 +141,12 @@ pub(super) fn shows_list(mode: GuiShowsModeFrame) -> GuiShowsList {
     }
 }
 
-/// The carried Shows detail part of `mode`: the series Hero, which the
-/// Upcoming mode does not paint (design D12).
-pub(super) fn shows_detail(mode: GuiShowsModeFrame) -> GuiShowsDetail {
+/// The carried Shows detail part: the selected series and its Hero.
+pub(super) fn shows_detail() -> GuiShowsDetail {
     GuiShowsDetail {
         workspace_loading: false,
         selected: Some("s1".to_owned()),
-        hero: (mode != GuiShowsModeFrame::Upcoming).then(|| GuiShowsHeroFrame {
+        hero: Some(GuiShowsHeroFrame {
             title: "Atlanta".to_owned(),
             parent: None,
             meta_rows: vec![segment("4 seasons", GuiMetaKindFrame::Count)],
@@ -183,8 +160,8 @@ pub(super) fn shows_detail(mode: GuiShowsModeFrame) -> GuiShowsDetail {
     }
 }
 
-/// The Shows sections of `mode`, under the Shows tab.
-pub(super) fn shows_sections(mode: GuiShowsModeFrame) -> (GuiLibraryList, GuiLibraryDetail) {
+/// The Shows sections, under the Shows tab.
+pub(super) fn shows_sections() -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
             tabs: vec![GuiLibraryTabFrame {
@@ -192,14 +169,14 @@ pub(super) fn shows_sections(mode: GuiShowsModeFrame) -> (GuiLibraryList, GuiLib
                 label: "Shows".to_owned(),
             }],
             current_tab: Some(3),
-            destination: GuiDestinationList::Shows(shows_list(mode)),
+            destination: GuiDestinationList::Shows(shows_list()),
         },
-        GuiLibraryDetail::Shows(shows_detail(mode)),
+        GuiLibraryDetail::Shows(shows_detail()),
     )
 }
 
 /// The plain Emby-library sections: the plain mode's list, or the feed-group
-/// mode's pills and date-ordered rows.
+/// mode's collection selector and date-ordered rows.
 pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {
@@ -211,16 +188,13 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             destination: GuiDestinationList::Emby(GuiEmbyList {
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),
-                pills: if feed_group {
-                    vec![GuiEmbyPillFrame {
-                        group: GuiEmbyFeedGroupFrame::All,
-                        name: "All".to_owned(),
-                        selected: true,
-                        collection: false,
-                    }]
-                } else {
-                    Vec::new()
-                },
+                collections: feed_group.then(|| GuiCollections {
+                    target: mbv::GuiCollectionTarget::EmbyFeed(3),
+                    all: true,
+                    entries: Vec::new(),
+                    noun: mbv::GuiCollectionNoun::Folders,
+                    order: Some(mbv::GuiDateOrder::Newest),
+                }),
                 collection_names: if feed_group {
                     vec!["All".to_owned()]
                 } else {
@@ -324,20 +298,17 @@ pub(super) fn feeds_sections(
             }],
             current_tab: Some(5),
             destination: GuiDestinationList::Feeds(GuiFeedsList {
-                pills: vec![
-                    GuiPillFrame {
-                        pill: GuiFeedPill::Latest,
-                        name: "Latest".to_owned(),
-                        selected: true,
-                        collection: false,
-                    },
-                    GuiPillFrame {
-                        pill: GuiFeedPill::Subscription("https://sub.one".to_owned()),
+                collections: GuiCollections {
+                    target: mbv::GuiCollectionTarget::Feeds,
+                    all: true,
+                    entries: vec![GuiCollectionEntry {
+                        key: "https://sub.one".to_owned(),
                         name: "Sub One".to_owned(),
-                        selected: false,
-                        collection: false,
-                    },
-                ],
+                        checked: false,
+                    }],
+                    noun: mbv::GuiCollectionNoun::Subscriptions,
+                    order: Some(mbv::GuiDateOrder::Newest),
+                },
                 loading: false,
                 failed: false,
                 rows: vec![GuiEntryRowFrame {

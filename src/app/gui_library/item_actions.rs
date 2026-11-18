@@ -5,26 +5,37 @@ use mbv_emby_model::EmbyItem;
 use mbv_ui_model::ui_util::is_playable;
 
 use super::GuiGroupAlbums;
+use super::collection::GuiCollectionSet;
 use crate::app::App;
 
 impl App {
-    /// Show `item_id` in the Hero (design D2, D13): the album the window content
-    /// picked becomes the selected group's pick, so the pill reopens on it. An
-    /// id the current Service data does not hold leaves the Hero's item as it
-    /// was, because the frame that carried the id is stale.
+    /// Show `item_id` in the Hero (design D2, D13; gui-collection-dropdown
+    /// design D11): the album the window content picked becomes the
+    /// selection's pick — one checked group's kept pick, which the launch
+    /// file saves, or the session's union pick while All or several groups
+    /// are checked. An id the current Service data does not hold leaves the
+    /// Hero's item as it was, because the frame that carried the id is stale.
     pub(super) fn show_gui_library_detail(&mut self, item_id: &str) {
         let Some((lib_idx, item)) = self.gui_library_item(item_id) else {
             Self::log_stale_library_item("showDetail", item_id);
             return;
         };
-        let Some(group_id) = self.gui_selected_group(lib_idx) else {
-            return;
+        let single_group = match self.gui_effective_music_set(lib_idx).as_ref() {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
+            _ => None,
         };
-        let key = (lib_idx, group_id);
-        if self.gui_library_picks.get(&key) == Some(&item.id) {
-            return;
+        if let Some(group_id) = single_group {
+            let key = (lib_idx, group_id);
+            if self.gui_library_picks.get(&key) == Some(&item.id) {
+                return;
+            }
+            self.gui_library_picks.insert(key, item.id);
+        } else {
+            if self.gui_music_union_picks.get(&lib_idx) == Some(&item.id) {
+                return;
+            }
+            self.gui_music_union_picks.insert(lib_idx, item.id);
         }
-        self.gui_library_picks.insert(key, item.id);
         // A pick move is library navigation: it closes the image warm gate, so
         // fast arrow traffic warms no neighbour art (the TUI's own rule).
         self.stamp_navigation();
@@ -193,11 +204,11 @@ impl App {
     /// The albums the GUI store loaded for `lib_idx`'s selected groups.
     pub(super) fn gui_stored_albums(&self, lib_idx: usize) -> impl Iterator<Item = &EmbyItem> {
         self.gui_music_albums
-            .iter()
-            .filter(move |((store_lib_idx, _group_id), _state)| *store_lib_idx == lib_idx)
-            .filter_map(|(_key, state)| match state {
+            .get(&lib_idx)
+            .into_iter()
+            .flat_map(|groups| groups.values())
+            .filter_map(|state| match state {
                 GuiGroupAlbums::Loaded(albums) => Some(albums.iter()),
-
                 GuiGroupAlbums::Loading | GuiGroupAlbums::Failed => None,
             })
             .flatten()

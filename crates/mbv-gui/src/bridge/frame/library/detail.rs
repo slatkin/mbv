@@ -20,3 +20,19 @@ pub enum GuiLibraryDetail {
     Podcasts(GuiPodcastsDetail),
     Feeds(GuiFeedsDetail),
 }
+
+impl GuiLibraryDetail {
+    /// Whether the detail carries a Hero, for the log (`sections::log_built`).
+    #[must_use]
+    pub fn has_hero(&self) -> bool {
+        match self {
+            Self::Music(detail) => detail.hero.is_some(),
+            Self::Home(detail) => detail.hero.is_some(),
+            Self::Shows(detail) => detail.hero.is_some(),
+            Self::Emby(detail) => detail.hero.is_some(),
+            Self::Audiobooks(detail) => detail.hero.is_some(),
+            Self::Podcasts(detail) => detail.hero.is_some(),
+            Self::Feeds(detail) => detail.hero.is_some(),
+        }
+    }
+}

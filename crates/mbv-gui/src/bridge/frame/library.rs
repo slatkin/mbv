@@ -15,6 +15,7 @@ use mbv::{GuiArtShape, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab};
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 
 mod audiobooks;
+mod collections;
 mod detail;
 mod emby;
 mod entry_list;
@@ -31,12 +32,13 @@ pub use self::audiobooks::{
     GuiAudiobooksChapterRowFrame, GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList,
     GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
 };
+pub use self::collections::{ALL_KEY, GuiCollectionEntry, GuiCollections, GuiCollectionsFrame};
 pub use self::detail::GuiLibraryDetail;
 pub use self::emby::{
-    GuiEmbyDetail, GuiEmbyFeedGroupFrame, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiEmbyList,
-    GuiEmbyPillFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
+    GuiEmbyDetail, GuiEmbyHeroCreditFrame, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame,
 };
-pub use self::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+pub use self::entry_list::GuiEntryRowFrame;
 pub use self::feeds::{GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList};
 pub use self::home::{
     GuiHomeDetail, GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame,
@@ -46,14 +48,13 @@ pub use self::list::{GuiDestinationList, GuiLibraryList};
 pub use self::meta::{GuiMetaKindFrame, GuiMetaSegmentFrame, gui_meta_rows};
 pub use self::music::{
     GuiArtistKey, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicList, GuiMusicPillFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
+    GuiMusicList, GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
 };
 pub use self::podcasts::{GuiPodcastsDetail, GuiPodcastsHeroFrame, GuiPodcastsList};
 pub use self::search::{GuiSearchFrame, GuiSearchRowFrame};
 pub use self::shows::{
-    GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsModeFrame,
-    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeasonPillFrame,
-    GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
+    GuiShowsDetail, GuiShowsEpisodeRowFrame, GuiShowsHeroFrame, GuiShowsList, GuiShowsRowFrame,
+    GuiShowsSeasonFrame, GuiShowsSeasonPillFrame, GuiShowsSeriesFrame, GuiShowsWorkspaceFrame,
 };
 
 /// One destination tab of the top bar (design D2).

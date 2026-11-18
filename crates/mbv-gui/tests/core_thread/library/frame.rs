@@ -58,26 +58,18 @@ fn the_library_section_carries_the_destination_tabs_and_the_lib_idx() {
     assert_eq!(music.lib_idx, 0);
 }
 
-/// The section carries the selected collection names in pill order once for
-/// the whole panel (design D6): the list header's, the Status bar location's,
-/// and the Hero header's names read this one fact. Regression for the
-/// Phase-1 gate finding: the names were derived separately in the projection,
-/// the Status bar, and the list header.
+/// The section carries the collection selector whose one derivation names the
+/// selected collections (design D6): the list header's, the Status bar
+/// location's, and the Hero header's names read this one fact.
+/// Regression for the Phase-1 gate finding: the names were derived separately
+/// in the projection, the Status bar, and the list header.
 #[test]
 fn the_music_frame_carries_the_selected_collection_names() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
 
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
-
-    let music = music_list(&test.held()).expect("the Music destination is active");
-    assert_eq!(music.collection_names, ["Hip-Hop"]);
+    let music = music_list(&seeded_frame(&mut test)).expect("the Music destination is active");
+    assert_eq!(music.collections.selected_names(), ["Hip-Hop"]);
 }
 
 /// The Library list section rides a batch only when its value changes (design
@@ -87,15 +79,8 @@ fn the_music_frame_carries_the_selected_collection_names() {
 fn the_library_list_rides_only_a_changed_value() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
     assert!(
-        list_of(&test.held()).is_some(),
+        list_of(&seeded_frame(&mut test)).is_some(),
         "the first list rides its section"
     );
 
@@ -115,15 +100,8 @@ fn the_library_list_rides_only_a_changed_value() {
 fn a_pick_sends_the_detail_and_no_list() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    send_library(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
-    // Read the batches the select sent, so the pick's batch stands alone.
-    test.held();
+    // Read the seeded content's batch, so the pick's batch stands alone.
+    let _ = seeded_frame(&mut test);
 
     send_library(
         &mut test,
@@ -149,13 +127,7 @@ fn a_pick_sends_the_detail_and_no_list() {
 fn the_hero_art_rides_the_section_after_the_image_lands() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
-    let _selected = send_library_frame(
-        &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
-        },
-    );
+    let _ = seeded_frame(&mut test);
     let picked = send_library_frame(
         &mut test,
         GuiLibraryCommand::ShowDetail {

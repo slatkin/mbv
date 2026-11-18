@@ -43,19 +43,77 @@ pub struct GuiLaunchState {
     /// with none.
     #[serde(default)]
     pub collections: Vec<GuiDestinationCollections>,
+    /// The Shows destination's one active view. An older file without the
+    /// field loads as All: the destination's default series list.
+    #[serde(default)]
+    pub shows_view: GuiLaunchShowsView,
+}
+
+/// The three views a GUI Shows destination can show (gui-collection-dropdown
+/// design D8): a single choice, held in its own launch field rather than in a
+/// collection entry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiLaunchShowsView {
+    /// The series list, the default and the value an old file loads as.
+    #[default]
+    All,
+    /// The merged New (latest episodes) list.
+    New,
+    /// The merged Upcoming premieres list.
+    Upcoming,
 }
 
 /// The selected collections of one destination: the destination's stable
-/// identity, the selected collection group ids in pill order, and the album
-/// each group's pill last showed (`add-gui-library-panel` design D13).
+/// identity, the collection dropdown kind the ids and picks belong to, the
+/// checked ids in press order, the list's date order, and the album each
+/// collection's pill last showed (`add-gui-library-panel` design D13).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuiDestinationCollections {
     pub destination: TabIdentity,
+    /// The collection dropdown whose selection this entry holds. An entry
+    /// written before this field held a Grouped Music library's groups.
+    #[serde(default)]
+    pub target: GuiLaunchCollectionTarget,
     pub group_ids: Vec<String>,
+    /// The list's date order where the destination stores one. Absent for a
+    /// Grouped Music library, which sorts by name.
+    #[serde(default)]
+    pub order: Option<GuiLaunchDateOrder>,
     /// The last picked album of each collection group, so each pill reopens
     /// on its own album. Absent in a file written before this field.
     #[serde(default)]
     pub picks: Vec<GuiGroupPick>,
+}
+
+/// The collection dropdown a saved entry belongs to. The destination's
+/// identity names the library or tab; this kind distinguishes the dropdowns
+/// one identity can hold, so a Music group list and an Emby feed's folder
+/// list never read each other's saved ids.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiLaunchCollectionTarget {
+    /// A Grouped Music library's groups. This is the default an old entry
+    /// without a `target` field held.
+    #[default]
+    Music,
+    /// An Audiobookshelf podcast library's shows.
+    Podcasts,
+    /// The Feeds tab's subscriptions.
+    Feeds,
+    /// An Emby feed-view library's folders.
+    EmbyFeed,
+}
+
+/// The date order a saved feed-based list sorts by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiLaunchDateOrder {
+    /// The most recent row first.
+    #[default]
+    Newest,
+    /// The earliest row first.
+    Oldest,
 }
 
 /// The album a collection group's pill last showed: the group's Service id
@@ -92,6 +150,7 @@ pub fn first_launch() -> GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Home,
         collections: Vec::new(),
+        shows_view: GuiLaunchShowsView::All,
     }
 }
 

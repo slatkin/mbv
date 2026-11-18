@@ -738,7 +738,8 @@ conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the line is lawful. While the Library panel shows, the
 Library Status bar paints the same projection (design D10): the hints on the
 left, the location on the right, and the armed prefix or the live toast in
-place of the hints.
+place of the hints. The location names the destination, `All` or the checked
+collections' names, and the picked item, joined by the canvas's separator.
 
 ## The Library panel
 
@@ -752,31 +753,37 @@ Client core holds the data selection and the actions (design D1).
 | Window content (`src/window/library/`) | Client core (`App`) |
 | --- | --- |
 | Hover (the pointer target), scroll, open tree nodes | The active destination (`App::tab`) |
-| Filter text and Search query text | The selected collections of each destination |
+| Filter text, the collection dropdown's open state and filter text, and Search query text | The selected collections of each destination |
 | The open Hero overlay, item menu, and row menu | The album each collection last showed in the Hero (`App::gui_library_picks`) |
 | The Library's keys, sent to their pointer target | Service data, its loading, and the artwork |
 | No cursor and no focus inside the panel | Panel focus (`FocusStack`) and the actions |
 
 The data selection is core state because the core decides what to load and
 what to save at exit. The window content changes it only by a command, and the
-frame carries it back, so the pill row paints the core's set. The panel holds
-no cursor and no focus inside it: its keys go to the *Pointer target*, not by
-Panel focus (ADR 0040). The panel uses
+frame carries it back, so the collection dropdown paints the core's set. The
+panel holds no cursor and no focus inside it: its keys go to the *Pointer
+target*, not by Panel focus (ADR 0040). The panel uses
 no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
 recogniser or hit map. `src/window/components/library_panel.rs` paints `LibraryTopBar` (the
 Home icon, one tab per Service library destination, and the Search field
-with its results dropdown), the destination's pill row (`LibraryPills` in
-Music; `LibraryShowsPills`, `LibraryEmbyPills`, `LibraryPodcastsPills`, and
-`LibraryFeedsPills` — a destination with no pills paints no row), the
-destination's list (`LibraryList` with `LibraryLetterRail` in Music;
+with its results dropdown), the destination's list (`LibraryList` with
+`LibraryLetterRail` in Music;
 `LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
 `LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
 the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryHomeHero`, `LibraryShowsHero` with its Workspace,
 `LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
-`LibraryFeedsHero`), and `LibraryStatusBar`, and the right-click item menu
-(`QueueRowMenu` under the panel), which a right-press on a list row or a
+`LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
+row and no pills region between `LibraryTopBar` and the list. Each list
+paints its own header: `LibraryListHeader` paints the list title line — the
+title and, where one applies, the dropdown — on that line. Music, Podcasts,
+Feeds, and an Emby feed-group library paint `LibraryCollectionDropdown` with
+the collection frame; Shows paints its single-choice view dropdown over the
+same prop-driven presentation (no filter strip, no date order). A plain Emby,
+Audiobooks, or Home destination paints no dropdown. The panel also
+paints the right-click item menu (`QueueRowMenu` under the panel), which a
+right-press on a list row or a
 Hero tracklist row opens through the `rowMenu` command: the command names
 the row's stable Service id, the frame's `rowMenu` section carries the
 shared builder's full entries for that item, and the menu paints at the
@@ -787,6 +794,23 @@ the ones its own buttons already send (`Play`, `Play All`, `Add to
 Queue`), under each entry's carried builder index, and paints no control at
 all when the remainder is empty — the live finding that a Music album's
 menu repeated the buttons and offered nothing new.
+
+The collection dropdown is one component for every destination that has
+collections (gui-collection-dropdown design D6): Music, Podcasts, Feeds, and
+an Emby library in feed-group mode paint it, and no other destination does.
+Shows paints a separate single-choice view dropdown — All, New, Upcoming —
+through the same prop-driven dropdown presentation; it is not a collection
+filter and adds no key. Its closed state is one trigger that
+names the selection — `All`, the one checked collection's name, or the count
+with the destination's noun (`2 folders`) — with a `Clear` control while the
+selection is not All and a `Newest`/`Oldest` toggle on the three feed-based
+destinations. A press on `Clear` selects All without opening anything; a press
+elsewhere on the trigger opens or closes the popover, which paints over the
+list with the row menu's card chrome: a filter field, the All row, and one
+checkbox row per collection in catalog order. A check leaves the popover open.
+A press outside it, a destination change, or Esc closes it and clears the
+filter text. The window owns the open state and the filter text (design D7);
+the core owns the checked set it paints back.
 
 ### The Library sections and their revisions
 
@@ -848,11 +872,13 @@ keeps its list and detail parts in one file under `src/bridge/frame/library/`;
 `music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`.
 
 `GuiHomeList` carries `loading` and `rows`: Home's flat list in the Music list
-slot, with no pill, no letter rail, and no Workspace. `rows`
-are the two sections' heading rows and item rows in paint order —
-`Continue watching` first, then `Recently added` — with a heading only above
-its rows, an empty section omitted, and the spacer only between two
-non-empty sections, the TUI's flat list's rules. An item row carries:
+slot, with no dropdown, no letter rail, and no Workspace. `rows` are the two
+sections' heading rows and item rows in paint order — `Continue watching`
+first, then `Recently added` — with a heading only above its rows, an empty
+section omitted, and the spacer only between two non-empty sections, the
+TUI's flat list's rules. The former `Latest episodes` and `Upcoming` sections
+are gone: those lists paint in the Shows destination (gui-collection-dropdown
+D9). An item row carries:
 `id` (`GuiHomeRowIdFrame`), the stable identity `App::home_stable_target`
 resolves — a `Continue` tag with the row's Emby item id, or a `Recent` tag
 with the queue item's content id (`provider`/`value`, never a position);
@@ -878,46 +904,35 @@ shared hero producers' facts, the same facts the TUI paints for the same
 item.
 
 `GuiShowsList` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
-Shows library index the Shows commands name), `pills`, `collection_names`
-(the active mode's name, which the Library Status bar's location reads),
-`loading`, `series`, `upcoming_failed`, and `rows`. `GuiShowsDetail` carries
-`workspace_loading`, `selected`, and `hero` (design D14). The pill row is single-select and holds
-the TUI's three modes in order — `latest`, `upcoming`, and `all`, labelled
-New, Upcoming, and All — each with `mode`, `name`, `selected`, and
-`collection` (`false`: the TUI's letter-range buckets are not pills here,
-because the All mode's letter rail replaces them).
+Shows library index the Shows commands name), `view` (the single-choice view
+frame: the active All, New, or Upcoming choice; the window paints the three labelled entries),
+`loading`,
+`series`, `upcoming_failed`, and `rows` (gui-collection-dropdown D8, D9).
+`GuiShowsDetail` carries `workspace_loading`, `selected`, and `hero` (design
+D14). All paints the series tree, its letter rail, and its Workspace. New
+paints the merged latest-episodes rows; Upcoming paints the merged premiere
+rows and takes no select. Both flat views reuse the old Home row types and
+data sources; there is no collection dropdown and no collection target for
+Shows. The TUI's Latest and Upcoming modes stay TUI-only.
 
-The All mode's list is the Music tree over the TUI's TV node kinds, and
+The list is the Music tree over the TUI's TV node kinds, and
 `GuiShowsList` carries it as `series`: each node holds `id`, `title`, `sort_letter`,
 `expandable`, and its `seasons`; each season holds `id`, `name`, and
 `episodes`, which are `null` until that season's load lands, so an open
 season asks the core for them. The window content owns the open and closed
 node keys, exactly as the Music tree's does, and builds the painted rows at
 the Music heights: series and seasons on the node row, episodes on the track
-row, the letter heading above the first series of each letter, and the
-`Series` header with the mode as the selection label and the `/` filter
-field. A series whose detail has not landed paints closed and expandable.
-`rows` carries the flat Latest and Upcoming lists only, each row with `id`,
-`title`, `subtitle`, `date`, and `sort_letter`: Latest holds the newest
-episodes, with the show's name as `title`, the episode's own name as
-`subtitle`, and the provider date in `date`; Upcoming holds the snapshot's
-premieres, with the series' name as `title`, the season/episode label and the
-episode's name as `subtitle`, and the premiere date in `date`. Both flat
-lists are date-sorted and carry no `sort_letter`; `upcoming_failed` carries
-the eager fetch's final failure, which the list names with the pill as the
-retry. `GuiShowsDetail`'s `selected` carries the core's selected row as the frame
-painted it —
-the series id in All, the episode id or the premiere's stable key in the flat
-modes — with the first node as the default, so the Hero paints as soon as a
-list lands, and a stored id the list no longer carries falls back to that
-first node. The All mode's `hero` is present exactly while a series is
-selected; `ensure_gui_shows_workspace` loads the selected series' detail and
-its selected season's episodes on the frame path, so the Workspace paints
-without a season press.
+row, the letter heading above the first series of each letter, and the `Series` header with no selection label and the
+`/` filter field. A series whose detail has not landed paints closed and
+expandable. `GuiShowsDetail`'s `selected` carries the core's selected series
+as the frame painted it — the series id — with the first node as the default,
+so the Hero paints as soon as a list lands, and a stored id the list no
+longer carries falls back to that first node. The `hero` is present exactly
+while a series is selected; `ensure_gui_shows_workspace` loads the selected
+series' detail and its selected season's episodes on the frame path, so the
+Workspace paints without a season press.
 
-`GuiShowsDetail`'s `hero` is the selected row's Hero and is absent in
-Upcoming, which paints
-none. In All series it carries the TUI series producer's facts —
+That hero carries the TUI series producer's facts —
 `hero_content_series_with_episode`'s genre, year range (else the release
 date), season count, and network rows, no duration row while the Workspace
 has no focus, and the artwork policy's landscape arm — plus `workspace`: the
@@ -928,8 +943,7 @@ series change), and that season's `episodes`. The Workspace-focus overlay
 that swaps the facts for the selected episode's is recorded in D14 as a
 follow-up and is not carried. A Workspace episode row carries `episode_id`,
 `number`, `name`, `duration`, and `state` (the shared row state the Home rows
-carry). In Latest the Hero is the selected episode's facts from
-`hero_content_emby` with no `workspace`. The landscape arm paints the still
+carry). The landscape arm paints the still
 at the Hero content width at 16:9 above the facts, as the TUI does; the
 portrait and square arms keep the canvas's 300 px box beside the text. A
 click or a double-click on a Workspace episode sends that episode's
@@ -937,8 +951,11 @@ click or a double-click on a Workspace episode sends that episode's
 menu at that row's stable Service id.
 
 `GuiEmbyList` (`src/bridge/frame/library/emby.rs`) carries `lib_idx` (the
-plain Emby-library index the Emby commands name), `pills`,
-`collection_names` (the selected collection's name the Library Status bar's
+plain Emby-library index the Emby commands name), `collections` (the
+destination's collection dropdown frame; `Some` in the feed-group mode with
+All, every root folder in listing order, the Folders noun, and the list's date
+order; `None` in plain mode, whose letter rail replaces it, design D6),
+`collection_names` (the checked folders' names the Library Status bar's
 location reads; empty in plain mode, whose list is the whole library),
 `feed_group`, `loading`, `failed`, and `rows`. `GuiEmbyDetail` carries
 `selected` and `hero`. A plain
@@ -947,14 +964,13 @@ library nor a TV library) paints the plain mode: `feed_group` is `false`,
 the rows are the root-list store's full list in the server's `SortName`
 order, each with `sort_letter` over the article-stripped sort name (`#`
 past Z), the year or the runtime on `subtitle`, and no `date` — the letter
-rail replaces the TUI's letter-range pill row, so no pill rides. A library
-in the feed-group mode (`feed_view_libraries`) paints `feed_group` `true`
-with a single-select pill row of All and each root folder whose video count
-is positive, in listing order, each pill with `group` (`{ kind: 'all' }` or
-`{ kind: 'folder', id }`), `name`, `selected`, and `collection` (`false`,
-design D6). Its rows are the selected group's items in the server's date
-order — All newest first, a folder oldest first — with the production year
-in `date` and no `sort_letter`. In both modes the detail's `selected` carries the
+rail replaces the TUI's letter-range pills, so no collection dropdown
+rides. A library in the feed-group mode (`feed_view_libraries`) paints
+`feed_group` `true` with a collection dropdown over All and each root folder
+whose video count is positive, in listing order (design D6). Its rows are the
+checked folders' items, or every folder's while All is selected, in the
+list's date order — Newest first, Oldest last, with undated rows last in
+both — with the production year in `date` and no `sort_letter`. In both modes the detail's `selected` carries the
 core's selected row as the frame painted it, with the first row as the default, so
 the Hero paints as soon as a list lands, and a stored id the list no longer
 carries falls back to that first row; a plain mode's fetch that failed
@@ -967,7 +983,8 @@ artwork policy's declared arm, and `art` — and carries no Workspace.
 `lib_idx` (the Audiobooks library index the Audiobooks commands name),
 `loading`, `failed` (the browse state's catalog states), and `rows`.
 `GuiAudiobooksDetail` carries `workspace_loading` (the selected book's detail
-fetch), `selected`, and `hero`. No pill rides here: the A-Z letter rail replaces the TUI's eight
+fetch), `selected`, and `hero`. No collection dropdown rides here: the A-Z
+letter rail replaces the TUI's eight
 surname buckets, as it does for Shows and the plain Emby libraries. The rows
 are the catalog's books in the TUI's order — author sort key, then title —
 each with `id` (the book's stable `library_item_id`), `title`, `subtitle`
@@ -994,18 +1011,17 @@ marks the row whose span holds the playhead while this book plays. An
 audio-part row carries no span, so it never lights.
 
 `GuiPodcastsList` (`src/bridge/frame/library/podcasts.rs`) carries `lib_idx`
-(the Podcasts library index the Podcasts commands name), `pills`, `loading`
+(the Podcasts library index the Podcasts commands name), `collections` (the
+destination's collection dropdown frame: All, every listed show in title
+order, the Shows noun, and the list's date order; design D6), `loading`
 (the show catalog's pages or the active view's own episode fetches), `failed`
 (the catalog's error), and `rows`. `GuiPodcastsDetail` carries `selected` and
 `hero`. No letter rail
-rides here: the list is sorted by date. `pills` holds the single-select pill
-row in paint order — `Latest` first, then one pill per show in the show
-list's title order — each with `pill` (`{ kind: 'latest' }` or
-`{ kind: 'show', id }`), `name` (`Latest`, or the show's title), `selected`,
-and `collection` (`false`). The rows are the active pill's episodes: `Latest`
-merges every listed show's episodes, and a show pill holds that one show's,
-both newest first with undated episodes last, exactly as the TUI's
-`visible_episodes` and `visible_episodes_from` order them. A row carries `id`
+rides here: the list is sorted by date. The rows are the checked shows'
+episodes: All merges every listed show's episodes, and a checked set merges
+the checked shows', in the carried date order with undated episodes last,
+exactly as the TUI's `visible_episodes` and `visible_episodes_from` order
+them. A row carries `id`
 — the episode's stable identity, the provider's `(library_item_id,
 episode_id)` pair encoded as one opaque string
 (`GuiPodcastEpisodeId::encode`: the show id's byte length, a `:`, then the
@@ -1015,8 +1031,8 @@ gutter, `null` on an undated episode), and `state` (`ordinary`, `played`, or
 `{ active: { progress } }`, the TUI podcast row's own arms). The detail's `selected`
 carries the core's picked episode as the frame painted it while the active
 list still holds it, else that list's first row, so the Hero paints as soon
-as a list lands; a stored pill whose show the published show list no longer
-carries falls back to `Latest`.
+as a list lands; a checked show the published show list no longer carries
+falls back to `All`.
 
 The detail's `hero` is the selected episode's Hero: the shared
 `hero_content_abs_episode`
@@ -1028,32 +1044,31 @@ the parent show's cover through the Service-scoped cover chain (`null` while
 the show declares no cover or no server is configured). There is no
 Workspace: a podcast Hero is episode information only.
 
-`GuiFeedsList` (`src/bridge/frame/library/feeds.rs`) carries `pills`,
-`loading`, `failed`, and `rows`. `GuiFeedsDetail` carries `selected` and `hero`. It carries no `libIdx`: a
+`GuiFeedsList` (`src/bridge/frame/library/feeds.rs`) carries `collections`
+(the destination's collection dropdown frame: All, every configured
+subscription in the tab's order, the Subscriptions noun, and the list's date
+order), `loading`, `failed`, and `rows`. `GuiFeedsDetail` carries `selected`
+and `hero`. It carries no `libIdx`: a
 Client holds one feed tab, so the Feeds commands name no library. No letter
 rail rides here — the list is sorted by date — and no state filter.
 `failed` is always `false`, because the feed tab keeps no failure state: a
 failed subscription's fetch flashes the TUI's toast and keeps that
-subscription's previous entries. `pills` holds the single-select pill row in
-paint order — `Latest` first, then one pill per configured subscription in the
-tab's order — each with `pill` (`{ kind: 'latest' }` or
-`{ kind: 'subscription', id }`, the id being the subscription's URL),
-`name` (`Latest`, or the subscription's name), `selected`, and `collection`
-(`false`). The rows are the active pill's entries: `Latest` merges every
-subscription's entries, and a subscription pill holds that one
-subscription's, both newest first with undated entries last, exactly as
-`FeedTabState::rebuild_all_entries` orders them. A row carries `id` — the
-entry's stable identity, its `(subscription url, guid)` pair encoded as one
-opaque string (`GuiFeedEntryId::encode`: the URL's byte length, a `:`, then
-the URL and the `guid`; `decode` is its only reader), because two
+subscription's previous entries. The rows are the checked subscriptions'
+entries: All merges every subscription's entries, and a checked subscription
+holds that one subscription's, in the carried date order with undated entries
+last, exactly as `FeedTabState::rebuild_all_entries` orders them. A row
+carries `id` — the entry's stable identity, its `(subscription url, guid)`
+pair encoded as one opaque string (`GuiFeedEntryId::encode`: the URL's byte
+length, a `:`, then the URL and the `guid`; `decode` is its only reader),
+because two
 subscriptions can publish the same `guid` — `title` (the entry), `subtitle`
 (the subscription's name, `null` when the tab no longer holds it), `date`
 (the `day month` gutter, `null` on an undated entry), and `state`
 (`ordinary`, `played`, or `{ active: { progress } }`, the TUI feed row's own
 arms). The detail's `selected` carries the core's picked entry as the frame painted
 it while the active list still holds it, else that list's first row, so the Hero
-paints as soon as a list lands; a stored pill whose subscription the tab no
-longer holds falls back to `Latest`.
+paints as soon as a list lands; a checked subscription the tab no longer holds
+falls back to `All`.
 
 The detail's `hero` is the selected entry's Hero: the shared
 `hero_content_feed`
@@ -1066,10 +1081,13 @@ Workspace ride here: a feed entry has no artwork source and no description,
 so the Hero paints its placeholder in the reserved shape.
 
 `GuiMusicList` carries `lib_idx` (the Grouped Music library index the
-set-collections command names), `pills` (`group_id`, `name`, `selected`, and
-`collection`), `collection_names`, `loading`, `failure` (the failure line
-naming the selected groups whose album list failed), and `artists`
-(`artist_key`, `name`, `sort_letter`, and `albums`). `GuiMusicDetail` carries
+collection commands name), `collections` (the destination's collection
+dropdown frame: All, every group in the group level's order, the Groups noun,
+and no date order), `collection_names` (the checked groups' names the list
+header and the Library Status bar's location read), `loading`, `failure`
+(the failure line naming the selected groups whose album list failed), and
+`artists` (`artist_key`, `name`, `sort_letter`, and `albums`).
+`GuiMusicDetail` carries
 `hero`, `art`, and `playing_track_id` (the playhead's Emby track id, from the
 Queue panel's own authority, which the tracklist's playing row paints with a
 play glyph beside the title, as the Queue's now-playing row does; the library
@@ -1110,8 +1128,10 @@ only pushes `CoreInput::Library` into the core channel, as the other commands
 do. `src/bridge/library.rs` translates the wire variants and
 `App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
 through the existing `App` action, so the TUI's own paths do not change. The
-variants are `openDestination` (`position`), `selectCollection` (`libIdx`,
-`groupId`), `showDetail` (`itemId`), `openAlbum` (`albumId`),
+variants are `openDestination` (`position`), `collectionToggle` (`target`,
+`key`), `collectionAll` (`target`), `dateOrder` (`target`, `order`),
+`showsSetView` (`libIdx`, `view`), `showDetail` (`itemId`), `openAlbum`
+(`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
 (`itemId`), and the Home commands — `homeSelect`, `homePlay`,
@@ -1129,26 +1149,47 @@ no library the Music play-next admission resolves against. A stale frame's
 row, one whose item the App's Home data no longer holds, logs and changes
 nothing, as every item-named variant's stale arm does.
 
+The collection commands serve every destination that has a dropdown, and
+their `target` is a `GuiCollectionTarget`: the Grouped Music library, a
+Podcasts library, or a feed-group Emby library at its catalog index, or the
+Feeds tab. `collectionToggle` checks or unchecks the collection whose stable
+Service id `key` names, and a selection that ends with none checked falls
+back to All; `collectionAll` selects All; and `dateOrder` stores Newest or
+Oldest, which only the three feed-based destinations sort by (a Music target
+is a documented no-op, because its dropdown paints no order toggle). Each
+command stores the selection or the order and then starts the loads the new
+selection needs through the destination's own loaders, so one dictionary of
+three commands serves all four destinations. A `key` the destination's
+catalog no longer holds, or a target that names no presented destination,
+logs and changes nothing.
+
+The Shows view command `showsSetView` names the library by its `libIdx` and
+one of All, New, or Upcoming. It is a view choice, not a collection command:
+the core holds it in its own per-library map, saves it in the launch file's
+`shows_view` field, and never routes it through `apply_collection`. A press
+selects the choice and closes the dropdown; Upcoming rows take no select,
+play, or enqueue, so the Hero keeps its item.
+
 The Shows commands name a Shows library by its `libIdx` and its content by
-the stable Service id the frame painted: `showsSetMode` (`libIdx`, `mode`)
-loads the chosen mode through the TUI's own mode load, `showsSelect`
-(`libIdx`, `row`) selects the row the Hero shows — the All series mode's
-series, which also starts its detail load, or a flat mode's episode or
-premiere — `showsSelectSeason` (`libIdx`, `seasonId`) moves the Workspace to
+the stable Service id the frame painted: `showsSelect`
+(`libIdx`, `row`) selects the series the Hero shows, which also starts its
+detail load, `showsSelectSeason` (`libIdx`, `seasonId`) moves the Workspace to
 that season's episodes, and `showsPlay`, `showsPlayNext`, and `showsQueue`
 (`libIdx`, `itemId`) run the shared library play, play-next, and enqueue
-paths on an episode. The Owner owns the queue, so no Shows command mutates
+paths on an episode. The GUI Shows destination paints the series list alone
+(design D8), so no view-mode command rides: the TUI keeps its own modes. The
+Owner owns the queue, so no Shows command mutates
 it directly, and a row, season, or episode id the active list no longer holds
 logs and changes nothing.
 
 The plain Emby-library commands name their library by its `libIdx` and its
 content by the stable Service id the frame painted (row 8.1):
-`embySelect` (`libIdx`, `row`) selects the row the Hero shows, and
-`embySetFeedGroup` (`libIdx`, `group`) runs the TUI's own feed-group
-selection path — the session cache, the stale-drop, and the lazy fetch
-behave as the TUI pill's press does — with a group the library does not
-present, or a library that presents no feed-group mode, logging and changing
-nothing. `embyPlay` (`libIdx`, `itemId`) — the command Enter and a
+`embySelect` (`libIdx`, `row`) selects the row the Hero shows. The
+feed-group mode's folder selection is the dropdown's own `collectionToggle`
+and `collectionAll` commands over an `embyFeed` target, so no Emby-specific
+feed-group command rides: the folder a press names is the stable root id
+the frame carries, and a folder the root listing no longer holds logs and
+changes nothing. `embyPlay` (`libIdx`, `itemId`) — the command Enter and a
 double-click both send — runs the shared library play path, whose
 folder-play rule expands a folder or a boxset into its playable content, so
 the queue is replaced with the folder's items and no nested list opens;
@@ -1174,12 +1215,10 @@ mutates it directly, and a book or chapter id the Service data no longer
 holds logs and changes nothing.
 
 The Podcasts commands name their library by its `libIdx` and an episode by the
-opaque row id the frame carried (row 10.1): `podcastsSetPill` (`libIdx`,
-`pill`) stores the single-select pill — `{ kind: 'latest' }` or
-`{ kind: 'show', id }` — and starts the loads that pill needs through the
-TUI's own loaders, with a show the published show list no longer carries
-logging and changing nothing; `podcastsSelect` (`libIdx`, `row`) selects the
-episode the Hero shows; `podcastsPlay` (`libIdx`, `itemId`) — the command
+opaque row id the frame carried (row 10.1): `podcastsSelect` (`libIdx`, `row`)
+selects the episode the Hero shows; the show selection is the dropdown's own
+`collectionToggle`, `collectionAll`, and `dateOrder` commands over a
+`podcasts` target; `podcastsPlay` (`libIdx`, `itemId`) — the command
 Enter and a double-click both send — replaces the queue with the episode
 through the TUI's episode play path; and `podcastsQueue` (`libIdx`, `itemId`)
 appends it at the tail. There is no play-next command: `n` is consumed by the
@@ -1190,10 +1229,9 @@ mutates it directly. A row id of no valid shape, or an episode the per-show
 cache no longer holds, logs and changes nothing.
 
 The Feeds commands name an entry by the opaque row id the frame carried and
-carry no library index (row 11.1): `feedsSetPill` (`pill`) stores the
-single-select pill — `{ kind: 'latest' }` or `{ kind: 'subscription', id }` —
-and starts no load, because the shared startup fetch already fills every
-subscription's entries; a subscription the tab no longer holds logs and
+carry no library index (row 11.1): the subscription selection is the
+dropdown's own `collectionToggle`, `collectionAll`, and `dateOrder` commands
+over the `feeds` target, and a subscription the tab no longer holds logs and
 changes nothing. `feedsSelect` (`row`) selects the entry the Hero shows.
 `feedsPlay` (`itemId`) — the command Enter and a double-click both send —
 replaces the queue through the TUI's `play_feed_entry`, and `feedsQueue`
@@ -1290,11 +1328,13 @@ With no Settings frame, the Library chain runs. The order is:
    key: the Search field first — its hold is DOM focus, Esc closes its
    results, the arrow keys move the highlight, and Enter activates the
    marked one — then the `/` filter, whose Esc closes it and Enter
-   accepts it.
+   accepts it. The collection dropdown's own filter takes the typed keys,
+   Backspace, and Esc while the dropdown is open, wherever the pointer is;
+   a check change leaves it open.
 4. Esc closes what the window opened, wherever the pointer is: the
    right-click row menu, the picked item's menu, the Narrow arrangement's
-   Hero overlay, then the Search results dropdown. With nothing open, Esc
-   stays the core's key.
+   Hero overlay, the collection dropdown, then the Search results
+   dropdown. With nothing open, Esc stays the core's key.
 5. A digit `1` to `7` opens the destination tab at its place after Home.
 6. While the pointer rests over the Library column, the Library keys run on
    the pointer target (ADR 0040): `/` opens the list filter, Right and Left
@@ -1302,8 +1342,8 @@ With no Settings frame, the Library chain runs. The order is:
    `n` plays it next, `a` adds it to the queue, and the arrow, Page Up, Page
    Down, Home, and End keys scroll the list the pointer rests on. With no
    hovered row, the keys that act on one are consumed and do nothing. Space
-   keeps its core effect: no pill holds a keyboard focus, so the pills
-   answer a press only.
+   keeps its core effect: no collection dropdown control holds a keyboard
+   focus, so the dropdown answers a press only.
 7. Every other key goes to the core's keyboard router with the target the
    pointer resolved: a key over the Queue list box names the `Queue`
    target, and every other key names none. So `[` and `]` seek, and the
@@ -1328,7 +1368,7 @@ a picked item opens the Hero as an overlay over the list. Wide mounts both
 panels with the Hero beside the list — the list at the left edge of the
 Library panel, the Hero pane to its right. The Queue panel keeps its four states
 inside every arrangement, and a resize across a threshold moves no active
-row, pill selection, or picked item, because those live in the window
+row, collection selection, or picked item, because those live in the window
 content and the core.
 
 Both columns are resizable (`src/window/resize.rs`). A drag on either
@@ -1374,12 +1414,18 @@ nor its hidden empty queue column.
 
 The GUI keeps its own launch location (design D9). Its `App` starts with
 `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab,
-and the GUI never writes the TUI file. The GUI file
+and the GUI never writes the TUI file. The file also carries a separate
+`shows_view` field for the selected Shows destination view; an older file
+without the field loads as All. The GUI file
 (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
-destination and the selected collections of each destination with the album
-each collection last showed, as stable Service identities. The core reads it once before the first step, saves
-it at orderly exit before `client_exit_teardown`, and never while the window
-is open.
+destination and one entry per collection destination whose selection the
+session changed: the checked Music groups, Podcast shows, Feeds subscriptions,
+or Emby feed-group folders, the date order where one is held, and the album
+each Music group last showed. Each entry names its collection `target`, so
+saved ids restore only to their own dropdown; an entry written before the
+target field loads as Music. The core reads it once before the first step,
+saves it at orderly exit before `client_exit_teardown`, and never while the
+window is open.
 
 The restore runs in two phases (`GuiLaunchRestore`,
 `CoreThread::restore_launch_location`). The first phase opens the saved
@@ -1393,9 +1439,12 @@ its Home destination resolves to the first presented one, with no saved
 collection choice, so the Library panel is
 reachable from the first launch. The
 second phase applies the saved
-collection choice once the destination's group list lands: the first saved
-group the library still holds is selected, and a saved group the library
-no longer held, or no saved entry, leaves the first group selected. The
+collection choice once the destination's collection catalog lands, and applies
+the saved `shows_view` to an opened Shows destination: it matches
+the saved destination and target, retains only the saved ids the catalog still
+holds, and installs the checked set and date order through the shared
+collection path. An emptied set, a saved All, or no saved entry leaves All
+selected. The
 restore applies to a destination that holds no choice and never clobbers one
 the session already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and
@@ -1655,6 +1704,7 @@ block (art, selected unit, actions, overview), and the list band (the movie's
 credits table and the IMDb button).
 `LibraryWorkspaceTable` paints the list band's rows,
 `LibraryHeroActions` the Play, Play next, and Add to queue buttons,
-`LibraryPillButton` every pill, `LibraryItemRow` and `LibraryLetterHeading` the
-flat list rows, and `LibraryVirtualList` the scroller of every list. Home still
+`LibraryPillButton` the Shows Workspace's season pills, `LibraryItemRow` and
+`LibraryLetterHeading` the flat list rows, and `LibraryVirtualList` the
+scroller of every list. Home still
 paints `LibraryHeroSummary`.

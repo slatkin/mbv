@@ -1,54 +1,45 @@
 //! Tests of the GUI Library's Podcasts data path (add-gui-library-panel
 //! design D12, row 10.1): an open of an unloaded show catalog starts the
 //! TUI's own show-list chain and the fetched page lands on the App through
-//! the GUI tick's drain, the Latest pill lands every listed show's episodes
-//! through the TUI's bounded fan-out, a show pill lands that show's episodes
-//! only, an episode select stores the pick, the presented destination set
-//! names the podcast libraries and restores a saved podcast location, and the
-//! Latest shelf's shared one-shot guard requests once. The Audiobookshelf
-//! boundary is the lib event channel, so no request leaves the process beyond
-//! a mocked loopback port's refusal and no worker outlives the assertion.
+//! the GUI tick's drain, All lands every listed show's episodes through the
+//! TUI's bounded fan-out, a checked show lands that show's episodes only, two
+//! checked shows merge with no committed scope, an episode select stores the
+//! pick, the presented destination set names the podcast libraries and
+//! restores a saved podcast location, and the All shelf's shared one-shot
+//! guard requests once. The Audiobookshelf boundary is the lib event channel,
+//! so no request leaves the process beyond a mocked loopback port's refusal
+//! and no worker outlives the assertion. The data path's tests live in the
+//! `data_path` child module, so this file stays within its line ceiling.
 
 use super::*;
-use mbv_audiobookshelf::{
-    AudiobookshelfDownloadedEpisode, AudiobookshelfShow, AudiobookshelfShowPage,
-};
-use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiLaunchState, TabIdentity};
-use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
-use mbv_ui_msg::PodcastEpisodeTarget;
 
-/// The generation the event arms accept while the test's runtime holds none.
-fn generation() -> mbv_core::service_runtime::SetupGeneration {
-    mbv_core::service_runtime::SetupGeneration::default()
+mod data_path;
+
+/// Press one show in the Podcasts destination's collection dropdown.
+fn toggle_show(app: &mut App, lib_idx: usize, show_id: &str) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Podcasts(lib_idx),
+        key: show_id.to_string(),
+    });
 }
 
-/// One show of a mocked catalog page or browse state.
-fn show(id: &str, title: &str) -> AudiobookshelfShow {
-    AudiobookshelfShow {
-        library_item_id: id.into(),
-        title: title.into(),
-        author: None,
-        description: None,
-        cover_path: None,
-    }
+/// Press the All row of the Podcasts destination's collection dropdown.
+fn select_all_shows(app: &mut App, lib_idx: usize) {
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Podcasts(lib_idx),
+    });
 }
 
-/// One downloaded episode of a mocked per-show fetch.
-fn episode(
-    show_id: &str,
-    episode_id: &str,
-    published_at: Option<u64>,
-) -> AudiobookshelfDownloadedEpisode {
-    AudiobookshelfDownloadedEpisode {
-        library_item_id: show_id.into(),
-        episode_id: episode_id.into(),
-        title: episode_id.into(),
-        description: None,
-        published_at,
-        duration_seconds: Some(600.0),
-    }
+/// The names of the Podcasts dropdown's checked shows.
+fn checked_names(projection: &GuiPodcastsProjection) -> Vec<&str> {
+    let collections = &projection.collections;
+    let entries = collections.entries.iter();
+    entries
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.as_str())
+        .collect()
 }
 
 /// A stub `App` whose Audiobookshelf catalog holds one book library and one
@@ -72,317 +63,6 @@ fn podcast_app() -> App {
 /// The podcast browse state the seeded catalog holds for library 1.
 fn podcast_state(app: &App) -> &AudiobookshelfBrowseState {
     &app.audiobookshelf_browse[1]
-}
-
-/// The in-flight per-show fetch marks, as `(show id, request serial)` pairs in
-/// show order: the fan-out's one observable decision.
-fn detail_marks(app: &App) -> Vec<(String, u64)> {
-    podcast_state(app)
-        .shows
-        .iter()
-        .filter_map(|show| {
-            podcast_state(app)
-                .detail_loading_ids
-                .get(&show.library_item_id)
-                .map(|request| (show.library_item_id.clone(), *request))
-        })
-        .collect()
-}
-
-/// Consume `count` of the fan-out's own detail completions off the lib
-/// channel: each spawned worker reports exactly one, and consuming it raw
-/// leaves the fetch marks in place for the test's own completion below.
-fn consume_detail_completions(app: &mut App, count: usize) {
-    let mut consumed = 0;
-    while consumed < count {
-        let event = app
-            .channels
-            .lib_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("the fan-out's detail fetch reported its completion");
-        if matches!(
-            event,
-            LibEvent::Audiobookshelf(AudiobookshelfEvent::DetailFetched { .. })
-        ) {
-            consumed += 1;
-        }
-    }
-}
-
-/// Opening an unloaded podcast library starts the TUI's own show-list chain
-/// and the fetched page lands on the App through the GUI tick's drain (row
-/// 10.1, contract a): the open arms a single replacement batch, the page
-/// event's handler publishes the show list the projection reads, and an open
-/// of the loaded catalog starts no second chain.
-#[test]
-fn opening_a_podcast_library_lands_its_show_list_on_the_app() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-
-    app.gui_podcast_open(1);
-    let request = podcast_state(&app).catalog_request;
-    assert_eq!(request, 1, "the open began one catalog chain");
-    assert!(
-        podcast_state(&app).replacement.is_some(),
-        "the open's show-list chain is collecting"
-    );
-
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::ShowsFetched {
-            generation: generation(),
-            request,
-            library_id: "lib-abs-podcasts".into(),
-            result: Ok(AudiobookshelfShowPage {
-                page: 0,
-                limit: 20,
-                total: 1,
-                items: vec![show("show-a", "Show A")],
-            }),
-        },
-    ));
-    while app.drain_lib_event() {}
-
-    let state = podcast_state(&app);
-    assert_eq!(
-        state
-            .shows
-            .iter()
-            .map(|show| show.library_item_id.as_str())
-            .collect::<Vec<_>>(),
-        ["show-a"],
-        "the fetched page landed on the App's browse state"
-    );
-    assert_eq!(state.total, 1, "the page's total is the catalog's");
-    assert!(state.replacement.is_none(), "the completed batch published");
-
-    let loaded_request = podcast_state(&app).catalog_request;
-    app.gui_podcast_open(1);
-    assert_eq!(
-        podcast_state(&app).catalog_request,
-        loaded_request,
-        "a loaded catalog's open starts no second chain"
-    );
-}
-
-/// The Latest pill lands every listed show's episodes through the TUI's
-/// bounded fan-out (row 10.1, contract b): the pill commits no show scope, so
-/// the fan-out requests both shows, and each landed completion caches that
-/// show's episodes on the App — the data the list's merged order is projected
-/// from.
-#[test]
-fn the_latest_pill_lands_every_shows_episodes_through_the_fan_out() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
-    app.audiobookshelf_browse[1].total = 2;
-
-    app.gui_podcast_set_pill(1, GuiPodcastPill::Latest);
-
-    assert_eq!(app.gui_podcast_pill(1), GuiPodcastPill::Latest);
-    assert_eq!(
-        podcast_state(&app).committed_show_pill,
-        None,
-        "Latest needs every listed show"
-    );
-    let marks = detail_marks(&app);
-    assert_eq!(
-        marks
-            .iter()
-            .map(|(show_id, _)| show_id.as_str())
-            .collect::<Vec<_>>(),
-        ["show-a", "show-b"],
-        "the fan-out requested both shows' episodes"
-    );
-    consume_detail_completions(&mut app, marks.len());
-
-    for (show_id, request) in &marks {
-        let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::DetailFetched {
-                generation: generation(),
-                request: *request,
-                library_item_id: show_id.clone(),
-                result: Ok(vec![episode(
-                    show_id,
-                    &format!("{show_id}-ep-1"),
-                    Some(1_700_000_000),
-                )]),
-            },
-        ));
-    }
-    while app.drain_lib_event() {}
-
-    let state = podcast_state(&app);
-    for show_id in ["show-a", "show-b"] {
-        assert_eq!(
-            state.detail_cache.get(show_id).map(Vec::len),
-            Some(1),
-            "the {show_id} episodes landed on the App"
-        );
-    }
-}
-
-/// A show pill lands that show's episodes only (row 10.1, contract c): the
-/// pill commits the show scope the bounded fan-out reads, so one show is
-/// requested and the other show's cache stays empty.
-#[test]
-fn a_show_pill_lands_only_that_shows_episodes() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A"), show("show-b", "Show B")];
-    app.audiobookshelf_browse[1].total = 2;
-
-    app.gui_podcast_set_pill(1, GuiPodcastPill::Show("show-b".into()));
-
-    assert_eq!(
-        app.gui_podcast_pill(1),
-        GuiPodcastPill::Show("show-b".into())
-    );
-    assert_eq!(
-        podcast_state(&app).committed_show_pill.as_deref(),
-        Some("show-b"),
-        "the show pill scopes the fan-out"
-    );
-    let marks = detail_marks(&app);
-    assert_eq!(marks.len(), 1, "one show pill requests one show");
-    assert_eq!(marks[0].0, "show-b");
-    consume_detail_completions(&mut app, 1);
-
-    let _ = app.channels.lib_tx.send(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::DetailFetched {
-            generation: generation(),
-            request: marks[0].1,
-            library_item_id: "show-b".into(),
-            result: Ok(vec![episode("show-b", "show-b-ep-1", None)]),
-        },
-    ));
-    while app.drain_lib_event() {}
-
-    let state = podcast_state(&app);
-    assert_eq!(
-        state.detail_cache.get("show-b").map(Vec::len),
-        Some(1),
-        "the scoped show's episodes landed"
-    );
-    assert!(
-        !state.detail_cache.contains_key("show-a"),
-        "the unscoped show was never requested"
-    );
-}
-
-/// An episode select stores the pick the Hero paints (row 10.1): the target's
-/// provider identity is kept as the store names it, and an episode the landed
-/// cache does not carry changes nothing.
-#[test]
-fn selecting_an_episode_stores_the_pick_and_ignores_a_stale_one() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-    app.audiobookshelf_browse[1].shows = vec![show("show-a", "Show A")];
-    app.audiobookshelf_browse[1]
-        .cache_detail("show-a".into(), vec![episode("show-a", "ep-1", None)]);
-
-    let target = PodcastEpisodeTarget::new("show-a".into(), "ep-1".into());
-    app.gui_podcast_select(1, &target);
-    assert_eq!(
-        app.gui_podcast_picked_episode(1),
-        Some(&target),
-        "the picked episode is the select command's"
-    );
-
-    app.gui_podcast_select(
-        1,
-        &PodcastEpisodeTarget::new("show-a".into(), "gone".into()),
-    );
-    assert_eq!(
-        app.gui_podcast_picked_episode(1),
-        Some(&target),
-        "a stale episode id changes nothing"
-    );
-}
-
-/// The presented destination set names both Audiobookshelf destinations, and
-/// a location saved on the podcast library restores to it with no pill
-/// persistence (row 10.1, contract d): the podcast library presents the
-/// Podcasts tab at its own position, the active podcast destination's kind is
-/// the Podcasts one, and the restore applies no saved pill because the
-/// Podcasts destination keeps no pill in the launch file.
-#[test]
-fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-
-    let tabs = app.gui_library_tabs();
-    let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
-    assert_eq!(
-        labels,
-        vec!["Audiobooks", "Podcasts"],
-        "each Audiobookshelf library presents its own destination"
-    );
-    assert_eq!(
-        tabs.tabs.iter().map(|tab| tab.position).collect::<Vec<_>>(),
-        [1, 2],
-        "the podcast library's tab position follows the book library's"
-    );
-    assert_eq!(tabs.current, Some(2), "the active podcast tab is current");
-    assert_eq!(
-        app.gui_active_destination(),
-        Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
-        "the active podcast destination's kind is the Podcasts one"
-    );
-
-    app.tab = TabSelection::Home;
-    let saved = GuiLaunchState {
-        version: GUI_LAUNCH_STATE_VERSION,
-        destination: TabIdentity::ServiceLibrary {
-            kind: ServiceKind::Audiobookshelf,
-            library_id: "lib-abs-podcasts".into(),
-        },
-        collections: Vec::new(),
-    };
-    let opened = match app.open_gui_launch_destination(&saved) {
-        crate::app::GuiLaunchOpen::Opened(opened) => opened,
-        other => panic!("the settled catalog resolves the saved library: {other:?}"),
-    };
-    assert_eq!(
-        app.tab,
-        TabSelection::AudiobookshelfLibrary(1),
-        "the saved Podcasts destination restored"
-    );
-    assert!(
-        app.restore_gui_launch_collections(&saved, &opened),
-        "the Podcasts destination applies no saved pill and needs no retry"
-    );
-    assert_eq!(
-        app.gui_podcast_pill(1),
-        GuiPodcastPill::Latest,
-        "the restored destination keeps the default Latest pill"
-    );
-}
-
-/// The Latest shelf's shared one-shot guard requests once (row 10.1, the
-/// shell half's App-state move): the TUI's projection pass and the GUI's
-/// frame path call the same method, and the request set makes the second call
-/// load nothing.
-#[test]
-fn the_latest_shelfs_shared_guard_requests_once() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = podcast_app();
-
-    assert!(
-        !app.audiobookshelf_shelf_requested
-            .contains("lib-abs-podcasts")
-    );
-    assert!(
-        app.ensure_audiobookshelf_latest_shelf("lib-abs-podcasts"),
-        "the first call started the shelf fetch"
-    );
-    assert!(
-        !app.ensure_audiobookshelf_latest_shelf("lib-abs-podcasts"),
-        "the request set is single-flight"
-    );
-    assert!(
-        app.audiobookshelf_shelf_requested
-            .contains("lib-abs-podcasts")
-    );
 }
 
 /// A stub `App` whose podcast library 1 holds `shows` in the list's title
@@ -421,13 +101,13 @@ fn projection_app() -> App {
     app
 }
 
-/// The Latest pill merges every listed show's episodes in the TUI's date order
-/// (row 10.1, contract a): newest first with the undated episode last, the
-/// pill row Latest plus one pill per show by title with Latest selected, the
-/// first row as the selected episode, and the Hero carrying that episode's
-/// facts, its description, and the parent show's Square cover.
+/// All merges every listed show's episodes in the date order (row 10.1,
+/// contract a): newest first with the undated episode last, the pill row All
+/// plus one pill per show by title with All checked, the first row as the
+/// selected episode, and the Hero carrying that episode's facts, its
+/// description, and the parent show's Square cover.
 #[test]
-fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
+fn all_merges_two_shows_in_date_order_with_the_default_hero() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
@@ -458,21 +138,16 @@ fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
         "an undated episode carries no gutter"
     );
 
-    let names: Vec<&str> = projection
-        .pills
+    let collections = &projection.collections;
+    let rows: Vec<(&str, bool)> = collections
+        .entries
         .iter()
-        .map(|pill| pill.name.as_str())
+        .map(|entry| (entry.name.as_str(), entry.checked))
         .collect();
     assert_eq!(
-        names,
-        ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
-        "the pill row carries the TUI's three state pills between Latest and the shows"
-    );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
-    assert_eq!(
-        selected_pills,
-        [true, false, false, false, false, false],
-        "Latest is the default pill"
+        rows,
+        [("Show A", false), ("Show B", false)],
+        "the dropdown offers every show, all unchecked under All"
     );
 
     let first = GuiPodcastEpisodeId::new("show-b".into(), "b-new".into()).encode();
@@ -507,14 +182,15 @@ fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
     );
 }
 
-/// A show pill scopes the list to that show (row 10.1, contract a): the pill
-/// is the one selected and only that show's episodes ride the rows.
+/// A checked show scopes the list to that show (row 10.1, contract a): the
+/// show's pill is the one checked and only that show's episodes ride the
+/// rows.
 #[test]
-fn a_show_pill_scopes_the_rows_to_that_show() {
+fn a_checked_show_scopes_the_rows_to_that_show() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
 
-    app.gui_podcast_set_pill(1, GuiPodcastPill::Show("show-a".into()));
+    toggle_show(&mut app, 1, "show-a");
     let projection = app.gui_podcasts_projection(1);
 
     let titles: Vec<&str> = projection
@@ -525,53 +201,80 @@ fn a_show_pill_scopes_the_rows_to_that_show() {
     assert_eq!(
         titles,
         ["A Old", "A Undated"],
-        "a show pill holds that show's episodes only"
+        "a checked show holds that show's episodes only"
     );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
     assert_eq!(
-        selected_pills,
-        [false, false, false, false, true, false],
-        "the show pill is the selected one of the four mode pills before it"
+        checked_names(&projection),
+        ["Show A"],
+        "the checked show's row is the one checked"
     );
 }
 
-/// A state pill filters every listed show's episodes by play state (row 10.1):
-/// the TUI's `PillSelection::State`, which the GUI dropped before D15. The
-/// merged list keeps the date order of the episodes the state admits.
+/// Two checked shows merge their episodes (gui-collection-dropdown design
+/// D2): both pills stay checked, and the merged list keeps the date order
+/// with the undated episode last.
 #[test]
-fn a_state_pill_filters_the_merged_list_by_play_state() {
+fn two_checked_shows_merge_their_episodes_in_date_order() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.gui_podcast_set_pill(
-        1,
-        GuiPodcastPill::State(
-            mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played,
-        ),
+
+    toggle_show(&mut app, 1, "show-a");
+    toggle_show(&mut app, 1, "show-b");
+    let projection = app.gui_podcasts_projection(1);
+
+    let titles: Vec<&str> = projection
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        ["B New", "A Old", "A Undated"],
+        "the two checked shows' episodes merge in the date order"
     );
+    assert_eq!(
+        checked_names(&projection),
+        ["Show A", "Show B"],
+        "both shows stay checked"
+    );
+    assert_eq!(
+        podcast_state(&app).committed_show_pill,
+        None,
+        "several checked shows commit the every-show scope, the same loads as All"
+    );
+}
+
+/// The Oldest order puts the earliest episode first, with the undated
+/// episodes last (gui-collection-dropdown design D4): the stored order sorts
+/// the merged list without a refetch.
+#[test]
+fn the_oldest_order_puts_the_earliest_episode_first_with_undated_last() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    app.gui_podcast_libs.entry(1).or_default().selection.order = GuiDateOrder::Oldest;
 
     let projection = app.gui_podcasts_projection(1);
 
-    assert!(
-        projection.rows.is_empty(),
-        "no episode of the fixture is finished, so the Played view holds no row"
-    );
-    let selected: Vec<&str> = projection
-        .pills
+    let titles: Vec<&str> = projection
+        .rows
         .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.as_str())
+        .map(|row| row.title.as_str())
         .collect();
-    assert_eq!(selected, ["Played"], "the state pill is the selected mode");
+    assert_eq!(
+        titles,
+        ["A Old", "B New", "A Undated"],
+        "Oldest sorts the earliest episode first and keeps the undated one last"
+    );
 }
 
-/// A show pill the published show list no longer carries falls back to Latest
-/// (row 10.1): the stored pill survives in the core, the projection paints
-/// Latest's merged rows and marks Latest selected.
+/// A checked show the published show list no longer carries drops from the
+/// set (row 10.1; gui-collection-dropdown design D1's vanish rule): the
+/// projection paints All's merged rows and marks All checked.
 #[test]
-fn a_stale_show_pill_falls_back_to_latest() {
+fn a_vanished_checked_show_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.gui_podcast_set_pill(1, GuiPodcastPill::Show("show-a".into()));
+    toggle_show(&mut app, 1, "show-a");
     app.audiobookshelf_browse[1]
         .shows
         .retain(|show| show.library_item_id != "show-a");
@@ -588,11 +291,10 @@ fn a_stale_show_pill_falls_back_to_latest() {
         ["B New"],
         "the fallback view merges every listed show"
     );
-    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
     assert_eq!(
-        selected_pills,
-        [true, false, false, false, false],
-        "Latest paints as selected"
+        checked_names(&projection),
+        Vec::<&str>::new(),
+        "All checks no show"
     );
 }
 

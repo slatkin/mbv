@@ -10,7 +10,6 @@ use mbv_ctrl::CtrlCmd;
 use mbv_gui::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiPodcastsDetail, GuiPodcastsList,
 };
-use mbv_gui::bridge::library::GuiPodcastPill;
 use mbv_queue::AudiobookshelfItem;
 use mbv_ui_model::tab_selection::TabSelection;
 
@@ -136,8 +135,8 @@ fn commanded_episode_id(cmd_rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> String {
 }
 
 /// The frame carries the Podcasts list after the open (row 10.1): the section
-/// names the podcast library, the episodes are in the TUI's date order with
-/// the undated one last, the pill row is Latest first then each show by title,
+/// names the podcast library, the episodes are in the date order with
+/// the undated one last, the pill row is All first then each show by title,
 /// the first row is the Hero default, and the Hero carries that episode's
 /// facts, description, and Square art shape.
 #[test]
@@ -159,12 +158,18 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
         ["B New", "A Old", "A Undated"],
         "Latest merges both shows newest first with the undated episode last"
     );
-    let names: Vec<&str> = list.pills.iter().map(|pill| pill.name.as_str()).collect();
+    let collections = &list.collections;
+    let names: Vec<&str> = collections
+        .entries
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
     assert_eq!(
         names,
-        ["Latest", "All", "Unplayed", "Played", "Show A", "Show B"],
-        "the pill row carries the TUI's state pills between Latest and the shows"
+        ["Show A", "Show B"],
+        "the selector carries one entry per show"
     );
+    assert!(collections.all, "the selection is All");
     assert_eq!(
         detail.selected.as_deref(),
         list.rows.first().map(|row| row.id.as_str()),
@@ -184,7 +189,7 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
 }
 
 /// A pill command re-scopes the rows (row 10.1): the set-pill command's show
-/// leaves only that show's episodes, and its pill is the selected one.
+/// check leaves only that show's episodes, and its pill is the checked one.
 #[test]
 fn the_pill_command_changes_the_rows() {
     let (mut test, _cmd_rx) = seeded_podcasts_core();
@@ -193,22 +198,23 @@ fn the_pill_command_changes_the_rows() {
 
     send_library(
         &mut test,
-        mbv_gui::bridge::library::GuiLibraryCommand::PodcastsSetPill {
-            lib_idx: 1,
-            pill: GuiPodcastPill::Show("show-a".into()),
+        mbv_gui::bridge::library::GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::Podcasts(1),
+            key: "show-a".into(),
         },
     );
 
     let (list, _) = podcasts_parts(&newest_frame(&mut test));
     let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["A Old", "A Undated"]);
-    let selected: Vec<&str> = list
-        .pills
+    let collections = &list.collections;
+    let checked: Vec<&str> = collections
+        .entries
         .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.name.as_str())
+        .filter(|entry| entry.checked)
+        .map(|entry| entry.name.as_str())
         .collect();
-    assert_eq!(selected, ["Show A"]);
+    assert_eq!(checked, ["Show A"]);
 }
 
 /// A select command moves the Hero (row 10.1): the second row's opaque id

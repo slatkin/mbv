@@ -1,6 +1,6 @@
 //! The Feeds list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryFeedsList`; add-gui-library-panel design D12, row 11.1):
-//! the active pill's flat entry rows — the entry's title over its
+//! the checked collections' flat entry rows — the entry's title over its
 //! subscription, and the entry date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
 //!
@@ -14,6 +14,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -66,16 +67,14 @@ pub fn LibraryFeedsList() -> Element {
     let feeds_ui = library.feeds_ui.cloned();
     let scroll = library.scrolls.feeds.cloned();
 
-    // The header's selection label (design D15): the active pill's name.
-    let selection_label = frame
-        .and_then(|frame| {
-            frame
-                .pills
-                .iter()
-                .find(|pill| pill.selected)
-                .map(|pill| pill.name.clone())
-        })
-        .unwrap_or_else(|| "Latest".to_owned());
+    // The header's selection label (design D15, D6): the collections frame's
+    // label — All, the one checked name, or the count with the noun.
+    let selection_label = frame.map_or_else(|| "All".to_owned(), |frame| frame.collections.label());
+
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the destination's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it.
+    let collections = frame.map(|frame| frame.collections.clone());
 
     // The painted rows of the flat list (row 11.1): the same model
     // [`crate::window::library::feeds`] builds from the carried content,
@@ -107,7 +106,7 @@ pub fn LibraryFeedsList() -> Element {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-feeds-list-column": "",
             // The Music list's header (design D15): the list names itself, the
-            // active pill is the carried scope, and the `/` filter field
+            // checked collections are the carried scope, and the `/` filter field
             // narrows it.
             div {
                 class: "flex flex-none flex-col",
@@ -115,6 +114,7 @@ pub fn LibraryFeedsList() -> Element {
                     title: "Feeds".to_owned(),
                     label: selection_label.clone(),
                     label_attr: Some("data-library-feeds-selection-label"),
+                    collections,
                     filter: feeds_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter entries".to_owned(),

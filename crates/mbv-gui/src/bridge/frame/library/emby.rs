@@ -1,12 +1,11 @@
 //! The plain Emby-library section of the Library frame (add-gui-library-panel
-//! design D12, row 8.1): the feed-group pills, the active list's rows, the
-//! core's selected row, and the selected row's Hero with no Workspace. A
-//! command names a row or a folder by the stable Service id the frame
-//! carries, never by position.
+//! design D12, row 8.1): the feed-group folder selector, the active list's
+//! rows, the core's selected row, and the selected row's Hero with no
+//! Workspace. A command names a row or a folder by the stable Service id the
+//! frame carries, never by position.
 
 use mbv::{
-    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
-    GuiEmbyRowKind,
+    GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 
 use super::GuiArtShapeFrame;
@@ -14,7 +13,7 @@ use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
 
 /// The plain Emby-library destination's list part (row 8.1; design D8): the
-/// feed-group pills, the active list's rows, and the load facts.
+/// feed-group folder selector, the active list's rows, and the load facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiEmbyList {
     /// The plain Emby-library index the Emby commands name (design D2, row
@@ -23,9 +22,11 @@ pub struct GuiEmbyList {
     /// The library's display name: the list header's title, so the column
     /// names the library it holds.
     pub library_name: String,
-    /// The feed-group mode's pills in pill order; empty in plain mode, whose
-    /// letter rail replaces the TUI's pill row.
-    pub pills: Vec<GuiEmbyPillFrame>,
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): `Some` in the feed-group mode, with All, every root folder in
+    /// listing order, the Folders noun, and the list's date order; `None` in
+    /// plain mode, whose letter rail replaces it.
+    pub collections: Option<GuiCollections>,
     /// The selected collection's name the Library Status bar's location
     /// reads (design D10); empty in plain mode, whose list is the whole
     /// library.
@@ -50,43 +51,6 @@ pub struct GuiEmbyDetail {
     pub selected: Option<String>,
     /// The selected row's Hero facts; `None` while no row is selected.
     pub hero: Option<GuiEmbyHeroFrame>,
-}
-
-/// The feed-group pill a press selects (row 8.1): `New` (the destination
-/// Latest view), `All`, or one root folder by its stable Service id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GuiEmbyFeedGroupFrame {
-    /// The New pill: the library's destination-Latest snapshot, newest first.
-    Latest,
-    /// The All pill: the library root's own listing, newest first.
-    All,
-    /// One root folder that holds items, by its stable Service id.
-    Folder(String),
-}
-
-impl From<GuiEmbyFeedGroup> for GuiEmbyFeedGroupFrame {
-    fn from(group: GuiEmbyFeedGroup) -> Self {
-        match group {
-            GuiEmbyFeedGroup::Latest => Self::Latest,
-            GuiEmbyFeedGroup::All => Self::All,
-            GuiEmbyFeedGroup::Folder(folder_id) => Self::Folder(folder_id),
-        }
-    }
-}
-
-/// One pill of a feed-view library's pill row (row 8.1): single-select.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiEmbyPillFrame {
-    /// The group the pill selects: the set-feed-group command carries it.
-    pub group: GuiEmbyFeedGroupFrame,
-    /// The pill's label: `All`, or the folder's name.
-    pub name: String,
-    /// Whether the feed state's selection is this pill's group.
-    pub selected: bool,
-    /// Whether the pill is a collection pill (multi-select) rather than a
-    /// single-select one. Every Emby-library pill is single-select (design
-    /// D6).
-    pub collection: bool,
 }
 
 /// One row's kind (row 8.1), mirroring `mbv::GuiEmbyRowKind`: `collection`
@@ -165,11 +129,7 @@ impl GuiEmbyList {
         Self {
             lib_idx,
             library_name: projection.library_name.clone(),
-            pills: projection
-                .pills
-                .iter()
-                .map(GuiEmbyPillFrame::from)
-                .collect(),
+            collections: projection.collections.clone(),
             collection_names: projection.collection_names.clone(),
             feed_group: projection.feed_group,
             loading: projection.loading,
@@ -185,17 +145,6 @@ impl GuiEmbyDetail {
         Self {
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiEmbyHeroFrame::from),
-        }
-    }
-}
-
-impl From<&GuiEmbyPill> for GuiEmbyPillFrame {
-    fn from(pill: &GuiEmbyPill) -> Self {
-        Self {
-            group: GuiEmbyFeedGroupFrame::from(pill.group.clone()),
-            name: pill.name.clone(),
-            selected: pill.selected,
-            collection: false,
         }
     }
 }
@@ -249,24 +198,5 @@ impl From<&GuiEmbyHeroCredit> for GuiEmbyHeroCreditFrame {
             name: credit.name.clone(),
             role: credit.role.clone(),
         }
-    }
-}
-
-/// The wire feed group a carried pill's group sends (row 8.1): the same
-/// shape on the way out, so a command built from a carried pill addresses
-/// exactly that group.
-impl From<&GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
-    fn from(group: &GuiEmbyFeedGroupFrame) -> Self {
-        match group {
-            GuiEmbyFeedGroupFrame::Latest => Self::Latest,
-            GuiEmbyFeedGroupFrame::All => Self::All,
-            GuiEmbyFeedGroupFrame::Folder(folder_id) => Self::Folder(folder_id.clone()),
-        }
-    }
-}
-
-impl From<GuiEmbyFeedGroupFrame> for crate::bridge::library::GuiEmbyFeedGroup {
-    fn from(group: GuiEmbyFeedGroupFrame) -> Self {
-        Self::from(&group)
     }
 }

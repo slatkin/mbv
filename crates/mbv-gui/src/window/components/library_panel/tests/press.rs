@@ -1,11 +1,11 @@
 //! The panel's press contracts (`LibraryPanel.test.ts`, design D2 of
 //! `gui-pointer-target-interaction`, D8, D15): the item menu's paint on a
-//! destination that is not Music and the outside-press close. The presses are
-//! the panel's handler functions, tested against the mock core link; a headless
-//! document cannot fire a DOM press.
+//! destination that is not Music and the outside-press close, the library
+//! menu's, and the collection dropdown's (gui-collection-dropdown design D7).
+//! The presses are the panel's handler functions, tested against the mock core
+//! link; a headless document cannot fire a DOM press.
 
-use super::{Fixture, built, fixtures, press_outside_menu, seed_idle_status};
-use crate::bridge::frame::library::GuiShowsModeFrame;
+use super::{Fixture, built, fixtures, press_in_panel, seed_idle_status};
 use crate::window::arrangement::GuiArrangement;
 use dioxus_native::prelude::*;
 
@@ -64,7 +64,7 @@ fn the_wide_list_region_ends_left_of_the_hero_region() {
 /// Carry a Shows list and open its item menu at `x, y`, as the core's
 /// right-click frame does.
 fn open_the_shows_item_menu(fixture: &mut Fixture, x: f32, y: f32) {
-    let (list, detail) = fixtures::shows_sections(GuiShowsModeFrame::All);
+    let (list, detail) = fixtures::shows_sections();
     fixture.carry(list, detail);
     seed_idle_status(fixture);
     let state = fixture.state.clone();
@@ -84,8 +84,69 @@ fn a_press_inside_the_panel_closes_the_open_row_menu() {
     fixture.receiver.try_iter().last();
 
     let state = fixture.state.clone();
-    fixture.in_runtime(move || press_outside_menu(&state));
+    fixture.in_runtime(move || press_in_panel(&state));
 
     assert!(fixture.state.ui.peek().row_menu.is_none());
     assert_eq!(fixture.library_commands(), []);
+}
+
+/// Contract (gui-collection-dropdown design D7, spec "A press outside closes
+/// the dropdown"): a press inside the panel while the dropdown is open closes
+/// it and clears its filter text, so the next open starts empty.
+#[test]
+fn a_press_inside_the_panel_closes_the_open_collection_dropdown() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::music_sections(None);
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || {
+        state.toggle_collections_dropdown();
+        state.set_collections_filter("tifo".to_owned());
+    });
+    assert!(fixture.presents("[data-library-collections-menu]"));
+
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || press_in_panel(&state));
+
+    assert!(fixture.state.ui.peek().collections.is_none());
+    assert_eq!(
+        fixture
+            .state
+            .ui
+            .peek()
+            .collections
+            .clone()
+            .unwrap_or_default(),
+        ""
+    );
+    assert_eq!(fixture.library_commands(), []);
+    assert!(!fixture.presents("[data-library-collections-menu]"));
+}
+
+/// Contract (gui-collection-dropdown design D6, D6a): the open popover paints
+/// below its trigger, fully, and no header clips it. The selector row carried
+/// the pill row's `overflow: hidden`, which cut the popover to the row's 52 px
+/// box and hid every collection (review of 96f04ebef); the dropdown now rides
+/// the list header's title line, and the header clips nothing.
+#[test]
+fn the_open_dropdown_paints_below_its_trigger_unclipped() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::music_sections(None);
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+    let state = fixture.state.clone();
+    fixture.in_runtime(move || state.toggle_collections_dropdown());
+    fixture.lay_out();
+
+    let trigger = fixture.rect_of("[data-library-collections-trigger]");
+    let menu = fixture.rect_of("[data-library-collections-menu]");
+    assert!(
+        menu.y >= trigger.y + trigger.height,
+        "the popover paints below the trigger"
+    );
+    assert!(
+        !fixture.clips_overflow("[data-library-list-header]"),
+        "the list header clips the popover"
+    );
 }

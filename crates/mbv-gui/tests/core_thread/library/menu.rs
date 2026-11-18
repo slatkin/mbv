@@ -19,11 +19,10 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     let http = MockHttp::new();
     http.respond(200, TRACKS);
     let (mut test, cmd_rx) = seeded_music_core(&http);
-    send_library_frame(
+    let _ = send_library_frame(
         &mut test,
-        GuiLibraryCommand::SelectCollection {
-            lib_idx: 0,
-            group_id: "grp-hiphop".into(),
+        GuiLibraryCommand::ShowDetail {
+            item_id: "no-such-item".to_owned(),
         },
     );
     let picked = send_library_frame(

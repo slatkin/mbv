@@ -14,9 +14,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::route_library_key;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicPillFrame,
-    GuiMusicTrackFrame,
+    GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiMusicList, GuiMusicTrackFrame, GuiShowsDetail, GuiShowsList,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -295,22 +295,27 @@ fn route_in(
     );
 }
 
-/// The two group pills the Music fixture carries: one selected, one not.
-fn pills() -> Vec<GuiMusicPillFrame> {
-    vec![
-        GuiMusicPillFrame {
-            group_id: "g1".to_owned(),
-            name: "Rock".to_owned(),
-            selected: true,
-            collection: true,
-        },
-        GuiMusicPillFrame {
-            group_id: "g2".to_owned(),
-            name: "Jazz".to_owned(),
-            selected: false,
-            collection: true,
-        },
-    ]
+/// The Music fixture's collection selector: the one Rock group checked
+/// (design D6).
+fn collections() -> GuiCollections {
+    GuiCollections {
+        target: mbv::GuiCollectionTarget::Music(0),
+        all: false,
+        entries: vec![
+            GuiCollectionEntry {
+                key: "g1".to_owned(),
+                name: "Rock".to_owned(),
+                checked: true,
+            },
+            GuiCollectionEntry {
+                key: "g2".to_owned(),
+                name: "Jazz".to_owned(),
+                checked: false,
+            },
+        ],
+        noun: mbv::GuiCollectionNoun::Groups,
+        order: None,
+    }
 }
 
 /// The Beastie Boys artist: one album with a cached tracklist, one without.
@@ -386,8 +391,9 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The carried Music content: two group pills, one selected, the union the
-/// list keys move through, and the Hero's facts while an album is picked.
+/// The carried Music content: the collection selector with one checked group,
+/// the union the list keys move through, and the Hero's facts while an album
+/// is picked.
 fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
     GuiLibraryList {
         tabs: vec![GuiLibraryTabFrame {
@@ -397,13 +403,39 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            pills: pills(),
-            collection_names: vec!["Rock".to_owned()],
+            collections: collections(),
             loading: false,
             failure: None,
             artists,
         }),
     }
+}
+
+/// The carried Shows content: the Shows destination's series list, whose view
+/// dropdown reuses the collection dropdown's open fact and mounts no filter
+/// field (design D8).
+fn shows_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: Some(2),
+        destination: GuiDestinationList::Shows(GuiShowsList {
+            lib_idx: 0,
+            view: mbv::GuiShowsView::All,
+            loading: false,
+            series: Vec::new(),
+            upcoming_failed: false,
+            rows: Vec::new(),
+        }),
+    }
+}
+
+/// The Shows detail section value: no Hero.
+fn shows_detail() -> GuiLibraryDetail {
+    GuiLibraryDetail::Shows(GuiShowsDetail {
+        workspace_loading: false,
+        selected: None,
+        hero: None,
+    })
 }
 
 /// The Music detail section value: the given Hero, `None` while none is
@@ -437,8 +469,13 @@ fn carry(state: &LibraryState, list: GuiLibraryList, detail: GuiLibraryDetail) {
 fn ui_facts(state: &LibraryState) -> String {
     let ui = state.ui.peek().clone();
     format!(
-        "filter_open={} filter={:?} pill_select={:?} open={:?} dismissed={}",
-        ui.filter_open, ui.filter, ui.pill_select, ui.open_nodes, ui.hero_dismissed,
+        "filter_open={} filter={:?} collections_open={} collections_filter={:?} open={:?} dismissed={}",
+        ui.filter_open,
+        ui.filter,
+        ui.collections.is_some(),
+        ui.collections.clone().unwrap_or_default(),
+        ui.open_nodes,
+        ui.hero_dismissed,
     )
 }
 
@@ -458,9 +495,9 @@ fn carry_list(state: &LibraryState, open: &[&str]) {
 
 // A cursor move below the rows in view scrolls its row into view.
 
+mod collections;
 mod gating;
 mod home;
 mod list;
-mod pills;
 mod search_keys;
 mod window_keys;

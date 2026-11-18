@@ -39,12 +39,10 @@ pub(crate) fn build(app: &mut App) -> LibraryPass {
     if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
         app.ensure_gui_podcast_selection(lib_idx);
     }
-    // The Feeds destination's ensure (row 11.1): the stored pill converges on
-    // the subscription set the tab holds. The entries arrive from the shared
-    // startup fetch, so the ensure starts no load.
-    if matches!(destination, Some(GuiDestinationKind::Feeds)) {
-        app.ensure_gui_feeds_selection();
-    }
+    // The Feeds destination needs no frame-path ensure (row 11.1): the feed
+    // entries arrive from the shared startup fetch, and the effective set's
+    // retention settles the stored checked set against the subscription set
+    // the tab holds wherever it is read.
     let Some((list, detail)) = destination_parts(app, destination) else {
         return LibraryPass::default();
     };
@@ -183,8 +181,17 @@ pub(crate) fn log_built(
     list: Option<&GuiLibraryList>,
     detail: Option<&GuiLibraryDetail>,
 ) {
-    let (kind, pills, rows) = list.map_or(("none", 0, 0), |list| list_size(&list.destination));
-    let hero = detail.is_some_and(detail_has_hero);
+    let (kind, pills, rows) = list.map_or(("none", 0, 0), |list| {
+        let destination = &list.destination;
+        (
+            destination.kind_word(),
+            destination
+                .collections()
+                .map_or(0, |collections| collections.entries.len()),
+            destination.rows(),
+        )
+    });
+    let hero = detail.is_some_and(GuiLibraryDetail::has_hero);
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -196,30 +203,4 @@ pub(crate) fn log_built(
         hero,
         "the Library sections changed"
     );
-}
-
-/// The destination's kind word, its pill count, and its row count, for the log.
-fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
-    match list {
-        GuiDestinationList::Music(list) => ("music", list.pills.len(), list.artists.len()),
-        GuiDestinationList::Home(list) => ("home", 0, list.rows.len()),
-        GuiDestinationList::Shows(list) => ("shows", list.pills.len(), list.rows.len()),
-        GuiDestinationList::Emby(list) => ("emby", list.pills.len(), list.rows.len()),
-        GuiDestinationList::Audiobooks(list) => ("audiobooks", 0, list.rows.len()),
-        GuiDestinationList::Podcasts(list) => ("podcasts", list.pills.len(), list.rows.len()),
-        GuiDestinationList::Feeds(list) => ("feeds", list.pills.len(), list.rows.len()),
-    }
-}
-
-/// Whether the detail carries a Hero, for the log.
-fn detail_has_hero(detail: &GuiLibraryDetail) -> bool {
-    match detail {
-        GuiLibraryDetail::Music(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Home(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Shows(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Emby(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Audiobooks(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Podcasts(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Feeds(detail) => detail.hero.is_some(),
-    }
 }

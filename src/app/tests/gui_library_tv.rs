@@ -96,10 +96,11 @@ fn root_ids(app: &App) -> Vec<String> {
         .collect()
 }
 
-/// Opening the Shows library in the All series mode lands the series root
-/// rows on the App (row 7.1, contract a): the mode load is the TUI's own
-/// `apply_tv_letter_mode`, whose refresh the mocked transport answers, and
-/// the selection stores the mode as its active one.
+/// Opening the Shows library lands the series list on the App (row 7.1,
+/// contract a; gui-collection-dropdown design D8): the GUI's one view mode is
+/// the TUI's own `apply_tv_letter_mode` load of All, whatever the TUI's default
+/// resolution or a restored position chose, and the mocked transport answers
+/// its refresh.
 #[test]
 fn opening_shows_in_all_mode_lands_the_series_root_rows() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -111,7 +112,6 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
     let mut app = tv_app(&http);
 
     app.gui_tv_open(0);
-    app.gui_tv_set_mode(0, &TvContentMode::All);
     land(&mut app);
 
     assert_eq!(
@@ -121,8 +121,11 @@ fn opening_shows_in_all_mode_lands_the_series_root_rows() {
     );
     let root = &app.libs[0].nav_stack[0];
     assert!(!root.loading);
-    assert_eq!(root.tv_content_mode.as_ref(), Some(&TvContentMode::All));
-    assert_eq!(app.gui_tv_mode(0).as_ref(), Some(&TvContentMode::All));
+    assert_eq!(
+        root.tv_content_mode.as_ref(),
+        Some(&TvContentMode::All),
+        "the GUI Shows destination opens on the series list"
+    );
 }
 
 /// Selecting a series lands its seasons in `series_detail_cache`, and
@@ -146,6 +149,9 @@ fn selecting_a_series_lands_its_seasons_and_a_seasons_episodes() {
     );
     let mut app = tv_app(&http);
     app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
+    // The series list is already the library's mode, so the open asks for no
+    // load and the scripted answers belong to the detail fetch alone.
+    app.libs[0].tv_content_mode = Some(TvContentMode::All);
     app.gui_tv_open(0);
 
     app.gui_tv_select_series(0, "series-a");
@@ -204,7 +210,6 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
     app.gui_tv_shows.insert(
         0,
         crate::app::gui_library::GuiTvShowsSelection {
-            mode: Some(TvContentMode::All),
             series_id: Some("series-a".into()),
             ..Default::default()
         },
@@ -230,69 +235,6 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
             .collect::<Vec<_>>(),
         ["ep-1a"],
         "the Workspace's first season loads without a season select"
-    );
-}
-
-/// The Latest mode lands its rows on the App (row 7.1, contract c): the
-/// mode's own fetch (`get_latest_episodes`) replaces the root level, whose
-/// fetch fields the spawn aligned first so the completion is not stale.
-#[test]
-fn the_latest_mode_lands_its_rows() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let http = MockHttp::new();
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"ep-new","Name":"New episode","Type":"Episode"}],"TotalRecordCount":1}"#,
-    );
-    let mut app = tv_app(&http);
-    app.gui_tv_open(0);
-
-    app.gui_tv_set_mode(0, &TvContentMode::Latest);
-    land(&mut app);
-
-    assert_eq!(root_ids(&app), ["ep-new".to_string()]);
-    let root = &app.libs[0].nav_stack[0];
-    assert!(!root.loading);
-    assert_eq!(root.item_types.as_deref(), Some("Episode"));
-    assert_eq!(app.gui_tv_mode(0).as_ref(), Some(&TvContentMode::Latest));
-}
-
-/// The Upcoming mode lands its snapshot on the App (row 7.1, contract c):
-/// the fetch's completion stores the per-session premieres and fills the
-/// waiting Upcoming root level, through the same acceptance the presenting
-/// Client's shell drain runs.
-#[test]
-fn the_upcoming_mode_lands_its_snapshot() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let http = MockHttp::new();
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"ep-1","Type":"Episode","SeriesId":"series-a","SeriesName":"Alfred"}]}"#,
-    );
-    let mut app = tv_app(&http);
-    app.gui_tv_open(0);
-
-    app.gui_tv_set_mode(0, &TvContentMode::Upcoming);
-    // The Upcoming build sends the snapshot first, then the level's Loaded.
-    land(&mut app);
-    land(&mut app);
-
-    let premieres = &app.tv_upcoming_snapshots[TV_ID];
-    assert_eq!(premieres.len(), 1);
-    assert_eq!(premieres[0].series_name, "Alfred");
-    assert!(
-        !app.tv_upcoming_fetches.contains_key(TV_ID),
-        "the acceptance clears the request mark"
-    );
-    let root = &app.libs[0].nav_stack[0];
-    assert!(!root.loading);
-    assert_eq!(
-        root.tv_content_mode.as_ref(),
-        Some(&TvContentMode::Upcoming)
-    );
-    assert!(
-        root.items.is_empty(),
-        "premieres are not level items; they live in the snapshot"
     );
 }
 

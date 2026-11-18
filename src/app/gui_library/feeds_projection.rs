@@ -1,27 +1,25 @@
 //! The GUI Library's Feeds projection (add-gui-library-panel design D12,
-//! row 11.1): the single-select pill row of Latest and one pill per
-//! subscription, the active pill's entry list in the TUI's date order —
-//! newest first with undated entries last — the core's selected entry, and
-//! its Hero. Latest merges every subscription's entries; a subscription pill
-//! scopes the list to that one subscription. The list shows no letter rail,
+//! row 11.1): the interim collection pill row of All and one pill per
+//! subscription, the selection's entry list in the stored date order — the
+//! shared `compare_gui_date_order` rule, newest first with undated entries
+//! last while Newest — the core's selected entry, and its Hero. All merges
+//! every subscription's entries; a checked set merges the checked
+//! subscriptions'. The list shows no letter rail,
 //! because the sorted-by-date list has one, and the TUI's Watched filter is
 //! dropped. The Hero is the shared `hero_content_feed` producer's facts — the
 //! entry title with the duration — behind the subscription name, with the
 //! placeholder artwork only: a feed entry has no artwork source, so the frame
-//! carries the shape and no image. The order is the TUI's own
-//! (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift;
+//! carries the shape and no image. The per-subscription lists are the App's
+//! own (`FeedTabState::rebuild_all_entries`), so the two Clients cannot drift;
 //! the projection reads `App` data only.
 
 use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_queue::FeedEntry;
-use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
-use super::GuiFeedPill;
-use super::entry_list::{
-    GuiEntryListProjection, GuiEntryRow, GuiPillOption, picked_or_first, pill_options,
-};
+use super::collection::{GuiCollectionTarget, compare_gui_date_order};
+use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
@@ -91,16 +89,10 @@ impl GuiFeedEntryId {
     }
 }
 
-/// One pill of the Feeds pill row (row 11.1): Latest first, then one pill per
-/// configured subscription in the tab's order — the shared pill option over
-/// the Feeds pill. The pill row is single-select, as the TUI owner's
-/// one-valued group selection is; the state pills are dropped.
-pub type GuiFeedsPillOption = GuiPillOption<GuiFeedPill>;
-
-/// One row of the Feeds list (row 11.1) — the shared pill-scoped entry-list
-/// row. The identity is the entry's `(subscription url, guid)` pair, encoded
-/// as one opaque string a select, play, or enqueue command sends, never a row
-/// position.
+/// One row of the Feeds list (row 11.1) — the shared collection-scoped
+/// entry-list row. The identity is the entry's `(subscription url, guid)` pair,
+/// encoded as one opaque string a select, play, or enqueue command sends, never
+/// a row position.
 pub type GuiFeedsRow = GuiEntryRow;
 
 /// The selected entry's Hero facts (row 11.1): the shared `hero_content_feed`
@@ -130,32 +122,40 @@ pub struct GuiFeedsHero {
     pub art_shape: GuiArtShape,
 }
 
-/// The Feeds projection the GUI Library panel paints (row 11.1) — the shared
-/// pill-scoped entry-list projection over the Feeds pill and Hero: the
-/// single-select pill row, the active pill's entry rows, the core's selected
-/// entry, and its Hero. No letter rail rides here and no state filter.
-pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedPill, GuiFeedsHero>;
+/// The Feeds projection the GUI Library panel paints (row 11.1) — the
+/// shared collection-scoped entry-list projection over the collection selector
+/// and Hero: All and the subscriptions with their checked state, the
+/// selection's entry rows, the core's selected entry, and its Hero. No letter
+/// rail rides here and no state filter.
+pub type GuiFeedsProjection = GuiEntryListProjection<GuiFeedsHero>;
 
 impl App {
-    /// The Feeds projection the GUI Library panel paints (row 11.1): the pill
-    /// row, the active pill's entry rows, the selected entry, and its Hero. A
-    /// Client with no configured subscription projects the empty projection,
-    /// as the frame's gate excludes that destination anyway.
+    /// The Feeds projection the GUI Library panel paints (row 11.1): the
+    /// collection selector, the selection's entry rows in the stored date
+    /// order, the selected entry, and its Hero. A Client with no configured
+    /// subscription projects the empty projection, as the frame's gate
+    /// excludes that destination anyway. The selection's entries are built
+    /// once and sorted once; the rows and the Hero lookup read the sorted
+    /// list, so the frame never rebuilds it.
     #[must_use]
     pub fn gui_feeds_projection(&self) -> GuiFeedsProjection {
         if !self.gui_feeds_present() {
             return GuiFeedsProjection::default();
         }
-        let pill = self.gui_feeds_pill();
-        let pills = self.gui_feeds_pills(&pill);
-        let rows = self.gui_feeds_rows();
+        let order = self.gui_feeds_date_order();
+        let collections = self.gui_collections(GuiCollectionTarget::Feeds);
+        let mut entries = self.gui_feeds_entries();
+        entries.sort_by(|left, right| {
+            compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order)
+        });
+        let rows = self.gui_feeds_rows(&entries);
         let selected = self.gui_feeds_selected(&rows);
         let hero = selected
             .as_deref()
             .and_then(GuiFeedEntryId::decode)
-            .and_then(|entry| self.gui_feeds_hero(&entry));
+            .and_then(|entry| self.gui_feeds_hero(&entry, &entries));
         GuiFeedsProjection {
-            pills,
+            collections,
             loading: self.feed_tab.loading,
             failed: false,
             rows,
@@ -164,27 +164,22 @@ impl App {
         }
     }
 
-    /// The pill row (row 11.1): Latest first, then each configured
-    /// subscription by its name in the tab's order, with the effective pill
-    /// selected.
-    fn gui_feeds_pills(&self, pill: &GuiFeedPill) -> Vec<GuiFeedsPillOption> {
-        pill_options(
-            &GuiFeedPill::Latest,
-            pill,
-            self.feed_tab.subscriptions.iter().map(|subscription| {
-                (
-                    GuiFeedPill::Subscription(subscription.url.clone()),
-                    subscription.name.clone(),
-                )
-            }),
-        )
+    /// The Feeds collection selector's catalog (row 11.1): each configured
+    /// subscription by its name in the tab's order, keyed by its URL.
+    pub(in crate::app::gui_library) fn gui_feeds_subscriptions(&self) -> Vec<(String, String)> {
+        self.feed_tab
+            .subscriptions
+            .iter()
+            .map(|subscription| (subscription.url.clone(), subscription.name.clone()))
+            .collect()
     }
 
-    /// The active pill's entry rows (row 11.1): the order is the App's own,
-    /// which `FeedTabState::rebuild_all_entries` sorted newest first with
-    /// undated entries last.
-    fn gui_feeds_rows(&self) -> Vec<GuiFeedsRow> {
-        self.gui_feeds_entries()
+    /// The selection's entry rows (row 11.1; gui-collection-dropdown design
+    /// D2, D4): the projection has already applied the stored date order to
+    /// the entries — newest first with undated rows last while Newest — and
+    /// these rows carry that order as it is.
+    fn gui_feeds_rows(&self, entries: &[&FeedEntry]) -> Vec<GuiFeedsRow> {
+        entries
             .iter()
             .map(|entry| self.gui_feeds_row(entry))
             .collect()
@@ -204,9 +199,7 @@ impl App {
             subtitle: self
                 .gui_feeds_subscription_name(entry.feed_id.as_deref())
                 .map(str::to_string),
-            date: row_date(provider_timestamp_secs(&mbv_queue::QueueItem::Feed(
-                entry.clone(),
-            ))),
+            date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
         }
     }
@@ -224,10 +217,15 @@ impl App {
     /// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
     /// producer's title and duration behind the subscription name, and the
     /// feed artwork policy's shape. The entry has no artwork source, so no
-    /// image rides here and the Hero paints its placeholder.
-    fn gui_feeds_hero(&self, entry: &GuiFeedEntryId) -> Option<GuiFeedsHero> {
-        let entry = self
-            .gui_feeds_entries()
+    /// image rides here and the Hero paints its placeholder. `listed` is the
+    /// projection's sorted selection list — the list the Hero's row came
+    /// from — so the lookup re-reads it instead of rebuilding it.
+    fn gui_feeds_hero(
+        &self,
+        entry: &GuiFeedEntryId,
+        listed: &[&FeedEntry],
+    ) -> Option<GuiFeedsHero> {
+        let entry = listed
             .iter()
             .find(|known| feed_entry_matches(known, entry))?;
         let content = hero_content_feed(entry);

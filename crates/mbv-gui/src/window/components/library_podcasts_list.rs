@@ -1,6 +1,7 @@
 //! The Podcasts list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryPodcastsList`; add-gui-library-panel design D12, row
-//! 10.1): the active pill's flat episode rows — the episode's title over its
+//! 10.1): the checked collections' flat episode rows — the episode's title
+//! over its
 //! show, and the publish date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
 //!
@@ -15,6 +16,7 @@
 
 use dioxus_native::prelude::*;
 
+use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -76,17 +78,15 @@ pub fn LibraryPodcastsList() -> Element {
     let podcasts_ui = library.podcasts_ui.cloned();
     let scroll = library.scrolls.podcasts.cloned();
 
-    // The header's selection label (design D15): the active pill's name, so
-    // the column names the view it holds.
-    let selection_label = frame
-        .and_then(|frame| {
-            frame
-                .pills
-                .iter()
-                .find(|pill| pill.selected)
-                .map(|pill| pill.name.clone())
-        })
-        .unwrap_or_else(|| "Latest".to_owned());
+    // The header's selection label (design D15, D6): the collections frame's
+    // label — All, the one checked name, or the count with the noun — so the
+    // column names the view it holds.
+    let selection_label = frame.map_or_else(|| "All".to_owned(), |frame| frame.collections.label());
+
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the destination's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it.
+    let collections = frame.map(|frame| frame.collections.clone());
 
     // The painted rows of the flat list (row 10.1): the same model
     // [`crate::window::library::podcasts`] builds from the carried content,
@@ -120,7 +120,7 @@ pub fn LibraryPodcastsList() -> Element {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-podcasts-list-column": "",
             // The Music list's header (design D15): the list names itself, the
-            // active pill is the carried scope, and the `/` filter field
+            // checked collections are the carried scope, and the `/` filter field
             // narrows it.
             div {
                 class: "flex flex-none flex-col",
@@ -128,6 +128,7 @@ pub fn LibraryPodcastsList() -> Element {
                     title: "Podcasts".to_owned(),
                     label: selection_label.clone(),
                     label_attr: Some("data-library-podcasts-selection-label"),
+                    collections,
                     filter: podcasts_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter episodes".to_owned(),

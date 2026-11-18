@@ -4,8 +4,8 @@
 //! reads — the `/` filter's text. The scroll offset and the measured viewport
 //! live in the Emby list's scroll store ([`super::scroll`], design D9). The core
 //! owns the selected row and the feed-group selection (the frame's `selected`
-//! and `pills`), so nothing here mirrors them: a press and an Enter send the
-//! command, and the frame carries the choice back. The row model is
+//! and `collections`), so nothing here mirrors them: a press and an Enter send
+//! the command, and the frame carries the choice back. The row model is
 //! [`super::emby_list`]'s; the Hero overlay stays in [`super::state`]'s shared
 //! store, and the Hero carries no Workspace and no cursor of its own.
 //!
@@ -13,34 +13,32 @@
 //! (`gui-pointer-target-interaction` D2), and their movement keys scroll the
 //! list (design D6).
 //!
-//! The state, the filter, and the scroll store are the pill-list controller's
-//! ([`super::pill_list`], row 7C.1); this module keeps the Emby frame, the Emby
-//! rows and their letter headings, the letter rail, the play-next command, the
-//! Emby command shapes, and the Emby names.
+//! The state, the filter, and the scroll store are the filtered-list
+//! controller's ([`super::list_state`], row 7C.1); this module keeps the Emby
+//! frame, the Emby rows and their letter headings, the letter rail, the
+//! play-next command, the Emby command shapes, and the Emby names.
 
 use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiEmbyFeedGroupFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::emby_list::{EmbyItemRow, EmbyListRow, emby_letter_rail};
 use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_emby_list;
 
-use super::pill_list::PillListUiState;
+use super::list_state::ListUiState;
 use super::scroll::set_scroll_top;
 use super::state::LibraryState;
 
-/// The Emby list's interaction state: the shared pill-list state over the
-/// feed-group pill, whose focus the pill row keeps as the group's stable key
-/// (`embyGroupKey`) rather than the group itself (design D6, row 8.1).
-pub type EmbyUiState = PillListUiState<GuiEmbyFeedGroupFrame>;
+/// The Emby list's interaction state: the shared filtered-list state over the
+/// feed-group mode's folder selector (gui-collection-dropdown design D6).
+pub type EmbyUiState = ListUiState;
 
 /// The state a freshly mounted Emby list starts with.
 #[must_use]
 pub fn initial_emby_ui() -> EmbyUiState {
-    PillListUiState::initial()
+    ListUiState::initial()
 }
 
 impl LibraryState {
@@ -208,35 +206,5 @@ impl LibraryState {
         let rows = self.emby_rows();
         let held = *self.scrolls.emby.peek();
         set_scroll_top(self.scrolls.emby, &rows, held.scroll_top);
-    }
-
-    /// Ask for a pill to be selected (row 8.1): the pill row turns the request
-    /// into the set-feed-group command.
-    pub fn request_emby_pill_select(&self, group: GuiEmbyFeedGroupFrame) {
-        let mut emby_ui = self.emby_ui;
-        emby_ui.with_mut(|ui| ui.pill_select = Some(group));
-    }
-
-    /// Select the feed group `group` of the plain Emby library `lib_idx` (row
-    /// 8.1): one group is always selected, and a press on a pill loads that
-    /// group's items. The core stores the choice, and the pills paint it back,
-    /// so the row and the list cannot disagree.
-    pub fn select_emby_pill(&self, lib_idx: usize, group: GuiEmbyFeedGroupFrame) {
-        self.link.library(GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx,
-            group: group.into(),
-        });
-    }
-
-    /// Turn the keys' pill request into the set-feed-group command the pill
-    /// sends (row 8.1). The intent is consumed here, so one key sends one
-    /// command.
-    pub fn apply_emby_pill_select(&self, lib_idx: usize) {
-        let group = self.emby_ui.peek().pill_select.clone();
-        if let Some(group) = group {
-            let mut emby_ui = self.emby_ui;
-            emby_ui.with_mut(|ui| ui.pill_select = None);
-            self.select_emby_pill(lib_idx, group);
-        }
     }
 }

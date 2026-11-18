@@ -4,15 +4,19 @@
 //! regions — the top bar above the list, and, in Wide, the Hero pane beside
 //! the list; in Narrow the Hero mounts as an overlay over the list once an
 //! item is picked. The active destination decides which painters mount
-//! (design D12): Music paints the pill row, the union list, and the album
-//! Hero (the Home Hero mounts with row 7.5); Home paints the flat list and
-//! its Hero, with no pill row, no letter rail, and no Workspace; Shows
-//! paints its mode pills, the series or flat list with the All series mode's
-//! rail, and the series Hero with its Workspace; a plain Emby library paints
-//! its feed-group pills, its list with the plain mode's rail, and its Hero
-//! with no Workspace; Audiobooks paints the book list with its letter rail
-//! and the book Hero with its chapters Workspace (row 9.1). The Status bar
-//! closes the column under both.
+//! (design D12): Music paints the union list and the album Hero (the Home Hero
+//! mounts with row 7.5); Home paints the flat list and its Hero, with no letter
+//! rail and no Workspace; Shows paints its series list with the letter rail and
+//! the series Hero with its Workspace; a plain Emby library paints its list with
+//! the plain mode's rail and its Hero with no Workspace, and a feed-group
+//! library paints the date-ordered list; Audiobooks paints the book list with
+//! its letter rail and the book Hero with its chapters Workspace (row 9.1). The
+//! Status bar closes the column under both.
+//!
+//! The collection dropdown is not a panel region (gui-collection-dropdown design
+//! D6a): it rides the list header's title line, so the panel paints nothing
+//! between the top bar and the list, and the list's own component carries the
+//! destination's collections frame to its header.
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
@@ -20,13 +24,15 @@
 //! destination lists mount for real (row 7.7); the destination lists read
 //! their carried frames from the section store themselves, so a panel
 //! repaint never deep-clones a list's rows for them.
-//! The pill rows mount for real (rows 7.2–7.4).
+//! The collection dropdowns ride the list headers (gui-collection-dropdown row
+//! 8.2).
 //!
 //! A press inside the panel stores no focus (design D2 of
 //! `gui-pointer-target-interaction`): the pointer names the key target, so the
 //! press acts on the row it lands on. The press that lands while the
-//! right-click item menu is up closes the menu — the outside-press rule —
-//! unless it landed on the menu itself, whose handler stops this one.
+//! right-click item menu or the collection dropdown is up closes it — the
+//! outside-press rule — unless it landed on the menu or the dropdown itself,
+//! whose handler stops this one.
 //!
 //! The Narrow Hero overlay covers the list, so it must be dismissible: its
 //! backdrop press closes it, and Esc closes it in the key router (design
@@ -42,21 +48,16 @@ use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
 use crate::window::components::library_audiobooks_list::LibraryAudiobooksList;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
 use crate::window::components::library_emby_list::LibraryEmbyList;
-use crate::window::components::library_emby_pills::LibraryEmbyPills;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
 use crate::window::components::library_feeds_list::LibraryFeedsList;
-use crate::window::components::library_feeds_pills::LibraryFeedsPills;
 use crate::window::components::library_hero::LibraryHero;
 use crate::window::components::library_home_hero::LibraryHomeHero;
 use crate::window::components::library_home_list::LibraryHomeList;
 use crate::window::components::library_list::LibraryList;
-use crate::window::components::library_pills::LibraryPills;
 use crate::window::components::library_podcasts_hero::LibraryPodcastsHero;
 use crate::window::components::library_podcasts_list::LibraryPodcastsList;
-use crate::window::components::library_podcasts_pills::LibraryPodcastsPills;
 use crate::window::components::library_shows_hero::LibraryShowsHero;
 use crate::window::components::library_shows_list::LibraryShowsList;
-use crate::window::components::library_shows_pills::LibraryShowsPills;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::library_top_bar::LibraryTopBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
@@ -80,14 +81,17 @@ pub struct LibraryPanelProps {
     pub library_column: f32,
 }
 
-/// A press inside the panel while the right-click item menu is up (design
-/// D8, D15): the press closes the menu — the outside-press rule. The menu's
-/// own press handler stops this one from running, so a press on the menu's
-/// entries runs the entry instead of closing, including the right-press that
-/// opens the menu over another row.
-fn press_outside_menu(library: &LibraryState) {
+/// A press inside the panel (design D8, D15; gui-collection-dropdown design
+/// D7): the press closes the right-click item menu — the outside-press rule —
+/// and the open collection dropdown, whose next open starts with an empty
+/// filter. The menu's and the dropdown's own handlers stop this one from
+/// running, so a press on either surface acts on it instead of closing it.
+fn press_in_panel(library: &LibraryState) {
     if library.ui.peek().row_menu.is_some() {
         library.close_library_row_menu();
+    }
+    if library.ui.peek().collections.is_some() {
+        library.close_collections_dropdown();
     }
 }
 
@@ -102,45 +106,6 @@ fn pair_has_hero(pair: &LibraryPair) -> bool {
         LibraryPair::Audiobooks(_, detail) => detail.hero.is_some(),
         LibraryPair::Podcasts(_, detail) => detail.hero.is_some(),
         LibraryPair::Feeds(_, detail) => detail.hero.is_some(),
-    }
-}
-
-/// The active destination's pill row (design D6, D12), with the pills region
-/// the arrangement paints it in. Home and a plain Emby library paint no pill
-/// row at all — the rail replaces it — so their pair names none. The
-/// painters take the pills and the library index alone (the port review's
-/// repaint-clone finding): the pills read nothing else, so a panel repaint
-/// never clones the carried list's rows for them.
-fn pills_painter(pair: Option<LibraryPair>) -> Option<Element> {
-    match pair {
-        Some(LibraryPair::Music(list, _)) => Some(rsx! {
-            LibraryPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Shows(list, _)) => Some(rsx! {
-            LibraryShowsPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Emby(list, _)) if list.feed_group => Some(rsx! {
-            LibraryEmbyPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Podcasts(list, _)) => Some(rsx! {
-            LibraryPodcastsPills {
-                pills: list.pills.clone(),
-                lib_idx: list.lib_idx,
-            }
-        }),
-        Some(LibraryPair::Feeds(list, _)) => Some(rsx! {
-            LibraryFeedsPills { pills: list.pills.clone() }
-        }),
-        _ => None,
     }
 }
 
@@ -342,19 +307,12 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             // and the row and list markers under it name what the key acts
             // on.
             "data-pointer-zone": PointerZone::Library.token(),
-            onpointerdown: move |_| press_outside_menu(&press_library),
+            onpointerdown: move |_| press_in_panel(&press_library),
             LibraryTopBar {
                 tabs: tabs.clone(),
                 current_tab,
                 search: search.clone(),
                 home_active: pair.is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
-            }
-            // The active destination's pills (design D6, D12): Home paints
-            // none, so the row is absent on it, not collapsed; a plain Emby
-            // library paints none either — its letter rail replaces the
-            // TUI's letter-range pill row.
-            if let Some(pills) = pills_painter(pair) {
-                { pills }
             }
             div {
                 class: "relative flex min-h-0 flex-1",

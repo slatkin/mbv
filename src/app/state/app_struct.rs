@@ -263,23 +263,34 @@ pub struct App {
     /// hide, so the visualizer and hide setters and the persisted hide do
     /// nothing for the GUI Client.
     pub(in crate::app) gui_client: bool,
-    /// The GUI Library panel's selected collection per destination
-    /// (add-gui-library-panel design D2, D5, D6): a Grouped Music library's
-    /// selected group id, keyed by the library index. One group is always
-    /// selected, so an absent entry (or one the library no longer holds)
-    /// selects the first group. The window content sends the choice with the
-    /// select-collection command; the TUI never reads it.
-    pub(in crate::app) gui_library_groups: std::collections::HashMap<usize, String>,
+    /// The GUI Library panel's selected collections per destination
+    /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design
+    /// D1, D2): one stored selection per Grouped Music library, keyed by the
+    /// library index — the checked set (All or the checked collection ids),
+    /// whose order half the Music destination never reads. An absent entry is
+    /// All, and a checked set the library emptied falls back to All where the
+    /// selection is read. The window content sends the choice with the
+    /// collection commands; the TUI never reads it.
+    pub(in crate::app) gui_library_groups:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
     /// The GUI Library's Music collection store (design D5): each selected
-    /// group's album list, keyed by the library index and the group id. It
+    /// group's album list, keyed by the library index, then the group id. It
     /// lands outside `nav_stack`, so the TUI's navigation state and fetches do
-    /// not change.
-    pub(in crate::app) gui_music_albums:
-        std::collections::HashMap<(usize, String), crate::app::gui_library::GuiGroupAlbums>,
+    /// not change, and a per-frame reader looks a group up through its
+    /// borrowed id.
+    pub(in crate::app) gui_music_albums: std::collections::HashMap<
+        usize,
+        std::collections::HashMap<String, crate::app::gui_library::GuiGroupAlbums>,
+    >,
     /// The album each collection group's pill last showed in the GUI Library's
     /// Hero (design D13), keyed by the library index and the group id. A group
     /// with no entry shows its first album. The TUI never reads it.
     pub(in crate::app) gui_library_picks: std::collections::HashMap<(usize, String), String>,
+    /// The album the Hero last showed while All or several Music groups were
+    /// checked (gui-collection-dropdown design D11), keyed by the library
+    /// index: the session-only union pick, which the launch file never saves.
+    /// The TUI never reads it.
+    pub(in crate::app) gui_music_union_picks: std::collections::HashMap<usize, String>,
     /// The item whose full menu the frame's `rowMenu` section carries (the
     /// GUI Library's right-click item menu): the item the row-menu command
     /// last named. The TUI never reads it.
@@ -290,20 +301,52 @@ pub struct App {
     /// to the first item row in the projection, so the Hero's default is
     /// never blank. The TUI never reads it.
     pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
+    /// The flat Shows row whose Hero the GUI holds (gui-collection-dropdown
+    /// design D9): the New row the select command last named. The projection
+    /// falls back to the first New row, so the Hero is never blank, and an
+    /// Upcoming row is display-only and never lands here.
+    pub(in crate::app) gui_shows_flat_selection: Option<String>,
+    /// The GUI Shows destination's single view per library (design D8): All,
+    /// New, or Upcoming. A library with no entry shows All, the default.
+    pub(in crate::app) gui_shows_views:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiShowsView>,
+    /// The GUI Shows New list's per-library source (gui-collection-dropdown
+    /// design D9): each Emby TV library's latest episodes, keyed by the
+    /// library id, filled by the GUI launch's one worker fetch per library.
+    /// An absent entry has not been requested, `Requesting` is in flight, and
+    /// `Landed` holds the rows — empty when the fetch returned nothing or
+    /// failed, so the view paints its empty state and does not re-request.
+    /// The view merges every library's landed list by `date_added`, newest
+    /// first, and de-duplicates by item id. It lives outside `nav_stack`, so
+    /// the TUI's own levels stay unchanged, and the TUI never reads it.
+    pub(in crate::app) gui_shows_new: std::collections::HashMap<
+        String,
+        crate::app::gui_library::GuiSectionRequest<mbv_emby_model::EmbyItem>,
+    >,
     /// The GUI Library's Shows selection (add-gui-library-panel design D12,
     /// the USER-APPROVED GUI Shows design): per Shows library, the active
     /// view mode (default from `resolve_tv_content_mode`), the selected
     /// series, and the selected season. The TUI never reads it.
     pub(in crate::app) gui_tv_shows:
         std::collections::HashMap<usize, crate::app::gui_library::GuiTvShowsSelection>,
-    /// The GUI Library's plain Emby-library selection (add-gui-library-panel
-    /// design D12, row 8.1): per plain Emby library, the row the Hero shows.
-    /// The feed-view library's selected group is the library tab's own
-    /// `feed_home_video` selection, which the set-feed-group action writes
-    /// through the TUI's path — no second store of it exists here. The TUI
-    /// never reads it.
+    /// The GUI Library's own state per Emby library (add-gui-library-panel
+    /// design D12, row 8.1; gui-collection-dropdown design D2, D3): the row
+    /// the Hero shows, and a feed-view library's claim on its fetched results.
+    /// The feed-view library's checked folders are the separate
+    /// `gui_emby_feed_sets` store, so the library tab's own
+    /// `feed_home_video` selection stays the TUI's. The TUI never reads it.
     pub(in crate::app) gui_emby_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
+    /// The GUI Library's Emby feed-group selection (add-gui-library-panel
+    /// design D12, row 8.1; gui-collection-dropdown design D2, D3, D4): per
+    /// feed-group library, one stored selection — the checked folders (or
+    /// All) and the list's date order. The GUI reads and fills the library tab's shared
+    /// `feed_home_video` cache without writing its `selection`, so the TUI's
+    /// own pill selection stays the TUI's. A library with no entry has set no
+    /// GUI selection and reads All on Newest; the store is session memory
+    /// only. The TUI never reads it.
+    pub(in crate::app) gui_emby_feed_sets:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
     /// The GUI Library's Emby root-list store (row 8.1): each plain Emby
     /// library's full root list, paged to completion, keyed by the library
     /// index. It lands outside `nav_stack`, because the TUI's root path
@@ -312,15 +355,6 @@ pub struct App {
     /// reads. The TUI never reads it.
     pub(in crate::app) gui_emby_roots:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
-    /// The GUI Library's destination-Latest store (row 8.1): each Emby
-    /// library's Latest snapshot, keyed by the library index — the list the
-    /// New pill paints, fetched through the store's own `get_latest` fetch
-    /// the way the root-list store fetches its flat list. A loaded snapshot
-    /// lives for the session, and a failed one stays failed until the pill
-    /// is selected again. The TUI's own Latest snapshot stays the shell's
-    /// (`tv_latest_snapshots`), and the TUI never reads this store.
-    pub(in crate::app) gui_emby_latest:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLatestItems>,
     /// The GUI Library's Audiobooks selection (add-gui-library-panel design
     /// D12, row 9.1): per Audiobookshelf book library, the book the Hero
     /// shows, by stable `library_item_id`. The TUI's own resting selection is
@@ -329,8 +363,9 @@ pub struct App {
     pub(in crate::app) gui_abs_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiAudiobooksSelection>,
     /// The GUI Library's Podcasts selection (add-gui-library-panel design
-    /// D12, row 10.1): per podcast library, the selected pill (default
-    /// Latest) and the episode the Hero shows, by the provider's
+    /// D12, row 10.1; gui-collection-dropdown design D1, D2): per podcast
+    /// library, the checked shows (default All), the date order (default
+    /// Newest), and the episode the Hero shows, by the provider's
     /// `(library_item_id, episode_id)` identity. The browse state's
     /// `committed_show_pill` is the one write both Clients make — the bounded
     /// fan-out's scope reads it — while the browse state's own selected show
@@ -338,10 +373,11 @@ pub struct App {
     pub(in crate::app) gui_podcast_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiPodcastsSelection>,
     /// The GUI Library's Feeds selection (add-gui-library-panel design D12,
-    /// row 11.1): the selected pill (default Latest) and the entry the Hero
-    /// shows, by the entry's stable `guid`. One feed tab exists per Client, so
-    /// one store holds it. The TUI's feed group and Watched filter stay the
-    /// TUI owner's, and the TUI never reads this store.
+    /// row 11.1; gui-collection-dropdown design D1, D2): the checked
+    /// subscriptions (default All), the date order (default Newest), and the
+    /// entry the Hero shows, by the entry's stable `guid`. One feed tab exists
+    /// per Client, so one store holds it. The TUI's feed group and Watched
+    /// filter stay the TUI owner's, and the TUI never reads this store.
     pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
     /// The GUI Library's Search store (add-gui-library-panel design D12, row
     /// 12.1): the live query, whether its result is still out, whether it
@@ -358,10 +394,10 @@ pub struct App {
     /// drain once the landed nav stack has replaced the saved position, so
     /// the switch's activation never restores a stale position. Consumed only
     /// when the drained activation belongs to the pending library; any other
-    /// library's activation leaves it armed. Loss semantics: it is cleared by
-    /// any manual tab change (`apply_tab_position`) and by `LibEvent::Error`,
-    /// so a user who moved on or a failed activation never gets yanked to the
-    /// navigated library (U2 correction).
+    /// library's activation leaves it armed. A manual tab change
+    /// (`apply_tab_position`), `LibEvent::Error`, or
+    /// `LibEvent::FeedHomeVideoSelectionFailed` clears it, so a user who moved
+    /// on or a failed activation never gets yanked (U2 correction).
     pub(in crate::app) pending_navigate_tab_switch: Option<usize>,
     /// Ensure-then-land state for a `NavigateLanding::Series` whose target
     /// library corpus is not ready (U2 correction): armed by the

@@ -168,9 +168,9 @@ fn show_album(test: &mut TestCore) {
     );
     test.tx
         .send(CoreInput::Library(
-            GuiLibraryCommand::SelectCollection {
-                lib_idx: 0,
-                group_id: "grp-hiphop".into(),
+            GuiLibraryCommand::CollectionToggle {
+                target: mbv::GuiCollectionTarget::Music(0),
+                key: "grp-hiphop".into(),
             }
             .into(),
         ))
@@ -299,9 +299,9 @@ fn seed_six_albums(test: &mut TestCore) {
     app.seed_gui_music_albums_for_test(0, "grp-hiphop", &albums);
     test.tx
         .send(CoreInput::Library(
-            GuiLibraryCommand::SelectCollection {
-                lib_idx: 0,
-                group_id: "grp-hiphop".into(),
+            GuiLibraryCommand::CollectionToggle {
+                target: mbv::GuiCollectionTarget::Music(0),
+                key: "grp-hiphop".into(),
             }
             .into(),
         ))

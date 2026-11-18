@@ -47,8 +47,8 @@ pub enum NavigateLanding {
 /// `App::retry_pending_series_landing` retries the landing on that
 /// library's next `Loaded`/`AllItemsPrefetched`/restored-position drain.
 /// Cleared by the retry on success (land, save, switch per D4) or on a miss
-/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error`,
-/// and by any manual tab change.
+/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error` or
+/// `LibEvent::FeedHomeVideoSelectionFailed`, and by any manual tab change.
 #[derive(Debug)]
 pub struct PendingSeriesLanding {
     pub lib_idx: usize,
@@ -355,6 +355,19 @@ pub enum ModelContentEvent {
     HomeContentCleared,
 }
 
+/// One feed-group target's items fetch failed (gui-collection-dropdown design
+/// D3): the library index, the target the fetch named, and the error. The
+/// dispatch arm retires the target's outstanding-fetch mark and records the
+/// GUI's terminal failure mark, which its shown pass skips until a user press
+/// clears it. Both Clients' fetch paths send it, so a TUI selection's failed
+/// fetch retires its mark too.
+#[derive(Debug)]
+pub struct FeedHomeVideoSelectionFailed {
+    pub lib_idx: usize,
+    pub selection: mbv_ui_model::feed::FeedHomeVideoSelection,
+    pub error: String,
+}
+
 /// Library events are grouped by the App state handler that owns them.
 /// A new variant goes in the family whose handler file owns its state.
 #[derive(Debug)]
@@ -373,11 +386,14 @@ pub enum LibEvent {
     /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
     /// root-list store starts one, so the TUI never receives it.
     GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
-    /// The GUI Library's destination-Latest store's fetch completed (row
-    /// 8.1): the New pill's snapshot lands in the store the way the root-list
-    /// completion lands in its store. Only the GUI Client's Latest store
-    /// starts one, so the TUI never starts or receives it.
-    GuiEmbyLatestItems(crate::app::gui_library::GuiEmbyLatestItemsEvent),
+    /// The GUI Shows New list's fetch completed for one Emby TV library
+    /// (gui-collection-dropdown design D9). Only the GUI Client's launch
+    /// starts one, so the TUI never receives it.
+    GuiShowsNew(crate::app::gui_library::GuiShowsNewEvent),
+    /// One feed-group target's items fetch failed (gui-collection-dropdown
+    /// design D3). Both Clients' fetch paths send it, and the GUI's store
+    /// owns the terminal failure mark it records.
+    FeedHomeVideoSelectionFailed(FeedHomeVideoSelectionFailed),
     Error(String),
 }
 

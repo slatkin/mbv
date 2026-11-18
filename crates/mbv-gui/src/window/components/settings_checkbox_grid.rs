@@ -11,8 +11,8 @@
 
 use dioxus_native::prelude::*;
 
+use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::cursor_reveal::cursor_reveal;
-use crate::window::icons::Check;
 use crate::window::settings::entries::entry_id;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -176,13 +176,14 @@ fn ChoiceBox(
             "data-settings-cursor": cursor.then_some(""),
             onmounted: move |event: Event<MountedData>| reveal.set(Some(event)),
             onclick: move |_| onpress.call(()),
-            span {
-                class: "flex flex-none items-center justify-center",
-                style: "{mark_style}",
-                "aria-hidden": "true",
-                if on {
-                    Check { size: 11, stroke_width: 3.5, color: "var(--canvas-ink)" }
-                }
+            CheckboxBox {
+                checked: on,
+                element: CheckboxBoxElement::Span,
+                style: mark_style,
+                size: 11,
+                stroke_width: 3.5,
+                color: "var(--canvas-ink)".to_owned(),
+                aria_hidden: true,
             }
             Truncate {
                 text: label,

@@ -33,12 +33,14 @@ use crate::window::pointer_target::PointerList;
 use crate::window::sections::SectionRef;
 
 /// The props of the Feeds Hero (the `LibraryFeedsHero` props, narrowed
-/// to what the Hero reads): the carried Feeds rows — the active pill's rows,
+/// to what the Hero reads): the carried Feeds rows — the checked
+/// collections' rows,
 /// which the list band filters to the Hero's feed — and the selected entry's
 /// Hero facts.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryFeedsHeroProps {
-    /// The active pill's entry rows (design D12, row 11.1): the carried list,
+    /// The checked collections' entry rows (design D12, row 11.1): the carried
+    /// list,
     /// as the one handle every reader clones, which the list band narrows to
     /// the rows that belong to the Hero's feed (`share-gui-sections-by-rc`
     /// design D3).
@@ -117,7 +119,8 @@ pub fn LibraryFeedsHero(props: LibraryFeedsHeroProps) -> Element {
     let layout = hero_layout(&facts, "feed");
 
     // The feed's entries, newest first, as the Workspace table paints them:
-    // the active pill's rows that belong to the Hero's feed. A date takes the
+    // the checked collections' rows that belong to the Hero's feed. A date
+    // takes the
     // time cell. The rows are narrowed from the list handle, so a Hero repaint
     // never clones them (`share-gui-sections-by-rc` design D3).
     let rows: &[GuiEntryRowFrame] =

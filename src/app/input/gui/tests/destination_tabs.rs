@@ -54,9 +54,10 @@ fn tab_from_music_opens_shows_and_starts_its_root_load() {
     press(&mut app, Key::Tab);
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
-    assert!(
-        app.gui_tv_shows.contains_key(&1),
-        "the open seeded the Shows destination's mode, as the window's open step does"
+    assert_eq!(
+        app.libs[1].tv_content_mode.as_ref(),
+        Some(&mbv_queue::TvContentMode::All),
+        "the open forces the Show destination's one view mode, the series list"
     );
     assert!(
         app.libs[1]

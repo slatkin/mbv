@@ -2,8 +2,9 @@
 //! of `lib/library/shows-list.ts`): the Music tree over the TUI's TV node
 //! kinds — series → season → episode — with the 24 px letter headings above
 //! the first series of each letter, the rows in view, and the A–Z letter rail.
-//! The Latest and Upcoming modes keep their flat rows with the date gutter. The
-//! list paints fixed-height rows over native scroll and only the rows in view,
+//! The GUI Shows destination paints this series list alone (`gui-collection-dropdown`
+//! design D8), so the list carries no view mode. The list paints fixed-height
+//! rows over native scroll and only the rows in view,
 //! as the Music list does, and the keys act on the row the pointer marks
 //! (`gui-pointer-target-interaction` D2), which is never a heading. The model is
 //! plain data over fixed heights, so the geometry is asserted without a layout.
@@ -12,26 +13,14 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use mbv::GuiShowsView;
+
 use crate::bridge::frame::library::{
-    GuiShowsEpisodeRowFrame, GuiShowsList, GuiShowsModeFrame, GuiShowsRowFrame,
-    GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiShowsEpisodeRowFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
-    FlatItem, GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT,
-    build_flat_rows, letter_rail_by,
+    GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT, letter_rail_by,
 };
-
-/// The fields of a carried flat Shows row the flat list reads (design D14):
-/// the stable id and the title the filter narrows on.
-impl FlatItem for GuiShowsRowFrame {
-    fn row_id(&self) -> &str {
-        &self.id
-    }
-
-    fn row_title(&self) -> &str {
-        &self.title
-    }
-}
 
 /// The letter heading row's height in logical pixels: the Music list's letter
 /// heading, which the All series list reuses.
@@ -43,9 +32,6 @@ pub const SHOWS_SERIES_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
 pub const SHOWS_SEASON_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
 /// The episode leaf's height in logical pixels: the Music track row.
 pub const SHOWS_EPISODE_ROW_HEIGHT: f32 = TRACK_ROW_HEIGHT;
-/// The flat episode or premiere row's height in logical pixels: the room a
-/// two-line title and the date gutter paint into, as a Home item row.
-pub const SHOWS_FLAT_ROW_HEIGHT: f32 = 48.0;
 
 /// The tree's open and closed node keys (design D14): the Music tree's rule.
 /// `open` holds the nodes the user opened, and `closed` holds the nodes the
@@ -142,23 +128,30 @@ pub struct ShowsEpisodeRow {
     pub letter: char,
 }
 
-/// A painted flat row of the Latest and Upcoming modes (design D12, kept): an
-/// episode or a premiere notice.
+/// One painted row of the New or Upcoming list (gui-collection-dropdown
+/// design D9): the stable Service id, the two title lines, and the gutter
+/// date the old Home sections carried. An Upcoming row is display-only.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowsFlatRow {
-    /// The row's stable key.
+    /// The row's stable key and command id.
     pub id: String,
+    /// The primary title line.
+    pub title: String,
+    /// The secondary title line.
+    pub subtitle: Option<String>,
+    /// The gutter date.
+    pub date: Option<String>,
+    /// Whether the row takes no select, play, or enqueue.
+    pub display_only: bool,
     /// The row's top edge from the list's first row.
     pub top: f32,
     /// The row's painted height.
     pub height: f32,
-    /// The carried row the item paints.
-    pub row: GuiShowsRowFrame,
 }
 
 /// One painted row of the Shows list (design D14). The `id` is the row's
 /// stable key: the pointer marker's value and the each-block's key. A heading
-/// is structural; the keys act on the other four kinds only.
+/// is structural; the keys act on the flat and tree rows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowsListRow {
     /// A letter heading above the first series of the letter.
@@ -169,7 +162,7 @@ pub enum ShowsListRow {
     Season(ShowsSeasonRow),
     /// An episode leaf under an open season.
     Episode(ShowsEpisodeRow),
-    /// A flat row of the Latest and Upcoming modes.
+    /// A flat New or Upcoming row.
     Flat(ShowsFlatRow),
 }
 
@@ -247,33 +240,11 @@ pub fn episode_row_id(episode_id: &str) -> String {
     format!("shows-episode:{episode_id}")
 }
 
-/// The active view mode: the pill the core marked selected. A frame that
-/// marks none falls back to the rows' own shape — the tree-carrying frame is
-/// the All series list — so the list always has one mode.
-#[must_use]
-pub fn active_shows_mode(shows: &GuiShowsList) -> GuiShowsModeFrame {
-    if let Some(pill) = shows.pills.iter().find(|pill| pill.selected) {
-        return pill.mode;
-    }
-    if !shows.series.is_empty() || shows.rows.iter().any(|row| row.sort_letter.is_some()) {
-        GuiShowsModeFrame::All
-    } else {
-        GuiShowsModeFrame::Latest
-    }
-}
-
-/// Whether the mode paints the series tree rather than a flat episode or
-/// premiere list.
-#[must_use]
-pub fn shows_series_mode(mode: GuiShowsModeFrame) -> bool {
-    mode == GuiShowsModeFrame::All
-}
-
-/// The painted rows of the Shows list (design D14): in the All series mode the
-/// Music tree over the TUI's node kinds — each series node under the letter
-/// heading of its rail letter, its seasons when it is open, and each season's
-/// episodes when that season is open — and in the Latest and Upcoming modes
-/// the flat rows with no heading at all.
+/// The painted rows of the Shows list (design D14): the Music tree over the
+/// TUI's node kinds — each series node under the letter heading of its rail
+/// letter, its seasons when it is open, and each season's episodes when that
+/// season is open. The GUI Shows destination paints this list alone (design
+/// D8).
 ///
 /// The filter narrows the rows to the titles that contain its text, without
 /// case: a row paints when its own title matches, and a node whose descendants
@@ -283,15 +254,41 @@ pub fn shows_series_mode(mode: GuiShowsModeFrame) -> bool {
 /// native scroll.
 #[must_use]
 pub fn build_shows_rows(
-    shows: &GuiShowsList,
-    mode: GuiShowsModeFrame,
+    view: GuiShowsView,
+    series: &[GuiShowsSeriesFrame],
+    rows: &[GuiShowsRowFrame],
     filter: &str,
     tree: ShowsTreeState<'_>,
 ) -> Vec<ShowsListRow> {
-    if shows_series_mode(mode) {
-        series_shows_rows(&shows.series, filter, tree)
-    } else {
-        flat_shows_rows(&shows.rows, filter)
+    match view {
+        GuiShowsView::All => series_shows_rows(series, filter, tree),
+        GuiShowsView::New | GuiShowsView::Upcoming => {
+            let needle = filter.trim().to_lowercase();
+            let mut top = 0.0_f32;
+            rows.iter()
+                .filter(|row| {
+                    needle.is_empty()
+                        || row.title.to_lowercase().contains(&needle)
+                        || row
+                            .subtitle
+                            .as_deref()
+                            .is_some_and(|text| text.to_lowercase().contains(&needle))
+                })
+                .map(|row| {
+                    let built = ShowsListRow::Flat(ShowsFlatRow {
+                        id: row.id.clone(),
+                        title: row.title.clone(),
+                        subtitle: row.subtitle.clone(),
+                        date: row.date.clone(),
+                        display_only: row.display_only,
+                        top,
+                        height: TRACK_ROW_HEIGHT,
+                    });
+                    top += TRACK_ROW_HEIGHT;
+                    built
+                })
+                .collect()
+        }
     }
 }
 
@@ -404,21 +401,6 @@ fn series_shows_rows(
     built
 }
 
-/// The flat modes' rows: the carried rows in their order, no heading at all.
-fn flat_shows_rows(rows: &[GuiShowsRowFrame], filter: &str) -> Vec<ShowsListRow> {
-    build_flat_rows(rows, SHOWS_FLAT_ROW_HEIGHT, filter)
-        .into_iter()
-        .map(|flat| {
-            ShowsListRow::Flat(ShowsFlatRow {
-                id: flat.id,
-                row: flat.row.clone(),
-                top: flat.top,
-                height: flat.height,
-            })
-        })
-        .collect()
-}
-
 /// The A–Z rail over the painted rows (design D7, D14): each letter with the
 /// first series row under it, so a press scrolls there. A letter no painted row
 /// carries is disabled, as the Music rail's is.
@@ -441,16 +423,16 @@ struct ShowsMemoEntry {
     /// section's value at one revision is immutable, so equal revisions carry
     /// equal rows and the hit test never compares the union.
     revision: Option<u64>,
-    mode: GuiShowsModeFrame,
+    view: GuiShowsView,
     filter: String,
     open: Vec<String>,
     closed: Vec<String>,
     rows: Arc<[ShowsListRow]>,
 }
 
-/// The Shows rows, memoized on the carried content, the view mode, the filter,
-/// and the tree's open and closed nodes (design D9). One slot, because a list
-/// paints one content at a time.
+/// The Shows rows, memoized on the carried content, the filter, and the tree's
+/// open and closed nodes (design D9). One slot, because a list paints one
+/// content at a time.
 #[derive(Clone, Default)]
 pub struct ShowsRowsMemo {
     last: Signal<Option<ShowsMemoEntry>>,
@@ -472,9 +454,9 @@ impl ShowsRowsMemo {
     pub fn rows(
         &self,
         revision: Option<u64>,
+        view: GuiShowsView,
         series: &[GuiShowsSeriesFrame],
-        flat_rows: &[GuiShowsRowFrame],
-        mode: GuiShowsModeFrame,
+        rows: &[GuiShowsRowFrame],
         filter: &str,
         open: &[String],
         closed: &[String],
@@ -484,7 +466,7 @@ impl ShowsRowsMemo {
         // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
-            && entry.mode == mode
+            && entry.view == view
             && entry.filter == filter
             && entry.open == open
             && entry.closed == closed
@@ -492,15 +474,11 @@ impl ShowsRowsMemo {
             return Arc::clone(&entry.rows);
         }
         let tree = ShowsTreeState { open, closed };
-        let built: Arc<[ShowsListRow]> = if shows_series_mode(mode) {
-            series_shows_rows(series, filter, tree).into()
-        } else {
-            flat_shows_rows(flat_rows, filter).into()
-        };
+        let built: Arc<[ShowsListRow]> = build_shows_rows(view, series, rows, filter, tree).into();
         let mut last = self.last;
         last.set(Some(ShowsMemoEntry {
             revision,
-            mode,
+            view,
             filter: filter.to_owned(),
             open: open.to_vec(),
             closed: closed.to_vec(),

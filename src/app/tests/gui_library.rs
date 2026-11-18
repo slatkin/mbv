@@ -3,7 +3,9 @@
 //! albums land in the store outside `nav_stack`, a loaded group is not fetched
 //! again, one failing group keeps the other groups' albums, and the projection
 //! unions the selected groups' artists with their facts. The Emby boundary is
-//! the in-memory mock transport, so no request leaves the process.
+//! the in-memory mock transport, so no request leaves the process. The Hero's
+//! and the warm window's tests live in the `projection` child module, and the
+//! presented destinations' tests in the `destinations` child module.
 
 use std::io::ErrorKind;
 
@@ -13,12 +15,20 @@ use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
+mod destinations;
+mod launch;
+mod projection;
+
 const LIB_ID: &str = "lib-music";
 const HIPHOP: &str = "grp-hiphop";
 const SOUL: &str = "grp-soul";
 
 /// One album of a group's listing, as the mock transport returns it.
 const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"},{"Id":"alb-paul","Name":"Paul's Boutique","Type":"MusicAlbum"}],"TotalRecordCount":2}"#;
+
+/// One album of a second group's listing, with ids the first group's list does
+/// not hold, so a union assertion can tell the two lists apart.
+const SOUL_ALBUMS: &str = r#"{"Items":[{"Id":"alb-3ft","Name":"3 Feet High and Rising","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;
 
 /// A group row of a music group level.
 fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
@@ -84,14 +94,13 @@ fn app_with_music_groups(http: &MockHttp) -> App {
     app
 }
 
-/// Select `group_id` for the stub's Music library (one group is always
-/// selected). The fetch it started lands through `land_one_group`, as a Client
-/// tick drains it.
+/// Select `group_id` for the stub's Music library as its one checked group
+/// (one group is always selected). The fetch it started lands through
+/// `land_one_group`, as a Client tick drains it. The selection installs
+/// directly, so these store tests read the one-group rule the collection
+/// commands build on.
 fn select_group(app: &mut App, group_id: &str) {
-    app.apply_gui_library_command(GuiLibraryCommand::SelectCollection {
-        lib_idx: 0,
-        group_id: group_id.to_string(),
-    });
+    app.install_gui_library_collection(0, GuiCollectionSet::Checked(vec![group_id.to_string()]));
 }
 
 /// One album as the store holds it, with the display artist and year the
@@ -122,11 +131,21 @@ fn app_with_stored_groups(
 ) -> App {
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(0, HIPHOP.to_string());
+    app.gui_library_groups.insert(
+        0,
+        GuiCollectionSelection {
+            set: GuiCollectionSet::Checked(vec![HIPHOP.to_string()]),
+            ..GuiCollectionSelection::default()
+        },
+    );
     app.gui_music_albums
-        .insert((0, HIPHOP.to_string()), GuiGroupAlbums::Loaded(hiphop));
+        .entry(0)
+        .or_default()
+        .insert(HIPHOP.to_string(), GuiGroupAlbums::Loaded(hiphop));
     app.gui_music_albums
-        .insert((0, SOUL.to_string()), GuiGroupAlbums::Loaded(soul));
+        .entry(0)
+        .or_default()
+        .insert(SOUL.to_string(), GuiGroupAlbums::Loaded(soul));
     app
 }
 
@@ -217,6 +236,104 @@ fn one_failing_group_keeps_the_other_groups_albums() {
     );
 }
 
+/// A failed group's album list refetches when the user presses All
+/// (gui-collection-dropdown design D5): a selection change is the one refetch
+/// trigger, so the All press drops the failed marks of the selection's groups
+/// and the ensure step starts their fetches again, one at a time.
+#[test]
+fn pressing_all_refetches_a_failed_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.fail(ErrorKind::ConnectionRefused);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        None,
+        "the failed group holds no album list"
+    );
+
+    http.respond(200, ALBUMS);
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Music(0),
+    });
+    land_one_group(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the All press refetched the failed group"
+    );
+
+    // The rest of All's groups fetch one at a time on later frames, and the
+    // union holds every group's albums once their fetches land.
+    http.respond(200, SOUL_ALBUMS);
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+    let projection = app.gui_music_projection(0);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "All fetched the group the failed selection had not started"
+    );
+    assert!(
+        projection.failure.is_none(),
+        "the refetch cleared the failure line"
+    );
+}
+
+/// A frame's ensure never refetches a failed group (gui-collection-dropdown
+/// design D5): a hard failure retries only on a selection change, so a paint
+/// never re-issues the fetch.
+#[test]
+fn an_ensure_call_does_not_refetch_a_failed_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.fail(ErrorKind::ConnectionRefused);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+
+    app.ensure_gui_music_selection(0);
+    app.ensure_gui_music_selection(0);
+
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "a failed group's ensure starts no new fetch"
+    );
+}
+
+/// Checking one group and then pressing All fetches the group the checked
+/// selection did not hold and unions every group's albums (gui-collection-
+/// dropdown "The selection is All or checked collections").
+#[test]
+fn checking_one_group_then_pressing_all_unions_every_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(200, ALBUMS);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+
+    http.respond(200, SOUL_ALBUMS);
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Music(0),
+    });
+    land_one_group(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "All fetched the group the checked selection did not hold"
+    );
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the checked group keeps its albums"
+    );
+}
+
 /// One selected group is the whole list: the other group's albums stay out, and
 /// the selected pill is the only one painted (add-gui-library-panel design D5,
 /// D6).
@@ -238,15 +355,11 @@ fn the_selected_group_alone_fills_the_list() {
 
     let projection = app.gui_music_projection(0);
 
-    let pills: Vec<(&str, bool)> = projection
-        .pills
-        .iter()
-        .map(|pill| (pill.name.as_str(), pill.selected))
-        .collect();
+    let rows: Vec<(&str, bool)> = checked_rows(&projection);
     assert_eq!(
-        pills,
+        rows,
         [("Hip-Hop", true), ("Soul", false)],
-        "the pills paint the core's selection"
+        "the dropdown paints the core's selection"
     );
     let artists: Vec<&str> = projection
         .artists
@@ -276,29 +389,92 @@ fn the_selected_group_alone_fills_the_list() {
     );
 }
 
-/// A stored group the library no longer holds falls back to the first group,
-/// as the TUI's persisted pill does (design D6): one group stays selected.
+/// The collection toggle checks two groups in turn (gui-collection-dropdown
+/// design D5): the Music destination toggles on the effective set and installs
+/// each change through its one selection entry, so two presses on two groups
+/// check both and the list unions their albums.
 #[test]
-fn a_stored_group_the_library_lost_falls_back_to_the_first_group() {
+fn a_collection_toggle_checks_two_groups() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![stored_album(
+            "alb-3ft",
+            "3 Feet High and Rising",
+            "De La Soul",
+            1989,
+        )],
+    );
+    app.gui_library_groups.remove(&0);
+
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Music(0),
+        key: HIPHOP.to_string(),
+    });
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionToggle {
+        target: GuiCollectionTarget::Music(0),
+        key: SOUL.to_string(),
+    });
+
+    assert_eq!(
+        app.gui_library_groups.get(&0).map(|stored| &stored.set),
+        Some(&GuiCollectionSet::Checked(vec![
+            HIPHOP.to_string(),
+            SOUL.to_string(),
+        ])),
+        "two presses check two groups"
+    );
+    let projection = app.gui_music_projection(0);
+    let artists: Vec<&str> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(
+        artists,
+        ["Beastie Boys", "De La Soul"],
+        "the union lists both checked groups' artists"
+    );
+}
+
+/// A stored set the library emptied falls back to All (gui-collection-dropdown
+/// design D1): no group stays checked, so the list is every group's.
+#[test]
+fn a_stored_group_the_library_lost_falls_back_to_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(Vec::new(), Vec::new());
-    app.gui_library_groups.insert(0, "grp-gone".to_string());
+    app.gui_library_groups.insert(
+        0,
+        GuiCollectionSelection {
+            set: GuiCollectionSet::Checked(vec!["grp-gone".to_string()]),
+            ..GuiCollectionSelection::default()
+        },
+    );
 
     let projection = app.gui_music_projection(0);
 
-    let selected: Vec<&str> = projection
-        .pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.group_id.as_str())
-        .collect();
-    assert_eq!(selected, [HIPHOP]);
+    assert_eq!(
+        checked_names(&projection),
+        Vec::<&str>::new(),
+        "the emptied checked set reads as All, which checks no group"
+    );
+    assert_eq!(
+        projection.collections.selected_names(),
+        ["All"],
+        "All names itself in the frame's collection names"
+    );
 }
 
-/// With no stored choice, the first group in pill order is the selected one
-/// (design D6): one group is always selected.
+/// With no stored choice, the destination starts on All (gui-collection-dropdown
+/// "The selection is All or checked collections"): no group is checked and the
+/// union is every group's.
 #[test]
-fn the_first_group_is_selected_when_no_choice_is_stored() {
+fn no_stored_choice_selects_all() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
@@ -313,261 +489,34 @@ fn the_first_group_is_selected_when_no_choice_is_stored() {
 
     let projection = app.gui_music_projection(0);
 
-    let selected: Vec<&str> = projection
-        .pills
-        .iter()
-        .filter(|pill| pill.selected)
-        .map(|pill| pill.group_id.as_str())
-        .collect();
-    assert_eq!(selected, [HIPHOP]);
-}
-
-/// The album the Hero shows, by Service id (add-gui-library-panel design D13).
-fn hero_album_id(app: &mut App) -> Option<String> {
-    app.gui_music_projection(0)
-        .hero
-        .map(|hero| hero.album.album_id)
-}
-
-/// A group with no pick heroes its first album in list order, so the Hero is
-/// never blank while the group's albums are loaded (design D13).
-#[test]
-fn a_group_with_no_pick_heroes_its_first_album() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_stored_groups(
-        vec![
-            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
-            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
-        ],
-        Vec::new(),
+    assert_eq!(
+        checked_names(&projection),
+        Vec::<&str>::new(),
+        "All is selected, which checks no group"
     );
-    let first = app.gui_music_projection(0).artists[0].albums[0]
-        .album_id
-        .clone();
-
-    assert_eq!(hero_album_id(&mut app), Some(first));
-}
-
-/// Each pill keeps its own last picked album: a pick on one group survives a
-/// switch to another, and reselecting the group reopens on the pick, while the
-/// other group with no pick heroes its first album (design D13).
-#[test]
-fn each_pill_reopens_on_its_own_last_pick() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_stored_groups(
-        vec![
-            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
-            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
-        ],
-        vec![stored_album(
-            "alb-3ft",
-            "3 Feet High and Rising",
-            "De La Soul",
-            1989,
-        )],
+    assert_eq!(
+        projection.collections.selected_names(),
+        ["All"],
+        "All names itself in the frame's collection names"
     );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-paul".into(),
-    });
-
-    select_group(&mut app, SOUL);
-    assert_eq!(hero_album_id(&mut app), Some("alb-3ft".to_string()));
-
-    select_group(&mut app, HIPHOP);
-    assert_eq!(hero_album_id(&mut app), Some("alb-paul".to_string()));
 }
 
-/// A stub `App` whose Music store holds `albums` and whose Emby runtime holds
-/// no client: a warm's fetch reservation stays visible, and no fetch leaves
-/// the process.
-fn app_with_warm_albums(albums: Vec<mbv_emby_model::EmbyItem>) -> App {
-    let mut app = app_with_stored_groups(albums, Vec::new());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
-    app.images
-        .configure_protocol(Some("kitty".to_string()), true);
-    app
-}
-
-/// Six albums of one artist, named so the projection's sort order is the
-/// declared `alb-0` .. `alb-5` order.
-fn six_warm_albums() -> Vec<mbv_emby_model::EmbyItem> {
-    (0..6)
-        .map(|index| {
-            stored_album(
-                &format!("alb-{index}"),
-                &format!("Album {index}"),
-                "Beastie Boys",
-                1986,
-            )
-        })
+/// The Music dropdown's rows as `(name, checked)` pairs, in catalog order.
+fn checked_rows(projection: &GuiMusicProjection) -> Vec<(&str, bool)> {
+    let collections = &projection.collections;
+    let entries = collections.entries.iter();
+    entries
+        .map(|entry| (entry.name.as_str(), entry.checked))
         .collect()
 }
 
-/// The albums neighbouring the pick are warmed, one behind and three ahead:
-/// the TUI's grouped-Music neighbour window
-/// (`openspec/specs/music-library-hero/spec.md`) over this Client's
-/// projection. The pick itself is the Hero's own fetch.
-#[test]
-fn the_picked_albums_neighbours_are_warmed() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_warm_albums(six_warm_albums());
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
-    // The pick's own move closed the warm gate; the next idle pass opens it.
-    app.last_nav_at = std::time::Instant::now()
-        .checked_sub(std::time::Duration::from_secs(1))
-        .unwrap();
-
-    let projection = app.gui_music_projection(0);
-
-    assert_eq!(
-        projection
-            .hero
-            .as_ref()
-            .map(|hero| hero.album.album_id.as_str()),
-        Some("alb-3"),
-        "alb-3 is the picked album"
-    );
-    let warmed: Vec<String> = (0..6)
-        .map(|index| format!("alb-{index}:P"))
-        .filter(|key| app.images.is_loading(key))
-        .collect();
-    assert_eq!(
-        warmed,
-        ["alb-2:P", "alb-4:P", "alb-5:P"],
-        "one behind and three ahead warm; the pick and the two behind do not"
-    );
-}
-
-/// A pick move warms nothing: it stamps navigation, so the neighbours wait for
-/// the idle window and fast arrow traffic issues no fetch (the TUI's idle
-/// gate).
-#[test]
-fn a_pick_move_warms_no_neighbour_until_navigation_is_idle() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_warm_albums(six_warm_albums());
-    app.last_nav_at = std::time::Instant::now()
-        .checked_sub(std::time::Duration::from_secs(1))
-        .unwrap();
-
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-3".into(),
-    });
-    let projection = app.gui_music_projection(0);
-
-    assert!(projection.hero.is_some(), "the pick still heroes its album");
-    let warmed: Vec<String> = (0..6)
-        .map(|index| format!("alb-{index}:P"))
-        .filter(|key| app.images.is_loading(key))
-        .collect();
-    assert!(
-        warmed.is_empty(),
-        "a pick move closes the gate, so no neighbour art warms: {warmed:?}"
-    );
-}
-
-/// The Hero's facts for the picked album: the artist header, the album block,
-/// and the tracklist from the cached tracks (add-gui-library-panel design D5).
-#[test]
-fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_stored_groups(
-        vec![
-            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
-            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
-        ],
-        Vec::new(),
-    );
-    app.album_tracks_cache.insert(
-        "alb-ill".to_string(),
-        vec![
-            cached_track("trk-1", "Rhymin & Stealin", 1, 248),
-            cached_track("trk-2", "The New Style", 2, 275),
-        ],
-    );
-    app.album_tracks_cache.insert(
-        "alb-paul".to_string(),
-        vec![cached_track("trk-3", "Shake Your Rump", 1, 195)],
-    );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
-
-    let hero = app
-        .gui_music_projection(0)
-        .hero
-        .expect("the picked album has a Hero");
-
-    assert_eq!(hero.artist, "Beastie Boys");
-    assert_eq!(hero.collections, ["Hip-Hop"]);
-    assert_eq!(hero.album_count, 2, "the artist's albums in the union");
-    assert_eq!(hero.album.year, "1986");
-    assert_eq!(hero.album.name, "Licensed to Ill");
-    assert_eq!(
-        hero.album.total,
-        Some(GuiMusicTrackTotal {
-            count: 2,
-            duration: "8:43".to_string(),
-        })
-    );
-    let tracklist: Vec<(i64, &str, &str)> = hero
-        .album
-        .tracks
-        .iter()
-        .flatten()
-        .map(|track| (track.number, track.name.as_str(), track.duration.as_str()))
-        .collect();
-    assert_eq!(
-        tracklist,
-        [
-            (1, "Rhymin & Stealin", "4:08"),
-            (2, "The New Style", "4:35")
-        ]
-    );
-    assert_eq!(
-        hero.artist_tracks,
-        Some(GuiMusicTrackTotal {
-            count: 3,
-            duration: "11:58".to_string(),
-        }),
-        "the artist header counts every loaded album's tracks"
-    );
-}
-
-/// The artist header's track count and total time wait for every one of the
-/// artist's album tracklists (add-gui-library-panel design D5).
-#[test]
-fn the_artist_total_waits_for_every_albums_tracklist() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = app_with_stored_groups(
-        vec![
-            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
-            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
-        ],
-        Vec::new(),
-    );
-    app.album_tracks_cache.insert(
-        "alb-ill".to_string(),
-        vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
-    );
-    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
-        item_id: "alb-ill".into(),
-    });
-
-    let hero = app
-        .gui_music_projection(0)
-        .hero
-        .expect("the picked album has a Hero");
-
-    assert!(
-        hero.album.total.is_some(),
-        "the picked album's tracks are cached"
-    );
-    assert_eq!(
-        hero.artist_tracks, None,
-        "the artist's second album holds no tracklist yet"
-    );
+/// The names of the Music dropdown's checked groups.
+fn checked_names(projection: &GuiMusicProjection) -> Vec<&str> {
+    checked_rows(projection)
+        .into_iter()
+        .filter(|(_, checked)| *checked)
+        .map(|(name, _)| name)
+        .collect()
 }
 
 /// A group that failed to load keeps the other groups' albums and names itself
@@ -577,9 +526,17 @@ fn a_failed_selected_group_shows_a_failure_line() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups.insert(0, SOUL.to_string());
+    app.gui_library_groups.insert(
+        0,
+        GuiCollectionSelection {
+            set: GuiCollectionSet::Checked(vec![SOUL.to_string()]),
+            ..GuiCollectionSelection::default()
+        },
+    );
     app.gui_music_albums
-        .insert((0, SOUL.to_string()), GuiGroupAlbums::Failed);
+        .entry(0)
+        .or_default()
+        .insert(SOUL.to_string(), GuiGroupAlbums::Failed);
 
     let projection = app.gui_music_projection(0);
 
@@ -599,160 +556,57 @@ fn a_failed_selected_group_shows_a_failure_line() {
     );
 }
 
-/// A stub `App` whose catalog holds two Grouped Music libraries around a
-/// Movies library, so the tabs present every Emby library in catalog order
-/// (row 8.1 presents the plain Emby libraries beside Music). No Service
-/// client: the tab projection reads the catalog alone.
-fn app_with_two_music_libraries() -> App {
-    let mut app = make_app_stub();
-    app.music_levels = vec!["group".to_string(), "album".to_string()];
-    for (name, collection_type) in [
-        ("Music A", "music"),
-        ("Movies", "movies"),
-        ("Music B", "music"),
-    ] {
-        let mut library = make_item(name, "CollectionFolder");
-        library.collection_type = collection_type.to_string();
-        library.is_folder = true;
-        app.libs.push(LibraryTab::new(library));
+/// All with no Emby client at startup fetches once the client connects
+/// (gui-collection-dropdown design D5): the no-client condition is not a fetch
+/// failure, so the groups stay un-fetched, a later tick's ensure starts their
+/// fetches, and the union shows every group's albums.
+#[test]
+fn all_fetches_once_the_client_appears() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    let ready = std::mem::replace(
+        &mut app.emby_runtime,
+        crate::app::state::service_runtime::EmbyRuntime::new(true),
+    );
+    app.install_gui_library_collection(0, GuiCollectionSet::All);
+
+    app.ensure_gui_music_selection(0);
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "no client starts no fetch"
+    );
+
+    http.respond(200, ALBUMS);
+    http.respond(200, SOUL_ALBUMS);
+    app.emby_runtime = ready;
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+
+    let projection = app.gui_music_projection(0);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the client's arrival fetched Hip-Hop's albums"
+    );
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "the client's arrival fetched Soul's albums"
+    );
+    assert!(
+        projection.failure.is_none(),
+        "the no-client condition names no failure"
+    );
+}
+
+/// The saved identity of the stub's Grouped Music library, as the launch file
+/// carries it.
+fn saved_music_identity() -> mbv_config::TabIdentity {
+    mbv_config::TabIdentity::ServiceLibrary {
+        kind: mbv_queue::ServiceKind::Emby,
+        library_id: LIB_ID.to_string(),
     }
-    app.tab = TabSelection::EmbyLibrary(0);
-    app
-}
-
-/// The frame's destination tabs (row 4.3, design D2; row 8.1 presents the
-/// plain Emby libraries beside Music): one tab per Emby library in catalog
-/// order, each naming the position the open-destination command takes.
-#[test]
-fn the_tabs_present_every_emby_library_in_catalog_order() {
-    let app = app_with_two_music_libraries();
-
-    let tabs = app.gui_library_tabs().tabs;
-
-    assert_eq!(
-        tabs,
-        vec![
-            GuiLibraryTab {
-                position: 1,
-                label: "Music A".to_string(),
-            },
-            GuiLibraryTab {
-                position: 2,
-                label: "Movies".to_string(),
-            },
-            GuiLibraryTab {
-                position: 3,
-                label: "Music B".to_string(),
-            },
-        ],
-        "every Emby library presents a tab, and the positions are the open command's"
-    );
-}
-
-/// The current tab (row 4.3, design D2): the active tab's position while the
-/// active destination is one of the presented ones.
-#[test]
-fn the_current_tab_names_the_active_presented_destination() {
-    let mut app = app_with_two_music_libraries();
-    app.tab = TabSelection::EmbyLibrary(2);
-
-    assert_eq!(app.gui_library_tabs().current, Some(3));
-}
-
-/// The current tab names the plain Emby-library destination the row 8.1
-/// presented set added (row 4.3, design D2): the Movies library's tab is
-/// current while it is active.
-#[test]
-fn the_current_tab_names_the_movies_destination() {
-    let mut app = app_with_two_music_libraries();
-    app.tab = TabSelection::EmbyLibrary(1);
-
-    assert_eq!(app.gui_library_tabs().current, Some(2));
-}
-
-/// A Music item's right-click item menu offers the played-state entries no
-/// item kind (the context-menu spec's music rule, through the GUI's menu
-/// builder): music ignores its played state everywhere, so the mark entries
-/// would name changes the UI never shows. An album-folder music item carries
-/// the standard folder entries — Play All, Shuffle, Add to Queue — and
-/// nothing else.
-#[test]
-fn a_music_items_row_menu_leaves_out_the_played_toggle() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let app = app_with_stored_groups(
-        vec![stored_album(
-            "alb-ill",
-            "Licensed to Ill",
-            "Beastie Boys",
-            1986,
-        )],
-        Vec::new(),
-    );
-    let mut app = app;
-    app.set_panel_focus(PanelFocus::Library);
-    app.apply_gui_library_command(GuiLibraryCommand::RowMenu {
-        item_id: "alb-ill".into(),
-    });
-
-    let menu = app.gui_library_row_menu().expect("the album has a menu");
-    let labels: Vec<&str> = menu
-        .entries
-        .iter()
-        .map(|entry| entry.label.as_str())
-        .collect();
-    assert!(!labels.iter().any(|label| label.contains("Mark")));
-    assert_eq!(labels, ["Play", "Add to Queue"]);
-}
-
-/// The opener the openUrl seam stages: it records the url the core handed
-/// the opener, so the test observes the open without a real browser spawn.
-static OPENED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
-
-fn record_open(url: &str) {
-    OPENED.lock().unwrap().push(url.to_string());
-}
-
-/// The `openUrl` command's trust boundary: the core opens an http or https
-/// url through the shared opener, and any other scheme — the url comes from
-/// the window — reaches no opener.
-#[test]
-fn open_url_opens_an_http_url_and_drops_any_other_scheme() {
-    let _guard = crate::app::OPEN_URL_TEST_LOCK.lock().unwrap();
-    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = Some(record_open);
-    let mut app = make_app_stub();
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "https://www.imdb.com/title/tt0088763/".to_string(),
-    });
-    app.apply_gui_library_command(GuiLibraryCommand::OpenUrl {
-        url: "javascript:alert(1)".to_string(),
-    });
-    *crate::app::OPEN_URL_OVERRIDE.lock().unwrap() = None;
-
-    assert_eq!(
-        *OPENED.lock().unwrap(),
-        vec!["https://www.imdb.com/title/tt0088763/".to_string()],
-        "the https url opened and the javascript url dropped"
-    );
-}
-
-/// An interrupted art fetch's retry is reported by the window that holds its
-/// retry time (design D3 rule 3, invariant 27): the core keeps each window's
-/// start, so the next window does not report it again.
-#[test]
-fn an_interrupted_art_retry_comes_due_in_the_window_that_holds_it() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    let start = std::time::Instant::now();
-    app.images.fetch_interrupted("alb-1:P".to_owned());
-    let hour = std::time::Duration::from_secs(3600);
-    let later = start + hour;
-
-    assert!(
-        app.gui_art_retry_due(start, later),
-        "the window holds the retry time"
-    );
-    assert!(
-        !app.gui_art_retry_due(later, later + hour),
-        "the next window starts after the retry time"
-    );
 }

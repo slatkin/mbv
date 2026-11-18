@@ -23,19 +23,24 @@ no way to read their list oldest first.
 - **All** replaces the Podcasts and Feeds **Latest** pill. Music gains **All**: today one group is
   always selected.
 - The Podcasts state pills (All, Unplayed, Played) go away in the GUI, as the Feeds state pills did.
-- The Emby feed-group **New** pill goes away for now. A later Home redesign takes the Latest-style
-  views.
+- The Emby feed-group **New** pill goes away for now. The TV destination gains its own single-choice
+  **New** view instead.
 - YouTube, Podcasts, and Feeds get an **Oldest / Newest** toggle beside the trigger. Newest is the
   default. Undated rows stay last in both orders. A YouTube folder no longer reads oldest first by
   default.
-- Shows loses its pill row and shows only its series list (the All mode). Its **Latest** and
-  **Upcoming** lists move to GUI Home as two more sections after Recently added: **Latest episodes**
-  and **Upcoming**. Each merges every TV library.
-- Upcoming rows on Home are display-only: a press does not select them, they do not play or enqueue,
-  and the Hero keeps its item.
-- Music keeps its save across a restart, now for the checked set or All, through the existing GUI
-  launch location. YouTube, Podcasts, and Feeds selections and every sort order are session memory
-  only.
+- Shows loses its old pill row and gains one dropdown with the single choices **All**, **New**, and
+  **Upcoming**. All is the default and is the current series list with its Hero and Workspace. New
+  is the old Shows Latest episodes list, and Upcoming is the old Shows Upcoming premieres list; both
+  merge every TV library and use their existing data sources and row types. This is a view selector,
+  not a collection filter and not a key binding.
+- Upcoming rows in Shows are display-only: a press does not select them, they do not play or enqueue,
+  and the Hero keeps its item. Selecting a dropdown entry replaces the active view and closes the
+  popover.
+- GUI Home has no Latest episodes or Upcoming section: those two lists live in the Shows destination.
+- Every collection destination keeps its selection across a restart through the same GUI launch
+  entry: Music groups, Podcast shows, Feeds subscriptions, and YouTube folders, with the date order
+  where one is held. An old Music-only entry still loads. The Shows view persists in its own launch
+  field; an old file without the field loads as All.
 - The Library Status bar location names All, or the checked collections joined.
 
 ## Capabilities
@@ -49,21 +54,25 @@ None.
 - `gui-client`: the pill requirements ("One collection pill is selected at a time", "The pill
   selection persists per destination", "Each collection pill keeps its last picked album") become
   collection dropdown requirements. New requirements cover the date order toggle, the Shows
-  destination with no mode selector, the GUI Home Latest episodes and Upcoming sections, and the
-  dropdown filter field among the open text fields that keep the keys. The Library Status bar
+  single-choice view dropdown with its New and Upcoming lists, and the dropdown filter field among
+  the open text fields that keep the keys. The GUI Home sections are removed. The Library Status bar
   location names the checked set.
 
 ## Impact
 
 - `src/app/gui_library/`: a shared collection-set type and date order in the core; the Music,
   Podcasts, Feeds, and Emby feed-group selections move to it; the commands that set a pill are
-  replaced; Home gains two sections; Shows loses its mode commands.
+  replaced; Shows gains a separate view-selection type and command, and its New and Upcoming lists;
+  Home loses the two sections.
 - `src/app/dispatch/feeds/feed.rs`: a folder fetch that does not move the TUI-shared feed-group
   selection, so the GUI can load more than one folder.
 - `crates/mbv-gui/src/bridge/`: one collection frame replaces the per-destination pill frames.
-- `crates/mbv-gui/src/window/`: a new collection dropdown component replaces `LibraryPillRow` and
-  the five destination pill components; the window holds the dropdown's open state and filter text.
+- `crates/mbv-gui/src/window/`: a prop-driven dropdown presentation component serves the collection
+  dropdowns and the Shows view dropdown; a new collection dropdown component replaces `LibraryPillRow`
+  and the five destination pill components; the window holds the dropdown's open state and filter
+  text.
 - `CONTEXT.md`: the *Collection pill* term becomes *Collection dropdown*.
-- `crates/mbv-config` GUI launch state: no format change. `group_ids` is already a list; an empty
-  list now means All.
+- `crates/mbv-config` GUI launch state: each entry adds a collection `target` and an optional date
+  `order`; `group_ids` is still a list and an empty list means All. An entry without the new fields
+  loads as Music. The snapshot gains a separate Shows `shows_view` field, whose absence loads as All.
 - No new dependency.

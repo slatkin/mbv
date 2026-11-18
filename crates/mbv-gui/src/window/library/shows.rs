@@ -2,10 +2,11 @@
 //! D14, the port of `lib/library/shows.ts`): what the window content owns and
 //! the core never reads — the tree's open and closed nodes and the `/` filter's
 //! text. The scroll offset and the measured viewport live in the Shows list's
-//! scroll store ([`super::scroll`], design D9). The core owns the view mode and
-//! the selection (the frame's `pills` and `selected`), so nothing here mirrors
-//! them: a press and an Enter send the select command, and the frame carries the
-//! selection back. The row model is [`super::shows_list`]'s, and the Hero
+//! scroll store ([`super::scroll`], design D9). The core owns the selection (the
+//! frame's `selected`), so nothing here mirrors it: a press and an Enter send the
+//! select command, and the frame carries the selection back. The GUI Shows list
+//! is the series list alone (gui-collection-dropdown design D8), so no view-mode
+//! request lives here. The row model is [`super::shows_list`]'s, and the Hero
 //! overlay stays in [`super::state`]'s shared store.
 //!
 //! The list keeps no cursor: the keys act on the row the pointer marks
@@ -16,21 +17,17 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiShowsModeFrame;
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::library::list::{ListMove, jump_to_letter, scroll_step};
 use crate::window::library::parts::library_shows_list;
 use crate::window::library::scroll::set_scroll_top;
-use crate::window::library::shows_list::{ShowsListRow, active_shows_mode, shows_letter_rail};
+use crate::window::library::shows_list::{ShowsListRow, shows_letter_rail};
 
 use super::state::LibraryState;
 
 /// The Shows list's interaction state (`shows.ts`'s `ShowsUiState`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShowsUiState {
-    /// The mode selection a press asked for, and the pill row turns it into the
-    /// set-mode command.
-    pub pill_select: Option<GuiShowsModeFrame>,
     /// The `/` filter's text: the list paints only the rows whose title
     /// contains it, without case (design D7's filter rule, the rail's
     /// keyboard path).
@@ -49,29 +46,6 @@ impl ShowsUiState {
     #[must_use]
     pub fn initial() -> Self {
         Self::default()
-    }
-}
-
-/// The stable focus key a mode pill is focused and selected by (design D6,
-/// D12): the mode itself, so the pill row and the keys agree on it without a
-/// row position.
-#[must_use]
-pub fn shows_mode_key(mode: GuiShowsModeFrame) -> &'static str {
-    match mode {
-        GuiShowsModeFrame::Latest => "latest",
-        GuiShowsModeFrame::Upcoming => "upcoming",
-        GuiShowsModeFrame::All => "all",
-    }
-}
-
-/// The Shows view mode the set-mode command carries (design D12), from the
-/// frame's mode the pill row paints.
-#[must_use]
-pub fn shows_command_mode(mode: GuiShowsModeFrame) -> crate::bridge::library::GuiShowsMode {
-    match mode {
-        GuiShowsModeFrame::Latest => crate::bridge::library::GuiShowsMode::Latest,
-        GuiShowsModeFrame::Upcoming => crate::bridge::library::GuiShowsMode::Upcoming,
-        GuiShowsModeFrame::All => crate::bridge::library::GuiShowsMode::All,
     }
 }
 
@@ -98,9 +72,9 @@ impl LibraryState {
         let ui = self.shows_ui.peek();
         self.shows_rows_memo.rows(
             revision,
+            shows.view,
             &shows.series,
             &shows.rows,
-            active_shows_mode(shows),
             &ui.filter,
             &ui.open,
             &ui.closed,
@@ -152,6 +126,15 @@ impl LibraryState {
         let command = match row {
             // A heading and an episode leaf name no series to select.
             ShowsListRow::Heading(_) | ShowsListRow::Episode(_) => return,
+            ShowsListRow::Flat(flat) => {
+                if flat.display_only {
+                    return;
+                }
+                GuiLibraryCommand::ShowsSelect {
+                    lib_idx,
+                    row: flat.id.clone(),
+                }
+            }
             ShowsListRow::Series(series) => GuiLibraryCommand::ShowsSelect {
                 lib_idx,
                 row: series.source_id.clone(),
@@ -159,10 +142,6 @@ impl LibraryState {
             ShowsListRow::Season(season) => GuiLibraryCommand::ShowsSelectSeason {
                 lib_idx,
                 season_id: season.source_id.clone(),
-            },
-            ShowsListRow::Flat(flat) => GuiLibraryCommand::ShowsSelect {
-                lib_idx,
-                row: flat.row.id.clone(),
             },
         };
         self.link.library(command);
@@ -232,6 +211,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsPlay {
             lib_idx,
             item_id: row_id.to_owned(),
@@ -243,6 +233,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsPlayNext {
             lib_idx,
             item_id: row_id.to_owned(),
@@ -255,6 +256,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsQueue {
             lib_idx,
             item_id: row_id.to_owned(),
@@ -303,35 +315,5 @@ impl LibraryState {
         let rows = self.shows_rows();
         let held = *self.scrolls.shows.peek();
         set_scroll_top(self.scrolls.shows, &rows, held.scroll_top);
-    }
-
-    /// Ask for a pill to be selected (design D6, D12): the pill row turns the
-    /// request into the set-mode command.
-    pub fn request_shows_pill_select(&self, mode: GuiShowsModeFrame) {
-        let mut shows_ui = self.shows_ui;
-        shows_ui.with_mut(|ui| ui.pill_select = Some(mode));
-    }
-
-    /// Select the view mode `mode` of the Shows library `lib_idx` (design
-    /// D12): one mode is always selected. The core stores the choice, loads
-    /// the mode's root level, and the pills paint the core's choice back, so
-    /// the row and the list cannot disagree.
-    pub fn select_shows_pill(&self, lib_idx: usize, mode: GuiShowsModeFrame) {
-        self.link.library(GuiLibraryCommand::ShowsSetMode {
-            lib_idx,
-            mode: shows_command_mode(mode),
-        });
-    }
-
-    /// Turn the keys' pill request into the set-mode command the pill sends
-    /// (design D12). The intent is consumed here, so one key sends one
-    /// command.
-    pub fn apply_shows_pill_select(&self, lib_idx: usize) {
-        let pill_select = self.shows_ui.peek().pill_select;
-        if let Some(mode) = pill_select {
-            let mut shows_ui = self.shows_ui;
-            shows_ui.with_mut(|ui| ui.pill_select = None);
-            self.select_shows_pill(lib_idx, mode);
-        }
     }
 }

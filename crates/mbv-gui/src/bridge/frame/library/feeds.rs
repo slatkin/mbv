@@ -1,37 +1,37 @@
 //! The Feeds section of the Library frame (add-gui-library-panel design D12,
-//! row 11.1): the single-select pill row of Latest and one pill per
-//! subscription, the active pill's entry rows in the date gutter, the core's
-//! selected entry, and the Hero with the placeholder artwork's shape. A
-//! command names an entry by the opaque identity the row carries — the
-//! `(subscription url, guid)` pair encoded in one place — never by position,
-//! because two subscriptions can publish the same `guid`. The pill and row
-//! frames are the shared entry-list ones (`entry_list.rs`); the Hero and the
-//! frame struct are the destination's own.
+//! row 11.1): the subscription selector, the selected subscriptions' entry
+//! rows in the date gutter, the core's selected entry, and the Hero with the
+//! placeholder artwork's shape. A command names an entry by the opaque identity
+//! the row carries — the `(subscription url, guid)` pair encoded in one place —
+//! never by position, because two subscriptions can publish the same `guid`.
+//! The row frame is the shared entry-list one (`entry_list.rs`); the Hero and
+//! the frame struct are the destination's own.
 
-use mbv::{GuiFeedsHero, GuiFeedsProjection};
+use mbv::{GuiCollections, GuiFeedsHero, GuiFeedsProjection};
 
 use super::GuiArtShapeFrame;
-use super::entry_list::{GuiEntryRowFrame, GuiPillFrame};
+use super::entry_list::GuiEntryRowFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
-use crate::bridge::library::GuiFeedPill;
 
 /// The Feeds destination's list part (add-gui-library-panel design D12, row
-/// 11.1; `gui-change-driven-sections` design D8): the pill row and the active
-/// pill's entry rows, with the load facts.
+/// 11.1; `gui-change-driven-sections` design D8): the subscription selector and
+/// the selected subscriptions' entry rows, with the load facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiFeedsList {
-    /// The pill row in paint order: Latest, then each configured subscription
-    /// by its name.
-    pub pills: Vec<GuiPillFrame<GuiFeedPill>>,
+    /// The destination's collection selector (gui-collection-dropdown design
+    /// D6): All, every configured subscription in the tab's order, the
+    /// Subscriptions noun, and the list's date order.
+    pub collections: GuiCollections,
     /// Whether the tab's fetch results are still landing.
     pub loading: bool,
     /// Whether a fetch failed. The feed tab keeps no failure state — a failed
     /// subscription flashes the TUI's toast and keeps its previous entries —
     /// so this is always `false`.
     pub failed: bool,
-    /// The active pill's entry rows: Latest merges every subscription's
-    /// entries, a subscription pill holds that one subscription's, both newest
-    /// first with undated entries last.
+    /// The selected subscriptions' entry rows (design D1, D2): All merges
+    /// every subscription's entries, a checked set merges the checked
+    /// subscriptions', both in the stored date order with undated entries
+    /// last.
     pub rows: Vec<GuiEntryRowFrame>,
 }
 
@@ -75,7 +75,7 @@ impl GuiFeedsList {
     /// The Feeds list part for `projection` (row 11.1).
     pub(crate) fn from_projection(projection: &GuiFeedsProjection) -> Self {
         Self {
-            pills: projection.pills.iter().map(GuiPillFrame::from).collect(),
+            collections: projection.collections.clone(),
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),

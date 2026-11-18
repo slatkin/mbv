@@ -1,9 +1,9 @@
 //! The GUI's saved launch location and its restore (add-gui-library-panel
 //! design D9): the file is read once, before the first step; the destination
-//! opens when the catalog lands, and the saved collection sets apply once the
-//! destination's group list lands, because a saved group is dropped against
-//! the groups the library actually holds. The orderly exit's save runs from
-//! the core's run loop here too.
+//! opens when the catalog lands, and each saved collection set applies through
+//! the destination and target it names. A set whose collection catalog has not
+//! landed keeps its saved keys; a later effective read drops vanished keys.
+//! The orderly exit's save runs from the core's run loop here too.
 
 use mbv::GuiLaunchOpen;
 use mbv_config::TabIdentity;
@@ -17,10 +17,11 @@ pub(super) enum GuiLaunchRestore {
     /// The saved location, or a fresh launch's first-choice default, waiting
     /// for the catalog's presented destination.
     Destination(mbv_config::GuiLaunchState),
-    /// The destination is open, waiting for its group list. `destination` is
-    /// the identity of the destination the first phase opened, so the saved
-    /// collection sets apply only to it, never to a destination a mid-restore
-    /// tab switch brought up.
+    /// The destination is open, applying the saved entries as their
+    /// destination identities resolve. `destination` is the identity of the
+    /// destination the first phase opened: a mid-restore tab switch abandons
+    /// any unresolved entries, so saved sets never land under a destination
+    /// the user moved to.
     Collections {
         state: mbv_config::GuiLaunchState,
         destination: TabIdentity,
@@ -33,10 +34,10 @@ impl CoreThread {
     /// Advance the launch location's restore (design D9): open the saved
     /// destination — a start with no saved location opens the first presented
     /// one, through [`mbv_config::GuiLaunchState::first_launch`] — once the
-    /// catalog lands, then apply its saved collection sets once the
-    /// destination's group list lands. The collection sets apply only to the
-    /// destination the first phase opened; a mid-restore tab switch abandons
-    /// them. A saved destination the settled catalog no longer holds opens
+    /// catalog lands, then apply every saved collection set through its own
+    /// destination and target, so a destination the first phase did not open
+    /// still restores. A mid-restore tab switch abandons unresolved entries.
+    /// A saved destination the settled catalog no longer holds opens
     /// nothing: the restore finishes, so a library that appears later cannot
     /// move the tab under the user. Idempotent, so the catalog and library
     /// drains call it whenever their content can complete a phase.
@@ -62,7 +63,7 @@ impl CoreThread {
             }
         };
         // The first phase just opened the destination: record its identity
-        // so the second phase applies the saved sets only to it (design D9).
+        // so a mid-restore tab switch abandons the saved sets (design D9).
         if matches!(self.launch_restore, GuiLaunchRestore::Destination(_)) {
             self.launch_restore = GuiLaunchRestore::Collections {
                 state: state.clone(),

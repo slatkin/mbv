@@ -25,7 +25,6 @@ use crate::bridge::frame::library::{
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
-use crate::window::components::library_pill_button::LibraryPillButton;
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceAction, WorkspaceActionIcon, WorkspaceLoading, WorkspaceRow,
     WorkspaceRowState,
@@ -141,8 +140,11 @@ fn row_state(state: &GuiHomeRowStateFrame) -> WorkspaceRowState {
     WorkspaceRowState::Active
 }
 
-/// One season pill: the core's selected season
-/// pressed, a press sending the select-season command.
+/// One season pill: the core's selected season pressed, a press sending the
+/// select-season command. The one pill button the panel paints
+/// (add-gui-library-panel design D6, D15): a destination supplies the pill's
+/// name, its selected state, its own attributes, and the press; it never
+/// restates the pill's look. The selected pill fills in the source tone.
 fn paint_season(
     season: &GuiShowsSeasonPillFrame,
     lib_idx: usize,
@@ -150,17 +152,31 @@ fn paint_season(
 ) -> Element {
     let season_library = library.clone();
     let season_id = season.season_id.clone();
+    let selected = season.selected;
+    let (border, background, color, weight) = if selected {
+        (
+            "1px solid var(--canvas-source)",
+            "var(--canvas-source)",
+            "var(--canvas-ink)",
+            600,
+        )
+    } else {
+        (
+            "1px solid var(--canvas-border)",
+            "none",
+            "var(--canvas-text)",
+            400,
+        )
+    };
     rsx! {
-        LibraryPillButton {
-            name: season.name.clone(),
-            selected: season.selected,
-            attrs: vec![Attribute::new(
-                "data-library-shows-season",
-                season.season_id.clone(),
-                None,
-                false,
-            )],
-            onpress: Callback::new(move |()| select_season(&season_library, lib_idx, &season_id)),
+        button {
+            "type": "button",
+            class: "flex flex-none items-center whitespace-nowrap",
+            style: "height: 32px; gap: 5px; padding: 0 12px; border-radius: 16px; font-size: 14px; font-weight: {weight}; border: {border}; background: {background}; color: {color};",
+            "aria-pressed": "{selected}",
+            "data-library-shows-season": season.season_id.clone(),
+            onclick: move |_| select_season(&season_library, lib_idx, &season_id),
+            "{season.name}"
         }
     }
 }

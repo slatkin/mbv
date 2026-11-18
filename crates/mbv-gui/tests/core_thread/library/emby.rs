@@ -26,11 +26,6 @@ use crate::{test_core_with, test_emby_client};
 /// video is the item the switched group's rows carry.
 const LIBRARY_BODY: &str = r#"{"Items":[{"Id":"folder-1","Name":"Channel 1","Type":"Folder"},{"Id":"vid-1","Name":"Clip","Type":"Video"}],"TotalRecordCount":2}"#;
 
-/// A Latest snapshot listing, as the mock transport returns it: the bare
-/// JSON array `get_latest` parses, whose video sits in the listing's folder
-/// and carries the date added the New rows' gutter reads.
-const LATEST_BODY: &str = r#"[{"Id":"vid-new","Name":"Fresh Clip","Type":"Video","ParentId":"folder-1","DateCreated":"2026-11-01T10:00:00.0000000Z"}]"#;
-
 /// A movie row of a root-list store's loaded list.
 fn movie(id: &str, name: &str) -> EmbyItem {
     let mut item = mbv_emby_model::test_support::make_item(name, "Movie");
@@ -92,7 +87,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     );
     assert!(!list.feed_group, "the Movies library is the plain mode");
     assert!(
-        list.pills.is_empty() && list.rows.is_empty() && detail.hero.is_none(),
+        list.collections.is_none() && list.rows.is_empty() && detail.hero.is_none(),
         "the root list has not landed rows yet"
     );
     // The no-URL stub client's root-list fetch fails; the frame names the
@@ -124,11 +119,12 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     );
 }
 
-/// An `embySetFeedGroup` pill switch loads the chosen group's items into the
-/// next frame (row 8.1, the task's own contract): the set-feed-group command
-/// runs the TUI's own selection path, whose lazy fetch the mock answers, and
-/// the frame path's projection carries the folder pill as the selected one
-/// with the group's items as the rows.
+/// An `embySetFeedGroup` pill switch loads the checked folder's items into the
+/// next frame (row 8.1, the task's own contract; gui-collection-dropdown
+/// design D2, D3): the press checks the folder in the GUI's own set, whose
+/// fetch the mock answers, and the frame path's projection carries the folder
+/// pill as a checked one with the folder's items as the rows — while the TUI's
+/// shared selection stays where the TUI left it.
 #[test]
 fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     let http = MockHttp::new();
@@ -145,98 +141,51 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        |list, _| list.pills.len() == 3 && !list.loading,
-        "the counted folder pill",
+        |list, _| {
+            list.collections
+                .as_ref()
+                .is_some_and(|collections| collections.entries.len() == 1)
+                && !list.loading
+        },
+        "the folder entry",
     );
 
     send_library(
         &mut test,
-        GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx: 0,
-            group: mbv_gui::bridge::library::GuiEmbyFeedGroup::Folder("folder-1".into()),
+        GuiLibraryCommand::CollectionToggle {
+            target: mbv::GuiCollectionTarget::EmbyFeed(0),
+            key: "folder-1".into(),
         },
     );
     pump_until_emby(
         &mut test,
         |list, _| {
             list.rows.iter().any(|row| row.id == "vid-1")
-                && list
-                    .pills
-                    .iter()
-                    .find(|pill| pill.selected)
-                    .is_some_and(|pill| pill.name == "Channel 1")
+                && list.collections.as_ref().is_some_and(|collections| {
+                    collections
+                        .entries
+                        .iter()
+                        .any(|entry| entry.key == "folder-1" && entry.checked)
+                })
         },
         "the switched group's items",
     );
     let app = test.core.app_mut();
+    let state = app.libs_for_test()[0]
+        .feed_home_video
+        .as_ref()
+        .expect("the feed state");
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::All,
+        "the TUI's own selection stays where the TUI left it"
+    );
     assert!(
-        app.libs_for_test()[0].feed_home_video.as_ref().is_some_and(
-            |state| state.selection == FeedHomeVideoSelection::Folder("folder-1".into())
-        ),
-        "the feed state's selection is the command's folder"
-    );
-}
-
-/// An `embySetFeedGroup` New-pill press selects the Latest view and loads the
-/// snapshot into the next frame (row 8.1, the New pill's contract): the
-/// command triggers the store's own Latest fetch, whose items are the frame's
-/// rows with the New pill the selected one, and the rows carry the programme
-/// (root folder) the video sits in underneath the title.
-#[test]
-fn an_emby_new_pill_command_loads_the_latest_snapshot_into_the_next_frame() {
-    let http = MockHttp::new();
-    // The Latest fetch answers a bare JSON array, the body `get_latest`
-    // parses; every other request this open path makes reads the listing.
-    http.respond_when("/Items/Latest", 200, LATEST_BODY);
-    http.respond_repeated(200, LIBRARY_BODY, 12);
-    let (app, _cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
-    let mut test = test_core_with(app);
-    test.core
-        .app_mut()
-        .seed_gui_feed_view_library_for_test(test_emby_client(&http));
-
-    pump_until_emby(
-        &mut test,
-        |list, _| list.pills.len() == 3 && !list.loading,
-        "the counted folder pill",
-    );
-
-    send_library(
-        &mut test,
-        GuiLibraryCommand::EmbySetFeedGroup {
-            lib_idx: 0,
-            group: mbv_gui::bridge::library::GuiEmbyFeedGroup::Latest,
-        },
-    );
-    let new_view = std::cell::RefCell::new(None);
-    pump_until_emby(
-        &mut test,
-        |list, detail| {
-            let ready = list
-                .pills
-                .iter()
-                .find(|pill| pill.selected)
-                .is_some_and(|pill| pill.name == "New")
-                && list.rows.iter().any(|row| row.id == "vid-new");
-            if ready {
-                *new_view.borrow_mut() = Some((list.clone(), detail.clone()));
-            }
-            ready
-        },
-        "the Latest snapshot's rows",
-    );
-    let (list, _detail) = new_view
-        .into_inner()
-        .expect("the New view's frame carried its content");
-    assert_eq!(
-        list.collection_names,
-        vec!["New".to_string()],
-        "the location names the New pill"
-    );
-    assert_eq!(
-        list.rows[0].subtitle,
-        Some("Channel 1".to_string()),
-        "the row names the programme (root folder) the video sits in"
+        state
+            .items
+            .get(&FeedHomeVideoSelection::Folder("folder-1".into()))
+            .is_some_and(|items| items.iter().any(|item| item.id == "vid-1")),
+        "the checked folder's fetch filled the shared cache"
     );
 }
 
