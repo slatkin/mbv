@@ -1362,8 +1362,9 @@ breakpoint changes because the store is module state, and every drag is saved
 to `gui-panel-widths.toml` in the state directory, so the next launch
 reads the widths back; a corrupt value falls back to the defaults. The list
 column defaults to 368 px, the canvas's 320 px index 15 % wider. The Queue
-column holds between its 400 px artboard and the width that leaves the
-Library column its 480 px Mini threshold, and the list column holds between
+column holds between its 400 px artboard and the lesser of its 800 px cap
+and the width that leaves the Library column its 480 px Mini threshold, and
+the list column holds between
 320 px and 640 px, short enough to leave the Hero pane its minimum.
 `panelWidths` resolves the two painted widths and the Library column they
 leave, and the arrangement classifies that same value, so a drag paints the

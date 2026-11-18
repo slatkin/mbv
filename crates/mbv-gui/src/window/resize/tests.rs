@@ -72,13 +72,13 @@ fn both_dividers_start_at_their_defaults() {
     assert_eq!(widths.library_column, 1200.0);
 }
 
-/// Contract 2: the Queue column stays between its canvas width and the width
-/// that leaves the Library column its Mini threshold — a drag removes no
-/// panel, and a drag inside the bounds holds.
+/// Contract 2: the Queue column stays between its canvas width and the lesser
+/// of its 800 px cap and the width that leaves the Library column its Mini
+/// threshold — a drag removes no panel, and a drag inside the bounds holds.
 #[test]
-fn the_queue_column_stays_between_its_canvas_width_and_the_mini_threshold() {
+fn the_queue_column_stays_between_its_canvas_width_and_the_cap() {
     assert_eq!(clamp_queue_width(100.0, 1600.0), 400.0);
-    assert_eq!(clamp_queue_width(1400.0, 1600.0), 1120.0);
+    assert_eq!(clamp_queue_width(1400.0, 1600.0), 800.0);
 
     let mut session = dragged(None, None);
     session.queue = Some(clamp_queue_width(500.0, 1600.0));

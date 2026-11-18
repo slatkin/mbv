@@ -12,6 +12,11 @@ use crate::bridge::layout::LayoutSize;
 /// The Queue panel's expanded width: the canvas's expanded artboard.
 pub const QUEUE_PANEL_WIDTH_PX: f32 = 400.0;
 
+/// The Queue panel's widest dragged width: the 800 px cap a drag stops at.
+/// A window too narrow for it keeps the room it leaves the Library column,
+/// so the cap never removes the Library column's two-panel states.
+pub const QUEUE_PANEL_MAX_WIDTH_PX: f32 = 800.0;
+
 /// The Queue panel's collapsed width: the `z` toggle's 72 px rail.
 pub const QUEUE_RAIL_WIDTH_PX: f32 = 72.0;
 

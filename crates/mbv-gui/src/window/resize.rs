@@ -9,9 +9,10 @@
 //! Every painted width resolves here, so the columns the window paints and
 //! the width the arrangement classifies are one value: a drag can never paint
 //! a column the thresholds do not measure. The Queue panel keeps its canvas
-//! width as its minimum, and its maximum leaves the Library column its Mini
-//! threshold, so a drag removes no panel and the thresholds still decide Mini,
-//! Narrow, and Wide.
+//! width as its minimum, and its maximum is its 800 px cap, or the width
+//! that leaves the Library column its Mini threshold on a narrower window,
+//! so a drag removes no panel and the thresholds still decide Mini, Narrow,
+//! and Wide.
 
 use std::sync::Arc;
 
@@ -22,7 +23,8 @@ use num_traits::ToPrimitive;
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::layout::LayoutSize;
 use crate::window::arrangement::{
-    LIBRARY_MINI_MAX_WIDTH_PX, QUEUE_PANEL_WIDTH_PX, library_column_width, queue_column_width,
+    LIBRARY_MINI_MAX_WIDTH_PX, QUEUE_PANEL_MAX_WIDTH_PX, QUEUE_PANEL_WIDTH_PX,
+    library_column_width, queue_column_width,
 };
 use crate::window::input::f32_from_f64;
 
@@ -56,13 +58,15 @@ pub struct DraggedWidths {
 /// instance writes `mbv-config`'s `gui-panel-widths.toml`; a test records.
 pub type WidthsSaver = Arc<dyn Fn(&GuiPanelWidths) + Send + Sync>;
 
-/// A Queue column width held between the panel's canvas width and the width
-/// that leaves the Library column its Mini threshold: the Queue panel never
-/// narrows below its artboard and never grows enough to remove the Library
-/// column's two-panel states.
+/// A Queue column width held between the panel's canvas width and the lesser
+/// of its 800 px cap and the width that leaves the Library column its Mini
+/// threshold: the Queue panel never narrows below its artboard and never
+/// grows past its cap or enough to remove the Library column's two-panel
+/// states.
 #[must_use]
 pub fn clamp_queue_width(width: f32, container_width: f32) -> f32 {
-    let max = (QUEUE_PANEL_WIDTH_PX).max(container_width.round() - LIBRARY_MINI_MAX_WIDTH_PX);
+    let room = container_width.round() - LIBRARY_MINI_MAX_WIDTH_PX;
+    let max = QUEUE_PANEL_WIDTH_PX.max(QUEUE_PANEL_MAX_WIDTH_PX.min(room));
     width.round().clamp(QUEUE_PANEL_WIDTH_PX, max)
 }
 
