@@ -4,8 +4,8 @@ Every task: run `cargo fmt` after each Rust change. Never run `cargo nextest`, `
 
 ## 1. Tokens and the queue module split (design D1, D10)
 
-- [ ] 1.1 Add the `--ef-*` token block from design D1 to `crates/mbv-gui/assets/app.css` and regenerate `assets/app.generated.css` with `make gui-css`. Verify `cargo check -p mbv-gui`.
-- [ ] 1.2 Move the row-size constants and the row-geometry helpers out of `crates/mbv-gui/src/window/components/queue_panel.rs` into a new child module `queue_panel/geometry.rs` with no behavior change (design D10). Verify `cargo nextest run -p mbv-gui` passes and `queue_panel.rs` is well under 800 lines.
+- [x] 1.1 Add the `--ef-*` token block from design D1 to `crates/mbv-gui/assets/app.css` and regenerate `assets/app.generated.css` with `make gui-css`. Verify `cargo check -p mbv-gui`.
+- [x] 1.2 Move the row-size constants and the row-geometry helpers out of `crates/mbv-gui/src/window/components/queue_panel.rs` into a new child module `queue_panel/geometry.rs` with no behavior change (design D10). Verify `cargo nextest run -p mbv-gui` passes and `queue_panel.rs` is well under 800 lines.
 
 ## 2. Buffered position on the ctrl wire (design D6, spec `ctrl-protocol`)
 
