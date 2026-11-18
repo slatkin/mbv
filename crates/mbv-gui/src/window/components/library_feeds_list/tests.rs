@@ -481,10 +481,11 @@ fn a_loading_tab_paints_its_line_and_no_row() {
     );
 }
 
-/// Contract (`LibraryFeedsList.test.ts`, design D15, D6): the Feeds column
-/// carries the Music list's header, naming the collection selector's label.
+/// Contract (`LibraryFeedsList.test.ts`, design D15, D6a): the Feeds column
+/// carries the Music list's header, with the collection dropdown's trigger
+/// naming the selection on the title's line.
 #[test]
-fn the_list_paints_the_feeds_header_with_the_collections_label() {
+fn the_list_paints_the_feeds_header_with_the_collections_trigger() {
     let mut fixture = built(frame(Vec::new(), false), detail(None));
     fixture.measure(300.0);
 
@@ -494,9 +495,9 @@ fn the_list_paints_the_feeds_header_with_the_collections_label() {
         "the header names the list"
     );
     assert_eq!(
-        fixture.text_of("[data-library-feeds-selection-label]"),
+        fixture.text_of("[data-library-collections-trigger]"),
         "All",
-        "the selector's label is All while the selection is All"
+        "the trigger names All while the selection is All"
     );
 }
 

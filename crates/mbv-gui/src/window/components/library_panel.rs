@@ -4,16 +4,19 @@
 //! regions — the top bar above the list, and, in Wide, the Hero pane beside
 //! the list; in Narrow the Hero mounts as an overlay over the list once an
 //! item is picked. The active destination decides which painters mount
-//! (design D12): Music paints the collection dropdown, the union list, and the
-//! album Hero (the Home Hero mounts with row 7.5); Home paints the flat list
-//! and its Hero, with no collection dropdown, no letter rail, and no
-//! Workspace; Shows paints its series list with the letter rail and the series
-//! Hero with its Workspace, and no collection dropdown; a plain Emby library
-//! paints its list with the plain mode's rail and its Hero with no Workspace,
-//! and a feed-group library paints the collection dropdown and the date-ordered
-//! list; Audiobooks paints the book list with its letter rail and the book Hero
-//! with its chapters Workspace (row 9.1). The Status bar closes the column under
-//! both.
+//! (design D12): Music paints the union list and the album Hero (the Home Hero
+//! mounts with row 7.5); Home paints the flat list and its Hero, with no letter
+//! rail and no Workspace; Shows paints its series list with the letter rail and
+//! the series Hero with its Workspace; a plain Emby library paints its list with
+//! the plain mode's rail and its Hero with no Workspace, and a feed-group
+//! library paints the date-ordered list; Audiobooks paints the book list with
+//! its letter rail and the book Hero with its chapters Workspace (row 9.1). The
+//! Status bar closes the column under both.
+//!
+//! The collection dropdown is not a panel region (gui-collection-dropdown design
+//! D6a): it rides the list header's title line, so the panel paints nothing
+//! between the top bar and the list, and the list's own component carries the
+//! destination's collections frame to its header.
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
@@ -21,7 +24,8 @@
 //! destination lists mount for real (row 7.7); the destination lists read
 //! their carried frames from the section store themselves, so a panel
 //! repaint never deep-clones a list's rows for them.
-//! The collection dropdowns mount for real (gui-collection-dropdown row 5.3).
+//! The collection dropdowns ride the list headers (gui-collection-dropdown row
+//! 8.2).
 //!
 //! A press inside the panel stores no focus (design D2 of
 //! `gui-pointer-target-interaction`): the pointer names the key target, so the
@@ -42,7 +46,6 @@ use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
 use crate::window::components::library_audiobooks_list::LibraryAudiobooksList;
-use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
 use crate::window::components::library_emby_list::LibraryEmbyList;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
@@ -104,25 +107,6 @@ fn pair_has_hero(pair: &LibraryPair) -> bool {
         LibraryPair::Podcasts(_, detail) => detail.hero.is_some(),
         LibraryPair::Feeds(_, detail) => detail.hero.is_some(),
     }
-}
-
-/// The active destination's collection dropdown (design D6, D12), with the
-/// selector region the arrangement paints it in. Home, Shows, a plain Emby
-/// library, and Audiobooks paint no dropdown at all — their rail, or their
-/// series list, replaces it — so their pair names none. The painter takes the
-/// destination's collections frame alone, so a panel repaint never clones the
-/// carried list's rows for it.
-fn collections_painter(pair: Option<LibraryPair>) -> Option<Element> {
-    let collections = match pair {
-        Some(LibraryPair::Music(list, _)) => list.collections.clone()?,
-        Some(LibraryPair::Emby(list, _)) if list.feed_group => list.collections.clone()?,
-        Some(LibraryPair::Podcasts(list, _)) => list.collections.clone()?,
-        Some(LibraryPair::Feeds(list, _)) => list.collections.clone()?,
-        _ => return None,
-    };
-    Some(rsx! {
-        LibraryCollectionDropdown { collections }
-    })
 }
 
 /// The active destination's list painter (row 7.7): the list the former client
@@ -329,12 +313,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 current_tab,
                 search: search.clone(),
                 home_active: pair.is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
-            }
-            // The active destination's collection dropdown (design D6, D12):
-            // Home, Shows, and a plain Emby library paint none, so the region is
-            // absent on them, not collapsed.
-            if let Some(collections) = collections_painter(pair) {
-                { collections }
             }
             div {
                 class: "relative flex min-h-0 flex-1",

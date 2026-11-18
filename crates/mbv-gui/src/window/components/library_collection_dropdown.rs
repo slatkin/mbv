@@ -14,15 +14,17 @@
 //! change closes it. A press on a row leaves it open, and the All row stays shown
 //! whatever the filter holds.
 //!
-//! The trigger keeps the region name `pills`: the arrangement's region order is
-//! the panel's own contract (`library_panel/tests`), and the region's place — a
-//! selector row above the list — did not change with the pill row it replaced.
+//! The component sits in the list header on the title's line (design D6a): the
+//! header paints it directly after the list title, so the panel paints no
+//! selector row between its top bar and its list. The trigger is a bordered
+//! rectangular button with a trailing chevron, which shows that it opens a menu,
+//! and the open popover is anchored under the trigger, over the list.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
-use crate::window::icons::Check;
+use crate::window::icons::{Check, ChevronDown};
 use crate::window::library::list::filter_match;
 use crate::window::library::state::LibraryState;
 
@@ -127,29 +129,29 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
 
     rsx! {
         div {
-            class: "flex flex-none items-center",
+            class: "flex min-w-0 flex-1 items-center justify-between",
             role: "group",
             "aria-label": "Collections",
-            "data-library-region": "pills",
-            style: "height: 52px; gap: 6px; padding: 0 16px; border-bottom: 1px solid var(--canvas-border);",
+            style: "gap: 12px;",
             // A press on the dropdown's own surface is not an outside press:
-            // it stops at the region, and the Row menu it may have opened
+            // it stops at the group, and the Row menu it may have opened
             // closes here (design D7).
             onpointerdown: move |event: PointerEvent| {
                 event.stop_propagation();
                 inside_library.close_library_row_menu();
             },
             div {
-                class: "relative flex items-center",
+                class: "relative flex min-w-0 items-center",
                 style: "gap: 6px;",
-                // The trigger names the selection (design D6): All, the one
-                // checked collection, or the count with the destination's noun.
-                // Its own box clips a long name: the header paints no overflow
-                // clip, because that clip hid the whole open popover.
+                // The trigger names the selection (design D6) and shows that it
+                // opens a menu (design D6a): All, the one checked collection, or
+                // the count with the destination's noun, then the chevron. Its
+                // own box clips a long name: the header paints no overflow clip,
+                // because that clip hid the whole open popover.
                 button {
                     "type": "button",
                     class: "flex flex-none items-center",
-                    style: "height: 32px; max-width: 18rem; padding: 0 12px; border-radius: 16px; font-size: 14px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-text);",
+                    style: "height: 30px; max-width: 18rem; padding: 0 10px; gap: 6px; border-radius: 6px; font-size: 14px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-text);",
                     "aria-label": "Select collections",
                     "aria-haspopup": "menu",
                     "aria-expanded": "{open}",
@@ -159,6 +161,10 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         style: "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
                         "{label}"
                     }
+                    ChevronDown {
+                        size: 14,
+                        color: "var(--canvas-muted)".to_owned(),
+                    }
                 }
                 // Clear selects All without opening the dropdown (design D6),
                 // and paints only while the selection is not All.
@@ -166,30 +172,17 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                     button {
                         "type": "button",
                         class: "flex flex-none items-center whitespace-nowrap",
-                        style: "height: 32px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
+                        style: "height: 30px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
                         "aria-label": "Clear the collection selection",
                         "data-library-collections-clear": "",
                         onclick: move |_| on_clear.call(()),
                         "Clear"
                     }
                 }
-                // The date-order toggle sits beside the trigger on a feed-based
-                // destination (design D6); Music carries no order and paints
-                // none.
-                if let Some(order) = order_label {
-                    button {
-                        "type": "button",
-                        class: "flex flex-none items-center whitespace-nowrap",
-                        style: "height: 32px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
-                        "aria-label": "Date order",
-                        "data-library-date-order": "",
-                        onclick: move |_| on_order.call(()),
-                        "{order}"
-                    }
-                }
-                // The open dropdown (design D6): the filter field, the All row,
-                // and one checkbox row per matching collection, in the row
-                // menu's own canvas chrome.
+                // The open dropdown (design D6, D6a): the filter field, the All
+                // row, and one checkbox row per matching collection, in the row
+                // menu's own canvas chrome. It is anchored under the trigger,
+                // over the list, which the header does not clip.
                 if open {
                     div {
                         class: "absolute z-20 flex flex-col",
@@ -197,7 +190,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         "aria-label": "Collections",
                         "data-library-collections-menu": "",
                         style: format!(
-                            "top: 40px; left: 0; width: 20rem; max-width: calc(100vw - 48px); padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
+                            "top: 36px; left: 0; width: 20rem; max-width: calc(100vw - 48px); padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
                         ),
                         label {
                             class: "flex flex-none items-center",
@@ -258,6 +251,20 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                             }
                         }
                     }
+                }
+            }
+            // The date-order toggle sits at the title line's right end on a
+            // feed-based destination (design D6, D6a); Music carries no order
+            // and paints none.
+            if let Some(order) = order_label {
+                button {
+                    "type": "button",
+                    class: "flex flex-none items-center whitespace-nowrap",
+                    style: "height: 30px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
+                    "aria-label": "Date order",
+                    "data-library-date-order": "",
+                    onclick: move |_| on_order.call(()),
+                    "{order}"
                 }
             }
         }

@@ -304,6 +304,11 @@ pub fn LibraryList() -> Element {
         names => names.join(" + "),
     };
 
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the destination's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it.
+    let collections = frame.and_then(|frame| frame.collections.clone());
+
     // The filter field's placeholder, naming the selection as the canvas
     // does.
     let filter_placeholder = match collection_names {
@@ -342,6 +347,7 @@ pub fn LibraryList() -> Element {
                 LibraryListHeader {
                     title: "Artists".to_owned(),
                     label: selection_label,
+                    collections,
                     filter: ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter artists".to_owned(),

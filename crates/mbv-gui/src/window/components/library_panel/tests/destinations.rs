@@ -7,30 +7,29 @@
 use super::{built, fixtures, seed_idle_status};
 use crate::window::arrangement::GuiArrangement;
 
-/// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7):
-/// the panel paints the top bar and the collection dropdown above the content
-/// row, and the content row paints the list region before the Wide Hero pane.
+/// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7,
+/// gui-collection-dropdown D6a): the panel paints the top bar directly above
+/// the content row — no selector region between them — and the content row
+/// paints the list region before the Wide Hero pane.
 #[test]
-fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
+fn the_panel_paints_the_top_bar_the_list_and_the_hero_region() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::music_sections(None);
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
     let regions = fixture.regions();
-    assert_eq!(regions[..3], ["topBar", "pills", "list"]);
-    // The Wide Hero paints after the list (gui-swap-queue-and-library-sides D1).
-    assert!(regions[3..].contains(&"hero".to_owned()));
-    // The dropdown's painter mounts for real (gui-collection-dropdown row 5.3):
-    // the pills region is the dropdown's group, and the Music list's painter
-    // mounts under it.
-    assert!(
-        fixture.presents("[data-library-region=\"pills\"][role=\"group\"]"),
-        "the Music collection dropdown's painter mounts"
+    assert_eq!(
+        regions,
+        ["topBar", "list", "rail", "hero"],
+        "no selector region paints between the top bar and the list"
     );
+    // The dropdown rides the list header (gui-collection-dropdown row 8.2), so
+    // the Music list's header paints its trigger and the list's painter mounts
+    // under it.
     assert!(
         fixture.presents("[data-library-collections-trigger]"),
-        "the dropdown's trigger mounts"
+        "the Music collection dropdown's trigger mounts"
     );
     assert!(
         fixture.presents("[data-library-list-column]"),
@@ -48,14 +47,14 @@ fn the_panel_paints_the_top_bar_the_pill_row_the_list_and_the_hero_region() {
 /// the panel mounts the Home painters in place of the Music ones, and the
 /// collection dropdown and the letter rail do not paint.
 #[test]
-fn the_home_content_mounts_the_home_list_and_hero_and_no_pills() {
+fn the_home_content_mounts_the_home_list_and_hero_and_no_collection_dropdown() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::home_sections(true);
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
     assert!(
-        !fixture.presents("[data-library-region=\"pills\"]"),
+        !fixture.presents("[data-library-collections-trigger]"),
         "Home paints no collection dropdown"
     );
     assert!(
@@ -120,7 +119,7 @@ fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_de
         "the Emby Hero's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-library-region=\"pills\"]"),
+        !fixture.presents("[data-library-collections-trigger]"),
         "a plain library paints no collection dropdown"
     );
     assert!(
@@ -165,7 +164,7 @@ fn the_shows_content_paints_no_collection_dropdown() {
         "the Shows list's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-library-region=\"pills\"]"),
+        !fixture.presents("[data-library-collections-trigger]"),
         "Shows paints no collection dropdown"
     );
 }
@@ -190,7 +189,7 @@ fn the_audiobooks_content_mounts_the_book_list_and_hero_and_none_of_the_other_de
         "the book Hero's painter mounts"
     );
     assert!(
-        !fixture.presents("[data-library-region=\"pills\"]"),
+        !fixture.presents("[data-library-collections-trigger]"),
         "no collection dropdown rides on the destination"
     );
     assert!(
@@ -229,7 +228,7 @@ fn the_hero_less_audiobooks_content_paints_its_list_and_no_hero() {
 /// the panel mounts the collection dropdown, the entry list, and the entry
 /// Hero, and none of the other destinations' painters.
 #[test]
-fn the_feeds_content_mounts_the_feeds_pills_list_and_hero_and_none_of_the_other_destinations() {
+fn the_feeds_content_mounts_the_feeds_list_and_hero_and_none_of_the_other_destinations() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::feeds_sections(Some(fixtures::feeds_hero()));
     fixture.carry(list, detail);

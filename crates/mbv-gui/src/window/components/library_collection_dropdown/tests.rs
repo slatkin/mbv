@@ -256,6 +256,18 @@ fn a_feed_list_paints_its_date_order() {
     assert_eq!(fixture.text_of("[data-library-date-order]"), "Newest");
 }
 
+/// Contract (design D6a, spec "The collection dropdown sits in the list header"):
+/// the trigger shows that it opens a menu, through its trailing chevron.
+#[test]
+fn the_trigger_paints_its_chevron() {
+    let fixture = built(music_all());
+
+    assert!(
+        fixture.presents("[data-library-collections-trigger] svg.lucide-chevron-down"),
+        "the trigger's chevron paints"
+    );
+}
+
 /// Contract (design D7): the trigger opens the dropdown, and a second press
 /// closes it.
 #[test]

@@ -176,7 +176,7 @@ pub(super) fn shows_sections() -> (GuiLibraryList, GuiLibraryDetail) {
 }
 
 /// The plain Emby-library sections: the plain mode's list, or the feed-group
-/// mode's pills and date-ordered rows.
+/// mode's collection selector and date-ordered rows.
 pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, GuiLibraryDetail) {
     (
         GuiLibraryList {

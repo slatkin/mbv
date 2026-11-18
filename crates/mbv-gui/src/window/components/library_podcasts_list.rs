@@ -84,6 +84,11 @@ pub fn LibraryPodcastsList() -> Element {
         .and_then(|frame| frame.collections.as_ref())
         .map_or_else(|| "All".to_owned(), GuiCollectionsFrame::label);
 
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the destination's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it.
+    let collections = frame.and_then(|frame| frame.collections.clone());
+
     // The painted rows of the flat list (row 10.1): the same model
     // [`crate::window::library::podcasts`] builds from the carried content,
     // narrowed by the filter's text.
@@ -124,6 +129,7 @@ pub fn LibraryPodcastsList() -> Element {
                     title: "Podcasts".to_owned(),
                     label: selection_label.clone(),
                     label_attr: Some("data-library-podcasts-selection-label"),
+                    collections,
                     filter: podcasts_ui.filter.clone(),
                     placeholder: format!("Filter {selection_label}"),
                     aria_label: "Filter episodes".to_owned(),

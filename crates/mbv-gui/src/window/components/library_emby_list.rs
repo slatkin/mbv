@@ -129,6 +129,12 @@ pub fn LibraryEmbyList() -> Element {
         format!("Filter {}", selection_names.join(" + "))
     };
 
+    // The collection dropdown the header paints on the title's line (design
+    // D6a): the feed-group mode's carried selector, which names the selection
+    // itself, so the header paints no selection label beside it. A plain
+    // library carries none, so its header keeps the label.
+    let collections = frame.and_then(|frame| frame.collections.clone());
+
     // The rail's A–Z letters over the painted rows (row 8.1): the plain mode
     // paints it, and the date-ordered feed-group mode paints none.
     let rail = emby_letter_rail(&rows);
@@ -174,6 +180,7 @@ pub fn LibraryEmbyList() -> Element {
                     title: frame.map_or(String::new(), |frame| frame.library_name.clone()),
                     label: selection_label,
                     label_attr: Some("data-library-emby-selection-label"),
+                    collections,
                     filter: emby_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter items".to_owned(),

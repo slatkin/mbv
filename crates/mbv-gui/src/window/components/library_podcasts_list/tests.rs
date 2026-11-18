@@ -497,11 +497,11 @@ fn loading_and_failed_facts_paint_their_own_lines() {
     );
 }
 
-/// Contract (`LibraryPodcastsList.test.ts`, design D15, D6): the Podcasts
-/// column carries the Music list's header, naming the collection selector's
-/// label.
+/// Contract (`LibraryPodcastsList.test.ts`, design D15, D6a): the Podcasts
+/// column carries the Music list's header, with the collection dropdown's
+/// trigger naming the selection on the title's line.
 #[test]
-fn the_list_paints_the_podcasts_header_with_the_collections_label() {
+fn the_list_paints_the_podcasts_header_with_the_collections_trigger() {
     let mut fixture = built(frame(Vec::new(), false, false), detail(None));
     fixture.measure(300.0);
 
@@ -511,9 +511,9 @@ fn the_list_paints_the_podcasts_header_with_the_collections_label() {
         "the header names the list"
     );
     assert_eq!(
-        fixture.text_of("[data-library-podcasts-selection-label]"),
+        fixture.text_of("[data-library-collections-trigger]"),
         "All",
-        "the selector's label is All while the selection is All"
+        "the trigger names All while the selection is All"
     );
 }
 
