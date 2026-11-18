@@ -87,6 +87,14 @@ fn checked(keys: &[&str]) -> GuiCollectionSet {
     Op::RetainPresent(&["blues"]),
     GuiCollectionSet::All,
 )]
+#[case::an_empty_checked_list_retains_to_all(
+    // Review 3 (PR 1021): the all-present read was vacuously true for an
+    // empty key list, so the empty Checked shape a saved All carries
+    // survived retention and the restore installed it.
+    checked(&[]),
+    Op::RetainPresent(&["tifo"]),
+    GuiCollectionSet::All,
+)]
 #[case::a_catalog_that_has_not_landed_keeps_the_set(
     checked(&["soul", "jazz"]),
     Op::Effective(None),

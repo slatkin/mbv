@@ -87,12 +87,18 @@ impl GuiCollectionSet {
     /// `present` does not hold drop, and when none survive the selection
     /// becomes All. All stays All. The stored set is cloned only when a key
     /// drops; an unchanged set is returned borrowed, so a per-frame reader
-    /// allocates nothing when the catalog holds every checked key.
+    /// allocates nothing when the catalog holds every checked key. An empty
+    /// key list is All before the all-present read, whose `all` is vacuously
+    /// true for one — the stored shape a saved All carries, so the launch
+    /// restore normalizes it instead of installing the empty shape.
     #[must_use]
     pub fn retain_present(&self, present: impl Fn(&str) -> bool) -> Cow<'_, Self> {
         let Self::Checked(keys) = self else {
             return Cow::Borrowed(self);
         };
+        if keys.is_empty() {
+            return Cow::Owned(Self::All);
+        }
         if keys.iter().all(|key| present(key)) {
             return Cow::Borrowed(self);
         }
@@ -106,11 +112,15 @@ impl GuiCollectionSet {
     /// no longer holds drops, and when none survive the selection becomes
     /// All; `None` is a catalog that has not landed yet, the list that would
     /// name a key stale, which keeps the set as it is. All stays All either
-    /// way, and a set nothing drops is returned borrowed.
+    /// way, and a set nothing drops is returned borrowed — except an empty
+    /// key list, which is All before the catalog lands too: nothing can be
+    /// stale in an empty list, and the stored shape a saved All carries must
+    /// not survive as the empty Checked shape.
     #[must_use]
     pub fn effective(&self, present: Option<impl Fn(&str) -> bool>) -> Cow<'_, Self> {
         match present {
             Some(present) => self.retain_present(present),
+            None if matches!(self, Self::Checked(keys) if keys.is_empty()) => Cow::Owned(Self::All),
             None => Cow::Borrowed(self),
         }
     }
