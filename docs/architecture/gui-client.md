@@ -767,17 +767,21 @@ no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
 recogniser or hit map. `src/window/components/library_panel.rs` paints `LibraryTopBar` (the
 Home icon, one tab per Service library destination, and the Search field
-with its results dropdown), the destination's collection dropdown
-(`LibraryCollectionDropdown`: the trigger, the Clear control, the date order
-toggle, and the popover — a destination with no collections paints none),
-the destination's list (`LibraryList` with `LibraryLetterRail` in Music;
+with its results dropdown), the destination's list (`LibraryList` with
+`LibraryLetterRail` in Music;
 `LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
 `LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
 the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryHomeHero`, `LibraryShowsHero` with its Workspace,
 `LibraryEmbyHero`, `LibraryAudiobooksHero`, `LibraryPodcastsHero`, and
-`LibraryFeedsHero`), and `LibraryStatusBar`, and the right-click item menu
-(`QueueRowMenu` under the panel), which a right-press on a list row or a
+`LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
+row and no pills region between `LibraryTopBar` and the list. Each list
+paints its own header: `LibraryListHeader` paints the list title line — the
+title, the collection dropdown (`LibraryCollectionDropdown`: the trigger,
+the Clear control, the right-aligned date order toggle, and the popover — a
+destination with no collections paints none) — on that line. The panel also
+paints the right-click item menu (`QueueRowMenu` under the panel), which a
+right-press on a list row or a
 Hero tracklist row opens through the `rowMenu` command: the command names
 the row's stable Service id, the frame's `rowMenu` section carries the
 shared builder's full entries for that item, and the menu paints at the
