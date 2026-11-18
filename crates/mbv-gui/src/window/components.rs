@@ -3,6 +3,7 @@
 
 pub mod art_image;
 pub mod attach_screen;
+pub mod checkbox_box;
 pub mod collapsed_rail;
 pub mod compact_strip;
 pub mod confirm_overlay;
@@ -73,3 +74,4 @@ pub mod settings_status_bar;
 pub mod settings_switch;
 pub mod track_chips;
 pub mod typed_text;
+pub mod use_focus_while;

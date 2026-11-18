@@ -33,8 +33,10 @@ use mbv::GuiCollectionNoun;
 use crate::bridge::frame::library::{
     ALL_KEY, GuiCollectionEntry, GuiCollections, GuiCollectionsFrame as _,
 };
+use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
-use crate::window::icons::{Check, ChevronDown, ChevronUp};
+use crate::window::components::use_focus_while::use_focus_while;
+use crate::window::icons::{ChevronDown, ChevronUp};
 use crate::window::library::list::filter_match;
 use crate::window::library::state::LibraryState;
 
@@ -95,6 +97,42 @@ fn checkbox_style(checked: bool) -> String {
     }
 }
 
+/// One row of the open dropdown (design D6): the All row and an entry row
+/// share the button, the leading checkbox, and the label. The All row names
+/// itself in `data-library-collections-all` and carries a bottom margin; an
+/// entry row names its collection key in `data-library-collections-row`.
+#[component]
+fn CollectionRow(
+    checked: bool,
+    style: String,
+    key_attr: Option<String>,
+    label: String,
+    on_press: Callback<()>,
+) -> Element {
+    rsx! {
+        button {
+            "type": "button",
+            class: "flex flex-none items-center text-left",
+            role: "menuitemcheckbox",
+            style: "{style}",
+            "aria-checked": "{checked}",
+            "data-library-collections-all": key_attr.is_none().then_some(""),
+            "data-library-collections-row": key_attr,
+            onclick: move |_| on_press.call(()),
+            CheckboxBox {
+                checked: checked,
+                element: CheckboxBoxElement::Div,
+                style: checkbox_style(checked),
+                size: 10,
+                stroke_width: 2.0,
+                color: "var(--canvas-menu)".to_owned(),
+                collections_marker: true,
+            }
+            span { "{label}" }
+        }
+    }
+}
+
 /// The collection dropdown: the capsule trigger and the open popover over one
 /// carried collections frame.
 #[component]
@@ -125,17 +163,9 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
     // The open filter takes the typed keys wherever the pointer is (design D7):
     // the field owns its focus, as the list's `/` filter does, so the router's
     // `Text` answer types into it.
-    let mut filter_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let watch_ui = library.ui;
-    use_effect(move || {
-        let open = watch_ui.cloned().collections.is_some();
-        let mounted = filter_mounted.cloned();
-        spawn(async move {
-            if let Some(event) = mounted {
-                let _ = event.set_focus(open).await;
-            }
-        });
-    });
+    let focus_library = library.clone();
+    let mut filter_mounted =
+        use_focus_while(move || focus_library.ui.cloned().collections.is_some());
     let filter_library = library.clone();
     let on_filter = Callback::new(move |text: String| {
         filter_library.set_collections_filter(text);
@@ -250,31 +280,14 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                             style: "padding: 6px;",
                             // All stays shown whatever the filter holds (design
                             // D7), and a press on it unchecks every collection.
-                            button {
-                                "type": "button",
-                                class: "flex flex-none items-center text-left",
-                                role: "menuitemcheckbox",
-                                style: format!(
-                                    "margin-bottom: 8px; {}",
-                                    row_style(all)
-                                ),
-                                "aria-checked": "{all}",
-                                "data-library-collections-all": "",
-                                onclick: move |_| {
+                            CollectionRow {
+                                checked: all,
+                                style: format!("margin-bottom: 8px; {}", row_style(all)),
+                                key_attr: None,
+                                label: "All".to_owned(),
+                                on_press: Callback::new(move |()| {
                                     all_library.press_collection_target(&all_target, ALL_KEY);
-                                },
-                                div {
-                                    class: "flex flex-none items-center justify-center",
-                                    style: checkbox_style(all),
-                                    "data-library-collections-checkbox": "",
-                                    if all {
-                                        Check {
-                                            size: 10,
-                                            color: "var(--canvas-menu)".to_owned(),
-                                        }
-                                    }
-                                }
-                                span { "All" }
+                                }),
                             }
                             for entry in rows.iter() {
                                 {
@@ -284,28 +297,15 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                     let row_library = library.clone();
                                     let row_target = collections.target.clone();
                                     rsx! {
-                                        button {
-                                            "type": "button",
-                                            class: "flex flex-none items-center text-left",
-                                            role: "menuitemcheckbox",
+                                        CollectionRow {
+                                            checked: checked,
                                             style: row_style(checked),
-                                            "aria-checked": "{checked}",
-                                            "data-library-collections-row": "{key}",
-                                            onclick: move |_| {
-                                                row_library.press_collection_target(&row_target, &key);
-                                            },
-                                            div {
-                                                class: "flex flex-none items-center justify-center",
-                                                style: checkbox_style(checked),
-                                                "data-library-collections-checkbox": "",
-                                                if checked {
-                                                    Check {
-                                                        size: 10,
-                                                        color: "var(--canvas-menu)".to_owned(),
-                                                    }
-                                                }
-                                            }
-                                            span { "{name}" }
+                                            key_attr: Some(key.clone()),
+                                            label: name,
+                                            on_press: Callback::new(move |()| {
+                                                row_library
+                                                    .press_collection_target(&row_target, &key);
+                                            }),
                                         }
                                     }
                                 }

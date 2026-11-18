@@ -26,6 +26,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame, GuiSearchRowFrame};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::settings::GuiSettingsCommand;
+use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::{ChevronLeft, ChevronRight, Settings};
 use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
@@ -95,17 +96,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     // elsewhere retracts it through this same element's blur event. The
     // effect reads the focus fact and writes no signal — the DOM focus is
     // the write.
-    let mut search_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let watch_search_state = library.search;
-    use_effect(move || {
-        let focused = watch_search_state.cloned().focused;
-        let mounted = search_mounted.cloned();
-        spawn(async move {
-            if let Some(event) = mounted {
-                let _ = event.set_focus(focused).await;
-            }
-        });
-    });
+    let focus_mount_library = library.clone();
+    let mut search_mounted = use_focus_while(move || focus_mount_library.search.cloned().focused);
 
     // A results frame keeps the held highlight by id (row 12.1): a first
     // landing and an id a new frame no longer carries — a new query's rows,
