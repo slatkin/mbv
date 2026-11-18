@@ -450,9 +450,9 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward)) => {
                 Some(Msg::Playback(PlaybackRequest::SeekRelative(30.0)))
             }
-            // The header's target press emits the same opener the TUI's
-            // indicator sends the Sessions sidebar; the GUI's counterpart
-            // is the Client-core chooser overlay.
+            // The footer's playback-target control emits the same opener the
+            // TUI's indicator sends the Sessions sidebar; the GUI's
+            // counterpart is the Client-core chooser overlay.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)) => {
                 Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
             }
@@ -481,8 +481,8 @@ impl<'a> PlaybackLeaf<'a> {
                     .popover_track_id(*index)
                     .map(|track_id| Msg::Playback(PlaybackRequest::TrackPopoverSelect(track_id)))
             }
-            // The header's collapse and queue-fold controls run the `z`/`q`
-            // toggles' own dispatch.
+            // The footer's collapse control and the folded queue line's
+            // queue-fold control run the `z`/`q` toggles' own dispatch.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse)) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePanelCollapse))
             }
@@ -524,7 +524,8 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
         match gesture {
             // A press seeks or activates what it lands on: the seekbar
             // seeks to the pressed position (the `gui-client` spec), the
-            // transport and header targets act. The second press of a pair
+            // transport and playback-panel targets act. The second press of
+            // a pair
             // resolves through the same arms, so a double-click on the bar
             // seeks twice to the same position — the kept double-click
             // behaviour.

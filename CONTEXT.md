@@ -425,7 +425,7 @@ _Avoid_: active panel, focused panel, pane focus
 Panel mode:
 The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values are:
 
-1. Mini names a state where only one of Library or Queue is visible. In the TUI Client, Panel focus sets it. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows. The GUI Client has no Panel focus: its Mini always shows the Queue panel (ADR 0040).
+1. Mini names a state where only one of Library or Queue is visible. In the TUI Client, Panel focus sets it. An explicit `x` toggle at any terminal width reaches it. A terminal width below the mini-view threshold forces it. Both paths are the same state. Mini names that only one panel shows, not the reason it shows. The GUI Client has no Panel focus: its Mini shows the Queue panel or the *GUI Library panel*, and a press on the global header's destination control switches between them (ADR 0040).
 2. Narrow names a state where both panels are visible. A hero-bearing Library panel uses the standard fixed-row browser. It opens a Library Hero overlay on demand.
 3. Wide names a state where both panels are visible. A hero-bearing Library panel uses Wide hero when the shared width and minimum-height conditions hold.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
@@ -519,7 +519,7 @@ The root-composed Panel that paints the playback transport in the Library column
 _Avoid_: player strip
 
 Queue playback panel:
-The root-composed Panel in the Queue column. It owns the header, visual slot, and transport when the Queue column is visible. The header shows the now-playing title while a target plays. Otherwise it shows the playback status or target. It remains while idle, when the visual slot and transport collapse.
+The root-composed Panel in the Queue column. It owns the visual slot and transport when the Queue column is visible; the TUI also owns the header row above the artwork: the playback-target indicator and the right-aligned status word, with the now-playing title between them. The GUI paints no header row: the artwork is the panel's topmost content, directly under the window's global header (the Library top bar, mounted in app.rs), and the playback-target control, the collapse control, and the target chooser live in the Queue footer band; no GUI surface paints the now-playing status word. It remains while idle, when the visual slot and transport collapse.
 _Avoid_: now-playing panel
 
 Now-playing title site:

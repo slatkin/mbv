@@ -101,8 +101,8 @@ impl RegionTarget {
     pub(crate) fn owns_gui_overlay(&self) -> bool {
         match self {
             // A chooser, popover, or row-menu row; the row menu's opener; and
-            // the chips and header target whose presses toggle their overlay
-            // (a sibling chip's press swaps the open popover).
+            // the chips and the playback-target control whose presses toggle
+            // their overlay (a sibling chip's press swaps the open popover).
             Self::QueuePlayback(
                 QueuePlaybackTargetId::TargetChoice(_)
                 | QueuePlaybackTargetId::TrackPopoverChoice(_)
@@ -238,7 +238,8 @@ pub enum QueuePlaybackTargetId {
     SeekForward,
     /// The Queue footer's collapse control: the `z` toggle's pointer target.
     Collapse,
-    /// The header's queue-fold control: the `q` toggle's pointer target.
+    /// The folded queue line's expand control: the `q` toggle's pointer
+    /// target.
     QueueFold,
     /// One row of the open playback-target chooser: the choice's index in
     /// the `targetChoices` list.
