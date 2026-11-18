@@ -280,6 +280,7 @@ fn fresh_summary() -> GuiQueueSummary {
         header: GuiQueueHeaderFacts {
             entries: 0,
             shown_name: String::new(),
+            shown_len: 0,
             close_disabled: true,
         },
     }

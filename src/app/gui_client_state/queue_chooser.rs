@@ -16,29 +16,55 @@ impl App {
     /// named by its device name. The list is read per call, like every other
     /// projection, and a shown entry that the list does not hold — a peer that
     /// just disconnected, a queue another Client closed — marks nothing.
+    ///
+    /// Each entry's count comes from that queue's freshest view (design D8 of
+    /// `gui-queue-panel-redesign`): the current queue's snapshot, the shown
+    /// resting queue's live view, another resting queue's published length —
+    /// the Owner keeps that fresh — or the peer's own view.
     #[must_use]
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
         let current = self.named_queues.current();
         let local_plays = self.local_owner_plays();
+        let shown_resting = match &self.shown_resting {
+            Some((queue, view)) if self.named_queues.rests(*queue) => Some((*queue, view)),
+            _ => None,
+        };
         let mut entries: Vec<QueueChooserEntryProjection> = self
             .named_queues
             .entries()
             .iter()
-            .map(|entry| QueueChooserEntryProjection {
-                label: entry.name.clone(),
-                queue: Some(entry.id),
-                shown: self.gui_shown_entry == Some(ShownEntry::Local(entry.id)),
-                current: current == Some(entry.id),
-                playing: local_plays && current == Some(entry.id),
+            .map(|entry| {
+                let len = if current == Some(entry.id) {
+                    self.local_view.total_queue_len()
+                } else if let Some((shown, view)) = &shown_resting
+                    && *shown == entry.id
+                {
+                    view.total_queue_len()
+                } else {
+                    entry.len
+                };
+                QueueChooserEntryProjection {
+                    label: entry.name.clone(),
+                    queue: Some(entry.id),
+                    shown: self.gui_shown_entry == Some(ShownEntry::Local(entry.id)),
+                    current: current == Some(entry.id),
+                    playing: local_plays && current == Some(entry.id),
+                    len,
+                }
             })
             .collect();
         if self.has_direct_remote_queue() {
+            let peer_len = self
+                .remote_view
+                .as_ref()
+                .map_or(0, |view| view.total_queue_len());
             entries.push(QueueChooserEntryProjection {
                 label: self.peer_owner_label(),
                 queue: None,
                 shown: self.gui_shown_entry == Some(ShownEntry::Peer),
                 current: false,
                 playing: false,
+                len: peer_len,
             });
         }
         entries

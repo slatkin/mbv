@@ -376,6 +376,10 @@ pub struct GuiQueueHeaderFacts {
     /// The name of the shown entry: the chooser button's label. Empty while
     /// no entry shows.
     pub shown_name: String,
+    /// The shown entry's slot count: the switcher's count chip (design D7 of
+    /// `gui-queue-panel-redesign`). The Queue filter narrows no count, so it
+    /// counts every slot of the shown queue.
+    pub shown_len: usize,
     /// Whether the close control is disabled: the only local queue has no
     /// close (spec `gui-queue-chooser` "The close control closes the shown
     /// entry").
@@ -407,6 +411,7 @@ impl GuiQueueSummary {
             header: GuiQueueHeaderFacts {
                 entries: header.entries,
                 shown_name: header.shown_name.clone(),
+                shown_len: header.shown_len,
                 close_disabled: header.close_disabled,
             },
         }

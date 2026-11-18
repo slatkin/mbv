@@ -87,6 +87,7 @@ pub(super) fn summary() -> GuiQueueSummary {
         header: GuiQueueHeaderFacts {
             entries: 1,
             shown_name: "Default".to_owned(),
+            shown_len: 26,
             close_disabled: true,
         },
     }
@@ -100,6 +101,7 @@ pub(super) fn several_entries() -> GuiQueueSummary {
         header: GuiQueueHeaderFacts {
             entries: 2,
             shown_name: "Kids".to_owned(),
+            shown_len: 4,
             close_disabled: false,
         },
         ..summary()
@@ -114,6 +116,7 @@ pub(super) fn chooser_summary() -> GuiQueueSummary {
         header: GuiQueueHeaderFacts {
             entries: 3,
             shown_name: "Kids".to_owned(),
+            shown_len: 4,
             close_disabled: false,
         },
         ..summary()
@@ -121,10 +124,11 @@ pub(super) fn chooser_summary() -> GuiQueueSummary {
 }
 
 /// One entry of the open Queue chooser: its label, the local queue it shows
-/// (`None` for the peer), and its shown and current marks.
+/// (`None` for the peer), its slot count, and its shown and current marks.
 pub(super) fn chooser_entry(
     label: &str,
     queue: Option<u64>,
+    len: usize,
     shown: bool,
     current: bool,
 ) -> GuiQueueChooserEntry {
@@ -134,19 +138,20 @@ pub(super) fn chooser_entry(
         shown,
         current,
         playing: false,
+        len,
     }
 }
 
 /// The open Queue chooser the fixture paints (task 8.3): `Default` is current
 /// and `Kids` is shown, then the connected peer. `renaming` carries the draft
-/// the chooser holds.
+/// the chooser holds. The counts are the `gui-queue-chooser` spec's scenario.
 pub(super) fn queue_chooser(renaming: Option<GuiQueueChooserRename>) -> GuiOverlayFrame {
     GuiOverlayFrame::QueueChooser {
         cursor: 1,
         entries: vec![
-            chooser_entry("Default", Some(1), false, true),
-            chooser_entry("Kids", Some(2), true, false),
-            chooser_entry("living-room", None, false, false),
+            chooser_entry("Default", Some(1), 26, false, true),
+            chooser_entry("Kids", Some(2), 4, true, false),
+            chooser_entry("living-room", None, 9, false, false),
         ],
         renaming,
     }
@@ -160,9 +165,9 @@ pub(super) fn queue_chooser_playing() -> GuiOverlayFrame {
         entries: vec![
             GuiQueueChooserEntry {
                 playing: true,
-                ..chooser_entry("Default", Some(1), false, true)
+                ..chooser_entry("Default", Some(1), 26, false, true)
             },
-            chooser_entry("Kids", Some(2), true, false),
+            chooser_entry("Kids", Some(2), 4, true, false),
         ],
         renaming: None,
     }

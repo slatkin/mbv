@@ -109,6 +109,7 @@ pub(super) fn summary() -> GuiQueueSummary {
         header: GuiQueueHeaderFacts {
             entries: 1,
             shown_name: "Default".to_owned(),
+            shown_len: 26,
             close_disabled: true,
         },
     }

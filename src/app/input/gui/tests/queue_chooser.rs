@@ -11,7 +11,8 @@ use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 use crate::app::App;
 use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
-use crate::app::tests::{make_items, make_local_daemon_app_stub_with_cmd_rx};
+use crate::app::tests::{emby_unified_state, make_items, make_local_daemon_app_stub_with_cmd_rx};
+use mbv_ctrl::player::PlayerEvent;
 
 /// The stub Owner's current queue.
 fn current() -> mbv_queue::NamedQueueId {
@@ -242,6 +243,62 @@ fn the_chooser_projects_its_entries_and_rename_draft() {
     assert!(
         renames.selected,
         "the draft opens with its whole name selected"
+    );
+}
+
+/// The chooser counts each entry's queue (spec `gui-queue-chooser` "Each
+/// entry shows its slot count", design D8 of `gui-queue-panel-redesign`): the
+/// current queue's live view, a resting queue's published length, and the
+/// peer's own view. The header's switcher carries the shown queue's count.
+/// (`Default` holds 3 slots, `Kids` publishes 1, and the peer holds 2.)
+#[test]
+fn the_chooser_counts_the_current_resting_and_peer_queues() {
+    let (mut app, _cmd_rx) = app_with_queues();
+    let (peer, peer_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
+    let sess = mbv_emby::test_support::make_session("peer-host", "mbv");
+    app.switch_to_direct_remote(
+        &sess,
+        peer,
+        peer_rx,
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().expect("a test address")),
+    );
+
+    let counts: Vec<usize> = app
+        .queue_chooser_entries()
+        .iter()
+        .map(|entry| entry.len)
+        .collect();
+
+    assert_eq!(counts, [3, 1, 2], "the current, the resting, and the peer");
+    assert_eq!(
+        app.gui_queue_header_projection().shown_len,
+        2,
+        "the switcher counts the shown queue, which the connect made the peer"
+    );
+}
+
+/// The current queue's count follows its edits (spec `gui-queue-chooser` "The
+/// current queue's count follows edits", design D8 of
+/// `gui-queue-panel-redesign`): it reads the current queue's own snapshot, not
+/// the queue list the Owner publishes on create, rename, close, and swap.
+#[test]
+fn the_current_queues_count_follows_a_removal() {
+    let (mut app, _cmd_rx) = app_with_queues();
+    app.show_local_current_entry();
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(&make_items(2), 0),
+    )));
+
+    assert_eq!(
+        app.queue_chooser_entries().first().map(|entry| entry.len),
+        Some(2),
+        "the current queue's count follows the removal"
+    );
+    assert_eq!(
+        app.gui_queue_header_projection().shown_len,
+        2,
+        "the switcher follows the same removal"
     );
 }
 
