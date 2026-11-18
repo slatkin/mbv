@@ -7,9 +7,9 @@
 
 ## 2. Frame fact and pointer target (design D5, D6)
 
-- [ ] 2.1 Add `auto_hide: bool` and `can_start: bool` to `GuiQueuePlayback` (`crates/mbv-gui/src/bridge/frame/playback.rs`; `From` sets both `false`), and set them in the section build beside `artwork` (`crates/mbv-gui/src/sections.rs`): `auto_hide` from `App::gui_player_auto_hide`, `can_start` from `App::shown_queue_play_request().is_some()` and a public shown-queue slot-count read added beside it; `can_start` is false when that queue is empty (design D7). Update the test fixtures that build `GuiQueuePlayback`. Verify with `cargo nextest run -p mbv-gui`.
-- [ ] 2.2 Remove `still_caption` from `QueuePlaybackProjection` (`src/app/queue_playback_projection.rs`), `GuiQueuePlayback`, the window default in `crates/mbv-gui/src/window/sections.rs`, and every test fixture or test that names it. Verify `cargo check --workspace --all-targets` and `cargo nextest run -p mbv-gui`.
-- [ ] 2.3 Add `QueuePlaybackTargetId::AutoHide` (`crates/mbv-gui/src/bridge/layout.rs`) and map a left press on it to `Msg::Playback(PlaybackRequest::ToggleAutoHide)` in `crates/mbv-gui/src/leaves.rs`. Add one press-resolution test in the test module of `leaves.rs`, beside `PlaybackLeaf::press`; verify with `cargo nextest run -p mbv-gui`.
+- [x] 2.1 Add `auto_hide: bool` and `can_start: bool` to `GuiQueuePlayback` (`crates/mbv-gui/src/bridge/frame/playback.rs`; `From` sets both `false`), and set them in the section build beside `artwork` (`crates/mbv-gui/src/sections.rs`): `auto_hide` from `App::gui_player_auto_hide`, `can_start` from `App::shown_queue_play_request().is_some()` and a public shown-queue slot-count read added beside it; `can_start` is false when that queue is empty (design D7). Update the test fixtures that build `GuiQueuePlayback`. Verify with `cargo nextest run -p mbv-gui`.
+- [x] 2.2 Remove `still_caption` from `QueuePlaybackProjection` (`src/app/queue_playback_projection.rs`), `GuiQueuePlayback`, the window default in `crates/mbv-gui/src/window/sections.rs`, and every test fixture or test that names it. Verify `cargo check --workspace --all-targets` and `cargo nextest run -p mbv-gui`.
+- [x] 2.3 Add `QueuePlaybackTargetId::AutoHide` (`crates/mbv-gui/src/bridge/layout.rs`) and map a left press on it to `Msg::Playback(PlaybackRequest::ToggleAutoHide)` in `crates/mbv-gui/src/leaves.rs`. Add one press-resolution test in the test module of `leaves.rs`, beside `PlaybackLeaf::press`; verify with `cargo nextest run -p mbv-gui`.
 
 ## 3. Art stage and overlays (design D1, D4, D6, D7, D8)
 
