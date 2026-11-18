@@ -8,11 +8,12 @@ use super::{built, fixtures, seed_idle_status};
 use crate::window::arrangement::GuiArrangement;
 
 /// Contract (`LibraryPanel.test.ts`, gui-swap-queue-and-library-sides D7,
-/// gui-collection-dropdown D6a): the panel paints the top bar directly above
-/// the content row — no selector region between them — and the content row
-/// paints the list region before the Wide Hero pane.
+/// gui-collection-dropdown D6a; design D7 of
+/// `move-playback-header-into-queue-footer`): the panel mounts no top bar —
+/// the window's global header sits above both columns — and it paints the
+/// list region before the Wide Hero pane, with no region above the list.
 #[test]
-fn the_panel_paints_the_top_bar_the_list_and_the_hero_region() {
+fn the_panel_paints_the_list_and_the_hero_region_and_no_header() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::music_sections(None);
     fixture.carry(list, detail);
@@ -21,8 +22,12 @@ fn the_panel_paints_the_top_bar_the_list_and_the_hero_region() {
     let regions = fixture.regions();
     assert_eq!(
         regions,
-        ["topBar", "list", "rail", "hero"],
-        "no selector region paints between the top bar and the list"
+        ["list", "rail", "hero"],
+        "no region paints above the list"
+    );
+    assert!(
+        !fixture.presents("[data-library-region=\"topBar\"]"),
+        "the panel mounts no header of its own"
     );
     // The dropdown rides the list header (gui-collection-dropdown row 8.2), so
     // the Music list's header paints its trigger and the list's painter mounts

@@ -32,6 +32,7 @@ use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 
 mod art;
+mod header;
 mod paint;
 mod resize;
 

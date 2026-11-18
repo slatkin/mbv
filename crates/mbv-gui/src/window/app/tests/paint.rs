@@ -31,9 +31,7 @@ use rstest::rstest;
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::GuiAttachState;
-use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
-};
+use crate::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability};
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueHeaderFacts, GuiQueueRow, GuiQueueSummary, GuiSemanticState,
 };
@@ -45,6 +43,7 @@ use crate::window::clock::{Clock, FiredTimers, RecordingClock};
 use crate::window::components::art_image::{ArtEvents, ScaleFactor};
 use crate::window::components::attach_screen::AttachScreen;
 use crate::window::components::library_panel::LibraryPanel;
+use crate::window::components::library_top_bar::LibraryTopBar;
 use crate::window::components::panel::Panel;
 use crate::window::components::queue_footer::QueueFooter;
 use crate::window::components::queue_panel::QueuePanel;
@@ -98,7 +97,8 @@ enum Screen {
     PanelCompactStrip,
     /// The player panel collapsed to the 72 px rail.
     PanelRail,
-    /// The Library panel: the top bar, the Hero column, and the list column.
+    /// The Library panel under the window's global header: the Hero column
+    /// and the list column.
     Library,
     /// The Settings screen.
     Settings,
@@ -177,7 +177,6 @@ fn summary() -> GuiQueueSummary {
 /// The transport band's now-playing facts, painting `art`.
 fn playing(art: GuiArtRef) -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: "poo".to_owned(),
         host_is_remote: true,
         shown: true,
@@ -307,11 +306,21 @@ fn screen_element(screen: Screen) -> Element {
             Panel { container: RAIL }
         },
         Screen::Library => rsx! {
-            div { class: "flex h-full min-h-0 flex-col flex-1",
-                LibraryPanel {
-                    arrangement: GuiArrangement::Wide,
-                    list_width: 640.0,
-                    library_column: 900.0,
+            div { class: "flex h-full min-h-0 w-full min-w-0 flex-col",
+                // The global header above the Library column, as the root
+                // paints it (design D7 of
+                // `move-playback-header-into-queue-footer`).
+                LibraryTopBar {
+                    tabs: Vec::new(),
+                    current_tab: None,
+                    home_active: false,
+                }
+                div { class: "flex min-h-0 flex-1 flex-col",
+                    LibraryPanel {
+                        arrangement: GuiArrangement::Wide,
+                        list_width: 640.0,
+                        library_column: 900.0,
+                    }
                 }
             }
         },

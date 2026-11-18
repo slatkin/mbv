@@ -24,9 +24,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::Panel;
 use crate::bridge::frame::GuiPanelToggles;
-use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
-};
+use crate::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability};
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::layout::{LayoutSize, QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
@@ -131,7 +129,6 @@ fn summary_with_next(next: Option<&str>) -> GuiQueueSummary {
 /// fixture's `playing()`, trimmed to what the tests read).
 fn playback() -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: "poo".to_owned(),
         host_is_remote: true,
         shown: true,

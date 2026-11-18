@@ -30,9 +30,7 @@ use kurbo::Shape as _;
 use mbv_config::GuiPanelWidths;
 
 use crate::art::{ArtResponse, GuiArtRef, art_url, card_path};
-use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiQueuePlayback, GuiTransportAvailability,
-};
+use crate::bridge::frame::playback::{GuiQueuePlayback, GuiTransportAvailability};
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
@@ -69,7 +67,6 @@ impl Times for FakeTimes {
 /// the cached card the core answers.
 fn playing(art: GuiArtRef) -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: "poo".to_owned(),
         host_is_remote: true,
         shown: true,

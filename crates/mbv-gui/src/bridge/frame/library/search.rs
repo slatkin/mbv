@@ -1,6 +1,6 @@
 //! The Library section's Search (add-gui-library-panel design D12, row 12.1):
-//! the query the top bar's field is answering, whether its fetch is still out
-//! or failed, and the rows it found.
+//! the query the Library Status bar's Search field is answering, whether its
+//! fetch is still out or failed, and the rows it found.
 //!
 //! Search is cross-destination — its rows name items in any destination and
 //! the activate command opens the one the row names — so it rides the

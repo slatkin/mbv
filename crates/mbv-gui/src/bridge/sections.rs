@@ -71,8 +71,8 @@ pub struct GuiSectionBatch {
     /// The right-click item menu the window last opened, `null` while no
     /// destination is active or no row has named an item.
     pub row_menu: Option<GuiSection<Option<GuiLibraryRowMenuFrame>>>,
-    /// The Search section: the query the top bar answers and its rows, `null`
-    /// while the field is closed.
+    /// The Search section: the query the Library Status bar's field answers
+    /// and its rows, `null` while the field is closed.
     pub search: Option<GuiSection<Option<GuiSearchFrame>>>,
     /// The Settings screen, `null` while the screen is closed.
     pub settings: Option<GuiSection<Option<GuiSettingsFrame>>>,

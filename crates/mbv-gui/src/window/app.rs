@@ -16,6 +16,7 @@ use dioxus_native::winit::window::{Window, WindowId};
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
+use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::pointer::DomPointerKind;
@@ -29,6 +30,7 @@ use crate::window::components::attach_screen::AttachScreen;
 use crate::window::components::confirm_overlay::ConfirmOverlay;
 use crate::window::components::daemon_lost_overlay::DaemonLostOverlay;
 use crate::window::components::library_panel::LibraryPanel;
+use crate::window::components::library_top_bar::{HOME_POSITION, LibraryTopBar};
 use crate::window::components::panel::Panel;
 use crate::window::components::panel_divider::{
     DividerDrag, DividerName, DividerSide, PanelDivider,
@@ -40,6 +42,7 @@ use crate::window::layout::{
     use_layout_reporter,
 };
 use crate::window::library::keys::route_library_key;
+use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::reset::reset_library_interaction;
 use crate::window::library::state::LibraryState;
 use crate::window::playhead::{Playhead, SystemTimes, Times};
@@ -206,13 +209,97 @@ fn window_key_router(
     }
 }
 
-/// Whether the Queue panel alone shows in Mini (design D5 of
-/// `gui-pointer-target-interaction`): the GUI Client has no Panel focus, so
-/// Mini is always the Queue. A later change adds a tabbed Mini view and
-/// replaces only this pick.
+/// The panel the Mini arrangement shows (design D8): the Queue until a press
+/// on a destination tab shows the Library in its place. Every other
+/// arrangement shows both columns, so only Mini reads this value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum MiniView {
+    /// The Queue column alone, the mounted value.
+    #[default]
+    Queue,
+    /// The Library panel in the Queue column's place.
+    Library,
+}
+
+/// Whether the Queue column shows (design D8): every arrangement but Mini
+/// shows it beside the Library panel, and Mini shows the view's pick.
 #[must_use]
-pub(crate) fn mini_shows_queue(arrangement: GuiArrangement) -> bool {
-    arrangement == GuiArrangement::Mini
+pub(crate) fn queue_column_shows(
+    panel_shows: bool,
+    arrangement: GuiArrangement,
+    view: MiniView,
+) -> bool {
+    !panel_shows || arrangement != GuiArrangement::Mini || view == MiniView::Queue
+}
+
+/// Whether the Library panel shows (design D8): its content must be present,
+/// and Mini shows it only while the view picks it.
+#[must_use]
+pub(crate) fn library_column_shows(
+    panel_shows: bool,
+    arrangement: GuiArrangement,
+    view: MiniView,
+) -> bool {
+    panel_shows && (arrangement != GuiArrangement::Mini || view == MiniView::Library)
+}
+
+/// The window's answer to a header destination press (design D8): in Mini the
+/// Library panel takes the Queue column's place. While the Library shows, a
+/// press on the already active destination's own control — its tab, or the
+/// Home icon while the Home content is present — puts the Queue back, so the
+/// active destination's control is the Queue/Library toggle there. Every other
+/// arrangement paints both columns, so the press leaves the view alone.
+pub(crate) fn destination_pressed(
+    arrangement: GuiArrangement,
+    view: &mut Signal<MiniView>,
+    pressed: usize,
+    current_tab: Option<usize>,
+    home_active: bool,
+) {
+    if arrangement != GuiArrangement::Mini {
+        return;
+    }
+    let already_active = if pressed == HOME_POSITION {
+        home_active
+    } else {
+        current_tab == Some(pressed)
+    };
+    let showing_library = *view.peek() == MiniView::Library;
+    view.set(if showing_library && already_active {
+        MiniView::Queue
+    } else {
+        MiniView::Library
+    });
+}
+
+/// The global header's facts (design D7): the presented destination tabs, the
+/// active one, and whether the Home content is present. The header paints the
+/// same sections the Library panel narrows for its lists, so the two cannot
+/// name different destinations.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct HeaderFacts {
+    /// The presented destination tabs in catalog order.
+    pub tabs: Vec<GuiLibraryTabFrame>,
+    /// The active tab's position, or `None` while no tab is active.
+    pub current_tab: Option<usize>,
+    /// Whether the Home content is present, which the Home icon marks.
+    pub home_active: bool,
+}
+
+/// Read the header's facts from the sections the frame carries.
+#[must_use]
+pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
+    let list = sections.library_list.cloned();
+    let detail = sections.library_detail.cloned();
+    HeaderFacts {
+        tabs: list
+            .as_ref()
+            .map(|list| list.tabs.clone())
+            .unwrap_or_default(),
+        current_tab: list.as_ref().and_then(|list| list.current_tab),
+        home_active: library_pair(list.as_deref(), detail.as_deref())
+            .is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
+    }
 }
 
 /// The Queue column's class for its one root slot. Two columns pin its width;
@@ -415,14 +502,31 @@ pub fn App() -> Element {
     // panel mounts. The key router gates on the same fact. (`libraryShown`
     // of `lib/library/state.ts`; its port lands with task 6.1.)
     let panel_shows = has_library_list;
-    // Mini shows the Queue alone (design D5 of
-    // `gui-pointer-target-interaction`): no key and no press changes which
-    // panel it shows, because the GUI has no Panel focus.
-    let queue_visible =
-        !panel_shows || arrangement != GuiArrangement::Mini || mini_shows_queue(arrangement);
-    let library_visible =
-        panel_shows && (arrangement != GuiArrangement::Mini || !mini_shows_queue(arrangement));
+    // The panel row's two columns (design D8): both in every arrangement but
+    // Mini, which shows the Mini view's pick. The header's destination press
+    // flips that pick while Mini holds.
+    let mini_view = use_signal(MiniView::default);
+    let mini = mini_view.cloned();
+    let queue_visible = queue_column_shows(panel_shows, arrangement, mini);
+    let library_visible = library_column_shows(panel_shows, arrangement, mini);
     let two_columns = queue_visible && library_visible;
+    // The global header's facts (design D7) and its press (design D8): the
+    // header reports which destination it opened, and the window flips the
+    // same view the panel row reads. The active facts the press reads are this
+    // render's, so the toggle answers the destination the frame carries.
+    let header = header_facts(&sections);
+    let header_current_tab = header.current_tab;
+    let header_home_active = header.home_active;
+    let mut opened_mini_view = mini_view;
+    let on_destination_opened = Callback::new(move |pressed: usize| {
+        destination_pressed(
+            arrangement,
+            &mut opened_mini_view,
+            pressed,
+            header_current_tab,
+            header_home_active,
+        );
+    });
     // The container's backdrop holds one fill at every focus state (user
     // decision 2026-11-15), unlike the TUI's focus-reactive
     // `panel_appearance_focus` pick.
@@ -520,59 +624,74 @@ pub fn App() -> Element {
             },
             if connected && attach.is_none() {
                 div {
-                    class: "relative flex h-full min-h-0 w-full min-w-0 overflow-hidden",
-                    "data-arrangement": arrangement.name(),
-                    style: "background: {queue_canvas};",
-                    onmounted: move |event| container_mounted.set(Some(event)),
-                    if settings_open {
-                        // The Settings screen replaces the two panels while
-                        // its section is present (add-gui-settings-screen
-                        // design D11): no player panel, queue, or Library
-                        // panel mounts, and playback continues. The screen's
-                        // Mini check measures the window minus its fixed
-                        // 260 px sidebar, which the root measures separately
-                        // from the Library panel's own arrangement.
-                        SettingsScreen { arrangement: settings_screen_arrangement }
-                    } else {
-                        // Paint order, left to right: Library panel, Queue
-                        // divider, Queue column (design D1).
-                        if library_visible && has_library_list {
-                            LibraryPanel {
-                                arrangement,
-                                list_width: widths.list,
-                                library_column: widths.library_column,
-                            }
+                    // The window's one column (design D7): the global header
+                    // above the panel row, in every arrangement. The panel row
+                    // keeps the box the arrangement measures, so the header's
+                    // 56 px band sits outside that measure.
+                    class: "flex h-full min-h-0 w-full min-w-0 flex-col",
+                    if !settings_open {
+                        LibraryTopBar {
+                            tabs: header.tabs.clone(),
+                            current_tab: header.current_tab,
+                            home_active: header.home_active,
+                            on_destination_opened: Some(on_destination_opened),
                         }
-                        if two_columns && !panel.collapsed {
-                            // The Queue panel's divider (design D4): dragging
-                            // it resizes the Queue column and, with it, the
-                            // Library column the arrangement measures; a
-                            // double-click returns the canvas width.
-                            PanelDivider {
-                                side: DividerSide::Right,
-                                name: DividerName::Queue,
-                                width: widths.queue,
-                                on_drag: move |width| {
-                                    drag_widths
-                                        .drag_queue_width(width, drag_container.cloned().width);
-                                },
-                                on_reset: move |()| {
-                                    reset_widths.reset_queue_width();
-                                },
+                    }
+                    div {
+                        class: "relative flex min-h-0 flex-1 w-full min-w-0 overflow-hidden",
+                        "data-arrangement": arrangement.name(),
+                        style: "background: {queue_canvas};",
+                        onmounted: move |event| container_mounted.set(Some(event)),
+                        if settings_open {
+                            // The Settings screen replaces the two panels while
+                            // its section is present (add-gui-settings-screen
+                            // design D11): no player panel, queue, or Library
+                            // panel mounts, and playback continues. The screen's
+                            // Mini check measures the window minus its fixed
+                            // 260 px sidebar, which the root measures separately
+                            // from the Library panel's own arrangement.
+                            SettingsScreen { arrangement: settings_screen_arrangement }
+                        } else {
+                            // Paint order, left to right: Library panel, Queue
+                            // divider, Queue column (design D1).
+                            if library_visible && has_library_list {
+                                LibraryPanel {
+                                    arrangement,
+                                    list_width: widths.list,
+                                    library_column: widths.library_column,
+                                }
                             }
-                        }
-                        if queue_visible {
-                            div {
-                                class: queue_column_class(two_columns, panel.collapsed),
-                                "data-queue-column": "",
-                                style: if two_columns {
-                                    format!("width: {}px;", widths.queue)
-                                } else {
-                                    String::new()
-                                },
-                                Panel {
-                                    container: container.cloned(),
-                                    library_visible,
+                            if two_columns && !panel.collapsed {
+                                // The Queue panel's divider (design D4): dragging
+                                // it resizes the Queue column and, with it, the
+                                // Library column the arrangement measures; a
+                                // double-click returns the canvas width.
+                                PanelDivider {
+                                    side: DividerSide::Right,
+                                    name: DividerName::Queue,
+                                    width: widths.queue,
+                                    on_drag: move |width| {
+                                        drag_widths
+                                            .drag_queue_width(width, drag_container.cloned().width);
+                                    },
+                                    on_reset: move |()| {
+                                        reset_widths.reset_queue_width();
+                                    },
+                                }
+                            }
+                            if queue_visible {
+                                div {
+                                    class: queue_column_class(two_columns, panel.collapsed),
+                                    "data-queue-column": "",
+                                    style: if two_columns {
+                                        format!("width: {}px;", widths.queue)
+                                    } else {
+                                        String::new()
+                                    },
+                                    Panel {
+                                        container: container.cloned(),
+                                        library_visible,
+                                    }
                                 }
                             }
                         }

@@ -3,7 +3,12 @@
 //! totals at the line's right, the canvas band's paint, the icon-free source,
 //! the autosave and dirty icons, the armed prefix badge, the live toast
 //! painting inline and dropping the badge (the line's pill-drop rule), and the
-//! regionless report. The core channel is a mock pair; no test opens a window,
+//! regions the band reports. The playback target and the collapse control
+//! moved here from the player panel's header
+//! (`move-playback-header-into-queue-footer` 3.1, 3.2, 4.1), so their
+//! contracts live here too: the controls lead the band, they compact to it,
+//! the chooser's popover opens above it, and no surface paints a now-playing
+//! status word. The core channel is a mock pair; no test opens a window,
 //! sleeps, or reaches the core.
 
 use std::cell::RefCell;
@@ -17,11 +22,17 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use rstest::rstest;
 
 use super::QueueFooter;
+use crate::art::GuiArtRef;
 use crate::bridge::frame::chrome::{
     GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToast, GuiToastSeverity,
 };
+use crate::bridge::frame::overlay::GuiOverlayFrame;
+use crate::bridge::frame::playback::{
+    GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
+};
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::theme::GuiRole;
+use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
@@ -62,6 +73,57 @@ fn summary() -> GuiQueueSummary {
     }
 }
 
+/// The playing transport band's facts the band's controls paint: the remote
+/// target `poo`, no transport.
+fn playing() -> GuiQueuePlayback {
+    GuiQueuePlayback {
+        host: "poo".to_owned(),
+        host_is_remote: true,
+        shown: true,
+        show_controls: true,
+        now_playing_title: Some("Track title".to_owned()),
+        parent_line: None,
+        episode_badge: None,
+        still_caption: None,
+        chapters: Vec::new(),
+        intro_mark: None,
+        credits_mark: None,
+        trickplay: None,
+        availability: GuiTransportAvailability {
+            stop: true,
+            next: true,
+            previous: false,
+        },
+        status_indicators: None,
+        artwork: Some(GuiArtRef::Image {
+            src: "mbv-art://localhost/card/k".to_owned(),
+        }),
+        track_chips: None,
+        target_choices: Vec::new(),
+    }
+}
+
+/// The open playback-target chooser: two choices, the first attached.
+fn chooser() -> GuiOverlayFrame {
+    GuiOverlayFrame::TargetChooser {
+        cursor: 0,
+        choices: vec![
+            GuiTargetChoice {
+                key: GuiTargetKey::Emby("session-1".to_owned()),
+                label: "Living room".to_owned(),
+                is_active: true,
+                is_direct_peer: false,
+            },
+            GuiTargetChoice {
+                key: GuiTargetKey::Cast("receiver-1".to_owned()),
+                label: "Kitchen speaker".to_owned(),
+                is_active: false,
+                is_direct_peer: false,
+            },
+        ],
+    }
+}
+
 /// The idle Status bar: nothing armed, no toast.
 fn idle_status() -> GuiStatusBar {
     GuiStatusBar {
@@ -92,11 +154,18 @@ fn active_pills() -> (Option<GuiFooterPill>, Option<GuiFooterPill>) {
 /// laid-out width.
 const FIXTURE_CSS: &str = concat!(
     ".flex { display: flex; }",
+    ".flex-col { flex-direction: column; }",
     ".items-center { align-items: center; }",
+    ".justify-center { justify-content: center; }",
     ".min-w-0 { min-width: 0; }",
     ".flex-1 { flex: 1 1 0%; }",
     ".shrink-0 { flex-shrink: 0; }",
     ".block { display: block; }",
+    ".relative { position: relative; }",
+    ".absolute { position: absolute; }",
+    ".h-full { height: 100%; }",
+    ".w-full { width: 100%; }",
+    ".overflow-hidden { overflow: hidden; }",
     ".truncate { width: 100%; }",
 );
 
@@ -178,6 +247,19 @@ impl Fixture {
         node.attr(attribute).map(str::to_owned)
     }
 
+    /// The tree order of the node the selector names: the painted order two
+    /// selectors' nodes stand in.
+    fn order_of(&self, selector: &str) -> usize {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        TreeTraverser::new(&dom)
+            .position(|node| node == id)
+            .expect("the node is in the tree")
+    }
+
     /// The text of the first node the selector names.
     fn text_of(&self, selector: &str) -> String {
         let dom = self.doc.inner();
@@ -209,6 +291,18 @@ impl Fixture {
             sections.footer.set(footer);
             sections.summary.set(summary);
             sections.status.set(status);
+        });
+        self.poll_until_idle();
+        self.lay_out();
+    }
+
+    /// Paint the band's playback facts and, when one is up, the open chooser:
+    /// the target control's host label and the popover's rows read them.
+    fn show_playback(&mut self, playback: GuiQueuePlayback, overlay: Option<GuiOverlayFrame>) {
+        let mut sections = self.sections.clone();
+        self.doc.vdom.in_runtime(move || {
+            sections.playback.set(playback);
+            sections.overlay.set(overlay);
         });
         self.poll_until_idle();
         self.lay_out();
@@ -366,27 +460,36 @@ fn the_footer_totals_the_marked_rows(
 }
 
 /// Contract (`QueueFooter.test.ts`): the source text paints as plain text with
-/// no leading icon — the canvas paints none.
+/// no leading icon — the canvas paints none. The band's own controls paint
+/// their glyphs ahead of it, so the claim is the source span's.
 #[test]
 fn the_source_text_paints_with_no_leading_icon() {
     let mut fixture = built();
     fixture.show(footer_frame(), summary(), idle_status());
 
-    assert_eq!(fixture.all("[data-footer-line] svg").len(), 0);
+    assert!(fixture.presents("[data-footer-source]"));
+    assert_eq!(fixture.all("[data-footer-source] svg").len(), 0);
 }
 
 /// Contract (`QueueFooter.test.ts`): the active footer states paint their
-/// Lucide icons — the autosave glyph and the dirty glyph, one each.
-#[test]
-fn the_active_footer_states_paint_their_lucide_icons() {
+/// Lucide icons — the autosave glyph and the dirty glyph, one each, beside the
+/// band's two control glyphs.
+#[rstest]
+#[case::no_pills(None, 3)]
+#[case::active_pills(Some(active_pills()), 5)]
+fn the_active_footer_states_paint_their_lucide_icons(
+    #[case] pills: Option<(Option<GuiFooterPill>, Option<GuiFooterPill>)>,
+    #[case] expected_glyphs: usize,
+) {
     let mut fixture = built();
     let mut frame = footer_frame();
-    let (autosave, dirty) = active_pills();
-    frame.autosave = autosave;
-    frame.dirty = dirty;
+    if let Some((autosave, dirty)) = pills {
+        frame.autosave = autosave;
+        frame.dirty = dirty;
+    }
     fixture.show(frame, summary(), idle_status());
 
-    assert_eq!(fixture.all("[data-footer-line] svg").len(), 2);
+    assert_eq!(fixture.all("[data-footer-line] svg").len(), expected_glyphs);
 }
 
 /// Contract (`QueueFooter.test.ts`): an armed frame renders the prefix
@@ -429,16 +532,107 @@ fn a_live_toast_paints_inline_in_the_line_and_drops_the_prefix_badge() {
     assert!(!text.contains("PREFIX"), "the prefix badge drops: {text}");
 }
 
-/// Contract (`QueueFooter.test.ts`): the line reports no region — its pills
-/// are informational, so a reported target whose press can never fire would
-/// lie in the layout report; the report still accounts for the mounted
-/// surface.
+/// Contract (`move-playback-header-into-queue-footer` 3.1, spec `gui-client`
+/// "The footer paints the queue's source text"): the band's left group leads
+/// with the playback target and the collapse control, then the queue's
+/// source text.
 #[test]
-fn the_line_reports_no_region() {
+fn the_band_leads_with_the_playback_target_and_the_collapse_control() {
+    let mut fixture = built();
+    fixture.show_playback(playing(), None);
+    fixture.show(footer_frame(), summary(), idle_status());
+
+    let target = fixture
+        .text_of("[data-target=\"playbackTarget\"]")
+        .trim()
+        .to_owned();
+    assert_eq!(target, "poo", "the target control paints its host label");
+    let target_at = fixture.order_of("[data-target=\"playbackTarget\"]");
+    let collapse_at = fixture.order_of("[data-target=\"collapse\"]");
+    let source_at = fixture.order_of("[data-footer-source]");
+    assert!(target_at < collapse_at, "the target leads the collapse");
+    assert!(collapse_at < source_at, "the controls lead the source");
+}
+
+/// Contract (`move-playback-header-into-queue-footer` D2): the moved controls
+/// compact to the band — a 28 px control height, the collapse control's
+/// aria-label and `Collapse panel (z)` title, and the target's chevron.
+#[test]
+fn the_moved_controls_compact_to_the_band() {
+    let mut fixture = built();
+    fixture.show(footer_frame(), summary(), idle_status());
+
+    let target = fixture.style_of("[data-target=\"playbackTarget\"]");
+    assert!(target.contains("height: 28px"), "{target}");
+    let collapse = fixture.style_of("[data-target=\"collapse\"]");
+    assert!(collapse.contains("height: 28px"), "{collapse}");
+    assert!(
+        collapse.contains("width: 28px"),
+        "the control is square: {collapse}"
+    );
+    assert_eq!(
+        fixture.attr_of("[data-target=\"collapse\"]", local_name!("aria-label")),
+        Some("Collapse panel".to_owned())
+    );
+    assert_eq!(
+        fixture.attr_of("[data-target=\"collapse\"]", local_name!("title")),
+        Some("Collapse panel (z)".to_owned())
+    );
+}
+
+/// Contract (`move-playback-header-into-queue-footer` D3, spec `gui-client`
+/// "The footer's target chooser opens above the band"): the chooser's popover
+/// opens upward from the control and lists the live choice list.
+#[test]
+fn the_target_chooser_opens_above_the_band() {
+    let mut fixture = built();
+    fixture.show_playback(playing(), Some(chooser()));
+
+    let popover = fixture
+        .attr_of("[data-target-chooser]", local_name!("class"))
+        .expect("the popover paints");
+    assert!(popover.contains("bottom-full"), "{popover}");
+    assert!(!popover.contains("top-full"), "{popover}");
+    let text = fixture.text();
+    assert!(text.contains("Living room"), "{text}");
+    assert!(text.contains("Kitchen speaker"), "{text}");
+}
+
+/// Contract (`move-playback-header-into-queue-footer` D5, spec `gui-client`
+/// "No now-playing status word paints"): the band paints no now-playing status
+/// word. The playing state carries a title, the controls, and artwork, so the
+/// word's absence holds where a status readout would paint.
+#[test]
+fn no_surface_paints_a_now_playing_status_word() {
+    let mut fixture = built();
+    fixture.show_playback(playing(), None);
+    fixture.show(footer_frame(), summary(), idle_status());
+
+    let text = fixture.text();
+    for word in ["PLAYING", "PAUSED", "IDLE"] {
+        assert!(!text.contains(word), "{word} paints: {text}");
+    }
+}
+
+/// Contract (`move-playback-header-into-queue-footer` 3.2, design D4): the
+/// band's contribution reports the playback target's and the collapse
+/// control's regions, in paint order.
+#[test]
+fn the_band_reports_the_moved_controls_regions() {
     let mut fixture = built();
     fixture.show(footer_frame(), summary(), idle_status());
 
     let report = fixture.last_report().expect("the mounted surface reports");
     assert!(report.lists.is_empty(), "{report:?}");
-    assert!(report.regions.is_empty(), "{report:?}");
+    assert_eq!(
+        report
+            .regions
+            .iter()
+            .map(|region| region.target)
+            .collect::<Vec<_>>(),
+        vec![
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
+        ]
+    );
 }

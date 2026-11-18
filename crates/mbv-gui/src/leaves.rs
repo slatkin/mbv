@@ -373,11 +373,11 @@ pub(crate) struct TransportAvailability {
 /// glyphs act on a left press — the second press of a double-click pair
 /// included, so a double-click on a glyph toggles twice and nets out — and
 /// the seekbar seeks on a press (the `gui-client` spec's single-press seek)
-/// and scrubs on a left-drag anchored inside its bar. The header's target
-/// indicator opens the chooser the Sessions sidebar is in the TUI, a
+/// and scrubs on a left-drag anchored inside its bar. The footer band's target
+/// control opens the chooser the Sessions sidebar is in the TUI, a
 /// chooser row selects its painted output through the same `SelectSession`
-/// request, and the header's collapse and queue-fold controls run the `z`/`q`
-/// toggles' dispatches. The audio and subtitle chips toggle their track
+/// request, and the footer's collapse control and the folded line's expand
+/// control run the `z`/`q` toggles' dispatches. The audio and subtitle chips toggle their track
 /// popover through the `OpenTrackPopover` request's open path, and a
 /// popover row selects the track its painted row named (row 6.5's review of
 /// row 6.4: the index addresses the list the window painted).
@@ -450,9 +450,9 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward)) => {
                 Some(Msg::Playback(PlaybackRequest::SeekRelative(30.0)))
             }
-            // The header's target press emits the same opener the TUI's
-            // indicator sends the Sessions sidebar; the GUI's counterpart
-            // is the Client-core chooser overlay.
+            // The footer's playback-target control emits the same opener the
+            // TUI's indicator sends the Sessions sidebar; the GUI's
+            // counterpart is the Client-core chooser overlay.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)) => {
                 Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
             }
@@ -481,8 +481,8 @@ impl<'a> PlaybackLeaf<'a> {
                     .popover_track_id(*index)
                     .map(|track_id| Msg::Playback(PlaybackRequest::TrackPopoverSelect(track_id)))
             }
-            // The header's collapse and queue-fold controls run the `z`/`q`
-            // toggles' own dispatch.
+            // The footer's collapse control and the folded queue line's
+            // queue-fold control run the `z`/`q` toggles' own dispatch.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse)) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePanelCollapse))
             }
@@ -524,7 +524,8 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
         match gesture {
             // A press seeks or activates what it lands on: the seekbar
             // seeks to the pressed position (the `gui-client` spec), the
-            // transport and header targets act. The second press of a pair
+            // transport and playback-panel targets act. The second press of
+            // a pair
             // resolves through the same arms, so a double-click on the bar
             // seeks twice to the same position — the kept double-click
             // behaviour.

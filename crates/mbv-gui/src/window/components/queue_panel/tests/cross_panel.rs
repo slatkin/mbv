@@ -1,6 +1,9 @@
 //! The region-order contracts `QueuePlaybackPanel.test.ts` deferred until
-//! this panel existed: an open chooser's rows reporting after the queue's,
-//! and the full player panel's region order over the expanded artboard.
+//! this panel existed: an open chooser's rows reporting after the queue's and
+//! the footer's, and the full player panel's region order over the expanded
+//! artboard — the player block's transport and art, the queue header's and
+//! rows' regions, then the footer band's moved playback-target and collapse
+//! controls (`move-playback-header-into-queue-footer` D4).
 
 use dioxus_native::prelude::*;
 
@@ -29,10 +32,11 @@ fn a_chooser_row_paints_the_brand_mark_of_its_target_kind() {
     );
 }
 
-/// Contract (`QueuePlaybackPanel.test.ts`): an open chooser reports its rows
-/// after the queue and footer regions — the hit map's last push wins where
-/// a chooser row paints over a queue row beneath it. The header's control
-/// regions lead the queue's, the footer's line reports none.
+/// Contract (`QueuePlaybackPanel.test.ts`, `move-playback-header-into-queue-
+/// footer` D4): an open chooser reports its rows after the queue and footer
+/// regions — the hit map's last push wins where a chooser row paints over a
+/// queue row beneath it. The footer band's control regions lead the queue's
+/// rows; the band's own second key carries the chooser's rows last.
 #[test]
 fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     let mut fixture = built_sized(panel_tree_app);
@@ -62,6 +66,8 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     for wanted in [
         RegionTarget::Queue(QueueTargetId::Filter),
         RegionTarget::Queue(QueueTargetId::Slot(1)),
+        RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+        RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
     ] {
         assert!(before.contains(&wanted), "{targets:?}");
     }
@@ -74,10 +80,11 @@ fn an_open_chooser_reports_its_rows_after_the_queue_and_footer_regions() {
     );
 }
 
-/// Contract (`QueuePlaybackPanel.test.ts`): a paint reports the player
-/// panel's transport, seek, header, seekbar, and target regions, then the
-/// queue header's and rows' regions — the two panels mount in that order
-/// under the expanded artboard.
+/// Contract (`QueuePlaybackPanel.test.ts`, `move-playback-header-into-queue-
+/// footer` D4): a paint reports the player panel's transport, seek, and
+/// seekbar regions, then the queue header's and rows' regions, then the
+/// footer band's playback-target and collapse regions — the three panels mount
+/// in that order under the expanded artboard.
 #[test]
 fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
     let mut fixture = built_sized(panel_tree_app);
@@ -102,11 +109,11 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(1)),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse),
         ]
     );
 }
