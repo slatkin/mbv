@@ -2,7 +2,7 @@
 
 ## 1. Frame: drop the now-playing status fact
 
-- [ ] 1.1 Delete `GuiNowPlayingStatus` and the `status` field from `GuiQueuePlayback`
+- [x] 1.1 Delete `GuiNowPlayingStatus` and the `status` field from `GuiQueuePlayback`
   (`crates/mbv-gui/src/bridge/frame/playback.rs`), drop the conversion in the bridge
   sections builder, and remove the field from every test fixture that constructs a
   playback section. The library projection keeps its status fact; only the conversion
@@ -10,11 +10,11 @@
 
 ## 2. Player panel: remove the header row
 
-- [ ] 2.1 Remove `HeaderRow` and the popover/chooser plumbing from
+- [x] 2.1 Remove `HeaderRow` and the popover/chooser plumbing from
   `queue_playback_panel.rs`: the artwork becomes the panel's topmost content (design D6),
   the component stops reporting `PlaybackTarget`, `Collapse`, and chooser-row regions,
   and its module comment no longer names the header row.
-- [ ] 2.2 Move `TargetChooserPopover` to `queue_footer.rs` and flip its anchor to
+- [x] 2.2 Move `TargetChooserPopover` to `queue_footer.rs` and flip its anchor to
   `bottom-full` so it opens above the footer band (design D3).
 
 ## 2b. Global header and Library Status bar
@@ -30,10 +30,10 @@
 
 ## 3. Footer: own the target and collapse controls
 
-- [ ] 3.1 Paint the playback-target control and the collapse control at the left of
+- [x] 3.1 Paint the playback-target control and the collapse control at the left of
   `queue_footer.rs`'s left group, ahead of the autosave/source/dirty content, compacted
   to the 40 px band (design D1, D2). The status word does not move: no surface paints it.
-- [ ] 3.2 Report the moved regions: the footer's contribution carries the `PlaybackTarget`
+- [x] 3.2 Report the moved regions: the footer's contribution carries the `PlaybackTarget`
   and `Collapse` regions, and the open chooser's rows report under a second key the
   footer owns (design D4). Update the footer's module comment — the band no longer
   resolves no target.
