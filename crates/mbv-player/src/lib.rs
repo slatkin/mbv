@@ -228,6 +228,8 @@ pub use owner_state::{PlayerOwnerState, StepTarget};
 mod tracks;
 #[cfg(test)]
 use tracks::lang_code_to_name;
+#[doc(inline)]
+pub use tracks::lang_short_code;
 use tracks::{auto_select_tracks, refresh_tracks};
 mod resume;
 #[doc(inline)]

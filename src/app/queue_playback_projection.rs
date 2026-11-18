@@ -55,6 +55,10 @@ pub struct TrackChips {
     /// The subtitle chip: the track choices and the chosen track's mpv id;
     /// a `chosen` of `None` is subtitles off.
     pub subtitles: TrackChip,
+    /// The audio chip's pill text: the chosen audio track's two-letter
+    /// language code (`"EN"`), empty while no audio track is chosen or it names
+    /// no language. The full label stays in the popover's choices.
+    pub audio_lang_code: String,
 }
 
 /// One chip's facts: its choices and the chosen one.
@@ -351,6 +355,7 @@ impl App {
                     .collect(),
                 chosen: (status.sub_id != 0).then_some(status.sub_id),
             },
+            audio_lang_code: mbv_player::lang_short_code(&status.audio_lang),
         })
     }
 

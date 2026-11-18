@@ -64,6 +64,7 @@ fn chips() -> GuiTrackChips {
             }],
             chosen: None,
         },
+        audio_lang_code: "EN".to_owned(),
     }
 }
 
@@ -166,6 +167,18 @@ impl Fixture {
             }
         }
         out
+    }
+
+    /// The text content of the first node the selector names.
+    fn text_of(&self, selector: &str) -> String {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_node(id)
+            .map(blitz_dom::Node::text_content)
+            .unwrap_or_default()
     }
 
     /// Whether the selector names a node in the painted tree.
@@ -277,8 +290,21 @@ fn a_frame_renders_the_video_label_and_the_audio_and_subtitle_chips() {
     let fixture = built(Some(chips()), None);
     let text = fixture.text();
     assert!(text.contains("1080p"), "{text}");
-    assert!(text.contains("English"), "{text}");
     assert!(text.contains("Off"), "{text}");
+}
+
+/// The audio pill paints the chosen track's language code, never its full
+/// label (`English`); the label stays in the popover's rows. A track that
+/// names no language falls back to the choice's label.
+#[test]
+fn the_audio_pill_paints_the_language_code_not_the_label() {
+    let fixture = built(Some(chips()), None);
+    assert_eq!(fixture.text_of("[data-chip=\"audio\"]"), "EN");
+
+    let mut no_language = chips();
+    no_language.audio_lang_code = String::new();
+    let fixture = built(Some(no_language), None);
+    assert_eq!(fixture.text_of("[data-chip=\"audio\"]"), "English");
 }
 
 /// Contract (`TrackChips.test.ts`): an audio-only frame paints no video

@@ -161,6 +161,7 @@ pub(super) fn chips() -> GuiTrackChips {
             choices: Vec::new(),
             chosen: None,
         },
+        audio_lang_code: String::new(),
     }
 }
 

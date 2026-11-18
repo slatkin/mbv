@@ -198,6 +198,19 @@ fn lang_code_to_name_matches_api_table() {
     }
 }
 
+/// The audio pill's code: a table language gives its two-letter code from
+/// either spelling, an unknown code its first two letters, and nothing gives
+/// nothing.
+#[rstest]
+#[case::two_letter("en", "EN")]
+#[case::three_letter("eng", "EN")]
+#[case::bibliographic("ger", "DE")]
+#[case::unknown("heb", "HE")]
+#[case::empty("", "")]
+fn lang_short_code_gives_the_pill_text(#[case] code: &str, #[case] expected: &str) {
+    assert_eq!(lang_short_code(code), expected);
+}
+
 #[test]
 fn disconnect_remote_disconnects_a_remote_player() {
     let (remote, _event_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);

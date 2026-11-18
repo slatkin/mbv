@@ -218,6 +218,9 @@ pub struct GuiTrackChips {
     pub audio: GuiTrackChip,
     /// The subtitle chip; a `chosen` of `None` is subtitles off.
     pub subtitles: GuiTrackChip,
+    /// The audio chip's pill text: the chosen track's two-letter language code,
+    /// empty when none applies (the chip then paints the choice's label).
+    pub audio_lang_code: String,
 }
 
 impl From<&TrackChips> for GuiTrackChips {
@@ -226,6 +229,7 @@ impl From<&TrackChips> for GuiTrackChips {
             video: chips.video.clone(),
             audio: GuiTrackChip::from(&chips.audio),
             subtitles: GuiTrackChip::from(&chips.subtitles),
+            audio_lang_code: chips.audio_lang_code.clone(),
         }
     }
 }

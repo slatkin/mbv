@@ -97,6 +97,17 @@ fn chip_label(chip: &GuiTrackChip, kind: GuiTrackChipKind) -> String {
     }
 }
 
+/// The audio chip's pill text: the chosen track's language code (`EN`), or the
+/// choice's label while the track names no language. The popover keeps the
+/// full labels (`English AAC Stereo`).
+fn audio_chip_text(chips: &GuiTrackChips) -> String {
+    if chips.audio_lang_code.is_empty() {
+        chip_label(&chips.audio, GuiTrackChipKind::Audio)
+    } else {
+        chips.audio_lang_code.clone()
+    }
+}
+
 /// The track chips row, centred under the transport as the canvas draws it:
 /// video label, audio chip, subtitle chip — one chip-height row in the
 /// chips' mono face with tabular figures (the spec's chips type rule).
@@ -246,7 +257,7 @@ pub fn TrackChips(props: TrackChipsProps) -> Element {
                     "data-chip": "audio",
                     onmounted: move |event| audio_mounted.set(Some(event)),
                     AudioLines { size: 12, color: role_var(GuiRole::IndicatorAudioFg) }
-                    span { "{chip_label(&chips.audio, GuiTrackChipKind::Audio)}" }
+                    span { "{audio_chip_text(chips)}" }
                 }
                 if audio_open {
                     if let Some((kind, cursor, choices)) = popover.clone() {
