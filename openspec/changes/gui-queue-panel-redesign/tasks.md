@@ -34,10 +34,10 @@ Every task: run `cargo fmt` after each Rust change. Never run `cargo nextest`, `
 
 ## 6. Queue rows (design D9; spec `gui-client` "The queue shows a row menu and drag reorder")
 
-- [ ] 6.1 Set the row height to 34 px and the stride to 36 px in `queue_panel/geometry.rs`, and replace every literal `30px` row size in `queue_panel.rs` (rows, spacer, ghost, actions button, grip offset, insertion math) with the constants. Verify `cargo nextest run -p mbv-gui queue_panel`.
-- [ ] 6.2 Move the row progress bar in `queue_panel/row_cells.rs` to an absolute bar inside the row (2 px, bottom 4 px, inset 54 px left and 12 px right), and paint the row states of design D9 (now-playing, active and marked, hover, watched). Add one paint test, citing this change, that a partial row and an unwatched row paint the same height. Verify `cargo nextest run -p mbv-gui`.
-- [ ] 6.3 Delete the zebra stripe: `GuiQueueRow::Item::striped`, its computation in `crates/mbv-gui/src/bridge/frame/queue.rs`, `ItemRow::striped`, and the stripe arm of `row_background`, with the tests that assert stripes. Verify `cargo check --workspace --all-targets` and `cargo nextest run -p mbv-gui`.
-- [ ] 6.4 Point the footer band's fill at `--ef-bg0` and its top border at `--ef-bg3` (`queue_footer.rs`); delete every `--canvas-*` token in `app.css` that no component reads any more (check with `rg -n "canvas-<name>" crates/mbv-gui/src`), and regenerate with `make gui-css`. Verify `cargo nextest run -p mbv-gui`.
+- [x] 6.1 Set the row height to 34 px and the stride to 36 px in `queue_panel/geometry.rs`, and replace every literal `30px` row size in `queue_panel.rs` (rows, spacer, ghost, actions button, grip offset, insertion math) with the constants. Verify `cargo nextest run -p mbv-gui queue_panel`.
+- [x] 6.2 Move the row progress bar in `queue_panel/row_cells.rs` to an absolute bar inside the row (2 px, bottom 4 px, inset 54 px left and 12 px right), and paint the row states of design D9 (now-playing, active and marked, hover, watched). Add one paint test, citing this change, that a partial row and an unwatched row paint the same height. Verify `cargo nextest run -p mbv-gui`.
+- [x] 6.3 Delete the zebra stripe: `GuiQueueRow::Item::striped`, its computation in `crates/mbv-gui/src/bridge/frame/queue.rs`, `ItemRow::striped`, and the stripe arm of `row_background`, with the tests that assert stripes. Verify `cargo check --workspace --all-targets` and `cargo nextest run -p mbv-gui`.
+- [x] 6.4 Point the footer band's fill at `--ef-bg0` and its top border at `--ef-bg3` (`queue_footer.rs`); delete every `--canvas-*` token in `app.css` that no component reads any more (check with `rg -n "canvas-<name>" crates/mbv-gui/src`), and regenerate with `make gui-css`. Verify `cargo nextest run -p mbv-gui`.
 
 ## 7. Documentation and gates
 
