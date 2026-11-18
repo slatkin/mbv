@@ -1,6 +1,6 @@
 //! The Feeds list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryFeedsList`; add-gui-library-panel design D12, row 11.1):
-//! the active pill's flat entry rows — the entry's title over its
+//! the checked collections' flat entry rows — the entry's title over its
 //! subscription, and the entry date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
 //!
@@ -108,7 +108,7 @@ pub fn LibraryFeedsList() -> Element {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-feeds-list-column": "",
             // The Music list's header (design D15): the list names itself, the
-            // active pill is the carried scope, and the `/` filter field
+            // checked collections are the carried scope, and the `/` filter field
             // narrows it.
             div {
                 class: "flex flex-none flex-col",

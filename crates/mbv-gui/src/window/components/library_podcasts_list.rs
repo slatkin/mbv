@@ -1,6 +1,7 @@
 //! The Podcasts list (`replace-tauri-with-blitz` task 7.7, the port of
 //! `LibraryPodcastsList`; add-gui-library-panel design D12, row
-//! 10.1): the active pill's flat episode rows — the episode's title over its
+//! 10.1): the checked collections' flat episode rows — the episode's title
+//! over its
 //! show, and the publish date in the gutter — with no letter headings,
 //! because the list is sorted by date, and so no letter rail.
 //!
@@ -121,7 +122,7 @@ pub fn LibraryPodcastsList() -> Element {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-podcasts-list-column": "",
             // The Music list's header (design D15): the list names itself, the
-            // active pill is the carried scope, and the `/` filter field
+            // checked collections are the carried scope, and the `/` filter field
             // narrows it.
             div {
                 class: "flex flex-none flex-col",

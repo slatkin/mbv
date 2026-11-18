@@ -432,7 +432,7 @@ pub fn LibraryShowsList() -> Element {
                     failed: (!frame.loading && frame.upcoming_failed).then(|| {
                         ListFrameNoticeLine::new(
                             "data-library-shows-failed",
-                            "Upcoming fetch failed — select the pill to retry",
+                            "Upcoming fetch failed",
                         )
                     }),
                 }

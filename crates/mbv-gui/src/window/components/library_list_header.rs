@@ -91,8 +91,7 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                 }
                 if let Some(collections) = collections {
                     // The dropdown paints the title line's rest (design D6a):
-                    // the trigger after the title, the Clear control after the
-                    // trigger, and the date-order toggle at the line's right end.
+                    // the trigger after the title.
                     LibraryCollectionDropdown { collections }
                 } else {
                     span {
