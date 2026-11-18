@@ -2,8 +2,8 @@
 
 ## 1. Auto-hide preference in the core (design D5)
 
-- [ ] 1.1 Add `gui_player_auto_hide: bool` to `App` (`src/app/state/app_struct.rs`), read it in `src/app/state/construct.rs` from the prefs key `gui_player_auto_hide` (default `false`, as `visual_slot_hidden_from_prefs` does), and write it in `App::save_prefs` (`src/app/input.rs`). Extend the existing prefs round-trip test module in `src/app/input.rs` with one round-trip case; verify with `cargo nextest run -p mbv prefs_tests`.
-- [ ] 1.2 Add `PlaybackRequest::ToggleAutoHide` in `crates/mbv-ui-msg/src/playback.rs` with a doc comment ("GUI-painted only, as `TogglePanelCollapse` is"). Add the explicit arm in `src/app/shell/playback.rs` that flips `gui_player_auto_hide` and calls `save_prefs`. Verify `cargo check --workspace` shows no non-exhaustive match.
+- [x] 1.1 Add `gui_player_auto_hide: bool` to `App` (`src/app/state/app_struct.rs`), read it in `src/app/state/construct.rs` from the prefs key `gui_player_auto_hide` (default `false`, as `visual_slot_hidden_from_prefs` does), and write it in `App::save_prefs` (`src/app/input.rs`). Extend the existing prefs round-trip test module in `src/app/input.rs` with one round-trip case; verify with `cargo nextest run -p mbv prefs_tests`.
+- [x] 1.2 Add `PlaybackRequest::ToggleAutoHide` in `crates/mbv-ui-msg/src/playback.rs` with a doc comment ("GUI-painted only, as `TogglePanelCollapse` is"). Add the explicit arm in `src/app/shell/playback.rs` that flips `gui_player_auto_hide` and calls `save_prefs`. Verify `cargo check --workspace` shows no non-exhaustive match.
 
 ## 2. Frame fact and pointer target (design D5, D6)
 
