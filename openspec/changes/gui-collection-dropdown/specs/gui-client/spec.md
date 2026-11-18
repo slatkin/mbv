@@ -30,12 +30,15 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 
 ### Requirement: The collection dropdown sits in the list header and no pill row remains
 
-The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, directly after the list title, and SHALL show that it opens a menu. The Clear control and the date order toggle SHALL sit on the same line. The open dropdown SHALL open under its trigger, over the list.
+The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, directly after the list title,
+and SHALL show that it opens a menu. The trigger is a capsule outline in the accent colour with a
+chevron that points down while closed and up while open. The open dropdown SHALL open under its
+trigger, over the list.
 
 #### Scenario: Podcasts header
 
 - **WHEN** the Podcasts destination paints
-- **THEN** the list header's title line shows the list title, then the dropdown trigger, then the date order toggle
+- **THEN** the list header's title line shows the list title, then the dropdown trigger, and nothing else
 - **AND** no row of pills or selector controls shows between the top bar and the list
 
 #### Scenario: No destination paints a pill row
@@ -83,20 +86,17 @@ The selection SHALL be All or a non-empty set of checked collections, never both
 - **THEN** only Jazz is checked
 - **AND** when the library has none of the checked collections, All is selected
 
-### Requirement: The dropdown trigger names the selection and clears it
+### Requirement: The dropdown trigger names the selection
 
-The closed dropdown SHALL show a trigger that names the selection: All, the one checked collection, or the count of checked collections. While the selection is not All, the trigger SHALL show a Clear control. A press on Clear SHALL select All without opening the dropdown. A press elsewhere on the trigger SHALL open the dropdown, or close it while it is open.
+The closed dropdown SHALL show a trigger that names the selection: All, the one checked collection,
+or the count of checked collections. A press on the trigger SHALL open the dropdown, or close it
+while it is open.
 
-#### Scenario: Clear resets the selection
+#### Scenario: Two collections are checked
 
 - **GIVEN** Tifo Football and Off Menu are checked
-- **WHEN** the user presses Clear
-- **THEN** All is selected and the dropdown stays closed
-
-#### Scenario: All shows no Clear
-
-- **WHEN** All is selected
-- **THEN** the trigger shows no Clear control
+- **WHEN** the dropdown is closed
+- **THEN** the trigger shows the count, for example "2 shows"
 
 #### Scenario: The trigger opens the dropdown
 
@@ -125,25 +125,21 @@ The open dropdown SHALL show a filter field. Text in the field SHALL narrow the 
 - **WHEN** the user presses a Library row outside the dropdown
 - **THEN** the dropdown closes and the next open shows an empty filter
 
-### Requirement: Feed-based lists have an Oldest and Newest order
+### Requirement: Feed-based lists paint newest first
 
-Podcasts, Feeds, and an Emby library in feed-group mode SHALL show a date order toggle beside the collection dropdown. The toggle SHALL read Newest or Oldest, and a press SHALL switch it. The list SHALL follow the order: Newest puts the most recent row first, Oldest puts the earliest row first. Undated rows SHALL stay last in both orders. Each destination SHALL start on Newest at each launch and SHALL keep its own order while the GUI Client runs.
+Podcasts, Feeds, and an Emby library in feed-group mode SHALL paint their lists with the most recent
+row first; undated rows SHALL stay last. The GUI SHALL show no date order control; the core keeps
+its `DateOrder` command.
 
-#### Scenario: The order flips
+#### Scenario: A folder paints newest first
 
-- **GIVEN** the Feeds list shows Newest
-- **WHEN** the user presses the date order toggle
-- **THEN** the list shows the earliest entry first, with undated entries last
-
-#### Scenario: A folder starts on Newest
-
-- **WHEN** the user checks one folder of an Emby library in feed-group mode for the first time in a launch
+- **WHEN** the user checks one folder of an Emby library in feed-group mode
 - **THEN** the list shows that folder's items newest first
 
-#### Scenario: Music has no date order
+#### Scenario: No destination shows a date order control
 
-- **WHEN** Music paints its list
-- **THEN** no date order toggle shows
+- **WHEN** any destination paints its list header
+- **THEN** no date order control shows
 
 ### Requirement: The collection selection persists per destination
 

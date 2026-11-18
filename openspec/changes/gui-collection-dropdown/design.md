@@ -108,7 +108,8 @@ the order is a sort in the projection, with no refetch:
   moved last after the reversal.
 
 The sort key comparison lives in `collection.rs` as one function over `Option<i64>` seconds, so the
-"undated last in both orders" rule has one owner and one unit test.
+"undated last in both orders" rule has one owner and one unit test. The GUI sends no `DateOrder`
+command, so GUI lists stay on Newest; the Oldest path stays for the core command (D5).
 
 ### D5. Commands
 
@@ -125,7 +126,7 @@ enum GuiCollectionTarget { Music(usize), Podcasts(usize), Feeds, EmbyFeed(usize)
 
 Each arm is exhaustive per target. A key that the target's catalog does not hold is a stale frame;
 it is logged and ignored, as stale commands are today. `DateOrder` on `Music` is a documented
-no-op arm.
+no-op arm. No GUI control sends `DateOrder` (D6a); the command stays for the core and later callers.
 
 ### D6. One frame, one component
 
@@ -138,12 +139,11 @@ struct GuiCollectionsFrame {
     all: bool,
     entries: Vec<GuiCollectionEntry>,   // { key, name, checked }, in catalog order
     noun: GuiCollectionNoun,            // Groups | Shows | Subscriptions | Folders
-    order: Option<GuiDateOrder>,        // None for Music
 }
 ```
 
 The window gets one component, `LibraryCollectionDropdown` (`window/components/library_collection_dropdown.rs`),
-with the trigger, the Clear control, the date order toggle, and the popover. The popover paints with
+with the trigger and the popover. The popover paints with
 `menu_card`, as the row menu and Queue chooser do. The trigger label is All, the one checked name, or
 the count with the noun (for example "2 folders"). `LibraryPillRow`, `LibraryPillButton`,
 `library_pills.rs`, the four destination pill components, and `window/library/pill_list.rs` are
@@ -152,13 +152,25 @@ deleted with their tests.
 ### D6a. Placement and form follow the artboard (page 7)
 
 The dropdown is painted by `LibraryListHeader`, not by the panel. The header takes an optional
-collections frame. When the frame is present, the title line is: list title, then the trigger, then
-the Clear control, then (right-aligned) the date order toggle. The selection label on the right of
-the title line is not painted when the trigger is present, because the trigger names the selection.
-The panel paints nothing between `LibraryTopBar` and the list region: the selector row and its
-`pills` region are deleted. The trigger is a bordered rectangular button with a trailing
-`ChevronDown`, as on the artboard; it is not a pill. The popover is absolutely positioned under the
-trigger inside the header, over the list.
+collections frame. When the frame is present, the title line is: list title, then the trigger, and
+nothing else. The selection label on the right of the title line is not painted when the trigger is
+present, because the trigger names the selection. The panel paints nothing between `LibraryTopBar`
+and the list region: the selector row and its `pills` region are deleted.
+
+The trigger is the capsule the artboard shows: a fully rounded outline in the accent colour, with
+the selection label and a chevron that points down while closed and up while open. It is not a
+rectangular button and not a muted pill.
+
+The popover is absolutely positioned under the trigger inside the header, over the list, and paints
+as the artboard shows: a filter strip with a teal `/` and the placeholder (for example "Find a
+category" for folders), a divider under it, a checkbox row for All first with an extra gap after it,
+one checkbox row per collection, a highlighted band and a bold name on a checked row, and a footer
+strip whose only hint is "esc close". The artboard's "space toggle" and "enter only this" hints name
+behaviours the GUI does not have, so the footer does not paint them.
+
+The artboard shows no Clear control and no date order toggle, and the user has dropped both from the
+GUI. All is selected by pressing the All row, and the GUI shows no date order control; the core keeps
+the `DateOrder` command (D4, D5).
 
 ### D7. The window holds the open state and the filter text
 
