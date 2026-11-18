@@ -13,11 +13,19 @@ core-side: the window reports `QueuePlaybackTargetId::{PlaybackTarget, Collapse,
 TargetChoice}` regions and the Client core resolves presses, so a control can move between
 components without any core change.
 
+`LibraryTopBar` (Home icon, tabs, Search field, Settings control) is the first child of
+`LibraryPanel`, so it spans the Library column only. `LibraryStatusBar` paints fixed key
+hints (`HINTS`) at its left, the prefix or toast in their place, and the location at its
+right.
+
 ## Goals / Non-Goals
 
 **Goals:**
 
-- The queue column's topmost painted content is the artwork, with no band above it.
+- The queue column's topmost painted content is the artwork, directly under the global
+  header.
+- One window-wide header row above both columns.
+- The Search field lives at the left of the Library Status bar; the key hints are gone.
 - The footer band owns the playback-target control and the collapse control, before the
   autosave/source/dirty content in its left group.
 - The target chooser opens upward, above the footer band.
@@ -69,10 +77,30 @@ is simply dropped. Alternative rejected: keeping the field unpainted, which leav
 state in the frame.
 
 **D6 — The artwork starts at the column's top edge.** With the header row gone, no band
-replaces it and nothing realigns with the Library top bar: the Library top bar keeps its
-own 56 px band, and the queue column's top edge is the artwork's (or, with no item, the
-column's backdrop above the queue box). The still slot's own shapes, caption, and badge
+replaces it inside the column. The column's top edge is the bottom of the global header
+(D7), and the artwork (or, with no item, the column's backdrop above the queue box) starts
+there. The still slot's own shapes, caption, and badge
 are unchanged.
+
+**D7 — The top bar becomes the global header.** The root (`app.rs`) mounts `LibraryTopBar`
+above the panel row, outside both columns; `LibraryPanel` stops mounting it. The header
+keeps its 56 px band and its type, spans the Library column, the divider, and the Queue
+column or its collapsed rail, and keeps `data-pointer-zone=Library`, so its tab presses
+route as today. It paints in every arrangement and is absent while the Settings screen
+shows, which keeps its own layout.
+
+**D8 — Mini.** The header paints in Mini whichever panel shows. While the Queue shows, a
+tab press makes the destination active and shows the Library in place of the Queue,
+through the same Mini toggle the window uses today.
+
+**D9 — The Search field moves to the Library Status bar.** `HINTS` and their markup are
+deleted. The field, with its `Ctrl K` hint, leads the bar's left side; the armed prefix or
+the live toast paints after it, and the location stays flush right. The results dropdown
+anchors `bottom-full` and opens upward, because the bar sits at the window's bottom. The
+field's focus, debounce, and key routing are unchanged. The field mounts only while the
+Library panel shows, so in Mini with the Queue showing `Ctrl+K` keeps its core effect, as
+today. Alternative rejected: keeping the hints beside the field, which the user named as
+gibberish.
 
 ## Risks / Trade-offs
 
@@ -83,5 +111,9 @@ are unchanged.
   header's downward popover made over the artwork, and the rows report under the footer's
   chooser key, so a press on a popover row resolves to the row, not the queue row beneath
   it.
+- The global header takes 56 px of height from the queue column, which matters most in
+  Mini. The user chose a window-wide header.
+- The upward Search results can cover the Library list's lower rows; they win where they
+  paint, as the dropdown does today over the list.
 - The status word's removal loses one redundant state readout; a paused panel now reads
   from the transport's play glyph alone. The user chose this.

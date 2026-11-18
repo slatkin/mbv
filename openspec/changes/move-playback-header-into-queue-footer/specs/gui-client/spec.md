@@ -4,7 +4,7 @@
 
 ### Requirement: The first GUI slice presents the player panel of the design canvas
 
-The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The panel SHALL show no header row above its artwork: the artwork SHALL be the panel's topmost content. The footer line SHALL show the playback-target chooser and the collapse control at its left edge. The GUI Client SHALL paint no now-playing status word on any surface. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. The footer line SHALL show the total time of the shown queue and, while rows are marked, the total time of the marked rows. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and it carries the Search field only once Search is presented.
+The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The window SHALL show the top bar as one global header across the full window width, above the Library panel and the Queue column, in every arrangement; the Settings screen SHALL show no global header. The panel SHALL show no header row above its artwork: the artwork SHALL be the panel's topmost content, directly under the global header. The footer line SHALL show the playback-target chooser and the collapse control at its left edge. The GUI Client SHALL paint no now-playing status word on any surface. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. The footer line SHALL show the total time of the shown queue and, while rows are marked, the total time of the marked rows. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and the Library Status bar carries the Search field only once Search is presented.
 
 #### Scenario: The queue has slots
 
@@ -90,3 +90,55 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **GIVEN** the Queue filter narrows the shown queue
 - **WHEN** the footer line paints
 - **THEN** the total time still covers every slot of the shown queue
+
+#### Scenario: The header spans both columns
+
+- **GIVEN** the Library panel and the Queue column show, or the Queue column is collapsed to its rail
+- **WHEN** the window paints
+- **THEN** the top bar spans the full window width, and the Library column and the Queue column or its rail start below it
+
+#### Scenario: The Settings screen shows
+
+- **WHEN** the Settings screen shows
+- **THEN** no global header paints
+
+### Requirement: The top bar shows the destination tabs and Search
+
+The window SHALL show a top bar with a Home icon and the destination tabs as its global header. Once Search is presented, the Library Status bar SHALL show a Search field with the hint `Ctrl K` at its left side. A press on a tab SHALL make its destination active. The Search field SHALL search all libraries, show the results above the field, and activate a result by Enter or a press.
+
+#### Scenario: A tab is pressed
+
+- **WHEN** the user presses the Music tab
+- **THEN** Music becomes the active destination and its tab is marked current
+
+#### Scenario: A tab is pressed in Mini while the Queue shows
+
+- **GIVEN** the arrangement is Mini and the Queue shows
+- **WHEN** the user presses a destination tab
+- **THEN** that destination becomes active and the Library shows in place of the Queue
+
+#### Scenario: Search opens from the keyboard
+
+- **GIVEN** the Library panel shows
+- **WHEN** the user presses `Ctrl+K`
+- **THEN** the Search field in the Library Status bar has focus
+
+#### Scenario: A Search result is activated
+
+- **WHEN** the user activates a Search result
+- **THEN** the GUI Client opens the result's destination on that item
+
+### Requirement: The Library Status bar shows hints and the location
+
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, the selected collection's name, and the picked item. The bar SHALL show no key hints. While prefix mode is armed or a toast is active, that SHALL paint after the Search field, and the field and the location SHALL stay.
+
+#### Scenario: Music has an album picked
+
+- **GIVEN** Music is active with Hip-Hop selected and a Beastie Boys album picked
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Hip-Hop, Beastie Boys, and no key hints
+
+#### Scenario: A toast arrives
+
+- **WHEN** the shared Status bar projection holds a toast while the Library panel shows
+- **THEN** the toast paints after the Search field until it ends, and the field and the location stay

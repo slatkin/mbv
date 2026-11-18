@@ -17,6 +17,17 @@
 - [ ] 2.2 Move `TargetChooserPopover` to `queue_footer.rs` and flip its anchor to
   `bottom-full` so it opens above the footer band (design D3).
 
+## 2b. Global header and Library Status bar
+
+- [ ] 2b.1 Move the `LibraryTopBar` mount from `library_panel.rs` to `app.rs`, above the
+  panel row and across both columns or the collapsed rail; absent on the Settings screen
+  (design D7).
+- [ ] 2b.2 In Mini with the Queue showing, a tab press makes the destination active and
+  shows the Library (design D8).
+- [ ] 2b.3 Delete `HINTS` from `library_status_bar.rs`; move the Search field and its
+  dropdown from `library_top_bar.rs` to the bar's left side, dropdown anchored
+  `bottom-full`; prefix and toast paint after the field (design D9).
+
 ## 3. Footer: own the target and collapse controls
 
 - [ ] 3.1 Paint the playback-target control and the collapse control at the left of
@@ -31,9 +42,13 @@
 
 - [ ] 4.1 Move the header-row and popover coverage with the surfaces: the playback panel
   suite loses the header's regions; the footer suite gains the controls, the popover's
-  upward anchor, and the no-status-word claim. Name the contract each moved test owns.
+  upward anchor, and the no-status-word claim. The top-bar suite loses the Search
+  field; the Library Status bar suite gains it and loses the hints. Add the header's
+  mount placement and its absence on Settings, and the Mini tab press. Name the
+  contract each moved test owns.
 - [ ] 4.2 Update `docs/architecture/gui-client.md` and both components' module comments
-  to describe the headerless panel and the footer's new controls.
+  to describe the headerless panel, the footer's new controls, the global header,
+  the Search field's place, and the `Ctrl+K` rule.
 
 ## 5. Verification
 
