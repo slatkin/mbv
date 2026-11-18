@@ -309,10 +309,10 @@ impl App {
     /// set as it is — it is still landing, and the list is what would name its
     /// shows stale.
     pub(in crate::app) fn gui_podcast_effective_set(&self, lib_idx: usize) -> GuiCollectionSet {
-        let stored = self
-            .gui_podcast_libs
-            .get(&lib_idx)
-            .map_or_else(GuiCollectionSet::all, |selection| selection.shows.clone());
+        let stored = self.gui_podcast_libs.get(&lib_idx).map_or_else(
+            || GuiCollectionSet::All,
+            |selection| selection.shows.clone(),
+        );
         let present = self
             .audiobookshelf_browse
             .get(lib_idx)

@@ -233,7 +233,7 @@ impl App {
             .gui_library_groups
             .get(&lib_idx)
             .cloned()
-            .unwrap_or_else(GuiCollectionSet::all);
+            .unwrap_or(GuiCollectionSet::All);
         match self.gui_music_present_groups(lib_idx) {
             Some(present) => stored.retain_present(&present),
             None => stored,

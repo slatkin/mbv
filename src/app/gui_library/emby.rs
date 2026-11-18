@@ -188,7 +188,7 @@ impl App {
             return;
         }
         let (_, order) = self.gui_emby_feed_set(lib_idx);
-        self.install_gui_emby_feed_set(lib_idx, GuiCollectionSet::all(), order);
+        self.install_gui_emby_feed_set(lib_idx, GuiCollectionSet::All, order);
     }
 
     /// Set the feed-view library's list order (row 8.1; gui-collection-dropdown
@@ -265,7 +265,7 @@ impl App {
         // rule alone governs its results.
         self.gui_emby_feed_sets
             .entry(lib_idx)
-            .or_insert_with(|| (GuiCollectionSet::all(), GuiDateOrder::default()));
+            .or_insert_with(|| (GuiCollectionSet::All, GuiDateOrder::default()));
         let Some(state) = self
             .libs
             .get(lib_idx)
@@ -293,7 +293,7 @@ impl App {
         self.gui_emby_feed_sets
             .get(&lib_idx)
             .cloned()
-            .unwrap_or((GuiCollectionSet::all(), GuiDateOrder::default()))
+            .unwrap_or((GuiCollectionSet::All, GuiDateOrder::default()))
     }
 
     /// The folder catalog the checked set resolves against (design D1, D3):

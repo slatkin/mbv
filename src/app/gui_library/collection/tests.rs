@@ -21,7 +21,7 @@ enum Op {
 fn apply(set: GuiCollectionSet, op: &Op) -> GuiCollectionSet {
     match op {
         Op::Toggle(key) => set.toggle(key),
-        Op::PressAll => GuiCollectionSet::all(),
+        Op::PressAll => GuiCollectionSet::All,
         Op::RetainPresent(present) => {
             let present: Vec<String> = present.iter().map(|key| (*key).to_string()).collect();
             set.retain_present(&present)
@@ -39,7 +39,7 @@ fn checked(keys: &[&str]) -> GuiCollectionSet {
 /// last, press All, retain past a vanished collection, and retain to empty.
 #[rstest]
 #[case::check_first_clears_all(
-    GuiCollectionSet::all(),
+    GuiCollectionSet::All,
     Op::Toggle("tifo"),
     checked(&["tifo"]),
 )]
@@ -51,12 +51,12 @@ fn checked(keys: &[&str]) -> GuiCollectionSet {
 #[case::unchecking_the_last_collection_returns_to_all(
     checked(&["tifo"]),
     Op::Toggle("tifo"),
-    GuiCollectionSet::all(),
+    GuiCollectionSet::All,
 )]
 #[case::pressing_all_clears_every_check(
     checked(&["tifo", "offmenu"]),
     Op::PressAll,
-    GuiCollectionSet::all(),
+    GuiCollectionSet::All,
 )]
 #[case::a_vanished_collection_drops(
     checked(&["soul", "jazz"]),
@@ -66,7 +66,7 @@ fn checked(keys: &[&str]) -> GuiCollectionSet {
 #[case::no_surviving_collection_returns_to_all(
     checked(&["soul", "jazz"]),
     Op::RetainPresent(&["blues"]),
-    GuiCollectionSet::all(),
+    GuiCollectionSet::All,
 )]
 fn the_selection_transitions_follow_the_spec(
     #[case] start: GuiCollectionSet,

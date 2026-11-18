@@ -23,12 +23,6 @@ pub enum GuiCollectionSet {
 }
 
 impl GuiCollectionSet {
-    /// The selection every destination starts on (design D1).
-    #[must_use]
-    pub fn all() -> Self {
-        Self::All
-    }
-
     /// Whether the selection is All (design D1).
     #[must_use]
     pub fn is_all(&self) -> bool {
@@ -56,16 +50,6 @@ impl GuiCollectionSet {
                     Self::Checked(keys)
                 }
             }
-        }
-    }
-
-    /// Whether the selection covers `key`: All covers every collection
-    /// (design D1).
-    #[must_use]
-    pub fn contains(&self, key: &str) -> bool {
-        match self {
-            Self::All => true,
-            Self::Checked(keys) => keys.iter().any(|checked| checked == key),
         }
     }
 
