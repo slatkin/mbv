@@ -544,6 +544,18 @@ impl Fixture {
             .last()
     }
 
+    /// Lay the document out again at a new viewport size, as a window resize
+    /// does, and let the epoch's re-measures land.
+    pub(super) fn resize(&mut self, width: u32, height: u32) {
+        self.doc.inner.borrow_mut().set_viewport(Viewport::new(
+            width,
+            height,
+            1.0,
+            ColorScheme::Light,
+        ));
+        self.lay_out();
+    }
+
     /// Resolve the document's style and layout, as the renderer's frame
     /// would, so the mounted rects are the laid-out ones, and let the
     /// re-measures the epoch bump drives land.
@@ -579,10 +591,11 @@ impl Fixture {
 /// The layout rules the fixture resolves with, in place of the app
 /// stylesheet a real window loads: the handful of utilities the queue tree
 /// sizes its cells with, and the positioning pair the hovered row's chrome is
-/// placed by, so a title that fits its box paints whole and the chrome's
-/// laid-out box is the box it paints. The styles the row assertions read are
-/// the component's inline styles, which the document applies regardless.
-pub(super) const FIXTURE_CSS: &str = concat!(
+/// placed by. The styles the row assertions read are the component's inline
+/// styles, which the document applies regardless. The fixture-only title
+/// width rule is separate, so a test can paint a title at the width its
+/// flex item really gets.
+const BASE_FIXTURE_CSS: &str = concat!(
     "[data-slot] { width: 100%; }",
     "button { padding-block: 0; border: 0; }",
     ".relative { position: relative; }",
@@ -597,23 +610,35 @@ pub(super) const FIXTURE_CSS: &str = concat!(
     ".w-full { width: 100%; }",
     ".h-full { height: 100%; }",
     ".block { display: block; }",
-    // The title box fills its row, so a title that fits paints whole from
-    // the first resolved measure on (a real window's first layout is sized
-    // before its first measure; a zero-height start would wedge the box at
-    // its cut).
-    ".truncate { width: 100%; }",
 );
+
+/// The fixture-only title-width crutch: a title that fits paints whole from
+/// the first resolved measure on, even before its flex item's box settles.
+const TITLE_WIDTH_CSS: &str = ".truncate { width: 100%; }";
+
+fn fixture_css_with_title_width() -> String {
+    format!("{BASE_FIXTURE_CSS}{TITLE_WIDTH_CSS}")
+}
 
 /// A fixture over a `width` × `height` viewport. A zero-sized viewport lays
 /// everything out at zero, which the capacity contract reads.
 pub(super) fn built_at(app: fn(FixtureProps) -> Element, width: u32, height: u32) -> Fixture {
+    built_at_with_css(app, width, height, &fixture_css_with_title_width())
+}
+
+fn built_at_with_css(
+    app: fn(FixtureProps) -> Element,
+    width: u32,
+    height: u32,
+    css: &str,
+) -> Fixture {
     let (sender, receiver) = channel();
     let handle = Rc::new(RefCell::new(None));
     let config = DocumentConfig {
         viewport: Some(Viewport::new(width, height, 1.0, ColorScheme::Light)),
         ua_stylesheets: vec![
             UserAgentStylesheet::default_sheet(),
-            UserAgentStylesheet::parse(FIXTURE_CSS),
+            UserAgentStylesheet::parse(css),
         ],
         ..DocumentConfig::default()
     };
@@ -649,6 +674,16 @@ pub(super) fn built_at(app: fn(FixtureProps) -> Element, width: u32, height: u32
 /// titles fit their boxes and the `Truncate` measure paints them whole.
 pub(super) fn built_sized(app: fn(FixtureProps) -> Element) -> Fixture {
     built_at(app, 640, 900)
+}
+
+/// A fixture whose title measures the width its flex item really gets, with
+/// no fixture-only `.truncate { width: 100% }` crutch.
+pub(super) fn built_at_with_real_title_width(
+    app: fn(FixtureProps) -> Element,
+    width: u32,
+    height: u32,
+) -> Fixture {
+    built_at_with_css(app, width, height, BASE_FIXTURE_CSS)
 }
 
 /// A fixture whose document lays out into a zero viewport: every rect is
