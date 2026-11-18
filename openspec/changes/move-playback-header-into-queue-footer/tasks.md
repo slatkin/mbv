@@ -46,7 +46,7 @@
   field; the Library Status bar suite gains it and loses the hints. Add the header's
   mount placement and its absence on Settings, and the Mini tab press. Name the
   contract each moved test owns.
-- [ ] 4.2 Update `docs/architecture/gui-client.md` and both components' module comments
+- [x] 4.2 Update `docs/architecture/gui-client.md` and both components' module comments
   to describe the headerless panel, the footer's new controls, the global header,
   the Search field's place, and the `Ctrl+K` rule.
 
