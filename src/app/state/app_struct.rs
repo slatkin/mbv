@@ -301,13 +301,22 @@ pub struct App {
     /// to the first item row in the projection, so the Hero's default is
     /// never blank. The TUI never reads it.
     pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
-    /// The GUI Home's `Latest episodes` store (gui-collection-dropdown design
-    /// D9): each Emby TV library's latest episodes, keyed by the library id,
-    /// filled by the GUI launch's one worker fetch per library. The section
-    /// merges every library's list by `date_added`, newest first, and
-    /// de-duplicated by item id. It lives outside `nav_stack`, so the TUI's
-    /// own levels stay unchanged, and the TUI never reads it.
-    pub(in crate::app) gui_home_tv_latest:
+    /// The flat Shows row whose Hero the GUI holds (gui-collection-dropdown
+    /// design D9): the New row the select command last named. The projection
+    /// falls back to the first New row, so the Hero is never blank, and an
+    /// Upcoming row is display-only and never lands here.
+    pub(in crate::app) gui_shows_flat_selection: Option<String>,
+    /// The GUI Shows destination's single view per library (design D8): All,
+    /// New, or Upcoming. A library with no entry shows All, the default.
+    pub(in crate::app) gui_shows_views:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiShowsView>,
+    /// The GUI Shows New list's per-library source (gui-collection-dropdown
+    /// design D9): each Emby TV library's latest episodes, keyed by the
+    /// library id, filled by the GUI launch's one worker fetch per library.
+    /// The view merges every library's list by `date_added`, newest first,
+    /// and de-duplicates by item id. It lives outside `nav_stack`, so the
+    /// TUI's own levels stay unchanged, and the TUI never reads it.
+    pub(in crate::app) gui_shows_new:
         std::collections::HashMap<String, Vec<mbv_emby_model::EmbyItem>>,
     /// The GUI Library's Shows selection (add-gui-library-panel design D12,
     /// the USER-APPROVED GUI Shows design): per Shows library, the active

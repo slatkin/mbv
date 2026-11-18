@@ -1,7 +1,7 @@
 use crate::gui_launch_state::{load_gui_launch_state_at, save_gui_launch_state_at};
 use crate::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget, GuiLaunchState,
-    TabIdentity, TestTempDir,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
+    GuiLaunchShowsView, GuiLaunchState, TabIdentity, TestTempDir,
 };
 use mbv_queue::ServiceKind;
 
@@ -31,6 +31,7 @@ fn two_group_location() -> GuiLaunchState {
             order: None,
             picks: Vec::new(),
         }],
+        shows_view: GuiLaunchShowsView::All,
     }
 }
 

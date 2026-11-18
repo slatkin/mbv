@@ -62,10 +62,10 @@ impl App {
             // The GUI Library's root-list store owns this event (add-gui-
             // library-panel design D12, row 8.1); the TUI never starts one.
             LibEvent::GuiEmbyRootItems(event) => self.handle_gui_emby_root_items(event),
-            // The GUI Home's `Latest episodes` store owns this event
+            // The GUI Shows New list's store owns this event
             // (gui-collection-dropdown design D9); only the GUI Client's launch
             // starts one, so the TUI never receives it.
-            LibEvent::GuiHomeLatest(event) => self.handle_gui_home_latest(event),
+            LibEvent::GuiShowsNew(event) => self.handle_gui_shows_new(event),
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and
             // the shell drain joins only its projection work after it.

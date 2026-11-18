@@ -5,7 +5,7 @@
 //! so a command built from a stale paint addresses the item that paint showed
 //! or nothing.
 
-use mbv::{GuiCollectionTarget, GuiDateOrder};
+use mbv::{GuiCollectionTarget, GuiDateOrder, GuiShowsView};
 use mbv_queue::QueueItemContentId;
 
 /// One request from the Library panel's window content (design D2). The
@@ -35,6 +35,9 @@ pub enum GuiLibraryCommand {
         target: GuiCollectionTarget,
         order: GuiDateOrder,
     },
+    /// Select the Shows view (design D8): All, New, or Upcoming. This is a
+    /// view choice, not a collection command.
+    ShowsSetView { lib_idx: usize, view: GuiShowsView },
     /// Show the item's detail in the Hero.
     ShowDetail { item_id: String },
     /// Open the album node: load its tracks when the cache does not hold
@@ -149,12 +152,6 @@ pub enum GuiHomeRowId {
     Continue(String),
     /// A `Recently added` row's queue-item content id.
     Recent(QueueItemContentId),
-    /// A `Latest episodes` row's Emby item id
-    /// (gui-collection-dropdown design D9).
-    LatestEpisode(String),
-    /// An `Upcoming` row's premiere stable key. The row is display-only, so
-    /// the core holds no command that acts on it.
-    Upcoming(String),
 }
 
 impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
@@ -166,6 +163,9 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             }
             GuiLibraryCommand::CollectionAll { target } => Self::CollectionAll { target },
             GuiLibraryCommand::DateOrder { target, order } => Self::DateOrder { target, order },
+            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
+                Self::ShowsSetView { lib_idx, view }
+            }
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
             GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
@@ -242,8 +242,6 @@ impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
         match row {
             GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
             GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
-            GuiHomeRowId::LatestEpisode(item_id) => Self::LatestEpisode(item_id.clone()),
-            GuiHomeRowId::Upcoming(key) => Self::Upcoming(key.clone()),
         }
     }
 }

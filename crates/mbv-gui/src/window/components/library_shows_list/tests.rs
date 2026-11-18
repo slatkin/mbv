@@ -252,6 +252,7 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
 /// and no collection selector.
 fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
+        view: mbv::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
         series: tree,

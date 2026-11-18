@@ -296,3 +296,132 @@ fn the_series_heroes_art_box_follows_the_fetched_images_own_aspect() {
         "the box follows the fetched still's 3:2 pixels, not the declared portrait arm"
     );
 }
+
+/// One episode of a TV library's New list, dated by `date_added` as the TV
+/// Latest fetch returns it.
+fn new_episode(id: &str, name: &str, date_added: &str) -> EmbyItem {
+    let mut item = make_item(name, "Episode");
+    item.id = id.to_string();
+    item.series_name = "Show".into();
+    item.date_added = date_added.into();
+    item
+}
+
+/// One Upcoming premiere of a TV library.
+fn premiere(
+    series_id: &str,
+    series_name: &str,
+    premiere_date: &str,
+) -> mbv_emby_model::UpcomingPremiere {
+    mbv_emby_model::UpcomingPremiere {
+        series_id: mbv_ids::ItemId::new(series_id),
+        series_name: series_name.into(),
+        season: Some(1),
+        episode: Some(2),
+        title: "The Episode".into(),
+        premiere_date: premiere_date.into(),
+    }
+}
+
+/// Contract (design D8): a press on one view replaces the active choice, and
+/// the collection stores have no Shows entry.
+#[test]
+fn one_shows_view_is_active_at_a_time() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+
+    assert_eq!(app.gui_shows_view(0), GuiShowsView::All);
+    for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
+        app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView { lib_idx: 0, view });
+        assert_eq!(app.gui_shows_view(0), view);
+    }
+    assert!(app.gui_shows_views.contains_key(&0));
+}
+
+/// Contract (design D9): New paints the merged latest episodes, newest first,
+/// with the title split and Hero the old Home section carried.
+#[test]
+fn the_new_view_paints_the_merged_latest_episodes() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.gui_shows_new.insert(
+        "lib-a".into(),
+        vec![
+            new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
+            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+        ],
+    );
+    app.gui_shows_new.insert(
+        "lib-b".into(),
+        vec![
+            new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
+            new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
+        ],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::New,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, ["ep-new", "ep-mid", "ep-old"]);
+    assert!(projection.rows.iter().all(|row| !row.display_only));
+    assert_eq!(projection.rows[0].title, "Show");
+    assert_eq!(projection.rows[0].subtitle.as_deref(), Some("New"));
+    assert_eq!(projection.selected.as_deref(), Some("ep-new"));
+    assert_eq!(projection.hero.expect("the Hero paints").title, "New");
+}
+
+/// Contract (design D9): Upcoming paints the merged premieres, soonest first,
+/// and every row is display-only.
+#[test]
+fn the_upcoming_view_paints_display_only_premieres() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    let later = premiere("series-a", "Show A", "2026-12-01T00:00:00.0000000Z");
+    let sooner = premiere("series-b", "Show B", "2026-11-20T00:00:00.0000000Z");
+    app.tv_upcoming_snapshots
+        .insert("lib-a".into(), vec![later.clone()]);
+    app.tv_upcoming_snapshots
+        .insert("lib-b".into(), vec![sooner.clone()]);
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::Upcoming,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, [sooner.stable_key(), later.stable_key()]);
+    assert!(projection.rows.iter().all(|row| row.display_only));
+    assert_eq!(projection.rows[0].title, "Show B");
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("S01:E02 — The Episode")
+    );
+}
+
+/// Contract (design D9): a play or enqueue command on an Upcoming row acts on
+/// nothing, so the Owner's queue stays untouched.
+#[test]
+fn an_upcoming_row_resolves_no_playable_item() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.tv_upcoming_snapshots.insert(
+        "lib-a".into(),
+        vec![premiere(
+            "series-a",
+            "Show A",
+            "2026-11-20T00:00:00.0000000Z",
+        )],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::Upcoming,
+    });
+    let id = app.gui_shows_projection(0).rows[0].id.clone();
+
+    assert_eq!(app.gui_shows_item(0, &id), None);
+}

@@ -26,6 +26,7 @@ mod projection;
 mod search;
 mod shows;
 mod shows_projection;
+mod shows_view;
 mod store;
 mod tabs;
 mod tv;
@@ -51,7 +52,6 @@ pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
-pub(in crate::app) use self::home::GuiHomeLatestEvent;
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
@@ -70,10 +70,12 @@ pub use self::projection::{
 };
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
+pub(in crate::app) use self::shows::GuiShowsNewEvent;
 pub use self::shows_projection::{
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsSeasonNode, GuiShowsSeasonPill,
-    GuiShowsSeries, GuiShowsWorkspace,
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
+    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
+pub use self::shows_view::GuiShowsView;
 use self::store::GuiMusicCollectionSite;
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
@@ -116,6 +118,9 @@ pub enum GuiLibraryCommand {
         target: GuiCollectionTarget,
         order: GuiDateOrder,
     },
+    /// Select the Shows destination's single view (design D8): All, New, or
+    /// Upcoming. This is a view choice, not a collection command.
+    ShowsSetView { lib_idx: usize, view: GuiShowsView },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -278,6 +283,9 @@ impl App {
             }
             GuiLibraryCommand::DateOrder { target, order } => {
                 self.apply_collection(&target, CollectionOp::Order(order));
+            }
+            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
+                self.set_gui_shows_view(lib_idx, view);
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
@@ -488,11 +496,6 @@ impl App {
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
     fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
-        // An `Upcoming` row is display-only (gui-collection-dropdown design
-        // D9): a press changes nothing, so the Hero keeps its item.
-        if matches!(row, GuiHomeRowId::Upcoming(_)) {
-            return;
-        }
         self.gui_home_selection = Some(row.clone());
     }
 
@@ -501,11 +504,7 @@ impl App {
     /// stale frame's row, one whose item the App's Home data no longer
     /// holds, changes nothing, as every stale command's item arm does.
     fn play_gui_home_row(&mut self, row: &GuiHomeRowId) {
-        // An `Upcoming` row is display-only (gui-collection-dropdown design
-        // D9): it resolves no target, so nothing plays.
-        let Some(target) = row.clone().into_home_item_target() else {
-            return;
-        };
+        let target = row.clone().into_home_item_target();
         let from_cw = row.is_continue();
         if let Some(item) = self.home_stable_target(&target) {
             self.home_play_target(item, from_cw);
@@ -520,11 +519,7 @@ impl App {
     /// resolved row, never a direct queue mutation. `name` is the command's
     /// intent, for the stale-frame log the item arms share.
     fn enqueue_gui_home_row(&mut self, row: &GuiHomeRowId, name: &str) {
-        // An `Upcoming` row is display-only (gui-collection-dropdown design
-        // D9): it resolves no target, so nothing enqueues.
-        let Some(target) = row.clone().into_home_item_target() else {
-            return;
-        };
+        let target = row.clone().into_home_item_target();
         let logged = home_row_command_id(name, row);
         let from_cw = row.is_continue();
         if let Some(item) = self.home_stable_target(&target) {

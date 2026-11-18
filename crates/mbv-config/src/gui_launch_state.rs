@@ -43,6 +43,25 @@ pub struct GuiLaunchState {
     /// with none.
     #[serde(default)]
     pub collections: Vec<GuiDestinationCollections>,
+    /// The Shows destination's one active view. An older file without the
+    /// field loads as All: the destination's default series list.
+    #[serde(default)]
+    pub shows_view: GuiLaunchShowsView,
+}
+
+/// The three views a GUI Shows destination can show (gui-collection-dropdown
+/// design D8): a single choice, held in its own launch field rather than in a
+/// collection entry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiLaunchShowsView {
+    /// The series list, the default and the value an old file loads as.
+    #[default]
+    All,
+    /// The merged New (latest episodes) list.
+    New,
+    /// The merged Upcoming premieres list.
+    Upcoming,
 }
 
 /// The selected collections of one destination: the destination's stable
@@ -131,6 +150,7 @@ pub fn first_launch() -> GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Home,
         collections: Vec::new(),
+        shows_view: GuiLaunchShowsView::All,
     }
 }
 

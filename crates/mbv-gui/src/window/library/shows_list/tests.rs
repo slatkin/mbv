@@ -79,6 +79,7 @@ fn kind_of(row: &ShowsListRow) -> &'static str {
         ShowsListRow::Series(_) => "series",
         ShowsListRow::Season(_) => "season",
         ShowsListRow::Episode(_) => "episode",
+        ShowsListRow::Flat(_) => "flat",
     }
 }
 
@@ -96,7 +97,9 @@ fn the_series_list_paints_the_tree_at_the_music_heights() {
     let open = vec![series_row_id("s1"), season_row_id("s1", "se1")];
     let closed: Vec<String> = Vec::new();
     let painted = build_shows_rows(
+        GuiShowsView::All,
         &tree(),
+        &[],
         "",
         ShowsTreeState {
             open: &open,
@@ -151,7 +154,13 @@ fn the_series_list_paints_the_tree_at_the_music_heights() {
 // A closed series paints no season and a closed season no episode.
 #[test]
 fn a_closed_series_paints_no_season_and_a_closed_season_no_episode() {
-    let closed = build_shows_rows(&tree(), "", ShowsTreeState::default());
+    let closed = build_shows_rows(
+        GuiShowsView::All,
+        &tree(),
+        &[],
+        "",
+        ShowsTreeState::default(),
+    );
 
     let kinds: Vec<&str> = closed.iter().map(kind_of).collect();
     assert_eq!(
@@ -165,7 +174,13 @@ fn a_closed_series_paints_no_season_and_a_closed_season_no_episode() {
 // The filter keeps a series whose season matches and opens it.
 #[test]
 fn the_filter_keeps_a_series_whose_season_matches_and_opens_it() {
-    let painted = build_shows_rows(&tree(), "season 2", ShowsTreeState::default());
+    let painted = build_shows_rows(
+        GuiShowsView::All,
+        &tree(),
+        &[],
+        "season 2",
+        ShowsTreeState::default(),
+    );
 
     let kinds: Vec<&str> = painted.iter().map(kind_of).collect();
     assert_eq!(kinds, ["heading", "series", "season"]);
@@ -180,7 +195,13 @@ fn the_filter_keeps_a_series_whose_season_matches_and_opens_it() {
 // rest.
 #[test]
 fn the_rail_holds_the_first_series_row_under_each_letter_and_disables_the_rest() {
-    let rail = shows_letter_rail(&build_shows_rows(&tree(), "", ShowsTreeState::default()));
+    let rail = shows_letter_rail(&build_shows_rows(
+        GuiShowsView::All,
+        &tree(),
+        &[],
+        "",
+        ShowsTreeState::default(),
+    ));
     let letter = |letter: char| {
         rail.iter()
             .find(|entry| entry.letter == letter)

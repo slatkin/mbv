@@ -170,6 +170,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
             order: None,
             picks: Vec::new(),
         }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -200,6 +201,7 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
             order: None,
             picks: Vec::new(),
         }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -243,6 +245,7 @@ fn a_location_saved_on_shows_opens_shows() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(SHOWS_LIBRARY.0),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -284,6 +287,7 @@ fn a_saved_destination_the_catalog_lost_opens_nothing() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity("lib-gone"),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -308,6 +312,7 @@ fn a_destination_presented_after_the_restore_finished_does_not_move_the_tab() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity("lib-gone"),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -346,6 +351,7 @@ fn a_saved_audiobooks_destination_waits_while_the_catalog_is_pending() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: abs_identity("lib-abs-books"),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -372,6 +378,7 @@ fn a_location_saved_on_a_movies_library_opens_it() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: library_identity(MOVIES_LIBRARY.0),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -421,6 +428,7 @@ fn a_location_saved_on_audiobooks_opens_it() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: abs_identity("lib-abs-books"),
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 
@@ -459,6 +467,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
                 picks: Vec::new(),
             },
         ],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     })
     .unwrap();
 

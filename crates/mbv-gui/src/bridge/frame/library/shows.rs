@@ -6,8 +6,8 @@
 //! position.
 
 use mbv::{
-    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsSeasonNode, GuiShowsSeasonPill,
-    GuiShowsSeries, GuiShowsWorkspace,
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
+    GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
 };
 
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
@@ -24,7 +24,10 @@ pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// Whether the series list has not landed yet.
+    /// The one active view (design D8): All, New, or Upcoming. The header
+    /// paints the matching single-choice dropdown.
+    pub view: GuiShowsView,
+    /// Whether the active list has not landed yet.
     pub loading: bool,
     /// The series list's tree (design D14): the series nodes with their
     /// seasons and loaded episodes.
@@ -103,6 +106,9 @@ pub struct GuiShowsRowFrame {
     /// The row's rail letter (design D7), or `#`; `None` on the date-sorted
     /// flat rows, whose list shows no rail.
     pub sort_letter: Option<char>,
+    /// Whether the row takes no select, play, or enqueue (design D9): an
+    /// Upcoming premiere is display-only.
+    pub display_only: bool,
 }
 
 /// The Hero's facts for the selected row (design D12), with the series
@@ -180,14 +186,15 @@ impl GuiShowsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiShowsProjection) -> Self {
         Self {
             lib_idx,
+            view: projection.view,
             loading: projection.loading,
+            rows: projection.rows.iter().map(GuiShowsRowFrame::from).collect(),
             series: projection
                 .series
                 .iter()
                 .map(GuiShowsSeriesFrame::from)
                 .collect(),
             upcoming_failed: false,
-            rows: Vec::new(),
         }
     }
 }
@@ -200,6 +207,19 @@ impl GuiShowsDetail {
             workspace_loading: projection.workspace_loading,
             selected: projection.selected.clone(),
             hero: projection.hero.as_ref().map(GuiShowsHeroFrame::from),
+        }
+    }
+}
+
+impl From<&GuiShowsRow> for GuiShowsRowFrame {
+    fn from(row: &GuiShowsRow) -> Self {
+        Self {
+            id: row.id.clone(),
+            title: row.title.clone(),
+            subtitle: row.subtitle.clone(),
+            date: row.date.clone(),
+            sort_letter: None,
+            display_only: row.display_only,
         }
     }
 }

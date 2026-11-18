@@ -145,7 +145,6 @@ impl App {
                 .flatten()
                 .find(|item| item.content_id() == *content_id)
                 .cloned()
-                .or_else(|| self.gui_home_latest_item(content_id))
                 .or_else(|| self.home_recent_feed_entry(content_id)),
         }
     }

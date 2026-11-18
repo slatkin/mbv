@@ -10,8 +10,6 @@
 
 use mbv_components::library_panel::content::ArtworkShape;
 use mbv_components::library_panel::hero::hero_content_queue;
-use mbv_components::tv_content::premiere_number_label;
-use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueItemContentId};
 use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
 use mbv_ui_model::media_list::MediaSemanticState;
@@ -21,7 +19,6 @@ use mbv_ui_model::ui_util::row_date;
 
 use super::GuiLibraryArtwork;
 use crate::app::App;
-use crate::app::state::events::LibEvent;
 use mbv_ui_model::meta::MetaSegment;
 
 /// One Home row's stable identity (design D12): the identity
@@ -34,29 +31,16 @@ pub enum GuiHomeRowId {
     Continue(String),
     /// A `Recently added` row, addressed by the item's queue-item content id.
     Recent(QueueItemContentId),
-    /// A `Latest episodes` row, addressed by its Emby item id
-    /// (gui-collection-dropdown design D9).
-    LatestEpisode(String),
-    /// An `Upcoming` row, addressed by the premiere's stable key. The row is
-    /// display-only, so no Home command acts on it.
-    Upcoming(String),
 }
 
 impl GuiHomeRowId {
     /// The stable target the Home paths resolve (`App::home_stable_target`),
-    /// as the command arms apply it. A `Latest episodes` row resolves through
-    /// the `Recently added` Emby path, so it plays and enqueues as such a row
-    /// does, never through the Continue Watching resume path. An `Upcoming`
-    /// row resolves no target: it is display-only (design D9).
+    /// as the command arms apply it.
     #[must_use]
-    pub fn into_home_item_target(self) -> Option<HomeItemTarget> {
+    pub fn into_home_item_target(self) -> HomeItemTarget {
         match self {
-            Self::Continue(item_id) => Some(HomeItemTarget::continue_item(item_id)),
-            Self::Recent(content_id) => Some(HomeItemTarget::Recent(content_id)),
-            Self::LatestEpisode(item_id) => {
-                Some(HomeItemTarget::Recent(QueueItemContentId::Emby(item_id)))
-            }
-            Self::Upcoming(_) => None,
+            Self::Continue(item_id) => HomeItemTarget::continue_item(item_id),
+            Self::Recent(content_id) => HomeItemTarget::Recent(content_id),
         }
     }
 
@@ -196,16 +180,6 @@ pub struct GuiHomeProjection {
     pub hero: Option<GuiHomeHero>,
 }
 
-/// The GUI Home `Latest episodes` fetch's completion (gui-collection-dropdown
-/// design D9): one Emby TV library's latest episodes, sent through the shared
-/// library event channel. Only the GUI Client's launch starts one, so the TUI
-/// never receives it.
-#[derive(Debug)]
-pub(in crate::app) struct GuiHomeLatestEvent {
-    pub(in crate::app) library_id: String,
-    pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
-}
-
 /// One item row beside the queue item that projects it: the row carries the
 /// paint facts, and the hero and the artwork read the item. Internal to one
 /// projection run.
@@ -270,31 +244,10 @@ impl App {
             recent_rows.push(self.home_item(item, id, feed_name.as_deref(), date));
         }
 
-        // The `Latest episodes` rows (gui-collection-dropdown design D9):
-        // every Emby TV library's latest episodes as one list, newest first,
-        // with the split show/episode title and the provider-date gutter the
-        // TUI's TV Latest rows paint.
-        let mut latest_rows = Vec::new();
-        for episode in self.gui_home_latest_items() {
-            let item = QueueItem::Emby(Box::new(episode));
-            let id = GuiHomeRowId::LatestEpisode(item.id().to_owned());
-            let date = row_date(provider_timestamp_secs(&item));
-            latest_rows.push(self.home_item(&item, id, None, date));
-        }
-        // The `Upcoming` rows (design D9): every TV library's premieres as one
-        // list, soonest first. An Upcoming row is display-only, so it carries
-        // no queue item, no artwork, and no selectable identity.
-        let upcoming_rows = self.gui_home_upcoming_rows();
-
         // The selection (design D2, D12): the core's stored row while the
         // list still carries it, else the first item row — Home's Hero
-        // default (row 6.2). An `Upcoming` row is never a candidate: it is
-        // display-only, so the Hero keeps whatever row it showed.
-        let items: Vec<&GuiHomeItem> = continue_rows
-            .iter()
-            .chain(recent_rows.iter())
-            .chain(latest_rows.iter())
-            .collect();
+        // default (row 6.2).
+        let items: Vec<&GuiHomeItem> = continue_rows.iter().chain(recent_rows.iter()).collect();
         let default_hero = items.first().map(|item| item.row.id.clone());
         let selected = self
             .gui_home_selection
@@ -308,7 +261,7 @@ impl App {
         // The flat rows in paint order: the sections' heading rows, each
         // omitted when it has no rows, and the spacer only between two
         // non-empty sections.
-        let sections: [(&str, Vec<GuiHomeRow>); 4] = [
+        let sections: [(&str, Vec<GuiHomeRow>); 2] = [
             (
                 "Continue watching",
                 continue_rows.iter().map(GuiHomeItem::flat_row).collect(),
@@ -316,14 +269,6 @@ impl App {
             (
                 "Recently added",
                 recent_rows.iter().map(GuiHomeItem::flat_row).collect(),
-            ),
-            (
-                "Latest episodes",
-                latest_rows.iter().map(GuiHomeItem::flat_row).collect(),
-            ),
-            (
-                "Upcoming",
-                upcoming_rows.into_iter().map(GuiHomeRow::Item).collect(),
             ),
         ];
         let mut rows = Vec::new();
@@ -345,147 +290,6 @@ impl App {
             selected,
             hero,
         }
-    }
-
-    /// Request the GUI Home's per-library sections at launch
-    /// (gui-collection-dropdown design D9): each Emby TV library's latest
-    /// episodes through one worker fetch, and its eager Upcoming snapshot
-    /// through the once-per-session guard the TV tab already uses. The
-    /// launch's catalog-landed step calls this, never a frame, and both
-    /// requests are idempotent, so a repeated call re-requests nothing.
-    pub(in crate::app) fn spawn_gui_home_sections(&mut self) {
-        let tv_libraries: Vec<(usize, String)> = (0..self.libs.len())
-            .filter(|lib_idx| self.libs[*lib_idx].library.collection_type == "tvshows")
-            .map(|lib_idx| (lib_idx, self.libs[lib_idx].library.id.clone()))
-            .collect();
-        for (lib_idx, library_id) in tv_libraries {
-            self.spawn_gui_home_tv_latest(library_id);
-            self.maybe_spawn_tv_upcoming_snapshot(lib_idx);
-        }
-    }
-
-    /// Start one TV library's `Latest episodes` fetch (design D9): the same
-    /// `get_latest_episodes(parent_id, 30)` call the TUI's Latest level makes,
-    /// on a worker thread, landing in `gui_home_tv_latest` through its own
-    /// event. It never touches `nav_stack`, so the TUI's levels are the TUI's.
-    fn spawn_gui_home_tv_latest(&mut self, library_id: String) {
-        if self.gui_home_tv_latest.contains_key(&library_id) {
-            return;
-        }
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        // The empty entry marks the request, so a later launch step starts no
-        // second fetch; the completion replaces it.
-        self.gui_home_tv_latest
-            .insert(library_id.clone(), Vec::new());
-        let tx = self.channels.lib_tx.clone();
-        std::thread::spawn(move || {
-            let result = client.get_latest_episodes(&library_id, 30);
-            let _ = tx.send(LibEvent::GuiHomeLatest(GuiHomeLatestEvent {
-                library_id,
-                result,
-            }));
-        });
-    }
-
-    /// Land one TV library's `Latest episodes` fetch (design D9): a loaded
-    /// list replaces the request mark, and a failure leaves the library with
-    /// no rows, so its section holds nothing and the log names it.
-    pub(in crate::app) fn handle_gui_home_latest(&mut self, event: GuiHomeLatestEvent) {
-        let GuiHomeLatestEvent { library_id, result } = event;
-        match result {
-            Ok(items) => {
-                self.gui_home_tv_latest.insert(library_id, items);
-            }
-            Err(error) => {
-                tracing::info!(
-                    name: "gui_library.home_latest.failed",
-                    target: "gui_library",
-                    library_id,
-                    error = %error,
-                    "the library's latest episodes failed to load"
-                );
-            }
-        }
-    }
-
-    /// The merged `Latest episodes` items (design D9): every Emby TV library's
-    /// list as one, the newest `date_added` first with the undated items last,
-    /// and de-duplicated by item id so an episode both libraries report shows
-    /// one time.
-    fn gui_home_latest_items(&self) -> Vec<EmbyItem> {
-        let mut items: Vec<EmbyItem> = self
-            .gui_home_tv_latest
-            .values()
-            .flatten()
-            .cloned()
-            .collect();
-        items.sort_by_cached_key(|item| {
-            (
-                std::cmp::Reverse(mbv_ui_model::home_latest::emby_date_added_secs(item)),
-                item.id.clone(),
-            )
-        });
-        let mut seen = std::collections::HashSet::new();
-        items.retain(|item| seen.insert(item.id.clone()));
-        items
-    }
-
-    /// The merged `Upcoming` rows (design D9): every TV library's premieres as
-    /// one list, the soonest premiere first with the undated rows last. The
-    /// subtitle carries the premiere number and the episode's title, the text
-    /// the TUI's upcoming rows paint. An Upcoming row is display-only, so it
-    /// carries no queue item and no artwork.
-    fn gui_home_upcoming_rows(&self) -> Vec<GuiHomeItemRow> {
-        let mut premieres: Vec<&mbv_emby_model::UpcomingPremiere> =
-            self.tv_upcoming_snapshots.values().flatten().collect();
-        premieres.sort_by_cached_key(|premiere| {
-            let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
-            (
-                secs.is_none(),
-                secs.unwrap_or_default(),
-                premiere.stable_key(),
-            )
-        });
-        premieres
-            .into_iter()
-            .map(|premiere| {
-                let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
-                GuiHomeItemRow {
-                    id: GuiHomeRowId::Upcoming(premiere.stable_key()),
-                    title: premiere.series_name.clone(),
-                    subtitle: Some(format!(
-                        "{} — {}",
-                        premiere_number_label(premiere),
-                        premiere.title
-                    )),
-                    date: row_date(secs),
-                    kind: GuiHomeRowKind::Media,
-                    state: MediaSemanticState::Ordinary,
-                    art: None,
-                }
-            })
-            .collect()
-    }
-
-    /// The `Latest episodes` item the target names (design D9): the row a
-    /// `LatestEpisode` identity resolves through the `Recently added` Emby
-    /// path. `None` for a content id that is not an Emby item id, and for an
-    /// item no library's list holds.
-    pub(in crate::app) fn gui_home_latest_item(
-        &self,
-        content_id: &QueueItemContentId,
-    ) -> Option<QueueItem> {
-        let QueueItemContentId::Emby(item_id) = content_id else {
-            return None;
-        };
-        self.gui_home_tv_latest
-            .values()
-            .flatten()
-            .find(|item| item.id == *item_id)
-            .cloned()
-            .map(|item| QueueItem::Emby(Box::new(item)))
     }
 
     /// One item row beside the queue item that projects it (design D12):

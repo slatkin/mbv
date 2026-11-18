@@ -270,12 +270,14 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
+            view: mbv::GuiShowsView::All,
             lib_idx: 0,
             loading: false,
             series: Vec::new(),
             upcoming_failed: false,
             rows: vec![
                 GuiShowsRowFrame {
+                    display_only: false,
                     id: "s1".to_owned(),
                     title: "Atlanta".to_owned(),
                     subtitle: None,
@@ -283,6 +285,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
                     sort_letter: Some('A'),
                 },
                 GuiShowsRowFrame {
+                    display_only: false,
                     id: "s2".to_owned(),
                     title: "The Bear".to_owned(),
                     subtitle: None,

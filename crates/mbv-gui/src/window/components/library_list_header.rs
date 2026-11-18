@@ -18,10 +18,11 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiCollections;
+use mbv::{GuiCollections, GuiShowsView};
 
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;
+use crate::window::components::library_shows_view_dropdown::LibraryShowsViewDropdown;
 
 /// The props of the list header (the `LibraryListHeader` props, in
 /// order).
@@ -43,6 +44,11 @@ pub struct LibraryListHeaderProps {
     /// is not painted, because the trigger names the selection.
     #[props(default)]
     pub collections: Option<GuiCollections>,
+    /// The Shows destination's single-choice view, when it paints one
+    /// (gui-collection-dropdown design D8): the dropdown goes on the same
+    /// title line and is not a collection selector.
+    #[props(default)]
+    pub view: Option<GuiShowsView>,
     /// The filter text the field paints.
     pub filter: String,
     /// The field's placeholder, which names the selection it narrows.
@@ -64,6 +70,7 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
         label,
         label_attr,
         collections,
+        view,
         filter,
         placeholder,
         aria_label,
@@ -96,6 +103,8 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                     // The dropdown paints the title line's right end (design
                     // D6a): the trigger after the title, at the line's end.
                     LibraryCollectionDropdown { collections }
+                } else if let Some(view) = view {
+                    LibraryShowsViewDropdown { view }
                 } else if !label.is_empty() {
                     span {
                         class: "font-mono",

@@ -13,8 +13,10 @@ use std::sync::Arc;
 
 use dioxus_native::prelude::*;
 
+use mbv::GuiShowsView;
+
 use crate::bridge::frame::library::{
-    GuiShowsEpisodeRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiShowsEpisodeRowFrame, GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::window::library::list::{
     GeometryRow, LETTER_ROW_HEIGHT, NODE_ROW_HEIGHT, RailLetter, TRACK_ROW_HEIGHT, letter_rail_by,
@@ -126,9 +128,30 @@ pub struct ShowsEpisodeRow {
     pub letter: char,
 }
 
+/// One painted row of the New or Upcoming list (gui-collection-dropdown
+/// design D9): the stable Service id, the two title lines, and the gutter
+/// date the old Home sections carried. An Upcoming row is display-only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowsFlatRow {
+    /// The row's stable key and command id.
+    pub id: String,
+    /// The primary title line.
+    pub title: String,
+    /// The secondary title line.
+    pub subtitle: Option<String>,
+    /// The gutter date.
+    pub date: Option<String>,
+    /// Whether the row takes no select, play, or enqueue.
+    pub display_only: bool,
+    /// The row's top edge from the list's first row.
+    pub top: f32,
+    /// The row's painted height.
+    pub height: f32,
+}
+
 /// One painted row of the Shows list (design D14). The `id` is the row's
 /// stable key: the pointer marker's value and the each-block's key. A heading
-/// is structural; the keys act on the other four kinds only.
+/// is structural; the keys act on the flat and tree rows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowsListRow {
     /// A letter heading above the first series of the letter.
@@ -139,6 +162,8 @@ pub enum ShowsListRow {
     Season(ShowsSeasonRow),
     /// An episode leaf under an open season.
     Episode(ShowsEpisodeRow),
+    /// A flat New or Upcoming row.
+    Flat(ShowsFlatRow),
 }
 
 impl ShowsListRow {
@@ -150,6 +175,7 @@ impl ShowsListRow {
             ShowsListRow::Series(row) => &row.id,
             ShowsListRow::Season(row) => &row.id,
             ShowsListRow::Episode(row) => &row.id,
+            ShowsListRow::Flat(row) => &row.id,
         }
     }
 
@@ -180,6 +206,7 @@ impl GeometryRow for ShowsListRow {
             ShowsListRow::Series(row) => row.top,
             ShowsListRow::Season(row) => row.top,
             ShowsListRow::Episode(row) => row.top,
+            ShowsListRow::Flat(row) => row.top,
         }
     }
 
@@ -189,6 +216,7 @@ impl GeometryRow for ShowsListRow {
             ShowsListRow::Series(row) => row.height,
             ShowsListRow::Season(row) => row.height,
             ShowsListRow::Episode(row) => row.height,
+            ShowsListRow::Flat(row) => row.height,
         }
     }
 }
@@ -226,11 +254,42 @@ pub fn episode_row_id(episode_id: &str) -> String {
 /// native scroll.
 #[must_use]
 pub fn build_shows_rows(
+    view: GuiShowsView,
     series: &[GuiShowsSeriesFrame],
+    rows: &[GuiShowsRowFrame],
     filter: &str,
     tree: ShowsTreeState<'_>,
 ) -> Vec<ShowsListRow> {
-    series_shows_rows(series, filter, tree)
+    match view {
+        GuiShowsView::All => series_shows_rows(series, filter, tree),
+        GuiShowsView::New | GuiShowsView::Upcoming => {
+            let needle = filter.trim().to_lowercase();
+            let mut top = 0.0_f32;
+            rows.iter()
+                .filter(|row| {
+                    needle.is_empty()
+                        || row.title.to_lowercase().contains(&needle)
+                        || row
+                            .subtitle
+                            .as_deref()
+                            .is_some_and(|text| text.to_lowercase().contains(&needle))
+                })
+                .map(|row| {
+                    let built = ShowsListRow::Flat(ShowsFlatRow {
+                        id: row.id.clone(),
+                        title: row.title.clone(),
+                        subtitle: row.subtitle.clone(),
+                        date: row.date.clone(),
+                        display_only: row.display_only,
+                        top,
+                        height: TRACK_ROW_HEIGHT,
+                    });
+                    top += TRACK_ROW_HEIGHT;
+                    built
+                })
+                .collect()
+        }
+    }
 }
 
 /// The All series mode's tree rows.
@@ -364,6 +423,7 @@ struct ShowsMemoEntry {
     /// section's value at one revision is immutable, so equal revisions carry
     /// equal rows and the hit test never compares the union.
     revision: Option<u64>,
+    view: GuiShowsView,
     filter: String,
     open: Vec<String>,
     closed: Vec<String>,
@@ -394,7 +454,9 @@ impl ShowsRowsMemo {
     pub fn rows(
         &self,
         revision: Option<u64>,
+        view: GuiShowsView,
         series: &[GuiShowsSeriesFrame],
+        rows: &[GuiShowsRowFrame],
         filter: &str,
         open: &[String],
         closed: &[String],
@@ -404,6 +466,7 @@ impl ShowsRowsMemo {
         // below otherwise.
         if let Some(entry) = self.last.peek().as_ref()
             && entry.revision == revision
+            && entry.view == view
             && entry.filter == filter
             && entry.open == open
             && entry.closed == closed
@@ -411,10 +474,11 @@ impl ShowsRowsMemo {
             return Arc::clone(&entry.rows);
         }
         let tree = ShowsTreeState { open, closed };
-        let built: Arc<[ShowsListRow]> = series_shows_rows(series, filter, tree).into();
+        let built: Arc<[ShowsListRow]> = build_shows_rows(view, series, rows, filter, tree).into();
         let mut last = self.last;
         last.set(Some(ShowsMemoEntry {
             revision,
+            view,
             filter: filter.to_owned(),
             open: open.to_vec(),
             closed: closed.to_vec(),

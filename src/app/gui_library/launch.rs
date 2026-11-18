@@ -10,7 +10,7 @@
 
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
-    GuiLaunchDateOrder, GuiLaunchState, TabIdentity,
+    GuiLaunchDateOrder, GuiLaunchShowsView, GuiLaunchState, TabIdentity,
 };
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
@@ -18,6 +18,7 @@ use mbv_ui_model::tab_selection::TabSelection;
 
 use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiDateOrder};
 use super::collection_command::{CollectionOp, GuiCollectionSite};
+use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
@@ -35,6 +36,7 @@ impl App {
             version: GUI_LAUNCH_STATE_VERSION,
             destination: self.gui_launch_destination(),
             collections: self.gui_launch_collections(),
+            shows_view: self.gui_launch_shows_view(),
         }
     }
 
@@ -52,12 +54,12 @@ impl App {
     /// restore instead of waiting for a destination that never lands.
     pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> GuiLaunchOpen {
         let resolved = self.launch_destination(&state.destination);
-        // The catalog has landed, so the GUI Home's two per-library sections
-        // are requested now, once per launch (gui-collection-dropdown design
-        // D9). Both requests are idempotent, so the retries a later catalog
-        // landing causes re-request nothing.
+        // The catalog has landed, so the Shows destination's two per-library
+        // lists are requested now, once per launch (gui-collection-dropdown
+        // design D9). Both requests are idempotent, so a later catalog landing
+        // re-requests nothing.
         if !matches!(resolved, LaunchDestination::Pending) {
-            self.spawn_gui_home_sections();
+            self.spawn_gui_shows_sections();
         }
         let kind = match resolved {
             LaunchDestination::Pending => return GuiLaunchOpen::Retry,
@@ -68,7 +70,43 @@ impl App {
             return GuiLaunchOpen::Unmatched;
         };
         self.set_library_tab(position);
+        self.restore_gui_shows_view(state.shows_view);
         GuiLaunchOpen::Opened(self.gui_launch_destination())
+    }
+
+    /// Apply the saved Shows view to an opened Shows destination (design D14):
+    /// the file's field is separate from the collection entries, and a
+    /// destination that is not Shows ignores it. A view the session already
+    /// chose is not overwritten.
+    fn restore_gui_shows_view(&mut self, view: GuiLaunchShowsView) {
+        let Some(GuiDestinationKind::Shows { lib_idx }) = self.gui_active_destination() else {
+            return;
+        };
+        if self.gui_shows_views.contains_key(&lib_idx) {
+            return;
+        }
+        self.set_gui_shows_view(lib_idx, shows_view(view));
+    }
+
+    /// The saved Shows view (design D14): the active Shows destination's
+    /// choice when there is one, else the first presented Shows library's, so
+    /// a session that changed a resting destination still saves its view.
+    fn gui_launch_shows_view(&self) -> GuiLaunchShowsView {
+        let active = match self.gui_active_destination() {
+            Some(GuiDestinationKind::Shows { lib_idx }) => Some(lib_idx),
+            _ => None,
+        };
+        let shows = active.or_else(|| {
+            self.presented_destinations().into_iter().find_map(|kind| {
+                let GuiDestinationKind::Shows { lib_idx } = kind else {
+                    return None;
+                };
+                Some(lib_idx)
+            })
+        });
+        shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
+            launch_shows_view(self.gui_shows_view(lib_idx))
+        })
     }
 
     /// Apply the saved collection choices of the destination the first phase
@@ -496,6 +534,24 @@ fn launch_collection_target(target: &GuiCollectionTarget) -> GuiLaunchCollection
         GuiCollectionTarget::Podcasts(_) => GuiLaunchCollectionTarget::Podcasts,
         GuiCollectionTarget::Feeds => GuiLaunchCollectionTarget::Feeds,
         GuiCollectionTarget::EmbyFeed(_) => GuiLaunchCollectionTarget::EmbyFeed,
+    }
+}
+
+/// The on-disk form of the Shows view (design D14).
+fn launch_shows_view(view: GuiShowsView) -> GuiLaunchShowsView {
+    match view {
+        GuiShowsView::All => GuiLaunchShowsView::All,
+        GuiShowsView::New => GuiLaunchShowsView::New,
+        GuiShowsView::Upcoming => GuiLaunchShowsView::Upcoming,
+    }
+}
+
+/// The core form of the saved Shows view.
+fn shows_view(view: GuiLaunchShowsView) -> GuiShowsView {
+    match view {
+        GuiLaunchShowsView::All => GuiShowsView::All,
+        GuiLaunchShowsView::New => GuiShowsView::New,
+        GuiLaunchShowsView::Upcoming => GuiShowsView::Upcoming,
     }
 }
 

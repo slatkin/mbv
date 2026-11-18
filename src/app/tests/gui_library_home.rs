@@ -7,7 +7,6 @@
 //! mock transport runs.
 
 use super::*;
-use crate::app::gui_library::GuiHomeLatestEvent;
 use crate::config::TestStateDirGuard;
 use mbv_config::FeedSubscription;
 use mbv_emby_model::UpcomingPremiere;
@@ -115,6 +114,24 @@ fn row_labels(row: &GuiHomeRow) -> (&str, Option<&str>) {
     (item.title.as_str(), item.subtitle.as_deref())
 }
 
+/// Seed both TV list sources, which now belong to Shows, so the Home
+/// projection's two-section contract is checked against populated sources.
+fn seed_relocated_tv_lists(app: &mut App) {
+    app.gui_shows_new
+        .insert("lib-tv".into(), vec![make_item("An episode", "Episode")]);
+    app.tv_upcoming_snapshots.insert(
+        "lib-tv".into(),
+        vec![UpcomingPremiere {
+            series_id: mbv_ids::ItemId::new("series-a"),
+            series_name: "Show A".into(),
+            season: Some(1),
+            episode: Some(2),
+            title: "A premiere".into(),
+            premiere_date: "2026-11-20T00:00:00.0000000Z".into(),
+        }],
+    );
+}
+
 #[test]
 fn the_seeded_sections_project_as_heading_rows_in_order() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -128,6 +145,7 @@ fn the_seeded_sections_project_as_heading_rows_in_order() {
         continue_item("cw-second", "Movie Two", 0, 0),
     ]);
     seed_recently_added(&mut app);
+    seed_relocated_tv_lists(&mut app);
 
     let projection = app.gui_home_projection();
 
@@ -251,236 +269,4 @@ fn a_stale_selection_falls_back_to_the_first_item_row() {
         Some(GuiHomeRowId::Continue("cw-first".to_string())),
         "the Hero default returns when the selection's row has left the list"
     );
-}
-
-/// One `Latest episodes` row's Emby episode, added at `date_added`.
-fn latest_episode(id: &str, name: &str, date_added: &str) -> EmbyItem {
-    let mut item = make_item(name, "Episode");
-    item.id = id.to_string();
-    item.series_name = "Show".into();
-    item.date_added = date_added.into();
-    item
-}
-
-/// One TV library's `Latest episodes` completion, applied through the drain's
-/// own handler as the launch's worker sends it.
-fn land_latest(app: &mut App, library_id: &str, items: Vec<EmbyItem>) {
-    app.handle_lib_event(LibEvent::GuiHomeLatest(GuiHomeLatestEvent {
-        library_id: library_id.to_string(),
-        result: Ok(items),
-    }));
-}
-
-/// One library's Upcoming premiere.
-fn premiere(series_id: &str, series_name: &str, premiere_date: &str) -> UpcomingPremiere {
-    UpcomingPremiere {
-        series_id: mbv_ids::ItemId::new(series_id),
-        series_name: series_name.into(),
-        season: Some(1),
-        episode: Some(2),
-        title: "The Episode".into(),
-        premiere_date: premiere_date.into(),
-    }
-}
-
-/// The projection's heading texts, in paint order.
-fn headings_of(rows: &[GuiHomeRow]) -> Vec<String> {
-    rows.iter()
-        .filter_map(|row| match row {
-            GuiHomeRow::Heading { text } => Some(text.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// The projection's item row ids, in paint order.
-fn ids_of(rows: &[GuiHomeRow]) -> Vec<GuiHomeRowId> {
-    rows.iter()
-        .filter_map(|row| match row {
-            GuiHomeRow::Item(item) => Some(item.id.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// The first Upcoming row id the projection carries.
-fn upcoming_row_of(rows: &[GuiHomeRow]) -> GuiHomeRowId {
-    rows.iter()
-        .find_map(|row| match row {
-            GuiHomeRow::Item(item) if matches!(item.id, GuiHomeRowId::Upcoming(_)) => {
-                Some(item.id.clone())
-            }
-            _ => None,
-        })
-        .expect("an Upcoming row")
-}
-
-/// Two TV libraries' latest episodes merge into one newest-first section,
-/// de-duplicated by item id (gui-collection-dropdown design D9), and a
-/// Latest episodes row selects into the Hero.
-#[test]
-fn two_tv_libraries_latest_episodes_merge_newest_first() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = home_app(Vec::new());
-    land_latest(
-        &mut app,
-        "lib-a",
-        vec![
-            latest_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
-            latest_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ],
-    );
-    land_latest(
-        &mut app,
-        "lib-b",
-        vec![
-            latest_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
-            latest_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ],
-    );
-
-    let projection = app.gui_home_projection();
-
-    assert_eq!(headings_of(&projection.rows), ["Latest episodes"]);
-    assert_eq!(
-        ids_of(&projection.rows),
-        vec![
-            GuiHomeRowId::LatestEpisode("ep-new".to_string()),
-            GuiHomeRowId::LatestEpisode("ep-mid".to_string()),
-            GuiHomeRowId::LatestEpisode("ep-old".to_string()),
-        ],
-        "both libraries' episodes paint as one list, newest first, and the \
-         shared episode paints one time"
-    );
-    assert_eq!(
-        projection.selected,
-        Some(GuiHomeRowId::LatestEpisode("ep-new".to_string())),
-        "a Latest episodes row selects into the Hero"
-    );
-    assert_eq!(
-        row_labels(&projection.rows[1]),
-        ("Show", Some("New")),
-        "a Latest episodes row splits its title as the TUI's TV Latest rows do"
-    );
-    assert_eq!(
-        projection.hero.expect("the Hero paints").title,
-        "New",
-        "the Hero shows the selected episode"
-    );
-}
-
-/// Two TV libraries' Upcoming snapshots merge into one section, soonest
-/// premiere first (gui-collection-dropdown design D9).
-#[test]
-fn two_tv_libraries_upcoming_premieres_merge_soonest_first() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = home_app(Vec::new());
-    let later = premiere("series-a", "Show A", "2026-12-01T00:00:00.0000000Z");
-    let sooner = premiere("series-b", "Show B", "2026-11-20T00:00:00.0000000Z");
-    app.tv_upcoming_snapshots
-        .insert("lib-a".into(), vec![later.clone()]);
-    app.tv_upcoming_snapshots
-        .insert("lib-b".into(), vec![sooner.clone()]);
-
-    let projection = app.gui_home_projection();
-
-    assert_eq!(headings_of(&projection.rows), ["Upcoming"]);
-    assert_eq!(
-        ids_of(&projection.rows),
-        vec![
-            GuiHomeRowId::Upcoming(sooner.stable_key()),
-            GuiHomeRowId::Upcoming(later.stable_key()),
-        ],
-        "both libraries' premieres paint as one list, soonest first"
-    );
-    assert_eq!(
-        row_labels(&projection.rows[1]),
-        ("Show B", Some("S01:E02 — The Episode")),
-        "an Upcoming row carries the premiere number and the episode's title"
-    );
-    assert_eq!(
-        projection.selected, None,
-        "an Upcoming row is display-only, so it is never the Hero's row"
-    );
-}
-
-/// Both libraries' Upcoming snapshots holding no rows show no Upcoming
-/// section (gui-collection-dropdown design D9).
-#[test]
-fn an_upcoming_section_with_no_rows_does_not_show() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = home_app(Vec::new());
-    app.tv_upcoming_snapshots.insert("lib-a".into(), Vec::new());
-    app.tv_upcoming_snapshots.insert("lib-b".into(), Vec::new());
-
-    let projection = app.gui_home_projection();
-
-    assert!(
-        !headings_of(&projection.rows).contains(&"Upcoming".to_string()),
-        "an empty Upcoming section paints no heading"
-    );
-    assert_eq!(
-        projection.rows,
-        Vec::new(),
-        "no rows paint without a section"
-    );
-}
-
-/// A press on an Upcoming row keeps the Hero's item (gui-collection-dropdown
-/// design D9): the select command changes nothing.
-#[test]
-fn home_select_on_an_upcoming_row_keeps_the_hero() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = home_app(vec![continue_item("cw-first", "Movie One", 0, 0)]);
-    app.tv_upcoming_snapshots.insert(
-        "lib-a".into(),
-        vec![premiere(
-            "series-a",
-            "Show A",
-            "2026-11-20T00:00:00.0000000Z",
-        )],
-    );
-    let before = app.gui_home_projection();
-    let row = upcoming_row_of(&before.rows);
-
-    app.apply_gui_library_command(GuiLibraryCommand::HomeSelect { row });
-    let after = app.gui_home_projection();
-
-    assert_eq!(
-        after.selected,
-        Some(GuiHomeRowId::Continue("cw-first".to_string())),
-        "the Hero keeps its item"
-    );
-    assert_eq!(after.hero, before.hero, "the Hero's facts do not change");
-}
-
-/// A play, a play-next, or an enqueue over an Upcoming row does nothing
-/// (gui-collection-dropdown design D9): the row resolves no Home target.
-#[test]
-fn home_play_and_queue_on_an_upcoming_row_change_nothing() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = home_app(vec![continue_item("cw-first", "Movie One", 0, 0)]);
-    app.tv_upcoming_snapshots.insert(
-        "lib-a".into(),
-        vec![premiere(
-            "series-a",
-            "Show A",
-            "2026-11-20T00:00:00.0000000Z",
-        )],
-    );
-    let before = app.gui_home_projection();
-    let row = upcoming_row_of(&before.rows);
-
-    assert_eq!(
-        row.clone().into_home_item_target(),
-        None,
-        "an Upcoming row resolves no Home target"
-    );
-    app.apply_gui_library_command(GuiLibraryCommand::HomePlay { row: row.clone() });
-    app.apply_gui_library_command(GuiLibraryCommand::HomePlayNext { row: row.clone() });
-    app.apply_gui_library_command(GuiLibraryCommand::HomeQueue { row });
-    let after = app.gui_home_projection();
-
-    assert_eq!(after.selected, before.selected, "the Hero keeps its row");
-    assert_eq!(after.hero, before.hero, "the Hero's facts do not change");
 }

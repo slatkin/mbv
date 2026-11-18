@@ -320,6 +320,7 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
             library_id: "lib-abs-podcasts".into(),
         },
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     };
     let opened = match app.open_gui_launch_destination(&saved) {
         crate::app::GuiLaunchOpen::Opened(opened) => opened,

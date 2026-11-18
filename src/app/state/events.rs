@@ -373,10 +373,10 @@ pub enum LibEvent {
     /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
     /// root-list store starts one, so the TUI never receives it.
     GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
-    /// The GUI Home's `Latest episodes` fetch completed for one Emby TV
-    /// library (gui-collection-dropdown design D9). Only the GUI Client's
-    /// launch starts one, so the TUI never receives it.
-    GuiHomeLatest(crate::app::gui_library::GuiHomeLatestEvent),
+    /// The GUI Shows New list's fetch completed for one Emby TV library
+    /// (gui-collection-dropdown design D9). Only the GUI Client's launch
+    /// starts one, so the TUI never receives it.
+    GuiShowsNew(crate::app::gui_library::GuiShowsNewEvent),
     Error(String),
 }
 

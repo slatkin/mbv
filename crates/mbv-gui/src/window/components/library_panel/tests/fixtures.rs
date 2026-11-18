@@ -125,11 +125,13 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
 /// (gui-collection-dropdown design D6, D8).
 pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
+        view: mbv::GuiShowsView::All,
         lib_idx: 0,
         loading: false,
         series: Vec::new(),
         upcoming_failed: false,
         rows: vec![GuiShowsRowFrame {
+            display_only: false,
             id: "s1".to_owned(),
             title: "Atlanta".to_owned(),
             subtitle: None,

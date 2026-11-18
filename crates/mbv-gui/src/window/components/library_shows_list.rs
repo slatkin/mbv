@@ -31,7 +31,7 @@ use crate::window::components::library_virtual_list::library_virtual_list;
 use crate::window::components::list_frame_notices::{ListFrameNoticeLine, ListFrameNotices};
 use crate::window::input::f32_from_f64;
 use crate::window::library::parts::{library_shows_detail, library_shows_list};
-use crate::window::library::shows_list::{ShowsListRow, shows_letter_rail};
+use crate::window::library::shows_list::{ShowsFlatRow, ShowsListRow, shows_letter_rail};
 use crate::window::library::shows_workspace::is_played_episode;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerList;
@@ -46,6 +46,7 @@ fn row_source_id(row: &ShowsListRow) -> Option<&str> {
         ShowsListRow::Series(series) => Some(&series.source_id),
         ShowsListRow::Season(season) => Some(&season.source_id),
         ShowsListRow::Episode(episode) => Some(&episode.source_id),
+        ShowsListRow::Flat(row) => Some(&row.id),
     }
 }
 
@@ -61,7 +62,7 @@ fn row_inset(row: &ShowsListRow) -> &'static str {
         ShowsListRow::Series(_) => "4px",
         ShowsListRow::Season(_) => "22px",
         ShowsListRow::Episode(_) => "40px",
-        ShowsListRow::Heading(_) => "8px",
+        ShowsListRow::Heading(_) | ShowsListRow::Flat(_) => "8px",
     }
 }
 
@@ -231,6 +232,67 @@ fn paint_shows_node(
     }
 }
 
+/// A flat New or Upcoming row (gui-collection-dropdown design D9): the two
+/// title lines and the date gutter the old Home sections carried. An Upcoming
+/// row paints no play affordance and takes no select.
+fn paint_shows_flat(row: &ShowsFlatRow, library: &LibraryState, selected: Option<&str>) -> Element {
+    let id = row.id.clone();
+    let title = row.title.clone();
+    let subtitle = row.subtitle.clone();
+    let date = row.date.clone();
+    let height = row.height;
+    let display_only = row.display_only;
+    let press_row = row.clone();
+    let press_library = library.clone();
+    let play_id = id.clone();
+    let play_library = library.clone();
+    let selected_row = Some(id.as_str()) == selected;
+    rsx! {
+        button {
+            "type": "button",
+            class: "flex w-full items-center overflow-hidden",
+            style: format!(
+                "height: {height}px; padding: 0 8px; gap: 10px; border: 0; border-radius: 4px; text-align: left;"
+            ),
+            "data-library-shows-row": "flat",
+            "data-library-shows-row-id": "{id}",
+            onclick: move |_| press_library.select_shows_row(&ShowsListRow::Flat(press_row.clone())),
+            ondoubleclick: move |_| {
+                if !display_only {
+                    play_library.play_shows_row(&play_id);
+                }
+            },
+            ..mark("data-library-shows-selected", selected_row),
+            if let Some(date) = date {
+                span {
+                    class: "flex-none font-mono tabular-nums",
+                    style: "font-size: 12px; color: var(--canvas-type-date);",
+                    "data-library-shows-flat-date": "",
+                    "{date}"
+                }
+            }
+            div {
+                class: "flex min-w-0 flex-1 flex-col",
+                Truncate {
+                    text: title,
+                    class: "min-w-0 w-full".to_owned(),
+                    css: "color: var(--canvas-heading); font-weight: 600;".to_owned(),
+                    style: TextStyle::sans(14.0, 600.0),
+                    attrs: vec![Attribute::new("data-library-shows-flat-title", "", None, false)],
+                }
+                if let Some(subtitle) = subtitle {
+                    Truncate {
+                        text: subtitle,
+                        class: "min-w-0 w-full".to_owned(),
+                        css: "color: var(--canvas-muted); font-weight: 400;".to_owned(),
+                        style: TextStyle::sans(12.0, 400.0),
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// An episode leaf row: the number, the name,
 /// and the runtime, with the double-click's play.
 fn paint_shows_episode(
@@ -322,6 +384,7 @@ fn paint_shows_row(
             paint_shows_node(row, library, shows, selected)
         }
         ShowsListRow::Episode(_) => paint_shows_episode(row, library, shows, selected),
+        ShowsListRow::Flat(flat) => paint_shows_flat(flat, library, selected),
     }
 }
 
@@ -359,6 +422,13 @@ pub fn LibraryShowsList() -> Element {
     // list does: the Shows list paints no collection selector (design D8), so
     // the placeholder names the whole library.
     let filter_placeholder = "Filter shows".to_owned();
+    let list_title = frame.map_or("Series", |frame| {
+        if frame.view == mbv::GuiShowsView::All {
+            "Series"
+        } else {
+            frame.view.label()
+        }
+    });
 
     // The list's two DOM facts report to the scroll store (design D9), and
     // the rows paint over the interaction state this render read.
@@ -398,9 +468,10 @@ pub fn LibraryShowsList() -> Element {
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
-                    title: "Series".to_owned(),
+                    title: list_title.to_owned(),
                     title_attr: Some("data-library-shows-list-title"),
                     label: String::new(),
+                    view: frame.map(|frame| frame.view),
                     filter: shows_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter series".to_owned(),

@@ -204,6 +204,7 @@ fn a_saved_group_no_longer_held_restores_as_all() {
             order: None,
             picks: Vec::new(),
         }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     };
 
     assert!(app.restore_gui_launch_collections(&state, &destination));
@@ -216,4 +217,48 @@ fn a_saved_group_no_longer_held_restores_as_all() {
         app.channels.lib_rx.try_recv().is_err(),
         "All fetches nothing"
     );
+}
+
+/// Contract (design D14): the Shows view saves in its own launch field and an
+/// old file without the field loads as All.
+#[test]
+fn the_shows_view_survives_a_restart() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-tv".into();
+    library.collection_type = "tvshows".into();
+    app.libs.push(crate::app::LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.gui_shows_views.insert(0, GuiShowsView::Upcoming);
+
+    let saved = app.gui_launch_state();
+    assert_eq!(saved.shows_view, mbv_config::GuiLaunchShowsView::Upcoming);
+    mbv_config::save_gui_launch_state(&saved).expect("the snapshot is written");
+    let loaded = mbv_config::load_gui_launch_state().expect("the snapshot is read");
+    let mut restored = make_app_stub();
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-tv".into();
+    library.collection_type = "tvshows".into();
+    restored.libs.push(crate::app::LibraryTab::new(library));
+
+    assert!(matches!(
+        restored.open_gui_launch_destination(&loaded),
+        GuiLaunchOpen::Opened(_)
+    ));
+    assert_eq!(restored.gui_shows_view(0), GuiShowsView::Upcoming);
+
+    let old = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: loaded.destination,
+        collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
+    };
+    let mut fresh = make_app_stub();
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-tv".into();
+    library.collection_type = "tvshows".into();
+    fresh.libs.push(crate::app::LibraryTab::new(library));
+    fresh.open_gui_launch_destination(&old);
+    assert_eq!(fresh.gui_shows_view(0), GuiShowsView::All);
 }

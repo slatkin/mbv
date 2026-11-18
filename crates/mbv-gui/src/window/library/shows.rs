@@ -70,8 +70,15 @@ impl LibraryState {
         };
         let revision = self.sections.library_list_revision();
         let ui = self.shows_ui.peek();
-        self.shows_rows_memo
-            .rows(revision, &shows.series, &ui.filter, &ui.open, &ui.closed)
+        self.shows_rows_memo.rows(
+            revision,
+            shows.view,
+            &shows.series,
+            &shows.rows,
+            &ui.filter,
+            &ui.open,
+            &ui.closed,
+        )
     }
 
     /// The row the pointer's marker names (design D1, D2): the marker carries
@@ -119,6 +126,15 @@ impl LibraryState {
         let command = match row {
             // A heading and an episode leaf name no series to select.
             ShowsListRow::Heading(_) | ShowsListRow::Episode(_) => return,
+            ShowsListRow::Flat(flat) => {
+                if flat.display_only {
+                    return;
+                }
+                GuiLibraryCommand::ShowsSelect {
+                    lib_idx,
+                    row: flat.id.clone(),
+                }
+            }
             ShowsListRow::Series(series) => GuiLibraryCommand::ShowsSelect {
                 lib_idx,
                 row: series.source_id.clone(),
@@ -195,6 +211,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsPlay {
             lib_idx,
             item_id: row_id.to_owned(),
@@ -206,6 +233,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsPlayNext {
             lib_idx,
             item_id: row_id.to_owned(),
@@ -218,6 +256,17 @@ impl LibraryState {
         let Some(lib_idx) = self.shows_lib_idx() else {
             return;
         };
+        if self.shows_row_at(row_id).is_some_and(|row| {
+            matches!(
+                row,
+                ShowsListRow::Flat(super::shows_list::ShowsFlatRow {
+                    display_only: true,
+                    ..
+                })
+            )
+        }) {
+            return;
+        }
         self.link.library(GuiLibraryCommand::ShowsQueue {
             lib_idx,
             item_id: row_id.to_owned(),

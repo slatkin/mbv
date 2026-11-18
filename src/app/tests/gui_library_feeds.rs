@@ -141,6 +141,7 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
         version: GUI_LAUNCH_STATE_VERSION,
         destination: TabIdentity::Feeds,
         collections: Vec::new(),
+        shows_view: mbv_config::GuiLaunchShowsView::All,
     };
 
     let opened = match app.open_gui_launch_destination(&saved) {

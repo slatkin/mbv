@@ -42,10 +42,8 @@ use crate::window::truncate::{TextStyle, Truncate};
 /// menu even though its key is a string.
 fn home_menu_item_id(id: &GuiHomeRowIdFrame) -> Option<String> {
     match id {
-        GuiHomeRowIdFrame::Continue(item_id) | GuiHomeRowIdFrame::LatestEpisode(item_id) => {
-            Some(item_id.clone())
-        }
-        GuiHomeRowIdFrame::Recent(_) | GuiHomeRowIdFrame::Upcoming(_) => None,
+        GuiHomeRowIdFrame::Continue(item_id) => Some(item_id.clone()),
+        GuiHomeRowIdFrame::Recent(_) => None,
     }
 }
 

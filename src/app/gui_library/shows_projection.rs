@@ -9,19 +9,39 @@
 
 mod hero;
 
+use mbv_components::tv_content::premiere_number_label;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_queue::TvContentMode;
+use mbv_queue::{QueueItem, TvContentMode};
 use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
-use mbv_ui_model::ui_util::fmt_duration_short;
+use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 
 use super::GuiLibraryArtwork;
 use super::home::GuiArtShape;
 use super::projection::sort_letter;
+use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
 use crate::app::App;
 use mbv_ui_model::meta::MetaSegment;
+
+/// One flat row of the New or Upcoming list (gui-collection-dropdown design
+/// D9): the row's stable identity, the two title lines the old Home sections
+/// carried, and its gutter date. An Upcoming row is display-only: a press, a
+/// play, and an enqueue name it but act on nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiShowsRow {
+    /// The stable Service id: an episode's item id or a premiere's stable key.
+    pub id: String,
+    /// The primary label, the show's name on a flat row.
+    pub title: String,
+    /// The secondary label, the episode's own title.
+    pub subtitle: Option<String>,
+    /// The gutter date, the provider date as `day month` text.
+    pub date: Option<String>,
+    /// Whether the row takes no select, play, or enqueue.
+    pub display_only: bool,
+}
 
 /// One series node of the All series tree (design D14): the series row, its
 /// rail letter, and the seasons the cached detail holds. The tree is the
@@ -145,14 +165,20 @@ pub struct GuiShowsHero {
 /// series list, the core's selected series, and its Hero.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiShowsProjection {
-    /// Whether the series list has not landed yet.
+    /// The one active view (design D8): All, New, or Upcoming. All is the
+    /// default for a library with no stored choice.
+    pub view: GuiShowsView,
+    /// Whether the active list has not landed yet.
     pub loading: bool,
+    /// The New or Upcoming list's flat rows in paint order (design D9); empty
+    /// in All, where the `series` tree paints.
+    pub rows: Vec<GuiShowsRow>,
     /// Whether the selected series' detail or the selected season's episodes
     /// fetch has not landed yet. The window paints the Workspace's loading
     /// state with it.
     pub workspace_loading: bool,
-    /// The series list's tree (design D14): the series nodes with their
-    /// seasons and loaded episodes.
+    /// The All series list's tree (design D14): the series nodes with their
+    /// seasons and loaded episodes; empty in the flat views.
     pub series: Vec<GuiShowsSeries>,
     /// The core's selected series (design D2, D12): the series the select
     /// command last named while the list still carries it, else the first row
@@ -175,37 +201,155 @@ impl App {
         }
     }
 
-    /// The Shows projection the GUI Library panel paints (design D12, D8): the
-    /// series list, the selected series, and its Hero. A `lib_idx` that names
-    /// no Shows library projects the empty projection, as the frame's gate
-    /// excludes that destination anyway.
+    /// The Shows projection the GUI Library panel paints (design D12, D8,
+    /// D9): the active view's rows, the selected row, and its Hero. All paints
+    /// the series tree; New and Upcoming paint the merged flat lists. A
+    /// `lib_idx` that names no Shows library projects the empty projection.
     #[must_use]
     pub fn gui_shows_projection(&mut self, lib_idx: usize) -> GuiShowsProjection {
         if !self.gui_tv_library(lib_idx) {
             return GuiShowsProjection::default();
         }
-        let series = self.gui_shows_series_tree(lib_idx);
-        let loading = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.last())
-            .is_none_or(|level| level.loading);
-        let selected = self.gui_shows_default_series(lib_idx);
-        let hero = selected
-            .as_ref()
-            .and_then(|selected| self.gui_shows_hero(lib_idx, selected));
-        let workspace_loading = selected
-            .as_ref()
-            .is_some_and(|series_id| self.gui_shows_workspace_loading(lib_idx, series_id));
+        let view = self.gui_shows_view(lib_idx);
+        let (series, rows, selected, hero, workspace_loading, loading) = match view {
+            GuiShowsView::All => {
+                let series = self.gui_shows_series_tree(lib_idx);
+                let loading = self
+                    .libs
+                    .get(lib_idx)
+                    .and_then(|lib| lib.nav_stack.last())
+                    .is_none_or(|level| level.loading);
+                let selected = self.gui_shows_default_series(lib_idx);
+                let hero = selected
+                    .as_ref()
+                    .and_then(|selected| self.gui_shows_hero(lib_idx, selected));
+                let workspace_loading = selected
+                    .as_ref()
+                    .is_some_and(|series_id| self.gui_shows_workspace_loading(lib_idx, series_id));
+                (
+                    series,
+                    Vec::new(),
+                    selected,
+                    hero,
+                    workspace_loading,
+                    loading,
+                )
+            }
+            GuiShowsView::New => {
+                let rows = self.gui_shows_new_rows();
+                let selected = self
+                    .gui_shows_flat_selection
+                    .clone()
+                    .filter(|id| rows.iter().any(|row| row.id == *id))
+                    .or_else(|| rows.first().map(|row| row.id.clone()));
+                let hero = selected
+                    .as_ref()
+                    .and_then(|id| self.gui_shows_new_item(id))
+                    .map(|item| self.gui_shows_flat_hero(&item));
+                let loading = self.libs.get(lib_idx).is_some_and(|lib| {
+                    self.gui_shows_new
+                        .get(&lib.library.id)
+                        .is_none_or(Vec::is_empty)
+                });
+                (Vec::new(), rows, selected, hero, false, loading)
+            }
+            GuiShowsView::Upcoming => {
+                // An Upcoming row is display-only: the Hero keeps the series
+                // the All view showed, so the detail part stays meaningful.
+                let selected = self.gui_shows_default_series(lib_idx);
+                let hero = selected
+                    .as_ref()
+                    .and_then(|selected| self.gui_shows_hero(lib_idx, selected));
+                (
+                    Vec::new(),
+                    self.gui_shows_upcoming_rows(),
+                    selected,
+                    hero,
+                    false,
+                    false,
+                )
+            }
+        };
         let projection = GuiShowsProjection {
+            view,
             loading,
+            rows,
             workspace_loading,
             series,
             selected,
             hero,
         };
-        self.warm_gui_shows_hero_neighbours(lib_idx, &projection);
+        if view == GuiShowsView::All {
+            self.warm_gui_shows_hero_neighbours(lib_idx, &projection);
+        }
         projection
+    }
+
+    /// The New list's merged flat rows (design D9): every TV library's latest
+    /// episodes as one list, newest `date_added` first, de-duplicated by item
+    /// id. The split show/episode title and the provider-date gutter are the
+    /// old `Latest episodes` section's.
+    fn gui_shows_new_rows(&self) -> Vec<GuiShowsRow> {
+        let mut items: Vec<EmbyItem> = self.gui_shows_new.values().flatten().cloned().collect();
+        items.sort_by_cached_key(|item| {
+            (
+                std::cmp::Reverse(mbv_ui_model::home_latest::emby_date_added_secs(item)),
+                item.id.clone(),
+            )
+        });
+        let mut seen = std::collections::HashSet::new();
+        items
+            .into_iter()
+            .filter(|item| seen.insert(item.id.clone()))
+            .map(|episode| {
+                let item = QueueItem::Emby(Box::new(episode.clone()));
+                let parts = item.playback_title_parts(None);
+                let (title, subtitle) = match &parts.context {
+                    Some(context) => (context.text.clone(), Some(parts.title.text.clone())),
+                    None => (parts.title.text.clone(), None),
+                };
+                GuiShowsRow {
+                    id: episode.id,
+                    title,
+                    subtitle,
+                    date: row_date(mbv_ui_model::home_latest::provider_timestamp_secs(&item)),
+                    display_only: false,
+                }
+            })
+            .collect()
+    }
+
+    /// The Upcoming list's merged flat rows (design D9): every TV library's
+    /// premieres, soonest first, with the same labels the old Home section
+    /// carried. Every row is display-only.
+    fn gui_shows_upcoming_rows(&self) -> Vec<GuiShowsRow> {
+        let mut premieres: Vec<&mbv_emby_model::UpcomingPremiere> =
+            self.tv_upcoming_snapshots.values().flatten().collect();
+        premieres.sort_by_cached_key(|premiere| {
+            let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
+            (
+                secs.is_none(),
+                secs.unwrap_or_default(),
+                premiere.stable_key(),
+            )
+        });
+        premieres
+            .into_iter()
+            .map(|premiere| {
+                let secs = mbv_feed::parse_pub_date_secs(&premiere.premiere_date);
+                GuiShowsRow {
+                    id: premiere.stable_key(),
+                    title: premiere.series_name.clone(),
+                    subtitle: Some(format!(
+                        "{} — {}",
+                        premiere_number_label(premiere),
+                        premiere.title
+                    )),
+                    date: row_date(secs),
+                    display_only: true,
+                }
+            })
+            .collect()
     }
 
     /// The series list's tree (design D14): every root-level series with
@@ -327,15 +471,16 @@ impl App {
         self.gui_tv_shows.get(&lib_idx).cloned().unwrap_or_default()
     }
 
-    /// The Emby item a Shows play command names (design D12): the root
-    /// level's series, then the cached series details' episode lists, which
-    /// the Workspace's rows name. `None` when no cached row carries the id, so
-    /// a stale command plays nothing.
-    pub(in crate::app::gui_library) fn gui_shows_item(
-        &self,
-        lib_idx: usize,
-        item_id: &str,
-    ) -> Option<EmbyItem> {
+    /// The Emby item a Shows play command names (design D12, D9): a New row
+    /// resolves through the merged episodes; an Upcoming row resolves nothing,
+    /// because it is display-only; All resolves the series, season, and
+    /// Workspace episode rows. A stale command plays nothing.
+    pub(in crate::app) fn gui_shows_item(&self, lib_idx: usize, item_id: &str) -> Option<EmbyItem> {
+        match self.gui_shows_view(lib_idx) {
+            GuiShowsView::New => return self.gui_shows_new_item(item_id),
+            GuiShowsView::Upcoming => return None,
+            GuiShowsView::All => {}
+        }
         let lib = self.libs.get(lib_idx)?;
         if let Some(item) = lib
             .nav_stack

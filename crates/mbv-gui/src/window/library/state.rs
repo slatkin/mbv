@@ -12,8 +12,8 @@
 
 use dioxus_native::prelude::*;
 
-use mbv::GuiCollectionTarget;
 use mbv::GuiCollections;
+use mbv::{GuiCollectionTarget, GuiShowsView};
 
 use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
 use crate::bridge::library::GuiLibraryCommand;
@@ -296,6 +296,15 @@ impl LibraryState {
             target: collections.target.clone(),
             order,
         });
+    }
+
+    /// Select the Shows destination's one view (gui-collection-dropdown
+    /// design D8): the command names the library and the view. The dropdown's
+    /// own press handler closes the popover; this method sends only the
+    /// selection, so a caller that reuses the open state cannot send it twice.
+    pub fn select_shows_view(&self, lib_idx: usize, view: GuiShowsView) {
+        self.link
+            .library(GuiLibraryCommand::ShowsSetView { lib_idx, view });
     }
 
     /// Open or close the collection dropdown (design D7): a press on the
