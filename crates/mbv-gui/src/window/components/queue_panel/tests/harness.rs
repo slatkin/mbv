@@ -22,7 +22,8 @@ use crate::bridge::frame::overlay::{
     GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename, GuiRowMenuEntry,
 };
 use crate::bridge::frame::playback::{
-    GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey,
+    GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueHeaderFacts, GuiQueueInsertion, GuiQueueRow,
@@ -365,7 +366,6 @@ pub(super) fn playing() -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: Some("S2 · E5".to_owned()),
-        still_caption: Some("Episode still · Emby Primary / Thumb".to_owned()),
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -381,6 +381,7 @@ pub(super) fn playing() -> GuiQueuePlayback {
         }),
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

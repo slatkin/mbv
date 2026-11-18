@@ -286,9 +286,19 @@ impl App {
     /// resumes the run — and for the TUI Client, whose transport keeps its
     /// behaviour.
     #[must_use]
-    pub(in crate::app) fn shown_queue_play_request(&self) -> Option<NamedQueueId> {
+    pub fn shown_queue_play_request(&self) -> Option<NamedQueueId> {
         let queue = self.shown_queue_edit()?;
         (!self.shown_playback_status().active).then_some(queue)
+    }
+
+    /// The slot count of the local queue the Queue panel shows (design D7):
+    /// the shown resting queue's own slots, or the current queue's, from the
+    /// same view the Queue section paints. The player panel's start gate reads
+    /// it, because `shown_queue_play_request` is also `Some` for an empty new
+    /// queue, which play/pause cannot start.
+    #[must_use]
+    pub fn shown_queue_slot_count(&self) -> usize {
+        self.shown_local_queue().total_queue_len()
     }
 
     /// Whether the Queue panel shows a resting local Named queue, so the

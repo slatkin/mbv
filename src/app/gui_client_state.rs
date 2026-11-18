@@ -63,6 +63,15 @@ impl App {
         !self.gui_client
     }
 
+    /// Whether the player panel hides its transport controls until the
+    /// pointer enters the stage (gui-art-player-overlay design D5): the
+    /// preference the GUI Client's panel frame carries. The core owns it, so
+    /// the section build reads it here rather than from the window.
+    #[must_use]
+    pub fn gui_player_auto_hide(&self) -> bool {
+        self.gui_player_auto_hide
+    }
+
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
     pub fn panel_toggles_projection(&self) -> PanelTogglesProjection {

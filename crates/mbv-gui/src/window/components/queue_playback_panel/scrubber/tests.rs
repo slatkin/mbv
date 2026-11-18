@@ -18,8 +18,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::Scrubber;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::playback::{
-    GuiChapter, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, GuiSegmentMark,
-    GuiTransportAvailability,
+    GuiChapter, GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover,
+    GuiScrubberTile, GuiSegmentMark, GuiTransportAvailability,
 };
 use crate::window::clock::Clock;
 use crate::window::playhead::{Playhead, Times};
@@ -65,7 +65,6 @@ fn playing() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        still_caption: None,
         chapters: vec![
             GuiChapter {
                 name: "Chapter One".to_owned(),
@@ -94,6 +93,7 @@ fn playing() -> GuiQueuePlayback {
         artwork: None,
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

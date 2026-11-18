@@ -21,7 +21,7 @@ use crate::bridge::frame::library::{
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
+    GuiPlayerControls, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
@@ -304,7 +304,6 @@ fn fresh_playback() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        still_caption: None,
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -318,6 +317,7 @@ fn fresh_playback() -> GuiQueuePlayback {
         artwork: None,
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

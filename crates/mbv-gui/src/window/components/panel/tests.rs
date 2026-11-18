@@ -24,7 +24,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::Panel;
 use crate::bridge::frame::GuiPanelToggles;
-use crate::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability};
+use crate::bridge::frame::playback::{
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
+};
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::layout::{LayoutSize, QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
@@ -136,7 +138,6 @@ fn playback() -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: None,
-        still_caption: None,
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -150,6 +151,7 @@ fn playback() -> GuiQueuePlayback {
         artwork: None,
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

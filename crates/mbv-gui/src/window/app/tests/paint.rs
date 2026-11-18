@@ -31,7 +31,9 @@ use rstest::rstest;
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::GuiAttachState;
-use crate::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability};
+use crate::bridge::frame::playback::{
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
+};
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueHeaderFacts, GuiQueueRow, GuiQueueSummary, GuiSemanticState,
 };
@@ -184,7 +186,6 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: Some("S2 · E5".to_owned()),
-        still_caption: Some("Episode still · Emby Primary / Thumb".to_owned()),
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -198,6 +199,7 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         artwork: Some(art),
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

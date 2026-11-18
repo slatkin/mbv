@@ -28,7 +28,7 @@ use crate::bridge::frame::chrome::{
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
+    GuiPlayerControls, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::theme::GuiRole;
@@ -84,7 +84,6 @@ fn playing() -> GuiQueuePlayback {
         now_playing_title: Some("Track title".to_owned()),
         parent_line: None,
         episode_badge: None,
-        still_caption: None,
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -100,6 +99,7 @@ fn playing() -> GuiQueuePlayback {
         }),
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

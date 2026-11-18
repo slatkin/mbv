@@ -231,6 +231,9 @@ pub enum QueuePlaybackTargetId {
     PlaybackTarget,
     /// The visual slot's image rectangle.
     VisualSlot,
+    /// The stage's auto-hide checkbox: a press toggles the core-owned
+    /// preference (gui-art-player-overlay design D5).
+    AutoHide,
     /// The back-10 s control: the `seek_back` chord's pointer target
     /// (add-tauri-gui-client row 6.4).
     SeekBack,

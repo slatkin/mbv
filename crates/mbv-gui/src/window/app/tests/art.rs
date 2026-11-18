@@ -30,7 +30,9 @@ use kurbo::Shape as _;
 use mbv_config::GuiPanelWidths;
 
 use crate::art::{ArtResponse, GuiArtRef, art_url, card_path};
-use crate::bridge::frame::playback::{GuiQueuePlayback, GuiTransportAvailability};
+use crate::bridge::frame::playback::{
+    GuiPlayerControls, GuiQueuePlayback, GuiTransportAvailability,
+};
 use crate::core_thread::CoreInput;
 use crate::window::channel::{CoreLink, WindowEvent};
 use crate::window::clock::{Clock, FiredTimers, RecordingClock};
@@ -74,7 +76,6 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         now_playing_title: Some("Friday Fun Stream".to_owned()),
         parent_line: Some("The Show".to_owned()),
         episode_badge: None,
-        still_caption: Some("Movie still · Emby Backdrop".to_owned()),
         chapters: Vec::new(),
         intro_mark: None,
         credits_mark: None,
@@ -88,6 +89,7 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         artwork: Some(art),
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 

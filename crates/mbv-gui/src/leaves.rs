@@ -489,6 +489,12 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::QueueFold)) => {
                 Some(Msg::Playback(PlaybackRequest::ToggleQueueFold))
             }
+            // The stage's auto-hide checkbox flips the core-owned preference
+            // through the same request the GUI-only dispatch applies
+            // (gui-art-player-overlay design D5).
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::AutoHide)) => {
+                Some(Msg::Playback(PlaybackRequest::ToggleAutoHide))
+            }
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)) => self.seek(at),
             _ => None,
         }
@@ -623,12 +629,16 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueueLeaf, QueueSlotId, QueueSurface, QueueTargetId, RegionTarget};
+    use super::{
+        PaintedChoices, PlaybackLeaf, QueueLeaf, QueuePlaybackSurface, QueueSlotId, QueueSurface,
+        QueueTargetId, RegionTarget, TransportAvailability,
+    };
+    use crate::bridge::layout::QueuePlaybackTargetId;
     use mbv::GuiSurfaceLeaf;
     use mbv_surfaces::gesture::PointerGesture;
     use mbv_surfaces::{HitMap, HitRegion};
     use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
-    use mbv_ui_msg::Position;
+    use mbv_ui_msg::{Msg, PlaybackRequest, Position};
     use rstest::rstest;
 
     /// A queue holding one item row for slot 1.
@@ -666,6 +676,34 @@ mod tests {
         assert_eq!(
             leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
             None
+        );
+    }
+
+    /// A left press on the stage's auto-hide checkbox flips the core-owned
+    /// preference through the GUI-only request
+    /// (gui-art-player-overlay row 2.3, design D5).
+    #[test]
+    fn a_press_on_the_auto_hide_checkbox_toggles_the_preference() {
+        let mut surface = QueuePlaybackSurface::new();
+        let mut regions = HitMap::new();
+        regions.push(
+            HitRegion::new(0.0, 0.0, 20.0, 20.0),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::AutoHide),
+        );
+        let painted = PaintedChoices::default();
+        let leaf = PlaybackLeaf::new(
+            &mut surface,
+            &regions,
+            TransportAvailability {
+                stop: false,
+                previous: false,
+                next: false,
+            },
+            &painted,
+        );
+        assert_eq!(
+            leaf.press(Position { x: 10.0, y: 10.0 }),
+            Some(Msg::Playback(PlaybackRequest::ToggleAutoHide))
         );
     }
 }

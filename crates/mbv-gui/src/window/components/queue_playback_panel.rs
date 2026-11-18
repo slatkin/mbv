@@ -156,7 +156,6 @@ pub fn QueuePlaybackPanel() -> Element {
                     StillSlot {
                         art: art.clone(),
                         art_mounted,
-                        still_caption: playback.still_caption.clone(),
                         episode_badge: playback.episode_badge.clone(),
                     }
                 }
@@ -323,8 +322,6 @@ struct StillSlotProps {
     /// The artwork reference the playback section carries.
     art: GuiArtRef,
     art_mounted: Signal<Option<Event<MountedData>>>,
-    /// The still slot's caption while no image lands.
-    still_caption: Option<String>,
     /// The season-and-episode badge, `None` for every kind but an Emby
     /// episode with an ordinal known.
     episode_badge: Option<String>,
@@ -334,7 +331,6 @@ impl std::fmt::Debug for StillSlotProps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StillSlotProps")
             .field("art", &self.art)
-            .field("still_caption", &self.still_caption)
             .field("episode_badge", &self.episode_badge)
             .finish_non_exhaustive()
     }
@@ -383,19 +379,6 @@ fn StillSlot(mut props: StillSlotProps) -> Element {
                 style: image_style.to_owned(),
                 bounds,
                 uncapped: image,
-                fallback: rsx! {
-                    // The canvas's source caption while no image lands
-                    // (design D4a's still slot): the frame's still-caption
-                    // fact, one `[...]` line per item kind; an item with no
-                    // image source paints no caption.
-                    if let Some(caption) = props.still_caption.as_ref() {
-                        span {
-                            class: "font-mono",
-                            style: "font-size: 12px; color: {role_var(GuiRole::TextMuted)};",
-                            "[{caption}]"
-                        }
-                    }
-                },
             }
             if let Some(badge) = props.episode_badge.as_ref() {
                 span {
