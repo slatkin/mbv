@@ -41,10 +41,12 @@ use super::scrubber::Scrubber;
 #[cfg(test)]
 mod tests;
 
-/// The control row's full height at scale 1.0 (design D3): the scrubber
-/// block's 6 px top pad, the 24 px bar, the 30 px clock line, and the 2 px
-/// tail pad. The scale's one-third share is measured against this height.
-pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 62.0;
+/// The bottom layer's full height at scale 1.0 (design D3): the layer's own
+/// 6 px top pad over the scrubber block's 6 px pad, the 24 px bar, the 30 px
+/// clock line, and the 2 px tail pad. The scale's one-third share is
+/// measured against this height, and the pad scales with the row, so the
+/// layer takes no more than one third of the stage at every height.
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 68.0;
 
 /// The control row's scale for a stage `stage_height` px tall (design D3):
 /// the row takes at most a third of the stage and never grows past its full
@@ -171,7 +173,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             }
             div {
                 class: "bottom absolute inset-x-0 bottom-0",
-                style: "padding-top: 6px; background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
+                style: "padding-top: calc(6px * var(--player-scale)); background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
                 ControlRow {
                     paused: props.paused,
                     availability: props.availability,

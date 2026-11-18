@@ -564,7 +564,8 @@ The auto-hide preference is core-owned (design D5). `App` holds
 `gui_player_auto_hide`, read from the prefs key `gui_player_auto_hide` with
 `false` as the default and saved back through `save_prefs`, so the choice
 persists across launches. The control that flips it is the player panel's
-right-click menu (gui-player-overlay-menu). The panel's right-click sends
+right-click menu (gui-player-overlay-menu). A right-click on the panel's
+artwork or controls sends
 `PlaybackRequest::OpenPlayerMenu` with the pointer's whole-pixel anchor, the
 core opens its `PlayerMenu` overlay — the cursor over the one auto-hide entry
 plus the anchor — and the frame projects it. The panel paints the card in

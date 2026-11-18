@@ -207,7 +207,7 @@ In the expanded panel, the player controls SHALL paint over the bottom of the ar
 
 ### Requirement: The player controls auto-hide when the user turns it on
 
-The player controls over the artwork SHALL show at all times by default. A right-click anywhere on the expanded panel SHALL open the panel's context menu at the pointer, whose single auto-hide entry SHALL turn auto-hide on and off and close the menu with the choice; Esc SHALL close the menu with no toggle, and a press outside the menu SHALL close it. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
+The player controls over the artwork SHALL show at all times by default. A right-click on the expanded panel's artwork or controls SHALL open the panel's context menu at the pointer, whose single auto-hide entry SHALL turn auto-hide on and off and close the menu with the choice; Esc SHALL close the menu with no toggle, and a press outside the menu SHALL close it. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
 
 #### Scenario: The user opens the panel's menu
 

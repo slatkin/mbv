@@ -286,7 +286,7 @@ impl App {
     /// resumes the run — and for the TUI Client, whose transport keeps its
     /// behaviour.
     #[must_use]
-    pub fn shown_queue_play_request(&self) -> Option<NamedQueueId> {
+    pub(in crate::app) fn shown_queue_play_request(&self) -> Option<NamedQueueId> {
         let queue = self.shown_queue_edit()?;
         (!self.shown_playback_status().active).then_some(queue)
     }
