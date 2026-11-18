@@ -655,11 +655,14 @@ fn HeaderRow(mut props: HeaderRowProps) -> Element {
                 onmounted: move |event| props.target_mounted.set(Some(event)),
                 Cast { size: 18, stroke_width: 1.8, color: "currentColor" }
                 if !props.host.is_empty() {
-                    // The 13 px the button's style sets is the label's inherited
-                    // size and weight: the box carries no style of its own.
-                    Truncate {
-                        text: props.host.clone(),
-                        style: TextStyle::sans(13.0, 400.0),
+                    // The name paints as plain clipped text, never through
+                    // `Truncate`: this box is sized by the text it paints, so
+                    // a measured cut would shrink the box and ratchet the name
+                    // down to `…` on the next session switch. The Queue
+                    // header's title follows the same rule.
+                    span {
+                        class: "min-w-0 overflow-hidden whitespace-nowrap",
+                        "{props.host}"
                     }
                 }
                 ChevronDown { size: 12, color: "currentColor" }
