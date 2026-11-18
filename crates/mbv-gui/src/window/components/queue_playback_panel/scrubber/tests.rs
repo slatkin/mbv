@@ -1,10 +1,10 @@
 //! Headless tests of the scrubber (D16): the contracts of
 //! `QueuePlaybackPanel.test.ts` the scrubber owns — the elapsed and
-//! `−remaining` clocks, the hover preview's label chip and its
-//! two tile forms, and the bar's hover chrome (track, played fill, thumb,
-//! position line). The presses are not ported: they are the root input
-//! layer's contract (`window/input.rs`), which the scrubber forwards to
-//! untouched. The clocks are the injected recorders (D10); no test waits.
+//! `−remaining` clocks, the hover preview's time label, and the bar's
+//! chrome (track, played fill, thumb). The presses are not ported: they are
+//! the root input layer's contract (`window/input.rs`), which the scrubber
+//! forwards to untouched. The clocks are the injected recorders (D10); no
+//! test waits.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,10 +16,8 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::Scrubber;
-use crate::art::GuiArtRef;
 use crate::bridge::frame::playback::{
-    GuiChapter, GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover,
-    GuiScrubberTile, GuiSegmentMark, GuiTransportAvailability,
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
 use crate::window::clock::Clock;
 use crate::window::playhead::{Playhead, Times};
@@ -27,9 +25,6 @@ use crate::window::sections::Sections;
 
 /// One second in Emby ticks (`mbv_emby_model::TICKS_PER_SECOND`).
 const SECOND: i64 = 10_000_000;
-
-/// The sheet image's reference the hovered tile names (the test's constant).
-const SHEET_URL: &str = "mbv-art://localhost/trickplay/item%3A320%3A0";
 
 /// The times the test drives: a frozen monotonic clock (the prediction
 /// stays at its anchor) and the wall clock a test sets (D10).
@@ -55,7 +50,7 @@ fn wall_ms_at_local(secs_of_day: i64) -> i64 {
 }
 
 /// The playing transport band's facts (the test's fixture, trimmed to the
-/// facts the scrubber reads: the chapters and the two marks).
+/// facts the scrubber reads).
 fn playing() -> GuiQueuePlayback {
     GuiQueuePlayback {
         host: String::new(),
@@ -65,25 +60,6 @@ fn playing() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        chapters: vec![
-            GuiChapter {
-                name: "Chapter One".to_owned(),
-                start_ticks: 0,
-            },
-            GuiChapter {
-                name: "Chapter Two".to_owned(),
-                start_ticks: 120 * SECOND,
-            },
-        ],
-        intro_mark: Some(GuiSegmentMark {
-            start_ticks: 0,
-            end_ticks: 30 * SECOND,
-        }),
-        credits_mark: Some(GuiSegmentMark {
-            start_ticks: 180 * SECOND,
-            end_ticks: 200 * SECOND,
-        }),
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: true,
             next: true,
@@ -98,27 +74,10 @@ fn playing() -> GuiQueuePlayback {
 }
 
 /// The hovered scrubber preview the `hover` section carries.
-fn hovered(fraction: f64, tile: Option<GuiScrubberTile>) -> GuiScrubberHover {
+fn hovered(fraction: f64) -> GuiScrubberHover {
     GuiScrubberHover {
         fraction,
         time_label: "1:40".to_owned(),
-        chapter: None,
-        chapter_number: None,
-        tile,
-    }
-}
-
-/// One hovered trickplay tile: column two, row one of a sheet whose image
-/// reference is `sheet` (the test's fixture).
-fn tile(sheet: GuiArtRef) -> GuiScrubberTile {
-    GuiScrubberTile {
-        sheet_key: "item:320:0".to_owned(),
-        width: 320,
-        height: 180,
-        columns: 10,
-        column: 2,
-        row: 1,
-        sheet,
     }
 }
 
@@ -316,11 +275,10 @@ fn the_scrubber_paints_the_elapsed_and_remaining_clocks() {
 }
 
 /// Contract (`QueuePlaybackPanel.test.ts`): the scrubber paints the hover
-/// preview from the frame — the label chip reads the canvas's `12:31 ·
-/// Ch. 2` form; a position the active item offers no tile for paints the
-/// label chip alone; and the bar's hover chrome carries the 6 px track, the
-/// played fill at its fraction, the 16 px thumb, and the 1 px position line
-/// at the hover's fraction (`main` audits 10–12).
+/// preview from the frame — the label chip reads the hovered time alone,
+/// with no trickplay frame and no chapter name (design D4); and the bar's
+/// hover chrome carries the 6 px track, the played fill at its fraction,
+/// and the 16 px thumb (`main` audits 10–12).
 #[test]
 fn the_scrubber_paints_the_hover_preview_from_the_frame() {
     let mut fixture = built();
@@ -332,23 +290,16 @@ fn the_scrubber_paints_the_hover_preview_from_the_frame() {
         runtime_ticks: 200 * SECOND,
         paused: false,
     });
-    fixture.set_hover(Some(GuiScrubberHover {
-        fraction: 0.75,
-        time_label: "2:30".to_owned(),
-        chapter: Some("Chapter Two".to_owned()),
-        chapter_number: Some(2),
-        tile: None,
-    }));
+    fixture.set_hover(Some(hovered(0.75)));
 
     let text = fixture.text();
-    assert!(text.contains("2:30 \u{b7} Ch. 2"), "{text}");
-    assert!(!text.contains("[trickplay]"), "{text}");
+    assert!(text.contains("1:40"), "{text}");
     assert!(
         !fixture
             .styles()
             .iter()
-            .any(|style| style.contains("background-size")),
-        "no tile box paints without a tile fact: {:?}",
+            .any(|style| style.contains("background-image")),
+        "no trickplay frame paints: {:?}",
         fixture.styles()
     );
     // The block's lengths carry the control rows' scale (design D3 of
@@ -363,126 +314,5 @@ fn the_scrubber_paints_the_hover_preview_from_the_frame() {
         fixture
             .style_of("[data-thumb]")
             .contains("width: calc(16px * var(--player-scale))")
-    );
-    let line = fixture.style_of("[data-hover-line]");
-    assert!(
-        line.contains("width: calc(1px * var(--player-scale))"),
-        "{line}"
-    );
-    assert!(
-        line.contains("height: calc(22px * var(--player-scale))"),
-        "{line}"
-    );
-    assert!(line.contains("left: 75%"), "{line}");
-}
-
-/// Contract (`QueuePlaybackPanel.test.ts`, task 6.7): the preview paints the
-/// trickplay thumbnail the frame's tile names, cropped from the sheet's
-/// sprite grid — the sheet loads by its URL, and the crop's place and size
-/// name the tile's sheet cell (column two, row one of ten-column sheets).
-#[test]
-fn the_hover_preview_paints_the_trickplay_tile_the_frame_carries() {
-    let mut fixture = built();
-    fixture.set_playback(playing());
-    fixture.stamp(GuiPlayhead {
-        active: true,
-        active_slot: Some(1),
-        position_ticks: 60 * SECOND,
-        runtime_ticks: 200 * SECOND,
-        paused: false,
-    });
-    fixture.set_hover(Some(hovered(
-        0.5,
-        Some(tile(GuiArtRef::Image {
-            src: SHEET_URL.to_owned(),
-        })),
-    )));
-
-    let sprite = fixture
-        .styles()
-        .iter()
-        .find(|style| style.contains("background-size"))
-        .expect("the sprite paints")
-        .clone();
-    assert!(
-        sprite.contains(&format!("background-image: url('{SHEET_URL}')")),
-        "{sprite}"
-    );
-    assert!(sprite.contains("background-size: 1280px auto"), "{sprite}");
-    assert!(
-        sprite.contains("background-position: -256px -72px"),
-        "{sprite}"
-    );
-    assert!(sprite.contains("height: 72px"), "{sprite}");
-}
-
-/// Regression (8dd4badf0's sibling): a 2-hour book's chapter tick and
-/// credits mark paint at their real bar fractions. The u32-bound
-/// `i64_to_f64_saturating` conversion clamped both the chapter's start and
-/// the runtime to ~7.15 minutes, so every boundary past it painted at 100 %.
-#[test]
-fn a_two_hour_book_paints_its_chapter_and_credits_at_their_real_fractions() {
-    let mut fixture = built();
-    let mut long_book = playing();
-    long_book.chapters = vec![
-        GuiChapter {
-            name: "Opening".to_owned(),
-            start_ticks: 0,
-        },
-        GuiChapter {
-            name: "Half".to_owned(),
-            start_ticks: 90 * 60 * SECOND,
-        },
-    ];
-    long_book.credits_mark = Some(GuiSegmentMark {
-        start_ticks: 60 * 60 * SECOND,
-        end_ticks: 110 * 60 * SECOND,
-    });
-    fixture.set_playback(long_book);
-    fixture.stamp(GuiPlayhead {
-        active: true,
-        active_slot: Some(1),
-        position_ticks: 60 * SECOND,
-        runtime_ticks: 2 * 3600 * SECOND,
-        paused: false,
-    });
-
-    let styles = fixture.styles();
-    let chapter = styles
-        .iter()
-        .find(|style| style.contains("height: calc(14px * var(--player-scale))"))
-        .expect("the chapter tick paints");
-    assert!(chapter.contains("left: 75%"), "{chapter}");
-    let credits = styles
-        .iter()
-        .find(|style| style.contains("width: calc(4px * var(--player-scale))"))
-        .expect("the credits mark paints");
-    assert!(credits.contains("left: 50%"), "{credits}");
-}
-
-/// Contract (`QueuePlaybackPanel.test.ts`): a sheet still loading paints the
-/// canvas's in-flight box, not a sprite — the placeholder paints only while
-/// the frame carries the tile fact.
-#[test]
-fn the_hover_preview_paints_the_in_flight_box_while_its_sheet_loads() {
-    let mut fixture = built();
-    fixture.set_playback(playing());
-    fixture.stamp(GuiPlayhead {
-        active: true,
-        active_slot: Some(1),
-        position_ticks: 60 * SECOND,
-        runtime_ticks: 200 * SECOND,
-        paused: false,
-    });
-    fixture.set_hover(Some(hovered(0.5, Some(tile(GuiArtRef::Loading)))));
-
-    assert!(fixture.text().contains("[trickplay]"));
-    assert!(
-        !fixture
-            .styles()
-            .iter()
-            .any(|style| style.contains("background-size")),
-        "no sprite paints while the sheet loads: {:?}",
-        fixture.styles()
     );
 }

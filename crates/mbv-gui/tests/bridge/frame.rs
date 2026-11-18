@@ -1,8 +1,7 @@
 mod settings_screen;
 
 use mbv::{
-    App, PlaybackChapter, PlaybackDecorations, SegmentMark, TrickplayGrid,
-    stub_app_with_open_row_menu, stub_app_with_playing_items, stub_app_with_playing_queue,
+    App, stub_app_with_open_row_menu, stub_app_with_playing_items, stub_app_with_playing_queue,
     stub_app_with_queue, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
@@ -260,10 +259,6 @@ fn empty_queue_frame_carries_no_rows() {
     assert!(!frame.panel().collapsed);
     assert!(!frame.panel().queue_folded);
     assert_eq!(frame.overlay(), None);
-    assert_eq!(frame.playback().chapters, Vec::new());
-    assert_eq!(frame.playback().intro_mark, None);
-    assert_eq!(frame.playback().credits_mark, None);
-    assert_eq!(frame.playback().trickplay, None);
 }
 
 /// The summary names the slot after the playhead's title (review of
@@ -550,103 +545,13 @@ fn track_popover_frame_marks_the_playing_audio_track() {
     );
 }
 
-/// The active item's metadata decoration reaches the frame (design D4a): a
-/// seeded cache entry's chapters, intro and credits marks, and trickplay
-/// source land in the playback section the scrubber reads.
-#[test]
-fn playing_queue_frame_carries_the_items_decorations() {
-    let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
-    let key = item.content_id();
-    let mut app = stub_app_with_playing_items(vec![item]);
-    app.seed_playback_metadata_for_test(
-        key,
-        PlaybackDecorations {
-            chapters: vec![PlaybackChapter {
-                name: "Opening".to_string(),
-                start_ticks: 0,
-            }],
-            intro: Some(SegmentMark {
-                start_ticks: 100,
-                end_ticks: 200,
-            }),
-            credits: Some(SegmentMark {
-                start_ticks: 300,
-                end_ticks: 400,
-            }),
-            trickplay: Some(vec![TrickplayGrid {
-                width: 854,
-                height: 480,
-                tile_width: 10,
-                tile_height: 10,
-                thumbnail_count: 100,
-                interval_ms: 10_000,
-                media_source_id: "ms1".to_string(),
-            }]),
-        },
-    );
-
-    let frame = frame_after_tick(&mut app);
-
-    assert_eq!(
-        frame.playback().chapters,
-        vec![mbv_gui::bridge::frame::playback::GuiChapter {
-            name: "Opening".to_string(),
-            start_ticks: 0,
-        }]
-    );
-    assert_eq!(
-        frame.playback().intro_mark,
-        Some(mbv_gui::bridge::frame::playback::GuiSegmentMark {
-            start_ticks: 100,
-            end_ticks: 200,
-        })
-    );
-    assert_eq!(
-        frame.playback().credits_mark,
-        Some(mbv_gui::bridge::frame::playback::GuiSegmentMark {
-            start_ticks: 300,
-            end_ticks: 400,
-        })
-    );
-    assert_eq!(
-        frame.playback().trickplay,
-        Some(vec![mbv_gui::bridge::frame::playback::GuiTrickplayGrid {
-            width: 854,
-            height: 480,
-            tile_width: 10,
-            tile_height: 10,
-            thumbnail_count: 100,
-            interval_ms: 10_000,
-            media_source_id: "ms1".to_string(),
-        }])
-    );
-}
-
 /// The scrubber's hover preview rides the frame (add-tauri-gui-client row
 /// 6.4, design D4): the Surface state's hover fraction projects with the
-/// time and the covering chapter's name and ordinal at the position — the
-/// canvas preview label's `Ch. 2` form (`main` audit 12).
+/// time it names at the position.
 #[test]
-fn the_scrubber_hover_projects_its_time_and_chapter() {
+fn the_scrubber_hover_projects_its_time() {
     let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
-    let key = item.content_id();
     let mut app = stub_app_with_playing_items(vec![item]);
-    app.seed_playback_metadata_for_test(
-        key,
-        PlaybackDecorations {
-            chapters: vec![
-                PlaybackChapter {
-                    name: "Opening".to_string(),
-                    start_ticks: 0,
-                },
-                PlaybackChapter {
-                    name: "Middle".to_string(),
-                    start_ticks: 10 * 60 * TICKS_PER_SECOND,
-                },
-            ],
-            ..PlaybackDecorations::default()
-        },
-    );
     let mut playback = QueuePlaybackSurface::new();
     playback.set_scrubber_hover(Some(0.75));
 
@@ -657,8 +562,6 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
     assert_eq!(hover.time_label, "15:00");
-    assert_eq!(hover.chapter.as_deref(), Some("Middle"));
-    assert_eq!(hover.chapter_number, Some(2));
 }
 
 /// The hover preview names the time under the pointer, and it carries no tile
@@ -676,7 +579,6 @@ fn the_scrubber_hover_names_its_time_without_a_cached_sheet() {
         .cloned()
         .expect("the hover rides the section");
     assert_eq!(hover.fraction, 0.25);
-    assert_eq!(hover.tile, None);
 
     let away = QueuePlaybackSurface::new();
     assert!(built(&mut app, &queue, &away).hover().is_none());

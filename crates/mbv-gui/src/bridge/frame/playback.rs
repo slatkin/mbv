@@ -4,8 +4,8 @@
 //! the window predicts from between anchors.
 
 use mbv::{
-    PlaybackChapter, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection, SegmentMark,
-    TrackChip, TrackChips, TrackChoice, TrickplayGrid,
+    PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection, TrackChip, TrackChips,
+    TrackChoice,
 };
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
@@ -34,20 +34,6 @@ pub struct GuiQueuePlayback {
     /// The season-and-episode badge the artwork paints ("S2 · E5"). `None`
     /// for every kind but an Emby episode with an ordinal known.
     pub episode_badge: Option<String>,
-    /// The active item's chapter boundaries with their names (design D4a):
-    /// the scrubber's boundary ticks and the hover preview's chapter name.
-    /// Empty while the item's fetch has not landed or carries none.
-    pub chapters: Vec<GuiChapter>,
-    /// The intro mark's tick bounds (the `MediaSegments` `Intro`). `None`
-    /// while unknown.
-    pub intro_mark: Option<GuiSegmentMark>,
-    /// The credits mark's tick bounds (the `MediaSegments` `Outro`). `None`
-    /// while unknown.
-    pub credits_mark: Option<GuiSegmentMark>,
-    /// The trickplay source description (design D4a): one tile grid per
-    /// available width. `None` while unknown; the preview's tile bytes ride
-    /// the hover datum from the core's cache (task 6.7).
-    pub trickplay: Option<Vec<GuiTrickplayGrid>>,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
     /// The status-indicator cluster the queue band paints on its controls
@@ -92,8 +78,7 @@ pub struct GuiPlayerControls {
 }
 
 /// The scrubber's hover preview (design D4): the position a move over the
-/// painted bar carried, resolved to the time and chapter it names, and the
-/// trickplay tile the preview paints (task 6.7).
+/// painted bar carried, resolved to the time it names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GuiScrubberHover {
     /// The pointer's fraction along the painted bar.
@@ -101,39 +86,6 @@ pub struct GuiScrubberHover {
     /// The time at the pointer's position, formatted by the TUI's shared
     /// duration formatter. The window paints the text verbatim.
     pub time_label: String,
-    /// The chapter covering the pointer's position, when the active item's
-    /// chapters cover it.
-    pub chapter: Option<String>,
-    /// The covering chapter's 1-based ordinal in the active item's chapter
-    /// list: the canvas preview label's `Ch. 2` form (`main` audit 12).
-    pub chapter_number: Option<usize>,
-    /// The trickplay tile at the pointer's position: `None` while the active
-    /// item offers none, its sheet is not yet cached, or the server does not
-    /// hold it — the preview paints its placeholder then.
-    pub tile: Option<GuiScrubberTile>,
-}
-
-/// The hovered trickplay tile the preview paints (task 6.7): the thumbnail's
-/// place in its sheet, the thumbnail's pixel size, and the sheet's image
-/// reference (design D7). The window loads the sheet from the core's cache
-/// through the `mbv-art` scheme; it makes no other request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiScrubberTile {
-    /// The sheet's opaque identity (the item, the thumbnail width, and the
-    /// sheet's ordinal).
-    pub sheet_key: String,
-    /// The thumbnail's pixel width within the sheet.
-    pub width: u32,
-    /// The thumbnail's pixel height within the sheet.
-    pub height: u32,
-    /// The sheet's thumbnail columns.
-    pub columns: u32,
-    /// The thumbnail's column in the sheet.
-    pub column: u32,
-    /// The thumbnail's row in the sheet.
-    pub row: u32,
-    /// The sheet image's reference: the URL the cached sheet loads through.
-    pub sheet: GuiArtRef,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -172,13 +124,6 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
-            chapters: projection.chapters.iter().map(GuiChapter::from).collect(),
-            intro_mark: projection.intro_mark.map(GuiSegmentMark::from),
-            credits_mark: projection.credits_mark.map(GuiSegmentMark::from),
-            trickplay: projection
-                .trickplay
-                .as_ref()
-                .map(|grids| grids.iter().map(GuiTrickplayGrid::from).collect()),
             availability: GuiTransportAvailability {
                 stop: projection.availability.stop,
                 next: projection.availability.next,
@@ -336,74 +281,6 @@ impl From<&SessionTargetKey> for GuiTargetKey {
         match key {
             SessionTargetKey::Emby(id) => Self::Emby(id.clone()),
             SessionTargetKey::Cast(id) => Self::Cast(id.clone()),
-        }
-    }
-}
-
-/// One chapter boundary of the active item, mirroring `PlaybackChapter`:
-/// the scrubber's boundary tick and the hover preview's chapter name.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiChapter {
-    pub name: String,
-    pub start_ticks: i64,
-}
-
-impl From<&PlaybackChapter> for GuiChapter {
-    fn from(chapter: &PlaybackChapter) -> Self {
-        Self {
-            name: chapter.name.clone(),
-            start_ticks: chapter.start_ticks,
-        }
-    }
-}
-
-/// One intro or credits mark of the active item, mirroring `SegmentMark`:
-/// the tick bounds the scrubber paints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GuiSegmentMark {
-    pub start_ticks: i64,
-    pub end_ticks: i64,
-}
-
-impl From<SegmentMark> for GuiSegmentMark {
-    fn from(mark: SegmentMark) -> Self {
-        Self {
-            start_ticks: mark.start_ticks,
-            end_ticks: mark.end_ticks,
-        }
-    }
-}
-
-/// One trickplay tile grid of the active item, mirroring `TrickplayGrid`:
-/// the source description the preview's tile fetch reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuiTrickplayGrid {
-    /// The thumbnail pixel width this grid answers.
-    pub width: u32,
-    /// The thumbnail pixel height.
-    pub height: u32,
-    /// Thumbnails per row of one tile sheet.
-    pub tile_width: u32,
-    /// Thumbnail rows of one tile sheet.
-    pub tile_height: u32,
-    /// The total thumbnails the grid holds.
-    pub thumbnail_count: u32,
-    /// Milliseconds between consecutive thumbnails.
-    pub interval_ms: u64,
-    /// The media source the tile URLs qualify with.
-    pub media_source_id: String,
-}
-
-impl From<&TrickplayGrid> for GuiTrickplayGrid {
-    fn from(grid: &TrickplayGrid) -> Self {
-        Self {
-            width: grid.width,
-            height: grid.height,
-            tile_width: grid.tile_width,
-            tile_height: grid.tile_height,
-            thumbnail_count: grid.thumbnail_count,
-            interval_ms: grid.interval_ms,
-            media_source_id: grid.media_source_id.clone(),
         }
     }
 }

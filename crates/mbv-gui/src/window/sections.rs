@@ -304,10 +304,6 @@ fn fresh_playback() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        chapters: Vec::new(),
-        intro_mark: None,
-        credits_mark: None,
-        trickplay: None,
         availability: GuiTransportAvailability {
             stop: false,
             next: false,

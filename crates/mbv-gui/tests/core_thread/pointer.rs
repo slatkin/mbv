@@ -376,8 +376,6 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
     assert_eq!(hover.time_label, "5:00");
-    // No queue item carries the playhead, so no chapter covers the point.
-    assert_eq!(hover.chapter, None);
 
     test.tx.send(move_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());

@@ -228,20 +228,6 @@ pub struct QueuePlaybackProjection {
     /// remaining runtime added to the clock. `None` while no item plays or
     /// the runtime is unknown.
     pub finish_clock: Option<String>,
-    /// The active item's chapter boundaries with their names (design D4a):
-    /// the scrubber's boundary ticks and the hover preview's chapter name.
-    /// Empty while the item's fetch has not landed or carries none.
-    pub chapters: Vec<PlaybackChapter>,
-    /// The intro mark's tick bounds (the `MediaSegments` `Intro`). `None`
-    /// while unknown.
-    pub intro_mark: Option<SegmentMark>,
-    /// The credits mark's tick bounds (the `MediaSegments` `Outro`). `None`
-    /// while unknown.
-    pub credits_mark: Option<SegmentMark>,
-    /// The trickplay source description (design D4a): one tile grid per
-    /// available width. `None` while unknown; the tile bytes are task 6.7's
-    /// fetch.
-    pub trickplay: Option<Vec<TrickplayGrid>>,
 }
 
 impl App {
@@ -258,12 +244,6 @@ impl App {
             mbv_queue::QueueItem::Emby(item) => episode_badge(item),
             _ => None,
         });
-        // The scrubber's decoration (design D4a): the cached metadata the
-        // active item's Client-side fetch landed, if any. The projection
-        // only reads the cache; a Client's frame path issues the fetch.
-        let decorations = active_item
-            .map(mbv_queue::QueueItem::content_id)
-            .and_then(|key| self.playback_metadata_cache.get(&key));
         QueuePlaybackProjection {
             status,
             host,
@@ -281,10 +261,6 @@ impl App {
                 .and_then(|parts| parts.context.as_ref().map(|part| part.text.clone())),
             episode_badge,
             finish_clock: playback_finish_clock(playback),
-            chapters: decorations.map_or_else(Vec::new, |d| d.chapters.clone()),
-            intro_mark: decorations.and_then(|d| d.intro),
-            credits_mark: decorations.and_then(|d| d.credits),
-            trickplay: decorations.and_then(|d| d.trickplay.clone()),
             availability: self.transport_availability(playback),
             status_indicators: crate::app::LocalPlaybackTarget::indicator_data(self)
                 .map(|data| status_indicator_items(&data)),
