@@ -1,9 +1,9 @@
 //! Headless tests of the collection dropdown (gui-collection-dropdown design
 //! D6, D7): the trigger names the selection (All, the one checked collection,
-//! the count with the destination's noun), Clear paints only while the
-//! selection is not All, the date-order toggle paints only where the frame
-//! carries an order, and the open popover narrows its entries by the Library
-//! filter's rule with All still shown. The presses ride the state methods the
+//! the count with the destination's noun) in the accent-outlined capsule with a
+//! chevron that follows the open fact, the open popover paints its checkbox
+//! rows with the checked row's band, and the footer names only the key that
+//! does something (esc close). The presses ride the state methods the
 //! component's own handlers call one line each (a headless document cannot fire
 //! a DOM click, the list's and the pill row's precedent). The core channel is a
 //! mock pair; no test opens a window, sleeps, or reaches the core.
@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
-use blitz_dom::Document as _;
+use blitz_dom::{Document as _, local_name};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
@@ -101,6 +101,20 @@ impl Fixture {
             .text_content()
             .trim()
             .to_owned()
+    }
+
+    /// The `style` attribute of the first node the selector names.
+    fn style_of(&self, selector: &str) -> String {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_node(id)
+            .expect("the node is in the document")
+            .attr(local_name!("style"))
+            .map(str::to_owned)
+            .unwrap_or_default()
     }
 
     /// The Library commands the core link received, in send order.
@@ -222,49 +236,55 @@ fn the_trigger_names_the_count_with_the_noun() {
     );
 }
 
-/// Contract (design D6, spec "All shows no Clear"): All paints no Clear.
+/// Contract (the page-7 artboard, user override): the dropdown paints no Clear
+/// control and no date-order toggle — the All row selects All, and the GUI
+/// exposes no date order.
 #[test]
-fn all_paints_no_clear() {
-    let fixture = built(music_all());
-
-    assert!(!fixture.presents("[data-library-collections-clear]"));
-}
-
-/// Contract (design D6): a selection that is not All paints Clear.
-#[test]
-fn a_checked_selection_paints_clear() {
+fn the_dropdown_paints_no_clear_and_no_date_order_toggle() {
     let fixture = built(feeds_two_checked());
 
-    assert!(fixture.presents("[data-library-collections-clear]"));
-}
-
-/// Contract (design D6, spec "Music has no date order"): a frame with no order
-/// paints no toggle.
-#[test]
-fn music_paints_no_date_order_toggle() {
-    let fixture = built(music_all());
-
+    assert!(!fixture.presents("[data-library-collections-clear]"));
     assert!(!fixture.presents("[data-library-date-order]"));
 }
 
-/// Contract (design D6, spec "Feed-based lists have an Oldest and Newest
-/// order"): the toggle reads the frame's order.
+/// Contract (design D6a): the trigger is a fully rounded capsule outlined in
+/// the accent.
 #[test]
-fn a_feed_list_paints_its_date_order() {
-    let fixture = built(feeds_two_checked());
+fn the_trigger_paints_the_accent_capsule() {
+    let fixture = built(music_all());
+    let style = fixture.style_of("[data-library-collections-trigger]");
 
-    assert_eq!(fixture.text_of("[data-library-date-order]"), "Newest");
+    assert!(style.contains("border-radius: 999px"), "{style}");
+    assert!(
+        style.contains("border: 1px solid var(--canvas-accent)"),
+        "{style}"
+    );
 }
 
-/// Contract (design D6a, spec "The collection dropdown sits in the list header"):
-/// the trigger shows that it opens a menu, through its trailing chevron.
+/// Contract (design D6a): the trigger's chevron points up while the popover is
+/// open and down while it is closed.
 #[test]
-fn the_trigger_paints_its_chevron() {
-    let fixture = built(music_all());
-
+fn the_chevron_follows_the_open_fact() {
+    let closed = built(music_all());
     assert!(
-        fixture.presents("[data-library-collections-trigger] svg.lucide-chevron-down"),
-        "the trigger's chevron paints"
+        closed.presents("[data-library-collections-trigger] svg.lucide-chevron-down"),
+        "the closed trigger's chevron points down"
+    );
+    assert!(
+        !closed.presents("[data-library-collections-trigger] svg.lucide-chevron-up"),
+        "the closed trigger paints no up chevron"
+    );
+
+    let mut open = built(music_all());
+    let library = open.state.clone();
+    open.in_runtime(move || library.toggle_collections_dropdown());
+    assert!(
+        open.presents("[data-library-collections-trigger] svg.lucide-chevron-up"),
+        "the open trigger's chevron points up"
+    );
+    assert!(
+        !open.presents("[data-library-collections-trigger] svg.lucide-chevron-down"),
+        "the open trigger paints no down chevron"
     );
 }
 
@@ -284,10 +304,10 @@ fn the_trigger_opens_and_closes_the_dropdown() {
     assert!(!fixture.presents("[data-library-collections-menu]"));
 }
 
-/// Contract (design D6, spec "Clear resets the selection"): Clear sends the All
-/// command and does not open the dropdown.
+/// Contract (design D6, spec "Clear resets the selection"): the All row's
+/// press sends the All command and does not open the dropdown.
 #[test]
-fn clear_sends_all_without_opening_the_dropdown() {
+fn the_all_row_press_sends_all_without_opening_the_dropdown() {
     let mut fixture = built(feeds_two_checked());
     let library = fixture.state.clone();
     let collections = feeds_two_checked();
@@ -326,21 +346,85 @@ fn a_row_press_toggles_and_leaves_the_dropdown_open() {
     assert!(fixture.state.ui.peek().collections.open);
 }
 
-/// Contract (design D4, D6, spec "The order flips"): the toggle sends the other
-/// order for the frame's destination.
+/// Contract (design D6): the rows paint a leading square checkbox, All first.
 #[test]
-fn the_order_press_sends_the_other_order() {
+fn the_rows_paint_a_leading_checkbox() {
     let mut fixture = built(feeds_two_checked());
     let library = fixture.state.clone();
-    let collections = feeds_two_checked();
-    fixture.in_runtime(move || library.press_date_order(&collections));
+    fixture.in_runtime(move || library.toggle_collections_dropdown());
+
+    assert!(
+        fixture.presents("[data-library-collections-all] [data-library-collections-checkbox]"),
+        "the All row's checkbox paints"
+    );
+    assert!(
+        fixture
+            .presents("[data-library-collections-row=\"https://example.test/tifo\"] [data-library-collections-checkbox]"),
+        "a collection row's checkbox paints"
+    );
+}
+
+/// Contract (design D6): a checked row's checkbox carries the check mark, and
+/// an unchecked row's checkbox is empty.
+#[test]
+fn the_check_mark_paints_in_the_checked_row_s_checkbox() {
+    let mut fixture = built(feeds_two_checked());
+    let library = fixture.state.clone();
+    fixture.in_runtime(move || library.toggle_collections_dropdown());
+
+    assert!(
+        fixture.presents(
+            "[data-library-collections-row=\"https://example.test/tifo\"] [data-library-collections-checkbox] svg.lucide-check"
+        ),
+        "the checked row's checkbox carries the check"
+    );
+    assert!(
+        !fixture.presents(
+            "[data-library-collections-row=\"https://example.test/other\"] [data-library-collections-checkbox] svg.lucide-check"
+        ),
+        "the unchecked row's checkbox is empty"
+    );
+}
+
+/// Contract (design D6): the checked row paints the highlighted band with its
+/// bold name, the unchecked row paints neither.
+#[test]
+fn the_checked_row_paints_the_highlight_band() {
+    let mut fixture = built(feeds_two_checked());
+    let library = fixture.state.clone();
+    fixture.in_runtime(move || library.toggle_collections_dropdown());
+
+    let checked = fixture.style_of("[data-library-collections-row=\"https://example.test/tifo\"]");
+    assert!(
+        checked.contains("background: var(--canvas-selected)"),
+        "{checked}"
+    );
+    assert!(checked.contains("font-weight: 600"), "{checked}");
+
+    let unchecked =
+        fixture.style_of("[data-library-collections-row=\"https://example.test/other\"]");
+    assert!(unchecked.contains("background: none"), "{unchecked}");
+    assert!(unchecked.contains("font-weight: 400"), "{unchecked}");
+}
+
+/// Contract (design D6): the popover's footer names the one key that does
+/// something, esc close, and paints no hint that does nothing (the artboard's
+/// space toggle and only-this).
+#[test]
+fn the_footer_names_esc_close_only() {
+    let mut fixture = built(music_all());
+    let library = fixture.state.clone();
+    fixture.in_runtime(move || library.toggle_collections_dropdown());
 
     assert_eq!(
-        fixture.library_commands(),
-        [mbv::GuiLibraryCommand::DateOrder {
-            target: mbv::GuiCollectionTarget::Feeds,
-            order: mbv::GuiDateOrder::Oldest,
-        }]
+        fixture.text_of("[data-library-collections-footer]"),
+        "esc close"
+    );
+    assert!(
+        !fixture
+            .text_of("[data-library-collections-menu]")
+            .contains("space toggle"),
+        "the artboard's space hints stay unpainted"
     );
 }
 

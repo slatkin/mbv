@@ -1,11 +1,15 @@
-//! The Library panel's collection dropdown (gui-collection-dropdown design D6):
-//! one component for every destination that has collections — Music groups,
+//! The Library panel's collection dropdown (gui-collection-dropdown design
+//! D6): one component for every destination that has collections — Music groups,
 //! Podcast shows, Feeds subscriptions, and an Emby library's feed-group folders
-//! — so the four cannot drift. It paints the trigger that names the selection
-//! (All, the one checked collection, or the count with the destination's noun),
-//! the Clear control while the selection is not All, the date-order toggle on a
-//! feed-based destination, and the `menu_card` popover with the filter field,
-//! the All row, and one checkbox row per collection.
+//! — so the four cannot drift. It paints the capsule trigger that names the
+//! selection (All, the one checked collection, or the count with the
+//! destination's noun) with a trailing chevron, and the `menu_card` popover
+//! with the filter strip, the All row and one checkbox row per collection, and
+//! the `esc close` footer. The page-7 artboard is the look: a fully rounded
+//! outline in the accent around the trigger, square checkboxes that lead the
+//! rows, a highlighted band and a bold name on the checked rows, and no Clear
+//! control and no date-order toggle (the All row selects All, and the window
+//! exposes no date order).
 //!
 //! The core owns the selection: a press sends the collection command the frame
 //! names, and the frame carries the checked state back. The window owns the open
@@ -16,15 +20,18 @@
 //!
 //! The component sits in the list header on the title's line (design D6a): the
 //! header paints it directly after the list title, so the panel paints no
-//! selector row between its top bar and its list. The trigger is a bordered
-//! rectangular button with a trailing chevron, which shows that it opens a menu,
-//! and the open popover is anchored under the trigger, over the list.
+//! selector row between its top bar and its list. The trigger is a fully rounded
+//! capsule outlined in the accent with a trailing chevron, which shows that it
+//! opens a menu, and the open popover is anchored under the trigger, over the
+//! list.
 
 use dioxus_native::prelude::*;
 
+use mbv::GuiCollectionNoun;
+
 use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
-use crate::window::icons::{Check, ChevronDown};
+use crate::window::icons::{Check, ChevronDown, ChevronUp};
 use crate::window::library::list::filter_match;
 use crate::window::library::state::LibraryState;
 
@@ -34,8 +41,8 @@ use crate::window::library::state::LibraryState;
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibraryCollectionDropdownProps {
     /// The carried collections frame: the destination the commands name, All,
-    /// every collection in catalog order with its checked flag, the noun the
-    /// trigger reads, and the date order a feed-based destination sorts by.
+    /// every collection in catalog order with its checked flag, and the noun
+    /// the trigger reads.
     pub collections: GuiCollectionsFrame,
 }
 
@@ -53,14 +60,40 @@ fn matching_entries<'a>(
         .collect()
 }
 
-/// One collection row's style: the popover's row height in the canvas's text
-/// tone, with the card's own padding around it.
-fn row_style() -> &'static str {
-    "height: 32px; padding: 0 10px; gap: 8px; border-radius: 6px; font-size: 14px; color: var(--canvas-text); background: none;"
+/// The filter strip's placeholder (design D6): the destination's noun in the
+/// singular, as the artboard's "Find a category" names the frame's
+/// "categories".
+fn find_placeholder(noun: GuiCollectionNoun) -> &'static str {
+    match noun {
+        GuiCollectionNoun::Groups => "Find a group",
+        GuiCollectionNoun::Shows => "Find a show",
+        GuiCollectionNoun::Subscriptions => "Find a subscription",
+        GuiCollectionNoun::Folders => "Find a folder",
+    }
 }
 
-/// The collection dropdown: the trigger, the Clear control, the date-order
-/// toggle, and the open popover over one carried collections frame.
+/// One collection row's style: the popover's row height, the checkbox's gap,
+/// and the checked row's highlighted band with its bold name (design D6).
+fn row_style(checked: bool) -> String {
+    if checked {
+        "height: 32px; padding: 0 10px; gap: 10px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--canvas-heading); background: var(--canvas-selected);".to_owned()
+    } else {
+        "height: 32px; padding: 0 10px; gap: 10px; border-radius: 4px; font-size: 14px; font-weight: 400; color: var(--canvas-text); background: none;".to_owned()
+    }
+}
+
+/// The row's leading checkbox: a square outline while unchecked, the accent's
+/// fill with a check mark while checked (design D6).
+fn checkbox_style(checked: bool) -> String {
+    if checked {
+        "width: 14px; height: 14px; flex: none; border-radius: 3px; border: 1px solid var(--canvas-accent); background: var(--canvas-accent);".to_owned()
+    } else {
+        "width: 14px; height: 14px; flex: none; border-radius: 3px; border: 1px solid var(--canvas-border); background: none;".to_owned()
+    }
+}
+
+/// The collection dropdown: the capsule trigger and the open popover over one
+/// carried collections frame.
 #[component]
 pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -73,26 +106,13 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
 
     let collections = props.collections;
     let label = collections.label();
-    let order_label = collections.order_label();
     let all = collections.all;
+    let placeholder = find_placeholder(collections.noun);
 
     // The trigger opens the dropdown, or closes it while it is open (design
     // D6, D7).
     let trigger_library = library.clone();
     let on_trigger = Callback::new(move |()| trigger_library.toggle_collections_dropdown());
-
-    // Clear selects All without opening the dropdown (design D6): the All row's
-    // own command, sent from the trigger.
-    let clear_library = library.clone();
-    let clear_collections = collections.clone();
-    let on_clear = Callback::new(move |()| {
-        clear_library.press_collection(&clear_collections, GuiCollectionsFrame::ALL_KEY);
-    });
-
-    // The date-order toggle switches the list order (design D4).
-    let order_library = library.clone();
-    let order_collections = collections.clone();
-    let on_order = Callback::new(move |()| order_library.press_date_order(&order_collections));
 
     // The dropdown keeps the presses that land on its own surface: a press
     // there closes the Library's row menu instead of the panel's outside-press
@@ -129,7 +149,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
 
     rsx! {
         div {
-            class: "flex min-w-0 flex-1 items-center justify-between",
+            class: "flex min-w-0 flex-1 items-center",
             role: "group",
             "aria-label": "Collections",
             style: "gap: 12px;",
@@ -145,13 +165,15 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                 style: "gap: 6px;",
                 // The trigger names the selection (design D6) and shows that it
                 // opens a menu (design D6a): All, the one checked collection, or
-                // the count with the destination's noun, then the chevron. Its
-                // own box clips a long name: the header paints no overflow clip,
-                // because that clip hid the whole open popover.
+                // the count with the destination's noun, then the chevron, up
+                // while the popover is open and down while it is closed. The
+                // capsule's outline is the accent's. Its own box clips a long
+                // name: the header paints no overflow clip, because that clip
+                // hid the whole open popover.
                 button {
                     "type": "button",
                     class: "flex flex-none items-center",
-                    style: "height: 30px; max-width: 18rem; padding: 0 10px; gap: 6px; border-radius: 6px; font-size: 14px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-text);",
+                    style: "height: 28px; max-width: 18rem; padding: 0 12px; gap: 6px; border-radius: 999px; font-size: 14px; border: 1px solid var(--canvas-accent); background: none; color: var(--canvas-heading);",
                     "aria-label": "Select collections",
                     "aria-haspopup": "menu",
                     "aria-expanded": "{open}",
@@ -161,28 +183,22 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         style: "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
                         "{label}"
                     }
-                    ChevronDown {
-                        size: 14,
-                        color: "var(--canvas-muted)".to_owned(),
+                    if open {
+                        ChevronUp {
+                            size: 14,
+                            color: "var(--canvas-accent)".to_owned(),
+                        }
+                    } else {
+                        ChevronDown {
+                            size: 14,
+                            color: "var(--canvas-accent)".to_owned(),
+                        }
                     }
                 }
-                // Clear selects All without opening the dropdown (design D6),
-                // and paints only while the selection is not All.
-                if !all {
-                    button {
-                        "type": "button",
-                        class: "flex flex-none items-center whitespace-nowrap",
-                        style: "height: 30px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
-                        "aria-label": "Clear the collection selection",
-                        "data-library-collections-clear": "",
-                        onclick: move |_| on_clear.call(()),
-                        "Clear"
-                    }
-                }
-                // The open dropdown (design D6, D6a): the filter field, the All
-                // row, and one checkbox row per matching collection, in the row
-                // menu's own canvas chrome. It is anchored under the trigger,
-                // over the list, which the header does not clip.
+                // The open dropdown (design D6, D6a): the filter strip, the All
+                // row, one checkbox row per matching collection, and the footer,
+                // in the row menu's own canvas chrome. It is anchored under the
+                // trigger, over the list, which the header does not clip.
                 if open {
                     div {
                         class: "absolute z-20 flex flex-col",
@@ -190,16 +206,24 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         "aria-label": "Collections",
                         "data-library-collections-menu": "",
                         style: format!(
-                            "top: 36px; left: 0; width: 20rem; max-width: calc(100vw - 48px); padding: 8px; gap: 4px; {MENU_CARD_STYLE}"
+                            "top: 34px; left: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
                         ),
+                        // The filter strip is the popover's header: the teal
+                        // `/` glyph and the field in no box, over a divider
+                        // (design D6).
                         label {
                             class: "flex flex-none items-center",
-                            style: "height: 32px; padding: 0 10px; gap: 8px; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-muted);",
+                            style: "height: 40px; padding: 0 12px; gap: 10px; border-bottom: 1px solid var(--canvas-menu-border); color: var(--canvas-muted);",
+                            span {
+                                class: "font-mono",
+                                style: "font-size: 14px; color: var(--canvas-accent);",
+                                "/"
+                            }
                             input {
                                 "type": "text",
                                 class: "min-w-0 flex-1",
                                 style: "background: none; border: 0; outline: none; color: var(--canvas-heading); font-size: 14px;",
-                                placeholder: "Filter the collections",
+                                placeholder: "{placeholder}",
                                 "aria-label": "Filter the collections",
                                 value: "{filter}",
                                 "data-library-collections-filter": "",
@@ -207,64 +231,88 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                 oninput: move |event: FormEvent| on_filter.call(event.value()),
                             }
                         }
-                        // All stays shown whatever the filter holds (design
-                        // D7), and a press on it unchecks every collection.
-                        button {
-                            "type": "button",
-                            class: "flex flex-none items-center justify-between text-left",
-                            role: "menuitemradio",
-                            style: row_style(),
-                            "aria-checked": "{all}",
-                            "data-library-collections-all": "",
-                            onclick: move |_| {
-                                all_library.press_collection(&all_collections, GuiCollectionsFrame::ALL_KEY);
-                            },
-                            span { "All" }
-                            if all {
-                                Check { size: 18, color: "var(--canvas-accent)".to_owned() }
+                        div {
+                            class: "flex flex-col flex-none",
+                            style: "padding: 6px;",
+                            // All stays shown whatever the filter holds (design
+                            // D7), and a press on it unchecks every collection.
+                            button {
+                                "type": "button",
+                                class: "flex flex-none items-center text-left",
+                                role: "menuitemcheckbox",
+                                style: format!(
+                                    "margin-bottom: 8px; {}",
+                                    row_style(all)
+                                ),
+                                "aria-checked": "{all}",
+                                "data-library-collections-all": "",
+                                onclick: move |_| {
+                                    all_library.press_collection(&all_collections, GuiCollectionsFrame::ALL_KEY);
+                                },
+                                div {
+                                    class: "flex flex-none items-center justify-center",
+                                    style: checkbox_style(all),
+                                    "data-library-collections-checkbox": "",
+                                    if all {
+                                        Check {
+                                            size: 10,
+                                            color: "var(--canvas-menu)".to_owned(),
+                                        }
+                                    }
+                                }
+                                span { "All" }
                             }
-                        }
-                        for entry in rows.iter() {
-                            {
-                                let key = entry.key.clone();
-                                let name = entry.name.clone();
-                                let checked = entry.checked;
-                                let row_library = library.clone();
-                                let row_collections = collections.clone();
-                                rsx! {
-                                    button {
-                                        "type": "button",
-                                        class: "flex flex-none items-center justify-between text-left",
-                                        role: "menuitemcheckbox",
-                                        style: row_style(),
-                                        "aria-checked": "{checked}",
-                                        "data-library-collections-row": "{key}",
-                                        onclick: move |_| {
-                                            row_library.press_collection(&row_collections, &key);
-                                        },
-                                        span { "{name}" }
-                                        if checked {
-                                            Check { size: 18, color: "var(--canvas-accent)".to_owned() }
+                            for entry in rows.iter() {
+                                {
+                                    let key = entry.key.clone();
+                                    let name = entry.name.clone();
+                                    let checked = entry.checked;
+                                    let row_library = library.clone();
+                                    let row_collections = collections.clone();
+                                    rsx! {
+                                        button {
+                                            "type": "button",
+                                            class: "flex flex-none items-center text-left",
+                                            role: "menuitemcheckbox",
+                                            style: row_style(checked),
+                                            "aria-checked": "{checked}",
+                                            "data-library-collections-row": "{key}",
+                                            onclick: move |_| {
+                                                row_library.press_collection(&row_collections, &key);
+                                            },
+                                            div {
+                                                class: "flex flex-none items-center justify-center",
+                                                style: checkbox_style(checked),
+                                                "data-library-collections-checkbox": "",
+                                                if checked {
+                                                    Check {
+                                                        size: 10,
+                                                        color: "var(--canvas-menu)".to_owned(),
+                                                    }
+                                                }
+                                            }
+                                            span { "{name}" }
                                         }
                                     }
                                 }
                             }
                         }
+                        // The popover's footer: the key hints the dropdown's
+                        // bindings actually have. Esc closes the dropdown
+                        // (design D7), so the footer names it at the right
+                        // end; Space does nothing on the dropdown, so the
+                        // artboard's left hints stay unpainted (design D6).
+                        div {
+                            class: "flex flex-none items-center justify-end",
+                            style: "height: 30px; padding: 0 12px; border-top: 1px solid var(--canvas-menu-border);",
+                            "data-library-collections-footer": "",
+                            span {
+                                class: "font-mono",
+                                style: "font-size: 11px; color: var(--canvas-muted);",
+                                "esc close"
+                            }
+                        }
                     }
-                }
-            }
-            // The date-order toggle sits at the title line's right end on a
-            // feed-based destination (design D6, D6a); Music carries no order
-            // and paints none.
-            if let Some(order) = order_label {
-                button {
-                    "type": "button",
-                    class: "flex flex-none items-center whitespace-nowrap",
-                    style: "height: 30px; padding: 0 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--canvas-border); background: none; color: var(--canvas-muted);",
-                    "aria-label": "Date order",
-                    "data-library-date-order": "",
-                    onclick: move |_| on_order.call(()),
-                    "{order}"
                 }
             }
         }

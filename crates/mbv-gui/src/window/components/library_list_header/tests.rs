@@ -1,10 +1,9 @@
 //! Headless tests of the list header's title line (gui-collection-dropdown
 //! design D6a, spec "The collection dropdown sits in the list header and no
-//! pill row remains"): the title line paints the list title, then the collection
-//! dropdown's trigger, then the date order toggle at the line's right end, and
-//! the selection label paints only where no trigger names the selection. The
-//! core channel is a mock pair; no test opens a window, sleeps, or reaches the
-//! core.
+//! pill row remains"): the title line paints the list title and then the
+//! collection dropdown's trigger, and the selection label paints only where no
+//! trigger names the selection. The core channel is a mock pair; no test opens
+//! a window, sleeps, or reaches the core.
 
 use std::sync::{Arc, mpsc};
 
@@ -155,30 +154,19 @@ fn podcasts_frame() -> GuiCollectionsFrame {
 }
 
 /// Contract (design D6a, spec "Podcasts header"): the title line paints the
-/// list title, then the trigger, then the date order toggle, and the toggle sits
-/// at the line's right end.
+/// list title and then the trigger after it.
 #[test]
-fn the_title_line_paints_the_title_the_trigger_then_the_date_order_toggle() {
+fn the_title_line_paints_the_title_then_the_trigger() {
     let fixture = built(Some(podcasts_frame()));
 
     assert_eq!(fixture.text_of("[data-library-list-title]"), "Podcasts");
     assert_eq!(fixture.text_of("[data-library-collections-trigger]"), "All");
-    assert_eq!(fixture.text_of("[data-library-date-order]"), "Newest");
 
     let title = fixture.rect_of("[data-library-list-title]");
     let trigger = fixture.rect_of("[data-library-collections-trigger]");
-    let toggle = fixture.rect_of("[data-library-date-order]");
     assert!(
         title.x + title.width <= trigger.x,
         "the trigger paints after the title"
-    );
-    assert!(
-        trigger.x + trigger.width <= toggle.x,
-        "the toggle paints after the trigger"
-    );
-    assert!(
-        toggle.x + toggle.width > trigger.x + trigger.width,
-        "the toggle sits at the line's right end"
     );
 }
 
