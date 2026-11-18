@@ -19,6 +19,12 @@
 //! raised fill and a brighter glyph rather than the canvas veil every other
 //! button takes, so `assets/app.css` excludes the header's buttons from it.
 //!
+//! The bar clips no child: the switcher sits in its own positioning anchor and
+//! the Queue chooser's dropdown mounts inside it (design D8), so the card hangs
+//! under the switcher with its leading edge on the switcher's and paints over
+//! the queue rows below. The title keeps its own clipping, so a long name still
+//! cannot push the controls.
+//!
 //! Each control carries a pointer target: it reports its own region through
 //! `QueuePanel`'s report keys — the switcher `queueChooser`, the filter
 //! `filter`, the new-queue control `newQueue`, and the close control
@@ -31,6 +37,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::GuiQueueSummary;
+use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
 
 /// The title the header paints while the shown entry has no name. The title
@@ -68,9 +75,13 @@ const ICON_BUTTON_STYLE: &str = "width: 32px; height: 32px; border-radius: 6px;"
 pub struct QueueHeaderProps {
     /// The queue summary the header's controls read.
     pub summary: GuiQueueSummary,
-    /// Whether the Queue chooser's dropdown is open: the switcher's chevron
-    /// points up while it is (design D7).
-    pub chooser_open: bool,
+    /// The open Queue chooser's dropdown facts: its cursor, its entries in
+    /// paint order, and the rename draft. `None` while it is closed, and the
+    /// switcher's chevron follows it (design D7).
+    pub chooser_menu: Option<QueueChooserMenuState>,
+    /// The painted chooser entries' mounted events, by their entry index — the
+    /// handles the panel's `queueChooserEntry` regions read.
+    pub chooser_row_slot: Signal<Vec<Option<Event<MountedData>>>>,
     /// The Queue chooser button's mounted event — the handle the
     /// `queueChooser` region reads.
     pub chooser: Signal<Option<Event<MountedData>>>,
@@ -95,7 +106,8 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     let filter = props.filter;
     let new_queue = props.new_queue;
     let close = props.close;
-    let chooser_open = props.chooser_open;
+    let chooser_menu = props.chooser_menu.clone();
+    let chooser_open = chooser_menu.is_some();
     let title = if summary.header.shown_name.is_empty() {
         DEFAULT_TITLE.to_owned()
     } else {
@@ -104,7 +116,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
 
     rsx! {
         div {
-            class: "flex items-center overflow-hidden whitespace-nowrap",
+            class: "flex items-center whitespace-nowrap",
             style: "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: var(--ef-bg1); border-bottom: 1px solid var(--ef-bg3); margin-inline: calc(var(--mbv-cell-col) * -2);",
             "data-queue-header": "",
             // The `QUEUE` label (design D7): the bar's own name, in the canvas's
@@ -115,59 +127,75 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 "data-queue-label": "",
                 "{QUEUE_LABEL}"
             }
-            // The Queue chooser button (design D7): it names the shown entry,
-            // counts its slots, and opens the dropdown. It always paints — a
-            // one-entry list switches nothing else, and the chevron points up
-            // while the dropdown is open.
-            {
-                let mut chooser_slot = chooser;
-                let switcher_style = if chooser_open {
-                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: var(--ef-grey0); background: var(--ef-bg3);"
-                } else {
-                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
-                };
-                rsx! {
-                    button {
-                        "type": "button",
-                        class: "{SWITCHER_CLASS}",
-                        style: "{switcher_style}",
-                        title: "Queue chooser (t)",
-                        "aria-label": "Queue chooser",
-                        "aria-expanded": "{chooser_open}",
-                        "data-queue-chooser": "",
-                        onmounted: move |event| chooser_slot.set(Some(event)),
-                        ListOrdered {
-                            size: 14,
-                            stroke_width: 1.6,
-                            color: "var(--ef-grey2)".to_owned(),
-                        }
-                        span {
-                            class: "min-w-0 overflow-hidden whitespace-nowrap",
-                            style: "font-size: 13px; font-weight: 600; color: var(--ef-fg);",
-                            "data-queue-title": "",
-                            "{title}"
-                        }
-                        // The shown queue's slot count (design D7): the canvas's
-                        // chip, in mono, on the header bar's own fill.
-                        span {
-                            class: "shrink-0",
-                            style: "padding: 0 4px; border-radius: 4px; background: var(--ef-bg1); color: var(--ef-grey2); font-family: var(--font-mono); font-size: 11px; line-height: 16px;",
-                            "data-queue-count": "",
-                            "{summary.header.shown_len}"
-                        }
-                        if chooser_open {
-                            ChevronUp {
-                                size: 12,
+            // The Queue switcher and its dropdown's anchor (design D7, D8): the
+            // button names the shown entry, counts its slots, and opens the
+            // dropdown; the card mounts inside this box, so its leading edge is
+            // the switcher's and it drops four pixels under it. The box takes no
+            // clipping of its own — the title keeps that — so the card is free to
+            // hang below the bar over the rows.
+            div {
+                style: "position: relative; min-width: 0;",
+                class: "flex items-center",
+                "data-queue-switcher-anchor": "",
+                {
+                    let mut chooser_slot = chooser;
+                    let switcher_style = if chooser_open {
+                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: var(--ef-grey0); background: var(--ef-bg3);"
+                    } else {
+                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
+                    };
+                    rsx! {
+                        button {
+                            "type": "button",
+                            class: "{SWITCHER_CLASS}",
+                            style: "{switcher_style}",
+                            title: "Queue chooser (t)",
+                            "aria-label": "Queue chooser",
+                            "aria-expanded": "{chooser_open}",
+                            "data-queue-chooser": "",
+                            onmounted: move |event| chooser_slot.set(Some(event)),
+                            ListOrdered {
+                                size: 14,
                                 stroke_width: 1.6,
                                 color: "var(--ef-grey2)".to_owned(),
                             }
-                        } else {
-                            ChevronDown {
-                                size: 12,
-                                stroke_width: 1.6,
-                                color: "var(--ef-grey2)".to_owned(),
+                            span {
+                                class: "min-w-0 overflow-hidden whitespace-nowrap",
+                                style: "font-size: 13px; font-weight: 600; color: var(--ef-fg);",
+                                "data-queue-title": "",
+                                "{title}"
+                            }
+                            // The shown queue's slot count (design D7): the
+                            // canvas's chip, in mono, on the header bar's own
+                            // fill.
+                            span {
+                                class: "shrink-0",
+                                style: "padding: 0 4px; border-radius: 4px; background: var(--ef-bg1); color: var(--ef-grey2); font-family: var(--font-mono); font-size: 11px; line-height: 16px;",
+                                "data-queue-count": "",
+                                "{summary.header.shown_len}"
+                            }
+                            if chooser_open {
+                                ChevronUp {
+                                    size: 12,
+                                    stroke_width: 1.6,
+                                    color: "var(--ef-grey2)".to_owned(),
+                                }
+                            } else {
+                                ChevronDown {
+                                    size: 12,
+                                    stroke_width: 1.6,
+                                    color: "var(--ef-grey2)".to_owned(),
+                                }
                             }
                         }
+                    }
+                }
+                if let Some(menu) = chooser_menu {
+                    QueueChooserMenu {
+                        cursor: menu.cursor,
+                        entries: menu.entries,
+                        renaming: menu.renaming,
+                        row_slot: props.chooser_row_slot,
                     }
                 }
             }

@@ -11,6 +11,34 @@ use super::harness::*;
 use crate::bridge::frame::overlay::GuiQueueChooserRename;
 use crate::bridge::layout::{QueueTargetId, RegionTarget};
 
+/// Contract (design D8 of `gui-queue-panel-redesign`: "The card anchors 4 px
+/// under the switcher, left-aligned"; review finding P2 of its unit 5): the
+/// dropdown's positioning ancestor is the switcher's own anchor box, so the
+/// card's leading edge is the switcher's — not the `QUEUE` label's — and its top
+/// edge drops four pixels under the switcher's bottom edge.
+#[test]
+fn the_chooser_card_hangs_four_pixels_under_the_switcher() {
+    let fixture = built_with_frame(
+        queue_panel_app,
+        queue(Vec::new()),
+        chooser_summary(),
+        Some(queue_chooser(None)),
+    );
+
+    let switcher = fixture.rect_of("[data-queue-chooser]");
+    let card = fixture.rect_of("[data-queue-chooser-menu]");
+
+    assert_eq!(
+        card.x, switcher.x,
+        "the card's leading edge is the switcher's"
+    );
+    assert_eq!(
+        card.y,
+        switcher.y + switcher.height + 4.0,
+        "the card drops four pixels under the switcher"
+    );
+}
+
 /// Contract (spec `gui-queue-chooser` "The chooser lists local queues and
 /// connected peers"): the dropdown paints the local Owner's queues in queue
 /// order and then the connected peer, and each entry reports its own region

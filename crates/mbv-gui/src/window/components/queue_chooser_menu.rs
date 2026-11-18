@@ -8,10 +8,11 @@
 //! The window holds no open, cursor, or rename state: the frame's `queueChooser`
 //! section carries the core's cursor, the entries, and the draft, and a press
 //! forwards like every other pointer event — the core resolves it against the
-//! hit map. The card drops four pixels under the Queue switcher's row,
-//! left-aligned with the header's content edge, and paints the design's own
-//! card and item chrome: a 34 px row in the raised fill on the cursor and under
-//! the pointer, so the two queue overlays read as one family.
+//! hit map. The card is a child of the switcher's own anchor box, so its leading
+//! edge is the switcher's and it drops four pixels under it (design D8), and it
+//! paints the design's own card and item chrome: a 34 px row in the raised fill
+//! on the cursor and under the pointer, so the two queue overlays read as one
+//! family.
 //!
 //! Each row paints, in the design's order: the shown entry's check, the name —
 //! or the name open for edit — then at the trailing end the playing mark, the
@@ -27,11 +28,14 @@
 //! inserted when the chooser opens — the row menu's technique — so the entries
 //! land after the queue's regions in the merged report and win the hit map where
 //! the dropdown paints over a queue row beneath it (the hit map's last push
-//! wins). A child-held key would land first, before the parent's, and lose.
+//! wins). A child-held key would land first, before the parent's, and lose. The
+//! card paints from the header's switcher anchor rather than from the panel's
+//! tree, which changes nothing about that order: the key belongs to the panel,
+//! not to where the card mounts.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::overlay::{GuiQueueChooserEntry, GuiQueueChooserRename};
+use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Check};
@@ -44,6 +48,37 @@ const CURRENT_MARK_PX: u16 = 8;
 const ITEM_HEIGHT_PX: u16 = 34;
 const CARD_PADDING_PX: u16 = 4;
 const ITEM_GAP_PX: u16 = 2;
+
+/// The open Queue chooser's dropdown facts, as the frame's overlay carries
+/// them: the core's cursor, the entries in paint order, and the rename draft
+/// while one is open. The header's switcher anchor paints the dropdown from
+/// these, so the card needs no second match on the overlay.
+#[derive(Clone, Debug, PartialEq)]
+pub struct QueueChooserMenuState {
+    pub cursor: usize,
+    pub entries: Vec<GuiQueueChooserEntry>,
+    pub renaming: Option<GuiQueueChooserRename>,
+}
+
+impl QueueChooserMenuState {
+    /// The open chooser's facts, or `None` while another overlay (or none) is
+    /// up.
+    #[must_use]
+    pub fn from_overlay(overlay: Option<&GuiOverlayFrame>) -> Option<Self> {
+        match overlay {
+            Some(GuiOverlayFrame::QueueChooser {
+                cursor,
+                entries,
+                renaming,
+            }) => Some(Self {
+                cursor: *cursor,
+                entries: entries.clone(),
+                renaming: renaming.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
 
 /// The props of the Queue chooser's dropdown: the core's cursor, the frame's
 /// entries in paint order, the rename draft while one is open, and the handles
@@ -95,7 +130,9 @@ fn entry_key(entry: &GuiQueueChooserEntry) -> String {
 /// The Queue chooser's dropdown: one 34 px row per entry, the cursor row
 /// filled, the shown entry checked, the current queue dotted, the playing queue
 /// marked in aqua, the peer entry brand-marked, each with its slot count, and
-/// the rename draft's caret after the text it edits.
+/// the rename draft's caret after the text it edits. It fills its positioning
+/// ancestor — the switcher's anchor — dropping four pixels under it with its
+/// leading edge on the switcher's (design D8).
 #[component]
 pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
     rsx! {
@@ -104,7 +141,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(var(--canvas-queue-header-height) - 4px); left: calc(var(--mbv-cell-col) * -2 + 12px); width: calc(100% + var(--mbv-cell-col) * 4 - 24px); min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: var(--ef-bg2); border: 1px solid var(--ef-bg4); border-radius: 8px;"
+                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: var(--ef-bg2); border: 1px solid var(--ef-bg4); border-radius: 8px;"
             ),
             "data-queue-chooser-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {

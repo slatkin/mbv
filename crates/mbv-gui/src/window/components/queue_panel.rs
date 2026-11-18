@@ -80,7 +80,7 @@ use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry};
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueRow};
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::layout::{LayoutRegion, ListId, ListRows, QueueTargetId, RegionTarget};
-use crate::window::components::queue_chooser_menu::QueueChooserMenu;
+use crate::window::components::queue_chooser_menu::QueueChooserMenuState;
 use crate::window::components::queue_header::QueueHeader;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::{Ellipsis, GripVertical};
@@ -268,15 +268,10 @@ pub fn QueuePanel() -> Element {
         _ => String::new(),
     });
     // The open Queue chooser, or `None` while another overlay (or none) is up:
-    // the core's cursor, the entries in paint order, and the rename draft.
-    let chooser_open = match overlay.as_ref() {
-        Some(GuiOverlayFrame::QueueChooser {
-            cursor,
-            entries,
-            renaming,
-        }) => Some((*cursor, entries.clone(), renaming.clone())),
-        _ => None,
-    };
+    // the core's cursor, the entries in paint order, and the rename draft. The
+    // header's switcher anchor paints the card from these facts; the entries'
+    // regions stay this panel's to report (design D8).
+    let chooser_menu = QueueChooserMenuState::from_overlay(overlay.as_ref());
     // The recessed box's fill: the chrome's `queuePanel` resting fill at
     // every state (user decision 2026-11-15). The property is undefined
     // on purpose (`window/theme.rs::write_chrome`), so the box paints no fill
@@ -455,7 +450,8 @@ pub fn QueuePanel() -> Element {
                 "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
-                    chooser_open: chooser_open.is_some(),
+                    chooser_menu,
+                    chooser_row_slot: chooser_rows,
                     chooser: chooser_handle,
                     filter: filter_handle,
                     new_queue: new_queue_handle,
@@ -683,18 +679,6 @@ pub fn QueuePanel() -> Element {
                         entries,
                         top: menu_top.unwrap_or_default(),
                         row_slot: menu_rows,
-                    }
-                }
-                if let Some((cursor, entries, renaming)) = chooser_open {
-                    // The open Queue chooser (task 8.3): the frame's entries
-                    // under the header at the chooser button's leading edge.
-                    // Its entries report their own regions under the third key,
-                    // last over the rows beneath.
-                    QueueChooserMenu {
-                        cursor,
-                        entries,
-                        renaming,
-                        row_slot: chooser_rows,
                     }
                 }
             }
