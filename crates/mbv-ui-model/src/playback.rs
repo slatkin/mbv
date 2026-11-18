@@ -9,6 +9,11 @@ pub struct PlaybackState {
     pub active_idx: Option<usize>,
     pub position_ticks: i64,
     pub runtime_ticks: i64,
+    /// Media position up to which the local player holds cached media, in the
+    /// same tick units as `position_ticks`. 0 = unknown: no local demuxer
+    /// cache, an output that keeps none (Cast, Emby Session), or an Owner
+    /// that predates the field.
+    pub buffered_ticks: i64,
     pub paused: bool,
 }
 

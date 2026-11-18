@@ -25,11 +25,20 @@ impl App {
             Some(self.resolved_active_index(s.current_idx))
         };
         let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
+        // Only the local output has a demuxer cache to report (design D6 of
+        // `gui-queue-panel-redesign`): a Cast receiver or an Emby Session
+        // holds the active item only, so its buffered end stays unknown.
+        let buffered_ticks = if self.output_is_cast() || self.output_is_emby_session() {
+            0
+        } else {
+            s.buffered_ticks
+        };
         mbv_ui_model::playback::PlaybackState {
             active: s.active,
             active_idx,
             position_ticks,
             runtime_ticks,
+            buffered_ticks,
             paused: s.paused,
         }
     }
@@ -108,6 +117,7 @@ impl App {
                 .playback_queue()
                 .item_at(index)
                 .map_or(0, mbv_queue::QueueItem::runtime_ticks),
+            buffered_ticks: 0,
             paused: false,
         }
     }

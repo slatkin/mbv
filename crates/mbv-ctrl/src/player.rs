@@ -86,9 +86,12 @@ pub struct PlayerStatus {
 impl PlayerStatus {
     /// Copy the start item's playback position, runtime, and identity into
     /// this status — the shared "player about to start / just scheduled"
-    /// seeding used by every queue path. Callers set `active`.
+    /// seeding used by every queue path. Callers set `active`. The previous
+    /// item's cache end is cleared with the position: the new start reports
+    /// nothing buffered until mpv observes the new file's demuxer cache.
     pub fn seed_from_item(&mut self, item: &QueueItem, idx: usize, queue_len: usize) {
         self.position_ticks = item.playback_position_ticks();
+        self.buffered_ticks = 0;
         self.runtime_ticks = item.runtime_ticks();
         self.paused = false;
         self.current_idx = idx;

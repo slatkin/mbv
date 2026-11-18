@@ -335,6 +335,10 @@ impl PlaybackRun {
                 self.status.lock().unwrap().volume =
                     mbv_emby_model::saturating_i64_from_f64(vol * vol / 100.0);
             }
+            ("demuxer-cache-time", PropertyValue::Double(cache_secs)) => {
+                self.status.lock().unwrap().buffered_ticks =
+                    mbv_emby_model::seconds_to_ticks(cache_secs);
+            }
             (_, PropertyValue::Double(pos_secs)) => {
                 self.on_time_pos(pos_secs, mpv);
             }
@@ -445,5 +449,23 @@ mod unavailable_property_tests {
         run.on_property_change("video-params/h", PropertyValue::None, &mpv, &tx);
 
         assert_eq!(status.lock().unwrap().video_height, 720);
+    }
+
+    /// A `demuxer-cache-time` observation lands in `PlayerStatus::
+    /// buffered_ticks` as media ticks (gui-queue-panel-redesign 2.3).
+    #[test]
+    fn demuxer_cache_time_updates_buffered_ticks() {
+        let (mut run, status, _events) = make_queue_session_for_pos_tests_with_events(0);
+        let (ours, _peer) = UnixStream::pair().expect("socket pair");
+        let session = IpcSession::from_stream(ours).expect("session over a socket pair");
+        let mpv = Mpv::for_test(session);
+        let (tx, _rx) = mpsc::channel();
+
+        run.on_property_change("demuxer-cache-time", PropertyValue::Double(30.0), &mpv, &tx);
+
+        assert_eq!(
+            status.lock().unwrap().buffered_ticks,
+            30 * mbv_emby_model::TICKS_PER_SECOND
+        );
     }
 }

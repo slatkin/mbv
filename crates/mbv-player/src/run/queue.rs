@@ -483,6 +483,10 @@ impl PlaybackRun {
         self.intro_start = 0;
         self.intro_end = 0;
         self.intro_state = state.intro_state;
+        // Every caller just installed a new file; the old file's cache end
+        // says nothing about it, and mpv's next `demuxer-cache-time`
+        // observation re-populates the field for the new source.
+        self.status.lock().unwrap().buffered_ticks = 0;
     }
 
     /// Construct a `PlaybackRun` from the Player owner's canonical slots.
