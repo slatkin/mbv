@@ -23,9 +23,11 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::Panel;
+use crate::art::GuiArtRef;
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::playback::{
-    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTrackChip, GuiTrackChips,
+    GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::layout::{LayoutSize, QueuePlaybackTargetId, RegionTarget};
@@ -152,6 +154,38 @@ fn playback() -> GuiQueuePlayback {
         track_chips: None,
         target_choices: Vec::new(),
         controls: GuiPlayerControls::default(),
+    }
+}
+
+/// The track chips the frame carries over a playing video item: a video label
+/// and two chips with no chosen choice, so each paints its kind's fallback
+/// label.
+fn chips() -> GuiTrackChips {
+    GuiTrackChips {
+        video: Some("1080p".to_owned()),
+        audio: GuiTrackChip {
+            choices: Vec::new(),
+            chosen: None,
+        },
+        subtitles: GuiTrackChip {
+            choices: Vec::new(),
+            chosen: None,
+        },
+    }
+}
+
+/// The stopped frame of `gui-art-player-overlay` D7: no title, no artwork, the
+/// controls behind `show_controls`, and `can_start` the transport gate.
+fn stopped(can_start: bool) -> GuiQueuePlayback {
+    GuiQueuePlayback {
+        show_controls: false,
+        now_playing_title: None,
+        artwork: None,
+        controls: GuiPlayerControls {
+            auto_hide: false,
+            can_start,
+        },
+        ..playback()
     }
 }
 
@@ -566,6 +600,100 @@ fn the_strip_paints_the_parent_line_alone_while_no_slot_follows() {
     let text = fixture.text();
     assert!(text.contains("The Show"), "{text}");
     assert!(!text.contains("Next:"), "{text}");
+}
+
+/// The no-image column's paint (`gui-art-player-overlay` D6, task 3.4b): no
+/// stage paints, and the chips line paints before the control rows.
+fn assert_no_image_column(artwork: Option<GuiArtRef>) {
+    let mut fixture = built(TALL);
+    fixture.set_playback(GuiQueuePlayback {
+        artwork,
+        track_chips: Some(chips()),
+        ..playback()
+    });
+    fixture.seed(summary());
+
+    assert!(
+        !fixture.presents("[data-target=\"visualSlot\"]"),
+        "the no-image column paints no stage"
+    );
+    assert!(fixture.presents("[data-chip]"), "the chips line paints");
+    assert!(
+        fixture.presents("[data-target=\"playPause\"]"),
+        "the control rows paint"
+    );
+    let text = fixture.text();
+    let chips_at = text.find("1080p").expect("the video chip paints");
+    let rows_at = text
+        .find("+30")
+        .expect("the control rows' forward label paints");
+    assert!(
+        chips_at < rows_at,
+        "the chips line paints before the control rows:\n{text}"
+    );
+}
+
+/// Contract (`gui-art-player-overlay` D6, task 3.4b): an item with no image
+/// paints the chips-and-badge line before the control rows and no stage — for
+/// the bundled placeholder and for a frame with no artwork at all.
+#[test]
+fn a_placeholder_or_no_artwork_paints_the_chips_line_before_the_control_rows() {
+    assert_no_image_column(Some(GuiArtRef::Placeholder {
+        src: "mbv-art://localhost/placeholder".to_owned(),
+    }));
+    assert_no_image_column(None);
+}
+
+/// Contract (`gui-art-player-overlay` D7, task 3.4c): the real stopped frame —
+/// no title, no artwork, the controls behind `show_controls`, and a shown local
+/// queue that can start — paints the two control rows and no stage, no chips
+/// line, and no title block.
+#[test]
+fn the_stopped_player_paints_its_control_rows_and_no_stage_and_no_title() {
+    let mut fixture = built(TALL);
+    fixture.set_playback(stopped(true));
+    fixture.seed(summary());
+
+    assert!(
+        fixture.presents("[data-target=\"playPause\"]"),
+        "the first control row paints"
+    );
+    assert!(
+        fixture.presents("[data-target=\"previous\"]"),
+        "the second control row paints"
+    );
+    assert!(
+        !fixture.presents("[data-target=\"visualSlot\"]"),
+        "no stage paints"
+    );
+    assert!(!fixture.presents("[data-chip]"), "no chips line paints");
+    assert!(
+        !fixture.text().contains("The Show"),
+        "the title block paints no parent line"
+    );
+}
+
+/// Contract (`gui-art-player-overlay` D7, task 3.4d): the same stopped frame
+/// while the shown queue cannot start — a shown peer queue or an empty shown
+/// local queue — paints no control rows.
+#[test]
+fn a_stopped_player_that_cannot_start_paints_no_control_rows() {
+    let mut fixture = built(TALL);
+    fixture.set_playback(stopped(false));
+    fixture.seed(summary());
+
+    assert!(
+        !fixture.presents("[data-target=\"playPause\"]"),
+        "no first control row paints"
+    );
+    assert!(
+        !fixture.presents("[data-target=\"previous\"]"),
+        "no second control row paints"
+    );
+    assert!(
+        !fixture.presents("[data-target=\"visualSlot\"]"),
+        "no stage paints"
+    );
 }
 
 /// Contract (`Panel.test.ts`): the folded queue paints the summary line —

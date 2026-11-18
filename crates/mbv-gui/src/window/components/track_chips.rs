@@ -10,7 +10,12 @@
 //! projection the chips read, so its rows and the chips cannot disagree —
 //! anchored below the chip it belongs to and right-aligned (design DR8),
 //! the chosen choice filled and checked and the core's cursor row
-//! highlighted. The dialog paints the Menus artboard's chrome (B.4). The
+//! highlighted. The dialog paints the Menus artboard's chrome (B.4). Its
+//! stacking class is the above-panel tier (`z-30`): the stage's top layer
+//! sits outside the media box's clip, so a popover that reaches past the
+//! artwork's bottom edge paints over the panel's own content and the queue
+//! rows below it (`gui-art-player-overlay` D1). The full-window dialogs
+//! mount later at the root and so still paint over it. The
 //! window holds no open, cursor, or hover state; Esc and a press elsewhere
 //! close the popover through the core's key and pointer paths. The subtitle
 //! popover's Off row comes first in the frame's choice order; the window
@@ -309,7 +314,10 @@ fn TrackPopoverList(props: TrackPopoverProps) -> Element {
     };
     rsx! {
         div {
-            class: "absolute top-full right-0 z-20 mt-1 flex flex-col",
+            // The above-panel stacking tier (`gui-art-player-overlay` D1):
+            // the popover hangs past the artwork and paints over the panel's
+            // content and the queue rows, never under them.
+            class: "absolute top-full right-0 z-30 mt-1 flex flex-col",
             role: "dialog",
             "aria-label": "{dialog_label}",
             style: "width: 260px; padding: 6px; gap: 2px; background: {canvas_var(\"popover\")}; border: 1px solid {canvas_var(\"popover-border\")}; border-radius: 8px; box-shadow: {canvas_var(\"popover-shadow\")};",

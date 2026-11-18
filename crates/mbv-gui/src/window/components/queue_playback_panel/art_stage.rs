@@ -128,6 +128,10 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             // overlay layers and the chip popovers paint past its edges
             // (design D1).
             div { class: "overflow-hidden w-full", {media} }
+            // The top layer anchors the chips and the badge. It is a sibling
+            // of the clipped media box, so a chip's popover hangs past the
+            // artwork's bottom edge and, at its own above-panel stacking
+            // class, paints over the panel's content and the queue rows.
             div {
                 class: "absolute inset-x-0 top-0",
                 style: "padding: 10px 12px;",
