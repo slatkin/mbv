@@ -207,6 +207,7 @@ fn anchor() -> GuiPlayhead {
         position_ticks: 60 * SECOND,
         runtime_ticks: 200 * SECOND,
         paused: false,
+        buffered_ticks: 90 * SECOND,
     }
 }
 

@@ -304,6 +304,10 @@ pub struct GuiPlayhead {
     /// Whether the transport is paused: the prediction holds the position
     /// while it is.
     pub paused: bool,
+    /// The media position up to which the output holds cached media, in ticks
+    /// (`gui-queue-panel-redesign` design D6). `0` while no output reports
+    /// one, so no buffered range paints.
+    pub buffered_ticks: i64,
 }
 
 impl GuiPlayhead {
@@ -318,6 +322,7 @@ impl GuiPlayhead {
             position_ticks: state.position_ticks,
             runtime_ticks: state.runtime_ticks,
             paused: state.paused,
+            buffered_ticks: state.buffered_ticks,
         }
     }
 }

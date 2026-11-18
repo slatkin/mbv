@@ -34,8 +34,10 @@ const TRACK_HOVER_PX: f32 = 6.0;
 const THUMB_REST_PX: f32 = 14.0;
 const THUMB_HOVER_PX: f32 = 16.0;
 
-/// The rest track's grey: `--ef-grey2` at 28 % (design D4).
+/// The rest track's grey: `--ef-grey2` at 28 %, with the buffered range at
+/// 42 % (design D4).
 const TRACK_OPACITY: f32 = 0.28;
+const BUFFERED_OPACITY: f32 = 0.42;
 
 /// The thumb's ring width at scale 1.0 (design D4): `--ef-bg-dim` around the
 /// green circle.
@@ -100,12 +102,19 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let track_style = format!(
         "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-grey2); opacity: {TRACK_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));"
     );
+    let buffered_style = format!(
+        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-grey2); opacity: {BUFFERED_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));"
+    );
     let played_style = format!(
         "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-green); border-radius: calc({track_radius_px}px * var(--player-scale));"
     );
     let thumb_style = format!(
         "top: calc({thumb_top_px}px * var(--player-scale)); width: calc({thumb_px}px * var(--player-scale)); height: calc({thumb_px}px * var(--player-scale)); background: var(--ef-green); box-shadow: 0 0 0 calc({THUMB_RING_PX}px * var(--player-scale)) var(--ef-bg-dim);"
     );
+    let buffered_pct = playhead.buffered_fraction.cloned() * 100.0;
+    // The cache end can sit behind the playhead after a seek, so the range
+    // paints only when it is ahead of the played fraction (design D6).
+    let buffered_ahead = playhead.buffered_fraction.cloned() > playhead.fraction.cloned();
     rsx! {
         div {
             class: "relative",
@@ -127,6 +136,13 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                 class: "absolute inset-x-0",
                 "data-track": "",
                 style: "{track_style}",
+            }
+            if buffered_ahead {
+                div {
+                    class: "absolute left-0",
+                    "data-buffered": "",
+                    style: "{buffered_style} width: {buffered_pct}%;",
+                }
             }
             div {
                 class: "absolute left-0",

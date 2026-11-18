@@ -149,6 +149,11 @@ pub struct Playhead {
     pub runtime: Memo<i64>,
     /// The played fraction of the active item, clamped to `[0, 1]`.
     pub fraction: Memo<f64>,
+    /// The buffered fraction of the active item, clamped to `[0, 1]`: the
+    /// output's reported cache end over the runtime, painted as it is and
+    /// never predicted (`gui-queue-panel-redesign` design D6). `0` while no
+    /// output reports a position.
+    pub buffered_fraction: Memo<f64>,
     /// The elapsed time, as the TUI's shared duration formatter paints it.
     pub elapsed: Memo<String>,
     /// The time left in the active item, in the same format. The panels
@@ -193,6 +198,10 @@ impl Playhead {
         });
         let fraction =
             Memo::new(move || clamp_ratio(position.cloned(), ticks_f64(runtime.cloned())));
+        let buffered_fraction = Memo::new(move || {
+            let buffered = anchor.cloned().map_or(0, |value| value.buffered_ticks);
+            clamp_ratio(ticks_f64(buffered), ticks_f64(runtime.cloned()))
+        });
         let elapsed = Memo::new(move || {
             format_duration_short(mbv_emby_model::saturating_i64_from_f64(
                 (position.cloned() / TICKS_PER_SECOND).floor(),
@@ -235,6 +244,7 @@ impl Playhead {
             position,
             runtime,
             fraction,
+            buffered_fraction,
             elapsed,
             remaining,
             finish,
