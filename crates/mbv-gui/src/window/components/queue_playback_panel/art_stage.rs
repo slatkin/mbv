@@ -93,9 +93,6 @@ pub struct ArtStageProps {
     pub availability: GuiTransportAvailability,
     /// Whether the core-owned auto-hide preference is on (design D5).
     pub auto_hide: bool,
-    /// Whether the transport plays: the playhead anchor's fact, not paused
-    /// (design D2). The stage carries `data-playing` while it holds.
-    pub playing: bool,
     /// The control rows' scale (design D3): the measured stage height's
     /// one-third share of the rows' full height, never above 1.0.
     pub scale: f32,
@@ -113,7 +110,6 @@ impl std::fmt::Debug for ArtStageProps {
             .field("paused", &self.paused)
             .field("availability", &self.availability)
             .field("auto_hide", &self.auto_hide)
-            .field("playing", &self.playing)
             .field("scale", &self.scale)
             .finish_non_exhaustive()
     }
@@ -153,7 +149,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             // otherwise, never `"false"`: the stylesheet's selectors test
             // presence (design D2).
             "data-auto-hide": props.auto_hide.then_some(""),
-            "data-playing": props.playing.then_some(""),
+            "data-playing": (!props.paused).then_some(""),
             onmounted: move |event| stage_mounted.set(Some(event)),
             // The clip belongs to the media box, never to the stage: the
             // overlay layers and the chip popovers paint past its edges
@@ -266,18 +262,13 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
     let next_glyph = glyph_color(props.availability.next, GuiRole::TextPrimary);
     // The box, its radius, and the mark inside it scale with the rows (design
     // D3); the hairline border stays 1.5 px so it cannot vanish.
+    let (border, background) = if props.auto_hide {
+        ("var(--canvas-accent)", "var(--canvas-accent)")
+    } else {
+        ("var(--canvas-ordinal)", "transparent")
+    };
     let mark_style = format!(
-        "width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); box-sizing: border-box; border-radius: calc(4px * var(--player-scale)); border: 1.5px solid {}; background: {};",
-        if props.auto_hide {
-            "var(--canvas-accent)"
-        } else {
-            "var(--canvas-ordinal)"
-        },
-        if props.auto_hide {
-            "var(--canvas-accent)"
-        } else {
-            "transparent"
-        },
+        "width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); box-sizing: border-box; border-radius: calc(4px * var(--player-scale)); border: 1.5px solid {border}; background: {background};",
     );
     rsx! {
         div {

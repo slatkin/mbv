@@ -291,14 +291,13 @@ impl App {
         (!self.shown_playback_status().active).then_some(queue)
     }
 
-    /// The slot count of the local queue the Queue panel shows (design D7):
-    /// the shown resting queue's own slots, or the current queue's, from the
-    /// same view the Queue section paints. The player panel's start gate reads
-    /// it, because `shown_queue_play_request` is also `Some` for an empty new
-    /// queue, which play/pause cannot start.
+    /// Whether the shown local queue can start while nothing plays (design
+    /// D7): the player panel's start gate reads this, because
+    /// `shown_queue_play_request` is also `Some` for an empty new queue, which
+    /// play/pause cannot start.
     #[must_use]
-    pub fn shown_queue_slot_count(&self) -> usize {
-        self.shown_local_queue().total_queue_len()
+    pub fn shown_queue_can_start(&self) -> bool {
+        self.shown_queue_play_request().is_some() && self.shown_local_queue().total_queue_len() > 0
     }
 
     /// Whether the Queue panel shows a resting local Named queue, so the

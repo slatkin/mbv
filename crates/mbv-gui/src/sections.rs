@@ -379,13 +379,11 @@ impl SectionLedger {
         ));
         let artwork = card_artwork_ref(&app.queue_card_artwork());
         // The GUI-only facts (gui-art-player-overlay design D5, D7): the
-        // auto-hide preference the core owns, and whether the transport can
-        // start the shown queue — a shown local queue that holds slots while
-        // nothing plays. A shown peer queue and an empty shown local queue
-        // cannot start.
+        // auto-hide preference the core owns, and whether the shown local
+        // queue can start while nothing plays. Both are core reads.
         let controls = GuiPlayerControls {
             auto_hide: app.gui_player_auto_hide(),
-            can_start: app.shown_queue_play_request().is_some() && app.shown_queue_slot_count() > 0,
+            can_start: app.shown_queue_can_start(),
         };
         self.playback.adopt(GuiQueuePlayback {
             artwork,

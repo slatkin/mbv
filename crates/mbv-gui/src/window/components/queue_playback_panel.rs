@@ -191,13 +191,6 @@ pub fn QueuePlaybackPanel() -> Element {
     // D5). `true` while no anchor holds — the idle transport paints a play
     // control.
     let paused = playhead.anchor.cloned().is_none_or(|anchor| anchor.paused);
-    // Whether the transport plays (design D2): the anchor's same fact, so a
-    // paused or idle transport paints no `data-playing` attribute.
-    let playing = !paused;
-    // The control rows paint while something plays and while the shown local
-    // queue can start (design D7). They are not behind `show_controls`: the
-    // stopped state carries `show_controls: false` and still paints them.
-    let controls_shown = playback.controls.can_start || playback.now_playing_title.is_some();
     let rows = ControlRowHandles {
         play_pause: play_pause_mounted,
         previous: prev_mounted,
@@ -219,7 +212,6 @@ pub fn QueuePlaybackPanel() -> Element {
                 chips: playback.track_chips.clone(),
                 overlay: sections.overlay.cloned(),
                 paused,
-                playing,
                 availability: playback.availability,
                 auto_hide: playback.controls.auto_hide,
                 scale: stage_scale(),
@@ -260,7 +252,7 @@ pub fn QueuePlaybackPanel() -> Element {
         div {
             class: "flex flex-col",
             style: "--player-scale: 1;",
-            if playback.now_playing_title.is_some() {
+            if let Some(title) = playback.now_playing_title.as_ref() {
                 {art_section}
                 // The title at the canvas's 18 px/600 and its parent line in
                 // the canvas link style at 13 px (`main` audit 8). The canvas
@@ -270,13 +262,11 @@ pub fn QueuePlaybackPanel() -> Element {
                 div {
                     class: "flex min-w-0 flex-col",
                     style: "padding: 14px 16px 6px; gap: 2px;",
-                    if let Some(title) = playback.now_playing_title.as_ref() {
-                        Truncate {
-                            text: title.clone(),
-                            css: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};"
-                                .to_owned(),
-                            style: TextStyle::sans(18.0, 600.0),
-                        }
+                    Truncate {
+                        text: title.clone(),
+                        css: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};"
+                            .to_owned(),
+                        style: TextStyle::sans(18.0, 600.0),
                     }
                     if let Some(parent_line) = playback.parent_line.as_ref() {
                         Truncate {
@@ -286,7 +276,7 @@ pub fn QueuePlaybackPanel() -> Element {
                         }
                     }
                 }
-            } else if controls_shown {
+            } else if playback.controls.can_start {
                 // The stopped state (design D7): the two control rows alone,
                 // with no stage, no chips line, and no title. The scrubber
                 // paints its empty track, because the playhead predicts no
