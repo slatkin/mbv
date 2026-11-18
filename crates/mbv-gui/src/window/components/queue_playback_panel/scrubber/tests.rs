@@ -18,8 +18,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::Scrubber;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::playback::{
-    GuiChapter, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, GuiSegmentMark,
-    GuiTransportAvailability,
+    GuiChapter, GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover,
+    GuiScrubberTile, GuiSegmentMark, GuiTransportAvailability,
 };
 use crate::window::clock::Clock;
 use crate::window::playhead::{Playhead, Times};
@@ -65,7 +65,6 @@ fn playing() -> GuiQueuePlayback {
         now_playing_title: None,
         parent_line: None,
         episode_badge: None,
-        still_caption: None,
         chapters: vec![
             GuiChapter {
                 name: "Chapter One".to_owned(),
@@ -94,6 +93,7 @@ fn playing() -> GuiQueuePlayback {
         artwork: None,
         track_chips: None,
         target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
     }
 }
 
@@ -351,12 +351,28 @@ fn the_scrubber_paints_the_hover_preview_from_the_frame() {
         "no tile box paints without a tile fact: {:?}",
         fixture.styles()
     );
-    assert!(fixture.style_of("[data-track]").contains("height: 6px"));
+    // The block's lengths carry the control rows' scale (design D3 of
+    // `gui-art-player-overlay`), so they multiply by `--player-scale`.
+    assert!(
+        fixture
+            .style_of("[data-track]")
+            .contains("height: calc(6px * var(--player-scale))")
+    );
     assert!(fixture.style_of("[data-played]").contains("width: 30%"));
-    assert!(fixture.style_of("[data-thumb]").contains("width: 16px"));
+    assert!(
+        fixture
+            .style_of("[data-thumb]")
+            .contains("width: calc(16px * var(--player-scale))")
+    );
     let line = fixture.style_of("[data-hover-line]");
-    assert!(line.contains("width: 1px"), "{line}");
-    assert!(line.contains("height: 22px"), "{line}");
+    assert!(
+        line.contains("width: calc(1px * var(--player-scale))"),
+        "{line}"
+    );
+    assert!(
+        line.contains("height: calc(22px * var(--player-scale))"),
+        "{line}"
+    );
     assert!(line.contains("left: 75%"), "{line}");
 }
 
@@ -434,12 +450,12 @@ fn a_two_hour_book_paints_its_chapter_and_credits_at_their_real_fractions() {
     let styles = fixture.styles();
     let chapter = styles
         .iter()
-        .find(|style| style.contains("height: 14px"))
+        .find(|style| style.contains("height: calc(14px * var(--player-scale))"))
         .expect("the chapter tick paints");
     assert!(chapter.contains("left: 75%"), "{chapter}");
     let credits = styles
         .iter()
-        .find(|style| style.contains("width: 4px"))
+        .find(|style| style.contains("width: calc(4px * var(--player-scale))"))
         .expect("the credits mark paints");
     assert!(credits.contains("left: 50%"), "{credits}");
 }

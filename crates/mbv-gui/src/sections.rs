@@ -35,7 +35,8 @@ use crate::bridge::frame::library::{
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, card_artwork_ref,
+    GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile,
+    card_artwork_ref,
 };
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
@@ -377,8 +378,16 @@ impl SectionLedger {
             tile,
         ));
         let artwork = card_artwork_ref(&app.queue_card_artwork());
+        // The GUI-only facts (gui-art-player-overlay design D5, D7): the
+        // auto-hide preference the core owns, and whether the shown local
+        // queue can start while nothing plays. Both are core reads.
+        let controls = GuiPlayerControls {
+            auto_hide: app.gui_player_auto_hide(),
+            can_start: app.shown_queue_can_start(),
+        };
         self.playback.adopt(GuiQueuePlayback {
             artwork,
+            controls,
             ..GuiQueuePlayback::from(&playback)
         });
         self.footer

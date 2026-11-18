@@ -34,11 +34,6 @@ pub struct GuiQueuePlayback {
     /// The season-and-episode badge the artwork paints ("S2 · E5"). `None`
     /// for every kind but an Emby episode with an ordinal known.
     pub episode_badge: Option<String>,
-    /// The still slot's caption while the artwork has no image (design
-    /// D4a's still slot): the image source the card-image fetch names for
-    /// the active item's kind. `None` while nothing to caption — idle, a
-    /// slotless output, or a kind with no image source.
-    pub still_caption: Option<String>,
     /// The active item's chapter boundaries with their names (design D4a):
     /// the scrubber's boundary ticks and the hover preview's chapter name.
     /// Empty while the item's fetch has not landed or carries none.
@@ -75,6 +70,25 @@ pub struct GuiQueuePlayback {
     /// receivers the Owner offers, each marked with whether it is the Owner's
     /// attached output.
     pub target_choices: Vec<GuiTargetChoice>,
+    /// The player panel's control facts (design D5, D7): the GUI-only facts
+    /// the shared projection does not carry, grouped as the availability is.
+    pub controls: GuiPlayerControls,
+}
+
+/// The player panel's GUI-only control facts (gui-art-player-overlay design
+/// D5, D7). Both decide how the transport controls paint, and neither rides
+/// the shared `QueuePlaybackProjection`: the core owns them for the GUI
+/// Client alone.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GuiPlayerControls {
+    /// Whether the panel hides its transport controls until the pointer
+    /// enters the stage (design D5): the core-owned preference, read from the
+    /// App.
+    pub auto_hide: bool,
+    /// Whether the transport can start the shown queue (design D7): true
+    /// only for a shown local queue that holds slots while nothing plays. The
+    /// panel paints its control rows then, even with no title.
+    pub can_start: bool,
 }
 
 /// The scrubber's hover preview (design D4): the position a move over the
@@ -158,7 +172,6 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
-            still_caption: projection.still_caption.clone(),
             chapters: projection.chapters.iter().map(GuiChapter::from).collect(),
             intro_mark: projection.intro_mark.map(GuiSegmentMark::from),
             credits_mark: projection.credits_mark.map(GuiSegmentMark::from),
@@ -189,6 +202,9 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 .iter()
                 .map(GuiTargetChoice::from)
                 .collect(),
+            // The GUI-only facts: the section build sets them from the App
+            // (design D5, D7); the projection cannot name either.
+            controls: GuiPlayerControls::default(),
         }
     }
 }
@@ -202,6 +218,9 @@ pub struct GuiTrackChips {
     pub audio: GuiTrackChip,
     /// The subtitle chip; a `chosen` of `None` is subtitles off.
     pub subtitles: GuiTrackChip,
+    /// The audio chip's pill text: the chosen track's two-letter language code,
+    /// empty when none applies (the chip then paints the choice's label).
+    pub audio_lang_code: String,
 }
 
 impl From<&TrackChips> for GuiTrackChips {
@@ -210,6 +229,7 @@ impl From<&TrackChips> for GuiTrackChips {
             video: chips.video.clone(),
             audio: GuiTrackChip::from(&chips.audio),
             subtitles: GuiTrackChip::from(&chips.subtitles),
+            audio_lang_code: chips.audio_lang_code.clone(),
         }
     }
 }

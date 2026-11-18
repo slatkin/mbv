@@ -489,6 +489,12 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::QueueFold)) => {
                 Some(Msg::Playback(PlaybackRequest::ToggleQueueFold))
             }
+            // The player menu's auto-hide entry runs the entry through the
+            // same execution the menu's Enter applies, and the menu closes
+            // with it (gui-player-overlay-menu).
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayerMenuEntry)) => {
+                Some(Msg::Playback(PlaybackRequest::PlayerMenuSelect))
+            }
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)) => self.seek(at),
             _ => None,
         }
@@ -530,14 +536,22 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
             // seeks twice to the same position — the kept double-click
             // behaviour.
             PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at) => self.press(at),
-            // A right-click on the visual slot opens the TUI's chrome menu,
-            // which the first slice does not present; the wheel scrolls
-            // nothing on the transport band; and the scrub's grab re-derives
-            // from the anchor every motion, so the drag's end carries no
-            // state to clear.
-            PointerGesture::RightClick(_)
-            | PointerGesture::Scroll { .. }
-            | PointerGesture::DragEnd => None,
+            // A right-click anywhere on the panel opens the player menu at
+            // the pointer (gui-player-overlay-menu): the menu's auto-hide
+            // entry replaces the checkbox the bottom overlay's second row
+            // painted. The wheel scrolls nothing on the transport band; and
+            // the scrub's grab re-derives from the anchor every motion, so
+            // the drag's end carries no state to clear.
+            PointerGesture::RightClick(at) => {
+                // The anchor is the pointer's CSS pixels, and the window
+                // paints the card at them, as the Library's right-click menu
+                // anchors at its event's client coordinates.
+                Some(Msg::Playback(PlaybackRequest::OpenPlayerMenu {
+                    x: at.x,
+                    y: at.y,
+                }))
+            }
+            PointerGesture::Scroll { .. } | PointerGesture::DragEnd => None,
             PointerGesture::Drag { from, to } => {
                 // The scrub's bar must hold both the anchor and the pointer:
                 // a drag that merely crossed the bar is not a scrub of it.
@@ -623,12 +637,16 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueueLeaf, QueueSlotId, QueueSurface, QueueTargetId, RegionTarget};
+    use super::{
+        PaintedChoices, PlaybackLeaf, QueueLeaf, QueuePlaybackSurface, QueueSlotId, QueueSurface,
+        QueueTargetId, RegionTarget, TransportAvailability,
+    };
+    use crate::bridge::layout::QueuePlaybackTargetId;
     use mbv::GuiSurfaceLeaf;
     use mbv_surfaces::gesture::PointerGesture;
     use mbv_surfaces::{HitMap, HitRegion};
     use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
-    use mbv_ui_msg::Position;
+    use mbv_ui_msg::{Msg, PlaybackRequest, Position};
     use rstest::rstest;
 
     /// A queue holding one item row for slot 1.
@@ -666,6 +684,65 @@ mod tests {
         assert_eq!(
             leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
             None
+        );
+    }
+
+    /// A right-click anywhere on the panel opens the player menu at the
+    /// pointer's whole-pixel anchor (gui-player-overlay-menu).
+    #[test]
+    fn a_right_click_on_the_panel_opens_the_player_menu() {
+        let mut surface = QueuePlaybackSurface::new();
+        let mut regions = HitMap::new();
+        regions.push(
+            HitRegion::new(0.0, 0.0, 20.0, 20.0),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
+        );
+        let painted = PaintedChoices::default();
+        let mut leaf = PlaybackLeaf::new(
+            &mut surface,
+            &regions,
+            TransportAvailability {
+                stop: false,
+                previous: false,
+                next: false,
+            },
+            &painted,
+        );
+        assert_eq!(
+            leaf.pointer(PointerGesture::RightClick(Position { x: 10.6, y: 20.9 })),
+            Some(Msg::Playback(PlaybackRequest::OpenPlayerMenu {
+                x: 10.6,
+                y: 20.9
+            }))
+        );
+    }
+
+    /// A left press on the player menu's auto-hide entry runs the entry
+    /// through the select request, whose App-side effect applies the same
+    /// execution the menu's Enter applies and closes the menu with it
+    /// (gui-player-overlay-menu).
+    #[test]
+    fn a_press_on_the_player_menu_entry_selects_it() {
+        let mut surface = QueuePlaybackSurface::new();
+        let mut regions = HitMap::new();
+        regions.push(
+            HitRegion::new(0.0, 0.0, 20.0, 20.0),
+            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayerMenuEntry),
+        );
+        let painted = PaintedChoices::default();
+        let leaf = PlaybackLeaf::new(
+            &mut surface,
+            &regions,
+            TransportAvailability {
+                stop: false,
+                previous: false,
+                next: false,
+            },
+            &painted,
+        );
+        assert_eq!(
+            leaf.press(Position { x: 10.0, y: 10.0 }),
+            Some(Msg::Playback(PlaybackRequest::PlayerMenuSelect))
         );
     }
 }

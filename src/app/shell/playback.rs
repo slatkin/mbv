@@ -99,6 +99,15 @@ impl crate::app::App {
             // exhaustiveness.
             PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
             PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
+            // The player panel's right-click opens the Client-core player
+            // menu at the pointer (gui-player-overlay-menu). The TUI paints
+            // no such menu; the arm is here for the shared dispatch's
+            // exhaustiveness.
+            PlaybackRequest::OpenPlayerMenu { x, y } => self.open_gui_player_menu(*x, *y),
+            // The player menu's auto-hide entry press (gui-player-overlay-menu):
+            // the same execution the menu's Enter applies, and the menu
+            // closes with it.
+            PlaybackRequest::PlayerMenuSelect => self.select_gui_player_menu_entry(),
             // The canvas queue header's filter control (row 6.5): the same
             // effect the `/` chord dispatches, so the header control and the
             // chord run one path.

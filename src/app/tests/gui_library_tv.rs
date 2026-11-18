@@ -206,6 +206,9 @@ fn the_frame_path_loads_the_first_seasons_episodes_without_a_select() {
         r#"{"Items":[{"Id":"ep-1a","Name":"Episode one","Type":"Episode"}],"TotalRecordCount":1}"#,
     );
     let mut app = tv_app(&http);
+    // The destination's settled root mode: the open step forces All before
+    // any frame pass runs, so the frame ensure starts no root reload here.
+    app.libs[0].tv_content_mode = Some(TvContentMode::All);
     app.libs[0].nav_stack[0].items = vec![series_item("series-a", "Alfred")];
     app.gui_tv_shows.insert(
         0,
@@ -265,5 +268,74 @@ fn a_failed_upcoming_fetch_clears_the_waiting_levels_loading_mark() {
     assert!(
         !app.libs[0].nav_stack[0].loading,
         "the waiting level's loading flag unsets"
+    );
+}
+
+/// The shared landing path's default-mode resolution replaces the first
+/// landed series root with the Latest episodes list (`resolve_tv_content_mode`'s
+/// any-size Latest default), and the GUI Shows destination projects only
+/// Series rows, so a launch restored onto Shows paints a blank tree until a
+/// destination click forces the All list (the live defect of 2026-11-18: the
+/// launch logged `browse.items.loaded` and `hero=false` until the first
+/// `OpenDestination` click). The frame ensure must reload a settled root in
+/// any other mode as the All series list, once.
+#[test]
+fn the_frame_ensure_reloads_a_latest_root_as_the_all_series_list() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"series-a","Name":"Alfred","Type":"Series"},{"Id":"series-b","Name":"Bridgerton","Type":"Series"}],"TotalRecordCount":2}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"ep-1a","Name":"Episode one","Type":"Episode"}],"TotalRecordCount":1}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"series-a","Name":"Alfred","Type":"Series"},{"Id":"series-b","Name":"Bridgerton","Type":"Series"}],"TotalRecordCount":2}"#,
+    );
+    let mut app = tv_app(&http);
+    // The live launch shape: no root level and no captured total, as the
+    // destination opens before any browse fetch has run.
+    app.libs[0].nav_stack.clear();
+    app.libs[0].library_total = None;
+
+    // The launch open step pushes the root and starts its fetch.
+    app.activate_library_position(0);
+    land(&mut app);
+
+    // The landing's default-mode resolution swaps the landed series for the
+    // Latest episodes list, and that fetch's completion settles it.
+    assert_eq!(
+        app.libs[0].tv_content_mode.as_ref(),
+        Some(&TvContentMode::Latest),
+        "the first landing resolves the library's default TV mode"
+    );
+    land(&mut app);
+    assert_eq!(
+        app.gui_shows_projection(0).series,
+        Vec::new(),
+        "a settled Latest root projects no series row, the blank tree"
+    );
+
+    // The frame ensure reloads the root as the All series list, once: the
+    // second pass finds the All list and starts no second request.
+    app.ensure_gui_shows_workspace(0);
+    land(&mut app);
+    app.ensure_gui_shows_workspace(0);
+
+    assert_eq!(
+        app.gui_shows_projection(0)
+            .series
+            .iter()
+            .map(|series| series.id.as_str())
+            .collect::<Vec<_>>(),
+        ["series-a", "series-b"],
+        "the All series list the destination presents paints after the reload"
+    );
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "a settled All root starts no second request"
     );
 }

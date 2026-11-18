@@ -291,6 +291,15 @@ impl App {
         (!self.shown_playback_status().active).then_some(queue)
     }
 
+    /// Whether the shown local queue can start while nothing plays (design
+    /// D7): the player panel's start gate reads this, because
+    /// `shown_queue_play_request` is also `Some` for an empty new queue, which
+    /// play/pause cannot start.
+    #[must_use]
+    pub fn shown_queue_can_start(&self) -> bool {
+        self.shown_queue_play_request().is_some() && self.shown_local_queue().total_queue_len() > 0
+    }
+
     /// Whether the Queue panel shows a resting local Named queue, so the
     /// display is not the run's queue and none of its rows carries a playhead
     /// (design D7).

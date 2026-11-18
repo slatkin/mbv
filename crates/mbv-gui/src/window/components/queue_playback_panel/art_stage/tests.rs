@@ -1,0 +1,22 @@
+//! The control rows' scale contract (`gui-art-player-overlay` design D3, task
+//! 4.2): the rows take at most a third of the stage's measured height, and
+//! they never grow past their full size.
+
+use rstest::rstest;
+
+use super::{BOTTOM_FULL_HEIGHT_PX, player_scale};
+
+/// Contract (`gui-art-player-overlay` design D3): the rows' scale is the
+/// stage's one-third share of their full height, capped at 1.0 — a stage
+/// three times the rows' height or taller keeps them at full size, and a
+/// shorter stage scales them down by that ratio.
+#[rstest]
+#[case::tall_image(BOTTOM_FULL_HEIGHT_PX * 3.0, 1.0)]
+#[case::short_image(BOTTOM_FULL_HEIGHT_PX * 1.5, 0.5)]
+fn the_control_rows_scale_with_the_stage_height(#[case] stage_height: f32, #[case] expected: f32) {
+    let scale = player_scale(stage_height);
+    assert!(
+        (scale - expected).abs() < f32::EPSILON,
+        "a {stage_height} px stage gives {scale}, not {expected}"
+    );
+}

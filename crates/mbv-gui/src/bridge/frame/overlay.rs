@@ -15,9 +15,20 @@ use mbv_ui_msg::TrackChipKind;
 use super::playback::GuiTargetChoice;
 
 /// The open menu or popover the window paints. `None` in the section while no
-/// overlay is open.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// overlay is open. The player menu's anchor carries CSS pixels, so the
+/// equality is `PartialEq` only.
+#[derive(Debug, Clone, PartialEq)]
 pub enum GuiOverlayFrame {
+    /// The player panel's context menu (gui-player-overlay-menu): the cursor
+    /// over its one auto-hide entry and the right-click's window anchor. The
+    /// entry itself is the window's: its checked fact is the playback
+    /// section's `controls.auto_hide`, the one fact the panel already holds.
+    PlayerMenu {
+        cursor: usize,
+        /// The right-click's window anchor, in CSS pixels.
+        x: f32,
+        y: f32,
+    },
     /// The queue row's menu: the anchor row, the menu cursor, and the
     /// entries, each with the key hint that selects it directly (the
     /// canvas's hints).
@@ -94,6 +105,11 @@ pub enum GuiConfirmButtonTone {
 impl From<&GuiOverlayProjection> for GuiOverlayFrame {
     fn from(overlay: &GuiOverlayProjection) -> Self {
         match overlay {
+            GuiOverlayProjection::PlayerMenu { cursor, x, y } => Self::PlayerMenu {
+                cursor: *cursor,
+                x: *x,
+                y: *y,
+            },
             GuiOverlayProjection::RowMenu {
                 anchor_slot,
                 cursor,
@@ -179,6 +195,10 @@ pub struct GuiRowMenuEntry {
     /// a divider (design DR6); the flag derives from the entry's action in
     /// the library's projection.
     pub destructive: bool,
+    /// The entry's toggle state, when it is a check entry: the player menu's
+    /// auto-hide entry paints the small box the former checkbox painted
+    /// (gui-player-overlay-menu). `None` paints a plain entry.
+    pub checked: Option<bool>,
     /// The entry's own index in the shared builder's order, when the frame
     /// carries one (the Library's item menu): the menu paints and reports it
     /// in place of the paint order, so a window that paints only some
@@ -194,6 +214,7 @@ impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
             key_hint: entry.key_hint.clone(),
             destructive: entry.destructive,
             index: None,
+            checked: None,
         }
     }
 }

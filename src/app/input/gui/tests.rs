@@ -685,5 +685,6 @@ fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
 }
 
 mod destination_tabs;
+mod player_menu;
 mod queue_chooser;
 mod target_chooser;

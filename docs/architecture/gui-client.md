@@ -156,7 +156,15 @@ capped retry (*Clocks and frames*). The GUI attaches with `ImageDecode::SourceOn
 only the server bytes and the size from the image header, and never decodes
 pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
-element's resizes report the regions a swapped bitmap moved.
+element's resizes report the regions a swapped bitmap moved. Inside one
+report key the last region pushed wins, so the panel pushes `visualSlot`
+first and the transport buttons, the seekbar, the collapse control, and the
+playback target follow it, while the chips report
+under their own later keys — so a press on a control over the artwork lands
+on the control, not on the artwork. The section also carries the core's
+`auto_hide` preference, the fact the stage's `data-auto-hide` attribute
+reads (below); the window derives the stage's `data-playing` fact from the
+playhead anchor.
 
 The scrubber's hover preview (`hover`) carries the pointer's fraction along
 the painted bar, the time it names, the covering chapter, and the trickplay
@@ -493,7 +501,7 @@ the exact values; this file records what the paint changed, not every
 canvas value.
 
 The queue column's backdrop (`queueColumn`) owns the window. The column paints
-no player header row: the artwork is its topmost content
+no player header row: the stage is its topmost content
 (`move-playback-header-into-queue-footer` D6), directly under the global
 header (below). The window paints no now-playing status word on any surface
 (D5) — a paused panel reads from the transport's play glyph. The playback
@@ -501,10 +509,77 @@ target and the collapse controls moved to the Queue footer's left group
 (below), and the footer's press on the target opens the `targetChooser`
 overlay upward; the chooser's rows carry the choices with the attached output
 marked, and Esc or a press elsewhere closes it in the core. The title and
-parent line sit below the artwork: where the TUI composites the title into the
+parent line sit below the stage: where the TUI composites the title into the
 artwork's top text row with a scrolling marquee, the GUI measures and cuts it with
-`Truncate`. The art has no fixed pixel box: the slot sizes at most 24 row
-units of the cell grid.
+`Truncate`. The stage is full-bleed at the column's top edge: a loaded image
+fills the panel's width and takes its height from the artwork's aspect, with
+no fixed pixel box.
+
+The stage (`queue_playback_panel/art_stage.rs`, design D1) is a `relative`
+wrapper with no clip, and it carries the `visualSlot` region for the whole
+box. It holds three siblings: the media box, the clipped one — so only the
+image is cut, and a track popover that hangs past the artwork's bottom
+paints in full — the absolute top layer, which holds the track chips at its
+left and the season-and-episode badge at its right and always shows, and the
+absolute bottom layer, which holds a gradient and the control row.
+While the image loads, the media box stays empty at the panel's width with a
+16:9 aspect, and both overlays paint on it as if the image were there; the
+box takes the image's own aspect when the image loads.
+
+The bottom layer's visibility is the stylesheet's, and the window holds no
+hover state (design D2). The stage carries `data-auto-hide` while the core's
+auto-hide preference is on and `data-playing` while the playhead anchor is
+active and not paused. Each attribute is present only while its fact holds —
+never `"false"` — and one rule set in `assets/app.css` acts on them:
+
+```
+.stage[data-auto-hide][data-playing] > .bottom         { opacity: 0 }
+.stage[data-auto-hide][data-playing]:hover > .bottom   { opacity: 1 }
+```
+
+The controls show at all times by default. With auto-hide on, they hide
+while an item plays and the pointer is away from the artwork, and show while
+the pointer is over the artwork and while the playback is paused. The hidden
+bottom layer stays laid out, so its regions still report, and a press can
+reach a hidden control only with the pointer over the stage, where the rules
+show it. The pointer-driven `:hover` is Blitz's, and a pointer that leaves
+the window unhovers the chain, so the controls hide. Auto-hide never hides
+the top layer: the chips and the badge show at all times.
+
+The control row scales with the artwork's height (design D3). Container
+queries are unimplemented in Blitz 0.3.0-beta.4 — `query_container_size`
+returns a default size — so `cq*` units do not resolve, and the window
+measures instead. The panel's effect reads the stage's mounted rect,
+computes `scale = min(1.0, (stage_height / 3.0) / BOTTOM_FULL_HEIGHT_PX)`,
+and holds it in a window `Signal<f32>`; this is layout, not interaction
+state. The bottom layer sets `--player-scale` from it, and its sizes — the
+button boxes, the glyph and font sizes, the gaps, and the scrubber's block
+height — are `calc(<px> * var(--player-scale))`, so the controls take no
+more than one third of the artwork's height at every height, with no floor.
+The stage height depends only on the panel width and the image aspect, never
+on the overlay, so there is no feedback loop; the scrubber's pointer math
+reads its own measured rect, so it stays correct at any scale.
+
+The auto-hide preference is core-owned (design D5). `App` holds
+`gui_player_auto_hide`, read from the prefs key `gui_player_auto_hide` with
+`false` as the default and saved back through `save_prefs`, so the choice
+persists across launches. The control that flips it is the player panel's
+right-click menu (gui-player-overlay-menu). A right-click on the panel's
+artwork or controls sends
+`PlaybackRequest::OpenPlayerMenu` with the pointer's whole-pixel anchor, the
+core opens its `PlayerMenu` overlay — the cursor over the one auto-hide entry
+plus the anchor — and the frame projects it. The panel paints the card in
+the shared menu-card face at the anchor, and the entry reports its
+`PlayerMenuEntry` region under the menu's own report key, first inserted
+while the menu is open, so the card wins the hit map where it paints over
+the panel. A press on the entry sends `PlaybackRequest::PlayerMenuSelect`,
+which runs the same execution the menu's Enter applies — the shared toggle
+that flips the field and saves the prefs — and closes the menu with the
+choice. The overlay's list key rules own the keyboard while it is open: Esc
+closes it with no toggle, and the core's outside-press rule closes it on a
+press elsewhere. The GUI-only fact rides `GuiQueuePlayback.auto_hide` — the
+menu entry's checked mark reads it — and stays out of the shared
+`QueuePlaybackProjection`; no key chord rides with it.
 
 The scrubber paints the played fraction, the chapter boundaries, the intro
 and credits mark segments, the thumb, and the elapsed, remaining, and finish
@@ -550,13 +625,27 @@ the scrubber hover's `time_label` (the pointer drives it, not the clock).
 the queue row DTO carries no NowPlaying progress — the window reads the
 playhead's played fraction for the row whose slot is the anchor's active
 slot. mbv has no playback-rate fact, so the anchor has no rate and a rate
-change re-anchors only through the drift rule. The transport row
-below it paints previous, back 10 s, play/pause, forward 30 s, and next as
-solid Lucide shapes, with the availability that the colour carries. The
-track chips row sits under the transport: the video stream's resolved label,
-and the audio and subtitle chips, each opening its `trackPopover` overlay
-with the choices and the chosen one marked. Both rows are absent while the
-local player is inactive.
+change re-anchors only through the drift rule. The bottom layer's row
+holds play/pause at the scrubber's left, and the scrubber's clock line
+carries previous, back 10 s, forward 30 s, and next between the two clocks,
+all as solid Lucide shapes with the availability that the colour carries. The top layer's
+chips line holds the video stream's resolved label, and the audio and
+subtitle chips, each opening its `trackPopover` overlay with the choices and
+the chosen one marked. The control row paints while the title shows, and the
+stopped state paints it without one (below).
+
+The stage and the no-image column are the panel's two arrangements (design
+D6). When the active item's art is `Placeholder` or absent, the panel paints
+no artwork box at all: under the header it shows the chips line, then the
+control row at scale 1.0 — always visible, whatever the auto-hide setting —
+then the title. The panel's right-click menu still carries the auto-hide
+entry and its setting. The stopped state (design D7) shows the control row
+without a title: while a shown local queue holds slots and nothing plays,
+the frame's `can_start` fact is true while `now_playing_title` is `None`,
+and the panel paints, under the header, only the control row at scale 1.0 —
+no stage, no chips line, no title — with the scrubber's empty track, which
+resolves no seek while nothing plays. A shown peer queue and an empty shown
+local queue leave `can_start` false, so no control row paints.
 
 The Queue panel's recessed box sits below the player block on the
 `queuePanel` fill, with its header row, its rows, and its bottom spacer. The
@@ -1708,6 +1797,7 @@ one handling:
 | Gap | Where | Handling |
 | --- | --- | --- |
 | No `text-overflow: ellipsis` | boxes that need an ellipsis | `Truncate` (`src/window/truncate.rs`) measures the text and cuts it with `…` |
+| No container queries (`cq*` units) | the player stage's control-row scale | The window measures the stage and sets `--player-scale` (design D3 of `gui-art-player-overlay`). |
 | An animation repaints the whole window | `animate-spin`, `transition` classes | Accepted. They run only while shown. |
 | No `NetHandler` error callback | artwork misses | The net provider sends `ArtEvent::Failed` (`src/window/net.rs`) |
 | Transform painting | the scrubber thumb's `translate` | Accepted. |

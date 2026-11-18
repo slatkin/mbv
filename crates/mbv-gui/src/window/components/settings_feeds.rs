@@ -281,6 +281,7 @@ fn FeedKindControl(kind: FeedKind) -> Element {
             label: feed_kind_label(*candidate).to_owned(),
             key_hint: None,
             destructive: false,
+            checked: None,
             index: None,
         })
         .collect();

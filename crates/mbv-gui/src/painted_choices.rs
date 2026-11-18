@@ -49,7 +49,8 @@ impl PaintedChoices {
             // through their own regions, not through painted choice indexes,
             // and the chooser's entries carry their own queue identities.
             Some(
-                GuiOverlayFrame::RowMenu { .. }
+                GuiOverlayFrame::PlayerMenu { .. }
+                | GuiOverlayFrame::RowMenu { .. }
                 | GuiOverlayFrame::QueueChooser { .. }
                 | GuiOverlayFrame::Confirm { .. }
                 | GuiOverlayFrame::DaemonLost { .. },

@@ -71,6 +71,7 @@ pub fn SettingsPickButton(props: SettingsPickButtonProps) -> Element {
                     label: pick_value_label(candidate).to_owned(),
                     key_hint: None,
                     destructive: false,
+                    checked: None,
                     index: None,
                 })
                 .collect()

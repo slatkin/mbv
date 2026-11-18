@@ -32,6 +32,19 @@ pub(crate) fn lang_code_to_name(code: &str) -> &'static str {
         .unwrap_or("")
 }
 
+/// The short code a chip paints for a raw track language code: the table's
+/// two-letter ISO 639-1 code upper-cased (`eng` and `en` both give `EN`), or the
+/// raw code's first two letters upper-cased when the table does not know it.
+/// Empty for an empty code.
+pub fn lang_short_code(code: &str) -> String {
+    let lower = code.to_lowercase();
+    LANGS
+        .iter()
+        .find_map(|(codes, _)| codes.contains(&lower.as_str()).then(|| codes[0]))
+        .map_or_else(|| lower.chars().take(2).collect(), str::to_owned)
+        .to_uppercase()
+}
+
 fn fmt_channels(n: i64) -> &'static str {
     match n {
         1 => "Mono",

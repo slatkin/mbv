@@ -57,6 +57,18 @@ pub(in crate::app) struct QueueChooserState {
     pub(in crate::app) renaming: Option<QueueRenameDraft>,
 }
 
+/// The player panel's context menu (`gui-player-overlay-menu`): the cursor
+/// over its one auto-hide entry and the pointer anchor the right-click
+/// carried, in window CSS pixels. The menu's single entry toggles the
+/// core-owned auto-hide preference, so the state carries no entry list —
+/// the frame's playback section carries the checked fact the entry paints.
+pub(in crate::app) struct GuiPlayerMenu {
+    pub(in crate::app) cursor: usize,
+    /// The right-click's window anchor, in CSS pixels.
+    pub(in crate::app) x: f32,
+    pub(in crate::app) y: f32,
+}
+
 /// One open rename draft: the local Named queue it renames and the text the
 /// user typed. The queue is held, not the cursor's row, so a list change
 /// while the name is open cannot redirect the rename. A draft opens with its
@@ -87,6 +99,10 @@ impl QueueRenameDraft {
 /// holds the open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
+    /// The player panel's context menu (the panel's right-click): the
+    /// auto-hide entry the panel's bottom overlay paints as a checkbox
+    /// no longer.
+    PlayerMenu(GuiPlayerMenu),
     TrackPopover(TrackPopoverState),
     TargetChooser(TargetChooserState),
     /// The Queue chooser (gui-named-queues design D8): the dropdown that
@@ -373,6 +389,7 @@ impl App {
         };
         let outcome = match &mut self.gui_overlay {
             Some(GuiOverlay::RowMenu(menu)) => menu.apply_key(key),
+            Some(GuiOverlay::PlayerMenu(menu)) => apply_overlay_list_key(&mut menu.cursor, key, 1),
             Some(GuiOverlay::TrackPopover(popover)) => {
                 apply_overlay_list_key(&mut popover.cursor, key, popover_choices)
             }
@@ -468,6 +485,10 @@ impl App {
                 // dispatch.
                 self.execute_context_action(Some(action), None);
             }
+            // The player menu's single entry toggles the auto-hide
+            // preference, the same effect the entry's press applies through
+            // its select request.
+            GuiOverlay::PlayerMenu(_) => self.toggle_gui_player_auto_hide(),
             GuiOverlay::TrackPopover(popover) => {
                 let Some(chips) = self.track_chips() else {
                     return false;

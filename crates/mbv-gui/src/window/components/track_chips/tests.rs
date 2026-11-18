@@ -11,6 +11,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use blitz_dom::{Document as _, local_name};
@@ -18,12 +19,21 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::TrackChips;
+use crate::art::GuiArtRef;
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind, GuiTrackPopoverChoice};
-use crate::bridge::frame::playback::{GuiTrackChip, GuiTrackChips, GuiTrackChoice};
+use crate::bridge::frame::playback::{
+    GuiPlayerControls, GuiQueuePlayback, GuiTrackChip, GuiTrackChips, GuiTrackChoice,
+    GuiTransportAvailability,
+};
 use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
+use crate::window::clock::{Clock, RecordingClock};
+use crate::window::components::art_image::ArtEvents;
+use crate::window::components::queue_playback_panel::QueuePlaybackPanel;
 use crate::window::layout::{LayoutEpoch, use_layout_reporter};
+use crate::window::playhead::{Playhead, Times};
+use crate::window::sections::Sections;
 
 /// The chips the frame carries over a playing video item: a video label,
 /// two audio tracks with the first chosen, and one forced subtitle with
@@ -54,6 +64,7 @@ fn chips() -> GuiTrackChips {
             }],
             chosen: None,
         },
+        audio_lang_code: "EN".to_owned(),
     }
 }
 
@@ -138,8 +149,9 @@ fn chips_app(props: FixtureProps) -> Element {
 struct Fixture {
     doc: DioxusDocument,
     receiver: Receiver<CoreInput>,
-    /// The overlay signal the root renders the row's props from.
-    overlay: Signal<Option<GuiOverlayFrame>>,
+    /// The overlay signal the root renders the row's props from, `None` for a
+    /// fixture whose overlay rides the section store (the stage's).
+    overlay: Option<Signal<Option<GuiOverlayFrame>>>,
 }
 
 impl Fixture {
@@ -155,6 +167,18 @@ impl Fixture {
             }
         }
         out
+    }
+
+    /// The text content of the first node the selector names.
+    fn text_of(&self, selector: &str) -> String {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_node(id)
+            .map(blitz_dom::Node::text_content)
+            .unwrap_or_default()
     }
 
     /// Whether the selector names a node in the painted tree.
@@ -203,7 +227,9 @@ impl Fixture {
     /// the drain task would carry the next overlay section, and let the
     /// re-render land.
     fn close_popover(&mut self) {
-        let mut overlay = self.overlay;
+        let mut overlay = self
+            .overlay
+            .expect("the fixture renders its overlay from a signal");
         self.doc.vdom.in_runtime(move || overlay.set(None));
         self.poll_until_idle();
     }
@@ -250,7 +276,7 @@ fn built(chips: Option<GuiTrackChips>, overlay: Option<GuiOverlayFrame>) -> Fixt
     let mut fixture = Fixture {
         doc,
         receiver,
-        overlay,
+        overlay: Some(overlay),
     };
     fixture.poll_until_idle();
     fixture
@@ -264,8 +290,21 @@ fn a_frame_renders_the_video_label_and_the_audio_and_subtitle_chips() {
     let fixture = built(Some(chips()), None);
     let text = fixture.text();
     assert!(text.contains("1080p"), "{text}");
-    assert!(text.contains("English"), "{text}");
     assert!(text.contains("Off"), "{text}");
+}
+
+/// The audio pill paints the chosen track's language code, never its full
+/// label (`English`); the label stays in the popover's rows. A track that
+/// names no language falls back to the choice's label.
+#[test]
+fn the_audio_pill_paints_the_language_code_not_the_label() {
+    let fixture = built(Some(chips()), None);
+    assert_eq!(fixture.text_of("[data-chip=\"audio\"]"), "EN");
+
+    let mut no_language = chips();
+    no_language.audio_lang_code = String::new();
+    let fixture = built(Some(no_language), None);
+    assert_eq!(fixture.text_of("[data-chip=\"audio\"]"), "English");
 }
 
 /// Contract (`TrackChips.test.ts`): an audio-only frame paints no video
@@ -480,5 +519,143 @@ fn closing_the_popover_retracts_its_row_regions() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::AudioChip),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip),
         ]
+    );
+}
+
+/// The stage fixture's props: the mock core's sender and the section store the
+/// test writes the frame through.
+#[derive(Clone)]
+struct StageProps {
+    sender: Sender<CoreInput>,
+    handle: Rc<RefCell<Option<Sections>>>,
+}
+
+/// The clocks the stage's scrubber reads: a frozen monotonic clock and a fixed
+/// wall clock, as the panel fixtures use.
+struct StageTimes;
+
+impl Times for StageTimes {
+    fn now_ms(&self) -> f64 {
+        0.0
+    }
+
+    fn wall_now_ms(&self) -> i64 {
+        1_700_000_000_000
+    }
+}
+
+/// The playback frame the stage fixture paints: a loading artwork, so the
+/// media box holds no image and the stage paints both overlay layers, with the
+/// chips the frame carries and a title.
+fn stage_frame() -> GuiQueuePlayback {
+    GuiQueuePlayback {
+        host: "poo".to_owned(),
+        host_is_remote: true,
+        shown: true,
+        show_controls: true,
+        now_playing_title: Some("Track title".to_owned()),
+        parent_line: None,
+        episode_badge: None,
+        chapters: Vec::new(),
+        intro_mark: None,
+        credits_mark: None,
+        trickplay: None,
+        availability: GuiTransportAvailability {
+            stop: false,
+            next: true,
+            previous: false,
+        },
+        status_indicators: None,
+        artwork: Some(GuiArtRef::Loading),
+        track_chips: Some(chips()),
+        target_choices: Vec::new(),
+        controls: GuiPlayerControls::default(),
+    }
+}
+
+/// The root of the stage's paint contract: the player panel as the expanded
+/// artboard mounts it, with one queue row under it, so an open popover has the
+/// panel's own content and the rows below to paint over.
+fn stage_app(props: StageProps) -> Element {
+    provide_context(CoreLink::new(props.sender));
+    provide_context(use_layout_reporter());
+    provide_context(use_hook(LayoutEpoch::new));
+    let sections = use_hook(Sections::new);
+    provide_context(sections.clone());
+    provide_context(use_hook(ArtEvents::new));
+    let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
+    let times: Arc<dyn Times> = Arc::new(StageTimes);
+    let playhead = use_hook(move || Playhead::new(clock, times));
+    provide_context(playhead);
+    props.handle.borrow_mut().replace(sections);
+    rsx! {
+        div { class: "flex h-full min-h-0 flex-col",
+            QueuePlaybackPanel {}
+            div { class: "flex min-h-0 flex-1 flex-col",
+                div { "data-row": "1", "Track 1" }
+            }
+        }
+    }
+}
+
+/// A fixture over the player panel with one queue row under it, painting the
+/// chips frame and the open subtitle popover.
+fn stage_built() -> Fixture {
+    let (sender, receiver) = channel();
+    let handle = Rc::new(RefCell::new(None));
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new_with_props(
+            stage_app,
+            StageProps {
+                sender,
+                handle: Rc::clone(&handle),
+            },
+        ),
+        DocumentConfig::default(),
+    );
+    doc.initial_build();
+    let sections = handle
+        .borrow_mut()
+        .take()
+        .expect("the root handed the section store over");
+    let mut playback = sections.playback;
+    let mut overlay = sections.overlay;
+    doc.vdom.in_runtime(move || {
+        playback.set(stage_frame());
+        overlay.set(Some(subtitle_popover()));
+    });
+    let mut fixture = Fixture {
+        doc,
+        receiver,
+        overlay: None,
+    };
+    fixture.poll_until_idle();
+    fixture
+}
+
+/// Contract (`gui-art-player-overlay` D1, task 3.3): an open chip popover
+/// paints in full where it reaches past the artwork's bottom edge. The media
+/// box owns the clip, so the popover anchors in the stage's top layer outside
+/// that box and carries the above-panel stacking class: it paints over the
+/// panel's content and the queue row under it, never cut and never under them.
+#[test]
+fn an_open_popover_paints_outside_the_clipped_media_box_above_the_panel() {
+    let fixture = stage_built();
+    let media_box = "[data-target=\"visualSlot\"] > .overflow-hidden";
+    assert!(fixture.presents(media_box), "the media box owns the clip");
+    assert!(
+        !fixture.presents(&format!("{media_box} [role=\"dialog\"]")),
+        "the popover is not inside the clipped media box"
+    );
+    assert!(
+        fixture.presents("[data-target=\"visualSlot\"] > .top-0 [role=\"dialog\"]"),
+        "the popover anchors in the stage's top layer"
+    );
+    let dialog_class = fixture
+        .attr_of("[role=\"dialog\"]", local_name!("class"))
+        .expect("the popover paints");
+    assert!(
+        dialog_class.contains("z-30"),
+        "the popover carries the above-panel stacking class: {dialog_class}"
     );
 }
