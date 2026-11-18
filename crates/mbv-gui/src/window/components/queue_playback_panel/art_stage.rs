@@ -16,8 +16,10 @@
 //! exists (design D6, D7). [`ChipsAndBadge`] is shared the same way: the top
 //! layer holds it, and the no-image column paints it as its own line.
 //!
-//! The sizes are the canvas's pixels. The measured `--player-scale` of design
-//! D3 is not applied here yet (task 4.2).
+//! The sizes are the canvas's pixels times the measured `--player-scale`
+//! (design D3): the panel holds the scale in a window signal and the bottom
+//! layer carries it, so the rows and everything inside them shrink as one
+//! unit while the no-image column paints them at full size.
 
 use dioxus_native::prelude::*;
 
@@ -32,6 +34,21 @@ use crate::window::icons::{Pause, Play, SkipBack, SkipForward};
 use crate::window::theme::{glyph_color, role_var};
 
 use super::scrubber::Scrubber;
+
+#[cfg(test)]
+mod tests;
+
+/// The two control rows' full height at scale 1.0 (design D3): row 1's
+/// scrubber block (10 + 60 + 4 px) over row 2's buttons and tail pad (44 + 6
+/// px). The scale's one-third share is measured against this height.
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 124.0;
+
+/// The control rows' scale for a stage `stage_height` px tall (design D3):
+/// the rows take at most a third of the stage and never grow past their full
+/// size. There is no floor, so the one-third limit holds at every height.
+pub(super) fn player_scale(stage_height: f32) -> f32 {
+    (stage_height / 3.0 / BOTTOM_FULL_HEIGHT_PX).min(1.0)
+}
 
 /// The mounted handles the control rows set: the panel holds every handle and
 /// hands the same set to the stage and to the no-image column (design D8), so
@@ -76,6 +93,12 @@ pub struct ArtStageProps {
     pub availability: GuiTransportAvailability,
     /// Whether the core-owned auto-hide preference is on (design D5).
     pub auto_hide: bool,
+    /// Whether the transport plays: the playhead anchor's fact, not paused
+    /// (design D2). The stage carries `data-playing` while it holds.
+    pub playing: bool,
+    /// The control rows' scale (design D3): the measured stage height's
+    /// one-third share of the rows' full height, never above 1.0.
+    pub scale: f32,
     /// The stage's own mounted event: the `visualSlot` region.
     pub stage_mounted: Signal<Option<Event<MountedData>>>,
     /// The two control rows' handles.
@@ -90,6 +113,8 @@ impl std::fmt::Debug for ArtStageProps {
             .field("paused", &self.paused)
             .field("availability", &self.availability)
             .field("auto_hide", &self.auto_hide)
+            .field("playing", &self.playing)
+            .field("scale", &self.scale)
             .finish_non_exhaustive()
     }
 }
@@ -101,6 +126,7 @@ impl std::fmt::Debug for ArtStageProps {
 #[component]
 pub fn ArtStage(props: ArtStageProps) -> Element {
     let mut stage_mounted = props.stage_mounted;
+    let scale = format!("{:.4}", props.scale);
     // The media box's content: the image, or the empty 16:9 box a loading
     // reference reserves at the panel's width (design D6).
     let media = if matches!(props.art, GuiArtRef::Image { .. }) {
@@ -120,9 +146,14 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
     };
     rsx! {
         div {
-            class: "relative w-full max-w-full",
+            class: "stage relative w-full max-w-full",
             style: "background: var(--mbv-secondary);",
             "data-target": "visualSlot",
+            // Each attribute is present only while its fact holds and absent
+            // otherwise, never `"false"`: the stylesheet's selectors test
+            // presence (design D2).
+            "data-auto-hide": props.auto_hide.then_some(""),
+            "data-playing": props.playing.then_some(""),
             onmounted: move |event| stage_mounted.set(Some(event)),
             // The clip belongs to the media box, never to the stage: the
             // overlay layers and the chip popovers paint past its edges
@@ -142,8 +173,8 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
                 }
             }
             div {
-                class: "absolute inset-x-0 bottom-0",
-                style: "padding-top: 28px; background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0));",
+                class: "bottom absolute inset-x-0 bottom-0",
+                style: "padding-top: 28px; background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0)); --player-scale: {scale};",
                 ControlRows {
                     paused: props.paused,
                     availability: props.availability,
@@ -217,10 +248,11 @@ impl std::fmt::Debug for ControlRowsProps {
 /// clocks paint the elapsed and `−remaining` labels; row 2 holds previous,
 /// back 10 s, forward 30 s, next, and the auto-hide checkbox.
 ///
-/// The stage's bottom layer paints them over the artwork, and the no-image
-/// column paints them under its chips line at the same sizes (design D6). The
-/// stopped state paints them alone (design D7); the scrubber then paints its
-/// empty track, because the playhead predicts no progress.
+/// The stage's bottom layer paints them over the artwork at the measured
+/// `--player-scale`, and the no-image column paints them under its chips line
+/// at full size (design D3, D6). The stopped state paints them alone (design
+/// D7); the scrubber then paints its empty track, because the playhead
+/// predicts no progress.
 #[component]
 pub fn ControlRows(props: ControlRowsProps) -> Element {
     let mut play_pause_mounted = props.rows.play_pause;
@@ -232,8 +264,10 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
     let seekbar_mounted = props.rows.seekbar;
     let glyph = glyph_color(props.availability.previous, GuiRole::TextPrimary);
     let next_glyph = glyph_color(props.availability.next, GuiRole::TextPrimary);
+    // The box, its radius, and the mark inside it scale with the rows (design
+    // D3); the hairline border stays 1.5 px so it cannot vanish.
     let mark_style = format!(
-        "width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid {}; background: {};",
+        "width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); box-sizing: border-box; border-radius: calc(4px * var(--player-scale)); border: 1.5px solid {}; background: {};",
         if props.auto_hide {
             "var(--canvas-accent)"
         } else {
@@ -248,22 +282,24 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
     rsx! {
         div {
             class: "flex items-center",
-            style: "gap: 8px; padding: 0 8px;",
+            style: "gap: calc(8px * var(--player-scale)); padding: 0 calc(8px * var(--player-scale));",
             button {
                 "type": "button",
                 class: "flex flex-none items-center justify-center rounded-full",
-                style: "width: 56px; height: 56px; background: var(--mbv-accent);",
+                style: "width: calc(56px * var(--player-scale)); height: calc(56px * var(--player-scale)); background: var(--mbv-accent);",
                 "data-target": "playPause",
                 "aria-label": if props.paused { "Play" } else { "Pause" },
                 onmounted: move |event| play_pause_mounted.set(Some(event)),
                 if props.paused {
                     Play {
+                        class: "player-play-glyph",
                         size: 22,
                         fill: role_var(GuiRole::TextOnAccent),
                         color: role_var(GuiRole::TextOnAccent),
                     }
                 } else {
                     Pause {
+                        class: "player-play-glyph",
                         size: 22,
                         fill: role_var(GuiRole::TextOnAccent),
                         color: role_var(GuiRole::TextOnAccent),
@@ -277,20 +313,25 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
         }
         div {
             class: "flex items-center justify-center",
-            style: "gap: 4px; padding: 0 16px 6px;",
+            style: "gap: calc(4px * var(--player-scale)); padding: 0 calc(16px * var(--player-scale)) calc(6px * var(--player-scale));",
             button {
                 "type": "button",
                 class: "flex items-center justify-center",
-                style: "width: 44px; height: 44px;",
+                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
                 "data-target": "previous",
                 "aria-label": "Previous",
                 onmounted: move |event| prev_mounted.set(Some(event)),
-                SkipBack { size: 20, fill: "{glyph}", color: "{glyph}" }
+                SkipBack {
+                    class: "player-glyph",
+                    size: 20,
+                    fill: "{glyph}",
+                    color: "{glyph}",
+                }
             }
             button {
                 "type": "button",
                 class: "flex items-center justify-center font-mono",
-                style: "width: 44px; height: 44px; font-size: 11px;",
+                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
                 "data-target": "seekBack",
                 "aria-label": "Back 10 seconds",
                 title: "Back 10 s",
@@ -300,7 +341,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center justify-center font-mono",
-                style: "width: 44px; height: 44px; font-size: 11px;",
+                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
                 "data-target": "seekForward",
                 "aria-label": "Forward 30 seconds",
                 title: "Forward 30 s",
@@ -310,11 +351,16 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center justify-center",
-                style: "width: 44px; height: 44px;",
+                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
                 "data-target": "next",
                 "aria-label": "Next",
                 onmounted: move |event| next_mounted.set(Some(event)),
-                SkipForward { size: 20, fill: "{next_glyph}", color: "{next_glyph}" }
+                SkipForward {
+                    class: "player-glyph",
+                    size: 20,
+                    fill: "{next_glyph}",
+                    color: "{next_glyph}",
+                }
             }
             // The auto-hide control: a checkbox with a tooltip and no visible
             // label (design D5). Its press toggles the core-owned preference
@@ -326,7 +372,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
                 "aria-label": "Auto-hide controls",
                 title: "Auto-hide controls",
                 class: "flex items-center justify-center",
-                style: "width: 44px; height: 44px;",
+                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
                 "data-target": "autoHide",
                 onmounted: move |event| auto_hide_mounted.set(Some(event)),
                 CheckboxBox {

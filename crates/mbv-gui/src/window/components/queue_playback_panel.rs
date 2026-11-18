@@ -45,7 +45,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 mod art_stage;
 mod scrubber;
 
-use art_stage::{ArtStage, ChipsAndBadge, ControlRowHandles, ControlRows};
+use art_stage::{ArtStage, ChipsAndBadge, ControlRowHandles, ControlRows, player_scale};
 
 /// The URL the artwork reference names, `None` while it names none (a
 /// `loading` reference paints no `img`, so no art answer can land for it).
@@ -63,6 +63,32 @@ fn stage_art(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
         Some(art @ (GuiArtRef::Image { .. } | GuiArtRef::Loading)) => Some(art.clone()),
         Some(GuiArtRef::Placeholder { .. }) | None => None,
     }
+}
+
+/// The stage's region, with the control rows' scale updated from its measured
+/// height (`gui-art-player-overlay` design D3, D4): the stage leads the
+/// panel's report, and its height decides how much of itself the two control
+/// rows may take.
+async fn stage_region(
+    mounted: &Event<MountedData>,
+    mut scale: Signal<f32>,
+) -> Option<LayoutRegion> {
+    let region = element_region(
+        mounted,
+        RegionTarget::QueuePlayback(QueuePlaybackTargetId::VisualSlot),
+    )
+    .await?;
+    // A stage with no laid-out height carries no aspect to measure: the art
+    // has not decoded yet, or its load failed and the media box is empty. The
+    // last scale stands then, so the controls do not collapse into a box that
+    // is not there. The formula itself has no floor (design D3).
+    if region.rect.height > 0.0 {
+        let measured = player_scale(region.rect.height);
+        if scale.peek().total_cmp(&measured).is_ne() {
+            scale.set(measured);
+        }
+    }
+    Some(region)
 }
 
 /// The player panel's top block (task 5.2). The block reads the `playback`
@@ -89,6 +115,10 @@ pub fn QueuePlaybackPanel() -> Element {
     let next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let seekbar_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let auto_hide_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
+    // The control rows' scale (design D3): layout, not interaction state. The
+    // region effect measures the stage and writes it; the stage paints it as
+    // `--player-scale`, so the rows take at most a third of the art.
+    let stage_scale: Signal<f32> = use_signal(|| 1.0);
 
     // No region outlives the block: the contribution retracts on unmount, as
     // the former client `onMount` teardown did.
@@ -116,11 +146,19 @@ pub fn QueuePlaybackPanel() -> Element {
         let seekbar = seekbar_mounted.cloned();
         let auto_hide = auto_hide_mounted.cloned();
         let art = art_mounted.cloned();
+        let scale_signal = stage_scale;
         let mut effect_reporter = reporter.clone();
         spawn(async move {
             let mut regions: Vec<LayoutRegion> = Vec::new();
+            // The stage leads the report (design D4), and its measured height
+            // is the scale's source (design D3): the rows take at most a
+            // third of it.
+            if let Some(mounted) = art
+                && let Some(region) = stage_region(&mounted, scale_signal).await
+            {
+                regions.push(region);
+            }
             let elements = [
-                (art, QueuePlaybackTargetId::VisualSlot),
                 (play_pause, QueuePlaybackTargetId::PlayPause),
                 (prev, QueuePlaybackTargetId::Previous),
                 (seek_back, QueuePlaybackTargetId::SeekBack),
@@ -153,6 +191,9 @@ pub fn QueuePlaybackPanel() -> Element {
     // D5). `true` while no anchor holds — the idle transport paints a play
     // control.
     let paused = playhead.anchor.cloned().is_none_or(|anchor| anchor.paused);
+    // Whether the transport plays (design D2): the anchor's same fact, so a
+    // paused or idle transport paints no `data-playing` attribute.
+    let playing = !paused;
     // The control rows paint while something plays and while the shown local
     // queue can start (design D7). They are not behind `show_controls`: the
     // stopped state carries `show_controls: false` and still paints them.
@@ -178,8 +219,10 @@ pub fn QueuePlaybackPanel() -> Element {
                 chips: playback.track_chips.clone(),
                 overlay: sections.overlay.cloned(),
                 paused,
+                playing,
                 availability: playback.availability,
                 auto_hide: playback.controls.auto_hide,
+                scale: stage_scale(),
                 stage_mounted: art_mounted,
                 rows,
             }
@@ -211,8 +254,12 @@ pub fn QueuePlaybackPanel() -> Element {
         // reference). The canvas paints no outer pad and no gutter between
         // these blocks: the stage is full-bleed at the column's top edge
         // (D6), and the title carries its own 16 px insets.
+        // The no-image column and the stopped state paint their rows at full
+        // size (design D6, D7): the panel's own `--player-scale` is 1.0, and
+        // only the stage's bottom layer overrides it with the measured value.
         div {
             class: "flex flex-col",
+            style: "--player-scale: 1;",
             if playback.now_playing_title.is_some() {
                 {art_section}
                 // The title at the canvas's 18 px/600 and its parent line in
