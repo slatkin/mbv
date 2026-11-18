@@ -54,6 +54,16 @@ impl App {
             .update_status(|status| status.runtime_ticks = runtime_ticks);
     }
 
+    /// Set the playing item's reported cache end, as the Owner's status
+    /// reports it when the demuxer cache grows (`gui-queue-panel-redesign`
+    /// design D6's buffered trigger). A core test moves the cache end on its
+    /// own, with no position change beside it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_playing_buffered_for_test(&self, buffered_ticks: i64) {
+        self.player
+            .update_status(|status| status.buffered_ticks = buffered_ticks);
+    }
+
     /// Whether `key`'s image fetch is in flight (the reservation a fetch takes
     /// before it starts): a core test observes that a neighbour warm started.
     #[cfg(any(test, feature = "test"))]

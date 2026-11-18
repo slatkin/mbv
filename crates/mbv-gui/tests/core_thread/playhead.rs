@@ -85,6 +85,20 @@ fn advance_half_a_second(test: &mut TestCore) {
 /// Leave the reported playhead where it is.
 fn move_nothing(_test: &mut TestCore) {}
 
+/// Report a cache end 5 s past the last sent one, with no position change.
+fn buffer_past_the_tolerance(test: &mut TestCore) {
+    test.core
+        .app_mut()
+        .set_playing_buffered_for_test(5 * SECOND);
+}
+
+/// Report a cache end half a second past the last sent one.
+fn buffer_inside_the_tolerance(test: &mut TestCore) {
+    test.core
+        .app_mut()
+        .set_playing_buffered_for_test(SECOND / 2);
+}
+
 /// The first anchor carries the tick's playhead facts (design D5): the active
 /// slot, position, runtime, and paused state of the one playback projection
 /// read.
@@ -102,6 +116,32 @@ fn the_first_anchor_carries_the_playhead_facts() {
     assert_eq!(anchor.position_ticks, 0);
     assert_eq!(anchor.runtime_ticks, 10 * SECOND);
     assert!(!anchor.paused);
+}
+
+/// Contract (`gui-queue-panel-redesign` design D6, unit-4 review finding
+/// [P1]): the buffered end reaches the window on its own — a cache end that
+/// moved past the tolerance re-anchors, so the scrubber's buffered range
+/// repaints while the position holds, as it does while paused; one that moved
+/// inside the tolerance leaves the anchor alone, so mpv's continuous cache
+/// reports do not re-anchor the playhead on every sample.
+#[rstest]
+#[case::past_the_tolerance(buffer_past_the_tolerance, true)]
+#[case::inside_the_tolerance(buffer_inside_the_tolerance, false)]
+fn a_buffered_end_alone_re_anchors_only_past_the_tolerance(
+    #[case] move_buffer: fn(&mut TestCore),
+    #[case] sends: bool,
+) {
+    let mut test = playing_core();
+
+    move_buffer(&mut test);
+    assert!(test.core.step());
+
+    let held = test.held();
+    let revision = held
+        .playhead_section()
+        .expect("the window holds the first anchor")
+        .revision;
+    assert_eq!(revision > 1, sends);
 }
 
 /// The anchor rule (design D5): each trigger sends a new anchor — a revision

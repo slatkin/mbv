@@ -1,11 +1,12 @@
 //! The playhead anchor compare (design D5). The ledger keeps the last sent
 //! anchor and the `Instant` of its send, and each collect compares the tick's
 //! one playback projection read against them: a changed `active`,
-//! `activeSlot`, `paused`, or `runtimeTicks`, or a new sample that drifts
-//! past the tolerance from the prediction, sends a new anchor. Only a new
-//! sample is compared, so an output that reports its position from time to
-//! time does not re-anchor between reports, and a rate change is no trigger —
-//! mbv has no playback-rate fact.
+//! `activeSlot`, `paused`, or `runtimeTicks`, a cache end that moved past the
+//! buffered tolerance, or a new sample that drifts past the tolerance from
+//! the prediction, sends a new anchor. Only a new sample is compared, so an
+//! output that reports its position from time to time does not re-anchor
+//! between reports, and a rate change is no trigger — mbv has no
+//! playback-rate fact.
 //!
 //! Sync does not replay the anchor either: a replay would rewind the window's
 //! position by the anchor's age, because the window stamps the anchor on
@@ -25,6 +26,14 @@ use crate::bridge::frame::playback::GuiPlayhead;
 /// The drift a new sample may carry before it re-anchors (design D5): one
 /// second, in ticks.
 const PLAYHEAD_TOLERANCE: i64 = TICKS_PER_SECOND;
+
+/// The distance the reported cache end may move before it re-anchors on its
+/// own (`gui-queue-panel-redesign` design D6): one second, in ticks. The
+/// scrubber paints the buffered range from the anchor, and a paused window
+/// takes no position sample to ride, so the cache end must reach the window
+/// without one; mpv reports the demuxer cache continuously, so this window
+/// keeps those reports from re-anchoring the playhead on every sample.
+const BUFFERED_TOLERANCE: i64 = TICKS_PER_SECOND;
 
 /// The anchor compare's own state (design D5): the last reported position,
 /// which names a new sample, and the `Instant` the last anchor went out,
@@ -68,6 +77,14 @@ impl PlayheadAnchor {
             || sent.paused != anchor.paused
             || sent.runtime_ticks != anchor.runtime_ticks;
         if fact_changed {
+            self.send(slot, anchor, now);
+            return;
+        }
+        // The cache end is an anchor fact of its own (`gui-queue-panel-redesign`
+        // design D6): a buffered range the window never receives would leave
+        // the scrubber stale while the position holds, which is the state a
+        // paused window is in.
+        if (anchor.buffered_ticks - sent.buffered_ticks).abs() > BUFFERED_TOLERANCE {
             self.send(slot, anchor, now);
             return;
         }
