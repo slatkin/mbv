@@ -15,6 +15,7 @@
     "answered-queue-ops",
     "queue-shuffle",
     "queue-replace-start-position",
+    "buffered-position",
     "owner-action",
     "audio-only"
   ],

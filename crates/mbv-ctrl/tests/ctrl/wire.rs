@@ -69,6 +69,35 @@ fn player_status_with_legacy_play_order_field_still_decodes() {
     assert_eq!(decoded.queue_len, 0);
 }
 
+// gui-queue-panel-redesign task 2.1: `buffered_ticks` is additive (design
+// D6) — a status that carries it round-trips the value.
+#[test]
+fn player_status_buffered_ticks_round_trips() {
+    let status = PlayerStatus {
+        buffered_ticks: 90_000_000,
+        ..PlayerStatus::default()
+    };
+
+    let wire = serde_json::to_string(&status).unwrap();
+    let decoded: PlayerStatus = serde_json::from_str(&wire).unwrap();
+    assert_eq!(decoded.buffered_ticks, 90_000_000);
+}
+
+// The same delta: a status from an Owner that predates the field decodes with
+// no buffered position known.
+#[test]
+fn player_status_without_buffered_ticks_decodes_as_unknown() {
+    let mut value = serde_json::to_value(PlayerStatus::default()).unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .remove("buffered_ticks")
+        .expect("a PlayerStatus serializes buffered_ticks");
+
+    let decoded: PlayerStatus = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.buffered_ticks, 0);
+}
+
 #[rstest::rstest]
 #[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None, queue: None }, true)]
 #[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None, queue: None }, true)]

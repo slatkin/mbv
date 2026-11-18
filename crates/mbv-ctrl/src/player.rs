@@ -31,6 +31,12 @@ pub struct PlayerStatus {
     #[serde(default)]
     pub last_valid_pos: i64,
     pub runtime_ticks: i64,
+    /// Media position up to which the local player holds cached media, in the
+    /// same tick units as `position_ticks`. 0 = unknown: no cache reported, an
+    /// output that keeps no local cache (Cast, Emby Session), or an Owner that
+    /// predates the field (additive, no protocol-version bump).
+    #[serde(default)]
+    pub buffered_ticks: i64,
     pub paused: bool,
     pub volume: i64,
     pub volume_max: i64,
@@ -184,6 +190,7 @@ impl Default for PlayerStatus {
             position_ticks: 0,
             last_valid_pos: 0,
             runtime_ticks: 0,
+            buffered_ticks: 0,
             paused: false,
             volume: 100,
             volume_max: 130,

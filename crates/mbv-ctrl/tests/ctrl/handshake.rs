@@ -97,6 +97,20 @@ fn peer_without_queue_replace_start_position_capability_reads_false() {
     peer.validate_peer().unwrap();
 }
 
+// gui-queue-panel-redesign task 2.1: the buffered-position capability is
+// additive (design D6), so the current hello advertises it and a peer without
+// it reads false — the field itself still decodes, it just paints no range.
+#[test]
+fn peer_without_buffered_position_capability_reads_false() {
+    assert!(CtrlHello::current().supports_buffered_position());
+
+    let mut peer = CtrlHello::current();
+    peer.capabilities
+        .retain(|cap| cap != CTRL_CAP_BUFFERED_POSITION);
+    assert!(!peer.supports_buffered_position());
+    peer.validate_peer().unwrap();
+}
+
 #[test]
 fn current_hello_has_no_service_credential_field() {
     let json = serde_json::to_string(&CtrlHello::current()).unwrap();
