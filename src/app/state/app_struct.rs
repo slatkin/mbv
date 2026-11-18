@@ -249,6 +249,11 @@ pub struct App {
     /// width at paint time (`list_pane_width`).
     pub(in crate::app) list_pane_width: Option<u16>,
     pub(in crate::app) visual_slot_hidden: bool,
+    /// Whether the GUI Client's player controls auto-hide (design D5 of
+    /// `gui-art-player-overlay`): while an item plays and the pointer is not
+    /// over the artwork. Persisted across launches; the TUI Client paints no
+    /// auto-hide control and never reads it.
+    pub(in crate::app) gui_player_auto_hide: bool,
     pub(in crate::app) panel_mode: PanelMode,
     /// The one Client-kind fact (add-gui-library-panel design D4, D9):
     /// `true` for a GUI Client, `false` for a TUI Client. The GUI Client
@@ -731,31 +736,6 @@ impl App {
     pub(in crate::app) fn status_toast_live(&self) -> bool {
         self.status_expires
             .is_some_and(|expires| expires > Instant::now())
-    }
-
-    /// Whether the Player owner's active playback output is a Cast receiver,
-    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Cast still
-    /// counts: the spec's cast-session
-    /// control scenario keeps the target presented as disconnected and the
-    /// output selection usable. `None` (no report yet, or the connection was
-    /// replaced/lost) and `Local` both read as not-Cast.
-    pub(in crate::app) fn output_is_cast(&self) -> bool {
-        matches!(
-            self.playback_output,
-            Some(mbv_ctrl::OutputState::Cast { .. })
-        )
-    }
-
-    /// Whether the Player owner's active playback output is an Emby Session,
-    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Session still
-    /// counts, like a
-    /// `Disconnected` Cast target. `None` and `Local` both read as not an
-    /// Emby Session.
-    pub(in crate::app) fn output_is_emby_session(&self) -> bool {
-        matches!(
-            self.playback_output,
-            Some(mbv_ctrl::OutputState::EmbySession { .. })
-        )
     }
 
     /// A pinned launch's default screen is always the Queue panel, never the

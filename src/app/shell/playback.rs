@@ -99,6 +99,15 @@ impl crate::app::App {
             // exhaustiveness.
             PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
             PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
+            // The player stage's auto-hide control (design D5 of
+            // `gui-art-player-overlay`): the press flips the persisted
+            // preference, so the choice survives the next launch. The TUI
+            // paints no such control; the arm is here for the shared
+            // dispatch's exhaustiveness.
+            PlaybackRequest::ToggleAutoHide => {
+                self.gui_player_auto_hide = !self.gui_player_auto_hide;
+                self.save_prefs();
+            }
             // The canvas queue header's filter control (row 6.5): the same
             // effect the `/` chord dispatches, so the header control and the
             // chord run one path.

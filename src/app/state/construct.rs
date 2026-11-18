@@ -22,6 +22,10 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
+fn gui_player_auto_hide_from_prefs(prefs: &serde_json::Value) -> bool {
+    prefs["gui_player_auto_hide"].as_bool().unwrap_or(false)
+}
+
 /// Load the legacy per-library position document with its pill fields
 /// cleared. The document is a startup migration reader only — it is never
 /// written — so its letter-filter, TV content mode, and feed-group fields
@@ -198,6 +202,7 @@ impl App {
                 }),
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
+            gui_player_auto_hide: gui_player_auto_hide_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the terminal-cell panel rules and the visual-slot

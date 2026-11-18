@@ -46,6 +46,11 @@ pub enum PlaybackRequest {
     /// The canvas header's queue-fold control: the `q` toggle's pointer
     /// dispatch. GUI-painted only, as `TogglePanelCollapse` is.
     ToggleQueueFold,
+    /// The player stage's auto-hide control (design D5 of
+    /// `gui-art-player-overlay`): the checkbox's press turns the persisted
+    /// auto-hide preference on and off. GUI-painted only, as
+    /// `TogglePanelCollapse` is.
+    ToggleAutoHide,
     /// The canvas queue header's filter control (row 6.5): the `/` chord's
     /// text-entry focus, pressed on the header control. GUI-painted only.
     ActivateQueueFilter,

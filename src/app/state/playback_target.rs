@@ -135,6 +135,31 @@ impl App {
         // playback target's queue — there is no idle fallback to paint.
         self.effective_playback_state()
     }
+
+    /// Whether the Player owner's active playback output is a Cast receiver,
+    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Cast still
+    /// counts: the spec's cast-session
+    /// control scenario keeps the target presented as disconnected and the
+    /// output selection usable. `None` (no report yet, or the connection was
+    /// replaced/lost) and `Local` both read as not-Cast.
+    pub(in crate::app) fn output_is_cast(&self) -> bool {
+        matches!(
+            self.playback_output,
+            Some(mbv_ctrl::OutputState::Cast { .. })
+        )
+    }
+
+    /// Whether the Player owner's active playback output is an Emby Session,
+    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Session still
+    /// counts, like a
+    /// `Disconnected` Cast target. `None` and `Local` both read as not an
+    /// Emby Session.
+    pub(in crate::app) fn output_is_emby_session(&self) -> bool {
+        matches!(
+            self.playback_output,
+            Some(mbv_ctrl::OutputState::EmbySession { .. })
+        )
+    }
 }
 
 #[cfg(test)]
