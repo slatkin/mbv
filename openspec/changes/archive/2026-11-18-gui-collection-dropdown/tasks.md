@@ -53,10 +53,10 @@
 
 ## 9. TV view dropdown (user spec change)
 
-- [ ] 9.1 Docs: state the three-choice Shows view dropdown, the two relocated TV lists, the Home removal, and the separate launch field in this change and `docs/architecture/gui-client.md`; `openspec validate gui-collection-dropdown` passes.
-- [ ] 9.2 Core: add the Shows view type, command, per-library state, frame field, and flat New/Upcoming rows; keep `GuiCollectionSet`/`GuiCollectionTarget`/`apply_collection` free of Shows.
-- [ ] 9.3 Relocation: delete the Home Latest episodes and Upcoming sections and their Home-only state, events, launch work, row ids, and no-op arms; reuse their data sources and row types under Shows New and Upcoming.
-- [ ] 9.4 Window: paint the Shows view through a prop-driven dropdown presentation shared with the collection dropdown, with no filter or date order, and close the popover on selection.
-- [ ] 9.5 Persistence: save and restore the Shows view in its own GUI launch field; an old file loads as All.
-- [ ] 9.6 Verify the contracts (single choice, New and Upcoming rows in Shows, no Home sections, Shows launch round trip) and run the repository gates.
+- [x] 9.1 Docs: state the three-choice Shows view dropdown, the two relocated TV lists, the Home removal, and the separate launch field in this change and `docs/architecture/gui-client.md`; `openspec validate gui-collection-dropdown` passes.
+- [x] 9.2 Core: add the Shows view type, command, per-library state, frame field, and flat New/Upcoming rows; keep `GuiCollectionSet`/`GuiCollectionTarget`/`apply_collection` free of Shows.
+- [x] 9.3 Relocation: delete the Home Latest episodes and Upcoming sections and their Home-only state, events, launch work, row ids, and no-op arms; reuse their data sources and row types under Shows New and Upcoming.
+- [x] 9.4 Window: paint the Shows view through a prop-driven dropdown presentation shared with the collection dropdown, with no filter or date order, and close the popover on selection.
+- [x] 9.5 Persistence: save and restore the Shows view in its own GUI launch field; an old file loads as All.
+- [x] 9.6 Verify the contracts (single choice, New and Upcoming rows in Shows, no Home sections, Shows launch round trip) and run the repository gates.
 

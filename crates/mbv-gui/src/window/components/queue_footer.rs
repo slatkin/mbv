@@ -295,12 +295,15 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
                         onmounted: move |event| target_mounted.set(Some(event)),
                         Cast { size: 18, stroke_width: 1.8, color: "currentColor" }
                         if !playback.host.is_empty() {
-                            // The band's 12 px mono type is the label's
-                            // inherited face and size: the box carries no
-                            // style of its own.
-                            Truncate {
-                                text: playback.host.clone(),
-                                style: TextStyle::mono(12.0, 400.0),
+                            // The name paints as plain clipped text, never
+                            // through `Truncate`: this box is sized by the
+                            // text it paints, so a measured cut would shrink
+                            // the box and ratchet the name down to `…` on the
+                            // next session switch (b3c8d874b's rule, kept on
+                            // the control's move).
+                            span {
+                                class: "min-w-0 overflow-hidden whitespace-nowrap",
+                                "{playback.host}"
                             }
                         }
                         ChevronDown { size: 12, color: "currentColor" }

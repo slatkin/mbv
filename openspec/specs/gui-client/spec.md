@@ -214,7 +214,7 @@ The GUI Client SHALL hold no Panel focus. At each key press it SHALL find the ke
 
 ### Requirement: Open text fields and menus keep the keys
 
-While the Search field, the Library filter, or the Queue filter is open for typing, it SHALL take the keys wherever the pointer is. While a core overlay is open or prefix mode is armed, every key SHALL go to the Client core. Esc SHALL close the open Library row menu, the item menu, the Hero overlay, or the Search results wherever the pointer is.
+While the Search field, the Library filter, the Queue filter, or the collection dropdown's filter field is open for typing, it SHALL take the keys wherever the pointer is. While a core overlay is open or prefix mode is armed, every key SHALL go to the Client core. Esc SHALL close the open Library row menu, the item menu, the Hero overlay, the collection dropdown, or the Search results wherever the pointer is.
 
 #### Scenario: The pointer moves while the user types
 
@@ -228,6 +228,13 @@ While the Search field, the Library filter, or the Queue filter is open for typi
 - **GIVEN** a Library row's menu is open
 - **WHEN** the pointer rests over the Queue list box and the user presses Esc
 - **THEN** the row menu closes
+- **AND** the Queue does not change
+
+#### Scenario: The dropdown filter keeps the keys
+
+- **GIVEN** the collection dropdown is open
+- **WHEN** the pointer moves over the Queue list box and the user types `ti`
+- **THEN** the dropdown filter holds `ti`
 - **AND** the Queue does not change
 
 ### Requirement: Every action is reachable from the keyboard
@@ -659,135 +666,284 @@ No Library list, Hero tracklist, or Workspace table SHALL have a keyboard cursor
 - **WHEN** the pointer moves away from the list
 - **THEN** the album's row stays marked as the Hero's item
 
-### Requirement: One collection pill is selected at a time
+### Requirement: A collection dropdown selects the collections
 
-One collection pill SHALL be selected at a time: one group is always selected. A press or an Alt-press on a collection pill SHALL select it and deselect the others. A press SHALL NOT deselect the selected pill. No pill SHALL hold a keyboard focus, and no key SHALL select a pill. Latest, filter, and letter-bucket pills SHALL stay single-select. The list SHALL show the selected group's rows.
+Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show one collection dropdown in the list header. The dropdown SHALL offer All and one entry per collection: a Music group, a Podcast show, a Feeds subscription, or an Emby folder. The list SHALL show the de-duplicated union of the checked collections, or every collection while All is selected. No other destination SHALL show a collection dropdown.
 
-#### Scenario: Collection pills per destination
+#### Scenario: Collections per destination
 
-- **WHEN** a destination paints its pill row
-- **THEN** the collection pills are the Music group pills, the Podcast Latest pill and its show pills, the Feeds Latest pill and its subscription pills, and All and each folder pill of an Emby library in feed-group mode
-- **AND** every other pill is single-select
+- **WHEN** a destination with collections paints its list
+- **THEN** the dropdown offers All and the Music groups, the Podcast shows, the Feeds subscriptions, or the folders of an Emby library in feed-group mode
 
-#### Scenario: A second collection is selected
+#### Scenario: A destination without collections
 
-- **GIVEN** the Hip-Hop collection is selected
-- **WHEN** the user presses the Soul pill
-- **THEN** only the Soul pill is selected and the list shows the artists of Soul, sorted as one list
-- **AND** the list header reads Soul · sort name
+- **WHEN** Shows, Audiobooks, or a plain Emby library paints its list
+- **THEN** no collection dropdown shows
+- **AND** Shows paints its own single-choice view dropdown, which is not a collection filter
 
-#### Scenario: The selected pill is pressed again
+#### Scenario: Two collections are checked
 
-- **GIVEN** the Hip-Hop collection is selected
-- **WHEN** the user presses the Hip-Hop pill
-- **THEN** Hip-Hop stays selected and the list does not change
+- **GIVEN** Hip-Hop and Soul are checked in Music, and one artist has albums in both
+- **WHEN** the list paints
+- **THEN** the list shows the artists of Hip-Hop and Soul sorted as one list, and that artist shows one time
 
-#### Scenario: An Alt-press selects the pill
+#### Scenario: Space over the trigger plays or pauses
 
-- **GIVEN** the Hip-Hop collection is selected
-- **WHEN** the user Alt-presses the Soul pill
-- **THEN** only the Soul pill is selected
-
-#### Scenario: Space over the pill row plays or pauses
-
-- **GIVEN** the pointer rests on the Soul pill
+- **GIVEN** the dropdown is closed and the pointer rests on its trigger
 - **WHEN** the user presses Space
-- **THEN** playback plays or pauses and the selected pill does not change
+- **THEN** playback plays or pauses and the selection does not change
 
-#### Scenario: The Podcasts Latest pill merges the shows
+### Requirement: The collection dropdown sits in the list header and no pill row remains
 
-- **WHEN** the user presses the Latest pill of Podcasts, whose two shows have episodes
-- **THEN** only Latest is selected and the list merges both shows' episodes newest first with undated episodes last
-- **AND** no letter rail shows
+The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, at the right end of the line, and SHALL show that it opens a menu. The open dropdown SHALL open under its trigger, over the list.
 
-#### Scenario: Latest is selected at the start
+#### Scenario: Podcasts header
 
-- **WHEN** the Podcasts or the Feeds destination opens for the first time in a launch
-- **THEN** its pill row offers Latest and one pill per show or subscription, and Latest is selected
+- **WHEN** the Podcasts destination paints
+- **THEN** the list header's title line shows the list title at the left and the dropdown trigger at the right end, and nothing else
+- **AND** no row of pills or selector controls shows between the top bar and the list
 
-#### Scenario: A podcast show pill scopes the list
+#### Scenario: No destination paints a pill row
 
-- **WHEN** the user presses a show pill of Podcasts
-- **THEN** only that pill is selected and the list shows that show's episodes in date order
+- **WHEN** any destination paints, Home, Shows, and Audiobooks included
+- **THEN** no pill row shows above the list
 
-#### Scenario: The Feeds Latest pill merges the subscriptions
+#### Scenario: The dropdown opens under the trigger
 
-- **WHEN** the user presses the Latest pill of Feeds, whose two subscriptions have entries
-- **THEN** only Latest is selected and the list merges both subscriptions' entries newest first with undated entries last
-- **AND** no letter rail shows
+- **WHEN** the user presses the trigger
+- **THEN** the dropdown opens directly under the trigger, over the list rows
 
-#### Scenario: A feed subscription pill scopes the list
+### Requirement: The selection is All or checked collections
 
-- **WHEN** the user presses a subscription pill of Feeds
-- **THEN** only that pill is selected and the list shows that subscription's entries in date order
+The selection SHALL be All or a non-empty set of checked collections, never both. A press on an unchecked collection SHALL check it and clear All. A press on a checked collection SHALL uncheck it; when no collection stays checked, the selection SHALL become All. A press on All SHALL uncheck every collection. A destination SHALL start on All when it holds no saved selection.
 
-#### Scenario: An Emby library in feed-group mode changes pill
+#### Scenario: The first collection is checked
 
-- **WHEN** the user presses a folder pill of an Emby library in feed-group mode
-- **THEN** only that pill is selected and the list shows that folder's items in date order with no letter rail
+- **GIVEN** All is selected
+- **WHEN** the user presses Tifo Football
+- **THEN** only Tifo Football is checked and All is not
 
-#### Scenario: A non-collection pill is selected
+#### Scenario: A second collection is checked
 
-- **GIVEN** the Hip-Hop collection is selected
-- **WHEN** the user selects the Latest pill
-- **THEN** only the Latest pill is selected
+- **GIVEN** Tifo Football is checked
+- **WHEN** the user presses Off Menu
+- **THEN** Tifo Football and Off Menu are checked
 
-### Requirement: The pill selection persists per destination
+#### Scenario: The last collection is unchecked
 
-Each destination SHALL keep its own selected pill while the GUI Client runs. A Grouped Music library's group pills SHALL also keep their selection across a restart of the GUI Client, through its launch location. The Podcasts and Feeds pill rows SHALL start on Latest at every launch and save no pill (design D12).
+- **GIVEN** only Tifo Football is checked
+- **WHEN** the user presses Tifo Football
+- **THEN** All is selected and no collection is checked
+
+#### Scenario: All is pressed
+
+- **GIVEN** Tifo Football and Off Menu are checked
+- **WHEN** the user presses All
+- **THEN** All is selected and no collection is checked
+
+#### Scenario: A failed collection is fetched again on a press
+
+- **GIVEN** a Music group whose albums failed to load
+- **WHEN** the user presses All
+- **THEN** the group's albums are requested again and the list shows every group's albums once they load
+- **AND** a repaint alone does not request them again
+
+#### Scenario: A checked collection no longer exists
+
+- **GIVEN** Soul and Jazz are checked, and the library no longer has Soul
+- **WHEN** the list paints
+- **THEN** only Jazz is checked
+- **AND** when the library has none of the checked collections, All is selected
+
+### Requirement: The dropdown trigger names the selection
+
+The closed dropdown SHALL show a trigger that names the selection: All, the one checked collection, or the count of checked collections. A press on the trigger SHALL open the dropdown, or close it while it is open.
+
+#### Scenario: Two collections are checked
+
+- **GIVEN** Tifo Football and Off Menu are checked
+- **WHEN** the dropdown is closed
+- **THEN** the trigger shows the count of checked collections
+
+#### Scenario: The trigger opens the dropdown
+
+- **WHEN** the user presses the trigger
+- **THEN** the dropdown opens with All and every collection, each with its check state
+
+### Requirement: The open dropdown filters its collections and closes
+
+The open dropdown SHALL show a filter field. Text in the field SHALL narrow the collection entries to the ones whose name matches, by the Library filter's match rule; All SHALL stay shown. A check change SHALL leave the dropdown open. A press outside the dropdown, a destination change, or Esc SHALL close it and clear the filter text. The dropdown SHALL bind no other key.
+
+#### Scenario: The filter narrows the entries
+
+- **GIVEN** the dropdown is open
+- **WHEN** the user types `tifo`
+- **THEN** the dropdown shows All and Tifo Football, and no other collection
+
+#### Scenario: A check leaves the dropdown open
+
+- **GIVEN** the dropdown is open
+- **WHEN** the user presses a collection
+- **THEN** its check state changes and the dropdown stays open
+
+#### Scenario: A press outside closes the dropdown
+
+- **GIVEN** the dropdown is open with the filter text `tifo`
+- **WHEN** the user presses a Library row outside the dropdown
+- **THEN** the dropdown closes and the next open shows an empty filter
+
+### Requirement: Feed-based lists paint newest first
+
+Podcasts, Feeds, and an Emby library in feed-group mode SHALL paint their lists with the most recent row first; undated rows SHALL stay last. The GUI SHALL show no date order control; the core keeps its date-order command.
+
+#### Scenario: A folder paints newest first
+
+- **WHEN** the user checks one folder of an Emby library in feed-group mode
+- **THEN** the list shows that folder's items newest first
+
+#### Scenario: No destination shows a date order control
+
+- **WHEN** any destination paints its list header
+- **THEN** no date order control shows
+
+### Requirement: The collection selection persists per destination
+
+Each destination SHALL keep its own selection while the GUI Client runs. Every collection dropdown selection and its date order, where one is held, SHALL persist across a restart through the same launch-location entry, keyed by collection target: Music groups, Podcast shows, Feeds subscriptions, or Emby feed-group folders. An entry written before targets existed SHALL load as Music. A destination with no saved selection SHALL start on All.
 
 #### Scenario: The user changes destination and returns
 
-- **GIVEN** Soul is selected in Music
+- **GIVEN** Soul and Jazz are checked in Music
 - **WHEN** the user opens another destination and then Music again
-- **THEN** Soul is still selected
+- **THEN** Soul and Jazz are still checked
 
 #### Scenario: The GUI starts again
 
-- **GIVEN** the GUI Client quit with Soul selected in Music
+- **GIVEN** the GUI Client quit with Soul and Jazz checked in Music
 - **WHEN** the GUI Client starts again
-- **THEN** Music opens with Soul selected
+- **THEN** Music opens with Soul and Jazz checked
 
 #### Scenario: A saved collection no longer exists
 
-- **GIVEN** the GUI Client quit with Soul selected, and the library no longer has Soul
+- **GIVEN** the GUI Client quit with only Soul checked, and the library no longer has Soul
 - **WHEN** the GUI Client starts again
-- **THEN** Music opens with the first group selected, as the TUI does
+- **THEN** Music opens on All
 
-#### Scenario: A Podcasts or Feeds pill starts on Latest
+#### Scenario: Non-Music selections survive a restart
 
-- **GIVEN** the GUI Client quit with a show pill selected in Podcasts and a subscription pill selected in Feeds
+- **GIVEN** the GUI Client quit with a show checked in Podcasts, a subscription checked in Feeds, and a folder checked in an Emby feed-group library
 - **WHEN** the GUI Client starts again
-- **THEN** Podcasts opens on Latest and Feeds opens on Latest
+- **THEN** Podcasts, Feeds, and that Emby library open with those collections checked
 
-### Requirement: Each collection pill keeps its last picked album
+#### Scenario: Saved ids restore to their own dropdown
 
-Each Music group pill SHALL keep the album its Hero last showed, while the GUI Client runs and across a restart of the GUI Client. A pill with no kept album, or whose kept album the selected collection no longer holds, SHALL show the first album in its list. The Hero SHALL therefore never be blank while the selected collection's albums are loaded.
+- **GIVEN** a launch entry names the Feeds target with a saved subscription
+- **WHEN** the GUI Client starts again
+- **THEN** Feeds opens with that subscription checked and no other dropdown reads it
 
-#### Scenario: A pill reopens on its own album
+#### Scenario: An old launch entry loads as Music
 
-- **GIVEN** the user picked Paul's Boutique under Hip-Hop, and then selected Soul, whose first album is 3 Feet High and Rising
-- **WHEN** the user selects Hip-Hop again
+- **GIVEN** the GUI Client quit with Soul and Jazz saved as Music groups before launch entries named a collection target
+- **WHEN** the GUI Client starts again
+- **THEN** Music opens with Soul and Jazz checked
+
+#### Scenario: A destination with no saved selection starts on All
+
+- **GIVEN** the GUI Client quit with no saved Podcasts or Feeds selection
+- **WHEN** the GUI Client starts again
+- **THEN** Podcasts and Feeds open on All
+
+#### Scenario: The Shows view survives a restart
+
+- **GIVEN** the GUI Client quit with Upcoming selected in a Shows destination
+- **WHEN** the GUI Client starts again
+- **THEN** that Shows destination opens with Upcoming selected
+
+#### Scenario: An old launch file has no Shows view
+
+- **GIVEN** the GUI Client quit before the launch file held a Shows view
+- **WHEN** the GUI Client starts again
+- **THEN** Shows opens on All
+
+### Requirement: Each Music group keeps its last picked album
+
+Each Music group SHALL keep the album its Hero last showed while it was the only checked group, across a restart too. When the selection becomes one group, the Hero SHALL show its kept album, else its first album. For All or several groups, the Hero SHALL keep its album while the union holds it, else show the union's first album. The Hero SHALL never be blank while the albums are loaded.
+
+#### Scenario: A group reopens on its own album
+
+- **GIVEN** the user picked Paul's Boutique with only Hip-Hop checked, and then checked only Soul
+- **WHEN** the user checks only Hip-Hop again
 - **THEN** the Hero shows Paul's Boutique
-- **AND** selecting Soul again shows 3 Feet High and Rising
 
-#### Scenario: A pill with no kept album
+#### Scenario: A second group keeps the Hero
 
-- **GIVEN** Soul has never had an album picked
-- **WHEN** the user selects Soul
-- **THEN** the Hero shows the first album in the Soul list
+- **GIVEN** only Hip-Hop is checked and the Hero shows Paul's Boutique
+- **WHEN** the user also checks Soul
+- **THEN** the Hero still shows Paul's Boutique
 
 #### Scenario: The kept albums survive a restart
 
-- **GIVEN** the GUI Client quit with Paul's Boutique kept under Hip-Hop
+- **GIVEN** the GUI Client quit with Paul's Boutique kept under Hip-Hop and only Hip-Hop checked
 - **WHEN** the GUI Client starts again
-- **THEN** Music opens with Hip-Hop selected, and the Hero shows Paul's Boutique
+- **THEN** Music opens with Hip-Hop checked, and the Hero shows Paul's Boutique
 
-#### Scenario: A kept album no longer exists
+### Requirement: Shows selects one view
 
-- **GIVEN** the kept album is no longer in the pill's list
-- **WHEN** the pill is selected
-- **THEN** the Hero shows the first album in the list
+The GUI Shows destination's list header SHALL paint one dropdown with exactly three single-choice entries: All, New, and Upcoming, in that order. All SHALL be the default. A press on one entry SHALL replace the active entry and close the dropdown. The choice SHALL be a view of the destination and SHALL NOT be a collection set, a collection target, a collection filter, or a key binding. The TUI Client's Shows modes SHALL NOT change.
+
+#### Scenario: Shows opens on All
+
+- **WHEN** the user opens a Shows destination with no saved view
+- **THEN** the list shows the library's series sorted by name with the letter rail, the Hero and Workspace are present, and the dropdown marks All
+
+#### Scenario: One view replaces another
+
+- **GIVEN** All is active and the view dropdown is open
+- **WHEN** the user presses New
+- **THEN** New is the only marked entry and the dropdown closes
+
+### Requirement: Shows paints the New and Upcoming lists
+
+Under New, the GUI Shows destination SHALL show the old Shows Latest episodes list, merged across every Emby TV library, newest first and de-duplicated by item id. A New row SHALL select into the Hero, play, and enqueue as a Recently added Emby row does. Under Upcoming, it SHALL show the old Shows Upcoming premieres list, merged across every Emby TV library, soonest first. An empty list SHALL show no rows. GUI Home SHALL NOT show either list. The TUI Client's Home SHALL NOT change.
+
+#### Scenario: Two TV libraries have new episodes
+
+- **GIVEN** two Emby TV libraries each have recent episodes
+- **WHEN** the Shows destination paints New
+- **THEN** the list shows the episodes of both libraries as one list, newest first
+
+#### Scenario: A New row plays
+
+- **WHEN** the user plays a New row
+- **THEN** that episode plays as a Recently added episode row plays
+
+#### Scenario: Upcoming has no premieres
+
+- **WHEN** no Emby TV library has an upcoming premiere
+- **THEN** the Shows destination's Upcoming view shows no rows
+
+#### Scenario: Home has no relocated sections
+
+- **WHEN** GUI Home paints
+- **THEN** it shows only Continue watching and Recently added sections, with no Latest episodes or Upcoming section
+
+### Requirement: Shows Upcoming rows are display-only
+
+An Upcoming row in the Shows destination SHALL NOT select, play, or enqueue. A press on it SHALL change nothing, a play or enqueue key over it SHALL do nothing, and the Hero SHALL keep its item.
+
+#### Scenario: An Upcoming row is pressed
+
+- **GIVEN** the Shows Hero shows a series
+- **WHEN** the user presses an Upcoming row
+- **THEN** the Hero still shows that series and nothing plays
+
+#### Scenario: Enter over an Upcoming row
+
+- **WHEN** the pointer rests on an Upcoming row and the user presses Enter
+- **THEN** nothing plays and the queue does not change
+
+
+
+
 
 ### Requirement: The panel widths persist across launches
 
@@ -866,12 +1022,12 @@ The Music list SHALL show the artists of the selected collection as a tree of ar
 
 ### Requirement: The letter rail jumps a name-sorted list
 
-A Library list sorted by name SHALL show a letter rail from A to Z. A letter with no rows SHALL be disabled. A press on a letter SHALL scroll the list to the first row whose sort name starts with that letter; it SHALL pick and select nothing. The rail's keyboard path SHALL be the list's `/` filter. A list sorted by date SHALL show no rail. An Emby library that is not a feed-group library SHALL show the rail and no pills: the rail replaces the TUI's letter-range pill row, as it does for Shows.
+A Library list sorted by name SHALL show a letter rail from A to Z. A letter with no rows SHALL be disabled. A press on a letter SHALL scroll the list to the first row whose sort name starts with that letter; it SHALL pick and select nothing. The rail's keyboard path SHALL be the list's `/` filter. A list sorted by date SHALL show no rail. An Emby library that is not a feed-group library SHALL show the rail and no collection dropdown: the rail replaces the TUI's letter-range pill row, as it does for Shows.
 
-#### Scenario: A plain Emby library paints the rail and no pills
+#### Scenario: A plain Emby library paints the rail and no collection dropdown
 
 - **WHEN** a Movies library paints its list
-- **THEN** the list is flat and sorted by name, it shows the letter rail, and its pill row holds no pill
+- **THEN** the list is flat and sorted by name, it shows the letter rail, and no collection dropdown shows
 
 #### Scenario: A letter is pressed
 
@@ -937,13 +1093,19 @@ The Library panel SHALL show a top bar with a Home icon and the destination tabs
 
 ### Requirement: The Library Status bar shows hints and the location
 
-While the Library panel shows, a Library Status bar SHALL show under the Library column: the key hints for the filter, play, play next, add to queue, and destination keys on the left, and the location on the right: the destination, the selected collection's name, and the picked item. The hints SHALL name no pane or focus key. While prefix mode is armed or a toast is active, that SHALL replace the key hints, and the location SHALL stay.
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the key hints for the filter, play, play next, add to queue, and destination keys on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. The hints SHALL name no pane or focus key. While prefix mode is armed or a toast is active, that SHALL replace the key hints, and the location SHALL stay.
 
 #### Scenario: Music has an album picked
 
-- **GIVEN** Music is active with Hip-Hop selected and a Beastie Boys album picked
+- **GIVEN** Music is active with Hip-Hop checked and a Beastie Boys album picked
 - **WHEN** the Library Status bar paints
 - **THEN** it shows the key hints and the location Music, Hip-Hop, Beastie Boys
+
+#### Scenario: Two collections are checked
+
+- **GIVEN** Feeds is active with Tifo Football and Off Menu checked
+- **WHEN** the Library Status bar paints
+- **THEN** the location names Feeds, then both subscriptions, then the picked entry
 
 #### Scenario: A toast arrives
 
