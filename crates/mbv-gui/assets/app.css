@@ -122,9 +122,6 @@
 	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
 	--canvas-segment-active: #475258; /* the switch's active segment */
 	--canvas-ordinal: #7f897d; /* the row ordinal */
-	--canvas-strike: #56635f; /* the watched row's strike-through */
-	--canvas-track: #414b50; /* the progress track */
-	--canvas-track-current: #7d9460; /* the active row's progress track */
 	--canvas-muted: #9da9a0; /* the second header line, inactive segments, watched text, Length values */
 	--canvas-text: #d3c6aa; /* the row title */
 	--canvas-heading: #e9e1cc; /* the header's heading, active segment, hovered row text, and drag ghost text */

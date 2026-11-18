@@ -90,8 +90,8 @@ pub fn theme_style_rule(theme: Option<&GuiTheme>) -> String {
 /// rest. Those six properties were therefore never defined in the webview:
 /// each consumer's `var()` was invalid at computed-value time, which left a
 /// `background` transparent (the queue column's backdrop showed through the
-/// recessed box, the zebra stripes, the footer band, and the compact strip)
-/// and the scrubber thumb's `box-shadow` ring unpainted. Writing the
+/// recessed box, the footer band, and the compact strip) and the scrubber
+/// thumb's `box-shadow` ring unpainted. Writing the
 /// camelCase names here would paint four fills the reference build never
 /// painted, so the port reproduces its token set instead. The six fields
 /// stay on the DTO — they still name the surface mapping — and stay bound so

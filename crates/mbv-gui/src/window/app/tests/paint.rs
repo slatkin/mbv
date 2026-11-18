@@ -119,8 +119,8 @@ impl Times for FakeTimes {
     }
 }
 
-/// The queue the panel screens paint: three rows, the cursor on the first, the
-/// second playing and hovered, and the stripes' zebra parity.
+/// The queue the panel screens paint: three rows, the cursor on the first, and
+/// the second playing and hovered.
 fn queue() -> GuiQueue {
     GuiQueue {
         rows: vec![
@@ -151,7 +151,6 @@ fn row(slot: u64, state: GuiSemanticState) -> GuiQueueRow {
         duration: Some("3:12".to_owned()),
         kind: GuiMediaKind::Media,
         state,
-        striped: slot.is_multiple_of(2),
     }
 }
 

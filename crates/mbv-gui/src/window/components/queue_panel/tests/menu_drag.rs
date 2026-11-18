@@ -106,25 +106,23 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
     assert!(ghost_style.contains("right: -6px"), "{ghost_style}");
     let card = fixture.style_of("[data-ghost] div");
     assert!(card.contains("background: var(--canvas-ghost)"), "{card}");
-    assert!(card.contains("border-radius: 4px"), "{card}");
+    assert!(card.contains("border-radius: 6px"), "{card}");
     assert!(card.contains("transform: rotate(-1deg)"), "{card}");
     assert!(
         card.contains("box-shadow: var(--canvas-ghost-shadow)"),
         "{card}"
     );
     let ghost_title = fixture.style_of("[data-ghost] .truncate");
-    assert!(
-        ghost_title.contains("color: var(--canvas-heading)"),
-        "{ghost_title}"
-    );
+    assert!(ghost_title.contains("color: var(--ef-fg)"), "{ghost_title}");
     assert!(
         !fixture.presents("[data-ghost] svg"),
         "the ghost paints no start mark"
     );
 
     let line = fixture.style_of("[data-insertion]");
-    // The `after` anchor: the line pins to the row's bottom edge, not its top.
-    assert!(line.contains("bottom: 0;"), "{line}");
+    // The `after` anchor: the line pins to the row's bottom edge — in the 2 px
+    // gap under it, where the drop lands — not to its top.
+    assert!(line.contains("top: 34px;"), "{line}");
     assert!(!line.contains("top: 0;"), "{line}");
     assert!(line.contains("margin: 0 8px"), "{line}");
     assert!(line.contains("border-radius: 1px"), "{line}");
@@ -164,7 +162,7 @@ fn the_open_menu_overlaps_the_bottom_edge_of_the_row_its_anchor_slot_names() {
 
     let menu_style = fixture.style_of("[data-row-menu]");
     assert!(
-        menu_style.contains("top: calc(var(--canvas-queue-header-height) + 54px)"),
+        menu_style.contains("top: calc(var(--canvas-queue-header-height) + 66px)"),
         "{menu_style}"
     );
 }

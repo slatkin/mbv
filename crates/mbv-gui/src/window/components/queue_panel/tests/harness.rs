@@ -182,7 +182,6 @@ pub(super) fn item(slot: u64) -> GuiQueueRow {
         duration: Some("3:12".to_owned()),
         kind: GuiMediaKind::Media,
         state: GuiSemanticState::Ordinary,
-        striped: false,
     }
 }
 

@@ -405,9 +405,10 @@ fn the_line_paints_the_canvas_footer_band() {
     assert!(line.contains("padding-inline: 16px"), "{line}");
     assert!(line.contains("font-size: 12px"), "{line}");
     assert!(
-        line.contains("border-top: 1px solid var(--canvas-border)"),
+        line.contains("border-top: 1px solid var(--ef-bg3)"),
         "{line}"
     );
+    assert!(line.contains("background: var(--ef-bg0)"), "{line}");
     let source = fixture.style_of("[data-footer-source]");
     assert!(
         source.contains("color: var(--canvas-type-secondary)"),
