@@ -152,21 +152,23 @@ deleted with their tests.
 ### D6a. Placement and form follow the artboard (page 7)
 
 The dropdown is painted by `LibraryListHeader`, not by the panel. The header takes an optional
-collections frame. When the frame is present, the title line is: list title, then the trigger, and
-nothing else. The selection label on the right of the title line is not painted when the trigger is
-present, because the trigger names the selection. The panel paints nothing between `LibraryTopBar`
-and the list region: the selector row and its `pills` region are deleted.
+collections frame. The title line is: the list title at the left, and the trigger at the right end
+when the frame is present, and nothing else. No destination paints a selection label on the right
+of the title line: the destinations with collections paint the trigger in its place, because the
+trigger names the selection, and Movies (a plain Emby library) and the Shows destination paint no
+label at all (user decision 2026-11-18). The panel paints nothing between `LibraryTopBar` and the
+list region: the selector row and its `pills` region are deleted.
 
-The trigger is the capsule the artboard shows: a fully rounded outline in the accent colour, with
-the selection label and a chevron that points down while closed and up while open. It is not a
-rectangular button and not a muted pill.
+The trigger is a rectangular button with the list filter field's corner radius, an outline in the
+accent colour, and a chevron that points down while closed and up while open. It is not a capsule
+and not a muted pill.
 
-The popover is absolutely positioned under the trigger inside the header, over the list, and paints
-as the artboard shows: a filter strip with a teal `/` and the placeholder (for example "Find a
-category" for folders), a divider under it, a checkbox row for All first with an extra gap after it,
-one checkbox row per collection, a highlighted band and a bold name on a checked row, and a footer
-strip whose only hint is "esc close". The artboard's "space toggle" and "enter only this" hints name
-behaviours the GUI does not have, so the footer does not paint them.
+The popover is absolutely positioned under the trigger inside the header, over the list, with its
+right edge aligned with the trigger's right edge, and paints as the artboard shows: a filter strip
+with a teal `/` and the placeholder (for example "Find a category" for folders), a divider under it,
+a checkbox row for All first with an extra gap after it, and one checkbox row per collection with a
+highlighted band and a bold name on a checked row. The artboard's footer does not paint: the
+popover has no footer strip, and Esc still closes the dropdown (D7).
 
 The artboard shows no Clear control and no date order toggle, and the user has dropped both from the
 GUI. All is selected by pressing the All row, and the GUI shows no date order control; the core keeps

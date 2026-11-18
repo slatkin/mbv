@@ -30,15 +30,14 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 
 ### Requirement: The collection dropdown sits in the list header and no pill row remains
 
-The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, directly after the list title,
-and SHALL show that it opens a menu. The trigger is a capsule outline in the accent colour with a
+The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, at the right end of the line, and SHALL show that it opens a menu. The trigger is a rectangular button with the list filter field's corner radius and an outline in the accent colour, with a
 chevron that points down while closed and up while open. The open dropdown SHALL open under its
-trigger, over the list.
+trigger, over the list, with its right edge aligned with the trigger's right edge.
 
 #### Scenario: Podcasts header
 
 - **WHEN** the Podcasts destination paints
-- **THEN** the list header's title line shows the list title, then the dropdown trigger, and nothing else
+- **THEN** the list header's title line shows the list title at the left and the dropdown trigger at the right end, and nothing else
 - **AND** no row of pills or selector controls shows between the top bar and the list
 
 #### Scenario: No destination paints a pill row
@@ -49,7 +48,7 @@ trigger, over the list.
 #### Scenario: The dropdown opens under the trigger
 
 - **WHEN** the user presses the trigger
-- **THEN** the dropdown opens directly under the trigger, over the list rows
+- **THEN** the dropdown opens directly under the trigger, over the list rows, with its right edge aligned with the trigger's right edge
 
 ### Requirement: The selection is All or checked collections
 

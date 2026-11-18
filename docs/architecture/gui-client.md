@@ -913,8 +913,7 @@ The list is the Music tree over the TUI's TV node kinds, and
 season asks the core for them. The window content owns the open and closed
 node keys, exactly as the Music tree's does, and builds the painted rows at
 the Music heights: series and seasons on the node row, episodes on the track
-row, the letter heading above the first series of each letter, and the
-`Series` header with `All` and the sort rule as the selection label and the
+row, the letter heading above the first series of each letter, and the `Series` header with no selection label and the
 `/` filter field. A series whose detail has not landed paints closed and
 expandable. `GuiShowsDetail`'s `selected` carries the core's selected series
 as the frame painted it — the series id — with the first node as the default,
