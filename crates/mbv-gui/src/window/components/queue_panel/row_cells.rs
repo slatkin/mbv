@@ -234,10 +234,13 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     } else {
                         cell_tone.title.clone()
                     };
+                    // The title is a row-flex item, so it grows into the row's
+                    // free width: its measure must read the room the row has,
+                    // not the width of the text it currently paints.
                     let title_class = if row.state == GuiSemanticState::Played {
-                        "min-w-0 line-through"
+                        "min-w-0 flex-1 line-through"
                     } else {
-                        "min-w-0"
+                        "min-w-0 flex-1"
                     };
                     let title_css = format!(
                         "font-size: 13.5px; font-weight: {}; text-decoration-color: {}; color: {};",

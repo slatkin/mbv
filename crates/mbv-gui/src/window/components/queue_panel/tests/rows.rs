@@ -163,6 +163,23 @@ fn the_row_paints_the_canvas_one_liner() {
     assert!(!fixture.presents("[data-slot=\"1\"] svg"));
 }
 
+/// Regression (2026-11-18 queue title truncation): after a narrow measure
+/// cuts a long title, a wider row paints it whole again. Without grow, the
+/// cut box keeps its shrunken width and the title never regrows.
+#[test]
+fn a_long_title_regrows_when_the_row_gets_room() {
+    let title = "Dedication (To Daddy Trane and Brother Shorter)";
+    let mut fixture = built_at_with_real_title_width(queue_panel_app, 240, 900);
+    fixture.show(queue(vec![renamed(item(1), title)]), summary(), None);
+
+    assert!(
+        fixture.text_of("[data-slot=\"1\"] .truncate").contains('…'),
+        "the narrow row cuts the title"
+    );
+    fixture.resize(640, 900);
+    assert_eq!(fixture.text_of("[data-slot=\"1\"] .truncate"), title);
+}
+
 /// Contract (`QueuePanel.test.ts`, design D7): the active row paints the
 /// canvas picked fill and its 4 px leading accent edge with no focus fact —
 /// the window holds none — and a marked row paints the same fill with no
