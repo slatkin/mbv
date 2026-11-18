@@ -29,7 +29,10 @@ use super::super::{
     MiniView, ROOT_STYLE, destination_pressed, header_facts, library_column_shows,
     queue_column_shows,
 };
-use crate::bridge::frame::library::GuiLibraryTabFrame;
+use crate::bridge::frame::library::{
+    GuiDestinationList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame,
+};
 use crate::bridge::frame::settings::{GuiSettingsContent, GuiSettingsFrame, GuiSettingsSection};
 use crate::core_thread::CoreInput;
 use crate::window::arrangement::GuiArrangement;
@@ -100,9 +103,18 @@ fn root(props: RootProps) -> Element {
     let library_visible = library_column_shows(panel_shows, arrangement, mini);
     // The header's facts and its press (design D7, D8).
     let header = header_facts(&sections);
+    let header_current_tab = header.current_tab;
+    let header_home_active = header.home_active;
     let mut opened = mini_view;
-    let on_destination_opened =
-        Callback::new(move |()| destination_pressed(arrangement, &mut opened));
+    let on_destination_opened = Callback::new(move |pressed: usize| {
+        destination_pressed(
+            arrangement,
+            &mut opened,
+            pressed,
+            header_current_tab,
+            header_home_active,
+        );
+    });
 
     let stylesheet = ROOT_STYLE.as_str();
     rsx! {
@@ -182,9 +194,16 @@ impl Fixture {
         self.doc.inner.borrow_mut().resolve(0.0);
     }
 
-    /// Write the Library list section's tabs, as the core's batch would.
+    /// Write the Library list section's tabs with the first tab active, as the
+    /// core's batch would.
     fn carry_tabs(&mut self, tabs: Vec<GuiLibraryTabFrame>) {
         let current_tab = tabs.first().map(|tab| tab.position);
+        self.carry_tabs_at(tabs, current_tab);
+    }
+
+    /// Write the Library list section's tabs with `current_tab` active, as the
+    /// core's batch carries the destination an open made active.
+    fn carry_tabs_at(&mut self, tabs: Vec<GuiLibraryTabFrame>, current_tab: Option<usize>) {
         let mut list = self.sections.library_list;
         self.doc.vdom.in_runtime(move || {
             list.set(Some(SectionRef::new(
@@ -208,6 +227,31 @@ impl Fixture {
                     ),
                 },
             )));
+        });
+        self.settle();
+    }
+
+    /// Write the Home destination's sections, as the core's batch would: the
+    /// Home content is present, so the header's Home icon is current and no
+    /// tab is.
+    fn carry_home(&mut self) {
+        let mut list = self.sections.library_list;
+        let mut detail = self.sections.library_detail;
+        self.doc.vdom.in_runtime(move || {
+            list.set(Some(SectionRef::new(GuiLibraryList {
+                tabs: two_tabs(),
+                current_tab: None,
+                destination: GuiDestinationList::Home(GuiHomeList {
+                    loading: false,
+                    rows: Vec::new(),
+                }),
+            })));
+            detail.set(Some(SectionRef::new(GuiLibraryDetail::Home(
+                GuiHomeDetail {
+                    selected: None,
+                    hero: None,
+                },
+            ))));
         });
         self.settle();
     }
@@ -239,6 +283,17 @@ impl Fixture {
             .unwrap_or_else(|| panic!("{selector} paints"));
         dom.get_client_bounding_rect(id)
             .expect("the node is laid out")
+    }
+
+    /// Press the painted control the selector names: the press lands on its
+    /// centre.
+    fn press(&mut self, selector: &str) {
+        let rect = self.rect_of(selector);
+        let (x, y) = (
+            f32_from_f64(rect.x + rect.width / 2.0),
+            f32_from_f64(rect.y + rect.height / 2.0),
+        );
+        self.click(x, y);
     }
 
     /// Press and release at `x`/`y`: the release dispatches the DOM `click`,
@@ -350,12 +405,7 @@ fn a_tab_press_in_mini_shows_the_library_in_place_of_the_queue() {
         "Mini starts on the Queue column"
     );
 
-    let tab = fixture.rect_of("[data-library-tab=\"2\"]");
-    let (x, y) = (
-        f32_from_f64(tab.x + tab.width / 2.0),
-        f32_from_f64(tab.y + tab.height / 2.0),
-    );
-    fixture.click(x, y);
+    fixture.press("[data-library-tab=\"2\"]");
 
     assert!(
         fixture.presents("[data-library-column]"),
@@ -364,5 +414,78 @@ fn a_tab_press_in_mini_shows_the_library_in_place_of_the_queue() {
     assert!(
         !fixture.presents("[data-queue-column]"),
         "the Queue column gives its place up"
+    );
+}
+
+/// Contract (design D8): in Mini, the active destination's own tab toggles the
+/// view back to the Queue, so a destination press never traps the window on
+/// the Library.
+#[test]
+fn the_active_destinations_tab_in_mini_returns_to_the_queue() {
+    let mut fixture = Fixture::built(Screen::Panels, GuiArrangement::Mini);
+    fixture.carry_tabs_at(two_tabs(), Some(2));
+    // The setup press shows the Library, as the scenario above does.
+    fixture.press("[data-library-tab=\"2\"]");
+    assert!(
+        fixture.presents("[data-library-column]"),
+        "the Library shows"
+    );
+
+    fixture.press("[data-library-tab=\"2\"]");
+
+    assert!(
+        fixture.presents("[data-queue-column]"),
+        "the active destination's tab puts the Queue back"
+    );
+    assert!(
+        !fixture.presents("[data-library-column]"),
+        "the Library gives its place up"
+    );
+}
+
+/// Contract (design D8): in Mini, a press on a destination that is not the
+/// active one keeps the Library showing, so only the active tab toggles.
+#[test]
+fn a_press_on_another_destination_keeps_the_library_in_mini() {
+    let mut fixture = Fixture::built(Screen::Panels, GuiArrangement::Mini);
+    fixture.carry_tabs_at(two_tabs(), Some(1));
+    fixture.press("[data-library-tab=\"2\"]");
+    // The core answers the open: Shows is the active tab now.
+    fixture.carry_tabs_at(two_tabs(), Some(2));
+
+    fixture.press("[data-library-tab=\"1\"]");
+
+    assert!(
+        fixture.presents("[data-library-column]"),
+        "a different destination's tab keeps the Library"
+    );
+    assert!(
+        !fixture.presents("[data-queue-column]"),
+        "the Queue stays hidden"
+    );
+}
+
+/// Contract (design D8): in Mini, the Home icon is the Queue/Library toggle
+/// while the Home content is active.
+#[test]
+fn the_home_icon_in_mini_returns_to_the_queue_while_home_is_active() {
+    let mut fixture = Fixture::built(Screen::Panels, GuiArrangement::Mini);
+    fixture.carry_home();
+    // The setup press shows the Home content in the Library's place.
+    fixture.press("[data-library-home]");
+    assert!(
+        fixture.presents("[data-library-column]"),
+        "the Library shows"
+    );
+
+    fixture.press("[data-library-home]");
+
+    assert!(
+        fixture.presents("[data-queue-column]"),
+        "the Home icon puts the Queue back"
+    );
+    assert!(
+        !fixture.presents("[data-library-column]"),
+        "the Library gives its place up"
     );
 }

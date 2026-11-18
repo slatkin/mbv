@@ -47,19 +47,30 @@ pub struct LibraryTopBarProps {
     /// marks itself current on it alone.
     #[props(default)]
     pub home_active: bool,
-    /// A destination press reported to the root (design D8): the root shows
-    /// the Library in place of the Queue while the Mini arrangement holds.
+    /// A destination press reported to the root (design D8), carrying the
+    /// pressed position: the root shows the Library in place of the Queue
+    /// while the Mini arrangement holds, and the active destination's own
+    /// control puts the Queue back.
     #[props(default)]
-    pub on_destination_opened: Option<Callback<()>>,
+    pub on_destination_opened: Option<Callback<usize>>,
 }
 
-/// Open the destination tab at `position` (design D2): Home's own position
-/// is 0, and the Home icon opens it. The window's own report follows the
-/// command (design D8).
-fn open_destination(library: &LibraryState, position: usize, on_opened: Option<Callback<()>>) {
+/// Home's own position in the destination order (design D2): the Home icon
+/// opens it, and the window reads the position to tell a Home press from a tab
+/// press.
+pub(crate) const HOME_POSITION: usize = 0;
+
+/// Open the destination tab at `position` (design D2): the Home icon opens
+/// [`HOME_POSITION`]. The window's own report follows the command and carries
+/// the pressed position (design D8).
+fn open_destination(
+    library: &LibraryState,
+    position: usize,
+    on_destination_opened: Option<Callback<usize>>,
+) {
     library.open_destination(position);
-    if let Some(on_opened) = on_opened {
-        on_opened.call(());
+    if let Some(on_destination_opened) = on_destination_opened {
+        on_destination_opened.call(position);
     }
 }
 
@@ -160,7 +171,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                 "aria-label": "Home",
                 "aria-current": props.home_active.then_some("page"),
                 "data-library-home": "",
-                onclick: move |_| open_destination(&home_library, 0, home_opened),
+                onclick: move |_| open_destination(&home_library, HOME_POSITION, home_opened),
                 // The canvas's Home glyph, verbatim.
                 svg {
                     width: "18",

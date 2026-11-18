@@ -30,7 +30,7 @@ use crate::window::components::attach_screen::AttachScreen;
 use crate::window::components::confirm_overlay::ConfirmOverlay;
 use crate::window::components::daemon_lost_overlay::DaemonLostOverlay;
 use crate::window::components::library_panel::LibraryPanel;
-use crate::window::components::library_top_bar::LibraryTopBar;
+use crate::window::components::library_top_bar::{HOME_POSITION, LibraryTopBar};
 use crate::window::components::panel::Panel;
 use crate::window::components::panel_divider::{
     DividerDrag, DividerName, DividerSide, PanelDivider,
@@ -244,12 +244,32 @@ pub(crate) fn library_column_shows(
 }
 
 /// The window's answer to a header destination press (design D8): in Mini the
-/// Library panel takes the Queue column's place, and every other arrangement
-/// paints both columns, so the press leaves the view alone.
-pub(crate) fn destination_pressed(arrangement: GuiArrangement, view: &mut Signal<MiniView>) {
-    if arrangement == GuiArrangement::Mini {
-        view.set(MiniView::Library);
+/// Library panel takes the Queue column's place. While the Library shows, a
+/// press on the already active destination's own control — its tab, or the
+/// Home icon while the Home content is present — puts the Queue back, so the
+/// active destination's control is the Queue/Library toggle there. Every other
+/// arrangement paints both columns, so the press leaves the view alone.
+pub(crate) fn destination_pressed(
+    arrangement: GuiArrangement,
+    view: &mut Signal<MiniView>,
+    pressed: usize,
+    current_tab: Option<usize>,
+    home_active: bool,
+) {
+    if arrangement != GuiArrangement::Mini {
+        return;
     }
+    let already_active = if pressed == HOME_POSITION {
+        home_active
+    } else {
+        current_tab == Some(pressed)
+    };
+    let showing_library = *view.peek() == MiniView::Library;
+    view.set(if showing_library && already_active {
+        MiniView::Queue
+    } else {
+        MiniView::Library
+    });
 }
 
 /// The global header's facts (design D7): the presented destination tabs, the
@@ -491,12 +511,22 @@ pub fn App() -> Element {
     let library_visible = library_column_shows(panel_shows, arrangement, mini);
     let two_columns = queue_visible && library_visible;
     // The global header's facts (design D7) and its press (design D8): the
-    // header reports a destination press, and the window flips the same view
-    // the panel row reads.
+    // header reports which destination it opened, and the window flips the
+    // same view the panel row reads. The active facts the press reads are this
+    // render's, so the toggle answers the destination the frame carries.
     let header = header_facts(&sections);
+    let header_current_tab = header.current_tab;
+    let header_home_active = header.home_active;
     let mut opened_mini_view = mini_view;
-    let on_destination_opened =
-        Callback::new(move |()| destination_pressed(arrangement, &mut opened_mini_view));
+    let on_destination_opened = Callback::new(move |pressed: usize| {
+        destination_pressed(
+            arrangement,
+            &mut opened_mini_view,
+            pressed,
+            header_current_tab,
+            header_home_active,
+        );
+    });
     // The container's backdrop holds one fill at every focus state (user
     // decision 2026-11-15), unlike the TUI's focus-reactive
     // `panel_appearance_focus` pick.
