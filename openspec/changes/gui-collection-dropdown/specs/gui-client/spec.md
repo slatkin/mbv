@@ -78,6 +78,13 @@ The selection SHALL be All or a non-empty set of checked collections, never both
 - **WHEN** the user presses All
 - **THEN** All is selected and no collection is checked
 
+#### Scenario: A failed collection is fetched again on a press
+
+- **GIVEN** a Music group whose albums failed to load
+- **WHEN** the user presses All
+- **THEN** the group's albums are requested again and the list shows every group's albums once they load
+- **AND** a repaint alone does not request them again
+
 #### Scenario: A checked collection no longer exists
 
 - **GIVEN** Soul and Jazz are checked, and the library no longer has Soul

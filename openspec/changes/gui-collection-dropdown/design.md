@@ -92,7 +92,10 @@ body of today's selection fetch, with the target passed in instead of read from 
 The existing path calls it with `state.selection`, so the TUI does not change. The GUI ensure step
 (`ensure_gui_emby_selection`) finds the first target (All, or the first checked folder) that has no
 cache entry and that `fetching` does not name, and starts one fetch. It starts the next one on a
-later frame, when `fetching` is clear. One fetch runs at a time, as today.
+later frame, when `fetching` is clear. One fetch runs at a time, as today. A failed fetch leaves no
+positive cache entry, so the ensure step offers that target again; only a user press (a collection
+toggle or All) runs that ensure step again, so an automatic repaint or tick never retries a failed
+group and no retry storm starts. The same rule covers the Music per-group album store.
 
 The Emby `getItems` endpoint takes one `ParentId` (dev.emby.media `ItemsService/getItems`), so one
 query cannot cover several folders. The cache already holds full lists, so the union is a merge of
