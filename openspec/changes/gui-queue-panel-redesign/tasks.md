@@ -42,7 +42,7 @@ Every task: run `cargo fmt` after each Rust change. Never run `cargo nextest`, `
 ## 7. Documentation and gates
 
 - [x] 7.1 Update `docs/architecture/gui-client.md`: the two-row bottom layer and its 104 px full height, the tick-free seekbar and its time tip, the buffered position path (mpv → `PlayerStatus` → `PlaybackState` → `GuiPlayhead`), the removal of the chapter, segment, and trickplay fetches, the `--ef-*` token set, the queue header order, the chooser counts, and the 34 px rows. Verify that `rg -n "trickplay|chapter tick|zebra" docs/architecture/gui-client.md` returns no stale paragraph.
-- [ ] 7.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; all pass.
+- [x] 7.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; all pass.
 
 ## Workflow follow-up
 
