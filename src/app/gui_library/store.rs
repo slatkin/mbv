@@ -221,24 +221,12 @@ impl App {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
-            // The no-client failure lands through the same event a real fetch
-            // failure takes (design D5): the started fetch stays `Loading`
-            // until the event drains, so a build that starts it and the next
-            // collect's clean build hold the same store state — a synchronous
-            // `Failed` insert here would change the Library section's built
-            // content between collects with no mark, and the window would
-            // never see the change.
-            self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);
-            let tx = self.channels.lib_tx.clone();
-            std::thread::spawn(move || {
-                let _ = tx.send(LibEvent::GuiGroupAlbums(GuiGroupAlbumsEvent {
-                    lib_idx,
-                    group_id,
-                    result: Err(mbv_emby::EmbyError::resolve(
-                        "the Emby Service holds no client",
-                    )),
-                }));
-            });
+            // The no-client condition is not a fetch failure (design D5): the
+            // group stays un-fetched, with no store mark, and a later frame's
+            // ensure starts the fetch once the client exists. A mark here would
+            // leave the fetch terminal with no retry but a user press, and a
+            // synchronous store change inside the Library section's build
+            // would change the built content between collects with no mark.
             return;
         };
         self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);

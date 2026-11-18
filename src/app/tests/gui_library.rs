@@ -598,6 +598,52 @@ fn a_saved_group_no_longer_held_restores_as_all() {
     );
 }
 
+/// All with no Emby client at startup fetches once the client connects
+/// (gui-collection-dropdown design D5): the no-client condition is not a fetch
+/// failure, so the groups stay un-fetched, a later tick's ensure starts their
+/// fetches, and the union shows every group's albums.
+#[test]
+fn all_fetches_once_the_client_appears() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    let ready = std::mem::replace(
+        &mut app.emby_runtime,
+        crate::app::state::service_runtime::EmbyRuntime::new(true),
+    );
+    app.install_gui_library_collection(0, GuiCollectionSet::All);
+
+    app.ensure_gui_music_selection(0);
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "no client starts no fetch"
+    );
+
+    http.respond(200, ALBUMS);
+    http.respond(200, SOUL_ALBUMS);
+    app.emby_runtime = ready;
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+
+    let projection = app.gui_music_projection(0);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the client's arrival fetched Hip-Hop's albums"
+    );
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "the client's arrival fetched Soul's albums"
+    );
+    assert!(
+        projection.failure.is_none(),
+        "the no-client condition names no failure"
+    );
+}
+
 /// The saved identity of the stub's Grouped Music library, as the launch file
 /// carries it.
 fn saved_music_identity() -> mbv_config::TabIdentity {
