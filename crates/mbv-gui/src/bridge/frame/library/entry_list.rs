@@ -4,7 +4,7 @@
 //! destination sections in `feeds.rs` and `podcasts.rs` keep what is truly
 //! their own — the frame struct (Podcasts names its library index), the Hero,
 //! and the docs. The collection selector both destinations paint is the one
-//! `GuiCollectionsFrame` (gui-collection-dropdown design D6).
+//! `GuiCollections` (gui-collection-dropdown design D6).
 
 use mbv::GuiEntryRow;
 

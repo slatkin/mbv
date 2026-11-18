@@ -41,26 +41,32 @@ fn hero() -> GuiMusicHeroFrame {
     }
 }
 
-/// The Music list part: the selector's checked groups and the carried names
-/// the line reads (design D6).
+/// The Music list part: the selector's checked groups, whose one derivation
+/// `selected_names` names the line's segments from (design D6).
 fn music_list() -> GuiLibraryList {
     GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            collections: Some(GuiCollectionsFrame {
+            collections: GuiCollections {
                 target: mbv::GuiCollectionTarget::Music(0),
                 all: false,
-                entries: vec![GuiCollectionEntry {
-                    key: "g1".to_owned(),
-                    name: "Hip-Hop".to_owned(),
-                    checked: true,
-                }],
+                entries: vec![
+                    GuiCollectionEntry {
+                        key: "g1".to_owned(),
+                        name: "Hip-Hop".to_owned(),
+                        checked: true,
+                    },
+                    GuiCollectionEntry {
+                        key: "g2".to_owned(),
+                        name: "Soul".to_owned(),
+                        checked: true,
+                    },
+                ],
                 noun: mbv::GuiCollectionNoun::Groups,
                 order: None,
-            }),
-            collection_names: vec!["Hip-Hop".to_owned(), "Soul".to_owned()],
+            },
             loading: false,
             failure: None,
             artists: Vec::new(),
@@ -123,7 +129,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
         destination: GuiDestinationList::Emby(GuiEmbyList {
             lib_idx: 2,
             library_name: "Movies".to_owned(),
-            collections: Some(GuiCollectionsFrame {
+            collections: Some(GuiCollections {
                 target: mbv::GuiCollectionTarget::EmbyFeed(2),
                 all: false,
                 entries: vec![
@@ -204,7 +210,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Feeds(GuiFeedsList {
-            collections: Some(GuiCollectionsFrame {
+            collections: GuiCollections {
                 target: mbv::GuiCollectionTarget::Feeds,
                 all: false,
                 entries: vec![GuiCollectionEntry {
@@ -214,7 +220,7 @@ fn feeds_content() -> (GuiLibraryList, GuiLibraryDetail) {
                 }],
                 noun: mbv::GuiCollectionNoun::Subscriptions,
                 order: Some(mbv::GuiDateOrder::Newest),
-            }),
+            },
             loading: false,
             failed: false,
             rows: vec![GuiEntryRowFrame {
@@ -265,7 +271,6 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
             lib_idx: 0,
-            collection_names: Vec::new(),
             loading: false,
             series: Vec::new(),
             upcoming_failed: false,
@@ -327,7 +332,7 @@ fn a_library_with_no_group_names_no_collection() {
     let GuiDestinationList::Music(music) = &mut list.destination else {
         panic!("music fixture");
     };
-    music.collection_names.clear();
+    music.collections.entries.clear();
     let location = library_location(&tabs(), Some(1), Some(&list), Some(&music_detail(None)));
     assert!(!location.contains("All"));
 }
@@ -414,15 +419,11 @@ fn the_location_reads_home_and_the_home_hero_title() {
 }
 
 // On Shows the location reads the destination tab's label and the selected
-// row's title: the series list carries no collection selector, so a carried
-// name never reaches the line (design D10, D12, D8).
+// row's title: the series list carries no collection selector, so the line
+// names no collection (design D10, D12, D8).
 #[test]
 fn the_location_reads_the_shows_destination_and_the_selected_row() {
-    let (mut list, detail) = shows_content();
-    let GuiDestinationList::Shows(shows) = &mut list.destination else {
-        panic!("shows fixture");
-    };
-    shows.collection_names = vec!["Latest episodes".to_owned()];
+    let (list, detail) = shows_content();
     assert_eq!(
         library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
         "Shows › The Bear"

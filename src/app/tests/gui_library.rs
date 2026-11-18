@@ -459,7 +459,7 @@ fn a_stored_group_the_library_lost_falls_back_to_all() {
         "the emptied checked set reads as All, which checks no group"
     );
     assert_eq!(
-        projection.collection_names,
+        projection.collections.selected_names(),
         ["All"],
         "All names itself in the frame's collection names"
     );
@@ -490,7 +490,7 @@ fn no_stored_choice_selects_all() {
         "All is selected, which checks no group"
     );
     assert_eq!(
-        projection.collection_names,
+        projection.collections.selected_names(),
         ["All"],
         "All names itself in the frame's collection names"
     );
@@ -498,7 +498,7 @@ fn no_stored_choice_selects_all() {
 
 /// The Music dropdown's rows as `(name, checked)` pairs, in catalog order.
 fn checked_rows(projection: &GuiMusicProjection) -> Vec<(&str, bool)> {
-    let collections = projection.collections.as_ref().expect("collections");
+    let collections = &projection.collections;
     let entries = collections.entries.iter();
     entries
         .map(|entry| (entry.name.as_str(), entry.checked))

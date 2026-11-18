@@ -24,9 +24,9 @@ use rstest::rstest;
 
 use super::{FeedsAction, LibraryFeedsHero, act};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame,
-    GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiMetaKindFrame,
-    GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail,
+    GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -257,7 +257,13 @@ fn built(facts: Option<GuiFeedsHeroFrame>, rows: Vec<GuiEntryRowFrame>) -> Fixtu
                     tabs: Vec::new(),
                     current_tab: Some(2),
                     destination: GuiDestinationList::Feeds(GuiFeedsList {
-                        collections: None,
+                        collections: GuiCollections {
+                            target: mbv::GuiCollectionTarget::Feeds,
+                            all: true,
+                            entries: Vec::new(),
+                            noun: mbv::GuiCollectionNoun::Subscriptions,
+                            order: None,
+                        },
                         loading: false,
                         failed: false,
                         rows,

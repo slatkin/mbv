@@ -14,8 +14,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
-    GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicTrackFrame,
+    GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
+    GuiMusicTrackFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -105,8 +106,17 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            collections: None,
-            collection_names: vec!["Rock".to_owned()],
+            collections: GuiCollections {
+                target: mbv::GuiCollectionTarget::Music(0),
+                all: false,
+                entries: vec![mbv::GuiCollectionEntry {
+                    key: "g1".to_owned(),
+                    name: "Rock".to_owned(),
+                    checked: true,
+                }],
+                noun: mbv::GuiCollectionNoun::Groups,
+                order: None,
+            },
             loading: false,
             failure: None,
             artists,

@@ -176,9 +176,7 @@ fn the_frame_carries_the_feed_list_after_the_open() {
         ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
         "Latest merges both subscriptions newest first with nothing dated last"
     );
-    let collections = list
-        .collections
-        .expect("the Feeds destination carries its collections");
+    let collections = &list.collections;
     assert!(collections.all, "the selection is All");
     assert_eq!(
         collections
@@ -223,9 +221,7 @@ fn the_pill_command_changes_the_rows() {
     let (list, _) = feeds_parts(&newest_frame(&mut test));
     let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["b-mid", "b-undated"]);
-    let collections = list
-        .collections
-        .expect("the Feeds destination carries its collections");
+    let collections = &list.collections;
     let checked: Vec<&str> = collections
         .entries
         .iter()

@@ -17,7 +17,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
+    GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyHeroFrame,
     GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame,
 };
@@ -261,7 +261,7 @@ fn emby_content(
         destination: GuiDestinationList::Emby(GuiEmbyList {
             lib_idx: 3,
             library_name: "Movies".to_owned(),
-            collections: feed_group.then(|| GuiCollectionsFrame {
+            collections: feed_group.then(|| GuiCollections {
                 target: mbv::GuiCollectionTarget::EmbyFeed(3),
                 all: true,
                 entries: vec![GuiCollectionEntry {

@@ -144,9 +144,6 @@ pub struct GuiShowsHero {
 /// series list, the core's selected series, and its Hero.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiShowsProjection {
-    /// The destination's collection names: the Shows list paints no collection
-    /// selector, so it holds none.
-    pub collection_names: Vec<String>,
     /// Whether the series list has not landed yet.
     pub loading: bool,
     /// Whether the selected series' detail or the selected season's episodes
@@ -200,7 +197,6 @@ impl App {
             .as_ref()
             .is_some_and(|series_id| self.gui_shows_workspace_loading(lib_idx, series_id));
         let projection = GuiShowsProjection {
-            collection_names: Vec::new(),
             loading,
             workspace_loading,
             series,

@@ -34,7 +34,7 @@ fn select_all_shows(app: &mut App, lib_idx: usize) {
 
 /// The names of the Podcasts dropdown's checked shows.
 fn checked_names(projection: &GuiPodcastsProjection) -> Vec<&str> {
-    let collections = projection.collections.as_ref().expect("collections");
+    let collections = &projection.collections;
     let entries = collections.entries.iter();
     entries
         .filter(|entry| entry.checked)
@@ -138,7 +138,7 @@ fn all_merges_two_shows_in_date_order_with_the_default_hero() {
         "an undated episode carries no gutter"
     );
 
-    let collections = projection.collections.as_ref().expect("collections");
+    let collections = &projection.collections;
     let rows: Vec<(&str, bool)> = collections
         .entries
         .iter()

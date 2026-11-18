@@ -6,6 +6,7 @@
 //! a set, so the TUI does not change.
 
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 /// All, or the checked collections of one destination (design D1). `Checked`
 /// is never empty: the toggle and the retention rules fall back to [`Self::All`]
@@ -212,13 +213,14 @@ impl GuiCollections {
         scopes: impl IntoIterator<Item = (String, String)>,
         order: Option<GuiDateOrder>,
     ) -> Self {
+        let checked: HashSet<&str> = set.checked_keys().iter().map(String::as_str).collect();
         Self {
             target,
             all: set.is_all(),
             entries: scopes
                 .into_iter()
                 .map(|(key, name)| GuiCollectionEntry {
-                    checked: set.checked_keys().contains(&key),
+                    checked: checked.contains(key.as_str()),
                     key,
                     name,
                 })
@@ -226,6 +228,27 @@ impl GuiCollections {
             noun,
             order,
         }
+    }
+
+    /// The names the destination's location and the Music Hero header read
+    /// (design D6): All names itself, and a checked set names its checked
+    /// collections' names in catalog order. The one derivation of the names
+    /// the Status bar's middle segment and the Music Hero header carry, so
+    /// every painter that names the selected collections reads the same fact.
+    /// The Emby feed-group location reads its own derivation over the checked
+    /// set's press order instead (`feed_collection_names`), whose stale-folder
+    /// fallback to the stable id the entries cannot carry: a folder the
+    /// listing no longer names holds no entry here.
+    #[must_use]
+    pub fn selected_names(&self) -> Vec<String> {
+        if self.all {
+            return vec!["All".to_string()];
+        }
+        self.entries
+            .iter()
+            .filter(|entry| entry.checked)
+            .map(|entry| entry.name.clone())
+            .collect()
     }
 }
 

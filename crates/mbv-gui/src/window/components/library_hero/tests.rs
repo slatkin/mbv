@@ -33,9 +33,9 @@ use super::{
     shuffle_artist,
 };
 use crate::bridge::frame::library::{
-    GuiArtistKey, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiMusicAlbumFrame,
-    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList, GuiMusicMenuEntryFrame,
-    GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
+    GuiArtistKey, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicList,
+    GuiMusicMenuEntryFrame, GuiMusicTrackFrame, GuiMusicTrackTotalFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -127,8 +127,17 @@ fn hero_app(props: FixtureProps) -> Element {
             current_tab: None,
             destination: GuiDestinationList::Music(GuiMusicList {
                 lib_idx: 0,
-                collections: None,
-                collection_names: vec!["Hip-Hop".to_owned()],
+                collections: GuiCollections {
+                    target: mbv::GuiCollectionTarget::Music(0),
+                    all: false,
+                    entries: vec![mbv::GuiCollectionEntry {
+                        key: "g1".to_owned(),
+                        name: "Hip-Hop".to_owned(),
+                        checked: true,
+                    }],
+                    noun: mbv::GuiCollectionNoun::Groups,
+                    order: None,
+                },
                 loading: false,
                 failure: None,
                 artists,

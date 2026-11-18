@@ -253,7 +253,6 @@ fn built(list: GuiShowsList, detail: GuiShowsDetail) -> Fixture {
 fn shows_frame(tree: Vec<GuiShowsSeriesFrame>) -> GuiShowsList {
     GuiShowsList {
         lib_idx: 0,
-        collection_names: Vec::new(),
         loading: false,
         series: tree,
         upcoming_failed: false,

@@ -4,10 +4,11 @@
 //! Workspace. A command names a row or a folder by the stable Service id the
 //! frame carries, never by position.
 
-use mbv::{GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind};
+use mbv::{
+    GuiCollections, GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+};
 
 use super::GuiArtShapeFrame;
-use super::collections::GuiCollectionsFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
 
@@ -25,7 +26,7 @@ pub struct GuiEmbyList {
     /// D6): `Some` in the feed-group mode, with All, every root folder in
     /// listing order, the Folders noun, and the list's date order; `None` in
     /// plain mode, whose letter rail replaces it.
-    pub collections: Option<GuiCollectionsFrame>,
+    pub collections: Option<GuiCollections>,
     /// The selected collection's name the Library Status bar's location
     /// reads (design D10); empty in plain mode, whose list is the whole
     /// library.
@@ -128,10 +129,7 @@ impl GuiEmbyList {
         Self {
             lib_idx,
             library_name: projection.library_name.clone(),
-            collections: projection
-                .collections
-                .as_ref()
-                .map(GuiCollectionsFrame::from),
+            collections: projection.collections.clone(),
             collection_names: projection.collection_names.clone(),
             feed_group: projection.feed_group,
             loading: projection.loading,

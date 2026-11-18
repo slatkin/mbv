@@ -100,17 +100,13 @@ pub struct GuiMusicHero {
 
 /// The Music projection the GUI Library panel paints (design D5): the group
 /// collection selector, the artist union, and the Hero's facts.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiMusicProjection {
     /// The destination's collection selector (design D6): All, every group in
     /// the group level's order with its checked flag, the Groups noun, and no
     /// date order — Music sorts by name. The bridge's collections frame rides
     /// here.
-    pub collections: Option<GuiCollections>,
-    /// The selected collection names in pill order (design D6): the one
-    /// derivation of the names the frame carries, so the list header, the
-    /// Status bar location, and the Hero header cannot disagree.
-    pub collection_names: Vec<String>,
+    pub collections: GuiCollections,
     /// Whether one of the selected groups' album lists has not landed yet.
     pub loading: bool,
     /// The failure line naming every selected group whose album list failed
@@ -156,14 +152,12 @@ impl App {
     #[must_use]
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
         let collections = self.gui_collections(GuiCollectionTarget::Music(lib_idx));
-        let collection_names = selected_collection_names(&collections);
         let selected_groups = self.gui_selected_groups(lib_idx);
         let union = self.gui_music_union(lib_idx, &selected_groups);
         let artists = self.gui_music_artists(&union);
-        let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
+        let hero = self.gui_music_hero(lib_idx, &artists, &collections);
         let projection = GuiMusicProjection {
-            collections: Some(collections),
-            collection_names,
+            collections,
             loading: union.loading,
             failure: failure_line(&union.failed),
             artists,
@@ -401,7 +395,7 @@ impl App {
         &self,
         lib_idx: usize,
         artists: &[GuiMusicArtist],
-        collection_names: &[String],
+        collections: &GuiCollections,
     ) -> Option<GuiMusicHero> {
         let picked = self.gui_picked_album_id(lib_idx, artists)?;
         let (artist, album) = artists.iter().find_map(|artist| {
@@ -413,7 +407,7 @@ impl App {
         })?;
         Some(GuiMusicHero {
             artist: artist.name.clone(),
-            collections: collection_names.to_vec(),
+            collections: collections.selected_names(),
             album_count: artist.albums.len(),
             artist_tracks: self.gui_artist_tracks(artist),
             album: album.clone(),
@@ -435,23 +429,6 @@ impl App {
             duration: fmt_duration_short(ticks / TICKS_PER_SECOND),
         })
     }
-}
-
-/// The names the frame carries for the selection (design D6):
-/// gui-collection-dropdown's All names itself, and a checked set names its
-/// checked groups' names in catalog order. The one derivation of the names the
-/// projection carries, so every painter that names the selected collections
-/// reads the same fact.
-fn selected_collection_names(collections: &GuiCollections) -> Vec<String> {
-    if collections.all {
-        return vec!["All".to_string()];
-    }
-    collections
-        .entries
-        .iter()
-        .filter(|entry| entry.checked)
-        .map(|entry| entry.name.clone())
-        .collect()
 }
 
 /// The album's tracklist rows (design D5, D7).

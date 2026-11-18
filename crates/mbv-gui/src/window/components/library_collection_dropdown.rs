@@ -30,7 +30,9 @@ use dioxus_native::prelude::*;
 
 use mbv::GuiCollectionNoun;
 
-use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame};
+use crate::bridge::frame::library::{
+    ALL_KEY, GuiCollectionEntry, GuiCollections, GuiCollectionsFrame as _,
+};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::icons::{Check, ChevronDown, ChevronUp};
 use crate::window::library::list::filter_match;
@@ -44,14 +46,14 @@ pub struct LibraryCollectionDropdownProps {
     /// The carried collections frame: the destination the commands name, All,
     /// every collection in catalog order with its checked flag, and the noun
     /// the trigger reads.
-    pub collections: GuiCollectionsFrame,
+    pub collections: GuiCollections,
 }
 
 /// The entries the open dropdown paints under `filter` (design D7): the
 /// collections whose name matches by the Library filter's rule. All is not here
 /// — it is painted above them and stays shown whatever the filter holds.
 fn matching_entries<'a>(
-    collections: &'a GuiCollectionsFrame,
+    collections: &'a GuiCollections,
     filter: &str,
 ) -> Vec<&'a GuiCollectionEntry> {
     collections
@@ -102,8 +104,8 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
     // The interaction state the dropdown paints from (design D7): its open fact
     // and its filter text. Reading the store subscribes the dropdown to both.
     let ui = library.ui.cloned();
-    let open = ui.collections.open;
-    let filter = ui.collections.filter;
+    let open = ui.collections.is_some();
+    let filter = ui.collections.clone().unwrap_or_default();
 
     let collections = props.collections;
     let label = collections.label();
@@ -126,7 +128,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
     let mut filter_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let watch_ui = library.ui;
     use_effect(move || {
-        let open = watch_ui.cloned().collections.open;
+        let open = watch_ui.cloned().collections.is_some();
         let mounted = filter_mounted.cloned();
         spawn(async move {
             if let Some(event) = mounted {
@@ -250,7 +252,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                 "aria-checked": "{all}",
                                 "data-library-collections-all": "",
                                 onclick: move |_| {
-                                    all_library.press_collection(&all_collections, GuiCollectionsFrame::ALL_KEY);
+                                    all_library.press_collection(&all_collections, ALL_KEY);
                                 },
                                 div {
                                     class: "flex flex-none items-center justify-center",

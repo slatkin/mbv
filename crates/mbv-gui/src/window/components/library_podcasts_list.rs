@@ -16,7 +16,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiCollectionsFrame;
+use crate::bridge::frame::library::GuiCollectionsFrame as _;
 use crate::window::components::library_item_row::{ItemRowPaint, paint_item_row};
 use crate::window::components::library_list_header::LibraryListHeader;
 use crate::window::components::library_virtual_list::library_virtual_list;
@@ -81,14 +81,12 @@ pub fn LibraryPodcastsList() -> Element {
     // The header's selection label (design D15, D6): the collections frame's
     // label — All, the one checked name, or the count with the noun — so the
     // column names the view it holds.
-    let selection_label = frame
-        .and_then(|frame| frame.collections.as_ref())
-        .map_or_else(|| "All".to_owned(), GuiCollectionsFrame::label);
+    let selection_label = frame.map_or_else(|| "All".to_owned(), |frame| frame.collections.label());
 
     // The collection dropdown the header paints on the title's line (design
     // D6a): the destination's carried selector, which names the selection
     // itself, so the header paints no selection label beside it.
-    let collections = frame.and_then(|frame| frame.collections.clone());
+    let collections = frame.map(|frame| frame.collections.clone());
 
     // The painted rows of the flat list (row 10.1): the same model
     // [`crate::window::library::podcasts`] builds from the carried content,

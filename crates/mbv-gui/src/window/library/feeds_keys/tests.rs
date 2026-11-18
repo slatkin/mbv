@@ -17,9 +17,9 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList,
-    GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame,
-    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
+    GuiArtShapeFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame,
+    GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeRowStateFrame, GuiLibraryDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMetaKindFrame, GuiMetaSegmentFrame,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -243,13 +243,13 @@ fn entry(
 
 /// The All selection or the one-subscription selection, over the two
 /// subscriptions (design D6).
-fn collections(selected: PillSelection) -> GuiCollectionsFrame {
+fn collections(selected: PillSelection) -> GuiCollections {
     let entry = |key: &str, name: &str, checked| GuiCollectionEntry {
         key: key.to_owned(),
         name: name.to_owned(),
         checked,
     };
-    GuiCollectionsFrame {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Feeds,
         all: selected == PillSelection::Latest,
         entries: vec![
@@ -326,7 +326,7 @@ fn feeds_content_selected(
         ],
         current_tab: Some(2),
         destination: GuiDestinationList::Feeds(GuiFeedsList {
-            collections: Some(collections(pill_selection)),
+            collections: collections(pill_selection),
             loading: false,
             failed: false,
             rows: rows.to_owned(),

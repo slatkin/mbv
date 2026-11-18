@@ -3,15 +3,14 @@
 //! rows in the date gutter, the core's selected episode, and the Hero with the
 //! parent show's Square cover. A command names an episode by the opaque
 //! identity the row carries — the provider's `(library_item_id, episode_id)`
-//! pair encoded in one place — never by position. The selector frame is the
-//! shared `GuiCollectionsFrame` (gui-collection-dropdown design D6) and the row
-//! frame the shared entry-list one (`entry_list.rs`); the Hero and the frame
-//! struct are the destination's own.
+//! pair encoded in one place — never by position. The selector is the shared
+//! core value type `GuiCollections` (gui-collection-dropdown design D6) and
+//! the row frame the shared entry-list one (`entry_list.rs`); the Hero and
+//! the frame struct are the destination's own.
 
-use mbv::{GuiPodcastsHero, GuiPodcastsProjection};
+use mbv::{GuiCollections, GuiPodcastsHero, GuiPodcastsProjection};
 
 use super::GuiArtShapeFrame;
-use super::collections::GuiCollectionsFrame;
 use super::entry_list::GuiEntryRowFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 use crate::art::GuiArtRef;
@@ -27,7 +26,7 @@ pub struct GuiPodcastsList {
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): All, every listed show in title order, the Shows noun, and the
     /// list's date order.
-    pub collections: Option<GuiCollectionsFrame>,
+    pub collections: GuiCollections,
     /// Whether the active view's episodes are still landing: the show
     /// catalog's pages or that view's own episode fetches.
     pub loading: bool,
@@ -85,10 +84,7 @@ impl GuiPodcastsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiPodcastsProjection) -> Self {
         Self {
             lib_idx,
-            collections: projection
-                .collections
-                .as_ref()
-                .map(GuiCollectionsFrame::from),
+            collections: projection.collections.clone(),
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),

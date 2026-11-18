@@ -56,8 +56,6 @@ fn listed_guids(app: &App) -> Vec<String> {
 fn selector_rows(projection: &GuiFeedsProjection) -> Vec<(String, bool)> {
     projection
         .collections
-        .as_ref()
-        .expect("the Feeds destination carries its collections")
         .entries
         .iter()
         .map(|entry| (entry.name.clone(), entry.checked))
@@ -68,8 +66,6 @@ fn selector_rows(projection: &GuiFeedsProjection) -> Vec<(String, bool)> {
 fn checked_names(projection: &GuiFeedsProjection) -> Vec<String> {
     projection
         .collections
-        .as_ref()
-        .expect("the Feeds destination carries its collections")
         .entries
         .iter()
         .filter(|entry| entry.checked)
@@ -303,14 +299,7 @@ fn all_merges_two_subscriptions_in_date_order_with_the_default_hero() {
         [("Feed A".to_owned(), false), ("Feed B".to_owned(), false)],
         "the dropdown offers every subscription by name, all unchecked under All"
     );
-    assert!(
-        projection
-            .collections
-            .as_ref()
-            .expect("the Feeds destination carries its collections")
-            .all,
-        "the selection starts on All"
-    );
+    assert!(projection.collections.all, "the selection starts on All");
     assert_eq!(
         projection.selected.as_deref(),
         Some(entry_id(FEED_A, "a-new").as_str()),

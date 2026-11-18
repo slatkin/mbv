@@ -21,7 +21,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryFeedsList;
 use crate::bridge::frame::library::{
-    GuiCollectionsFrame, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
+    GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList,
     GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
 };
 use crate::core_thread::CoreInput;
@@ -295,13 +295,13 @@ fn entries() -> Vec<GuiEntryRowFrame> {
 /// sets it (design D12).
 fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool) -> GuiFeedsList {
     GuiFeedsList {
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Feeds,
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Subscriptions,
             order: Some(mbv::GuiDateOrder::Newest),
-        }),
+        },
         loading,
         failed: false,
         rows,

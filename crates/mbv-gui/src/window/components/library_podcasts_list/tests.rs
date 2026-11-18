@@ -22,8 +22,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryPodcastsList;
 use crate::bridge::frame::library::{
-    GuiCollectionsFrame, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame,
-    GuiLibraryDetail, GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame, GuiLibraryDetail,
+    GuiLibraryList, GuiPodcastsDetail, GuiPodcastsList,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -297,13 +297,13 @@ fn episodes() -> Vec<GuiEntryRowFrame> {
 fn frame(rows: Vec<GuiEntryRowFrame>, loading: bool, failed: bool) -> GuiPodcastsList {
     GuiPodcastsList {
         lib_idx: 0,
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Podcasts(0),
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Shows,
             order: Some(mbv::GuiDateOrder::Newest),
-        }),
+        },
         loading,
         failed,
         rows,

@@ -17,9 +17,9 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::library::{
-    GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList, GuiEntryRowFrame,
-    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPodcastsDetail,
-    GuiPodcastsHeroFrame, GuiPodcastsList,
+    GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiEntryRowFrame, GuiHomeRowStateFrame,
+    GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiPodcastsDetail, GuiPodcastsHeroFrame,
+    GuiPodcastsList,
 };
 use crate::bridge::keys::{DomKey, DomModifiers};
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
@@ -225,13 +225,13 @@ fn episode(
 
 /// The All selection or the one-show selection, over the two shows (design
 /// D6).
-fn collections(selected: PillSelection) -> GuiCollectionsFrame {
+fn collections(selected: PillSelection) -> GuiCollections {
     let entry = |key: &str, name: &str, checked| GuiCollectionEntry {
         key: key.to_owned(),
         name: name.to_owned(),
         checked,
     };
-    GuiCollectionsFrame {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Podcasts(0),
         all: selected == PillSelection::Latest,
         entries: vec![
@@ -274,7 +274,7 @@ fn podcasts_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Podcasts(GuiPodcastsList {
             lib_idx: 0,
-            collections: Some(collections(pill_selection)),
+            collections: collections(pill_selection),
             loading: false,
             failed: false,
             rows: rows.to_owned(),

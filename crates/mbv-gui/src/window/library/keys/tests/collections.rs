@@ -31,7 +31,7 @@ fn the_open_dropdown_filter_keeps_the_keys_over_the_queue() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
-        ui.with_mut(|ui| ui.collections.open = true);
+        ui.with_mut(|ui| ui.collections = Some(String::new()));
         route_under(state, facts, "t", "t", PointerZone::Queue);
         route_under(state, facts, "i", "i", PointerZone::Queue);
         route_under(state, facts, "backspace", "Backspace", PointerZone::Queue);
@@ -51,10 +51,7 @@ fn esc_closes_the_open_dropdown_over_the_queue() {
     let (facts, rx) = run(move |state, facts| {
         carry(state, list.clone(), music_detail(None));
         let mut ui = state.ui;
-        ui.with_mut(|ui| {
-            ui.collections.open = true;
-            ui.collections.filter = "tifo".to_owned();
-        });
+        ui.with_mut(|ui| ui.collections = Some("tifo".to_owned()));
         route_under(state, facts, "escape", "Escape", PointerZone::Queue);
         facts.lock().expect("facts").push(ui_facts(state));
     });

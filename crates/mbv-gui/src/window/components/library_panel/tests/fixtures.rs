@@ -4,7 +4,7 @@
 
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksHeroFrame, GuiAudiobooksList, GuiAudiobooksRowFrame,
-    GuiAudiobooksWorkspaceFrame, GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList,
+    GuiAudiobooksWorkspaceFrame, GuiCollectionEntry, GuiCollections, GuiDestinationList,
     GuiEmbyDetail, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
     GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsHeroFrame, GuiFeedsList, GuiHomeDetail,
     GuiHomeHeroFrame, GuiHomeItemRowFrame, GuiHomeList, GuiHomeRowFrame, GuiHomeRowIdFrame,
@@ -18,14 +18,13 @@ use crate::bridge::frame::library::{
 pub(super) fn music_list() -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Music(0),
             all: true,
             entries: Vec::new(),
             noun: mbv::GuiCollectionNoun::Groups,
             order: None,
-        }),
-        collection_names: Vec::new(),
+        },
         loading: false,
         failure: None,
         artists: Vec::new(),
@@ -127,7 +126,6 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
 pub(super) fn shows_list() -> GuiShowsList {
     GuiShowsList {
         lib_idx: 0,
-        collection_names: Vec::new(),
         loading: false,
         series: Vec::new(),
         upcoming_failed: false,
@@ -188,7 +186,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
             destination: GuiDestinationList::Emby(GuiEmbyList {
                 lib_idx: 3,
                 library_name: "Movies".to_owned(),
-                collections: feed_group.then(|| GuiCollectionsFrame {
+                collections: feed_group.then(|| GuiCollections {
                     target: mbv::GuiCollectionTarget::EmbyFeed(3),
                     all: true,
                     entries: Vec::new(),
@@ -298,7 +296,7 @@ pub(super) fn feeds_sections(
             }],
             current_tab: Some(5),
             destination: GuiDestinationList::Feeds(GuiFeedsList {
-                collections: Some(GuiCollectionsFrame {
+                collections: GuiCollections {
                     target: mbv::GuiCollectionTarget::Feeds,
                     all: true,
                     entries: vec![GuiCollectionEntry {
@@ -308,7 +306,7 @@ pub(super) fn feeds_sections(
                     }],
                     noun: mbv::GuiCollectionNoun::Subscriptions,
                     order: Some(mbv::GuiDateOrder::Newest),
-                }),
+                },
                 loading: false,
                 failed: false,
                 rows: vec![GuiEntryRowFrame {

@@ -7,10 +7,9 @@
 //! The row frame is the shared entry-list one (`entry_list.rs`); the Hero and
 //! the frame struct are the destination's own.
 
-use mbv::{GuiFeedsHero, GuiFeedsProjection};
+use mbv::{GuiCollections, GuiFeedsHero, GuiFeedsProjection};
 
 use super::GuiArtShapeFrame;
-use super::collections::GuiCollectionsFrame;
 use super::entry_list::GuiEntryRowFrame;
 use super::meta::{GuiMetaSegmentFrame, gui_meta_rows};
 
@@ -22,7 +21,7 @@ pub struct GuiFeedsList {
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): All, every configured subscription in the tab's order, the
     /// Subscriptions noun, and the list's date order.
-    pub collections: Option<GuiCollectionsFrame>,
+    pub collections: GuiCollections,
     /// Whether the tab's fetch results are still landing.
     pub loading: bool,
     /// Whether a fetch failed. The feed tab keeps no failure state — a failed
@@ -76,10 +75,7 @@ impl GuiFeedsList {
     /// The Feeds list part for `projection` (row 11.1).
     pub(crate) fn from_projection(projection: &GuiFeedsProjection) -> Self {
         Self {
-            collections: projection
-                .collections
-                .as_ref()
-                .map(GuiCollectionsFrame::from),
+            collections: projection.collections.clone(),
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEntryRowFrame::from).collect(),

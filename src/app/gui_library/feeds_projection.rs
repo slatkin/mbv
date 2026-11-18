@@ -150,7 +150,7 @@ impl App {
             .and_then(GuiFeedEntryId::decode)
             .and_then(|entry| self.gui_feeds_hero(&entry));
         GuiFeedsProjection {
-            collections: Some(collections),
+            collections,
             loading: self.feed_tab.loading,
             failed: false,
             rows,

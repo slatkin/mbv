@@ -14,7 +14,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryListHeader;
-use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame};
+use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollections};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
@@ -44,7 +44,7 @@ const FIXTURE_CSS: &str = concat!(
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    collections: Option<GuiCollectionsFrame>,
+    collections: Option<GuiCollections>,
     label: String,
 }
 
@@ -119,7 +119,7 @@ impl Fixture {
 
 /// Build the document over the carried collections and the selection label and
 /// resolve its layout.
-fn built_with_label(collections: Option<GuiCollectionsFrame>, label: String) -> Fixture {
+fn built_with_label(collections: Option<GuiCollections>, label: String) -> Fixture {
     let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
@@ -146,13 +146,13 @@ fn built_with_label(collections: Option<GuiCollectionsFrame>, label: String) -> 
 
 /// Build the document over the carried collections and the default `All`
 /// selection label.
-fn built(collections: Option<GuiCollectionsFrame>) -> Fixture {
+fn built(collections: Option<GuiCollections>) -> Fixture {
     built_with_label(collections, "All".to_owned())
 }
 
 /// The Podcasts frame: All selected, one show, newest first.
-fn podcasts_frame() -> GuiCollectionsFrame {
-    GuiCollectionsFrame {
+fn podcasts_frame() -> GuiCollections {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Podcasts(0),
         all: true,
         entries: vec![GuiCollectionEntry {

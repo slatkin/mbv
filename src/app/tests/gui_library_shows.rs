@@ -100,10 +100,6 @@ fn the_series_mode_projects_the_tree() {
 
     let projection = app.gui_shows_projection(0);
 
-    assert!(
-        projection.collection_names.is_empty(),
-        "the Shows list paints no collection selector, so it names no collection"
-    );
     let ids: Vec<&str> = projection
         .series
         .iter()

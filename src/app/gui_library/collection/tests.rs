@@ -7,7 +7,10 @@ use std::cmp::Ordering;
 
 use rstest::rstest;
 
-use super::{GuiCollectionSet, GuiDateOrder, compare_gui_date_order};
+use super::{
+    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
+    compare_gui_date_order,
+};
 
 /// One selection-table operation (design D1): a press on a collection, a
 /// press on All, or the catalog's retention over the present keys.
@@ -135,4 +138,37 @@ fn the_undated_row_is_last_in_oldest_order() {
         compare_gui_date_order(None, None, GuiDateOrder::Oldest),
         Ordering::Equal
     );
+}
+
+/// All names itself (design D6): the location and the Music Hero header read
+/// `All` whatever the catalog holds.
+#[test]
+fn selected_names_names_all() {
+    let collections = GuiCollections::new(
+        GuiCollectionTarget::Feeds,
+        &GuiCollectionSet::All,
+        GuiCollectionNoun::Subscriptions,
+        [("feed-a".to_owned(), "Feed A".to_owned())],
+        None,
+    );
+    assert_eq!(collections.selected_names(), ["All"]);
+}
+
+/// A checked set names its checked collections' display names in catalog
+/// order (design D6): the one fact the Status bar's middle segment and the
+/// Music Hero header read, whatever press order the set keeps.
+#[test]
+fn selected_names_names_the_checked_collections_in_catalog_order() {
+    let collections = GuiCollections::new(
+        GuiCollectionTarget::Feeds,
+        &checked(&["feed-b", "feed-a"]),
+        GuiCollectionNoun::Subscriptions,
+        [
+            ("feed-a".to_owned(), "Feed A".to_owned()),
+            ("feed-b".to_owned(), "Feed B".to_owned()),
+            ("feed-c".to_owned(), "Feed C".to_owned()),
+        ],
+        None,
+    );
+    assert_eq!(collections.selected_names(), ["Feed A", "Feed B"]);
 }

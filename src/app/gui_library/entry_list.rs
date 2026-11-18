@@ -11,7 +11,7 @@
 
 use mbv_ui_model::media_list::MediaSemanticState;
 
-use super::collection::GuiCollections;
+use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
 
 /// One row of a collection-scoped destination's entry list (rows 10.1,
 /// 11.1). The identity is the entry's stable Service identity, encoded as one
@@ -46,9 +46,8 @@ pub struct GuiEntryRow {
 pub struct GuiEntryListProjection<H> {
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): All, every scope in the destination's order with its checked
-    /// flag, the destination's noun, and its date order. `None` in the empty
-    /// projection a destination that is not this one paints.
-    pub collections: Option<GuiCollections>,
+    /// flag, the destination's noun, and its date order.
+    pub collections: GuiCollections,
     /// Whether the active view's content is still landing: the feed tab's
     /// fetch for Feeds, the show catalog's pages and the active view's own
     /// episode fetches for Podcasts.
@@ -72,9 +71,19 @@ pub struct GuiEntryListProjection<H> {
 }
 
 impl<H> Default for GuiEntryListProjection<H> {
+    /// The empty projection: All with no collections. The Feeds target is the
+    /// one value the shared shape can carry — only a destination whose frame
+    /// gate excludes it (a non-podcast library, a Feeds tab with no
+    /// subscriptions) paints it, and no painter then reads the selector.
     fn default() -> Self {
         Self {
-            collections: None,
+            collections: GuiCollections::new(
+                GuiCollectionTarget::Feeds,
+                &GuiCollectionSet::All,
+                GuiCollectionNoun::Subscriptions,
+                Vec::new(),
+                None,
+            ),
             loading: false,
             failed: false,
             rows: Vec::new(),

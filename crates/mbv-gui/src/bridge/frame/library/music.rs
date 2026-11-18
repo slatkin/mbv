@@ -5,13 +5,12 @@
 //! Both ride the `libraryList` and `libraryDetail` sections.
 
 use mbv::{
-    GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection,
-    GuiMusicTrack, GuiMusicTrackTotal,
+    GuiCollections, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
 
 use super::GuiMusicMenuEntryFrame;
-use super::collections::GuiCollectionsFrame;
 use crate::art::GuiArtRef;
 
 /// The Music destination's list part (design D8): the group selector, the
@@ -24,13 +23,10 @@ pub struct GuiMusicList {
     pub lib_idx: usize,
     /// The destination's collection selector (gui-collection-dropdown design
     /// D6): All, every group in the group level's order, the Groups noun, and
-    /// no date order.
-    pub collections: Option<GuiCollectionsFrame>,
-    /// The selected collection names in selector order (design D6): the names
-    /// the list header and the Library Status bar location read, carried
-    /// once for the whole panel. The Hero header's own copy rides in
-    /// `hero.collections`, present exactly when the Hero is.
-    pub collection_names: Vec<String>,
+    /// no date order. The names the header's selection label, the filter's
+    /// placeholder, and the Library Status bar location read derive from it
+    /// ([`GuiCollections::selected_names`]), so they cannot disagree.
+    pub collections: GuiCollections,
     /// Whether one of the selected groups' album lists has not landed yet.
     pub loading: bool,
     /// The failure line naming the selected groups whose album list failed.
@@ -63,11 +59,7 @@ impl GuiMusicList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiMusicProjection) -> Self {
         Self {
             lib_idx,
-            collections: projection
-                .collections
-                .as_ref()
-                .map(GuiCollectionsFrame::from),
-            collection_names: projection.collection_names.clone(),
+            collections: projection.collections.clone(),
             loading: projection.loading,
             failure: projection.failure.clone(),
             artists: projection

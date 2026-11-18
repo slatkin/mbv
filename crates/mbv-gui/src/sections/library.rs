@@ -8,12 +8,14 @@
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
+use mbv::GuiCollections;
+
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
-    GuiAudiobooksDetail, GuiAudiobooksList, GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail,
-    GuiEmbyList, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail,
-    GuiLibraryList, GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicDetail, GuiMusicList,
-    GuiPodcastsDetail, GuiPodcastsList, GuiShowsDetail, GuiShowsList,
+    GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiEmbyDetail, GuiEmbyList,
+    GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryRowMenuFrame, GuiLibraryTabFrame, GuiMusicDetail, GuiMusicList, GuiPodcastsDetail,
+    GuiPodcastsList, GuiShowsDetail, GuiShowsList,
 };
 
 /// The three Library sections one gated pass builds (design D8). The list and
@@ -200,11 +202,9 @@ pub(crate) fn log_built(
 /// the log.
 fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
     match list {
-        GuiDestinationList::Music(list) => (
-            "music",
-            collection_count(list.collections.as_ref()),
-            list.artists.len(),
-        ),
+        GuiDestinationList::Music(list) => {
+            ("music", list.collections.entries.len(), list.artists.len())
+        }
         GuiDestinationList::Home(list) => ("home", 0, list.rows.len()),
         GuiDestinationList::Shows(list) => ("shows", 0, list.rows.len()),
         GuiDestinationList::Emby(list) => (
@@ -213,22 +213,18 @@ fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
             list.rows.len(),
         ),
         GuiDestinationList::Audiobooks(list) => ("audiobooks", 0, list.rows.len()),
-        GuiDestinationList::Podcasts(list) => (
-            "podcasts",
-            collection_count(list.collections.as_ref()),
-            list.rows.len(),
-        ),
-        GuiDestinationList::Feeds(list) => (
-            "feeds",
-            collection_count(list.collections.as_ref()),
-            list.rows.len(),
-        ),
+        GuiDestinationList::Podcasts(list) => {
+            ("podcasts", list.collections.entries.len(), list.rows.len())
+        }
+        GuiDestinationList::Feeds(list) => {
+            ("feeds", list.collections.entries.len(), list.rows.len())
+        }
     }
 }
 
-/// The collections a destination's selector offers, for the log: none while
-/// the destination paints no selector.
-fn collection_count(collections: Option<&GuiCollectionsFrame>) -> usize {
+/// The collections a destination's optional selector offers, for the log: none
+/// while the destination paints none.
+fn collection_count(collections: Option<&GuiCollections>) -> usize {
     collections.map_or(0, |collections| collections.entries.len())
 }
 

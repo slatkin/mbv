@@ -19,7 +19,7 @@ use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryCollectionDropdown;
-use crate::bridge::frame::library::{GuiCollectionEntry, GuiCollectionsFrame};
+use crate::bridge::frame::library::{ALL_KEY, GuiCollectionEntry, GuiCollections};
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::clock::{Clock, RecordingClock};
@@ -31,7 +31,7 @@ use crate::window::sections::Sections;
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
-    collections: GuiCollectionsFrame,
+    collections: GuiCollections,
     handle: Rc<RefCell<Option<LibraryState>>>,
 }
 
@@ -132,7 +132,7 @@ impl Fixture {
 
 /// Build the document over the carried collections and let the first render and
 /// its effects land.
-fn built(collections: GuiCollectionsFrame) -> Fixture {
+fn built(collections: GuiCollections) -> Fixture {
     let (sender, receiver) = mpsc::channel::<CoreInput>();
     let handle = Rc::new(RefCell::new(None));
     let mut doc = DioxusDocument::new(
@@ -173,8 +173,8 @@ fn entry(key: &str, name: &str, checked: bool) -> GuiCollectionEntry {
 }
 
 /// The Music frame: All selected, three groups, no date order.
-fn music_all() -> GuiCollectionsFrame {
-    GuiCollectionsFrame {
+fn music_all() -> GuiCollections {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Music(2),
         all: true,
         entries: vec![
@@ -188,8 +188,8 @@ fn music_all() -> GuiCollectionsFrame {
 }
 
 /// The Feeds frame: two subscriptions checked, newest first.
-fn feeds_two_checked() -> GuiCollectionsFrame {
-    GuiCollectionsFrame {
+fn feeds_two_checked() -> GuiCollections {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Feeds,
         all: false,
         entries: vec![
@@ -328,7 +328,7 @@ fn the_all_row_press_sends_all_without_opening_the_dropdown() {
     let library = fixture.state.clone();
     let collections = feeds_two_checked();
     fixture.in_runtime(move || {
-        library.press_collection(&collections, GuiCollectionsFrame::ALL_KEY);
+        library.press_collection(&collections, ALL_KEY);
     });
 
     assert_eq!(
@@ -337,7 +337,7 @@ fn the_all_row_press_sends_all_without_opening_the_dropdown() {
             target: mbv::GuiCollectionTarget::Feeds,
         }]
     );
-    assert!(!fixture.state.ui.peek().collections.open);
+    assert!(fixture.state.ui.peek().collections.is_none());
 }
 
 /// Contract (design D6, spec "A check leaves the dropdown open"): a row's press
@@ -359,7 +359,7 @@ fn a_row_press_toggles_and_leaves_the_dropdown_open() {
             key: "g3".to_owned(),
         }]
     );
-    assert!(fixture.state.ui.peek().collections.open);
+    assert!(fixture.state.ui.peek().collections.is_some());
 }
 
 /// Contract (design D6): the rows paint a leading square checkbox, All first.

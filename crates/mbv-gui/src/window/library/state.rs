@@ -12,7 +12,9 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiCollectionsFrame, GuiLibraryDetail, GuiLibraryList};
+use mbv::GuiCollections;
+
+use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
 use crate::bridge::library::GuiLibraryCommand;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
@@ -38,20 +40,6 @@ pub struct RowMenu {
     pub y: f32,
 }
 
-/// The collection dropdown's interaction state (gui-collection-dropdown design
-/// D7), which the window owns and the core never reads.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct CollectionsUiState {
-    /// Whether the dropdown is open: a press on its trigger opens it, and a
-    /// press outside it, Esc, or a destination change closes it.
-    pub open: bool,
-    /// The dropdown's filter text: while it is open it takes the typed keys
-    /// wherever the pointer is, and it narrows the collection entries by the
-    /// Library filter's match rule. A close clears it, so the next open starts
-    /// empty.
-    pub filter: String,
-}
-
 /// The Library panel's interaction state (`state.ts`'s `LibraryUiState`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LibraryUiState {
@@ -62,9 +50,10 @@ pub struct LibraryUiState {
     /// without case (design D7).
     pub filter: String,
     /// The collection dropdown's interaction state (gui-collection-dropdown
-    /// design D7): whether it is open, and the filter text the open popover
-    /// narrows its entries by.
-    pub collections: CollectionsUiState,
+    /// design D7): `None` while the dropdown is closed, and `Some(filter)`
+    /// while it is open, holding the filter text the open popover narrows its
+    /// entries by. One value, so a close clears the filter by construction.
+    pub collections: Option<String>,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -93,7 +82,7 @@ impl LibraryUiState {
         Self {
             filter_open: false,
             filter: String::new(),
-            collections: CollectionsUiState::default(),
+            collections: None,
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
             // No pick has happened yet: the Narrow arrangement shows the list,
@@ -282,14 +271,14 @@ impl LibraryState {
     /// D5, D6): the All row and the Clear control send All, and every other key
     /// toggles its collection. The frame names the destination, so every
     /// collection destination shares this one press path.
-    pub fn press_collection(&self, collections: &GuiCollectionsFrame, key: &str) {
+    pub fn press_collection(&self, collections: &GuiCollections, key: &str) {
         self.link.library(collections.pressed(key));
     }
 
     /// Press the date-order toggle (design D4, D6): the feed-based
     /// destinations' order switches between Newest and Oldest. Music carries no
     /// order, so its frame sends nothing.
-    pub fn press_date_order(&self, collections: &GuiCollectionsFrame) {
+    pub fn press_date_order(&self, collections: &GuiCollections) {
         let Some(order) = collections.next_order() else {
             return;
         };
@@ -303,11 +292,11 @@ impl LibraryState {
     /// trigger opens it when it is closed, and closes it when it is open. A
     /// close drops the filter text, so the next open starts empty.
     pub fn toggle_collections_dropdown(&self) {
-        if self.ui.peek().collections.open {
+        if self.collections_open() {
             self.close_collections_dropdown();
         } else {
             let mut ui = self.ui;
-            ui.with_mut(|ui| ui.collections.open = true);
+            ui.with_mut(|ui| ui.collections = Some(String::new()));
         }
     }
 
@@ -317,25 +306,25 @@ impl LibraryState {
     /// nothing: the window's every-press path calls this on each press, and the
     /// write would repaint the panel for no change.
     pub fn close_collections_dropdown(&self) {
-        let (open, filtered) = {
-            let ui = self.ui.peek();
-            (ui.collections.open, !ui.collections.filter.is_empty())
-        };
-        if !open && !filtered {
+        if !self.collections_open() {
             return;
         }
         let mut ui = self.ui;
-        ui.with_mut(|ui| {
-            ui.collections.open = false;
-            ui.collections.filter.clear();
-        });
+        ui.with_mut(|ui| ui.collections = None);
+    }
+
+    /// Whether the collection dropdown is open: `Some(filter)` is open, `None`
+    /// is closed (design D7).
+    #[must_use]
+    pub fn collections_open(&self) -> bool {
+        self.ui.peek().collections.is_some()
     }
 
     /// Type into the collection dropdown's filter (design D7): the entries
     /// narrow by the Library filter's match rule, and checks change nothing.
     pub fn set_collections_filter(&self, filter: String) {
         let mut ui = self.ui;
-        ui.with_mut(|ui| ui.collections.filter = filter);
+        ui.with_mut(|ui| ui.collections = Some(filter));
     }
 
     /// Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
@@ -374,8 +363,7 @@ impl LibraryState {
             ui.hero_dismissed = true;
             ui.item_menu_open = false;
             ui.row_menu = None;
-            ui.collections.open = false;
-            ui.collections.filter.clear();
+            ui.collections = None;
         });
     }
 

@@ -14,7 +14,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::route_library_key;
 use crate::bridge::frame::library::{
-    GuiCollectionEntry, GuiCollectionsFrame, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
+    GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
     GuiMusicList, GuiMusicTrackFrame,
 };
@@ -297,8 +297,8 @@ fn route_in(
 
 /// The Music fixture's collection selector: the one Rock group checked
 /// (design D6).
-fn collections() -> GuiCollectionsFrame {
-    GuiCollectionsFrame {
+fn collections() -> GuiCollections {
+    GuiCollections {
         target: mbv::GuiCollectionTarget::Music(0),
         all: false,
         entries: vec![
@@ -403,8 +403,7 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
             lib_idx: 0,
-            collections: Some(collections()),
-            collection_names: vec!["Rock".to_owned()],
+            collections: collections(),
             loading: false,
             failure: None,
             artists,
@@ -446,8 +445,8 @@ fn ui_facts(state: &LibraryState) -> String {
         "filter_open={} filter={:?} collections_open={} collections_filter={:?} open={:?} dismissed={}",
         ui.filter_open,
         ui.filter,
-        ui.collections.open,
-        ui.collections.filter,
+        ui.collections.is_some(),
+        ui.collections.clone().unwrap_or_default(),
         ui.open_nodes,
         ui.hero_dismissed,
     )

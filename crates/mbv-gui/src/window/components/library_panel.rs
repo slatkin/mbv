@@ -90,7 +90,7 @@ fn press_in_panel(library: &LibraryState) {
     if library.ui.peek().row_menu.is_some() {
         library.close_library_row_menu();
     }
-    if library.ui.peek().collections.open {
+    if library.ui.peek().collections.is_some() {
         library.close_collections_dropdown();
     }
 }

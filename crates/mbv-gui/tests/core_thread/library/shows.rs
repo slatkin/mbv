@@ -181,10 +181,6 @@ fn an_open_shows_destination_after_the_bootstrap_finds_the_shows_frame() {
         "the frame names the library the commands carry"
     );
     assert!(
-        list.collection_names.is_empty(),
-        "the GUI Shows destination paints no collection selector"
-    );
-    assert!(
         list.series.is_empty() && list.rows.is_empty() && detail.hero.is_none(),
         "the series load has not landed series or a Hero yet"
     );

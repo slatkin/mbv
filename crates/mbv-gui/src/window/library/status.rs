@@ -5,10 +5,11 @@
 //! composes no state of its own: the active destination's list part and detail
 //! part narrow on their kind.
 
+use mbv::GuiCollections;
+
 use crate::bridge::frame::library::{
-    GuiAudiobooksRowFrame, GuiCollectionsFrame, GuiDestinationList, GuiEmbyRowFrame,
-    GuiEntryRowFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame,
-    GuiShowsRowFrame,
+    GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame, GuiLibraryDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMusicHeroFrame, GuiShowsRowFrame,
 };
 
 /// The current destination's label: the tab whose position the frame marks
@@ -105,18 +106,10 @@ fn detail_selected(detail: Option<&GuiLibraryDetail>) -> Option<&str> {
 
 /// The location line's middle segment a collection selector names (design
 /// D10, D6): the checked collections' names, or `All` while the selection is
-/// All. A destination with no selector leaves the segment out.
-fn selected_collection(collections: Option<&GuiCollectionsFrame>) -> Option<String> {
-    let collections = collections?;
-    if collections.all {
-        return Some("All".to_owned());
-    }
-    let names: Vec<String> = collections
-        .entries
-        .iter()
-        .filter(|entry| entry.checked)
-        .map(|entry| entry.name.clone())
-        .collect();
+/// All, joined as one segment. A destination with no selector leaves the
+/// segment out.
+fn selected_collection(collections: Option<&GuiCollections>) -> Option<String> {
+    let names = collections?.selected_names();
     (!names.is_empty()).then(|| names.join(", "))
 }
 
@@ -177,7 +170,7 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_collection(podcasts.collections.as_ref()),
+                selected_collection(Some(&podcasts.collections)),
                 selected_title(selected, &podcasts.rows),
             ]
         }
@@ -185,13 +178,13 @@ fn segments_of(
             let selected = detail_selected(detail);
             vec![
                 label,
-                selected_collection(feeds.collections.as_ref()),
+                selected_collection(Some(&feeds.collections)),
                 selected_title(selected, &feeds.rows),
             ]
         }
         GuiDestinationList::Music(music) => {
             let mut segments = vec![label];
-            segments.extend(music.collection_names.iter().cloned().map(Some));
+            segments.extend(music.collections.selected_names().into_iter().map(Some));
             segments.push(picked_name(music_hero(detail)));
             segments
         }

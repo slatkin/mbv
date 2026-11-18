@@ -18,7 +18,8 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::GuiCollectionsFrame;
+use mbv::GuiCollections;
+
 use crate::window::components::library_collection_dropdown::LibraryCollectionDropdown;
 use crate::window::components::library_filter_field::LibraryFilterField;
 
@@ -41,7 +42,7 @@ pub struct LibraryListHeaderProps {
     /// the dropdown paints on the title's line after the title, and the label
     /// is not painted, because the trigger names the selection.
     #[props(default)]
-    pub collections: Option<GuiCollectionsFrame>,
+    pub collections: Option<GuiCollections>,
     /// The filter text the field paints.
     pub filter: String,
     /// The field's placeholder, which names the selection it narrows.

@@ -100,7 +100,7 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     // read would meet that write.
     let (filter_open, collections_open) = {
         let ui = state.ui.peek();
-        (ui.filter_open, ui.collections.open)
+        (ui.filter_open, ui.collections.is_some())
     };
     if filter_open {
         return Some(route_filter_key(state, key));

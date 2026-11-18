@@ -272,7 +272,6 @@ fn shows_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
             lib_idx: 0,
-            collection_names: Vec::new(),
             loading: false,
             series,
             upcoming_failed: false,

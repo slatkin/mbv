@@ -58,18 +58,18 @@ fn the_library_section_carries_the_destination_tabs_and_the_lib_idx() {
     assert_eq!(music.lib_idx, 0);
 }
 
-/// The section carries the selected collection names in pill order once for
-/// the whole panel (design D6): the list header's, the Status bar location's,
-/// and the Hero header's names read this one fact. Regression for the
-/// Phase-1 gate finding: the names were derived separately in the projection,
-/// the Status bar, and the list header.
+/// The section carries the collection selector whose one derivation names the
+/// selected collections (design D6): the list header's, the Status bar
+/// location's, and the Hero header's names read this one fact.
+/// Regression for the Phase-1 gate finding: the names were derived separately
+/// in the projection, the Status bar, and the list header.
 #[test]
 fn the_music_frame_carries_the_selected_collection_names() {
     let http = MockHttp::new();
     let (mut test, _cmd_rx) = seeded_music_core(&http);
 
     let music = music_list(&seeded_frame(&mut test)).expect("the Music destination is active");
-    assert_eq!(music.collection_names, ["Hip-Hop"]);
+    assert_eq!(music.collections.selected_names(), ["Hip-Hop"]);
 }
 
 /// The Library list section rides a batch only when its value changes (design

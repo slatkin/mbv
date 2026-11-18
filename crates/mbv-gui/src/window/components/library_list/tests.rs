@@ -24,8 +24,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::LibraryList;
 use crate::bridge::frame::library::{
-    GuiArtistKey, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicList, GuiMusicTrackFrame,
+    GuiArtistKey, GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail,
+    GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail,
+    GuiMusicList, GuiMusicTrackFrame,
 };
 use crate::bridge::sections::{GuiSection, GuiSectionBatch};
 use crate::core_thread::CoreInput;
@@ -178,20 +179,6 @@ impl Fixture {
         matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
     }
 
-    /// The trimmed text of the first node the selector names.
-    fn text_of(&self, selector: &str) -> String {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_node(id)
-            .expect("the node is in the document")
-            .text_content()
-            .trim()
-            .to_owned()
-    }
-
     /// The attribute of the first node the selector names.
     fn attr_of(&self, selector: &str, attribute: blitz_dom::LocalName) -> Option<String> {
         let dom = self.doc.inner();
@@ -301,17 +288,25 @@ fn brand() -> GuiMusicArtistFrame {
     }
 }
 
-/// The carried Music content: the two artists, and the collection names the
-/// header reads (design D6).
+/// The carried Music content: the two artists, and the checked collections
+/// whose one derivation `selected_names` names the header's label (design D6).
 fn music(collection_names: &[&str]) -> GuiMusicList {
     GuiMusicList {
         lib_idx: 0,
-        collections: None,
-        collection_names: collection_names
-            .iter()
-            .copied()
-            .map(str::to_owned)
-            .collect(),
+        collections: GuiCollections {
+            target: mbv::GuiCollectionTarget::Music(0),
+            all: collection_names.is_empty(),
+            entries: collection_names
+                .iter()
+                .map(|name| GuiCollectionEntry {
+                    key: format!("g-{}", name.to_lowercase()),
+                    name: (*name).to_owned(),
+                    checked: true,
+                })
+                .collect(),
+            noun: mbv::GuiCollectionNoun::Groups,
+            order: None,
+        },
         loading: false,
         failure: None,
         artists: vec![beastie(), brand()],
@@ -410,27 +405,6 @@ fn a_press_on_an_album_without_its_tracklist_opens_it_and_asks_for_the_tracks() 
         Some("true".to_owned()),
         "the pressed album paints open"
     );
-}
-
-/// Contract (`LibraryList.test.ts`): the header names the carried
-/// selection, not a derivation from the pills.
-#[test]
-fn the_header_names_the_carried_selection_not_a_derivation_from_the_pills() {
-    let fixture = built(&music(&["Hip-Hop", "Soul"]), &no_hero());
-
-    assert_eq!(
-        fixture.text_of("[data-library-selection-label]"),
-        "Hip-Hop + Soul"
-    );
-}
-
-/// Contract (`LibraryList.test.ts`): an empty selection names the header
-/// All — the Library's empty-selection label.
-#[test]
-fn an_empty_selection_names_the_header_all() {
-    let fixture = built(&music(&[]), &no_hero());
-
-    assert_eq!(fixture.text_of("[data-library-selection-label]"), "All");
 }
 
 /// Contract (`LibraryList.test.ts`): a right-press on a row requests the

@@ -186,7 +186,7 @@ impl App {
             .and_then(GuiPodcastEpisodeId::decode)
             .and_then(|episode| self.gui_podcast_hero(lib_idx, &episode));
         GuiPodcastsProjection {
-            collections: Some(collections),
+            collections,
             loading,
             failed,
             rows,

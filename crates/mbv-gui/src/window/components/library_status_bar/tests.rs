@@ -14,7 +14,7 @@ use super::{LibraryStatusBar, LibraryStatusBarProps};
 use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiAudiobooksRowFrame, GuiCollectionEntry,
-    GuiCollectionsFrame, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
+    GuiCollections, GuiDestinationList, GuiEmbyDetail, GuiEmbyList, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame, GuiEntryRowFrame, GuiFeedsDetail, GuiFeedsList, GuiHomeRowStateFrame,
     GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicDetail,
     GuiMusicHeroFrame, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
@@ -51,7 +51,7 @@ fn hero() -> GuiMusicHeroFrame {
 fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
         lib_idx: 0,
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Music(0),
             all: false,
             entries: vec![GuiCollectionEntry {
@@ -61,8 +61,7 @@ fn music_list() -> GuiDestinationList {
             }],
             noun: mbv::GuiCollectionNoun::Groups,
             order: None,
-        }),
-        collection_names: vec!["Hip-Hop".to_owned()],
+        },
         loading: false,
         failure: None,
         artists: Vec::new(),
@@ -288,7 +287,7 @@ fn audiobooks_content() -> (GuiDestinationList, GuiLibraryDetail) {
 fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Podcasts(GuiPodcastsList {
         lib_idx: 1,
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Podcasts(1),
             all: false,
             entries: vec![GuiCollectionEntry {
@@ -298,7 +297,7 @@ fn podcasts_content() -> (GuiDestinationList, GuiLibraryDetail) {
             }],
             noun: mbv::GuiCollectionNoun::Shows,
             order: Some(mbv::GuiDateOrder::Newest),
-        }),
+        },
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {
@@ -373,7 +372,7 @@ fn the_bar_paints_the_audiobooks_location_for_the_carried_content() {
 /// entry (spec "The Library Status bar shows hints and the location").
 fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Feeds(GuiFeedsList {
-        collections: Some(GuiCollectionsFrame {
+        collections: GuiCollections {
             target: mbv::GuiCollectionTarget::Feeds,
             all: false,
             entries: vec![
@@ -390,7 +389,7 @@ fn feeds_content() -> (GuiDestinationList, GuiLibraryDetail) {
             ],
             noun: mbv::GuiCollectionNoun::Subscriptions,
             order: Some(mbv::GuiDateOrder::Newest),
-        }),
+        },
         loading: false,
         failed: false,
         rows: vec![GuiEntryRowFrame {

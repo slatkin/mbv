@@ -24,10 +24,6 @@ pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The destination's collection names, as the Library Status bar's
-    /// location reads them. The Shows list paints no collection selector, so it
-    /// carries none (design D8).
-    pub collection_names: Vec<String>,
     /// Whether the series list has not landed yet.
     pub loading: bool,
     /// The series list's tree (design D14): the series nodes with their
@@ -184,7 +180,6 @@ impl GuiShowsList {
     pub(crate) fn from_projection(lib_idx: usize, projection: &GuiShowsProjection) -> Self {
         Self {
             lib_idx,
-            collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             series: projection
                 .series

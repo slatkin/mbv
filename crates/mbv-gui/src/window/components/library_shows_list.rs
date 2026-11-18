@@ -355,14 +355,10 @@ pub fn LibraryShowsList() -> Element {
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
-    // The filter field's placeholder, naming the selection as the Music list
-    // does.
-    let filter_placeholder = format!(
-        "Filter {}",
-        frame
-            .and_then(|frame| frame.collection_names.first().cloned())
-            .unwrap_or_else(|| "shows".to_owned())
-    );
+    // The filter field's placeholder, naming the Music selection as the Music
+    // list does: the Shows list paints no collection selector (design D8), so
+    // the placeholder names the whole library.
+    let filter_placeholder = "Filter shows".to_owned();
 
     // The list's two DOM facts report to the scroll store (design D9), and
     // the rows paint over the interaction state this render read.

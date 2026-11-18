@@ -158,9 +158,7 @@ fn the_frame_carries_the_podcast_list_after_the_open() {
         ["B New", "A Old", "A Undated"],
         "Latest merges both shows newest first with the undated episode last"
     );
-    let collections = list
-        .collections
-        .expect("the Podcasts destination carries its collections");
+    let collections = &list.collections;
     let names: Vec<&str> = collections
         .entries
         .iter()
@@ -209,9 +207,7 @@ fn the_pill_command_changes_the_rows() {
     let (list, _) = podcasts_parts(&newest_frame(&mut test));
     let titles: Vec<&str> = list.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["A Old", "A Undated"]);
-    let collections = list
-        .collections
-        .expect("the Podcasts destination carries its collections");
+    let collections = &list.collections;
     let checked: Vec<&str> = collections
         .entries
         .iter()
