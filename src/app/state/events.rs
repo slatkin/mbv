@@ -355,6 +355,19 @@ pub enum ModelContentEvent {
     HomeContentCleared,
 }
 
+/// One feed-group target's items fetch failed (gui-collection-dropdown design
+/// D3): the library index, the target the fetch named, and the error. The
+/// dispatch arm retires the target's outstanding-fetch mark and records the
+/// GUI's terminal failure mark, which its shown pass skips until a user press
+/// clears it. Both Clients' fetch paths send it, so a TUI selection's failed
+/// fetch retires its mark too.
+#[derive(Debug)]
+pub struct FeedHomeVideoSelectionFailed {
+    pub lib_idx: usize,
+    pub selection: mbv_ui_model::feed::FeedHomeVideoSelection,
+    pub error: String,
+}
+
 /// Library events are grouped by the App state handler that owns them.
 /// A new variant goes in the family whose handler file owns its state.
 #[derive(Debug)]
@@ -377,6 +390,10 @@ pub enum LibEvent {
     /// (gui-collection-dropdown design D9). Only the GUI Client's launch
     /// starts one, so the TUI never receives it.
     GuiShowsNew(crate::app::gui_library::GuiShowsNewEvent),
+    /// One feed-group target's items fetch failed (gui-collection-dropdown
+    /// design D3). Both Clients' fetch paths send it, and the GUI's store
+    /// owns the terminal failure mark it records.
+    FeedHomeVideoSelectionFailed(FeedHomeVideoSelectionFailed),
     Error(String),
 }
 

@@ -109,19 +109,17 @@ impl App {
         })
     }
 
-    /// Apply the saved collection choices of the destination the first phase
-    /// opened (design D9, D10; gui-collection-dropdown design D11): the saved
-    /// picks of the collections the library still holds restore, and the
-    /// checked set of every collection dropdown — Music groups, Podcast shows,
-    /// Feeds subscriptions, and Emby feed folders — restores through that
-    /// destination's own site. The site's catalog retention drops saved ids
+    /// Apply the saved collection choices of every destination the file
+    /// carries (design D9, D10; gui-collection-dropdown design D11, D13):
+    /// each entry restores through the destination and collection target it
+    /// names, so a destination that was not the one the first phase opened
+    /// still gets its saved set. The site's catalog retention drops saved ids
     /// the library no longer holds; an emptied set and a saved All fall back
-    /// to All, as does a destination with no saved entry. The saved entry
-    /// matches `destination`, the identity phase 1 recorded, and the active
-    /// destination must still be that one: a mid-restore tab switch abandons
-    /// the restore, so no other destination's saved set lands under the user.
-    /// Returns `false` while the destination's collection catalog has not
-    /// landed, so the caller retries.
+    /// to All, as does a destination with no saved entry. The active
+    /// destination must still be the one phase 1 recorded: a mid-restore tab
+    /// switch abandons the restore, so no other destination's saved set lands
+    /// under the user. Returns `false` while a saved entry's collection
+    /// catalog has not landed, so the caller retries.
     pub fn restore_gui_launch_collections(
         &mut self,
         state: &GuiLaunchState,
@@ -132,33 +130,60 @@ impl App {
             // than applying a saved set the user did not ask for.
             return true;
         }
-        let Some(target) = self
-            .gui_active_destination()
-            .and_then(|kind| self.gui_collection_target(kind))
-        else {
-            // The active destination paints no collection dropdown.
+        let mut pending = false;
+        for entry in &state.collections {
+            pending |= !self.restore_gui_launch_entry(entry);
+        }
+        !pending
+    }
+
+    /// Apply one saved entry through the destination it names (design D13):
+    /// the presented destination whose identity the entry holds, and whose
+    /// collection dropdown the entry's target names. A destination the
+    /// settled catalog no longer holds, and a destination that paints no
+    /// dropdown or another dropdown, install nothing, so saved ids never land
+    /// in a destination the entry did not name. Returns `false` while the
+    /// entry's catalog can still land or its collection catalog has not
+    /// landed, so the caller retries.
+    fn restore_gui_launch_entry(&mut self, entry: &GuiDestinationCollections) -> bool {
+        let kind = match &entry.destination {
+            // Home paints no collection dropdown, so no saved entry names it.
+            TabIdentity::Home => return true,
+            destination => match self.launch_destination(destination) {
+                LaunchDestination::Open(kind) => kind,
+                LaunchDestination::Pending => return false,
+                LaunchDestination::Unmatched => return true,
+            },
+        };
+        let Some(target) = self.gui_collection_target(kind) else {
+            // The destination paints no collection dropdown.
             return true;
         };
-        let kind = launch_collection_target(&target);
-        let Some(entry) = state
-            .collections
-            .iter()
-            .find(|entry| entry.destination == *destination && entry.target == kind)
-        else {
+        if launch_collection_target(&target) != entry.target {
+            // The destination's dropdown is not the one the entry names.
             return true;
-        };
+        }
+        self.restore_collection_for_target(&target, entry)
+    }
+
+    /// Apply one saved entry through `target`'s own site (design D13).
+    fn restore_collection_for_target(
+        &mut self,
+        target: &GuiCollectionTarget,
+        entry: &GuiDestinationCollections,
+    ) -> bool {
         match target {
             GuiCollectionTarget::Music(lib_idx) => {
-                self.restore_collection_at(&GuiMusicCollectionSite(lib_idx), entry)
+                self.restore_collection_at(&GuiMusicCollectionSite(*lib_idx), entry)
             }
             GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.restore_collection_at(&GuiPodcastsCollectionSite(lib_idx), entry)
+                self.restore_collection_at(&GuiPodcastsCollectionSite(*lib_idx), entry)
             }
             GuiCollectionTarget::Feeds => {
                 self.restore_collection_at(&GuiFeedsCollectionSite, entry)
             }
             GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.restore_collection_at(&GuiEmbyFeedCollectionSite(lib_idx), entry)
+                self.restore_collection_at(&GuiEmbyFeedCollectionSite(*lib_idx), entry)
             }
         }
     }

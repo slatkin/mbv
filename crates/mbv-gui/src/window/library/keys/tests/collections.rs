@@ -61,6 +61,44 @@ fn esc_closes_the_open_dropdown_over_the_queue() {
     assert_eq!(commands(&rx), []);
 }
 
+// The Shows view dropdown reuses the open fact but mounts no filter field
+// (design D8), so the typed keys stay the panel's and the core's while it is
+// open: Space keeps its play and pause and `n` reaches the core.
+#[test]
+fn the_shows_view_popover_takes_no_typed_key() {
+    let list = shows_list();
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), shows_detail());
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.collections = Some(String::new()));
+        route_under(state, facts, "space", " ", PointerZone::Queue);
+        route_under(state, facts, "n", "n", PointerZone::Queue);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(facts[0], "space=Core(Queue)");
+    assert_eq!(facts[1], "n=Core(Queue)");
+    assert!(facts[2].contains("collections_open=true"));
+    assert_eq!(commands(&rx), []);
+}
+
+// Esc closes the Shows view popover wherever the pointer is, as it closes the
+// collection dropdown (design D7, D8): the popover with no filter still binds
+// its close.
+#[test]
+fn esc_closes_the_shows_view_popover() {
+    let list = shows_list();
+    let (facts, rx) = run(move |state, facts| {
+        carry(state, list.clone(), shows_detail());
+        let mut ui = state.ui;
+        ui.with_mut(|ui| ui.collections = Some(String::new()));
+        route_under(state, facts, "escape", "Escape", PointerZone::Queue);
+        facts.lock().expect("facts").push(ui_facts(state));
+    });
+    assert_eq!(facts[0], "escape=Handled");
+    assert!(facts[1].contains("collections_open=false"));
+    assert_eq!(commands(&rx), []);
+}
+
 // A typed key with the dropdown closed is the core's, for the panel the
 // pointer names (design D7): the dropdown takes no key while it is closed.
 #[test]

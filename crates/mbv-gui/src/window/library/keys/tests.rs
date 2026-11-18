@@ -16,7 +16,7 @@ use super::route_library_key;
 use crate::bridge::frame::library::{
     GuiCollectionEntry, GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList,
     GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicList, GuiMusicTrackFrame,
+    GuiMusicList, GuiMusicTrackFrame, GuiShowsDetail, GuiShowsList,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::{DomKey, DomModifiers};
@@ -409,6 +409,33 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
             artists,
         }),
     }
+}
+
+/// The carried Shows content: the Shows destination's series list, whose view
+/// dropdown reuses the collection dropdown's open fact and mounts no filter
+/// field (design D8).
+fn shows_list() -> GuiLibraryList {
+    GuiLibraryList {
+        tabs: Vec::new(),
+        current_tab: Some(2),
+        destination: GuiDestinationList::Shows(GuiShowsList {
+            lib_idx: 0,
+            view: mbv::GuiShowsView::All,
+            loading: false,
+            series: Vec::new(),
+            upcoming_failed: false,
+            rows: Vec::new(),
+        }),
+    }
+}
+
+/// The Shows detail section value: no Hero.
+fn shows_detail() -> GuiLibraryDetail {
+    GuiLibraryDetail::Shows(GuiShowsDetail {
+        workspace_loading: false,
+        selected: None,
+        hero: None,
+    })
 }
 
 /// The Music detail section value: the given Hero, `None` while none is

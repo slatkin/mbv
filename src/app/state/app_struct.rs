@@ -329,12 +329,12 @@ pub struct App {
     /// series, and the selected season. The TUI never reads it.
     pub(in crate::app) gui_tv_shows:
         std::collections::HashMap<usize, crate::app::gui_library::GuiTvShowsSelection>,
-    /// The GUI Library's plain Emby-library selection (add-gui-library-panel
-    /// design D12, row 8.1): per plain Emby library, the row the Hero shows.
-    /// The feed-view library's selected group is the library tab's own
-    /// `feed_home_video` selection, which the set-feed-group action writes
-    /// through the TUI's path — no second store of it exists here. The TUI
-    /// never reads it.
+    /// The GUI Library's own state per Emby library (add-gui-library-panel
+    /// design D12, row 8.1; gui-collection-dropdown design D2, D3): the row
+    /// the Hero shows, and a feed-view library's claim on its fetched results.
+    /// The feed-view library's checked folders are the separate
+    /// `gui_emby_feed_sets` store, so the library tab's own
+    /// `feed_home_video` selection stays the TUI's. The TUI never reads it.
     pub(in crate::app) gui_emby_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
     /// The GUI Library's Emby feed-group selection (add-gui-library-panel

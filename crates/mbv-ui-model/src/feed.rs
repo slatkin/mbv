@@ -42,8 +42,8 @@ pub struct FeedHomeVideoState {
     /// loading state until its fetch returns") from the seed/listing-pending
     /// `loading` the listing completion hands off. Set at the fetch spawn,
     /// cleared when that selection's result event lands — applied or
-    /// stale-dropped. A fetch that fails reports through `LibEvent::Error`
-    /// and leaves the mark until the next result for the same selection.
+    /// stale-dropped — or when its targeted `FeedHomeVideoSelectionFailed`
+    /// event lands, so a user press can retry the failed target.
     pub fetching: Option<FeedHomeVideoSelection>,
     /// Per-root-folder video counts. The count fan-out fills this; pill
     /// membership reads it alongside the root listing. A full refresh clears

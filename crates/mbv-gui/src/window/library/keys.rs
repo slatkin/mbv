@@ -78,14 +78,29 @@ fn types_into_filter(key: &DomKey) -> bool {
             && key.key.chars().count() == 1)
 }
 
+/// Whether the open popover mounts a filter field: the collection dropdown
+/// does, and the Shows view dropdown reuses the open fact without one (design
+/// D8), so a destination that carries no collection selector mounts none.
+fn collections_filter_mounted(state: &LibraryState) -> bool {
+    let list = state.sections.library_list.peek();
+    list.as_ref()
+        .is_some_and(|list| list.destination.collections().is_some())
+}
+
 /// Route a key while the collection dropdown is open (gui-collection-dropdown
 /// design D7): Esc closes it and clears its filter text, and the filter takes
 /// the typed keys and Backspace wherever the pointer is. Every other key
-/// passes to the rest of the routing, so the dropdown binds nothing else.
+/// passes to the rest of the routing, so the dropdown binds nothing else. A
+/// popover with no filter field takes no typed key: the Shows view dropdown
+/// reuses the open fact (design D8), so its keys stay the panel's and the
+/// core's.
 fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     if key.key == "Escape" && bare(key) {
         state.close_collections_dropdown();
         return Some(KeyOutcome::Handled);
+    }
+    if !collections_filter_mounted(state) {
+        return None;
     }
     types_into_filter(key).then_some(KeyOutcome::Text)
 }

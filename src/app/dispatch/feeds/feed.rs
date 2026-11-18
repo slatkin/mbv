@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::events::{BrowseEvent, LibEvent};
+use crate::app::state::events::{BrowseEvent, FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, BrowseLevel, FeedHomeVideoSelection, FeedHomeVideoState, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
@@ -441,7 +441,16 @@ impl App {
             ) {
                 Ok(result) => result,
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e.to_string()));
+                    // A failed fetch reports its own target (design D3), so the
+                    // result arm can retire the in-flight mark and the GUI's
+                    // shown pass can mark the target failed.
+                    let _ = tx.send(LibEvent::FeedHomeVideoSelectionFailed(
+                        FeedHomeVideoSelectionFailed {
+                            lib_idx,
+                            selection: target.clone(),
+                            error: e.to_string(),
+                        },
+                    ));
                     return;
                 }
             };
@@ -460,7 +469,13 @@ impl App {
                 ) {
                     Ok((rest, _)) => items.extend(rest),
                     Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e.to_string()));
+                        let _ = tx.send(LibEvent::FeedHomeVideoSelectionFailed(
+                            FeedHomeVideoSelectionFailed {
+                                lib_idx,
+                                selection: target.clone(),
+                                error: e.to_string(),
+                            },
+                        ));
                         return;
                     }
                 }
@@ -499,6 +514,15 @@ impl App {
         let stale = !self.feed_home_video_selection_wanted(lib_idx, &selection)
             || matches!(selection, FeedHomeVideoSelection::All)
                 && !self.feed_home_video_root_matches(lib_idx, parent_id);
+        // The fetch returned, so the target's terminal failure mark retires:
+        // a later cache miss can fetch it again.
+        if let Some(claim) = self
+            .gui_emby_libs
+            .get_mut(&lib_idx)
+            .and_then(|stored| stored.feed_claim.as_mut())
+        {
+            claim.failed.remove(&selection);
+        }
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)

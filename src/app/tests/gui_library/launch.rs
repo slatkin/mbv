@@ -185,6 +185,44 @@ fn a_saved_checked_set_restores_as_saved(
     assert_eq!(restored_order, order);
 }
 
+/// A saved entry restores through the destination it names, not through the
+/// destination that was active at exit (gui-collection-dropdown "The
+/// collection selection persists per destination", scenario "Non-Music
+/// selections survive a restart"): Music is the opened destination and holds
+/// no saved entry, and the saved Feeds entry still installs through the Feeds
+/// site.
+#[test]
+fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.emby_runtime.client = None;
+    app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
+    let destination = saved_music_identity();
+    let state = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: destination.clone(),
+        collections: vec![mbv_config::GuiDestinationCollections {
+            destination: mbv_config::TabIdentity::Feeds,
+            target: mbv_config::GuiLaunchCollectionTarget::Feeds,
+            group_ids: vec![FEED_B.to_string()],
+            order: None,
+            picks: Vec::new(),
+        }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
+    };
+
+    assert!(app.restore_gui_launch_collections(&state, &destination));
+
+    let (set, _) = restored_launch_selection(&app, &GuiCollectionTarget::Feeds);
+    let expected = vec![FEED_B.to_string()];
+    assert_eq!(
+        set.checked_keys(),
+        expected.as_slice(),
+        "the saved Feeds entry installs although Music was the opened destination"
+    );
+}
+
 /// A saved group the library no longer holds falls back to All
 /// (gui-collection-dropdown "The collection selection persists per
 /// destination", scenario "A saved collection no longer exists").

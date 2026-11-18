@@ -66,6 +66,13 @@ impl App {
             // (gui-collection-dropdown design D9); only the GUI Client's launch
             // starts one, so the TUI never receives it.
             LibEvent::GuiShowsNew(event) => self.handle_gui_shows_new(event),
+            // A feed-group target's failed fetch (gui-collection-dropdown
+            // design D3): the GUI Library's store records the terminal failure
+            // mark its shown pass honours, and the shared in-flight mark
+            // retires.
+            LibEvent::FeedHomeVideoSelectionFailed(event) => {
+                self.handle_feed_home_video_selection_failed(event);
+            }
             // A `ModelContent` event's App-side half is
             // `handle_model_content_event`: both Clients' drains run it, and
             // the shell drain joins only its projection work after it.

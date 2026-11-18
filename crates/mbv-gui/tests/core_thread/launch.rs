@@ -32,8 +32,8 @@ const SHOWS_LIBRARY: (&str, &str) = ("lib-shows", "Shows");
 /// 8.1).
 const MOVIES_LIBRARY: (&str, &str) = ("lib-movies", "Movies");
 
-/// The id and name of a second Grouped Music library the GUI presents.
-const SECOND_MUSIC: (&str, &str) = ("lib-music-2", "Music 2");
+/// The id of the Audiobookshelf podcast library the seeded catalog holds.
+const PODCASTS_LIBRARY: &str = "lib-abs-podcasts";
 
 /// The identity the saved location names for a library.
 fn library_identity(library_id: &str) -> TabIdentity {
@@ -86,15 +86,24 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
     app.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
 }
 
-/// Seed two grouped Music libraries: the first holds its group list, and the
-/// second's pushed tab has none yet, so the Collections phase waits for it.
-fn seed_two_music(app: &mut mbv::App, http: &MockHttp) {
+/// Seed the grouped Music library and the Audiobookshelf catalog, whose
+/// podcast library holds no show yet, so a saved Podcasts entry waits for a
+/// show list that has not landed.
+fn seed_music_and_podcasts(app: &mut mbv::App, http: &MockHttp) {
     seed_music(app, http);
-    app.push_gui_library_tab_for_test(EmbyItem::folder(
-        SECOND_MUSIC.0.into(),
-        SECOND_MUSIC.1.into(),
-        "music".into(),
-    ));
+    app.seed_gui_abs_libraries_for_test();
+}
+
+/// The tab position the presented Podcasts destination carries.
+fn podcasts_position(test: &mut TestCore) -> usize {
+    test.core
+        .app_mut()
+        .gui_library_tabs()
+        .tabs
+        .iter()
+        .find(|tab| tab.label == "Podcasts")
+        .map(|tab| tab.position)
+        .expect("the presented tabs carry the Podcasts tab")
 }
 
 /// Seed the grouped Music library and one plain Emby (Movies) library the
@@ -441,16 +450,16 @@ fn a_location_saved_on_audiobooks_opens_it() {
     );
 }
 
-/// A tab switch between the catalog landing and a group list's landing never
-/// applies another destination's saved set (design D9): the Collections phase
-/// records the destination phase 1 opened, applies only its saved entry, and
-/// gives up when a different destination is active.
+/// A tab switch between the catalog landing and a saved entry's show list
+/// landing abandons the restore (design D9, D13): the destination phase 1
+/// opened restores its own saved entry, and the destination the user switched
+/// to never receives the saved set whose catalog landed after the switch.
 #[test]
 fn a_mid_restore_destination_switch_applies_no_saved_pills() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
-        destination: library_identity(SECOND_MUSIC.0),
+        destination: library_identity(MUSIC_LIBRARY.0),
         collections: vec![
             GuiDestinationCollections {
                 destination: library_identity(MUSIC_LIBRARY.0),
@@ -460,9 +469,9 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
                 picks: Vec::new(),
             },
             GuiDestinationCollections {
-                destination: library_identity(SECOND_MUSIC.0),
-                target: GuiLaunchCollectionTarget::Music,
-                group_ids: vec!["grp-jazz".into()],
+                destination: abs_identity(PODCASTS_LIBRARY),
+                target: GuiLaunchCollectionTarget::Podcasts,
+                group_ids: vec!["show-a".into()],
                 order: None,
                 picks: Vec::new(),
             },
@@ -471,31 +480,41 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
     })
     .unwrap();
 
-    let mut test = core_with_seeded_catalog(seed_two_music);
+    let mut test = core_with_seeded_catalog(seed_music_and_podcasts);
 
-    // Phase 1 opened the saved destination, whose group list has not landed,
-    // so the restore waits in the Collections phase.
-    assert_eq!(
-        test.core.app_mut().tab_for_test(),
-        TabSelection::EmbyLibrary(1)
-    );
-
-    // The user switches to the first Music library while the group list is
-    // still pending.
-    send_library(
-        &mut test,
-        GuiLibraryCommand::OpenDestination { position: 1 },
-    );
-    assert!(test.core.step());
-
+    // Phase 1 opened Music, whose landed group list takes its own saved entry;
+    // the Podcasts entry waits for a show list that has not landed.
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        None,
-        "the switched-to destination keeps no saved pills"
+        Some("grp-hiphop"),
+        "the opened destination restores its own saved entry"
     );
-    assert_eq!(
-        test.core.app_mut().gui_library_groups_for_test(1),
-        None,
-        "the opened destination's saved set is not applied after the switch"
+
+    // The user switches to Podcasts while the restore still waits, and the
+    // show list lands after the switch.
+    let position = podcasts_position(&mut test);
+    send_library(&mut test, GuiLibraryCommand::OpenDestination { position });
+    test.core
+        .app_mut()
+        .seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A")]);
+    test.tx
+        .send(crate::measured_layout(10, Vec::new()))
+        .unwrap();
+    assert!(test.core.step());
+
+    let frame = test.held();
+    let collections = frame
+        .library_list()
+        .and_then(|list| list.destination.collections())
+        .expect("the Podcasts destination paints its collection dropdown");
+    let listed: Vec<&str> = collections
+        .entries
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
+    assert_eq!(listed, ["Show A"], "the show list landed after the switch");
+    assert!(
+        collections.all,
+        "the switch abandons the restore: the saved show never installs"
     );
 }

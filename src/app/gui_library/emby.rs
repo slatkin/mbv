@@ -1,6 +1,7 @@
 //! The GUI Library's plain Emby-library data path (add-gui-library-panel
 //! design D12, row 8.1): the per-library selection the core owns (the picked
-//! row, and a feed-view library's checked folder set — gui-collection-dropdown
+//! row, a feed-view library's checked folder set, and that library's claim on
+//! its fetched results with their failed targets — gui-collection-dropdown
 //! design D2, D3), and the open, select, collection-toggle, All, and date-order
 //! actions the core's commands apply. A feed-view library's checked set reads and
 //! fills the shared `feed_home_video` cache without writing its `selection`,
@@ -13,6 +14,7 @@
 //! loaders, so the two Clients cannot drift. The TUI never reads any of it.
 
 use std::borrow::Cow;
+use std::collections::HashSet;
 
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::feed::FeedHomeVideoTarget;
@@ -21,7 +23,8 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
-use crate::app::state::events::LibEvent;
+use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, FeedHomeVideoSelection};
 
 /// One plain Emby library's root list in the store (row 8.1): a library's
@@ -47,9 +50,10 @@ pub(in crate::app) struct GuiEmbyRootItemsEvent {
     pub(in crate::app) result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
 }
 
-/// The GUI Library's plain Emby-library selection (row 8.1): per library,
-/// the row the Hero shows, by stable Service id. A feed-view library's
-/// checked folder set is the GUI's own store beside it
+/// The GUI Library's own state per Emby library (row 8.1): the row the Hero
+/// shows, by stable Service id, and a feed-view library's claim on that
+/// library's fetched results. A feed-view library's checked folder set is the
+/// GUI's own store beside it
 /// ([`App::gui_emby_feed_effective_set`](crate::app::App)), read over the
 /// library tab's shared `feed_home_video` cache without writing its
 /// `selection` — the TUI's selection stays the TUI's. A stored row the active
@@ -59,6 +63,38 @@ pub(in crate::app) struct GuiEmbyRootItemsEvent {
 pub struct GuiEmbyLibrarySelection {
     /// The row the Hero shows. `None` before a select command names one.
     pub picked_row: Option<String>,
+    /// The GUI's claim on a feed-view library's fetched results (design D2,
+    /// D3): the frame path's shown pass marks it, so the result arm accepts a
+    /// target the GUI's checked set wants while the stored set stays absent
+    /// until a user press or the launch restore installs one — a claim is not
+    /// a choice, so a painted frame never blocks the saved folders. A plain
+    /// Emby library never sets it.
+    pub feed_claim: Option<GuiEmbyFeedClaim>,
+}
+
+/// The GUI's claim on one feed-view library's fetched results (design D2,
+/// D3), held beside that library's [`GuiEmbyLibrarySelection`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GuiEmbyFeedClaim {
+    /// Targets whose fetch failed terminally: the shown pass's ensure step
+    /// offers them again only after a user press clears the mark, so an
+    /// automatic repaint never retries them.
+    pub failed: HashSet<FeedHomeVideoSelection>,
+}
+
+impl GuiEmbyFeedClaim {
+    /// Whether `target`'s fetch failed, probed through the borrowed target so
+    /// the per-frame ensure walk clones no folder id.
+    fn is_failed(&self, target: FeedHomeVideoTarget<'_>) -> bool {
+        self.failed.iter().any(|mark| match (mark, target) {
+            (FeedHomeVideoSelection::All, FeedHomeVideoTarget::All) => true,
+            (FeedHomeVideoSelection::Folder(mark_id), FeedHomeVideoTarget::Folder(target_id)) => {
+                mark_id == target_id
+            }
+            (FeedHomeVideoSelection::All, FeedHomeVideoTarget::Folder(_))
+            | (FeedHomeVideoSelection::Folder(_), FeedHomeVideoTarget::All) => false,
+        })
+    }
 }
 
 /// The Emby feed-group destination's collection-command site
@@ -107,6 +143,9 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
     }
 
     fn has_stored_selection(&self, app: &App) -> bool {
+        // Only a user press or the launch restore stores a set: the shown
+        // pass's claim is not a selection, so a painted frame never blocks
+        // the saved folders.
         app.gui_emby_feed_sets.contains_key(&self.0)
     }
 
@@ -254,6 +293,17 @@ impl App {
     ) {
         self.gui_emby_feed_sets
             .insert(lib_idx, GuiCollectionSelection { set, order });
+        // A user press (or the launch restore) is the one refetch trigger
+        // (design D3): clearing the failed marks here lets the ensure step
+        // start the selection's failed targets again, and an automatic
+        // repaint never does.
+        if let Some(claim) = self
+            .gui_emby_libs
+            .get_mut(&lib_idx)
+            .and_then(|selection| selection.feed_claim.as_mut())
+        {
+            claim.failed.clear();
+        }
         self.ensure_gui_emby_feed_fetch(lib_idx);
     }
 
@@ -276,7 +326,8 @@ impl App {
 
     /// Start the first fetch the GUI's checked set is missing (design D3):
     /// the first target — All, or the first checked folder — with no cache
-    /// entry, while no fetch is outstanding. `fetching` names the one fetch
+    /// entry and no terminal failure mark, while no fetch is outstanding.
+    /// `fetching` names the one fetch
     /// that runs, so the next target's fetch starts on a later frame once it
     /// clears: one fetch at a time, as the TUI's own selection fetch. The
     /// shared `FeedHomeVideoState::selection` is never written here, so the
@@ -284,12 +335,17 @@ impl App {
     /// borrowed keys, and All is one cache probe, so the per-frame ensure
     /// clones nothing for the walk.
     fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
-        // The GUI owns this library's set from the first frame it shows: the
-        // entry marks that library's results as the GUI's own, which the
-        // result arm's second acceptance rule reads. A Client that never
-        // shows the destination keeps no entry, so the TUI's own stale-drop
-        // rule alone governs its results.
-        self.gui_emby_feed_sets.entry(lib_idx).or_default();
+        // The GUI owns this library's results from the first frame it shows:
+        // the claim marks them as the GUI's own, which the result arm's
+        // second acceptance rule reads. The claim is not a stored selection,
+        // so a painted frame never blocks the launch restore. A Client that
+        // never shows the destination claims nothing, so the TUI's own
+        // stale-drop rule alone governs its results.
+        self.gui_emby_libs
+            .entry(lib_idx)
+            .or_default()
+            .feed_claim
+            .get_or_insert_with(GuiEmbyFeedClaim::default);
         let Some(state) = self
             .libs
             .get(lib_idx)
@@ -300,17 +356,23 @@ impl App {
         if state.fetching.is_some() {
             return;
         }
+        // A failed target waits for a user press: the press clears its mark,
+        // so an automatic repaint never retries it and no retry storm starts.
+        let failed = |target: FeedHomeVideoTarget<'_>| {
+            self.gui_emby_feed_claim(lib_idx)
+                .is_some_and(|claim| claim.is_failed(target))
+        };
         let next = match self.gui_emby_feed_effective_set(lib_idx).as_ref() {
-            GuiCollectionSet::All => state
-                .items_for(FeedHomeVideoTarget::All)
-                .is_none()
-                .then_some(FeedHomeVideoSelection::All),
+            GuiCollectionSet::All => (state.items_for(FeedHomeVideoTarget::All).is_none()
+                && !failed(FeedHomeVideoTarget::All))
+            .then_some(FeedHomeVideoSelection::All),
             GuiCollectionSet::Checked(keys) => keys
                 .iter()
                 .find(|key| {
                     state
                         .items_for(FeedHomeVideoTarget::Folder(key.as_str()))
                         .is_none()
+                        && !failed(FeedHomeVideoTarget::Folder(key.as_str()))
                 })
                 .map(|key| FeedHomeVideoSelection::Folder(key.clone())),
         };
@@ -318,6 +380,16 @@ impl App {
             return;
         };
         self.spawn_feed_home_video_fetch(lib_idx, target);
+    }
+
+    /// The GUI's claim on `lib_idx`'s fetched results (design D2, D3): `None`
+    /// before the frame path's shown pass marks the library, which is what
+    /// leaves the TUI's own stale-drop rule alone in a Client that never
+    /// shows the destination.
+    fn gui_emby_feed_claim(&self, lib_idx: usize) -> Option<&GuiEmbyFeedClaim> {
+        self.gui_emby_libs
+            .get(&lib_idx)
+            .and_then(|selection| selection.feed_claim.as_ref())
     }
 
     /// The library's stored feed-group selection (design D2): the checked
@@ -377,16 +449,16 @@ impl App {
     }
 
     /// Whether the GUI's checked set still wants `target`'s list (design D3):
-    /// the result arm's second acceptance rule. A library with no GUI
-    /// selection entry wants nothing, so the TUI's own stale-drop rule alone
-    /// applies to its results. All is one compare, and a checked set is the
-    /// key set's own compare, so no target list is built.
+    /// the result arm's second acceptance rule. A library the GUI has not
+    /// claimed wants nothing, so the TUI's own stale-drop rule alone applies
+    /// to its results. All is one compare, and a checked set is the key set's
+    /// own compare, so no target list is built.
     pub(in crate::app) fn gui_emby_feed_wants_target(
         &self,
         lib_idx: usize,
         target: &FeedHomeVideoSelection,
     ) -> bool {
-        if !self.gui_emby_feed_sets.contains_key(&lib_idx) {
+        if self.gui_emby_feed_claim(lib_idx).is_none() {
             return false;
         }
         match self.gui_emby_feed_effective_set(lib_idx).as_ref() {
@@ -398,6 +470,48 @@ impl App {
                 )
             }
         }
+    }
+
+    /// Land one feed-group target's failed fetch (gui-collection-dropdown
+    /// design D3): the fetch has returned, so retire the shared
+    /// outstanding-fetch mark when it names this target, and record the
+    /// terminal failure beside the GUI's claim. The shown pass then skips the
+    /// target, so an automatic repaint never retries it; a user press clears
+    /// the mark. A library the GUI has not claimed keeps no mark, so the
+    /// TUI's own rules alone govern its fetches.
+    pub(in crate::app) fn handle_feed_home_video_selection_failed(
+        &mut self,
+        event: FeedHomeVideoSelectionFailed,
+    ) {
+        let FeedHomeVideoSelectionFailed {
+            lib_idx,
+            selection,
+            error,
+        } = event;
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+            && state.fetching.as_ref() == Some(&selection)
+        {
+            state.fetching = None;
+        }
+        if let Some(claim) = self
+            .gui_emby_libs
+            .get_mut(&lib_idx)
+            .and_then(|selection| selection.feed_claim.as_mut())
+        {
+            claim.failed.insert(selection);
+        }
+        tracing::info!(
+            name: "feed.home_video.selection_fetch_failed",
+            target: "gui_library",
+            library_index = lib_idx,
+            error = %error,
+            "the feed-group target's items failed to load"
+        );
+        self.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
+        self.flash(format!("Library error: {error}"), ToastSeverity::Error);
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row

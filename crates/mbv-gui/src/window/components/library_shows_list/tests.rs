@@ -20,7 +20,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::LibraryShowsList;
 use crate::bridge::frame::library::{
     GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiShowsDetail, GuiShowsList,
-    GuiShowsSeasonFrame, GuiShowsSeriesFrame,
+    GuiShowsRowFrame, GuiShowsSeasonFrame, GuiShowsSeriesFrame,
 };
 use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
@@ -343,6 +343,38 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
         fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
         None,
         "the rail's B is enabled by the series row under it"
+    );
+}
+
+/// The New view's flat rows (design D8): one episode row, date-sorted, carrying
+/// no rail letter.
+fn new_view_rows() -> Vec<GuiShowsRowFrame> {
+    vec![GuiShowsRowFrame {
+        id: "new:e1".to_owned(),
+        title: "Pilot".to_owned(),
+        subtitle: Some("Atlanta".to_owned()),
+        date: Some("2026-11-18".to_owned()),
+        sort_letter: None,
+        display_only: false,
+    }]
+}
+
+/// Contract (spec "The letter rail jumps a name-sorted list"): a list sorted
+/// by date shows no rail, so the New view's flat rows paint without one.
+#[test]
+fn the_date_sorted_view_paints_no_rail() {
+    let frame = GuiShowsList {
+        view: mbv::GuiShowsView::New,
+        rows: new_view_rows(),
+        ..shows_frame(Vec::new())
+    };
+    let mut fixture = built(frame, shows_detail(None));
+    fixture.measure(300.0);
+
+    assert_eq!(painted_rows(&fixture), ["new:e1".to_owned()]);
+    assert!(
+        !fixture.presents("[data-library-region=\"rail\"]"),
+        "the date-sorted view paints no rail"
     );
 }
 

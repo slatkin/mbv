@@ -6,7 +6,8 @@
 //! stores the picked row and ignores a stale id, and the presented
 //! destination set names the plain Emby libraries. The Emby boundary is the
 //! in-memory mock transport, so no request leaves the process and no worker
-//! outlives the assertion.
+//! outlives the assertion. The feed-group fetch path's tests live in the
+//! `feed_fetch` child module.
 
 use super::*;
 use std::sync::Mutex;
@@ -14,6 +15,8 @@ use std::sync::Mutex;
 use crate::app::state::service_runtime::EmbyRuntime;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
+
+mod feed_fetch;
 
 const MOVIES_ID: &str = "lib-movies";
 const FEED_ID: &str = "lib-youtube";
@@ -698,6 +701,7 @@ fn a_folder_or_a_boxset_row_paints_no_hero() {
         0,
         crate::app::gui_library::GuiEmbyLibrarySelection {
             picked_row: Some("box-1".into()),
+            ..Default::default()
         },
     );
 

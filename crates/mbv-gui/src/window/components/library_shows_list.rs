@@ -450,8 +450,10 @@ pub fn LibraryShowsList() -> Element {
         },
     );
 
-    // The series list paints the rail (design D12).
-    let paints_rail = frame.is_some();
+    // The All view paints the rail (design D12): its series tree sorts by name,
+    // so it has letters to jump to. The date-sorted New and Upcoming views show
+    // no rail (spec "The letter rail jumps a name-sorted list").
+    let paints_rail = frame.is_some_and(|frame| frame.view == mbv::GuiShowsView::All);
 
     // The rail's press scrolls to the letter's first row (design D7).
     let jump_library = library.clone();
