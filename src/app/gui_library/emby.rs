@@ -14,7 +14,10 @@
 
 use mbv_emby_model::EmbyItem;
 
-use super::collection::{GuiCollectionSet, GuiDateOrder};
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
+};
+use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use crate::app::state::events::LibEvent;
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -53,6 +56,57 @@ pub(in crate::app) struct GuiEmbyRootItemsEvent {
 pub struct GuiEmbyLibrarySelection {
     /// The row the Hero shows. `None` before a select command names one.
     pub picked_row: Option<String>,
+}
+
+/// The Emby feed-group destination's collection-command site
+/// (gui-collection-dropdown design D5): the feed-view guard, the root
+/// listing's staleness rule, the folder catalog, and the selection install
+/// the shared collection path calls.
+pub(super) struct GuiEmbyFeedCollectionSite(pub(super) usize);
+
+impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
+    fn noun(&self) -> GuiCollectionNoun {
+        GuiCollectionNoun::Folders
+    }
+
+    fn has_order(&self) -> bool {
+        true
+    }
+
+    fn present(&self, app: &App) -> Option<Vec<String>> {
+        app.gui_emby_folder_catalog(self.0)
+    }
+
+    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+        app.gui_root_folder_names(self.0)
+    }
+
+    fn selection(&self, app: &App) -> GuiCollectionSelection {
+        app.gui_emby_feed_set(self.0)
+    }
+
+    fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
+        app.gui_emby_feed_reject_reason(self.0)
+            .map(|reason| CollectionRejection::Ignored(format!("library {}: {reason}", self.0)))
+    }
+
+    fn reject_key(&self, app: &App, key: &str) -> Option<CollectionRejection> {
+        if app.gui_emby_folder_known(self.0, key) {
+            None
+        } else {
+            Some(CollectionRejection::Stale(key.to_string()))
+        }
+    }
+
+    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
+        let order = app.gui_emby_feed_set(self.0).order;
+        app.install_gui_emby_feed_set(self.0, set, order);
+    }
+
+    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
+        let set = app.gui_emby_feed_set(self.0).set;
+        app.install_gui_emby_feed_set(self.0, set, order);
+    }
 }
 
 impl App {
@@ -149,64 +203,6 @@ impl App {
         }
     }
 
-    /// Check or uncheck one folder of the feed-view library `lib_idx` (row
-    /// 8.1; gui-collection-dropdown design D2, D3, D5). The selection is the
-    /// GUI's own, so the shared `FeedHomeVideoState::selection` stays what the
-    /// TUI set; the checked set's fetches start through the frame path's
-    /// ensure, one at a time through [`App::spawn_feed_home_video_fetch`]. A
-    /// folder the root listing does not hold is a stale frame's key and
-    /// changes nothing, and a listing still landing admits it, because the
-    /// listing is what would name the folder gone. A `lib_idx` that names no
-    /// feed-view library is an ignored command.
-    pub fn toggle_gui_emby_feed_folder(&mut self, lib_idx: usize, folder_id: &str) {
-        if let Some(reason) = self.gui_emby_feed_reject_reason(lib_idx) {
-            Self::log_ignored_library_command(
-                "collectionToggle",
-                format_args!("library {lib_idx}: {reason}"),
-            );
-            return;
-        }
-        if !self.gui_emby_folder_known(lib_idx, folder_id) {
-            Self::log_stale_library_item("collectionToggle", folder_id);
-            return;
-        }
-        let (_, order) = self.gui_emby_feed_set(lib_idx);
-        let next = self.gui_emby_feed_effective_set(lib_idx).toggle(folder_id);
-        self.install_gui_emby_feed_set(lib_idx, next, order);
-    }
-
-    /// Select All for the feed-view library `lib_idx` (row 8.1;
-    /// gui-collection-dropdown design D5): the All row's press and the
-    /// dropdown's Clear. A `lib_idx` that names no feed-view library is an
-    /// ignored command.
-    pub fn select_all_gui_emby_feed_folders(&mut self, lib_idx: usize) {
-        if let Some(reason) = self.gui_emby_feed_reject_reason(lib_idx) {
-            Self::log_ignored_library_command(
-                "collectionAll",
-                format_args!("library {lib_idx}: {reason}"),
-            );
-            return;
-        }
-        let (_, order) = self.gui_emby_feed_set(lib_idx);
-        self.install_gui_emby_feed_set(lib_idx, GuiCollectionSet::All, order);
-    }
-
-    /// Set the feed-view library's list order (row 8.1; gui-collection-dropdown
-    /// design D4, D5): the dropdown's order toggle. Newest is the launch
-    /// default. A `lib_idx` that names no feed-view library is an ignored
-    /// command.
-    pub fn set_gui_emby_feed_date_order(&mut self, lib_idx: usize, order: GuiDateOrder) {
-        if let Some(reason) = self.gui_emby_feed_reject_reason(lib_idx) {
-            Self::log_ignored_library_command(
-                "dateOrder",
-                format_args!("library {lib_idx}: {reason}"),
-            );
-            return;
-        }
-        let (set, _) = self.gui_emby_feed_set(lib_idx);
-        self.install_gui_emby_feed_set(lib_idx, set, order);
-    }
-
     /// Why a collection command cannot apply to `lib_idx` at all (row 8.1;
     /// gui-collection-dropdown design D5): the index names no plain Emby
     /// library, or that library presents no feed-view folders.
@@ -229,7 +225,8 @@ impl App {
         set: GuiCollectionSet,
         order: GuiDateOrder,
     ) {
-        self.gui_emby_feed_sets.insert(lib_idx, (set, order));
+        self.gui_emby_feed_sets
+            .insert(lib_idx, GuiCollectionSelection { set, order });
         self.ensure_gui_emby_feed_fetch(lib_idx);
     }
 
@@ -263,9 +260,7 @@ impl App {
         // result arm's second acceptance rule reads. A Client that never
         // shows the destination keeps no entry, so the TUI's own stale-drop
         // rule alone governs its results.
-        self.gui_emby_feed_sets
-            .entry(lib_idx)
-            .or_insert_with(|| (GuiCollectionSet::All, GuiDateOrder::default()));
+        self.gui_emby_feed_sets.entry(lib_idx).or_default();
         let Some(state) = self
             .libs
             .get(lib_idx)
@@ -289,11 +284,11 @@ impl App {
     /// The library's stored feed-group selection (design D2): the checked
     /// folders or All, and the list's date order. A library the GUI has not
     /// selected on reads All on Newest, the launch default.
-    fn gui_emby_feed_set(&self, lib_idx: usize) -> (GuiCollectionSet, GuiDateOrder) {
+    fn gui_emby_feed_set(&self, lib_idx: usize) -> GuiCollectionSelection {
         self.gui_emby_feed_sets
             .get(&lib_idx)
             .cloned()
-            .unwrap_or((GuiCollectionSet::All, GuiDateOrder::default()))
+            .unwrap_or_default()
     }
 
     /// The folder catalog the checked set resolves against (design D1, D3):
@@ -327,16 +322,12 @@ impl App {
     /// listing no longer holds dropped, so a vanished folder's check falls back
     /// to All when none survive. All stays All.
     pub(in crate::app) fn gui_emby_feed_effective_set(&self, lib_idx: usize) -> GuiCollectionSet {
-        let (set, _) = self.gui_emby_feed_set(lib_idx);
-        match self.gui_emby_folder_catalog(lib_idx) {
-            Some(present) => set.retain_present(&present),
-            None => set,
-        }
+        GuiEmbyFeedCollectionSite(lib_idx).effective_set(self)
     }
 
     /// The date order the GUI's feed-group list sorts by (design D4).
     pub(in crate::app) fn gui_emby_feed_order(&self, lib_idx: usize) -> GuiDateOrder {
-        self.gui_emby_feed_set(lib_idx).1
+        self.gui_emby_feed_set(lib_idx).order
     }
 
     /// The targets the effective selection reads (design D3): All is the one

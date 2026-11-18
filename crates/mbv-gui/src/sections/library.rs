@@ -39,12 +39,10 @@ pub(crate) fn build(app: &mut App) -> LibraryPass {
     if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
         app.ensure_gui_podcast_selection(lib_idx);
     }
-    // The Feeds destination's ensure (row 11.1): the stored pill converges on
-    // the subscription set the tab holds. The entries arrive from the shared
-    // startup fetch, so the ensure starts no load.
-    if matches!(destination, Some(GuiDestinationKind::Feeds)) {
-        app.ensure_gui_feeds_selection();
-    }
+    // The Feeds destination needs no frame-path ensure (row 11.1): the feed
+    // entries arrive from the shared startup fetch, and the effective set's
+    // retention settles the stored checked set against the subscription set
+    // the tab holds wherever it is read.
     let Some((list, detail)) = destination_parts(app, destination) else {
         return LibraryPass::default();
     };

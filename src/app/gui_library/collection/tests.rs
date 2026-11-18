@@ -15,6 +15,8 @@ enum Op {
     Toggle(&'static str),
     PressAll,
     RetainPresent(&'static [&'static str]),
+    /// The retention over a catalog that may not have landed yet.
+    Effective(Option<&'static [&'static str]>),
 }
 
 /// Apply `op` to `set`, as the store and the dropdown command do.
@@ -25,6 +27,15 @@ fn apply(set: GuiCollectionSet, op: &Op) -> GuiCollectionSet {
         Op::RetainPresent(present) => {
             let present: Vec<String> = present.iter().map(|key| (*key).to_string()).collect();
             set.retain_present(&present)
+        }
+        Op::Effective(present) => {
+            let present = present.map(|present| {
+                present
+                    .iter()
+                    .map(|key| (*key).to_string())
+                    .collect::<Vec<_>>()
+            });
+            set.effective(present.as_deref())
         }
     }
 }
@@ -67,6 +78,16 @@ fn checked(keys: &[&str]) -> GuiCollectionSet {
     checked(&["soul", "jazz"]),
     Op::RetainPresent(&["blues"]),
     GuiCollectionSet::All,
+)]
+#[case::a_catalog_that_has_not_landed_keeps_the_set(
+    checked(&["soul", "jazz"]),
+    Op::Effective(None),
+    checked(&["soul", "jazz"]),
+)]
+#[case::a_landed_catalog_retains(
+    checked(&["soul", "jazz"]),
+    Op::Effective(Some(&["soul"])),
+    checked(&["soul"]),
 )]
 fn the_selection_transitions_follow_the_spec(
     #[case] start: GuiCollectionSet,

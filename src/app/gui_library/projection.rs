@@ -13,8 +13,9 @@ use mbv_ui_model::music_grouping::ArtistKey;
 use mbv_ui_model::sort_filter::strip_article;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
-use super::GuiGroupAlbums;
-use super::collection::{GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections};
+use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiCollections};
+use super::collection_command::GuiCollectionSite;
+use super::{GuiGroupAlbums, GuiMusicCollectionSite};
 use crate::app::App;
 
 /// One artist row of the Music list (design D5, D7): the union's artist with
@@ -154,21 +155,14 @@ impl App {
     /// for the picked album (gui-collection-dropdown design D1, D2, D11).
     #[must_use]
     pub fn gui_music_projection(&mut self, lib_idx: usize) -> GuiMusicProjection {
-        let set = self.gui_effective_music_set(lib_idx);
-        let collections = Some(GuiCollections::new(
-            GuiCollectionTarget::Music(lib_idx),
-            &set,
-            GuiCollectionNoun::Groups,
-            self.gui_music_groups(lib_idx),
-            None,
-        ));
-        let collection_names = selected_collection_names(collections.as_ref());
+        let collections = self.gui_collections(GuiCollectionTarget::Music(lib_idx));
+        let collection_names = selected_collection_names(&collections);
         let selected_groups = self.gui_selected_groups(lib_idx);
         let union = self.gui_music_union(lib_idx, &selected_groups);
         let artists = self.gui_music_artists(&union);
         let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
         let projection = GuiMusicProjection {
-            collections,
+            collections: Some(collections),
             collection_names,
             loading: union.loading,
             failure: failure_line(&union.failed),
@@ -209,7 +203,10 @@ impl App {
     /// in the group level's order (design D5, D6): each group's stable Service
     /// id and its display name. The group level is the library's own level in
     /// `nav_stack`.
-    fn gui_music_groups(&self, lib_idx: usize) -> Vec<(String, String)> {
+    pub(in crate::app::gui_library) fn gui_music_groups(
+        &self,
+        lib_idx: usize,
+    ) -> Vec<(String, String)> {
         if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
             return Vec::new();
         }
@@ -229,15 +226,7 @@ impl App {
     /// group list that has not landed admits the stored set as it is, since
     /// the list is what would name its keys stale.
     pub(in crate::app) fn gui_effective_music_set(&self, lib_idx: usize) -> GuiCollectionSet {
-        let stored = self
-            .gui_library_groups
-            .get(&lib_idx)
-            .cloned()
-            .unwrap_or(GuiCollectionSet::All);
-        match self.gui_music_present_groups(lib_idx) {
-            Some(present) => stored.retain_present(&present),
-            None => stored,
-        }
+        GuiMusicCollectionSite(lib_idx).effective_set(self)
     }
 
     /// The groups the Music destination shows, in pill order (design D1, D2):
@@ -453,10 +442,7 @@ impl App {
 /// checked groups' names in catalog order. The one derivation of the names the
 /// projection carries, so every painter that names the selected collections
 /// reads the same fact.
-fn selected_collection_names(collections: Option<&GuiCollections>) -> Vec<String> {
-    let Some(collections) = collections else {
-        return Vec::new();
-    };
+fn selected_collection_names(collections: &GuiCollections) -> Vec<String> {
     if collections.all {
         return vec!["All".to_string()];
     }

@@ -26,8 +26,7 @@ use mbv_ui_msg::PodcastEpisodeTarget;
 
 use super::GuiLibraryArtwork;
 use super::collection::{
-    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
-    compare_gui_date_order,
+    GuiCollectionSet, GuiCollectionTarget, GuiDateOrder, compare_gui_date_order,
 };
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
@@ -179,13 +178,7 @@ impl App {
         }
         let set = self.gui_podcast_effective_set(lib_idx);
         let order = self.gui_podcast_date_order(lib_idx);
-        let collections = Some(GuiCollections::new(
-            GuiCollectionTarget::Podcasts(lib_idx),
-            &set,
-            GuiCollectionNoun::Shows,
-            self.gui_podcast_shows(lib_idx),
-            Some(order),
-        ));
+        let collections = self.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
         let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &set, order);
         let selected = self.gui_podcast_selected(lib_idx, &rows);
         let hero = selected
@@ -193,7 +186,7 @@ impl App {
             .and_then(GuiPodcastEpisodeId::decode)
             .and_then(|episode| self.gui_podcast_hero(lib_idx, &episode));
         GuiPodcastsProjection {
-            collections,
+            collections: Some(collections),
             loading,
             failed,
             rows,
@@ -205,7 +198,10 @@ impl App {
     /// The Podcasts collection selector's catalog (row 10.1): each listed show
     /// by title — the order the show list already holds — as its
     /// `library_item_id` key and title.
-    fn gui_podcast_shows(&self, lib_idx: usize) -> Vec<(String, String)> {
+    pub(in crate::app::gui_library) fn gui_podcast_shows(
+        &self,
+        lib_idx: usize,
+    ) -> Vec<(String, String)> {
         let shows = self
             .audiobookshelf_browse
             .get(lib_idx)

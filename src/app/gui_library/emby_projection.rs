@@ -17,8 +17,7 @@ use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
 use super::collection::{
-    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
-    compare_gui_date_order,
+    GuiCollectionSet, GuiCollectionTarget, GuiCollections, compare_gui_date_order,
 };
 use super::home::{GuiArtShape, artwork_shape};
 use super::projection::sort_letter;
@@ -215,7 +214,10 @@ impl App {
     /// programme lookup's source, the pill row's catalog, and the checked
     /// set's retention catalog — the listing the group view already holds.
     /// Empty while the listing has not landed.
-    fn gui_root_folder_names(&self, lib_idx: usize) -> Vec<(String, String)> {
+    pub(in crate::app::gui_library) fn gui_root_folder_names(
+        &self,
+        lib_idx: usize,
+    ) -> Vec<(String, String)> {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.nav_stack.first())
@@ -265,13 +267,7 @@ impl App {
     fn gui_emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let set = self.gui_emby_feed_effective_set(lib_idx);
         let folders = self.gui_root_folder_names(lib_idx);
-        let collections = Some(GuiCollections::new(
-            GuiCollectionTarget::EmbyFeed(lib_idx),
-            &set,
-            GuiCollectionNoun::Folders,
-            folders.iter().cloned(),
-            Some(self.gui_emby_feed_order(lib_idx)),
-        ));
+        let collections = self.gui_collections(GuiCollectionTarget::EmbyFeed(lib_idx));
         let collection_names = feed_collection_names(&set, &folders);
         let (items, loading) = self.gui_emby_feed_items(lib_idx);
         let rows: Vec<GuiEmbyRow> = items
@@ -286,7 +282,7 @@ impl App {
             .map(|item| self.gui_emby_hero(&item));
         GuiEmbyProjection {
             library_name: self.gui_emby_library_name(lib_idx),
-            collections,
+            collections: Some(collections),
             collection_names,
             feed_group: true,
             loading,

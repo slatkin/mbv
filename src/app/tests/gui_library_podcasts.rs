@@ -251,7 +251,7 @@ fn two_checked_shows_merge_their_episodes_in_date_order() {
 fn the_oldest_order_puts_the_earliest_episode_first_with_undated_last() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = projection_app();
-    app.gui_podcast_libs.entry(1).or_default().order = GuiDateOrder::Oldest;
+    app.gui_podcast_libs.entry(1).or_default().selection.order = GuiDateOrder::Oldest;
 
     let projection = app.gui_podcasts_projection(1);
 

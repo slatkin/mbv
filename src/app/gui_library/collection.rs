@@ -22,11 +22,30 @@ pub enum GuiCollectionSet {
     Checked(Vec<String>),
 }
 
+impl Default for GuiCollectionSet {
+    /// All: the selection every destination starts on (design D1).
+    fn default() -> Self {
+        Self::All
+    }
+}
+
 impl GuiCollectionSet {
     /// Whether the selection is All (design D1).
     #[must_use]
     pub fn is_all(&self) -> bool {
         matches!(self, Self::All)
+    }
+
+    /// The selection the key list `keys` names (design D1): an empty list is
+    /// All, any other list is its keys. The one owner of the "empty becomes
+    /// All" normalisation, so the toggle and the retention cannot drift.
+    #[must_use]
+    pub fn normalized(keys: Vec<String>) -> Self {
+        if keys.is_empty() {
+            Self::All
+        } else {
+            Self::Checked(keys)
+        }
     }
 
     /// The selection after a press on the collection `key` (design D1): a
@@ -40,15 +59,10 @@ impl GuiCollectionSet {
             Self::Checked(mut keys) => {
                 if let Some(position) = keys.iter().position(|checked| checked == key) {
                     keys.remove(position);
-                    if keys.is_empty() {
-                        Self::All
-                    } else {
-                        Self::Checked(keys)
-                    }
                 } else {
                     keys.push(key.to_string());
-                    Self::Checked(keys)
                 }
+                Self::normalized(keys)
             }
         }
     }
@@ -72,14 +86,37 @@ impl GuiCollectionSet {
             Self::All => Self::All,
             Self::Checked(mut keys) => {
                 keys.retain(|key| present.contains(key));
-                if keys.is_empty() {
-                    Self::All
-                } else {
-                    Self::Checked(keys)
-                }
+                Self::normalized(keys)
             }
         }
     }
+
+    /// The selection after the catalog settled (design D1): `Some(present)`
+    /// is the landed catalog, whose retention applies — every checked key it
+    /// no longer holds drops, and when none survive the selection becomes
+    /// All; `None` is a catalog that has not landed yet, the list that would
+    /// name a key stale, which keeps the set as it is. All stays All either
+    /// way.
+    #[must_use]
+    pub fn effective(self, present: Option<&[String]>) -> Self {
+        match present {
+            Some(present) => self.retain_present(present),
+            None => self,
+        }
+    }
+}
+
+/// One destination's whole stored selection (design D2, D4): the checked set
+/// and the date order the list sorts by. The one shape all four stores hold —
+/// the Music store's set, the Podcasts and Feeds selections' halves, and the
+/// Emby feed-group map's value. Music stores the default order it never
+/// reads: its list sorts by name, so its projection carries no order.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GuiCollectionSelection {
+    /// The checked collections, or All. All is the default.
+    pub set: GuiCollectionSet,
+    /// The list's date order. Newest is the default.
+    pub order: GuiDateOrder,
 }
 
 /// The list order of a feed-based destination (design D4): Newest is the

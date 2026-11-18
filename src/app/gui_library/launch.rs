@@ -171,7 +171,7 @@ impl App {
                 }
                 picks.sort_by(|a, b| a.group_id.cmp(&b.group_id));
                 let group_ids = selected
-                    .map(|set| set.checked_keys().to_vec())
+                    .map(|stored| stored.set.checked_keys().to_vec())
                     .unwrap_or_default();
                 Some(GuiDestinationCollections {
                     destination: library_identity(

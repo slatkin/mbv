@@ -250,7 +250,11 @@ impl App {
     /// `None` while All is selected or no entry is stored.
     #[must_use]
     pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> Option<&str> {
-        match self.gui_library_groups.get(&lib_idx) {
+        match self
+            .gui_library_groups
+            .get(&lib_idx)
+            .map(|stored| &stored.set)
+        {
             Some(crate::app::gui_library::GuiCollectionSet::Checked(keys)) => {
                 keys.first().map(String::as_str)
             }
@@ -267,7 +271,10 @@ impl App {
     pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_id: &str) {
         self.gui_library_groups.insert(
             lib_idx,
-            crate::app::gui_library::GuiCollectionSet::Checked(vec![group_id.to_string()]),
+            crate::app::gui_library::GuiCollectionSelection {
+                set: crate::app::gui_library::GuiCollectionSet::Checked(vec![group_id.to_string()]),
+                ..crate::app::gui_library::GuiCollectionSelection::default()
+            },
         );
     }
 

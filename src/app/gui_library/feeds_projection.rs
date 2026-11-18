@@ -19,9 +19,7 @@ use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
-use super::collection::{
-    GuiCollectionNoun, GuiCollectionTarget, GuiCollections, GuiDateOrder, compare_gui_date_order,
-};
+use super::collection::{GuiCollectionTarget, GuiDateOrder, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
@@ -143,15 +141,8 @@ impl App {
         if !self.gui_feeds_present() {
             return GuiFeedsProjection::default();
         }
-        let set = self.gui_feeds_effective_set();
         let order = self.gui_feeds_date_order();
-        let collections = Some(GuiCollections::new(
-            GuiCollectionTarget::Feeds,
-            &set,
-            GuiCollectionNoun::Subscriptions,
-            self.gui_feeds_subscriptions(),
-            Some(order),
-        ));
+        let collections = self.gui_collections(GuiCollectionTarget::Feeds);
         let rows = self.gui_feeds_rows(order);
         let selected = self.gui_feeds_selected(&rows);
         let hero = selected
@@ -159,7 +150,7 @@ impl App {
             .and_then(GuiFeedEntryId::decode)
             .and_then(|entry| self.gui_feeds_hero(&entry));
         GuiFeedsProjection {
-            collections,
+            collections: Some(collections),
             loading: self.feed_tab.loading,
             failed: false,
             rows,
@@ -170,7 +161,7 @@ impl App {
 
     /// The Feeds collection selector's catalog (row 11.1): each configured
     /// subscription by its name in the tab's order, keyed by its URL.
-    fn gui_feeds_subscriptions(&self) -> Vec<(String, String)> {
+    pub(in crate::app::gui_library) fn gui_feeds_subscriptions(&self) -> Vec<(String, String)> {
         self.feed_tab
             .subscriptions
             .iter()

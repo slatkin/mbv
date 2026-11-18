@@ -1146,8 +1146,8 @@ Feeds tab. `collectionToggle` checks or unchecks the collection whose stable
 Service id `key` names, and a selection that ends with none checked falls
 back to All; `collectionAll` selects All; and `dateOrder` stores Newest or
 Oldest, which only the three feed-based destinations sort by (a Music target
-is a documented no-op arm, because its dropdown paints no order toggle). Each
-arm stores the selection or the order and then starts the loads the new
+is a documented no-op, because its dropdown paints no order toggle). Each
+command stores the selection or the order and then starts the loads the new
 selection needs through the destination's own loaders, so one dictionary of
 three commands serves all four destinations. A `key` the destination's
 catalog no longer holds, or a target that names no presented destination,

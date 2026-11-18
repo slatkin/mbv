@@ -59,8 +59,11 @@ pub enum GuiDateOrder { Newest, Oldest }                  // Default: Newest
 ```
 
 `GuiCollectionSet` owns the rules: `toggle(key)` (check, or uncheck and fall back to All),
-`all()`, `contains(key)`, and `retain_present(&[String])` (drops vanished keys and falls back to
-All). The keys are the stable Service ids: the Music group id, the podcast show `library_item_id`,
+`normalized(Vec<String>)` (an empty list is All), `retain_present(&[String])` (drops vanished keys
+and falls back to All), and `effective(Option<&[String]>)` (`None` keeps the set — the catalog has
+not landed yet — `Some` retains). One stored selection type,
+`GuiCollectionSelection { set, order }`, is what every destination's store holds. The keys are the
+stable Service ids: the Music group id, the podcast show `library_item_id`,
 the subscription URL, and the Emby folder id. `Checked` keeps press order; the projections paint in
 the collection's own order, so the order inside the set has no effect.
 
@@ -69,7 +72,8 @@ which the spec forbids.
 
 ### D2. The GUI holds its own set; TUI-shared stores keep one value
 
-- Music: `gui_library_groups` becomes `HashMap<usize, GuiCollectionSet>`. `gui_selected_group`
+- Music: `gui_library_groups` becomes `HashMap<usize, GuiCollectionSelection>` (one stored
+  selection: the set plus the order, whose order half Music never reads). `gui_selected_group`
   becomes `gui_selected_groups`, which returns every group for All. The union code is reused.
 - Podcasts: `GuiPodcastSelection.pill` becomes `shows: GuiCollectionSet` plus `order: GuiDateOrder`.
   `GuiPodcastPill` and its `State` arm are deleted. The fan-out scope written to
@@ -78,8 +82,8 @@ which the spec forbids.
   shows.
 - Feeds: `GuiFeedsSelection.pill` becomes `subscriptions: GuiCollectionSet` plus `order`.
   `GuiFeedPill` is deleted.
-- Emby feed group: a new GUI map `gui_emby_feed_sets: HashMap<usize, (GuiCollectionSet,
-  GuiDateOrder)>`. `GuiEmbyFeedGroup` and the New view are deleted. The GUI no longer calls
+- Emby feed group: a new GUI map `gui_emby_feed_sets: HashMap<usize,
+  GuiCollectionSelection>`. `GuiEmbyFeedGroup` and the New view are deleted. The GUI no longer calls
   `apply_feed_home_video_group_selection`, so the TUI-shared `selection` stays as the TUI set it.
 
 Alternative: widen the TUI stores to sets. Rejected: it changes TUI behavior, and #986 dropped TUI

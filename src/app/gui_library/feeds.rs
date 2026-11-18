@@ -17,18 +17,22 @@
 
 use mbv_queue::FeedEntry;
 
-use super::collection::{GuiCollectionSet, GuiDateOrder};
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
+};
+use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use crate::app::App;
 
 /// The GUI Library's Feeds selection (row 11.1).
 ///
-/// The checked subscriptions, the list's date order, and the entry the Hero
-/// shows. The selection is All or a non-empty set of checked subscriptions
-/// (gui-collection-dropdown design D1, D2), and it starts on All and Newest
-/// at every launch and saves nothing — the store is session memory only. The
-/// checked set's keys are the subscriptions' URLs. One feed tab exists per
-/// Client, so one store holds it. The picked entry is named by its composite
+/// The stored collection selection — the checked subscriptions and the list's
+/// date order (gui-collection-dropdown design D1, D2, D4) — and the entry the
+/// Hero shows. All is the set default and Newest the order default, so the
+/// selection starts on All and Newest at every launch and saves nothing — the
+/// store is session memory only. The checked set's keys are the
+/// subscriptions' URLs. One feed tab exists per Client, so one store holds
+/// it. The picked entry is named by its composite
 /// `(subscription url, guid)` identity, encoded as one opaque string — two
 /// subscriptions can publish the same `guid`, so the entry's own `guid` alone
 /// names no row — and a pick the checked subscriptions' list no longer holds
@@ -36,10 +40,8 @@ use crate::app::App;
 /// selection's stale arm does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiFeedsSelection {
-    /// The checked subscriptions, or All. All is the default.
-    pub subscriptions: GuiCollectionSet,
-    /// The list's date order. Newest is the default.
-    pub order: GuiDateOrder,
+    /// The checked subscriptions and the list's date order.
+    pub selection: GuiCollectionSelection,
     /// The entry the Hero shows, as [`GuiFeedEntryId::encode`] writes it.
     /// `None` before a select command names one.
     pub picked_entry: Option<String>,
@@ -50,10 +52,65 @@ impl Default for GuiFeedsSelection {
     /// spec's persistence rule — session memory only, nothing saved).
     fn default() -> Self {
         Self {
-            subscriptions: GuiCollectionSet::All,
-            order: GuiDateOrder::default(),
+            selection: GuiCollectionSelection::default(),
             picked_entry: None,
         }
+    }
+}
+
+/// The Feeds destination's collection-command site (gui-collection-dropdown
+/// design D5): the feed-tab guard, the subscription staleness rule, the
+/// subscription catalog, and the selection install the shared collection path
+/// calls.
+pub(super) struct GuiFeedsCollectionSite;
+
+impl GuiCollectionSite for GuiFeedsCollectionSite {
+    fn noun(&self) -> GuiCollectionNoun {
+        GuiCollectionNoun::Subscriptions
+    }
+
+    fn has_order(&self) -> bool {
+        true
+    }
+
+    fn present(&self, app: &App) -> Option<Vec<String>> {
+        // The tab is present whenever the destination serves a command, so
+        // the retention always applies (row 11.1).
+        Some(app.feed_tab_subscription_ids())
+    }
+
+    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+        app.gui_feeds_subscriptions()
+    }
+
+    fn selection(&self, app: &App) -> GuiCollectionSelection {
+        app.gui_feeds_selection.selection.clone()
+    }
+
+    fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
+        if app.gui_feeds_present() {
+            None
+        } else {
+            Some(CollectionRejection::Ignored(
+                "the feed tab is absent".to_string(),
+            ))
+        }
+    }
+
+    fn reject_key(&self, app: &App, key: &str) -> Option<CollectionRejection> {
+        if app.gui_feeds_subscription_known(key) {
+            None
+        } else {
+            Some(CollectionRejection::Stale(key.to_string()))
+        }
+    }
+
+    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
+        app.gui_feeds_selection.selection.set = set;
+    }
+
+    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
+        app.gui_feeds_selection.selection.order = order;
     }
 }
 
@@ -68,66 +125,13 @@ impl App {
 
     /// Open the Feeds destination (row 11.1). The feed entries arrive from the
     /// shared startup fetch and the shared tick's `drain_feed_tab_results`, so
-    /// an open starts no load and touches no network: it settles the stored
-    /// checked set against the subscription set the tab holds, which is the
-    /// same trigger the frame path runs.
+    /// an open starts no load and touches no network: the effective set's
+    /// retention settles the stored checked set against the subscription set
+    /// the tab holds wherever it is read.
     pub fn gui_feeds_open(&mut self) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
-            return;
         }
-        self.ensure_gui_feeds_selection();
-    }
-
-    /// Check or uncheck one subscription (row 11.1; gui-collection-dropdown
-    /// design D2, D5).
-    ///
-    /// The selection the core owns, so the frame carries it back. No load
-    /// starts, because every subscription's entries arrive from the one fetch.
-    /// The toggle reads the effective set, so a press never resurrects a
-    /// checked subscription the tab dropped. A subscription the tab no longer
-    /// holds is a stale frame's key and changes nothing; a set of entries still
-    /// landing admits it, because the subscription list is what would name it
-    /// stale.
-    pub fn toggle_gui_feeds_subscription(&mut self, subscription_key: &str) {
-        if !self.gui_feeds_present() {
-            Self::log_ignored_library_command(
-                "collectionToggle",
-                format_args!("the feed tab is absent"),
-            );
-            return;
-        }
-        if !self.gui_feeds_subscription_known(subscription_key) {
-            Self::log_stale_library_item("collectionToggle", subscription_key);
-            return;
-        }
-        self.gui_feeds_selection.subscriptions =
-            self.gui_feeds_effective_set().toggle(subscription_key);
-    }
-
-    /// Select All (row 11.1; gui-collection-dropdown design D5): the All row's
-    /// press and the dropdown's Clear. No load starts. A Client with no feed
-    /// tab changes nothing.
-    pub fn select_all_gui_feeds(&mut self) {
-        if !self.gui_feeds_present() {
-            Self::log_ignored_library_command(
-                "collectionAll",
-                format_args!("the feed tab is absent"),
-            );
-            return;
-        }
-        self.gui_feeds_selection.subscriptions = GuiCollectionSet::All;
-    }
-
-    /// Set the Feeds list's date order (gui-collection-dropdown design D4,
-    /// D5): the dropdown's order toggle. Newest is the launch default. A
-    /// Client with no feed tab changes nothing.
-    pub fn set_gui_feeds_date_order(&mut self, order: GuiDateOrder) {
-        if !self.gui_feeds_present() {
-            Self::log_ignored_library_command("dateOrder", format_args!("the feed tab is absent"));
-            return;
-        }
-        self.gui_feeds_selection.order = order;
     }
 
     /// Select the entry the Hero shows (row 11.1).
@@ -182,40 +186,13 @@ impl App {
         self.enqueue_feed_entry(entry);
     }
 
-    /// The frame-path trigger for the active Feeds destination (row 11.1).
-    ///
-    /// The stored checked set converges on the subscription set the tab
-    /// holds, so a removed subscription's check drops instead of naming a
-    /// dead list — the retention the effective set applies on read, written
-    /// back so the stored set matches what the frame paints. The trigger
-    /// starts no load — the fetch is the shared startup step's — and it is
-    /// idempotent, so the frame path runs it on every frame.
-    pub fn ensure_gui_feeds_selection(&mut self) {
-        if !self.gui_feeds_present() || !self.tab.is_feeds() {
-            return;
-        }
-        let present = self.feed_tab_subscription_ids();
-        let retained = self
-            .gui_feeds_selection
-            .subscriptions
-            .clone()
-            .retain_present(&present);
-        if self.gui_feeds_selection.subscriptions != retained {
-            self.gui_feeds_selection.subscriptions = retained;
-        }
-    }
-
     /// The effective selection the list and the pill row paint (row 11.1;
     /// gui-collection-dropdown design D1): the stored set with every checked
     /// subscription the tab no longer holds dropped — the spec's vanish rule,
     /// so when none of the checked subscriptions survive, the selection
     /// becomes All. All stays All.
     pub(in crate::app) fn gui_feeds_effective_set(&self) -> GuiCollectionSet {
-        let present = self.feed_tab_subscription_ids();
-        self.gui_feeds_selection
-            .subscriptions
-            .clone()
-            .retain_present(&present)
+        GuiFeedsCollectionSite.effective_set(self)
     }
 
     /// The tab's subscription URLs (row 11.1), in the tab's order: the
@@ -232,7 +209,7 @@ impl App {
     /// design D4): the stored order — Newest is the launch default.
     #[must_use]
     pub fn gui_feeds_date_order(&self) -> GuiDateOrder {
-        self.gui_feeds_selection.order
+        self.gui_feeds_selection.selection.order
     }
 
     /// The entry the Hero shows (row 11.1): the stored pick. The projection

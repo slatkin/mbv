@@ -7,7 +7,10 @@
 
 use mbv_emby_model::EmbyItem;
 
-use super::collection::GuiCollectionSet;
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
+};
+use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use crate::app::state::events::LibEvent;
 use crate::app::{App, PAGE_SIZE};
 
@@ -37,48 +40,6 @@ pub(in crate::app) struct GuiGroupAlbumsEvent {
 }
 
 impl App {
-    /// Check or uncheck one collection group of the Grouped Music library
-    /// `lib_idx` (gui-collection-dropdown design D5): the dropdown's toggle
-    /// reads the effective set, so a press never resurrects a checked group the
-    /// catalog dropped, and the change installs through the one selection entry
-    /// so the Hero's album carries across it (design D11). A group the
-    /// library's group list does not hold is a stale frame's key and changes
-    /// nothing.
-    pub(in crate::app) fn toggle_gui_music_collection(&mut self, lib_idx: usize, group_id: &str) {
-        if let Some(reason) = self.gui_collection_reject_reason(lib_idx, group_id) {
-            App::log_ignored_library_command(
-                "collectionToggle",
-                format_args!("library {lib_idx}: {reason}"),
-            );
-            return;
-        }
-        tracing::info!(
-            name: "gui_library.collections.toggle",
-            target: "gui_library",
-            library_index = lib_idx,
-            group = %group_id,
-            "the selected collection changed"
-        );
-        let next = self.gui_effective_music_set(lib_idx).toggle(group_id);
-        self.install_gui_library_collection(lib_idx, next);
-    }
-
-    /// Select All for the Grouped Music library `lib_idx`
-    /// (gui-collection-dropdown design D5): the All row's press and the
-    /// dropdown's Clear, installed through the one selection entry so the
-    /// Hero's album carries across the change (design D11). A `lib_idx` that
-    /// names no Grouped Music library changes nothing.
-    pub(in crate::app) fn select_all_gui_music_collections(&mut self, lib_idx: usize) {
-        if let Some(reason) = self.gui_library_collection_target_reject_reason(lib_idx) {
-            App::log_ignored_library_command(
-                "collectionAll",
-                format_args!("library {lib_idx}: {reason}"),
-            );
-            return;
-        }
-        self.install_gui_library_collection(lib_idx, GuiCollectionSet::All);
-    }
-
     /// Install the collection set of the Grouped Music library `lib_idx`
     /// (gui-collection-dropdown design D2, D11): the one entry every
     /// selection change goes through, so the Hero's album carries across the
@@ -102,7 +63,13 @@ impl App {
         if !next_single && let Some(album_id) = self.gui_hero_album_under(lib_idx, &previous) {
             self.gui_music_union_picks.insert(lib_idx, album_id);
         }
-        self.gui_library_groups.insert(lib_idx, set);
+        self.gui_library_groups.insert(
+            lib_idx,
+            GuiCollectionSelection {
+                set,
+                order: GuiDateOrder::default(),
+            },
+        );
         self.clear_failed_music_groups(lib_idx);
         self.ensure_gui_music_selection(lib_idx);
     }
@@ -264,6 +231,69 @@ impl App {
             }
         };
         self.gui_music_albums.insert((lib_idx, group_id), state);
+    }
+}
+
+/// The Grouped Music destination's collection-command site
+/// (gui-collection-dropdown design D5): the destination-level and stale-key
+/// rejects, the group catalog, and the one selection install the shared
+/// collection path calls.
+pub(super) struct GuiMusicCollectionSite(pub(super) usize);
+
+impl GuiCollectionSite for GuiMusicCollectionSite {
+    fn noun(&self) -> GuiCollectionNoun {
+        GuiCollectionNoun::Groups
+    }
+
+    fn has_order(&self) -> bool {
+        // The Music destination sorts by name, never by date, and its
+        // dropdown paints no order toggle: an Order command is a no-op.
+        false
+    }
+
+    fn present(&self, app: &App) -> Option<Vec<String>> {
+        app.gui_music_present_groups(self.0)
+    }
+
+    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+        app.gui_music_groups(self.0)
+    }
+
+    fn selection(&self, app: &App) -> GuiCollectionSelection {
+        app.gui_library_groups
+            .get(&self.0)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
+        app.gui_library_collection_target_reject_reason(self.0)
+            .map(|reason| CollectionRejection::Ignored(format!("library {}: {reason}", self.0)))
+    }
+
+    fn reject_key(&self, app: &App, key: &str) -> Option<CollectionRejection> {
+        // A group list that has not landed admits the key: the list is what
+        // would name it stale.
+        app.gui_collection_reject_reason(self.0, key)
+            .map(|reason| CollectionRejection::Ignored(format!("library {}: {reason}", self.0)))
+    }
+
+    fn log_toggle(&self, key: &str) {
+        tracing::info!(
+            name: "gui_library.collections.toggle",
+            target: "gui_library",
+            library_index = self.0,
+            group = %key,
+            "the selected collection changed"
+        );
+    }
+
+    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
+        app.install_gui_library_collection(self.0, set);
+    }
+
+    fn install_order(&self, _app: &mut App, _order: GuiDateOrder) {
+        // Unreachable: the Music destination stores no order.
     }
 }
 

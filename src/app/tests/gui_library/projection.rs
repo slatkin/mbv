@@ -318,7 +318,10 @@ fn a_pick_under_the_effectively_single_group_is_kept() {
         .retain(|group| group.id == HIPHOP);
     app.gui_library_groups.insert(
         0,
-        GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+        GuiCollectionSelection {
+            set: GuiCollectionSet::Checked(vec![HIPHOP.to_string(), SOUL.to_string()]),
+            ..GuiCollectionSelection::default()
+        },
     );
 
     app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {

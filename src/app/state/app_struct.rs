@@ -265,13 +265,14 @@ pub struct App {
     pub(in crate::app) gui_client: bool,
     /// The GUI Library panel's selected collections per destination
     /// (add-gui-library-panel design D2, D5; gui-collection-dropdown design
-    /// D1, D2): All or the checked collection ids of a Grouped Music library,
-    /// keyed by the library index. An absent entry is All, and a checked set
-    /// the library emptied falls back to All where the selection is read. The
-    /// window content sends the choice with the collection commands; the TUI
-    /// never reads it.
+    /// D1, D2): one stored selection per Grouped Music library, keyed by the
+    /// library index — the checked set (All or the checked collection ids),
+    /// whose order half the Music destination never reads. An absent entry is
+    /// All, and a checked set the library emptied falls back to All where the
+    /// selection is read. The window content sends the choice with the
+    /// collection commands; the TUI never reads it.
     pub(in crate::app) gui_library_groups:
-        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSet>,
+        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
     /// The GUI Library's Music collection store (design D5): each selected
     /// group's album list, keyed by the library index and the group id. It
     /// lands outside `nav_stack`, so the TUI's navigation state and fetches do
@@ -321,19 +322,14 @@ pub struct App {
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
     /// The GUI Library's Emby feed-group selection (add-gui-library-panel
     /// design D12, row 8.1; gui-collection-dropdown design D2, D3, D4): per
-    /// feed-group library, the checked folders (or All) and the list's date
-    /// order. The GUI reads and fills the library tab's shared
+    /// feed-group library, one stored selection — the checked folders (or
+    /// All) and the list's date order. The GUI reads and fills the library tab's shared
     /// `feed_home_video` cache without writing its `selection`, so the TUI's
     /// own pill selection stays the TUI's. A library with no entry has set no
     /// GUI selection and reads All on Newest; the store is session memory
     /// only. The TUI never reads it.
-    pub(in crate::app) gui_emby_feed_sets: std::collections::HashMap<
-        usize,
-        (
-            crate::app::gui_library::GuiCollectionSet,
-            crate::app::gui_library::GuiDateOrder,
-        ),
-    >,
+    pub(in crate::app) gui_emby_feed_sets:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
     /// The GUI Library's Emby root-list store (row 8.1): each plain Emby
     /// library's full root list, paged to completion, keyed by the library
     /// index. It lands outside `nav_stack`, because the TUI's root path

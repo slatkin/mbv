@@ -14,19 +14,23 @@
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
-use super::collection::{GuiCollectionSet, GuiDateOrder};
-
+use super::collection::{
+    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
+};
+use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::podcasts_projection::GuiPodcastEpisodeId;
 
 use crate::app::App;
 
 /// The GUI Library's Podcasts selection (row 10.1): per podcast library, the
-/// checked shows, the list's date order, and the episode the Hero shows. The
-/// selection is All or a non-empty set of checked shows
-/// (gui-collection-dropdown design D1, D2): All fans out to every listed
-/// show, the same loads as today's Latest, and one checked show scopes the
-/// fan-out to it. The set's keys are the shows' stable `library_item_id`s.
-/// The episode is named by the
+/// stored collection selection — the checked shows and the list's date order
+/// (gui-collection-dropdown design D1, D2, D4) — and the episode the Hero
+/// shows. All is the set default and Newest the order default, so All on
+/// Newest with no pick is the selection every launch starts on (the spec's
+/// persistence rule — session memory only, nothing saved). All fans out to
+/// every listed show, the same loads as today's Latest, and one checked show
+/// scopes the fan-out to it. The set's keys are the shows' stable
+/// `library_item_id`s. The episode is named by the
 /// provider's stable `(library_item_id, episode_id)` identity — the identity
 /// the progress map and the queue-item resolver use — because an episode id
 /// alone names no row across shows. A pick the checked shows' list no longer
@@ -34,10 +38,8 @@ use crate::app::App;
 /// selection's stale arm does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiPodcastsSelection {
-    /// The checked shows, or All. All is the default.
-    pub shows: GuiCollectionSet,
-    /// The list's date order. Newest is the default.
-    pub order: GuiDateOrder,
+    /// The checked shows and the list's date order.
+    pub selection: GuiCollectionSelection,
     /// The episode the Hero shows. `None` before a select command names one.
     pub picked_episode: Option<PodcastEpisodeTarget>,
 }
@@ -47,10 +49,74 @@ impl Default for GuiPodcastsSelection {
     /// spec's persistence rule — session memory only, nothing saved).
     fn default() -> Self {
         Self {
-            shows: GuiCollectionSet::All,
-            order: GuiDateOrder::default(),
+            selection: GuiCollectionSelection::default(),
             picked_episode: None,
         }
+    }
+}
+
+/// The Podcasts destination's collection-command site
+/// (gui-collection-dropdown design D5): the destination guard, the show-list
+/// staleness rule, the show catalog, and the selection install the shared
+/// collection path calls.
+pub(super) struct GuiPodcastsCollectionSite(pub(super) usize);
+
+impl GuiCollectionSite for GuiPodcastsCollectionSite {
+    fn noun(&self) -> GuiCollectionNoun {
+        GuiCollectionNoun::Shows
+    }
+
+    fn has_order(&self) -> bool {
+        true
+    }
+
+    fn present(&self, app: &App) -> Option<Vec<String>> {
+        // A show list that holds no show keeps the stored set as it is: it is
+        // still landing, and the list is what would name a show stale (row
+        // 10.1).
+        let present = app.gui_podcast_present_shows(self.0);
+        (!present.is_empty()).then_some(present)
+    }
+
+    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+        app.gui_podcast_shows(self.0)
+    }
+
+    fn selection(&self, app: &App) -> GuiCollectionSelection {
+        app.gui_podcast_libs
+            .get(&self.0)
+            .map(|stored| stored.selection.clone())
+            .unwrap_or_default()
+    }
+
+    fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
+        if app.gui_podcast_library(self.0) {
+            None
+        } else {
+            Some(CollectionRejection::Ignored(
+                "the destination is no Podcasts library".to_string(),
+            ))
+        }
+    }
+
+    fn reject_key(&self, app: &App, key: &str) -> Option<CollectionRejection> {
+        if app.gui_podcast_show_known(self.0, key) {
+            None
+        } else {
+            Some(CollectionRejection::Stale(key.to_string()))
+        }
+    }
+
+    fn install_set(&self, app: &mut App, set: GuiCollectionSet) {
+        app.install_gui_podcast_set(self.0, set);
+    }
+
+    fn install_order(&self, app: &mut App, order: GuiDateOrder) {
+        app.gui_podcast_libs
+            .entry(self.0)
+            .or_default()
+            .selection
+            .order = order;
     }
 }
 
@@ -102,64 +168,15 @@ impl App {
         self.ensure_gui_podcast_selection(lib_idx);
     }
 
-    /// Check or uncheck one show of the Podcasts library `lib_idx`
-    /// (gui-collection-dropdown design D2, D5): the dropdown's toggle reads
-    /// the effective set, so a press never resurrects a checked show the
-    /// catalog dropped, and the loads the selection needs start. A show the
-    /// published list does not carry is a stale frame's key and changes
-    /// nothing; a list still landing admits it, because the list is what would
-    /// name it stale.
-    pub fn toggle_gui_podcast_show(&mut self, lib_idx: usize, show_id: &str) {
-        if !self.gui_podcast_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "collectionToggle",
-                format_args!("the destination is no Podcasts library"),
-            );
-            return;
-        }
-        if !self.gui_podcast_show_known(lib_idx, show_id) {
-            Self::log_stale_library_item("collectionToggle", show_id);
-            return;
-        }
-        let next = self.gui_podcast_effective_set(lib_idx).toggle(show_id);
-        self.install_gui_podcast_set(lib_idx, next);
-    }
-
-    /// Select All for the Podcasts library `lib_idx` (gui-collection-dropdown
-    /// design D5): the All row's press and the dropdown's Clear. The loads
-    /// every listed show needs start. A `lib_idx` that names no Podcasts
-    /// library changes nothing.
-    pub fn select_all_gui_podcast_shows(&mut self, lib_idx: usize) {
-        if !self.gui_podcast_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "collectionAll",
-                format_args!("the destination is no Podcasts library"),
-            );
-            return;
-        }
-        self.install_gui_podcast_set(lib_idx, GuiCollectionSet::All);
-    }
-
-    /// Set the Podcasts library's list order (gui-collection-dropdown design
-    /// D4, D5): the dropdown's order toggle. Newest is the launch default. A
-    /// `lib_idx` that names no Podcasts library changes nothing.
-    pub fn set_gui_podcast_date_order(&mut self, lib_idx: usize, order: GuiDateOrder) {
-        if !self.gui_podcast_library(lib_idx) {
-            Self::log_ignored_library_command(
-                "dateOrder",
-                format_args!("the destination is no Podcasts library"),
-            );
-            return;
-        }
-        self.gui_podcast_libs.entry(lib_idx).or_default().order = order;
-    }
-
-    /// Store the Podcasts library's checked set and start the loads it needs
-    /// (gui-collection-dropdown design D2, D5): the one write both the
-    /// toggle and the All press take, so the frame carries the same selection
-    /// back however it changed.
+    /// The one write the toggle and the All press take: the shared collection
+    /// path installs the change, the store records it, and the loads the
+    /// selection needs start (gui-collection-dropdown design D2, D5).
     fn install_gui_podcast_set(&mut self, lib_idx: usize, set: GuiCollectionSet) {
-        self.gui_podcast_libs.entry(lib_idx).or_default().shows = set;
+        self.gui_podcast_libs
+            .entry(lib_idx)
+            .or_default()
+            .selection
+            .set = set;
         self.ensure_gui_podcast_selection(lib_idx);
     }
 
@@ -309,12 +326,13 @@ impl App {
     /// set as it is — it is still landing, and the list is what would name its
     /// shows stale.
     pub(in crate::app) fn gui_podcast_effective_set(&self, lib_idx: usize) -> GuiCollectionSet {
-        let stored = self.gui_podcast_libs.get(&lib_idx).map_or_else(
-            || GuiCollectionSet::All,
-            |selection| selection.shows.clone(),
-        );
-        let present = self
-            .audiobookshelf_browse
+        GuiPodcastsCollectionSite(lib_idx).effective_set(self)
+    }
+
+    /// The published show list's ids (row 10.1): the retention's present
+    /// list, in the show list's own order.
+    fn gui_podcast_present_shows(&self, lib_idx: usize) -> Vec<String> {
+        self.audiobookshelf_browse
             .get(lib_idx)
             .map(|state| {
                 state
@@ -323,12 +341,7 @@ impl App {
                     .map(|show| show.library_item_id.clone())
                     .collect::<Vec<_>>()
             })
-            .unwrap_or_default();
-        if present.is_empty() {
-            stored
-        } else {
-            stored.retain_present(&present)
-        }
+            .unwrap_or_default()
     }
 
     /// The date order the list sorts by (row 10.1; gui-collection-dropdown
@@ -338,7 +351,7 @@ impl App {
     pub fn gui_podcast_date_order(&self, lib_idx: usize) -> GuiDateOrder {
         self.gui_podcast_libs
             .get(&lib_idx)
-            .map_or(GuiDateOrder::default(), |selection| selection.order)
+            .map_or(GuiDateOrder::default(), |stored| stored.selection.order)
     }
 
     /// The episode the Hero shows (row 10.1): the stored pick. The projection

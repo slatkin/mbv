@@ -9,6 +9,7 @@ mod artwork;
 mod audiobooks;
 mod audiobooks_projection;
 mod collection;
+mod collection_command;
 mod emby;
 mod emby_projection;
 mod entry_list;
@@ -36,15 +37,18 @@ pub use self::audiobooks_projection::{
     GuiAudiobooksWorkspace,
 };
 pub use self::collection::{
-    GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections,
-    GuiDateOrder, compare_gui_date_order,
+    GuiCollectionEntry, GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet,
+    GuiCollectionTarget, GuiCollections, GuiDateOrder, compare_gui_date_order,
 };
+use self::collection_command::CollectionOp;
+use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
     GuiEmbyHero, GuiEmbyHeroCredit, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
+use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 pub use self::feeds_projection::{GuiFeedEntryId, GuiFeedsHero, GuiFeedsProjection, GuiFeedsRow};
 pub(in crate::app) use self::home::GuiHomeLatestEvent;
@@ -55,6 +59,7 @@ pub use self::home::{
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::marks::GuiPlayheadMarks;
+use self::podcasts::GuiPodcastsCollectionSite;
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
@@ -69,6 +74,7 @@ pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsSeasonNode, GuiShowsSeasonPill,
     GuiShowsSeries, GuiShowsWorkspace,
 };
+use self::store::GuiMusicCollectionSite;
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
@@ -104,8 +110,8 @@ pub enum GuiLibraryCommand {
     /// dropdown's Clear.
     CollectionAll { target: GuiCollectionTarget },
     /// Set the list order of a feed-based `target` (design D4, D5): Newest or
-    /// Oldest. The Music destination sorts by name, so its arm changes
-    /// nothing.
+    /// Oldest. The Music destination sorts by name, so a Music target
+    /// changes nothing.
     DateOrder {
         target: GuiCollectionTarget,
         order: GuiDateOrder,
@@ -265,13 +271,13 @@ impl App {
                 self.open_gui_library_position(position);
             }
             GuiLibraryCommand::CollectionToggle { target, key } => {
-                self.apply_gui_collection_toggle(&target, &key);
+                self.apply_collection(&target, CollectionOp::Toggle { key });
             }
             GuiLibraryCommand::CollectionAll { target } => {
-                self.apply_gui_collection_all(&target);
+                self.apply_collection(&target, CollectionOp::All);
             }
             GuiLibraryCommand::DateOrder { target, order } => {
-                self.apply_gui_date_order(&target, order);
+                self.apply_collection(&target, CollectionOp::Order(order));
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
@@ -354,58 +360,6 @@ impl App {
             | GuiLibraryCommand::SearchActivate { .. }
             | GuiLibraryCommand::SearchClose) => self.apply_gui_search_command(command),
             GuiLibraryCommand::OpenUrl { url } => Self::open_gui_library_url(&url),
-        }
-    }
-
-    /// Apply one collection command's toggle for `target` (design D5): each
-    /// arm reaches the destination that owns the collection's catalog and its
-    /// staleness rule, so a key the catalog does not hold is logged and
-    /// changes nothing.
-    fn apply_gui_collection_toggle(&mut self, target: &GuiCollectionTarget, key: &str) {
-        match target {
-            GuiCollectionTarget::Music(lib_idx) => self.toggle_gui_music_collection(*lib_idx, key),
-            GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.toggle_gui_podcast_show(*lib_idx, key);
-            }
-            GuiCollectionTarget::Feeds => self.toggle_gui_feeds_subscription(key),
-            GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.toggle_gui_emby_feed_folder(*lib_idx, key);
-            }
-        }
-    }
-
-    /// Apply one All command for `target` (design D5): the All row's press and
-    /// the dropdown's Clear both land here, and each destination's own
-    /// All step clears every checked collection.
-    fn apply_gui_collection_all(&mut self, target: &GuiCollectionTarget) {
-        match target {
-            GuiCollectionTarget::Music(lib_idx) => {
-                self.select_all_gui_music_collections(*lib_idx);
-            }
-            GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.select_all_gui_podcast_shows(*lib_idx);
-            }
-            GuiCollectionTarget::Feeds => self.select_all_gui_feeds(),
-            GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.select_all_gui_emby_feed_folders(*lib_idx);
-            }
-        }
-    }
-
-    /// Apply one date-order command for `target` (design D4, D5): the three
-    /// feed-based destinations store the order their list sorts by.
-    fn apply_gui_date_order(&mut self, target: &GuiCollectionTarget, order: GuiDateOrder) {
-        match target {
-            // The Music destination sorts by name, never by date, and its
-            // dropdown paints no order toggle: a documented no-op arm.
-            GuiCollectionTarget::Music(_) => {}
-            GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.set_gui_podcast_date_order(*lib_idx, order);
-            }
-            GuiCollectionTarget::Feeds => self.set_gui_feeds_date_order(order),
-            GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.set_gui_emby_feed_date_order(*lib_idx, order);
-            }
         }
     }
 

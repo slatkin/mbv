@@ -189,16 +189,16 @@ fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
     );
 }
 
-/// The frame path's ensure drops a checked subscription that leaves the tab
-/// (row 11.1, contract c; gui-collection-dropdown design D1's vanish rule):
-/// the last checked subscription's drop returns the selection to All.
+/// A checked subscription that leaves the tab never paints (row 11.1,
+/// contract c; gui-collection-dropdown design D1's vanish rule): the
+/// effective read drops the check the tab no longer holds, so the last
+/// checked subscription's drop returns the selection to All.
 #[test]
-fn the_ensure_drops_the_checked_subscription_when_it_leaves() {
+fn a_checked_subscription_the_tab_drops_never_paints() {
     let mut app = fetched_feeds_app();
     toggle_subscription(&mut app, FEED_B);
 
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
-    app.ensure_gui_feeds_selection();
 
     assert_eq!(
         app.gui_feeds_effective_set(),
