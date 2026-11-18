@@ -18,7 +18,7 @@ The GUI Queue panel stacks the album art, the title, the progress bar, a centred
 - The auto-hide choice persists across launches.
 - While the image loads, the panel keeps an image box of the expected size and paints the overlays on it, as if the image were there.
 - When the item has no image, no image box paints. Under the panel header, one line holds the track chips at the left and the badge at the right, then the two control rows, then the title line. Auto-hide does nothing in that case, but the tickbox still shows and keeps its setting.
-- In the stopped state (a shown local queue holds slots but nothing plays), the panel shows only the two control rows under the panel header, with an empty progress bar. It shows no art, no title, and no track chips, as today's stopped panel shows none of them. A press on play/pause starts the shown queue, as it does today. A shown peer queue that is stopped shows no control rows, because play/pause cannot start it.
+- In the stopped state (a shown local queue holds slots but nothing plays), the panel shows only the two control rows under the panel header, with an empty progress bar. It shows no art, no title, and no track chips, as today's stopped panel shows none of them. A press on play/pause starts the shown queue, as it does today. A shown peer queue that is stopped shows no control rows, because play/pause cannot start it. A shown local queue with no slots shows no control rows, as it does today.
 - **Removed:** the placeholder art of the expanded panel (the fixed-height box with the bundled placeholder image and the `[source]` caption). The collapsed rail and the compact strip keep their own art paint.
 ## Capabilities
 

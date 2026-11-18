@@ -174,6 +174,12 @@ While a shown local queue holds slots and nothing plays, the expanded panel SHAL
 - **WHEN** the expanded panel paints
 - **THEN** the panel paints no control rows
 
+#### Scenario: An empty shown local queue is stopped
+
+- **GIVEN** a shown local queue holds no slots and nothing plays
+- **WHEN** the expanded panel paints
+- **THEN** the panel paints no control rows
+
 ## REMOVED Requirements
 
 ### Requirement: Every action is reachable from the keyboard
