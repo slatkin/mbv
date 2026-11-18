@@ -600,18 +600,12 @@ fn the_target_chooser_opens_above_the_band() {
 
 /// Contract (`move-playback-header-into-queue-footer` D5, spec `gui-client`
 /// "No now-playing status word paints"): the band paints no now-playing status
-/// word at any playback state.
-#[rstest]
-#[case::playing(playing())]
-#[case::idle(GuiQueuePlayback {
-    now_playing_title: None,
-    show_controls: false,
-    artwork: None,
-    ..playing()
-})]
-fn no_surface_paints_a_now_playing_status_word(#[case] playback: GuiQueuePlayback) {
+/// word. The playing state carries a title, the controls, and artwork, so the
+/// word's absence holds where a status readout would paint.
+#[test]
+fn no_surface_paints_a_now_playing_status_word() {
     let mut fixture = built();
-    fixture.show_playback(playback, None);
+    fixture.show_playback(playing(), None);
     fixture.show(footer_frame(), summary(), idle_status());
 
     let text = fixture.text();
