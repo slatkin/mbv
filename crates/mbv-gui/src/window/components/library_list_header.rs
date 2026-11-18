@@ -3,13 +3,15 @@
 //! canvas's list title, the destination's collection dropdown on the title's
 //! line, and the `/` filter field under both. Every destination paints this one
 //! header, so the column cannot drift between tabs: a destination passes its
-//! title, its collections frame when it has one, the label its core projection
-//! derived, and its own filter state.
+//! title, its collections frame when it has one, a selection label when it
+//! wants one, and its own filter state.
 //!
-//! The dropdown rides the title line (gui-collection-dropdown design D6a): it
-//! paints directly after the title, so the panel paints no selector row above
-//! the list, and the selection label is not painted while the trigger names the
-//! selection itself.
+//! The dropdown rides the title line's right end (gui-collection-dropdown
+//! design D6a, user override): it paints at the line's right end, so the panel
+//! paints no selector row above the list, and the selection label is not
+//! painted while the trigger names the selection itself. The label paints only
+//! where it is non-empty: a plain Emby library and the Shows destination pass
+//! an empty one, because the UI is not verbose.
 //!
 //! `title_attr` and `label_attr` name a destination's own attributes, so a
 //! destination's tests keep a per-tab hook beside the shared ones.
@@ -29,8 +31,8 @@ pub struct LibraryListHeaderProps {
     /// The destination's own title attribute, when it has one.
     #[props(default)]
     pub title_attr: Option<&'static str>,
-    /// The carried selection's label, painted on the title's line while the
-    /// destination paints no collection dropdown.
+    /// The carried selection's label, painted on the title's line only when
+    /// it is non-empty and the destination paints no collection dropdown.
     pub label: String,
     /// The destination's own label attribute, when it has one.
     #[props(default)]
@@ -90,10 +92,10 @@ pub fn LibraryListHeader(props: LibraryListHeaderProps) -> Element {
                     "{title}"
                 }
                 if let Some(collections) = collections {
-                    // The dropdown paints the title line's rest (design D6a):
-                    // the trigger after the title.
+                    // The dropdown paints the title line's right end (design
+                    // D6a): the trigger after the title, at the line's end.
                     LibraryCollectionDropdown { collections }
-                } else {
+                } else if !label.is_empty() {
                     span {
                         class: "font-mono",
                         style: "font-size: 12px; color: var(--canvas-muted);",

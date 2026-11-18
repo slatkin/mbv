@@ -110,19 +110,12 @@ pub fn LibraryEmbyList() -> Element {
     // or the feed-group mode's flat rows, narrowed by the filter's text.
     let rows = library.emby_rows();
 
-    // The header's selection label (design D15): the feed-group mode's
-    // selected group, and `All` for a plain library, whose list is the whole
-    // library — the Music header's own rule.
+    // The filter field's placeholder, naming the selection it narrows: the
+    // feed-group mode's selected group, and plain `Filter` for a whole
+    // library.
     let selection_names = frame
         .map(|frame| frame.collection_names.clone())
         .unwrap_or_default();
-    let selection_label = if selection_names.is_empty() {
-        "All".to_owned()
-    } else {
-        selection_names.join(" + ")
-    };
-
-    // The filter field's placeholder, naming the selection it narrows.
     let filter_placeholder = if selection_names.is_empty() {
         "Filter".to_owned()
     } else {
@@ -132,7 +125,8 @@ pub fn LibraryEmbyList() -> Element {
     // The collection dropdown the header paints on the title's line (design
     // D6a): the feed-group mode's carried selector, which names the selection
     // itself, so the header paints no selection label beside it. A plain
-    // library carries none, so its header keeps the label.
+    // library carries none, so its header paints no trigger either — and no
+    // label: the plain list is the whole library, and the UI is not verbose.
     let collections = frame.and_then(|frame| frame.collections.clone());
 
     // The rail's A–Z letters over the painted rows (row 8.1): the plain mode
@@ -172,14 +166,14 @@ pub fn LibraryEmbyList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-emby-list-column": "",
-            // The Music list's header (design D15): the library's name, the
-            // carried selection's label, and the `/` filter field.
+            // The Music list's header (design D15, user override): the
+            // library's name and the `/` filter field, and no selection
+            // label — the plain list is the whole library.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
                     title: frame.map_or(String::new(), |frame| frame.library_name.clone()),
-                    label: selection_label,
-                    label_attr: Some("data-library-emby-selection-label"),
+                    label: String::new(),
                     collections,
                     filter: emby_ui.filter.clone(),
                     placeholder: filter_placeholder,

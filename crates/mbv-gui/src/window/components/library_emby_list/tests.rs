@@ -517,11 +517,12 @@ fn a_failed_plain_mode_fetch_paints_the_failure_line() {
     );
 }
 
-/// Contract (`LibraryEmbyList.test.ts`, design D15): the list column carries
-/// the Music list's header — the library's name, the carried selection's
-/// label, and the `/` field.
+/// Contract (`LibraryEmbyList.test.ts`, design D15, user override): the list
+/// column carries the Music list's header — the library's name and the `/`
+/// field — and paints no selection label: the plain list is the whole library,
+/// and the UI is not verbose.
 #[test]
-fn the_list_paints_the_library_header_with_the_selection_label() {
+fn the_list_paints_the_library_header_without_the_selection_label() {
     let mut fixture = built(emby_frame(false, movies()), emby_detail(&movies()));
     fixture.measure(300.0);
 
@@ -530,10 +531,9 @@ fn the_list_paints_the_library_header_with_the_selection_label() {
         "Movies",
         "the header names the library"
     );
-    assert_eq!(
-        fixture.text_of("[data-library-emby-selection-label]"),
-        "All",
-        "a plain library's list is the whole library"
+    assert!(
+        !fixture.presents("[data-library-selection-label]"),
+        "a plain library paints no selection label"
     );
 }
 

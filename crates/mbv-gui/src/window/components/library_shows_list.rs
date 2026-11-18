@@ -4,8 +4,8 @@
 //! season's episodes — under the letter headings of the first series of each
 //! letter, with the A–Z rail beside them. The GUI Shows destination paints this
 //! series list alone (gui-collection-dropdown design D8). The list header is
-//! the Music list's: the `Series` title, the selection as the selection label,
-//! and the `/` filter field.
+//! the Music list's: the `Series` title and the `/` filter field, and no
+//! selection label — the UI is not verbose.
 //!
 //! The rows paint at the fixed heights of [`crate::window::library::shows_list`]
 //! over native scroll, and only the rows in view paint, so a long series
@@ -355,15 +355,6 @@ pub fn LibraryShowsList() -> Element {
 
     let selected = detail.and_then(|detail| detail.selected.clone());
 
-    // The header's right line, in the Music list's shape: the selection and
-    // its sort rule. The series list is sorted by name.
-    let selection_label = format!(
-        "{} · sort name",
-        frame
-            .and_then(|frame| frame.collection_names.first().cloned())
-            .unwrap_or_else(|| "All".to_owned())
-    );
-
     // The filter field's placeholder, naming the selection as the Music list
     // does.
     let filter_placeholder = format!(
@@ -405,15 +396,15 @@ pub fn LibraryShowsList() -> Element {
         div {
             class: "flex min-h-0 min-w-0 flex-1 flex-col",
             "data-library-shows-list-column": "",
-            // The Music list's header (design D14): the title, the active mode
-            // as the selection label, and the `/` filter field.
+            // The Music list's header (design D14, user override): the title
+            // and the `/` filter field, and no selection label — the UI is
+            // not verbose.
             div {
                 class: "flex flex-none flex-col",
                 LibraryListHeader {
                     title: "Series".to_owned(),
                     title_attr: Some("data-library-shows-list-title"),
-                    label: selection_label,
-                    label_attr: Some("data-library-shows-selection-label"),
+                    label: String::new(),
                     filter: shows_ui.filter.clone(),
                     placeholder: filter_placeholder,
                     aria_label: "Filter series".to_owned(),

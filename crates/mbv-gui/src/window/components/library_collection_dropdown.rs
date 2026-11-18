@@ -1,12 +1,13 @@
 //! The Library panel's collection dropdown (gui-collection-dropdown design
 //! D6): one component for every destination that has collections — Music groups,
 //! Podcast shows, Feeds subscriptions, and an Emby library's feed-group folders
-//! — so the four cannot drift. It paints the capsule trigger that names the
+//! — so the four cannot drift. It paints the trigger that names the
 //! selection (All, the one checked collection, or the count with the
 //! destination's noun) with a trailing chevron, and the `menu_card` popover
-//! with the filter strip, the All row and one checkbox row per collection, and
-//! the `esc close` footer. The page-7 artboard is the look: a fully rounded
-//! outline in the accent around the trigger, square checkboxes that lead the
+//! with the filter strip, the All row and one checkbox row per collection.
+//! The page-7 artboard is the look: an outline in the accent around the
+//! trigger, in the list filter field's corner radius (the user override: not
+//! a pill), square checkboxes that lead the
 //! rows, a highlighted band and a bold name on the checked rows, and no Clear
 //! control and no date-order toggle (the All row selects All, and the window
 //! exposes no date order).
@@ -18,12 +19,12 @@
 //! change closes it. A press on a row leaves it open, and the All row stays shown
 //! whatever the filter holds.
 //!
-//! The component sits in the list header on the title's line (design D6a): the
-//! header paints it directly after the list title, so the panel paints no
-//! selector row between its top bar and its list. The trigger is a fully rounded
-//! capsule outlined in the accent with a trailing chevron, which shows that it
-//! opens a menu, and the open popover is anchored under the trigger, over the
-//! list.
+//! The component sits in the list header on the title's line (design D6a,
+//! user override): the header paints it at the title line's right end, so the
+//! panel paints no selector row between its top bar and its list. The trigger
+//! is an outlined box in the accent with the filter field's corner radius and
+//! a trailing chevron, which shows that it opens a menu, and the open popover
+//! is anchored under the trigger at its right edge, over the list.
 
 use dioxus_native::prelude::*;
 
@@ -149,7 +150,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
 
     rsx! {
         div {
-            class: "flex min-w-0 flex-1 items-center",
+            class: "relative flex min-w-0 flex-1 items-center justify-end",
             role: "group",
             "aria-label": "Collections",
             style: "gap: 12px;",
@@ -164,16 +165,17 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                 class: "relative flex min-w-0 items-center",
                 style: "gap: 6px;",
                 // The trigger names the selection (design D6) and shows that it
-                // opens a menu (design D6a): All, the one checked collection, or
-                // the count with the destination's noun, then the chevron, up
-                // while the popover is open and down while it is closed. The
-                // capsule's outline is the accent's. Its own box clips a long
-                // name: the header paints no overflow clip, because that clip
-                // hid the whole open popover.
+                // opens a menu (design D6a, user override): All, the one checked
+                // collection, or the count with the destination's noun, then the
+                // chevron, up while the popover is open and down while it is
+                // closed. The outline is the accent's, in the list filter
+                // field's corner radius — the trigger is not a pill. Its own
+                // box clips a long name: the header paints no overflow clip,
+                // because that clip hid the whole open popover.
                 button {
                     "type": "button",
                     class: "flex flex-none items-center",
-                    style: "height: 28px; max-width: 18rem; padding: 0 12px; gap: 6px; border-radius: 999px; font-size: 14px; border: 1px solid var(--canvas-accent); background: none; color: var(--canvas-heading);",
+                    style: "height: 28px; max-width: 18rem; padding: 0 12px; gap: 6px; border-radius: 6px; font-size: 14px; border: 1px solid var(--canvas-accent); background: none; color: var(--canvas-heading);",
                     "aria-label": "Select collections",
                     "aria-haspopup": "menu",
                     "aria-expanded": "{open}",
@@ -195,10 +197,11 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         }
                     }
                 }
-                // The open dropdown (design D6, D6a): the filter strip, the All
-                // row, one checkbox row per matching collection, and the footer,
-                // in the row menu's own canvas chrome. It is anchored under the
-                // trigger, over the list, which the header does not clip.
+                // The open dropdown (design D6, D6a, user override): the
+                // filter strip, the All row, and one checkbox row per matching
+                // collection, in the row menu's own canvas chrome. It is
+                // anchored under the trigger at its right edge, over the list,
+                // which the header does not clip.
                 if open {
                     div {
                         class: "absolute z-20 flex flex-col",
@@ -206,7 +209,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                         "aria-label": "Collections",
                         "data-library-collections-menu": "",
                         style: format!(
-                            "top: 34px; left: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                            "top: 34px; right: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
                         ),
                         // The filter strip is the popover's header: the teal
                         // `/` glyph and the field in no box, over a divider
@@ -295,21 +298,6 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                         }
                                     }
                                 }
-                            }
-                        }
-                        // The popover's footer: the key hints the dropdown's
-                        // bindings actually have. Esc closes the dropdown
-                        // (design D7), so the footer names it at the right
-                        // end; Space does nothing on the dropdown, so the
-                        // artboard's left hints stay unpainted (design D6).
-                        div {
-                            class: "flex flex-none items-center justify-end",
-                            style: "height: 30px; padding: 0 12px; border-top: 1px solid var(--canvas-menu-border);",
-                            "data-library-collections-footer": "",
-                            span {
-                                class: "font-mono",
-                                style: "font-size: 11px; color: var(--canvas-muted);",
-                                "esc close"
                             }
                         }
                     }

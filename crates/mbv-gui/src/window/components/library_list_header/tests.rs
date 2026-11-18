@@ -1,9 +1,10 @@
 //! Headless tests of the list header's title line (gui-collection-dropdown
-//! design D6a, spec "The collection dropdown sits in the list header and no
-//! pill row remains"): the title line paints the list title and then the
-//! collection dropdown's trigger, and the selection label paints only where no
-//! trigger names the selection. The core channel is a mock pair; no test opens
-//! a window, sleeps, or reaches the core.
+//! design D6a, user override, spec "The collection dropdown sits in the list
+//! header and no pill row remains"): the title line paints the list title and
+//! then the collection dropdown's trigger at the line's right end, and the
+//! selection label paints only where it is non-empty and no trigger names the
+//! selection. The core channel is a mock pair; no test opens a window, sleeps,
+//! or reaches the core.
 
 use std::sync::{Arc, mpsc};
 
@@ -29,6 +30,7 @@ const FIXTURE_CSS: &str = concat!(
     ".flex-col { flex-direction: column; }",
     ".items-center { align-items: center; }",
     ".justify-between { justify-content: space-between; }",
+    ".justify-end { justify-content: flex-end; }",
     ".min-w-0 { min-width: 0; }",
     ".flex-1 { flex: 1 1 0%; }",
     ".flex-none { flex: none; }",
@@ -38,11 +40,12 @@ const FIXTURE_CSS: &str = concat!(
     "[data-library-list-header] { width: 600px; }",
 );
 
-/// The harness's props: the carried collections.
+/// The harness's props: the carried collections and the selection label.
 #[derive(Clone)]
 struct FixtureProps {
     sender: mpsc::Sender<CoreInput>,
     collections: Option<GuiCollectionsFrame>,
+    label: String,
 }
 
 /// The root: provides the Library store and paints the header, as a
@@ -51,6 +54,7 @@ fn header_app(props: FixtureProps) -> Element {
     let FixtureProps {
         sender,
         collections,
+        label,
     } = props;
     let clock: Arc<dyn Clock> = Arc::new(RecordingClock::new());
     let state = use_hook(move || {
@@ -66,7 +70,7 @@ fn header_app(props: FixtureProps) -> Element {
     rsx! {
         LibraryListHeader {
             title: "Podcasts".to_owned(),
-            label: "All".to_owned(),
+            label,
             collections,
             filter: String::new(),
             placeholder: "Filter All".to_owned(),
@@ -113,8 +117,9 @@ impl Fixture {
     }
 }
 
-/// Build the document over the carried collections and resolve its layout.
-fn built(collections: Option<GuiCollectionsFrame>) -> Fixture {
+/// Build the document over the carried collections and the selection label and
+/// resolve its layout.
+fn built_with_label(collections: Option<GuiCollectionsFrame>, label: String) -> Fixture {
     let (sender, _receiver) = mpsc::channel::<CoreInput>();
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
@@ -122,6 +127,7 @@ fn built(collections: Option<GuiCollectionsFrame>) -> Fixture {
             FixtureProps {
                 sender,
                 collections,
+                label,
             },
         ),
         DocumentConfig {
@@ -136,6 +142,12 @@ fn built(collections: Option<GuiCollectionsFrame>) -> Fixture {
     doc.initial_build();
     doc.inner.borrow_mut().resolve(0.0);
     Fixture { doc }
+}
+
+/// Build the document over the carried collections and the default `All`
+/// selection label.
+fn built(collections: Option<GuiCollectionsFrame>) -> Fixture {
+    built_with_label(collections, "All".to_owned())
 }
 
 /// The Podcasts frame: All selected, one show, newest first.
@@ -153,8 +165,8 @@ fn podcasts_frame() -> GuiCollectionsFrame {
     }
 }
 
-/// Contract (design D6a, spec "Podcasts header"): the title line paints the
-/// list title and then the trigger after it.
+/// Contract (design D6a, user override): the title line paints the list title
+/// and then the trigger after it, at the line's right end.
 #[test]
 fn the_title_line_paints_the_title_then_the_trigger() {
     let fixture = built(Some(podcasts_frame()));
@@ -170,6 +182,26 @@ fn the_title_line_paints_the_title_then_the_trigger() {
     );
 }
 
+/// Contract (design D6a, user override): the trigger sits at the title line's
+/// right end, after the title.
+#[test]
+fn the_trigger_sits_at_the_title_line_s_right_end() {
+    let fixture = built(Some(podcasts_frame()));
+
+    let header = fixture.rect_of("[data-library-list-header]");
+    let title = fixture.rect_of("[data-library-list-title]");
+    let trigger = fixture.rect_of("[data-library-collections-trigger]");
+    assert!(
+        title.x + title.width <= trigger.x,
+        "the trigger paints after the title"
+    );
+    let end_gap = header.x + header.width - (trigger.x + trigger.width);
+    assert!(
+        end_gap.abs() <= 17.0,
+        "the trigger's right edge sits at the line's right end, gap {end_gap}"
+    );
+}
+
 /// Contract (design D6a): the header paints no selection label while the
 /// trigger names the selection itself.
 #[test]
@@ -180,11 +212,21 @@ fn a_destination_with_collections_paints_no_selection_label() {
 }
 
 /// Contract (design D6a): a destination without collections keeps the carried
-/// selection's label on the title line.
+/// selection's label on the title line while the label is non-empty.
 #[test]
 fn a_destination_without_collections_paints_its_selection_label() {
     let fixture = built(None);
 
     assert_eq!(fixture.text_of("[data-library-selection-label]"), "All");
+    assert!(!fixture.presents("[data-library-collections-trigger]"));
+}
+
+/// Contract (design D6a, user override): a header whose label is empty paints
+/// no selection label span.
+#[test]
+fn an_empty_label_paints_no_selection_label() {
+    let fixture = built_with_label(None, String::new());
+
+    assert!(!fixture.presents("[data-library-selection-label]"));
     assert!(!fixture.presents("[data-library-collections-trigger]"));
 }

@@ -150,6 +150,11 @@ impl Fixture {
         self.in_runtime(move || state.measure_shows_list(viewport_height));
     }
 
+    /// Whether the selector names a node in the painted tree.
+    fn presents(&self, selector: &str) -> bool {
+        matches!(self.doc.inner().query_selector(selector), Ok(Some(_)))
+    }
+
     /// The attribute of the first node the selector names.
     fn attr_of(&self, selector: &str, attribute: &str) -> Option<String> {
         let dom = self.doc.inner();
@@ -338,6 +343,19 @@ fn the_all_series_mode_paints_letter_headings_its_tree_and_the_rail_beside_them(
         fixture.attr_of("[data-library-rail-letter=\"B\"]", "disabled"),
         None,
         "the rail's B is enabled by the series row under it"
+    );
+}
+
+/// Contract (design D14, user override): the Shows header paints no selection
+/// label — the UI is not verbose.
+#[test]
+fn the_shows_header_paints_no_selection_label() {
+    let mut fixture = built(shows_frame(tree()), shows_detail(None));
+    fixture.measure(300.0);
+
+    assert!(
+        !fixture.presents("[data-library-selection-label]"),
+        "the Shows header paints no selection label"
     );
 }
 

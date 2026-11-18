@@ -1,12 +1,13 @@
 //! Headless tests of the collection dropdown (gui-collection-dropdown design
-//! D6, D7): the trigger names the selection (All, the one checked collection,
-//! the count with the destination's noun) in the accent-outlined capsule with a
-//! chevron that follows the open fact, the open popover paints its checkbox
-//! rows with the checked row's band, and the footer names only the key that
-//! does something (esc close). The presses ride the state methods the
-//! component's own handlers call one line each (a headless document cannot fire
-//! a DOM click, the list's and the pill row's precedent). The core channel is a
-//! mock pair; no test opens a window, sleeps, or reaches the core.
+//! D6, D7, user override): the trigger names the selection (All, the one
+//! checked collection, the count with the destination's noun) in the
+//! accent-outlined box with the filter field's corner radius and a chevron
+//! that follows the open fact, the open popover paints its checkbox rows with
+//! the checked row's band and anchors to the trigger's right edge. The presses
+//! ride the state methods the component's own handlers call one line each (a
+//! headless document cannot fire a DOM click, the list's and the pill row's
+//! precedent). The core channel is a mock pair; no test opens a window, sleeps,
+//! or reaches the core.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -247,18 +248,33 @@ fn the_dropdown_paints_no_clear_and_no_date_order_toggle() {
     assert!(!fixture.presents("[data-library-date-order]"));
 }
 
-/// Contract (design D6a): the trigger is a fully rounded capsule outlined in
-/// the accent.
+/// Contract (design D6a, user override): the trigger is an outlined box in the
+/// accent, in the list filter field's corner radius — not a pill.
 #[test]
-fn the_trigger_paints_the_accent_capsule() {
+fn the_trigger_paints_the_accent_box_with_the_filter_field_s_radius() {
     let fixture = built(music_all());
     let style = fixture.style_of("[data-library-collections-trigger]");
 
-    assert!(style.contains("border-radius: 999px"), "{style}");
+    assert!(style.contains("border-radius: 6px"), "{style}");
+    assert!(!style.contains("999px"), "{style}");
     assert!(
         style.contains("border: 1px solid var(--canvas-accent)"),
         "{style}"
     );
+}
+
+/// Contract (design D6a, user override): the open popover anchors to the
+/// trigger's right edge, under it.
+#[test]
+fn the_open_popover_anchors_to_the_trigger_s_right_edge() {
+    let mut fixture = built(music_all());
+    let library = fixture.state.clone();
+    fixture.in_runtime(move || library.toggle_collections_dropdown());
+
+    let style = fixture.style_of("[data-library-collections-menu]");
+    assert!(style.contains("top: 34px"), "{style}");
+    assert!(style.contains("right: 0"), "{style}");
+    assert!(!style.contains("left: 0"), "{style}");
 }
 
 /// Contract (design D6a): the trigger's chevron points up while the popover is
@@ -405,27 +421,6 @@ fn the_checked_row_paints_the_highlight_band() {
         fixture.style_of("[data-library-collections-row=\"https://example.test/other\"]");
     assert!(unchecked.contains("background: none"), "{unchecked}");
     assert!(unchecked.contains("font-weight: 400"), "{unchecked}");
-}
-
-/// Contract (design D6): the popover's footer names the one key that does
-/// something, esc close, and paints no hint that does nothing (the artboard's
-/// space toggle and only-this).
-#[test]
-fn the_footer_names_esc_close_only() {
-    let mut fixture = built(music_all());
-    let library = fixture.state.clone();
-    fixture.in_runtime(move || library.toggle_collections_dropdown());
-
-    assert_eq!(
-        fixture.text_of("[data-library-collections-footer]"),
-        "esc close"
-    );
-    assert!(
-        !fixture
-            .text_of("[data-library-collections-menu]")
-            .contains("space toggle"),
-        "the artboard's space hints stay unpainted"
-    );
 }
 
 /// Contract (design D7, spec "The filter narrows the entries"): the open
