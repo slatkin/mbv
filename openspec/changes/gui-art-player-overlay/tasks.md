@@ -25,5 +25,5 @@
 
 ## 5. Documentation and gates
 
-- [ ] 5.1 Update `docs/architecture/gui-client.md`: the player panel's arrangement (stage, top and bottom layers), the region order rule, the stylesheet-only hover, the measured scale (and why container units do not apply in Blitz 0.3.0-beta.4), and the core-owned auto-hide preference. Verify the old still-slot and placeholder text is gone (`rg -n "still slot|225 px" docs/architecture/gui-client.md` returns no stale paragraph).
+- [x] 5.1 Update `docs/architecture/gui-client.md`: the player panel's arrangement (stage, top and bottom layers), the region order rule, the stylesheet-only hover, the measured scale (and why container units do not apply in Blitz 0.3.0-beta.4), and the core-owned auto-hide preference. Verify the old still-slot and placeholder text is gone (`rg -n "still slot|225 px" docs/architecture/gui-client.md` returns no stale paragraph).
 - [ ] 5.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; all pass.
