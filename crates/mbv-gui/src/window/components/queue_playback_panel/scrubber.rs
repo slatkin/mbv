@@ -34,6 +34,11 @@ pub struct ScrubberProps {
     /// absent.
     #[props(default)]
     pub seekbar_mounted: Signal<Option<Event<MountedData>>>,
+    /// The content the clock line paints between the elapsed and remaining
+    /// clocks: the transport controls, which sit on the same line as the
+    /// clocks and just under the bar. `None` paints the clocks alone.
+    #[props(default)]
+    pub center: Option<Element>,
 }
 
 /// The hover preview's painted width: the canvas's `w-32` box.
@@ -91,10 +96,11 @@ fn tile_crop(hover: &GuiScrubberHover) -> Option<String> {
     ))
 }
 
-/// The scrubber (`main` audits 9–12): the 46 px block with the track at
+/// The scrubber (`main` audits 9–12): the 24 px bar block with the track at
 /// 12 px, the intro and credits blocks, the played fill, the chapter ticks,
-/// the pointer's position line, the thumb, and the elapsed and
-/// `−remaining` labels at 28 px. The block's own rect is the
+/// the pointer's position line, and the thumb; under it a 30 px clock line
+/// with the elapsed and `−remaining` labels at its ends and the transport
+/// controls (`center`) between them. The bar block's own rect is the
 /// `seekbar` region; a press resolves there in the core.
 ///
 /// Every length in the block multiplies by the control rows' `--player-scale`
@@ -141,7 +147,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                 "aria-valuemin": "0",
                 "aria-valuemax": "100",
                 "aria-valuenow": "{progress_pct.round()}",
-                style: "height: calc(46px * var(--player-scale));",
+                style: "height: calc(24px * var(--player-scale));",
                 "data-target": "seekbar",
                 onmounted: move |event| props.seekbar_mounted.set(Some(event)),
                 if let Some(hover) = hover_preview.clone() {
@@ -197,22 +203,29 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                     "data-thumb": "",
                     style: "left: {progress_pct}%; top: calc(7px * var(--player-scale)); width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); background: {title_fg}; box-shadow: 0 0 0 calc(3px * var(--player-scale)) var(--mbv-queuePlaybackBand);",
                 }
-                div {
-                    class: "absolute inset-x-0 flex justify-between font-mono tabular-nums",
-                    style: "top: calc(28px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
-                    // The clocks sit on the stage's dark scrim, so they paint
-                    // the primary text role for contrast rather than the time
-                    // token; the remaining label dims slightly (0.85) to
-                    // stay secondary. The clocks are the playhead's
-                    // prediction (design D5).
-                    span {
-                        style: "color: var(--mbv-textPrimary);",
-                        "{elapsed}"
-                    }
-                    span {
-                        style: "color: var(--mbv-textPrimary); opacity: 0.85;",
-                        "{minus(&remaining)}"
-                    }
+            }
+            // The clock line sits under the bar, outside the `seekbar` box so a
+            // press on a control here never reads as a seek. The clocks take
+            // the line's two ends and the transport controls its middle. The
+            // clocks paint the primary text role for contrast on the stage's
+            // dark scrim rather than the time token; the remaining label dims
+            // slightly (0.85) to stay secondary. They are the playhead's
+            // prediction (design D5).
+            div {
+                class: "flex items-center font-mono tabular-nums",
+                style: "height: calc(30px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
+                span {
+                    class: "flex-1",
+                    style: "color: var(--mbv-textPrimary);",
+                    "{elapsed}"
+                }
+                if let Some(center) = props.center.clone() {
+                    {center}
+                }
+                span {
+                    class: "flex-1 text-right",
+                    style: "color: var(--mbv-textPrimary); opacity: 0.85;",
+                    "{minus(&remaining)}"
                 }
             }
         }

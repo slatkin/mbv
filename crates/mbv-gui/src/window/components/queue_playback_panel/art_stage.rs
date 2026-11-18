@@ -39,9 +39,10 @@ use super::scrubber::Scrubber;
 mod tests;
 
 /// The two control rows' full height at scale 1.0 (design D3): row 1's
-/// scrubber block (6 + 46 + 2 px) over row 2's buttons and tail pad (34 + 4
-/// px). The scale's one-third share is measured against this height.
-pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 92.0;
+/// scrubber block (6 + 24 bar + 30 clock line + 2 px) over row 2's auto-hide
+/// line and tail pad (20 + 4 px). The scale's one-third share is measured
+/// against this height.
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 86.0;
 
 /// The control rows' scale for a stage `stage_height` px tall (design D3):
 /// the rows take at most a third of the stage and never grow past their full
@@ -270,6 +271,62 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
     let mark_style = format!(
         "width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); box-sizing: border-box; border-radius: calc(4px * var(--player-scale)); border: 1.5px solid {border}; background: {background};",
     );
+    // The transport controls ride the scrubber's clock line, between the two
+    // clocks, so they sit tight under the bar.
+    let transport = rsx! {
+        div {
+            class: "flex items-center justify-center",
+            style: "gap: calc(4px * var(--player-scale));",
+            button {
+                "type": "button",
+                class: "flex items-center justify-center",
+                style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale));",
+                "data-target": "previous",
+                "aria-label": "Previous",
+                onmounted: move |event| prev_mounted.set(Some(event)),
+                SkipBack {
+                    class: "player-glyph",
+                    size: 20,
+                    fill: "{glyph}",
+                    color: "{glyph}",
+                }
+            }
+            button {
+                "type": "button",
+                class: "flex items-center justify-center font-mono",
+                style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
+                "data-target": "seekBack",
+                "aria-label": "Back 10 seconds",
+                title: "Back 10 s",
+                onmounted: move |event| seek_back_mounted.set(Some(event)),
+                "−10"
+            }
+            button {
+                "type": "button",
+                class: "flex items-center justify-center font-mono",
+                style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
+                "data-target": "seekForward",
+                "aria-label": "Forward 30 seconds",
+                title: "Forward 30 s",
+                onmounted: move |event| seek_forward_mounted.set(Some(event)),
+                "+30"
+            }
+            button {
+                "type": "button",
+                class: "flex items-center justify-center",
+                style: "width: calc(30px * var(--player-scale)); height: calc(30px * var(--player-scale));",
+                "data-target": "next",
+                "aria-label": "Next",
+                onmounted: move |event| next_mounted.set(Some(event)),
+                SkipForward {
+                    class: "player-glyph",
+                    size: 20,
+                    fill: "{next_glyph}",
+                    color: "{next_glyph}",
+                }
+            }
+        }
+    };
     rsx! {
         div {
             class: "flex items-center",
@@ -277,7 +334,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex flex-none items-center justify-center rounded-full",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); background: var(--mbv-accent);",
+                style: "width: calc(56px * var(--player-scale)); height: calc(56px * var(--player-scale)); background: var(--mbv-accent);",
                 "data-target": "playPause",
                 "aria-label": if props.paused { "Play" } else { "Pause" },
                 onmounted: move |event| play_pause_mounted.set(Some(event)),
@@ -299,62 +356,14 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             }
             div {
                 class: "min-w-0 flex-1",
-                Scrubber { seekbar_mounted }
+                Scrubber { seekbar_mounted, center: transport }
             }
         }
         div {
-            class: "flex items-center justify-center",
-            style: "gap: calc(4px * var(--player-scale)); padding: 0 calc(16px * var(--player-scale)) calc(4px * var(--player-scale));",
-            button {
-                "type": "button",
-                class: "flex items-center justify-center",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
-                "data-target": "previous",
-                "aria-label": "Previous",
-                onmounted: move |event| prev_mounted.set(Some(event)),
-                SkipBack {
-                    class: "player-glyph",
-                    size: 20,
-                    fill: "{glyph}",
-                    color: "{glyph}",
-                }
-            }
-            button {
-                "type": "button",
-                class: "flex items-center justify-center font-mono",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
-                "data-target": "seekBack",
-                "aria-label": "Back 10 seconds",
-                title: "Back 10 s",
-                onmounted: move |event| seek_back_mounted.set(Some(event)),
-                "−10"
-            }
-            button {
-                "type": "button",
-                class: "flex items-center justify-center font-mono",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
-                "data-target": "seekForward",
-                "aria-label": "Forward 30 seconds",
-                title: "Forward 30 s",
-                onmounted: move |event| seek_forward_mounted.set(Some(event)),
-                "+30"
-            }
-            button {
-                "type": "button",
-                class: "flex items-center justify-center",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
-                "data-target": "next",
-                "aria-label": "Next",
-                onmounted: move |event| next_mounted.set(Some(event)),
-                SkipForward {
-                    class: "player-glyph",
-                    size: 20,
-                    fill: "{next_glyph}",
-                    color: "{next_glyph}",
-                }
-            }
-            // The auto-hide control: a checkbox with a tooltip and no visible
-            // label (design D5). Its press toggles the core-owned preference
+            class: "flex items-center justify-end",
+            style: "padding: 0 calc(16px * var(--player-scale)) calc(4px * var(--player-scale));",
+            // The auto-hide control: a checkbox with a visible label and a
+            // tooltip (design D5). Its press toggles the core-owned preference
             // through the `autoHide` region; the box paints the setting.
             button {
                 "type": "button",
@@ -363,7 +372,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
                 "aria-label": "Auto-hide controls",
                 title: "Auto-hide controls",
                 class: "flex items-center justify-center",
-                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
+                style: "height: calc(20px * var(--player-scale)); gap: calc(6px * var(--player-scale)); padding: 0 calc(8px * var(--player-scale));",
                 "data-target": "autoHide",
                 onmounted: move |event| auto_hide_mounted.set(Some(event)),
                 CheckboxBox {
@@ -374,6 +383,12 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
                     stroke_width: 3.5,
                     color: "var(--canvas-ink)".to_owned(),
                     aria_hidden: true,
+                }
+                // The visible label: the checkbox names itself beside the box
+                // rather than only in a tooltip.
+                span {
+                    style: "font-size: calc(12px * var(--player-scale)); white-space: nowrap; color: var(--mbv-textPrimary);",
+                    "Auto-hide"
                 }
             }
         }
