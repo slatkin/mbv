@@ -1,131 +1,142 @@
-//! The scrubber seam (task 5.3): the port of `QueuePlaybackPanel`'s
-//! scrubber block — the 6 px track, the played fill, the 16 px thumb, and
-//! the elapsed and `−remaining` labels.
+//! The scrubber seam (task 5.3, `gui-queue-panel-redesign` design D4): the
+//! port of `QueuePlaybackPanel`'s scrubber block — one full-width seek row
+//! holding the track, the played fill, and the thumb, with the time tip while
+//! the pointer is on the row. The clocks are the transport row's
+//! (`art_stage.rs`), so the row is the whole of this component.
 //!
-//! The scrubber paints the canvas geometry. Its hover preview paints from
-//! the `hover` section (the core resolves the pointer move against the
-//! painted bar), so the component holds no hover state. A press on the bar
-//! forwards like every other pointer event: the component interprets no
-//! gesture, it reports its regions and the core resolves the press against
-//! the hit map (design D4).
+//! The scrubber paints the canvas geometry. Its hover state paints from the
+//! `hover` section (the core resolves the pointer move against the painted
+//! row), so the component holds no hover state and the track grows with the
+//! tip. A press on the row forwards like every other pointer event: the
+//! component interprets no gesture, it reports its region and the core
+//! resolves the press against the hit map (design D4).
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::playback::GuiScrubberHover;
-use crate::bridge::frame::theme::GuiRole;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
-use crate::window::theme::role_var;
-use crate::window::time::minus;
 
 #[cfg(test)]
 mod tests;
 
-/// The seekbar region's element handle (design D4): the scrubber's slider
-/// box is the `seekbar` region of the panel's one report, so the panel holds
-/// the handle and the scrubber sets it on mount.
+/// The seek row's height at scale 1.0 (design D3, D4): the whole row is the
+/// `seekbar` region, so this is the bar's hit area.
+pub(super) const SEEK_ROW_HEIGHT_PX: f32 = 14.0;
+
+/// The track's height at scale 1.0, at rest and while the pointer is on the
+/// row (design D4).
+const TRACK_REST_PX: f32 = 4.0;
+const TRACK_HOVER_PX: f32 = 6.0;
+
+/// The thumb's diameter at scale 1.0, at rest and while the pointer is on the
+/// row (design D4).
+const THUMB_REST_PX: f32 = 14.0;
+const THUMB_HOVER_PX: f32 = 16.0;
+
+/// The rest track's grey: `--ef-grey2` at 28 % (design D4).
+const TRACK_OPACITY: f32 = 0.28;
+
+/// The thumb's ring width at scale 1.0 (design D4): `--ef-bg-dim` around the
+/// green circle.
+const THUMB_RING_PX: f32 = 2.0;
+
+/// The distance the time tip sits above the row's top edge, in unscaled
+/// pixels: a tip is not a row size (design D4).
+const HOVER_TIP_OFFSET_PX: f64 = -22.0;
+
+/// The seekbar region's element handle (design D4): the seek row is the
+/// `seekbar` region of the panel's one report, so the panel holds the handle
+/// and the row sets it on mount.
 #[derive(Props, Clone, PartialEq)]
 pub struct ScrubberProps {
     /// The `seekbar` element's mounted event, `None` while the element is
     /// absent.
     #[props(default)]
     pub seekbar_mounted: Signal<Option<Event<MountedData>>>,
-    /// The content the clock line paints between the elapsed and remaining
-    /// clocks: the transport controls, which sit on the same line as the
-    /// clocks and just under the bar. `None` paints the clocks alone.
-    #[props(default)]
-    pub center: Option<Element>,
 }
 
-/// The scrubber (`main` audits 9–12): the 24 px bar block with the track at
-/// 12 px, the played fill, and the thumb; under it a 30 px clock line with
-/// the elapsed and `−remaining` labels at its ends and the transport
-/// controls (`center`) between them. The bar block's own rect is the
+/// The scrubber (`main` audits 9–12; `gui-queue-panel-redesign` design D4):
+/// one full-width row, 14 px tall at scale 1.0, holding the track, the played
+/// fill, the thumb, and the buffered range. The row's own rect is the
 /// `seekbar` region; a press resolves there in the core.
 ///
-/// Every length in the block multiplies by the control rows' `--player-scale`
+/// Every length in the row multiplies by the control rows' `--player-scale`
 /// (`gui-art-player-overlay` design D3): the rows shrink as one unit, so the
-/// track, the thumb, and the labels keep their places inside the block at
-/// any scale. The hover preview above the bar is not a row size and keeps
-/// its pixels.
+/// track, the thumb, and the tip keep their places inside the row at any
+/// scale. The time tip above the row is not a row size and keeps its pixels.
 ///
-/// The played fraction and the clocks are the playhead's prediction (design
-/// D5); the hover facts are the frame's.
+/// The played fraction and the buffered fraction are the playhead's; the
+/// hover facts are the frame's.
 #[component]
 pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let sections = consume_context::<Sections>();
     let playhead = consume_context::<Playhead>();
 
-    // The played fraction of the scrubber, clamped to `[0, 1]`: the
-    // playhead's prediction (design D5).
+    // The played fraction of the row, clamped to `[0, 1]`: the playhead's
+    // prediction (design D5 of `gui-art-player-overlay`).
     let progress_pct = playhead.fraction.cloned() * 100.0;
-    let elapsed = playhead.elapsed.cloned();
-    let remaining = playhead.remaining.cloned();
-    // The scrubber's hover preview, painted from the hover section: the
-    // pointer's fraction and the time it names. `None` while the pointer is
-    // away from the bar.
+    // The row's hover facts, painted from the hover section: the pointer's
+    // fraction and the time it names. `None` while the pointer is away from
+    // the row. The section drives the bar's hover chrome too, so the track
+    // grows with the tip and the state survives a drag (design D4).
     let hover_preview = sections.hover.cloned();
-    let title_fg = role_var(GuiRole::PlaybackTitleFg);
-
+    let hovered = hover_preview.is_some();
+    let track_px = if hovered {
+        TRACK_HOVER_PX
+    } else {
+        TRACK_REST_PX
+    };
+    let thumb_px = if hovered {
+        THUMB_HOVER_PX
+    } else {
+        THUMB_REST_PX
+    };
+    // Every part of the bar centres on the row's middle line.
+    let track_top_px = (SEEK_ROW_HEIGHT_PX - track_px) / 2.0;
+    let thumb_top_px = (SEEK_ROW_HEIGHT_PX - thumb_px) / 2.0;
+    let track_radius_px = track_px / 2.0;
+    let row_style = format!("height: calc({SEEK_ROW_HEIGHT_PX}px * var(--player-scale));");
+    let track_style = format!(
+        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-grey2); opacity: {TRACK_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));"
+    );
+    let played_style = format!(
+        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-green); border-radius: calc({track_radius_px}px * var(--player-scale));"
+    );
+    let thumb_style = format!(
+        "top: calc({thumb_top_px}px * var(--player-scale)); width: calc({thumb_px}px * var(--player-scale)); height: calc({thumb_px}px * var(--player-scale)); background: var(--ef-green); box-shadow: 0 0 0 calc({THUMB_RING_PX}px * var(--player-scale)) var(--ef-bg-dim);"
+    );
     rsx! {
         div {
-            style: "padding: calc(6px * var(--player-scale)) calc(16px * var(--player-scale)) calc(2px * var(--player-scale));",
-            div {
-                class: "relative",
-                role: "slider",
-                tabindex: 0,
-                "aria-label": "Seek",
-                "aria-valuemin": "0",
-                "aria-valuemax": "100",
-                "aria-valuenow": "{progress_pct.round()}",
-                style: "height: calc(24px * var(--player-scale));",
-                "data-target": "seekbar",
-                onmounted: move |event| props.seekbar_mounted.set(Some(event)),
-                if let Some(hover) = hover_preview.clone() {
-                    // The hover preview: the time label chip at the pointer's
-                    // position. No frame and no chapter name ride it (design
-                    // D4).
-                    HoverPreview { hover }
-                }
-                div {
-                    class: "absolute inset-x-0",
-                    "data-track": "",
-                    style: "top: calc(12px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressTrack); border-radius: calc(3px * var(--player-scale));",
-                }
-                div {
-                    class: "absolute left-0",
-                    "data-played": "",
-                    style: "top: calc(12px * var(--player-scale)); width: {progress_pct}%; height: calc(6px * var(--player-scale)); background: var(--mbv-accent); border-radius: calc(3px * var(--player-scale));",
-                }
-                div {
-                    class: "absolute -translate-x-1/2 rounded-full",
-                    "data-thumb": "",
-                    style: "left: {progress_pct}%; top: calc(7px * var(--player-scale)); width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); background: {title_fg}; box-shadow: 0 0 0 calc(3px * var(--player-scale)) var(--mbv-queuePlaybackBand);",
-                }
+            class: "relative",
+            role: "slider",
+            tabindex: 0,
+            "aria-label": "Seek",
+            "aria-valuemin": "0",
+            "aria-valuemax": "100",
+            "aria-valuenow": "{progress_pct.round()}",
+            style: "{row_style}",
+            "data-target": "seekbar",
+            onmounted: move |event| props.seekbar_mounted.set(Some(event)),
+            if let Some(hover) = hover_preview.clone() {
+                // The time tip at the pointer's position. No frame and no
+                // chapter name ride it (design D4).
+                HoverPreview { hover }
             }
-            // The clock line sits under the bar, outside the `seekbar` box so a
-            // press on a control here never reads as a seek. The clocks take
-            // the line's two ends and the transport controls its middle. The
-            // clocks paint the primary text role for contrast on the stage's
-            // dark scrim rather than the time token; the remaining label dims
-            // slightly (0.85) to stay secondary. They are the playhead's
-            // prediction (design D5).
             div {
-                class: "flex items-center font-mono tabular-nums",
-                style: "height: calc(30px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
-                span {
-                    class: "flex-1",
-                    style: "color: var(--mbv-textPrimary);",
-                    "{elapsed}"
-                }
-                if let Some(center) = props.center.clone() {
-                    {center}
-                }
-                span {
-                    class: "flex-1 text-right",
-                    style: "color: var(--mbv-textPrimary); opacity: 0.85;",
-                    "{minus(&remaining)}"
-                }
+                class: "absolute inset-x-0",
+                "data-track": "",
+                style: "{track_style}",
+            }
+            div {
+                class: "absolute left-0",
+                "data-played": "",
+                style: "{played_style} width: {progress_pct}%;",
+            }
+            div {
+                class: "absolute -translate-x-1/2 rounded-full",
+                "data-thumb": "",
+                style: "{thumb_style} left: {progress_pct}%;",
             }
         }
     }
@@ -146,18 +157,19 @@ impl std::fmt::Debug for HoverPreviewProps {
     }
 }
 
-/// The hover preview's block: the time label chip at the pointer's position.
+/// The hover preview's block: the time label chip at the pointer's position
+/// (design D4), on the menu fill.
 #[component]
 fn HoverPreview(props: HoverPreviewProps) -> Element {
     let hover_pct = props.hover.fraction * 100.0;
-    let title_fg = role_var(GuiRole::PlaybackTitleFg);
+    let offset = HOVER_TIP_OFFSET_PX;
     rsx! {
         div {
             class: "pointer-events-none absolute z-10 -translate-x-1/2",
-            style: "left: {hover_pct}%; top: -22px;",
+            style: "left: {hover_pct}%; top: {offset}px;",
             div {
                 class: "font-mono",
-                style: "font-size: 11px; padding: 2px 6px; border-radius: 3px; background: var(--mbv-background); color: {title_fg};",
+                style: "font-size: 11px; padding: 2px 6px; border-radius: 3px; background: var(--ef-bg2); color: var(--ef-fg);",
                 "{props.hover.time_label}"
             }
         }

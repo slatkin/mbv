@@ -1,10 +1,11 @@
-//! Headless tests of the scrubber (D16): the contracts of
-//! `QueuePlaybackPanel.test.ts` the scrubber owns — the elapsed and
-//! `−remaining` clocks, the hover preview's time label, and the bar's
-//! chrome (track, played fill, thumb). The presses are not ported: they are
-//! the root input layer's contract (`window/input.rs`), which the scrubber
-//! forwards to untouched. The clocks are the injected recorders (D10); no
-//! test waits.
+//! Headless tests of the scrubber (`gui-queue-panel-redesign` design D4): the
+//! seek row's chrome (track, played fill, thumb), its hover time tip, its
+//! buffered range, and its clock-free bar. The rows are painted inside the
+//! control rows, as the panel paints them, so the elapsed and `−remaining`
+//! clocks of the transport row are covered here too. The presses are not
+//! ported: they are the root input layer's contract (`window/input.rs`),
+//! which the scrubber forwards to untouched. The clocks are the injected
+//! recorders (D10); no test waits.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,7 +16,7 @@ use blitz_dom::local_name;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::Scrubber;
+use super::super::art_stage::{ControlRow, ControlRowHandles};
 use crate::bridge::frame::playback::{
     GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
@@ -92,8 +93,8 @@ struct FixtureProps {
 type FixtureHandles = (Sections, Playhead);
 
 /// The root: provides the section stores and the playhead over the injected
-/// clocks, and paints the scrubber, as the panel paints it inside its
-/// controls block.
+/// clocks, and paints the control rows, as the panel paints them inside its
+/// controls block at full scale.
 fn scrubber_app(props: FixtureProps) -> Element {
     let FixtureProps { wall_ms, handle } = props;
     let sections = use_hook(Sections::new);
@@ -104,10 +105,21 @@ fn scrubber_app(props: FixtureProps) -> Element {
     });
     let playhead = use_hook(move || Playhead::new(Arc::clone(&clock), times));
     provide_context(playhead.clone());
-    let seekbar_mounted = use_signal(|| None::<Event<MountedData>>);
+    let rows = ControlRowHandles {
+        play_pause: use_signal(|| None::<Event<MountedData>>),
+        previous: use_signal(|| None::<Event<MountedData>>),
+        seek_back: use_signal(|| None::<Event<MountedData>>),
+        seek_forward: use_signal(|| None::<Event<MountedData>>),
+        next: use_signal(|| None::<Event<MountedData>>),
+        seekbar: use_signal(|| None::<Event<MountedData>>),
+    };
+    let availability = playing().availability;
     handle.borrow_mut().replace((sections, playhead));
     rsx! {
-        Scrubber { seekbar_mounted }
+        div {
+            style: "--player-scale: 1;",
+            ControlRow { paused: false, availability, rows }
+        }
     }
 }
 
@@ -235,29 +247,30 @@ fn built() -> Fixture {
     fixture
 }
 
-/// Contract: the slider box carries `relative` — every painted part of the
-/// bar is `absolute`, so the box is the only positioned ancestor between
-/// them and the app root; without it the bar paints window-wide (the
-/// the former client markup's `class="relative"`, `main` audits 9–12).
+/// Contract (`gui-queue-panel-redesign` design D3): the seek row is the
+/// `seekbar` region and carries `relative` — every painted part of the bar is
+/// `absolute`, so the row is the only positioned ancestor between them and
+/// the app root; without it the bar paints window-wide (the former client
+/// markup's `class="relative"`, `main` audits 9–12).
 #[test]
 fn the_slider_box_is_positioned_so_the_bar_paints_inside_it() {
     let fixture = built();
     let class = fixture
         .class_of("[data-target=\"seekbar\"]")
-        .expect("the slider box paints");
+        .expect("the seek row paints");
     assert!(
         class.split_whitespace().any(|name| name == "relative"),
         "{class}"
     );
 }
 
-/// Contract (`QueuePlaybackPanel.test.ts`, the clocks): the scrubber's two
-/// labels paint the playhead's prediction — the elapsed time, and the
-/// remaining time behind the canvas minus, with no finish clock (the
-/// panel's `ends` hint is gone, 2026-11-16). The wall clock at 20:57:40
-/// puts a 200 s item at its 60th second's finish at exactly 21:00.
+/// Contract (`gui-queue-panel-redesign` design D3): the clocks paint on the
+/// transport row — the elapsed time, and the remaining time behind the
+/// canvas minus, with no finish clock (the panel's `ends` hint is gone,
+/// 2026-11-16). The wall clock at 20:57:40 puts a 200 s item at its 60th
+/// second's finish at exactly 21:00.
 #[test]
-fn the_scrubber_paints_the_elapsed_and_remaining_clocks() {
+fn the_transport_row_paints_the_elapsed_and_remaining_clocks() {
     let mut fixture = built();
     fixture.set_playback(playing());
     fixture.stamp(GuiPlayhead {
@@ -274,13 +287,12 @@ fn the_scrubber_paints_the_elapsed_and_remaining_clocks() {
     assert!(!text.contains("ends"), "{text}");
 }
 
-/// Contract (`QueuePlaybackPanel.test.ts`): the scrubber paints the hover
-/// preview from the frame — the label chip reads the hovered time alone,
-/// with no trickplay frame and no chapter name (design D4); and the bar's
-/// hover chrome carries the 6 px track, the played fill at its fraction,
-/// and the 16 px thumb (`main` audits 10–12).
+/// Contract (`gui-queue-panel-redesign` design D4, task 4.2a): the bar's
+/// hover tip reads the hovered time alone, with no trickplay frame and no
+/// chapter label; and the hover chrome carries the 6 px track, the played
+/// fill at its fraction, and the 16 px thumb (`main` audits 10–12).
 #[test]
-fn the_scrubber_paints_the_hover_preview_from_the_frame() {
+fn the_scrubber_paints_the_hover_time_tip_with_no_frame_and_no_chapter() {
     let mut fixture = built();
     fixture.set_playback(playing());
     fixture.stamp(GuiPlayhead {
@@ -302,6 +314,7 @@ fn the_scrubber_paints_the_hover_preview_from_the_frame() {
         "no trickplay frame paints: {:?}",
         fixture.styles()
     );
+    assert!(!text.contains("Ch."), "no chapter label paints: {text}");
     // The block's lengths carry the control rows' scale (design D3 of
     // `gui-art-player-overlay`), so they multiply by `--player-scale`.
     assert!(

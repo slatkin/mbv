@@ -20,12 +20,12 @@
 //! the bottom layer holds the gradient and the control row. The panel
 //! keeps every mounted handle and reports the regions in one contribution.
 //!
-//! The scrubber — the 6 px track, the intro and credits blocks, the played
-//! fill, the chapter ticks, the thumb, the hover preview, and the clocks — is
-//! this module's third file, `queue_playback_panel/scrubber.rs` (task 5.3):
-//! the component paints it in the control row, and its slider box
-//! is the `seekbar` region of this panel's one report, so the panel holds the
-//! element handle the scrubber sets on mount.
+//! The scrubber — the track, the played fill, the thumb, and the time tip —
+//! is this module's third file, `queue_playback_panel/scrubber.rs` (task
+//! 5.3; `gui-queue-panel-redesign` design D4): the component paints it as
+//! the control rows' seek row, and that row is the `seekbar` region of this
+//! panel's one report, so the panel holds the element handle the scrubber
+//! sets on mount.
 //!
 //! A press on the bar or a button forwards like every other pointer event:
 //! the component interprets no gesture, it reports its regions and the core
@@ -260,11 +260,14 @@ pub fn QueuePlaybackPanel() -> Element {
         rsx! {
             div {
                 class: "flex flex-col",
-                style: "padding: 10px 16px 0;",
-                ChipsAndBadge {
-                    chips: playback.track_chips.clone(),
-                    overlay: sections.overlay.cloned(),
-                    episode_badge: playback.episode_badge.clone(),
+                style: "padding: 10px 0 0;",
+                div {
+                    style: "padding: 0 16px;",
+                    ChipsAndBadge {
+                        chips: playback.track_chips.clone(),
+                        overlay: sections.overlay.cloned(),
+                        episode_badge: playback.episode_badge.clone(),
+                    }
                 }
                 ControlRow {
                     paused,
