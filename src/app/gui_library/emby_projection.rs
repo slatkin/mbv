@@ -12,6 +12,7 @@ use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_render::effective_sort_str;
+use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
 use super::GuiLibraryArtwork;
@@ -323,8 +324,12 @@ impl App {
         }
         let order = self.gui_emby_feed_order(lib_idx);
         items.sort_by(|left, right| {
-            compare_gui_date_order(date_added_secs(left), date_added_secs(right), order)
-                .then_with(|| left.id.cmp(&right.id))
+            compare_gui_date_order(
+                emby_date_added_secs(left),
+                emby_date_added_secs(right),
+                order,
+            )
+            .then_with(|| left.id.cmp(&right.id))
         });
         (items, landing || self.gui_emby_root_loading(lib_idx))
     }
@@ -494,15 +499,6 @@ fn row_kind(item: &EmbyItem) -> GuiEmbyRowKind {
     } else {
         GuiEmbyRowKind::Media
     }
-}
-
-/// The rows' date order key (design D4): the item's `DateCreated` as epoch
-/// seconds, the field the fetch already carries, parsed through the Home
-/// Latest rule every Emby timestamp uses. `None` on an undated item, which the
-/// shared order keeps last in both directions.
-fn date_added_secs(item: &EmbyItem) -> Option<i64> {
-    mbv_ui_model::home_latest::emby_date_added_secs(item)
-        .map(|secs| i64::try_from(secs).unwrap_or(i64::MAX))
 }
 
 /// The checked collection names the Library Status bar's location reads

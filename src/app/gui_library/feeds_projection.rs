@@ -186,17 +186,13 @@ impl App {
     /// through `compare_gui_date_order` applies the stored order to both, so
     /// Oldest reverses the dated rows and keeps the undated ones last.
     fn gui_feeds_rows(&self, order: GuiDateOrder) -> Vec<GuiFeedsRow> {
-        let mut entries: Vec<(&FeedEntry, Option<i64>)> = self
-            .gui_feeds_entries()
-            .into_iter()
-            .map(|entry| (entry, feed_entry_secs(entry)))
-            .collect();
-        entries.sort_by(|(_, left_secs), (_, right_secs)| {
-            compare_gui_date_order(*left_secs, *right_secs, order)
+        let mut entries = self.gui_feeds_entries();
+        entries.sort_by(|left, right| {
+            compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order)
         });
         entries
             .into_iter()
-            .map(|(entry, _)| self.gui_feeds_row(entry))
+            .map(|entry| self.gui_feeds_row(entry))
             .collect()
     }
 
@@ -275,13 +271,4 @@ pub(in crate::app::gui_library) fn feed_entry_matches(
     id: &GuiFeedEntryId,
 ) -> bool {
     entry.feed_id.as_deref().unwrap_or_default() == id.feed_id() && entry.guid == id.guid()
-}
-
-/// One entry's publish seconds as the comparison's `i64` (gui-collection-dropdown
-/// design D4): the provider carries `u64`, and a count past `i64::MAX` names
-/// no real date.
-fn feed_entry_secs(entry: &FeedEntry) -> Option<i64> {
-    entry
-        .pub_date_secs
-        .map(|secs| i64::try_from(secs).unwrap_or(i64::MAX))
 }

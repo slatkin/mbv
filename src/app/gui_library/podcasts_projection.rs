@@ -251,11 +251,7 @@ impl App {
             }
         };
         episodes.sort_by(|left, right| {
-            compare_gui_date_order(
-                left.published_at.map(podcast_secs),
-                right.published_at.map(podcast_secs),
-                order,
-            )
+            compare_gui_date_order(left.published_at, right.published_at, order)
         });
         let fetching = match set {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
@@ -388,13 +384,6 @@ fn podcast_row(
         date: row_date(episode.published_at),
         state: episode_row_state(progress, episode.duration_seconds),
     }
-}
-
-/// One episode's publish seconds as the comparison's `i64` (gui-collection-dropdown
-/// design D4): the provider carries `u64`, and a count past `i64::MAX` names
-/// no real date.
-fn podcast_secs(secs: u64) -> i64 {
-    i64::try_from(secs).unwrap_or(i64::MAX)
 }
 
 /// The parent show of `library_item_id` in the published show list.

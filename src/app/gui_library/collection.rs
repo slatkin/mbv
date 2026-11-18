@@ -195,9 +195,11 @@ impl GuiCollections {
 /// Compare two epoch-second dates in `order` (design D4): Newest puts the
 /// later date first, Oldest the earlier first, and a row with no date stays
 /// last in both orders. The one owner of the "undated last" rule, so the
-/// Podcasts, Feeds, and Emby feed-group sorts cannot drift.
+/// Podcasts, Feeds, and Emby feed-group sorts cannot drift. The providers
+/// carry `u64` seconds; a count past `i64::MAX` names no real date, so it
+/// saturates.
 #[must_use]
-pub fn compare_gui_date_order(a: Option<i64>, b: Option<i64>, order: GuiDateOrder) -> Ordering {
+pub fn compare_gui_date_order(a: Option<u64>, b: Option<u64>, order: GuiDateOrder) -> Ordering {
     match (a, b) {
         (None, None) => Ordering::Equal,
         (None, Some(_)) => Ordering::Greater,
