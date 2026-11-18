@@ -52,5 +52,5 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `cargo check -p mbv-gui`, `cargo nextest run -p mbv-gui`, `cargo fmt`,
+- [x] 5.1 `cargo check -p mbv-gui`, `cargo nextest run -p mbv-gui`, `cargo fmt`,
   and the complexity pass over the touched files.
