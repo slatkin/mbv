@@ -236,7 +236,7 @@ pub fn CollapsedRail(props: CollapsedRailProps) -> Element {
             }
             span { class: "flex-1" }
             // The expand control: the `z` toggle's second direction, the
-            // same `collapse` target the header's control reports.
+            // same `collapse` target the footer band's control reports.
             button {
                 "type": "button",
                 class: "flex items-center justify-center rounded-sm p-1",

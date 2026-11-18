@@ -11,15 +11,12 @@ use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_ui_model::media_list::{MediaListRow, MediaSemanticState};
 use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
-use mbv_ui_model::playback_target::NowPlayingStatus;
 
 use super::theme::GuiRole;
 use crate::art::{GuiArtRef, PLACEHOLDER_PATH, art_url, card_path};
 /// The Queue playback band's facts for one build.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GuiQueuePlayback {
-    /// The now-playing status that the header row shows.
-    pub status: GuiNowPlayingStatus,
     /// The playback target's host label. Empty when there is none.
     pub host: String,
     /// Whether the playback target is remote. The flag picks the icon's colour.
@@ -154,7 +151,6 @@ pub(crate) fn card_artwork_ref(artwork: &QueueCardArtwork) -> Option<GuiArtRef> 
 impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
     fn from(projection: &QueuePlaybackProjection) -> Self {
         Self {
-            status: GuiNowPlayingStatus::from(projection.status),
             host: projection.host.clone(),
             host_is_remote: projection.host_is_remote,
             shown: projection.shown,
@@ -388,24 +384,6 @@ impl From<&TrickplayGrid> for GuiTrickplayGrid {
             thumbnail_count: grid.thumbnail_count,
             interval_ms: grid.interval_ms,
             media_source_id: grid.media_source_id.clone(),
-        }
-    }
-}
-
-/// The now-playing status, mirroring `NowPlayingStatus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuiNowPlayingStatus {
-    Playing,
-    Paused,
-    Idle,
-}
-
-impl From<NowPlayingStatus> for GuiNowPlayingStatus {
-    fn from(status: NowPlayingStatus) -> Self {
-        match status {
-            NowPlayingStatus::Playing => Self::Playing,
-            NowPlayingStatus::Paused => Self::Paused,
-            NowPlayingStatus::Idle => Self::Idle,
         }
     }
 }

@@ -373,11 +373,11 @@ pub(crate) struct TransportAvailability {
 /// glyphs act on a left press — the second press of a double-click pair
 /// included, so a double-click on a glyph toggles twice and nets out — and
 /// the seekbar seeks on a press (the `gui-client` spec's single-press seek)
-/// and scrubs on a left-drag anchored inside its bar. The header's target
-/// indicator opens the chooser the Sessions sidebar is in the TUI, a
+/// and scrubs on a left-drag anchored inside its bar. The footer band's target
+/// control opens the chooser the Sessions sidebar is in the TUI, a
 /// chooser row selects its painted output through the same `SelectSession`
-/// request, and the header's collapse and queue-fold controls run the `z`/`q`
-/// toggles' dispatches. The audio and subtitle chips toggle their track
+/// request, and the footer's collapse control and the folded line's expand
+/// control run the `z`/`q` toggles' dispatches. The audio and subtitle chips toggle their track
 /// popover through the `OpenTrackPopover` request's open path, and a
 /// popover row selects the track its painted row named (row 6.5's review of
 /// row 6.4: the index addresses the list the window painted).

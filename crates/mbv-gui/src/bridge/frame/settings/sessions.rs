@@ -1,6 +1,6 @@
 //! The Sessions section's content (`add-gui-settings-screen` design D9):
-//! the same playback targets the header's chooser lists, so the section's rows
-//! and the chooser cannot disagree inside one tick.
+//! the same playback targets the footer band's chooser lists, so the section's
+//! rows and the chooser cannot disagree inside one tick.
 
 use mbv::PlaybackTargetChoice;
 

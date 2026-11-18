@@ -21,7 +21,7 @@ use crate::bridge::frame::library::{
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
+    GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
@@ -297,7 +297,6 @@ fn fresh_panel() -> GuiPanelToggles {
 /// The fresh transport band: idle, with nothing to show.
 fn fresh_playback() -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Idle,
         host: String::new(),
         host_is_remote: false,
         shown: false,

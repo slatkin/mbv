@@ -31,9 +31,7 @@ use rstest::rstest;
 
 use crate::art::GuiArtRef;
 use crate::bridge::frame::GuiAttachState;
-use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability,
-};
+use crate::bridge::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiTransportAvailability};
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueHeaderFacts, GuiQueueRow, GuiQueueSummary, GuiSemanticState,
 };
@@ -177,7 +175,6 @@ fn summary() -> GuiQueueSummary {
 /// The transport band's now-playing facts, painting `art`.
 fn playing(art: GuiArtRef) -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: "poo".to_owned(),
         host_is_remote: true,
         shown: true,

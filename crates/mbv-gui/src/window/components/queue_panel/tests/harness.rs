@@ -22,8 +22,7 @@ use crate::bridge::frame::overlay::{
     GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename, GuiRowMenuEntry,
 };
 use crate::bridge::frame::playback::{
-    GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey,
-    GuiTransportAvailability,
+    GuiPlayhead, GuiQueuePlayback, GuiTargetChoice, GuiTargetKey, GuiTransportAvailability,
 };
 use crate::bridge::frame::queue::{
     GuiMediaKind, GuiQueue, GuiQueueDrag, GuiQueueHeaderFacts, GuiQueueInsertion, GuiQueueRow,
@@ -359,7 +358,6 @@ pub(super) fn themed_queue_panel_app(props: FixtureProps) -> Element {
 /// TypeScript `playing()` fixture, trimmed to what the top block reads).
 pub(super) fn playing() -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: "poo".to_owned(),
         host_is_remote: true,
         shown: true,

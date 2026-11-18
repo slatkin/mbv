@@ -227,7 +227,7 @@ pub enum QueuePlaybackTargetId {
     Next,
     /// The seekbar.
     Seekbar,
-    /// The playback-target indicator in the header row.
+    /// The playback-target control in the Queue footer band.
     PlaybackTarget,
     /// The visual slot's image rectangle.
     VisualSlot,
@@ -236,7 +236,7 @@ pub enum QueuePlaybackTargetId {
     SeekBack,
     /// The forward-30 s control: the `seek_forward` chord's pointer target.
     SeekForward,
-    /// The header's collapse control: the `z` toggle's pointer target.
+    /// The Queue footer's collapse control: the `z` toggle's pointer target.
     Collapse,
     /// The header's queue-fold control: the `q` toggle's pointer target.
     QueueFold,

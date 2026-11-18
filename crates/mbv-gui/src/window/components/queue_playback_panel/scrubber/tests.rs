@@ -18,8 +18,8 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 use super::Scrubber;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::playback::{
-    GuiChapter, GuiNowPlayingStatus, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover,
-    GuiScrubberTile, GuiSegmentMark, GuiTransportAvailability,
+    GuiChapter, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile, GuiSegmentMark,
+    GuiTransportAvailability,
 };
 use crate::window::clock::Clock;
 use crate::window::playhead::{Playhead, Times};
@@ -58,7 +58,6 @@ fn wall_ms_at_local(secs_of_day: i64) -> i64 {
 /// facts the scrubber reads: the chapters and the two marks).
 fn playing() -> GuiQueuePlayback {
     GuiQueuePlayback {
-        status: GuiNowPlayingStatus::Playing,
         host: String::new(),
         host_is_remote: false,
         shown: true,
