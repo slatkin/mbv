@@ -9,6 +9,7 @@ use mbv_components::library_panel::hero::hero_content_queue;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
+use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use crate::app::App;
 use crate::app::state::events::LibEvent;
@@ -89,9 +90,10 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        // The empty entry marks the request, so a later launch step starts no
-        // second fetch; the completion replaces it.
-        self.gui_shows_new.insert(library_id.clone(), Vec::new());
+        // The requesting mark blocks a second fetch; the completion replaces
+        // it with landed rows, empty when the fetch fails.
+        self.gui_shows_new
+            .insert(library_id.clone(), GuiSectionRequest::Requesting);
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let result = client.get_latest_episodes(&library_id, 30);
@@ -102,13 +104,15 @@ impl App {
         });
     }
 
-    /// Land one TV library's New fetch (design D9): a loaded list replaces the
-    /// request mark, and a failure leaves the library with no rows.
+    /// Land one TV library's New fetch (design D9): success and failure both
+    /// land the request, so an empty or failed list paints the empty state and
+    /// no later launch step or frame starts the same fetch again.
     pub(in crate::app) fn handle_gui_shows_new(&mut self, event: GuiShowsNewEvent) {
         let GuiShowsNewEvent { library_id, result } = event;
         match result {
             Ok(items) => {
-                self.gui_shows_new.insert(library_id, items);
+                self.gui_shows_new
+                    .insert(library_id, GuiSectionRequest::landed(items));
             }
             Err(error) => {
                 tracing::info!(
@@ -118,6 +122,8 @@ impl App {
                     error = %error,
                     "the library's latest episodes failed to load"
                 );
+                self.gui_shows_new
+                    .insert(library_id, GuiSectionRequest::landed(Vec::new()));
             }
         }
     }
@@ -169,7 +175,7 @@ impl App {
     ) -> Option<EmbyItem> {
         self.gui_shows_new
             .values()
-            .flatten()
+            .flat_map(GuiSectionRequest::items)
             .find(|item| item.id == item_id)
             .cloned()
     }

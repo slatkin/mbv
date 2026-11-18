@@ -313,11 +313,16 @@ pub struct App {
     /// The GUI Shows New list's per-library source (gui-collection-dropdown
     /// design D9): each Emby TV library's latest episodes, keyed by the
     /// library id, filled by the GUI launch's one worker fetch per library.
-    /// The view merges every library's list by `date_added`, newest first,
-    /// and de-duplicates by item id. It lives outside `nav_stack`, so the
-    /// TUI's own levels stay unchanged, and the TUI never reads it.
-    pub(in crate::app) gui_shows_new:
-        std::collections::HashMap<String, Vec<mbv_emby_model::EmbyItem>>,
+    /// An absent entry has not been requested, `Requesting` is in flight, and
+    /// `Landed` holds the rows — empty when the fetch returned nothing or
+    /// failed, so the view paints its empty state and does not re-request.
+    /// The view merges every library's landed list by `date_added`, newest
+    /// first, and de-duplicates by item id. It lives outside `nav_stack`, so
+    /// the TUI's own levels stay unchanged, and the TUI never reads it.
+    pub(in crate::app) gui_shows_new: std::collections::HashMap<
+        String,
+        crate::app::gui_library::GuiSectionRequest<mbv_emby_model::EmbyItem>,
+    >,
     /// The GUI Library's Shows selection (add-gui-library-panel design D12,
     /// the USER-APPROVED GUI Shows design): per Shows library, the active
     /// view mode (default from `resolve_tv_content_mode`), the selected

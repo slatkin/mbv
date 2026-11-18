@@ -23,6 +23,7 @@ mod marks;
 mod podcasts;
 mod podcasts_projection;
 mod projection;
+mod request;
 mod search;
 mod shows;
 mod shows_projection;
@@ -68,6 +69,7 @@ pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
+pub(in crate::app) use self::request::GuiSectionRequest;
 pub(in crate::app) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 pub(in crate::app) use self::shows::GuiShowsNewEvent;

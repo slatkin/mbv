@@ -7,9 +7,11 @@
 //! Service, worker, or mock transport runs.
 
 use super::*;
+use crate::app::gui_library::{GuiSectionRequest, GuiShowsNewEvent};
 use crate::config::TestStateDirGuard;
 use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
+use rstest::rstest;
 
 /// A series row of the series list, with its sort name.
 fn series_item(id: &str, name: &str, sort_name: &str) -> EmbyItem {
@@ -346,17 +348,17 @@ fn the_new_view_paints_the_merged_latest_episodes() {
     let mut app = empty_shows_app();
     app.gui_shows_new.insert(
         "lib-a".into(),
-        vec![
+        GuiSectionRequest::Landed(vec![
             new_episode("ep-old", "Old", "2026-11-01T00:00:00.0000000Z"),
             new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ],
+        ]),
     );
     app.gui_shows_new.insert(
         "lib-b".into(),
-        vec![
+        GuiSectionRequest::Landed(vec![
             new_episode("ep-mid", "Mid", "2026-11-05T00:00:00.0000000Z"),
             new_episode("ep-new", "New", "2026-11-10T00:00:00.0000000Z"),
-        ],
+        ]),
     );
     app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
         lib_idx: 0,
@@ -424,4 +426,30 @@ fn an_upcoming_row_resolves_no_playable_item() {
     let id = app.gui_shows_projection(0).rows[0].id.clone();
 
     assert_eq!(app.gui_shows_item(0, &id), None);
+}
+
+/// PR 1021 regression: a New fetch that lands with no rows — whether the
+/// Service returned an empty list or the worker failed — paints the empty
+/// state, not `loading`, and needs no re-request to get there.
+#[rstest]
+#[case::empty(Ok(Vec::new()))]
+#[case::failed(Err(mbv_emby::EmbyError::resolve("latest episodes failed")))]
+fn an_empty_or_failed_new_fetch_paints_the_empty_state(
+    #[case] result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+) {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+    app.apply_gui_library_command(GuiLibraryCommand::ShowsSetView {
+        lib_idx: 0,
+        view: GuiShowsView::New,
+    });
+    app.handle_gui_shows_new(GuiShowsNewEvent {
+        library_id: "lib-tv".into(),
+        result,
+    });
+
+    let projection = app.gui_shows_projection(0);
+
+    assert!(!projection.loading, "the landed fetch is not loading");
+    assert!(projection.rows.is_empty(), "the list paints no rows");
 }

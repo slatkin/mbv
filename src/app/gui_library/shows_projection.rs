@@ -19,6 +19,7 @@ use mbv_ui_model::ui_util::{fmt_duration_short, row_date};
 use super::GuiLibraryArtwork;
 use super::home::GuiArtShape;
 use super::projection::sort_letter;
+use super::request::GuiSectionRequest;
 use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use super::tv::GuiTvShowsSelection;
@@ -247,9 +248,10 @@ impl App {
                     .and_then(|id| self.gui_shows_new_item(id))
                     .map(|item| self.gui_shows_flat_hero(&item));
                 let loading = self.libs.get(lib_idx).is_some_and(|lib| {
-                    self.gui_shows_new
+                    !self
+                        .gui_shows_new
                         .get(&lib.library.id)
-                        .is_none_or(Vec::is_empty)
+                        .is_some_and(GuiSectionRequest::is_landed)
                 });
                 (Vec::new(), rows, selected, hero, false, loading)
             }
@@ -290,7 +292,12 @@ impl App {
     /// id. The split show/episode title and the provider-date gutter are the
     /// old `Latest episodes` section's.
     fn gui_shows_new_rows(&self) -> Vec<GuiShowsRow> {
-        let mut items: Vec<EmbyItem> = self.gui_shows_new.values().flatten().cloned().collect();
+        let mut items: Vec<EmbyItem> = self
+            .gui_shows_new
+            .values()
+            .flat_map(GuiSectionRequest::items)
+            .cloned()
+            .collect();
         items.sort_by_cached_key(|item| {
             (
                 std::cmp::Reverse(mbv_ui_model::home_latest::emby_date_added_secs(item)),
