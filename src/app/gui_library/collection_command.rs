@@ -5,9 +5,10 @@
 //! destination's store and side effects (`store.rs`, `podcasts.rs`,
 //! `feeds.rs`, `emby.rs`); this module holds what they share.
 
+use std::borrow::Cow;
+
 use super::collection::{
-    GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiCollectionTarget,
-    GuiCollections, GuiDateOrder,
+    GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
 };
 use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
@@ -59,17 +60,30 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     /// not, so an Order command there is a no-op.
     fn has_order(&self) -> bool;
 
-    /// The catalog the retention retains against (design D1): `None` while
-    /// the catalog has not landed — the list that would name a key stale —
-    /// which keeps the stored set as it is.
-    fn present(&self, app: &App) -> Option<Vec<String>>;
+    /// The catalog the retention retains against (design D1): a key
+    /// predicate over the landed catalog — `None` while the catalog has not
+    /// landed, the list that would name a key stale, which keeps the stored
+    /// set as it is. The predicate reads the catalog without building its id
+    /// list, so a per-frame reader allocates nothing.
+    fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool>;
 
     /// The destination's scopes: each collection's stable key and label, in
-    /// catalog order (design D6).
-    fn scopes(&self, app: &App) -> Vec<(String, String)>;
+    /// catalog order (design D6). The pairs convert as they are kept, so a
+    /// site can stream its catalog without a freshly cloned vector between
+    /// them.
+    fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)>;
 
-    /// The destination's stored selection.
-    fn selection(&self, app: &App) -> GuiCollectionSelection;
+    /// The destination's stored set (design D1): the raw entry the effective
+    /// set retains against the catalog. All's site borrows
+    /// [`GuiCollectionSet::ALL`], so a library without a stored entry never
+    /// clones a default.
+    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet;
+
+    /// The destination's stored date order (design D4), read without
+    /// cloning the stored selection.
+    fn stored_order(&self, _app: &App) -> GuiDateOrder {
+        GuiDateOrder::default()
+    }
 
     /// Why the destination cannot serve a collection command at all (design
     /// D5, D6).
@@ -91,18 +105,18 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     fn install_order(&self, app: &mut App, order: GuiDateOrder);
 
     /// The effective selection the destination paints (design D1): the stored
-    /// set retained against the catalog.
-    fn effective_set(&self, app: &App) -> GuiCollectionSet {
-        self.selection(app)
-            .set
-            .effective(self.present(app).as_deref())
+    /// set retained against the catalog. A set nothing drops is returned
+    /// borrowed, so a per-frame reader clones nothing. The borrow is the
+    /// `App`'s alone, so the caller's site value need not outlive it.
+    fn effective_set<'a>(&self, app: &'a App) -> Cow<'a, GuiCollectionSet> {
+        self.stored_set(app).effective(self.present(app))
     }
 
     /// The selector's order (design D4): the stored order where the
     /// destination stores one, `None` where it does not (Music sorts by
     /// name).
     fn order(&self, app: &App) -> Option<GuiDateOrder> {
-        self.has_order().then(|| self.selection(app).order)
+        self.has_order().then(|| self.stored_order(app))
     }
 }
 
@@ -159,11 +173,7 @@ impl App {
         match op {
             CollectionOp::Toggle { key } => {
                 site.log_toggle(&key);
-                let next = site
-                    .selection(self)
-                    .set
-                    .effective(site.present(self).as_deref())
-                    .toggle(&key);
+                let next = site.effective_set(self).into_owned().toggle(&key);
                 site.install_set(self, next);
             }
             CollectionOp::All => site.install_set(self, GuiCollectionSet::All),
@@ -210,7 +220,7 @@ impl App {
         let set = site.effective_set(self);
         GuiCollections::new(
             target,
-            &set,
+            set.as_ref(),
             site.noun(),
             site.scopes(self),
             site.order(self),

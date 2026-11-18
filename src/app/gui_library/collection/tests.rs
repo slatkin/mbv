@@ -29,7 +29,8 @@ fn apply(set: GuiCollectionSet, op: &Op) -> GuiCollectionSet {
         Op::PressAll => GuiCollectionSet::All,
         Op::RetainPresent(present) => {
             let present: Vec<String> = present.iter().map(|key| (*key).to_string()).collect();
-            set.retain_present(&present)
+            set.retain_present(|key| present.iter().any(|present| present == key))
+                .into_owned()
         }
         Op::Effective(present) => {
             let present = present.map(|present| {
@@ -38,7 +39,11 @@ fn apply(set: GuiCollectionSet, op: &Op) -> GuiCollectionSet {
                     .map(|key| (*key).to_string())
                     .collect::<Vec<_>>()
             });
-            set.effective(present.as_deref())
+            set.effective(
+                present
+                    .map(|present| move |key: &str| present.iter().any(|present| present == key)),
+            )
+            .into_owned()
         }
     }
 }

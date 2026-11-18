@@ -15,11 +15,10 @@
 
 use mbv_components::library_panel::hero::hero_content_feed;
 use mbv_queue::FeedEntry;
-use mbv_ui_model::home_latest::provider_timestamp_secs;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 
-use super::collection::{GuiCollectionTarget, GuiDateOrder, compare_gui_date_order};
+use super::collection::{GuiCollectionTarget, compare_gui_date_order};
 use super::entry_list::{GuiEntryListProjection, GuiEntryRow, picked_or_first};
 use super::home::{GuiArtShape, artwork_shape};
 use crate::app::App;
@@ -135,7 +134,9 @@ impl App {
     /// collection selector, the selection's entry rows in the stored date
     /// order, the selected entry, and its Hero. A Client with no configured
     /// subscription projects the empty projection, as the frame's gate
-    /// excludes that destination anyway.
+    /// excludes that destination anyway. The selection's entries are built
+    /// once and sorted once; the rows and the Hero lookup read the sorted
+    /// list, so the frame never rebuilds it.
     #[must_use]
     pub fn gui_feeds_projection(&self) -> GuiFeedsProjection {
         if !self.gui_feeds_present() {
@@ -143,12 +144,16 @@ impl App {
         }
         let order = self.gui_feeds_date_order();
         let collections = self.gui_collections(GuiCollectionTarget::Feeds);
-        let rows = self.gui_feeds_rows(order);
+        let mut entries = self.gui_feeds_entries();
+        entries.sort_by(|left, right| {
+            compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order)
+        });
+        let rows = self.gui_feeds_rows(&entries);
         let selected = self.gui_feeds_selected(&rows);
         let hero = selected
             .as_deref()
             .and_then(GuiFeedEntryId::decode)
-            .and_then(|entry| self.gui_feeds_hero(&entry));
+            .and_then(|entry| self.gui_feeds_hero(&entry, &entries));
         GuiFeedsProjection {
             collections,
             loading: self.feed_tab.loading,
@@ -170,19 +175,12 @@ impl App {
     }
 
     /// The selection's entry rows (row 11.1; gui-collection-dropdown design
-    /// D2, D4): All is the App's merged order —
-    /// `FeedTabState::rebuild_all_entries` sorted it newest first with
-    /// undated entries last when the fetch landed — and a checked set merges
-    /// the checked subscriptions' lists in the tab's order. One stable sort
-    /// through `compare_gui_date_order` applies the stored order to both, so
-    /// Oldest reverses the dated rows and keeps the undated ones last.
-    fn gui_feeds_rows(&self, order: GuiDateOrder) -> Vec<GuiFeedsRow> {
-        let mut entries = self.gui_feeds_entries();
-        entries.sort_by(|left, right| {
-            compare_gui_date_order(left.pub_date_secs, right.pub_date_secs, order)
-        });
+    /// D2, D4): the projection has already applied the stored date order to
+    /// the entries — newest first with undated rows last while Newest — and
+    /// these rows carry that order as it is.
+    fn gui_feeds_rows(&self, entries: &[&FeedEntry]) -> Vec<GuiFeedsRow> {
         entries
-            .into_iter()
+            .iter()
             .map(|entry| self.gui_feeds_row(entry))
             .collect()
     }
@@ -201,9 +199,7 @@ impl App {
             subtitle: self
                 .gui_feeds_subscription_name(entry.feed_id.as_deref())
                 .map(str::to_string),
-            date: row_date(provider_timestamp_secs(&mbv_queue::QueueItem::Feed(
-                entry.clone(),
-            ))),
+            date: row_date(entry.pub_date_secs),
             state: MediaSemanticState::from_feed_entry(entry),
         }
     }
@@ -221,9 +217,14 @@ impl App {
     /// The selected entry's Hero (row 11.1): the shared `hero_content_feed`
     /// producer's title and duration behind the subscription name, and the
     /// feed artwork policy's shape. The entry has no artwork source, so no
-    /// image rides here and the Hero paints its placeholder.
-    fn gui_feeds_hero(&self, entry: &GuiFeedEntryId) -> Option<GuiFeedsHero> {
-        let listed = self.gui_feeds_entries();
+    /// image rides here and the Hero paints its placeholder. `listed` is the
+    /// projection's sorted selection list — the list the Hero's row came
+    /// from — so the lookup re-reads it instead of rebuilding it.
+    fn gui_feeds_hero(
+        &self,
+        entry: &GuiFeedEntryId,
+        listed: &[&FeedEntry],
+    ) -> Option<GuiFeedsHero> {
         let entry = listed
             .iter()
             .find(|known| feed_entry_matches(known, entry))?;

@@ -138,9 +138,13 @@ fn app_with_stored_groups(
         },
     );
     app.gui_music_albums
-        .insert((0, HIPHOP.to_string()), GuiGroupAlbums::Loaded(hiphop));
+        .entry(0)
+        .or_default()
+        .insert(HIPHOP.to_string(), GuiGroupAlbums::Loaded(hiphop));
     app.gui_music_albums
-        .insert((0, SOUL.to_string()), GuiGroupAlbums::Loaded(soul));
+        .entry(0)
+        .or_default()
+        .insert(SOUL.to_string(), GuiGroupAlbums::Loaded(soul));
     app
 }
 
@@ -529,7 +533,9 @@ fn a_failed_selected_group_shows_a_failure_line() {
         },
     );
     app.gui_music_albums
-        .insert((0, SOUL.to_string()), GuiGroupAlbums::Failed);
+        .entry(0)
+        .or_default()
+        .insert(SOUL.to_string(), GuiGroupAlbums::Failed);
 
     let projection = app.gui_music_projection(0);
 

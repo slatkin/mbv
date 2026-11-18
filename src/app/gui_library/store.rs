@@ -79,13 +79,18 @@ impl App {
     /// retries on every frame. The ensure step then starts the cleared groups'
     /// fetches again, one at a time.
     fn clear_failed_music_groups(&mut self, lib_idx: usize) {
-        for group_id in self.gui_selected_groups(lib_idx) {
-            let key = (lib_idx, group_id);
-            if matches!(
-                self.gui_music_albums.get(&key),
-                Some(GuiGroupAlbums::Failed)
-            ) {
-                self.gui_music_albums.remove(&key);
+        let set = self.gui_effective_music_set(lib_idx).into_owned();
+        let group_ids = self
+            .gui_selected_groups(lib_idx, &set)
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let Some(groups) = self.gui_music_albums.get_mut(&lib_idx) else {
+            return;
+        };
+        for group_id in group_ids {
+            if matches!(groups.get(&group_id), Some(GuiGroupAlbums::Failed)) {
+                groups.remove(&group_id);
             }
         }
     }
@@ -100,11 +105,14 @@ impl App {
     fn gui_hero_album_under(&self, lib_idx: usize, set: &GuiCollectionSet) -> Option<String> {
         match set {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => {
-                let key = (lib_idx, keys[0].clone());
-                if let Some(pick) = self.gui_library_picks.get(&key) {
+                if let Some(pick) = self.gui_library_picks.get(&(lib_idx, keys[0].clone())) {
                     return Some(pick.clone());
                 }
-                match self.gui_music_albums.get(&key) {
+                match self
+                    .gui_music_albums
+                    .get(&lib_idx)
+                    .and_then(|groups| groups.get(&keys[0]))
+                {
                     Some(GuiGroupAlbums::Loaded(albums)) => {
                         albums.first().map(|album| album.id.clone())
                     }
@@ -157,10 +165,17 @@ impl App {
     /// drops the selection's failed marks, so the next ensure starts their
     /// fetches again.
     pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
-        let group_ids = self.gui_selected_groups(lib_idx);
+        let set = self.gui_effective_music_set(lib_idx).into_owned();
+        let group_ids = self
+            .gui_selected_groups(lib_idx, &set)
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
         if group_ids.iter().any(|group_id| {
             matches!(
-                self.gui_music_albums.get(&(lib_idx, group_id.clone())),
+                self.gui_music_albums
+                    .get(&lib_idx)
+                    .and_then(|groups| groups.get(group_id)),
                 Some(GuiGroupAlbums::Loading)
             )
         }) {
@@ -169,7 +184,8 @@ impl App {
         let Some(group_id) = group_ids.into_iter().find(|group_id| {
             !self
                 .gui_music_albums
-                .contains_key(&(lib_idx, group_id.clone()))
+                .get(&lib_idx)
+                .is_some_and(|groups| groups.contains_key(group_id))
         }) else {
             return;
         };
@@ -180,9 +196,10 @@ impl App {
     /// (design D5): the Client core thread never fetches, and the completion
     /// lands in the store outside `nav_stack`.
     pub(in crate::app) fn fetch_gui_group_albums(&mut self, lib_idx: usize, group_id: String) {
-        let key = (lib_idx, group_id.clone());
         if matches!(
-            self.gui_music_albums.get(&key),
+            self.gui_music_albums
+                .get(&lib_idx)
+                .and_then(|groups| groups.get(&group_id)),
             Some(GuiGroupAlbums::Loading | GuiGroupAlbums::Loaded(_))
         ) {
             return;
@@ -196,7 +213,10 @@ impl App {
             // would change the built content between collects with no mark.
             return;
         };
-        self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);
+        self.gui_music_albums
+            .entry(lib_idx)
+            .or_default()
+            .insert(group_id.clone(), GuiGroupAlbums::Loading);
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let result = fetch_all_pages(&client, &group_id, None);
@@ -230,7 +250,10 @@ impl App {
                 GuiGroupAlbums::Failed
             }
         };
-        self.gui_music_albums.insert((lib_idx, group_id), state);
+        self.gui_music_albums
+            .entry(lib_idx)
+            .or_default()
+            .insert(group_id, state);
     }
 }
 
@@ -251,19 +274,22 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         false
     }
 
-    fn present(&self, app: &App) -> Option<Vec<String>> {
-        app.gui_music_present_groups(self.0)
+    fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
+        let level = app.gui_music_group_level(self.0)?;
+        if level.loading {
+            return None;
+        }
+        Some(move |key: &str| level.items.iter().any(|group| group.id == key))
     }
 
-    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+    fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)> {
         app.gui_music_groups(self.0)
     }
 
-    fn selection(&self, app: &App) -> GuiCollectionSelection {
+    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
         app.gui_library_groups
             .get(&self.0)
-            .cloned()
-            .unwrap_or_default()
+            .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {

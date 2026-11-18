@@ -158,8 +158,8 @@ fn a_saved_feeds_location_restores_to_the_feed_tab_with_no_saved_selection() {
         "the Feeds destination needs no retry"
     );
     assert_eq!(
-        app.gui_feeds_effective_set(),
-        GuiCollectionSet::All,
+        app.gui_feeds_effective_set().as_ref(),
+        &GuiCollectionSet::All,
         "the launch file saves no collection, so the restored tab opens on All"
     );
 }
@@ -172,15 +172,15 @@ fn a_checked_subscription_is_stored_and_a_stale_one_changes_nothing() {
 
     toggle_subscription(&mut app, FEED_B);
     assert_eq!(
-        app.gui_feeds_effective_set(),
-        GuiCollectionSet::Checked(vec![FEED_B.into()]),
+        app.gui_feeds_effective_set().as_ref(),
+        &GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "the checked subscription is stored"
     );
 
     toggle_subscription(&mut app, "https://example.test/gone");
     assert_eq!(
-        app.gui_feeds_effective_set(),
-        GuiCollectionSet::Checked(vec![FEED_B.into()]),
+        app.gui_feeds_effective_set().as_ref(),
+        &GuiCollectionSet::Checked(vec![FEED_B.into()]),
         "a subscription the tab does not hold changes nothing"
     );
 }
@@ -197,8 +197,8 @@ fn a_checked_subscription_the_tab_drops_never_paints() {
     app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
 
     assert_eq!(
-        app.gui_feeds_effective_set(),
-        GuiCollectionSet::All,
+        app.gui_feeds_effective_set().as_ref(),
+        &GuiCollectionSet::All,
         "a removed subscription's check never paints"
     );
 }

@@ -8,10 +8,14 @@
 //! the All view's gutter, `crates/mbv-components/src/emby_library_content.rs`),
 //! so the two Clients cannot drift, and the projection reads `App` data only.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use mbv_components::library_panel::content::ArtworkSource;
 use mbv_components::library_panel::hero::hero_content_emby;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_render::effective_sort_str;
+use mbv_ui_model::feed::FeedHomeVideoTarget;
 use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::ui_util::fmt_duration_short;
 
@@ -210,14 +214,14 @@ impl App {
             .unwrap_or_default()
     }
 
-    /// The root listing's folders as `(id, name)` pairs (row 8.1): the
-    /// programme lookup's source, the pill row's catalog, and the checked
+    /// The root listing's folders as borrowed `(id, name)` pairs (row 8.1):
+    /// the programme lookup's source, the pill row's catalog, and the checked
     /// set's retention catalog — the listing the group view already holds.
     /// Empty while the listing has not landed.
     pub(in crate::app::gui_library) fn gui_root_folder_names(
         &self,
         lib_idx: usize,
-    ) -> Vec<(String, String)> {
+    ) -> Vec<(&str, &str)> {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.nav_stack.first())
@@ -225,7 +229,7 @@ impl App {
                 root.items
                     .iter()
                     .filter(|item| item.is_folder)
-                    .map(|item| (item.id.clone(), item.name.clone()))
+                    .map(|item| (item.id.as_str(), item.name.as_str()))
                     .collect()
             })
             .unwrap_or_default()
@@ -263,16 +267,21 @@ impl App {
     /// The feed-group mode's projection (row 8.1; gui-collection-dropdown
     /// design D2, D3, D4): the All-and-folders pill row over the GUI's
     /// effective set, the checked folders' merged items in the stored date
-    /// order with the gutter and no rail, and the selected row's Hero.
+    /// order with the gutter and no rail, and the selected row's Hero. The
+    /// effective set is the frame's one read — the items and the pill names
+    /// read the set it borrows — and the programme lookup's id-to-name map is
+    /// built once, so a row's programme is one hash probe.
     fn gui_emby_feed_projection(&mut self, lib_idx: usize) -> GuiEmbyProjection {
         let set = self.gui_emby_feed_effective_set(lib_idx);
         let folders = self.gui_root_folder_names(lib_idx);
         let collections = self.gui_collections(GuiCollectionTarget::EmbyFeed(lib_idx));
-        let collection_names = feed_collection_names(&set, &folders);
-        let (items, loading) = self.gui_emby_feed_items(lib_idx);
+        let collection_names = feed_collection_names(set.as_ref(), &folders);
+        let programmes: HashMap<&str, &str> =
+            folders.iter().map(|(id, name)| (*id, *name)).collect();
+        let (items, loading) = self.gui_emby_feed_items(lib_idx, set.as_ref());
         let rows: Vec<GuiEmbyRow> = items
             .iter()
-            .map(|item| feed_row(item, feed_row_date(item), programme_of(item, &folders)))
+            .map(|item| feed_row(item, feed_row_date(item), programme_of(item, &programmes)))
             .collect();
         let selected = self.gui_emby_selected(lib_idx, &rows);
         let hero = selected
@@ -293,31 +302,20 @@ impl App {
         }
     }
 
-    /// The GUI's feed-group list (design D3, D4): the cached items of the
-    /// effective selection's targets, merged and de-duplicated by item id, and
-    /// sorted by date added through the shared date order — undated items last
-    /// in both orders, then by id. The second value is whether the list is
-    /// still landing: the root listing pending, or a target with no cache
-    /// entry yet, which is the fetch the ensure step starts.
-    pub(in crate::app) fn gui_emby_feed_items(&self, lib_idx: usize) -> (Vec<EmbyItem>, bool) {
-        let state = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref());
-        let mut items: Vec<EmbyItem> = Vec::new();
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut landing = state.is_none();
-        for target in self.gui_emby_feed_targets(lib_idx) {
-            let Some(cached) = state.and_then(|state| state.items.get(&target)) else {
-                landing = true;
-                continue;
-            };
-            for item in cached {
-                if seen.insert(item.id.clone()) {
-                    items.push(item.clone());
-                }
-            }
-        }
+    /// The GUI's feed-group list (design D3, D4): the cached items of `set`'s
+    /// targets, merged and de-duplicated by item id, and sorted by date added
+    /// through the shared date order — undated items last in both orders,
+    /// then by id. `set` is the projection's one effective-set read. The
+    /// second value is whether the list is still landing: the root listing
+    /// pending, or a target with no cache entry yet, which is the fetch the
+    /// ensure step starts. The items are borrowed from the cache, so a frame
+    /// clones no item.
+    pub(in crate::app) fn gui_emby_feed_items(
+        &self,
+        lib_idx: usize,
+        set: &GuiCollectionSet,
+    ) -> (Vec<&EmbyItem>, bool) {
+        let (mut items, landing) = self.gui_emby_feed_gathered(lib_idx, set);
         let order = self.gui_emby_feed_order(lib_idx);
         items.sort_by(|left, right| {
             compare_gui_date_order(
@@ -327,7 +325,67 @@ impl App {
             )
             .then_with(|| left.id.cmp(&right.id))
         });
+        (items, landing)
+    }
+
+    /// The cached items of `set`'s targets, merged and de-duplicated by item
+    /// id in the targets' own order, without the date sort — the membership
+    /// walks read this form. The second value is whether a target has no
+    /// cache entry yet, which is the fetch the ensure step starts, or the
+    /// root listing is pending.
+    pub(in crate::app::gui_library) fn gui_emby_feed_gathered(
+        &self,
+        lib_idx: usize,
+        set: &GuiCollectionSet,
+    ) -> (Vec<&EmbyItem>, bool) {
+        let state = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref());
+        let mut items: Vec<&EmbyItem> = Vec::new();
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut landing = state.is_none();
+        if let Some(state) = state {
+            match set {
+                GuiCollectionSet::All => {
+                    landing |= Self::gather_feed_target(
+                        state.items_for(FeedHomeVideoTarget::All),
+                        &mut seen,
+                        &mut items,
+                    );
+                }
+                GuiCollectionSet::Checked(keys) => {
+                    for key in keys {
+                        landing |= Self::gather_feed_target(
+                            state.items_for(FeedHomeVideoTarget::Folder(key.as_str())),
+                            &mut seen,
+                            &mut items,
+                        );
+                    }
+                }
+            }
+        }
         (items, landing || self.gui_emby_root_loading(lib_idx))
+    }
+
+    /// Merge one target's cached items into the de-duplicated gather: the
+    /// first occurrence of each item id is the one the list keeps, as the
+    /// owned merge did. `true` when the target has no cache entry yet — the
+    /// fetch the ensure step starts is owed.
+    fn gather_feed_target<'a>(
+        cached: Option<&'a Vec<EmbyItem>>,
+        seen: &mut HashSet<&'a str>,
+        items: &mut Vec<&'a EmbyItem>,
+    ) -> bool {
+        let Some(cached) = cached else {
+            return true;
+        };
+        for item in cached {
+            if seen.insert(item.id.as_str()) {
+                items.push(item);
+            }
+        }
+        false
     }
 
     /// Whether the feed-view library's root listing has not landed yet: the
@@ -354,15 +412,18 @@ impl App {
     /// The Emby item a command names (row 8.1): the active list's rows — the
     /// feed-group mode's merged checked-folder items, the root-list store's
     /// rows in plain mode. `None` when no row carries the id, so a stale
-    /// command plays nothing.
+    /// command plays nothing. The feed-group arm walks the merged items
+    /// without the date sort and clones only the match, so a play names one
+    /// clone.
     pub(in crate::app::gui_library) fn gui_emby_item(
         &self,
         lib_idx: usize,
         item_id: &str,
     ) -> Option<EmbyItem> {
         if self.is_feed_home_video_library(lib_idx) {
-            let (items, _) = self.gui_emby_feed_items(lib_idx);
-            return items.into_iter().find(|item| item.id == item_id);
+            let set = self.gui_emby_feed_effective_set(lib_idx);
+            let (items, _) = self.gui_emby_feed_gathered(lib_idx, set.as_ref());
+            return items.into_iter().find(|item| item.id == item_id).cloned();
         }
         self.gui_stored_emby_root_items(lib_idx)
             .find(|item| item.id == item_id)
@@ -457,12 +518,13 @@ fn feed_row_date(item: &EmbyItem) -> Option<String> {
 /// The programme (root folder) an item sits in (row 8.1): the root listing's
 /// folder whose id is the item's containing item's id. `None` for a loose
 /// root video — whose containing item is the library itself — and for an
-/// item whose folder the listing does not hold.
-fn programme_of(item: &EmbyItem, folders: &[(String, String)]) -> Option<String> {
-    folders
-        .iter()
-        .find(|(folder_id, _)| *folder_id == item.parent_id)
-        .map(|(_, name)| name.clone())
+/// item whose folder the listing does not hold. `programmes` is the id-to-
+/// name map the projection built once, so the lookup is one probe.
+fn programme_of(item: &EmbyItem, programmes: &HashMap<&str, &str>) -> Option<String> {
+    programmes
+        .get(item.parent_id.as_str())
+        .copied()
+        .map(str::to_string)
 }
 
 /// The TUI browse row's primary label (`row_for`, `crates/mbv-components/
@@ -500,7 +562,7 @@ fn row_kind(item: &EmbyItem) -> GuiEmbyRowKind {
 /// The checked collection names the Library Status bar's location reads
 /// (design D2, D6): `All`, or the checked folders' names in press order, with
 /// a folder the listing no longer names falling back to its stable id.
-fn feed_collection_names(set: &GuiCollectionSet, folders: &[(String, String)]) -> Vec<String> {
+fn feed_collection_names(set: &GuiCollectionSet, folders: &[(&str, &str)]) -> Vec<String> {
     match set {
         GuiCollectionSet::All => vec!["All".to_string()],
         GuiCollectionSet::Checked(keys) => keys
@@ -509,7 +571,7 @@ fn feed_collection_names(set: &GuiCollectionSet, folders: &[(String, String)]) -
                 folders
                     .iter()
                     .find(|(folder_id, _)| folder_id == key)
-                    .map_or_else(|| key.clone(), |(_, name)| name.clone())
+                    .map_or_else(|| key.clone(), |(_, name)| (*name).to_string())
             })
             .collect(),
     }

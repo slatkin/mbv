@@ -81,7 +81,7 @@ impl<H> Default for GuiEntryListProjection<H> {
                 GuiCollectionTarget::Feeds,
                 &GuiCollectionSet::All,
                 GuiCollectionNoun::Subscriptions,
-                Vec::new(),
+                std::iter::empty::<(String, String)>(),
                 None,
             ),
             loading: false,

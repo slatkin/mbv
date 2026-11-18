@@ -118,7 +118,9 @@ impl App {
         // restores through the retention (design D10); a saved All, an
         // emptied set, and no saved entry leave the default All.
         if let Some(entry) = saved_entry {
-            let set = GuiCollectionSet::Checked(entry.group_ids.clone()).retain_present(&present);
+            let set = GuiCollectionSet::Checked(entry.group_ids.clone())
+                .retain_present(|key| present.iter().any(|present| present == key))
+                .into_owned();
             if !set.is_all() {
                 self.install_gui_library_collection(lib_idx, set);
             }

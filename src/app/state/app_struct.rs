@@ -274,11 +274,14 @@ pub struct App {
     pub(in crate::app) gui_library_groups:
         std::collections::HashMap<usize, crate::app::gui_library::GuiCollectionSelection>,
     /// The GUI Library's Music collection store (design D5): each selected
-    /// group's album list, keyed by the library index and the group id. It
+    /// group's album list, keyed by the library index, then the group id. It
     /// lands outside `nav_stack`, so the TUI's navigation state and fetches do
-    /// not change.
-    pub(in crate::app) gui_music_albums:
-        std::collections::HashMap<(usize, String), crate::app::gui_library::GuiGroupAlbums>,
+    /// not change, and a per-frame reader looks a group up through its
+    /// borrowed id.
+    pub(in crate::app) gui_music_albums: std::collections::HashMap<
+        usize,
+        std::collections::HashMap<String, crate::app::gui_library::GuiGroupAlbums>,
+    >,
     /// The album each collection group's pill last showed in the GUI Library's
     /// Hero (design D13), keyed by the library index and the group id. A group
     /// with no entry shows its first album. The TUI never reads it.

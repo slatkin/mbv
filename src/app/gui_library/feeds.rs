@@ -15,6 +15,8 @@
 //! selection are shell-only, and they write `Model` state. So nothing that
 //! produces `App` feed state moved here, and the TUI never reads any of it.
 
+use std::borrow::Cow;
+
 use mbv_queue::FeedEntry;
 
 use super::collection::{
@@ -73,18 +75,27 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         true
     }
 
-    fn present(&self, app: &App) -> Option<Vec<String>> {
+    fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
         // The tab is present whenever the destination serves a command, so
         // the retention always applies (row 11.1).
-        Some(app.feed_tab_subscription_ids())
+        Some(move |key: &str| {
+            app.feed_tab
+                .subscriptions
+                .iter()
+                .any(|subscription| subscription.url == key)
+        })
     }
 
-    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+    fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)> {
         app.gui_feeds_subscriptions()
     }
 
-    fn selection(&self, app: &App) -> GuiCollectionSelection {
-        app.gui_feeds_selection.selection.clone()
+    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
+        &app.gui_feeds_selection.selection.set
+    }
+
+    fn stored_order(&self, app: &App) -> GuiDateOrder {
+        app.gui_feeds_selection.selection.order
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -190,19 +201,10 @@ impl App {
     /// gui-collection-dropdown design D1): the stored set with every checked
     /// subscription the tab no longer holds dropped — the spec's vanish rule,
     /// so when none of the checked subscriptions survive, the selection
-    /// becomes All. All stays All.
-    pub(in crate::app) fn gui_feeds_effective_set(&self) -> GuiCollectionSet {
+    /// becomes All. All stays All. A set nothing drops is returned borrowed,
+    /// so a per-frame reader clones nothing.
+    pub(in crate::app) fn gui_feeds_effective_set(&self) -> Cow<'_, GuiCollectionSet> {
         GuiFeedsCollectionSite.effective_set(self)
-    }
-
-    /// The tab's subscription URLs (row 11.1), in the tab's order: the
-    /// retention's present list.
-    fn feed_tab_subscription_ids(&self) -> Vec<String> {
-        self.feed_tab
-            .subscriptions
-            .iter()
-            .map(|subscription| subscription.url.clone())
-            .collect()
     }
 
     /// The date order the list sorts by (row 11.1; gui-collection-dropdown
@@ -229,7 +231,7 @@ impl App {
     /// copies no entry.
     #[must_use]
     pub fn gui_feeds_entries(&self) -> Vec<&FeedEntry> {
-        match self.gui_feeds_effective_set() {
+        match self.gui_feeds_effective_set().as_ref() {
             GuiCollectionSet::All => self.feed_tab.all_entries.iter().collect(),
             GuiCollectionSet::Checked(keys) => {
                 let mut merged = Vec::new();

@@ -20,7 +20,7 @@ impl App {
             Self::log_stale_library_item("showDetail", item_id);
             return;
         };
-        let single_group = match self.gui_effective_music_set(lib_idx) {
+        let single_group = match self.gui_effective_music_set(lib_idx).as_ref() {
             GuiCollectionSet::Checked(keys) if keys.len() == 1 => Some(keys[0].clone()),
             _ => None,
         };
@@ -204,11 +204,11 @@ impl App {
     /// The albums the GUI store loaded for `lib_idx`'s selected groups.
     pub(super) fn gui_stored_albums(&self, lib_idx: usize) -> impl Iterator<Item = &EmbyItem> {
         self.gui_music_albums
-            .iter()
-            .filter(move |((store_lib_idx, _group_id), _state)| *store_lib_idx == lib_idx)
-            .filter_map(|(_key, state)| match state {
+            .get(&lib_idx)
+            .into_iter()
+            .flat_map(|groups| groups.values())
+            .filter_map(|state| match state {
                 GuiGroupAlbums::Loaded(albums) => Some(albums.iter()),
-
                 GuiGroupAlbums::Loading | GuiGroupAlbums::Failed => None,
             })
             .flatten()

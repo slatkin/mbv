@@ -23,6 +23,7 @@ use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBrowseState, Audiobooksh
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::row_date;
 use mbv_ui_msg::PodcastEpisodeTarget;
+use std::collections::HashSet;
 
 use super::GuiLibraryArtwork;
 use super::collection::{
@@ -176,10 +177,12 @@ impl App {
         if !self.gui_podcast_library(lib_idx) {
             return GuiPodcastsProjection::default();
         }
+        // The one effective-set read the frame takes: the rows read the set
+        // it borrows, so the frame never recomputes the retention.
         let set = self.gui_podcast_effective_set(lib_idx);
         let order = self.gui_podcast_date_order(lib_idx);
         let collections = self.gui_collections(GuiCollectionTarget::Podcasts(lib_idx));
-        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, &set, order);
+        let (rows, loading, failed) = self.gui_podcast_rows(lib_idx, set.as_ref(), order);
         let selected = self.gui_podcast_selected(lib_idx, &rows);
         let hero = selected
             .as_deref()
@@ -197,20 +200,18 @@ impl App {
 
     /// The Podcasts collection selector's catalog (row 10.1): each listed show
     /// by title — the order the show list already holds — as its
-    /// `library_item_id` key and title.
+    /// `library_item_id` key and title. The catalog streams borrowed shows and
+    /// clones each pair as the selector keeps it, with no freshly cloned
+    /// vector between the two.
     pub(in crate::app::gui_library) fn gui_podcast_shows(
         &self,
         lib_idx: usize,
-    ) -> Vec<(String, String)> {
-        let shows = self
-            .audiobookshelf_browse
+    ) -> impl Iterator<Item = (String, String)> {
+        self.audiobookshelf_browse
             .get(lib_idx)
-            .map(|state| state.shows.as_slice())
-            .unwrap_or_default();
-        shows
-            .iter()
+            .into_iter()
+            .flat_map(|state| state.shows.iter())
             .map(|show| (show.library_item_id.clone(), show.title.clone()))
-            .collect()
     }
 
     /// The selection's episode rows with the view's loading and failure
@@ -232,12 +233,26 @@ impl App {
         let mut episodes = match set {
             GuiCollectionSet::All => state.visible_episodes(AudiobookshelfEpisodeFilter::All),
             GuiCollectionSet::Checked(keys) => {
-                let mut visible = Vec::new();
+                // The merge walks the shows, not the keys: the final stable
+                // date sort keeps equal dates in merge order, so the
+                // show-order walk alone yields the identical order. The key
+                // set is borrowed and hashed once, so the walk is one
+                // hash probe per show instead of a linear scan per show.
+                let keys: HashSet<&str> = keys.iter().map(String::as_str).collect();
+                let mut visible = Vec::with_capacity(
+                    state
+                        .shows
+                        .iter()
+                        .filter(|show| keys.contains(show.library_item_id.as_str()))
+                        .filter_map(|show| state.detail_cache.get(show.library_item_id.as_str()))
+                        .map(Vec::len)
+                        .sum(),
+                );
                 for show in &state.shows {
-                    if !keys.contains(&show.library_item_id) {
+                    if !keys.contains(show.library_item_id.as_str()) {
                         continue;
                     }
-                    if let Some(cached) = state.detail_cache.get(&show.library_item_id) {
+                    if let Some(cached) = state.detail_cache.get(show.library_item_id.as_str()) {
                         visible.extend(
                             state.visible_episodes_from(cached, AudiobookshelfEpisodeFilter::All),
                         );

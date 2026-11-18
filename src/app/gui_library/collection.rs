@@ -5,6 +5,7 @@
 //! date order the feed-based lists sort by. The TUI-shared stores never hold
 //! a set, so the TUI does not change.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -31,6 +32,10 @@ impl Default for GuiCollectionSet {
 }
 
 impl GuiCollectionSet {
+    /// All: the shared borrowed default (design D1), so a reader without a
+    /// stored entry borrows one value instead of cloning a fresh one.
+    pub const ALL: Self = Self::All;
+
     /// Whether the selection is All (design D1).
     #[must_use]
     pub fn is_all(&self) -> bool {
@@ -79,17 +84,21 @@ impl GuiCollectionSet {
     }
 
     /// The selection after the catalog changed (design D1): the checked keys
-    /// the catalog no longer holds drop, and when none survive the selection
-    /// becomes All. All stays All.
+    /// `present` does not hold drop, and when none survive the selection
+    /// becomes All. All stays All. The stored set is cloned only when a key
+    /// drops; an unchanged set is returned borrowed, so a per-frame reader
+    /// allocates nothing when the catalog holds every checked key.
     #[must_use]
-    pub fn retain_present(self, present: &[String]) -> Self {
-        match self {
-            Self::All => Self::All,
-            Self::Checked(mut keys) => {
-                keys.retain(|key| present.contains(key));
-                Self::normalized(keys)
-            }
+    pub fn retain_present(&self, present: impl Fn(&str) -> bool) -> Cow<'_, Self> {
+        let Self::Checked(keys) = self else {
+            return Cow::Borrowed(self);
+        };
+        if keys.iter().all(|key| present(key)) {
+            return Cow::Borrowed(self);
         }
+        let mut keys = keys.clone();
+        keys.retain(|key| present(key));
+        Cow::Owned(Self::normalized(keys))
     }
 
     /// The selection after the catalog settled (design D1): `Some(present)`
@@ -97,12 +106,12 @@ impl GuiCollectionSet {
     /// no longer holds drops, and when none survive the selection becomes
     /// All; `None` is a catalog that has not landed yet, the list that would
     /// name a key stale, which keeps the set as it is. All stays All either
-    /// way.
+    /// way, and a set nothing drops is returned borrowed.
     #[must_use]
-    pub fn effective(self, present: Option<&[String]>) -> Self {
+    pub fn effective(&self, present: Option<impl Fn(&str) -> bool>) -> Cow<'_, Self> {
         match present {
             Some(present) => self.retain_present(present),
-            None => self,
+            None => Cow::Borrowed(self),
         }
     }
 }
@@ -204,13 +213,15 @@ pub struct GuiCollections {
 impl GuiCollections {
     /// The selector for `target` (design D6) over `set`, with `scopes` — each
     /// collection's stable key and name, in catalog order — as its entries,
-    /// and the destination's list `order`.
+    /// and the destination's list `order`. The scopes' pairs convert as they
+    /// are kept, so a site can stream borrowed catalog entries without a
+    /// freshly cloned vector between them.
     #[must_use]
-    pub fn new(
+    pub fn new<S: Into<String>, N: Into<String>>(
         target: GuiCollectionTarget,
         set: &GuiCollectionSet,
         noun: GuiCollectionNoun,
-        scopes: impl IntoIterator<Item = (String, String)>,
+        scopes: impl IntoIterator<Item = (S, N)>,
         order: Option<GuiDateOrder>,
     ) -> Self {
         let checked: HashSet<&str> = set.checked_keys().iter().map(String::as_str).collect();
@@ -219,10 +230,13 @@ impl GuiCollections {
             all: set.is_all(),
             entries: scopes
                 .into_iter()
-                .map(|(key, name)| GuiCollectionEntry {
-                    checked: checked.contains(key.as_str()),
-                    key,
-                    name,
+                .map(|(key, name)| {
+                    let key = key.into();
+                    GuiCollectionEntry {
+                        checked: checked.contains(key.as_str()),
+                        key,
+                        name: name.into(),
+                    }
                 })
                 .collect(),
             noun,

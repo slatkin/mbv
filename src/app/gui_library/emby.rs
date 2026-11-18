@@ -12,7 +12,10 @@
 //! completion, outside `nav_stack`. Every action runs the TUI's existing
 //! loaders, so the two Clients cannot drift. The TUI never reads any of it.
 
+use std::borrow::Cow;
+
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::feed::FeedHomeVideoTarget;
 
 use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
@@ -73,16 +76,34 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
         true
     }
 
-    fn present(&self, app: &App) -> Option<Vec<String>> {
-        app.gui_emby_folder_catalog(self.0)
+    fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
+        let root = app.libs.get(self.0)?.nav_stack.first()?;
+        if root.loading {
+            return None;
+        }
+        Some(move |key: &str| {
+            root.items
+                .iter()
+                .any(|item| item.is_folder && item.id == key)
+        })
     }
 
-    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+    fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)> {
         app.gui_root_folder_names(self.0)
+            .into_iter()
+            .map(|(id, name)| (id.to_owned(), name.to_owned()))
     }
 
-    fn selection(&self, app: &App) -> GuiCollectionSelection {
-        app.gui_emby_feed_set(self.0)
+    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
+        app.gui_emby_feed_sets
+            .get(&self.0)
+            .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
+    }
+
+    fn stored_order(&self, app: &App) -> GuiDateOrder {
+        app.gui_emby_feed_sets
+            .get(&self.0)
+            .map_or(GuiDateOrder::default(), |stored| stored.order)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -190,10 +211,12 @@ impl App {
     /// feed-view library's merged checked-folder list, else the root-list
     /// store's loaded list. A loading or not-yet-started list admits the
     /// pick, because the list is what would name it stale; a failed list
-    /// names nothing.
+    /// names nothing. The feed-group arm reads the merged list without
+    /// building its date-sorted order — the membership walk alone answers.
     fn gui_emby_row_known(&self, lib_idx: usize, item_id: &str) -> bool {
         if self.is_feed_home_video_library(lib_idx) {
-            let (items, loading) = self.gui_emby_feed_items(lib_idx);
+            let set = self.gui_emby_feed_effective_set(lib_idx);
+            let (items, loading) = self.gui_emby_feed_gathered(lib_idx, set.as_ref());
             return loading || items.iter().any(|item| item.id == item_id);
         }
         match self.gui_emby_roots.get(&lib_idx) {
@@ -253,7 +276,9 @@ impl App {
     /// that runs, so the next target's fetch starts on a later frame once it
     /// clears: one fetch at a time, as the TUI's own selection fetch. The
     /// shared `FeedHomeVideoState::selection` is never written here, so the
-    /// TUI keeps its own selection.
+    /// TUI keeps its own selection. The targets iterate the checked set's
+    /// borrowed keys, and All is one cache probe, so the per-frame ensure
+    /// clones nothing for the walk.
     fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
         // The GUI owns this library's set from the first frame it shows: the
         // entry marks that library's results as the GUI's own, which the
@@ -271,11 +296,21 @@ impl App {
         if state.fetching.is_some() {
             return;
         }
-        let Some(target) = self
-            .gui_emby_feed_targets(lib_idx)
-            .into_iter()
-            .find(|target| !state.items.contains_key(target))
-        else {
+        let next = match self.gui_emby_feed_effective_set(lib_idx).as_ref() {
+            GuiCollectionSet::All => state
+                .items_for(FeedHomeVideoTarget::All)
+                .is_none()
+                .then_some(FeedHomeVideoSelection::All),
+            GuiCollectionSet::Checked(keys) => keys
+                .iter()
+                .find(|key| {
+                    state
+                        .items_for(FeedHomeVideoTarget::Folder(key.as_str()))
+                        .is_none()
+                })
+                .map(|key| FeedHomeVideoSelection::Folder(key.clone())),
+        };
+        let Some(target) = next else {
             return;
         };
         self.spawn_feed_home_video_fetch(lib_idx, target);
@@ -320,35 +355,28 @@ impl App {
     /// The effective feed-group selection the pills, the list, and the fetches
     /// read (design D1): the stored set with every checked folder the root
     /// listing no longer holds dropped, so a vanished folder's check falls back
-    /// to All when none survive. All stays All.
-    pub(in crate::app) fn gui_emby_feed_effective_set(&self, lib_idx: usize) -> GuiCollectionSet {
+    /// to All when none survive. All stays All. A set nothing drops is
+    /// returned borrowed, so a per-frame reader clones nothing.
+    pub(in crate::app) fn gui_emby_feed_effective_set(
+        &self,
+        lib_idx: usize,
+    ) -> Cow<'_, GuiCollectionSet> {
         GuiEmbyFeedCollectionSite(lib_idx).effective_set(self)
     }
 
-    /// The date order the GUI's feed-group list sorts by (design D4).
+    /// The date order the GUI's feed-group list sorts by (design D4): the
+    /// stored order, read without cloning the stored selection.
     pub(in crate::app) fn gui_emby_feed_order(&self, lib_idx: usize) -> GuiDateOrder {
-        self.gui_emby_feed_set(lib_idx).order
-    }
-
-    /// The targets the effective selection reads (design D3): All is the one
-    /// All list, and a checked set is one target per checked folder.
-    pub(in crate::app) fn gui_emby_feed_targets(
-        &self,
-        lib_idx: usize,
-    ) -> Vec<FeedHomeVideoSelection> {
-        match self.gui_emby_feed_effective_set(lib_idx) {
-            GuiCollectionSet::All => vec![FeedHomeVideoSelection::All],
-            GuiCollectionSet::Checked(keys) => keys
-                .into_iter()
-                .map(FeedHomeVideoSelection::Folder)
-                .collect(),
-        }
+        self.gui_emby_feed_sets
+            .get(&lib_idx)
+            .map_or(GuiDateOrder::default(), |stored| stored.order)
     }
 
     /// Whether the GUI's checked set still wants `target`'s list (design D3):
     /// the result arm's second acceptance rule. A library with no GUI
     /// selection entry wants nothing, so the TUI's own stale-drop rule alone
-    /// applies to its results.
+    /// applies to its results. All is one compare, and a checked set is the
+    /// key set's own compare, so no target list is built.
     pub(in crate::app) fn gui_emby_feed_wants_target(
         &self,
         lib_idx: usize,
@@ -357,9 +385,15 @@ impl App {
         if !self.gui_emby_feed_sets.contains_key(&lib_idx) {
             return false;
         }
-        self.gui_emby_feed_targets(lib_idx)
-            .iter()
-            .any(|wanted| wanted == target)
+        match self.gui_emby_feed_effective_set(lib_idx).as_ref() {
+            GuiCollectionSet::All => target == &FeedHomeVideoSelection::All,
+            GuiCollectionSet::Checked(keys) => {
+                matches!(
+                    target,
+                    FeedHomeVideoSelection::Folder(wanted) if keys.contains(wanted)
+                )
+            }
+        }
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row

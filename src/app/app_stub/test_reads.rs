@@ -225,8 +225,8 @@ impl App {
                 album
             })
             .collect();
-        self.gui_music_albums.insert(
-            (lib_idx, group_id.to_string()),
+        self.gui_music_albums.entry(lib_idx).or_default().insert(
+            group_id.to_string(),
             crate::app::gui_library::GuiGroupAlbums::Loaded(albums),
         );
     }
@@ -286,7 +286,11 @@ impl App {
         lib_idx: usize,
         group_id: &str,
     ) -> Option<Vec<String>> {
-        match self.gui_music_albums.get(&(lib_idx, group_id.to_string())) {
+        match self
+            .gui_music_albums
+            .get(&lib_idx)
+            .and_then(|groups| groups.get(group_id))
+        {
             Some(crate::app::gui_library::GuiGroupAlbums::Loaded(albums)) => {
                 Some(albums.iter().map(|album| album.id.clone()).collect())
             }

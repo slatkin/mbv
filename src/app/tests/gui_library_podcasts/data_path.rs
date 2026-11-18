@@ -157,7 +157,10 @@ fn the_all_row_lands_every_shows_episodes_through_the_fan_out() {
 
     select_all_shows(&mut app, 1);
 
-    assert_eq!(app.gui_podcast_effective_set(1), GuiCollectionSet::All);
+    assert_eq!(
+        app.gui_podcast_effective_set(1).as_ref(),
+        &GuiCollectionSet::All
+    );
     assert_eq!(
         podcast_state(&app).committed_show_pill,
         None,
@@ -214,8 +217,8 @@ fn a_checked_show_lands_only_that_shows_episodes() {
     toggle_show(&mut app, 1, "show-b");
 
     assert_eq!(
-        app.gui_podcast_effective_set(1),
-        GuiCollectionSet::Checked(vec!["show-b".into()])
+        app.gui_podcast_effective_set(1).as_ref(),
+        &GuiCollectionSet::Checked(vec!["show-b".into()])
     );
     assert_eq!(
         podcast_state(&app).committed_show_pill.as_deref(),
@@ -332,8 +335,8 @@ fn the_presented_tabs_include_a_podcast_library_and_a_saved_location_restores_it
         "the Podcasts destination applies no saved pill and needs no retry"
     );
     assert_eq!(
-        app.gui_podcast_effective_set(1),
-        GuiCollectionSet::All,
+        app.gui_podcast_effective_set(1).as_ref(),
+        &GuiCollectionSet::All,
         "the restored destination keeps the default All selection"
     );
 }

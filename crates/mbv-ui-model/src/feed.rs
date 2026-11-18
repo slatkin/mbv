@@ -12,6 +12,16 @@ pub enum FeedHomeVideoSelection {
     All,
     Folder(String),
 }
+
+/// Which list a caller reads the feed home-video cache with, borrowed: the
+/// one `All` list, or one root folder named by its stable id. The owned
+/// [`FeedHomeVideoSelection`] is the cache's key; this is its borrowing
+/// probe, so a per-frame reader names a target without cloning folder ids.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeedHomeVideoTarget<'a> {
+    All,
+    Folder(&'a str),
+}
 #[derive(Clone, Debug, Default)]
 pub struct FeedHomeVideoState {
     /// The selection whose items the view paints; the key into `items` and
@@ -61,6 +71,23 @@ impl FeedHomeVideoState {
     #[must_use]
     pub fn selected_len(&self) -> usize {
         self.items.get(&self.selection).map_or(0, Vec::len)
+    }
+
+    /// The loaded items `target` names, through the borrowed probe: `All`'s
+    /// own entry, or the folder entry whose id matches. `None` while the
+    /// target has no cache entry — the fetch that loads it is still owed.
+    #[must_use]
+    pub fn items_for(&self, target: FeedHomeVideoTarget<'_>) -> Option<&Vec<EmbyItem>> {
+        match target {
+            FeedHomeVideoTarget::All => self.items.get(&FeedHomeVideoSelection::All),
+            FeedHomeVideoTarget::Folder(id) => self
+                .items
+                .iter()
+                .find(|(selection, _)| {
+                    matches!(selection, FeedHomeVideoSelection::Folder(known) if known == id)
+                })
+                .map(|(_, items)| items),
+        }
     }
 
     /// The pill index to persist at the `LibraryPosition` save boundary: a

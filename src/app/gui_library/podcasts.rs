@@ -11,6 +11,8 @@
 //! show's episodes. So this module names the checked shows and triggers the
 //! loads the TUI's own loaders run. The TUI never reads any of it.
 
+use std::borrow::Cow;
+
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
@@ -70,23 +72,31 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
         true
     }
 
-    fn present(&self, app: &App) -> Option<Vec<String>> {
+    fn present(&self, app: &App) -> Option<impl Fn(&str) -> bool> {
         // A show list that holds no show keeps the stored set as it is: it is
         // still landing, and the list is what would name a show stale (row
         // 10.1).
-        let present = app.gui_podcast_present_shows(self.0);
-        (!present.is_empty()).then_some(present)
+        let state = app.audiobookshelf_browse.get(self.0)?;
+        if state.shows.is_empty() {
+            return None;
+        }
+        Some(move |key: &str| state.shows.iter().any(|show| show.library_item_id == key))
     }
 
-    fn scopes(&self, app: &App) -> Vec<(String, String)> {
+    fn scopes(&self, app: &App) -> impl IntoIterator<Item = (String, String)> {
         app.gui_podcast_shows(self.0)
     }
 
-    fn selection(&self, app: &App) -> GuiCollectionSelection {
+    fn stored_set<'a>(&self, app: &'a App) -> &'a GuiCollectionSet {
         app.gui_podcast_libs
             .get(&self.0)
-            .map(|stored| stored.selection.clone())
-            .unwrap_or_default()
+            .map_or(&GuiCollectionSet::ALL, |stored| &stored.selection.set)
+    }
+
+    fn stored_order(&self, app: &App) -> GuiDateOrder {
+        app.gui_podcast_libs
+            .get(&self.0)
+            .map_or(GuiDateOrder::default(), |stored| stored.selection.order)
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
@@ -220,8 +230,13 @@ impl App {
             return;
         }
         let set = self.gui_podcast_effective_set(lib_idx);
-        self.commit_gui_podcast_show_scope(lib_idx, &set);
-        if set.is_all()
+        let all = set.is_all();
+        let single_show = match set.as_ref() {
+            GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().cloned(),
+            _ => None,
+        };
+        self.commit_gui_podcast_show_scope(lib_idx, single_show.as_deref());
+        if all
             && let Some(library_id) = self
                 .audiobookshelf_libraries
                 .get(lib_idx)
@@ -324,24 +339,13 @@ impl App {
     /// spec's vanish rule), and when none of the checked shows survive the
     /// selection becomes All; a show list that holds no show admits the stored
     /// set as it is — it is still landing, and the list is what would name its
-    /// shows stale.
-    pub(in crate::app) fn gui_podcast_effective_set(&self, lib_idx: usize) -> GuiCollectionSet {
+    /// shows stale. A set nothing drops is returned borrowed, so a per-frame
+    /// reader clones nothing.
+    pub(in crate::app) fn gui_podcast_effective_set(
+        &self,
+        lib_idx: usize,
+    ) -> Cow<'_, GuiCollectionSet> {
         GuiPodcastsCollectionSite(lib_idx).effective_set(self)
-    }
-
-    /// The published show list's ids (row 10.1): the retention's present
-    /// list, in the show list's own order.
-    fn gui_podcast_present_shows(&self, lib_idx: usize) -> Vec<String> {
-        self.audiobookshelf_browse
-            .get(lib_idx)
-            .map(|state| {
-                state
-                    .shows
-                    .iter()
-                    .map(|show| show.library_item_id.clone())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
     }
 
     /// The date order the list sorts by (row 10.1; gui-collection-dropdown
@@ -371,15 +375,11 @@ impl App {
     /// the browse state on every frame. The scope is the one shared write both
     /// Clients make; the browse state's own selected episode and show stay the
     /// TUI's.
-    fn commit_gui_podcast_show_scope(&mut self, lib_idx: usize, set: &GuiCollectionSet) {
-        let scope = match set {
-            GuiCollectionSet::Checked(keys) if keys.len() == 1 => keys.first().cloned(),
-            _ => None,
-        };
+    fn commit_gui_podcast_show_scope(&mut self, lib_idx: usize, show: Option<&str>) {
         if let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx)
-            && state.committed_show_pill != scope
+            && state.committed_show_pill.as_deref() != show
         {
-            state.committed_show_pill = scope;
+            state.committed_show_pill = show.map(str::to_owned);
         }
     }
 
