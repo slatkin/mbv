@@ -23,7 +23,6 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -511,7 +510,6 @@ impl App {
             "the feed-group target's items failed to load"
         );
         self.log_feed_home_video_state(lib_idx, "selection_fetch_failed");
-        self.flash(format!("Library error: {error}"), ToastSeverity::Error);
     }
 
     /// Start `lib_idx`'s root-list fetch when the store holds no list (row

@@ -47,8 +47,8 @@ pub enum NavigateLanding {
 /// `App::retry_pending_series_landing` retries the landing on that
 /// library's next `Loaded`/`AllItemsPrefetched`/restored-position drain.
 /// Cleared by the retry on success (land, save, switch per D4) or on a miss
-/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error`,
-/// and by any manual tab change.
+/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error` or
+/// `LibEvent::FeedHomeVideoSelectionFailed`, and by any manual tab change.
 #[derive(Debug)]
 pub struct PendingSeriesLanding {
     pub lib_idx: usize,

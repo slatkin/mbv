@@ -118,8 +118,8 @@ impl App {
     /// to All, as does a destination with no saved entry. The active
     /// destination must still be the one phase 1 recorded: a mid-restore tab
     /// switch abandons the restore, so no other destination's saved set lands
-    /// under the user. Returns `false` while a saved entry's collection
-    /// catalog has not landed, so the caller retries.
+    /// under the user. Returns `false` while a saved entry's destination
+    /// catalog can still land, so the caller retries.
     pub fn restore_gui_launch_collections(
         &mut self,
         state: &GuiLaunchState,
@@ -143,8 +143,7 @@ impl App {
     /// settled catalog no longer holds, and a destination that paints no
     /// dropdown or another dropdown, install nothing, so saved ids never land
     /// in a destination the entry did not name. Returns `false` while the
-    /// entry's catalog can still land or its collection catalog has not
-    /// landed, so the caller retries.
+    /// entry's destination catalog can still land, so the caller retries.
     fn restore_gui_launch_entry(&mut self, entry: &GuiDestinationCollections) -> bool {
         let kind = match &entry.destination {
             // Home paints no collection dropdown, so no saved entry names it.
@@ -163,7 +162,8 @@ impl App {
             // The destination's dropdown is not the one the entry names.
             return true;
         }
-        self.restore_collection_for_target(&target, entry)
+        self.restore_collection_for_target(&target, entry);
+        true
     }
 
     /// Apply one saved entry through `target`'s own site (design D13).
@@ -171,19 +171,19 @@ impl App {
         &mut self,
         target: &GuiCollectionTarget,
         entry: &GuiDestinationCollections,
-    ) -> bool {
+    ) {
         match target {
             GuiCollectionTarget::Music(lib_idx) => {
-                self.restore_collection_at(&GuiMusicCollectionSite(*lib_idx), entry)
+                self.restore_collection_at(&GuiMusicCollectionSite(*lib_idx), entry);
             }
             GuiCollectionTarget::Podcasts(lib_idx) => {
-                self.restore_collection_at(&GuiPodcastsCollectionSite(*lib_idx), entry)
+                self.restore_collection_at(&GuiPodcastsCollectionSite(*lib_idx), entry);
             }
             GuiCollectionTarget::Feeds => {
-                self.restore_collection_at(&GuiFeedsCollectionSite, entry)
+                self.restore_collection_at(&GuiFeedsCollectionSite, entry);
             }
             GuiCollectionTarget::EmbyFeed(lib_idx) => {
-                self.restore_collection_at(&GuiEmbyFeedCollectionSite(*lib_idx), entry)
+                self.restore_collection_at(&GuiEmbyFeedCollectionSite(*lib_idx), entry);
             }
         }
     }
@@ -314,40 +314,44 @@ impl App {
         }
     }
 
-    /// Apply one saved entry through its destination's site: the site's
-    /// landed catalog retains the saved set and filters its picks, and the
-    /// shared apply path installs what survives unless the session already
-    /// changed this destination's selection. Returns `false` while the
-    /// catalog has not landed, so the caller retries.
+    /// Apply one saved entry through its destination's site (design D13): the
+    /// saved set installs against the site's landed catalog — the retention
+    /// drops the ids the library no longer holds and filters the picks — and
+    /// against the saved ids alone while the catalog has not landed, because a
+    /// resting destination never loads one. The per-frame effective read then
+    /// drops a vanished key when the catalog lands, so gating the install on a
+    /// catalog the destination has not loaded would strand the entry instead.
+    /// The shared apply path installs what survives unless the session already
+    /// changed this destination's selection.
     fn restore_collection_at(
         &mut self,
         site: &impl GuiCollectionSite,
         entry: &GuiDestinationCollections,
-    ) -> bool {
-        let (set, picks) = {
-            let Some(present) = site.present(self) else {
-                return false;
-            };
-            let picks = entry
+    ) {
+        let present = site.present(self);
+        let picks = match &present {
+            Some(present) => entry
                 .picks
                 .iter()
                 .filter(|pick| present(&pick.group_id))
                 .cloned()
-                .collect::<Vec<_>>();
-            let set = GuiCollectionSet::Checked(entry.group_ids.clone())
-                .retain_present(&present)
-                .into_owned();
-            (set, picks)
+                .collect::<Vec<_>>(),
+            // A catalog that has not landed names no pick stale, so the saved
+            // picks install as they are; a projection that reads the landed
+            // catalog drops a pick it does not hold.
+            None => entry.picks.clone(),
         };
+        let set = GuiCollectionSet::Checked(entry.group_ids.clone())
+            .effective(present)
+            .into_owned();
         if site.has_stored_selection(self) {
             // The user already selected in the pre-restore window: the
             // restore never clobbers a choice the session made.
-            return true;
+            return;
         }
         site.install_picks(self, &picks);
         let order = entry.order.map(collection_date_order);
         self.apply_collection_at(site, CollectionOp::Restore { set, order });
-        true
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):

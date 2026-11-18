@@ -69,8 +69,11 @@ impl App {
             // A feed-group target's failed fetch (gui-collection-dropdown
             // design D3): the GUI Library's store records the terminal failure
             // mark its shown pass honours, and the shared in-flight mark
-            // retires.
+            // retires. The library error cleanup runs first, so a deferred
+            // navigation is disarmed and the failure shows one toast, exactly
+            // as the `LibEvent::Error` arm this fetch used to send did.
             LibEvent::FeedHomeVideoSelectionFailed(event) => {
+                self.handle_error(&event.error);
                 self.handle_feed_home_video_selection_failed(event);
             }
             // A `ModelContent` event's App-side half is

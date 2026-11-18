@@ -6,6 +6,8 @@
 
 use super::*;
 
+use crate::app::state::events::PendingSeriesLanding;
+
 /// A painted frame does not defeat the saved folder set (gui-collection-
 /// dropdown design D2, D3): the shown pass claims the library's fetched
 /// results without storing a selection, so the launch restore still installs
@@ -117,5 +119,48 @@ fn a_failed_feed_folder_fetch_retries_on_a_press_and_not_on_a_repaint() {
         http.request_count(),
         fetched + 1,
         "the press requests the failed folder again"
+    );
+}
+
+/// A failed folder fetch runs the library error cleanup (gui-collection-
+/// dropdown design D3): the fetch reports its own target now, so its arm must
+/// still disarm the deferred tab switch and series landing that the plain
+/// library error used to clear. Without that cleanup a later album activation
+/// switches tabs after the library error.
+#[test]
+fn a_failed_feed_folder_fetch_disarms_deferred_navigation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when("ParentId=folder-1", 500, "");
+    let mut app = emby_app(&http, "homevideos", FEED_ID, "YouTube");
+    app.config
+        .lock()
+        .unwrap()
+        .feed_view_libraries
+        .push("youtube".into());
+    app.libs[0].nav_stack.push(level(
+        FEED_ID,
+        "YouTube",
+        vec![folder_item("folder-1", "Channel 1")],
+    ));
+    app.libs[0].feed_home_video = Some(FeedHomeVideoState::default());
+    app.pending_navigate_tab_switch = Some(0);
+    app.pending_series_landing = Some(PendingSeriesLanding {
+        lib_idx: 0,
+        reveal: Box::new(make_item("Show", "Series")),
+        switch_tab: true,
+        episode_id: None,
+    });
+
+    toggle_folder(&mut app, "folder-1");
+    land_until_fetched(&mut app);
+
+    assert_eq!(
+        app.pending_navigate_tab_switch, None,
+        "the failure disarms the deferred tab switch"
+    );
+    assert!(
+        app.pending_series_landing.is_none(),
+        "the failure disarms the deferred series landing"
     );
 }

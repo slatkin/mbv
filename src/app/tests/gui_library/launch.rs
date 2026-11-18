@@ -223,6 +223,102 @@ fn a_saved_entry_of_a_destination_that_was_not_active_restores() {
     );
 }
 
+/// A saved entry of a resting destination installs (gui-collection-dropdown
+/// design D13): a Music library the session has not opened holds no group
+/// list, so the restore must not wait for a catalog the resting tab never
+/// loads — the saved groups install as saved, and the per-frame effective read
+/// drops a group the landed catalog no longer holds.
+#[test]
+fn a_saved_resting_music_set_installs_without_a_group_list() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.music_levels = vec!["group".to_string(), "album".to_string()];
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = LIB_ID.into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    let destination = saved_music_identity();
+    let state = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: destination.clone(),
+        collections: vec![mbv_config::GuiDestinationCollections {
+            destination: destination.clone(),
+            target: mbv_config::GuiLaunchCollectionTarget::Music,
+            group_ids: vec![SOUL.to_string()],
+            order: None,
+            picks: Vec::new(),
+        }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
+    };
+
+    assert!(
+        app.restore_gui_launch_collections(&state, &destination),
+        "a resting destination's entry needs no retry"
+    );
+
+    let stored = app
+        .gui_library_groups
+        .get(&0)
+        .expect("the saved resting set installs with no group list to retain against");
+    assert_eq!(
+        stored.set.checked_keys(),
+        [SOUL.to_string()].as_slice(),
+        "the saved group installs as saved"
+    );
+}
+
+/// A tab switch between the opened destination and a saved entry whose
+/// destination catalog can still land abandons the restore (design D9): the
+/// Podcasts entry waits while the Audiobookshelf catalog is still connecting,
+/// the user opens Podcasts, and the settled catalog installs no saved show
+/// under the destination the user moved to.
+#[test]
+fn a_mid_restore_destination_switch_applies_no_saved_set() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.seed_gui_abs_libraries_for_test();
+    app.seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A")]);
+    app.audiobookshelf_runtime =
+        crate::app::state::service_runtime::AudiobookshelfRuntime::new(true);
+    let destination = saved_music_identity();
+    let state = mbv_config::GuiLaunchState {
+        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
+        destination: destination.clone(),
+        collections: vec![mbv_config::GuiDestinationCollections {
+            destination: mbv_config::TabIdentity::ServiceLibrary {
+                kind: mbv_queue::ServiceKind::Audiobookshelf,
+                library_id: "lib-abs-podcasts".into(),
+            },
+            target: mbv_config::GuiLaunchCollectionTarget::Podcasts,
+            group_ids: vec!["show-a".to_string()],
+            order: None,
+            picks: Vec::new(),
+        }],
+        shows_view: mbv_config::GuiLaunchShowsView::All,
+    };
+
+    assert!(
+        !app.restore_gui_launch_collections(&state, &destination),
+        "the Podcasts entry waits while its catalog can still land"
+    );
+
+    // The user opens Podcasts, and the Audiobookshelf catalog settles.
+    app.tab = TabSelection::AudiobookshelfLibrary(1);
+    app.audiobookshelf_runtime =
+        crate::app::state::service_runtime::AudiobookshelfRuntime::new(false);
+
+    assert!(
+        app.restore_gui_launch_collections(&state, &destination),
+        "the switch abandons the restore"
+    );
+    assert!(
+        !app.gui_podcast_libs.contains_key(&1),
+        "the saved show never installs under the destination the user moved to"
+    );
+}
+
 /// A saved group the library no longer holds falls back to All
 /// (gui-collection-dropdown "The collection selection persists per
 /// destination", scenario "A saved collection no longer exists").

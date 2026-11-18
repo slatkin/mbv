@@ -87,8 +87,8 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
 }
 
 /// Seed the grouped Music library and the Audiobookshelf catalog, whose
-/// podcast library holds no show yet, so a saved Podcasts entry waits for a
-/// show list that has not landed.
+/// podcast library holds no show yet, so the show list lands only after the
+/// user opens the destination.
 fn seed_music_and_podcasts(app: &mut mbv::App, http: &MockHttp) {
     seed_music(app, http);
     app.seed_gui_abs_libraries_for_test();
@@ -450,12 +450,14 @@ fn a_location_saved_on_audiobooks_opens_it() {
     );
 }
 
-/// A tab switch between the catalog landing and a saved entry's show list
-/// landing abandons the restore (design D9, D13): the destination phase 1
-/// opened restores its own saved entry, and the destination the user switched
-/// to never receives the saved set whose catalog landed after the switch.
+/// A saved entry of a resting destination installs before the user opens it
+/// (design D9, D13): the destination phase 1 opened restores its own saved
+/// entry, and the destination the user has not opened yet restores its own
+/// too, although its show list has not landed — the resting tab never loads
+/// that list, so the restore must not wait for it. The list lands when the
+/// user opens the destination, and the saved show is still the one checked.
 #[test]
-fn a_mid_restore_destination_switch_applies_no_saved_pills() {
+fn a_saved_resting_destination_restores_before_the_user_opens_it() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -472,7 +474,7 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
                 destination: abs_identity(PODCASTS_LIBRARY),
                 target: GuiLaunchCollectionTarget::Podcasts,
                 group_ids: vec!["show-a".into()],
-                order: None,
+                order: Some(mbv_config::GuiLaunchDateOrder::Oldest),
                 picks: Vec::new(),
             },
         ],
@@ -483,20 +485,24 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
     let mut test = core_with_seeded_catalog(seed_music_and_podcasts);
 
     // Phase 1 opened Music, whose landed group list takes its own saved entry;
-    // the Podcasts entry waits for a show list that has not landed.
+    // the Podcasts entry installs although no show list has landed.
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
         Some("grp-hiphop"),
         "the opened destination restores its own saved entry"
     );
+    assert_eq!(
+        test.core.app_mut().gui_podcast_date_order(1),
+        mbv::GuiDateOrder::Oldest,
+        "the resting destination installs its saved order with no show list"
+    );
 
-    // The user switches to Podcasts while the restore still waits, and the
-    // show list lands after the switch.
-    let position = podcasts_position(&mut test);
-    send_library(&mut test, GuiLibraryCommand::OpenDestination { position });
+    // The user opens Podcasts, whose show list has landed by then.
     test.core
         .app_mut()
         .seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A")]);
+    let position = podcasts_position(&mut test);
+    send_library(&mut test, GuiLibraryCommand::OpenDestination { position });
     test.tx
         .send(crate::measured_layout(10, Vec::new()))
         .unwrap();
@@ -512,9 +518,18 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
         .iter()
         .map(|entry| entry.name.as_str())
         .collect();
-    assert_eq!(listed, ["Show A"], "the show list landed after the switch");
+    assert_eq!(listed, ["Show A"], "the show list landed on the open");
     assert!(
-        collections.all,
-        "the switch abandons the restore: the saved show never installs"
+        !collections.all,
+        "the saved show stays checked against the landed list"
+    );
+    assert_eq!(
+        collections.order,
+        Some(mbv::GuiDateOrder::Oldest),
+        "the saved order stays the list's order"
+    );
+    assert!(
+        collections.entries[0].checked,
+        "the saved show is the one checked entry"
     );
 }

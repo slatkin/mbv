@@ -394,10 +394,10 @@ pub struct App {
     /// drain once the landed nav stack has replaced the saved position, so
     /// the switch's activation never restores a stale position. Consumed only
     /// when the drained activation belongs to the pending library; any other
-    /// library's activation leaves it armed. Loss semantics: it is cleared by
-    /// any manual tab change (`apply_tab_position`) and by `LibEvent::Error`,
-    /// so a user who moved on or a failed activation never gets yanked to the
-    /// navigated library (U2 correction).
+    /// library's activation leaves it armed. A manual tab change
+    /// (`apply_tab_position`), `LibEvent::Error`, or
+    /// `LibEvent::FeedHomeVideoSelectionFailed` clears it, so a user who moved
+    /// on or a failed activation never gets yanked (U2 correction).
     pub(in crate::app) pending_navigate_tab_switch: Option<usize>,
     /// Ensure-then-land state for a `NavigateLanding::Series` whose target
     /// library corpus is not ready (U2 correction): armed by the
