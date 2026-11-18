@@ -40,9 +40,9 @@ mod gui_launch_state;
 pub(crate) use gui_launch_state::clear_gui_launch_state_at;
 #[doc(inline)]
 pub use gui_launch_state::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
-    clear_gui_launch_state, first_launch, gui_launch_state_path, load_gui_launch_state,
-    save_gui_launch_state,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchCollectionTarget,
+    GuiLaunchDateOrder, GuiLaunchState, clear_gui_launch_state, first_launch,
+    gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
 };
 mod test_support;
 #[cfg(test)]

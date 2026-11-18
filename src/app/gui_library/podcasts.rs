@@ -99,6 +99,10 @@ impl GuiCollectionSite for GuiPodcastsCollectionSite {
             .map_or(GuiDateOrder::default(), |stored| stored.selection.order)
     }
 
+    fn has_stored_selection(&self, app: &App) -> bool {
+        app.gui_podcast_libs.contains_key(&self.0)
+    }
+
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
         if app.gui_podcast_library(self.0) {
             None

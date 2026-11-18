@@ -5,6 +5,7 @@
 //! fetches do not change. The selection is All or a set of checked groups
 //! (gui-collection-dropdown design D1, D2, D11).
 
+use mbv_config::GuiGroupPick;
 use mbv_emby_model::EmbyItem;
 
 use super::collection::{
@@ -290,6 +291,36 @@ impl GuiCollectionSite for GuiMusicCollectionSite {
         app.gui_library_groups
             .get(&self.0)
             .map_or(&GuiCollectionSet::ALL, |stored| &stored.set)
+    }
+
+    fn has_stored_selection(&self, app: &App) -> bool {
+        app.gui_library_groups.contains_key(&self.0)
+            || app
+                .gui_library_picks
+                .keys()
+                .any(|(lib_idx, _)| *lib_idx == self.0)
+    }
+
+    fn saved_picks(&self, app: &App) -> Vec<GuiGroupPick> {
+        let mut picks: Vec<GuiGroupPick> = app
+            .gui_library_picks
+            .iter()
+            .filter(|((pick_lib, _), _)| *pick_lib == self.0)
+            .map(|((_, group_id), album_id)| GuiGroupPick {
+                group_id: group_id.clone(),
+                album_id: album_id.clone(),
+            })
+            .collect();
+        picks.sort_by(|a, b| a.group_id.cmp(&b.group_id));
+        picks
+    }
+
+    fn install_picks(&self, app: &mut App, picks: &[GuiGroupPick]) {
+        for pick in picks {
+            app.gui_library_picks
+                .entry((self.0, pick.group_id.clone()))
+                .or_insert_with(|| pick.album_id.clone());
+        }
     }
 
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {

@@ -106,6 +106,10 @@ impl GuiCollectionSite for GuiEmbyFeedCollectionSite {
             .map_or(GuiDateOrder::default(), |stored| stored.order)
     }
 
+    fn has_stored_selection(&self, app: &App) -> bool {
+        app.gui_emby_feed_sets.contains_key(&self.0)
+    }
+
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
         app.gui_emby_feed_reject_reason(self.0)
             .map(|reason| CollectionRejection::Ignored(format!("library {}: {reason}", self.0)))

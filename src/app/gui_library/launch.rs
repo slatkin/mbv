@@ -9,14 +9,20 @@
 //! destination the saved location did not name.
 
 use mbv_config::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState, TabIdentity,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget,
+    GuiLaunchDateOrder, GuiLaunchState, TabIdentity,
 };
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use super::collection::GuiCollectionSet;
+use super::collection::{GuiCollectionSet, GuiCollectionTarget, GuiDateOrder};
+use super::collection_command::{CollectionOp, GuiCollectionSite};
 use super::tabs::GuiDestinationKind;
+use super::{
+    GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
+    GuiPodcastsCollectionSite,
+};
 use crate::app::App;
 
 impl App {
@@ -67,65 +73,56 @@ impl App {
 
     /// Apply the saved collection choices of the destination the first phase
     /// opened (design D9, D10; gui-collection-dropdown design D11): the saved
-    /// picks of the groups the library still holds restore, and the saved
-    /// checked set restores through the catalog's retention — the groups the
-    /// library still holds stay checked, and a saved set the library emptied
-    /// falls back to All, as do a saved All (an empty list) and a destination
-    /// with no saved entry, a fresh launch's case, whose default is All. The
-    /// saved entry matches `destination`, the identity phase 1 recorded, and
-    /// the active destination must still be that one: a mid-restore tab
-    /// switch abandons the restore, so no other destination's saved set
-    /// lands under the user. Returns `false` while the destination's group
-    /// list has not landed, so the caller retries.
+    /// picks of the collections the library still holds restore, and the
+    /// checked set of every collection dropdown — Music groups, Podcast shows,
+    /// Feeds subscriptions, and Emby feed folders — restores through that
+    /// destination's own site. The site's catalog retention drops saved ids
+    /// the library no longer holds; an emptied set and a saved All fall back
+    /// to All, as does a destination with no saved entry. The saved entry
+    /// matches `destination`, the identity phase 1 recorded, and the active
+    /// destination must still be that one: a mid-restore tab switch abandons
+    /// the restore, so no other destination's saved set lands under the user.
+    /// Returns `false` while the destination's collection catalog has not
+    /// landed, so the caller retries.
     pub fn restore_gui_launch_collections(
         &mut self,
         state: &GuiLaunchState,
         destination: &TabIdentity,
     ) -> bool {
-        let Some(lib_idx) = self.gui_music_destination() else {
-            // The active destination paints no collection dropdown.
-            return true;
-        };
         if self.gui_launch_destination() != *destination {
             // A different destination is active: the restore gives up rather
             // than applying a saved set the user did not ask for.
             return true;
         }
-        let Some(present) = self.gui_music_present_groups(lib_idx) else {
-            return false;
+        let Some(target) = self
+            .gui_active_destination()
+            .and_then(|kind| self.gui_collection_target(kind))
+        else {
+            // The active destination paints no collection dropdown.
+            return true;
         };
-        // The saved entry of the destination the first phase opened: its
-        // picks restore first, and its group ids check the groups with.
-        let saved_entry = state
+        let kind = launch_collection_target(&target);
+        let Some(entry) = state
             .collections
             .iter()
-            .find(|entry| entry.destination == *destination);
-        // The saved picks of the groups the library still holds (design D10)
-        // restore first, and never overwrite a pick the session already made.
-        for pick in saved_entry.map_or(&[][..], |entry| entry.picks.as_slice()) {
-            if present.contains(&pick.group_id) {
-                self.gui_library_picks
-                    .entry((lib_idx, pick.group_id.clone()))
-                    .or_insert_with(|| pick.album_id.clone());
-            }
-        }
-        if self.gui_library_groups.contains_key(&lib_idx) {
-            // The user already selected collections in the pre-restore window:
-            // the restore never clobbers a choice the session made.
+            .find(|entry| entry.destination == *destination && entry.target == kind)
+        else {
             return true;
-        }
-        // The saved checked set the library still holds, in saved order,
-        // restores through the retention (design D10); a saved All, an
-        // emptied set, and no saved entry leave the default All.
-        if let Some(entry) = saved_entry {
-            let set = GuiCollectionSet::Checked(entry.group_ids.clone())
-                .retain_present(|key| present.iter().any(|present| present == key))
-                .into_owned();
-            if !set.is_all() {
-                self.install_gui_library_collection(lib_idx, set);
+        };
+        match target {
+            GuiCollectionTarget::Music(lib_idx) => {
+                self.restore_collection_at(&GuiMusicCollectionSite(lib_idx), entry)
+            }
+            GuiCollectionTarget::Podcasts(lib_idx) => {
+                self.restore_collection_at(&GuiPodcastsCollectionSite(lib_idx), entry)
+            }
+            GuiCollectionTarget::Feeds => {
+                self.restore_collection_at(&GuiFeedsCollectionSite, entry)
+            }
+            GuiCollectionTarget::EmbyFeed(lib_idx) => {
+                self.restore_collection_at(&GuiEmbyFeedCollectionSite(lib_idx), entry)
             }
         }
-        true
     }
 
     /// The identity of the active destination (design D9), as the saved file
@@ -148,43 +145,146 @@ impl App {
         }
     }
 
-    /// The selected collections and the group picks of the catalog's
-    /// destinations (design D9, D10), in catalog order: one entry per
-    /// destination whose choice or pick the session holds, so a destination
-    /// the session never touched saves nothing and opens on All. The file
-    /// keeps the list shape, and each entry holds the checked groups (an
-    /// empty list is All) and the picks in group-id order, so the saved file
-    /// is stable.
+    /// The selected collections of the catalog's collection dropdowns
+    /// (design D9, D10), in catalog order: one entry per destination whose
+    /// choice the session holds, so a destination the session never touched
+    /// saves nothing and opens on All. Every dropdown reads its own site's
+    /// stored set, date order, and picks, so the four destinations share one
+    /// save path. The file keeps the list shape, and each entry holds the
+    /// checked ids (an empty list is All), so the saved file is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
-        (0..self.libs.len())
-            .filter_map(|lib_idx| {
-                let selected = self.gui_library_groups.get(&lib_idx);
-                let mut picks: Vec<GuiGroupPick> = self
-                    .gui_library_picks
-                    .iter()
-                    .filter(|((pick_lib, _), _)| *pick_lib == lib_idx)
-                    .map(|((_, group_id), album_id)| GuiGroupPick {
-                        group_id: group_id.clone(),
-                        album_id: album_id.clone(),
-                    })
-                    .collect();
-                if selected.is_none() && picks.is_empty() {
-                    return None;
-                }
-                picks.sort_by(|a, b| a.group_id.cmp(&b.group_id));
-                let group_ids = selected
-                    .map(|stored| stored.set.checked_keys().to_vec())
-                    .unwrap_or_default();
-                Some(GuiDestinationCollections {
-                    destination: library_identity(
-                        ServiceKind::Emby,
-                        &self.libs[lib_idx].library.id,
+        self.presented_destinations()
+            .into_iter()
+            .filter_map(|kind| {
+                let target = self.gui_collection_target(kind)?;
+                let destination = self.gui_destination_identity(kind)?;
+                let launch_target = launch_collection_target(&target);
+                match target {
+                    GuiCollectionTarget::Music(lib_idx) => self.gui_launch_collection_entry(
+                        &GuiMusicCollectionSite(lib_idx),
+                        launch_target,
+                        destination,
                     ),
-                    group_ids,
-                    picks,
-                })
+                    GuiCollectionTarget::Podcasts(lib_idx) => self.gui_launch_collection_entry(
+                        &GuiPodcastsCollectionSite(lib_idx),
+                        launch_target,
+                        destination,
+                    ),
+                    GuiCollectionTarget::Feeds => self.gui_launch_collection_entry(
+                        &GuiFeedsCollectionSite,
+                        launch_target,
+                        destination,
+                    ),
+                    GuiCollectionTarget::EmbyFeed(lib_idx) => self.gui_launch_collection_entry(
+                        &GuiEmbyFeedCollectionSite(lib_idx),
+                        launch_target,
+                        destination,
+                    ),
+                }
             })
             .collect()
+    }
+
+    /// One destination's saved entry, read from its own site: a destination
+    /// the session never touched writes nothing, and every dropdown writes
+    /// the same checked ids and order shape.
+    fn gui_launch_collection_entry(
+        &self,
+        site: &impl GuiCollectionSite,
+        target: GuiLaunchCollectionTarget,
+        destination: TabIdentity,
+    ) -> Option<GuiDestinationCollections> {
+        if !site.has_stored_selection(self) {
+            return None;
+        }
+        Some(GuiDestinationCollections {
+            destination,
+            target,
+            group_ids: site.stored_set(self).checked_keys().to_vec(),
+            order: site
+                .has_order()
+                .then(|| launch_date_order(site.stored_order(self))),
+            picks: site.saved_picks(self),
+        })
+    }
+
+    /// The collection dropdown a presented destination carries (design D5):
+    /// Music, Podcasts, and Feeds, and only a feed-view Emby library's
+    /// folder dropdown. A Shows, Audiobooks, or plain Emby destination has
+    /// no collection dropdown, so it saves and restores nothing.
+    fn gui_collection_target(&self, kind: GuiDestinationKind) -> Option<GuiCollectionTarget> {
+        match kind {
+            GuiDestinationKind::Music { lib_idx } => Some(GuiCollectionTarget::Music(lib_idx)),
+            GuiDestinationKind::Podcasts { lib_idx } => {
+                Some(GuiCollectionTarget::Podcasts(lib_idx))
+            }
+            GuiDestinationKind::Feeds => Some(GuiCollectionTarget::Feeds),
+            GuiDestinationKind::Library { lib_idx }
+                if lib_idx < self.libs.len() && self.is_feed_home_video_library(lib_idx) =>
+            {
+                Some(GuiCollectionTarget::EmbyFeed(lib_idx))
+            }
+            GuiDestinationKind::Home
+            | GuiDestinationKind::Shows { .. }
+            | GuiDestinationKind::Library { .. }
+            | GuiDestinationKind::Audiobooks { .. } => None,
+        }
+    }
+
+    /// The launch identity a presented destination carries: a stable Service
+    /// library id, or Feeds for the one synthetic tab.
+    fn gui_destination_identity(&self, kind: GuiDestinationKind) -> Option<TabIdentity> {
+        match kind {
+            GuiDestinationKind::Home => Some(TabIdentity::Home),
+            GuiDestinationKind::Feeds => Some(TabIdentity::Feeds),
+            GuiDestinationKind::Music { lib_idx }
+            | GuiDestinationKind::Shows { lib_idx }
+            | GuiDestinationKind::Library { lib_idx } => self
+                .libs
+                .get(lib_idx)
+                .map(|lib| library_identity(ServiceKind::Emby, &lib.library.id)),
+            GuiDestinationKind::Audiobooks { lib_idx }
+            | GuiDestinationKind::Podcasts { lib_idx } => self
+                .audiobookshelf_libraries
+                .get(lib_idx)
+                .map(|lib| library_identity(ServiceKind::Audiobookshelf, &lib.id)),
+        }
+    }
+
+    /// Apply one saved entry through its destination's site: the site's
+    /// landed catalog retains the saved set and filters its picks, and the
+    /// shared apply path installs what survives unless the session already
+    /// changed this destination's selection. Returns `false` while the
+    /// catalog has not landed, so the caller retries.
+    fn restore_collection_at(
+        &mut self,
+        site: &impl GuiCollectionSite,
+        entry: &GuiDestinationCollections,
+    ) -> bool {
+        let (set, picks) = {
+            let Some(present) = site.present(self) else {
+                return false;
+            };
+            let picks = entry
+                .picks
+                .iter()
+                .filter(|pick| present(&pick.group_id))
+                .cloned()
+                .collect::<Vec<_>>();
+            let set = GuiCollectionSet::Checked(entry.group_ids.clone())
+                .retain_present(&present)
+                .into_owned();
+            (set, picks)
+        };
+        if site.has_stored_selection(self) {
+            // The user already selected in the pre-restore window: the
+            // restore never clobbers a choice the session made.
+            return true;
+        }
+        site.install_picks(self, &picks);
+        let order = entry.order.map(collection_date_order);
+        self.apply_collection_at(site, CollectionOp::Restore { set, order });
+        true
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
@@ -356,19 +456,6 @@ impl App {
             .iter()
             .find(|level| level.parent_id == lib.library.id)
     }
-
-    /// The groups the library holds, in pill order. `None` while the list has
-    /// not landed: the level is absent, or its fetch is still in flight.
-    pub(in crate::app::gui_library) fn gui_music_present_groups(
-        &self,
-        lib_idx: usize,
-    ) -> Option<Vec<String>> {
-        let level = self.gui_music_group_level(lib_idx)?;
-        if level.loading {
-            return None;
-        }
-        Some(level.items.iter().map(|group| group.id.clone()).collect())
-    }
 }
 
 /// What the saved destination's first phase found (add-gui-library-panel
@@ -398,6 +485,34 @@ enum LaunchDestination {
     Pending,
     /// The settled presented set holds no such destination.
     Unmatched,
+}
+
+/// The launch file's dropdown kind for one core target. The target's index
+/// is the catalog's, and the entry's destination names the library, so only
+/// the kind is written.
+fn launch_collection_target(target: &GuiCollectionTarget) -> GuiLaunchCollectionTarget {
+    match target {
+        GuiCollectionTarget::Music(_) => GuiLaunchCollectionTarget::Music,
+        GuiCollectionTarget::Podcasts(_) => GuiLaunchCollectionTarget::Podcasts,
+        GuiCollectionTarget::Feeds => GuiLaunchCollectionTarget::Feeds,
+        GuiCollectionTarget::EmbyFeed(_) => GuiLaunchCollectionTarget::EmbyFeed,
+    }
+}
+
+/// The on-disk form of the list's date order.
+fn launch_date_order(order: GuiDateOrder) -> GuiLaunchDateOrder {
+    match order {
+        GuiDateOrder::Newest => GuiLaunchDateOrder::Newest,
+        GuiDateOrder::Oldest => GuiLaunchDateOrder::Oldest,
+    }
+}
+
+/// The core form of the saved list's date order.
+fn collection_date_order(order: GuiLaunchDateOrder) -> GuiDateOrder {
+    match order {
+        GuiLaunchDateOrder::Newest => GuiDateOrder::Newest,
+        GuiLaunchDateOrder::Oldest => GuiDateOrder::Oldest,
+    }
 }
 
 /// The saved identity of one Service library.

@@ -98,6 +98,10 @@ impl GuiCollectionSite for GuiFeedsCollectionSite {
         app.gui_feeds_selection.selection.order
     }
 
+    fn has_stored_selection(&self, app: &App) -> bool {
+        app.gui_feeds_selection.selection != GuiCollectionSelection::default()
+    }
+
     fn reject_destination(&self, app: &App) -> Option<CollectionRejection> {
         if app.gui_feeds_present() {
             None

@@ -16,6 +16,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 mod destinations;
+mod launch;
 mod projection;
 
 const LIB_ID: &str = "lib-music";
@@ -552,70 +553,6 @@ fn a_failed_selected_group_shows_a_failure_line() {
     assert!(
         artists.is_empty(),
         "the failed selected group holds no albums"
-    );
-}
-
-/// A saved checked set restores as it was saved, in saved order
-/// (gui-collection-dropdown "The collection selection persists per
-/// destination", scenario "The GUI starts again").
-#[test]
-fn a_saved_checked_set_restores_as_saved() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let http = MockHttp::new();
-    http.respond(200, ALBUMS);
-    let mut app = app_with_music_groups(&http);
-    let destination = saved_music_identity();
-    let state = mbv_config::GuiLaunchState {
-        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
-        destination: destination.clone(),
-        collections: vec![mbv_config::GuiDestinationCollections {
-            destination: destination.clone(),
-            group_ids: vec![SOUL.to_string(), HIPHOP.to_string()],
-            picks: Vec::new(),
-        }],
-    };
-
-    assert!(app.restore_gui_launch_collections(&state, &destination));
-
-    assert_eq!(
-        app.gui_library_groups.get(&0).map(|stored| &stored.set),
-        Some(&GuiCollectionSet::Checked(vec![
-            SOUL.to_string(),
-            HIPHOP.to_string(),
-        ])),
-        "the saved groups restore checked, in saved order"
-    );
-    land_one_group(&mut app);
-}
-
-/// A saved group the library no longer holds falls back to All
-/// (gui-collection-dropdown "The collection selection persists per
-/// destination", scenario "A saved collection no longer exists").
-#[test]
-fn a_saved_group_no_longer_held_restores_as_all() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let http = MockHttp::new();
-    let mut app = app_with_music_groups(&http);
-    let destination = saved_music_identity();
-    let state = mbv_config::GuiLaunchState {
-        version: mbv_config::GUI_LAUNCH_STATE_VERSION,
-        destination: destination.clone(),
-        collections: vec![mbv_config::GuiDestinationCollections {
-            destination: destination.clone(),
-            group_ids: vec!["grp-gone".to_string()],
-            picks: Vec::new(),
-        }],
-    };
-
-    assert!(app.restore_gui_launch_collections(&state, &destination));
-
-    assert!(
-        !app.gui_library_groups.contains_key(&0),
-        "the vanished group restores as All: no entry is stored"
-    );
-    assert!(
-        app.channels.lib_rx.try_recv().is_err(),
-        "All fetches nothing"
     );
 }
 

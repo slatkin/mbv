@@ -7,6 +7,8 @@
 
 use std::borrow::Cow;
 
+use mbv_config::GuiGroupPick;
+
 use super::collection::{
     GuiCollectionNoun, GuiCollectionSet, GuiCollectionTarget, GuiCollections, GuiDateOrder,
 };
@@ -25,6 +27,11 @@ pub(in crate::app::gui_library) enum CollectionOp {
     All,
     /// Set the list's date order.
     Order(GuiDateOrder),
+    /// Install a saved launch selection, retained against the landed catalog.
+    Restore {
+        set: GuiCollectionSet,
+        order: Option<GuiDateOrder>,
+    },
 }
 
 impl CollectionOp {
@@ -34,6 +41,7 @@ impl CollectionOp {
             Self::Toggle { .. } => "collectionToggle",
             Self::All => "collectionAll",
             Self::Order(_) => "dateOrder",
+            Self::Restore { .. } => "collectionRestore",
         }
     }
 }
@@ -84,6 +92,22 @@ pub(in crate::app::gui_library) trait GuiCollectionSite {
     fn stored_order(&self, _app: &App) -> GuiDateOrder {
         GuiDateOrder::default()
     }
+
+    /// Whether the session has changed this destination's collection state
+    /// (design D10): a launch restore never overwrites a choice the session
+    /// made before the saved file's collections landed.
+    fn has_stored_selection(&self, app: &App) -> bool;
+
+    /// The collection album picks the session holds (design D13): only a
+    /// Music destination keeps one, so the other sites save none.
+    fn saved_picks(&self, _app: &App) -> Vec<GuiGroupPick> {
+        Vec::new()
+    }
+
+    /// Restore the saved album picks whose collections the landed catalog
+    /// holds (design D13): the shared restore filters them with the same
+    /// predicate that retains the saved set's keys.
+    fn install_picks(&self, _app: &mut App, _picks: &[GuiGroupPick]) {}
 
     /// Why the destination cannot serve a collection command at all (design
     /// D5, D6).
@@ -150,14 +174,20 @@ impl App {
     /// op's reject rule names the log line; a toggle reads the effective set
     /// and installs the change, All installs All, and an order writes the
     /// stored order where the destination stores one.
-    fn apply_collection_at(&mut self, site: &impl GuiCollectionSite, op: CollectionOp) {
+    pub(in crate::app::gui_library) fn apply_collection_at(
+        &mut self,
+        site: &impl GuiCollectionSite,
+        op: CollectionOp,
+    ) {
         let log_name = op.name();
         let rejection = match &op {
             CollectionOp::Toggle { key } => match site.reject_destination(self) {
                 Some(rejection) => Some(rejection),
                 None => site.reject_key(self, key),
             },
-            CollectionOp::All | CollectionOp::Order(_) => site.reject_destination(self),
+            CollectionOp::All | CollectionOp::Order(_) | CollectionOp::Restore { .. } => {
+                site.reject_destination(self)
+            }
         };
         if let Some(rejection) = rejection {
             match rejection {
@@ -184,6 +214,19 @@ impl App {
                 // A destination that stores no order (Music sorts by name)
                 // takes no Order command and logs none: its dropdown paints no
                 // order toggle.
+            }
+            CollectionOp::Restore { set, order } => {
+                // An All entry leaves the default unset, as a destination
+                // the session never touched does; a feed-based destination
+                // still restores its saved sort through its own site.
+                if !set.is_all() {
+                    site.install_set(self, set);
+                }
+                if site.has_order()
+                    && let Some(order) = order
+                {
+                    site.install_order(self, order);
+                }
             }
         }
     }

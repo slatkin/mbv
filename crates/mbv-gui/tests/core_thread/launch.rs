@@ -7,8 +7,9 @@
 
 use mbv::{ClientTickHost, stub_app_with_queue};
 use mbv_config::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, TabIdentity,
-    TestStateDirGuard, gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchCollectionTarget, GuiLaunchState,
+    TabIdentity, TestStateDirGuard, gui_launch_state_path, load_gui_launch_state,
+    save_gui_launch_state,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::library::GuiLibraryCommand;
@@ -145,7 +146,9 @@ fn the_window_close_saves_the_launch_location_once() {
         state.collections,
         vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
+            target: GuiLaunchCollectionTarget::Music,
             group_ids: vec!["grp-soul".into()],
+            order: None,
             picks: Vec::new(),
         }]
     );
@@ -162,7 +165,9 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
         destination: library_identity(MUSIC_LIBRARY.0),
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
+            target: GuiLaunchCollectionTarget::Music,
             group_ids: vec!["grp-hiphop".into(), "grp-gone".into()],
+            order: None,
             picks: Vec::new(),
         }],
     })
@@ -190,7 +195,9 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
         destination: library_identity(MUSIC_LIBRARY.0),
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
+            target: GuiLaunchCollectionTarget::Music,
             group_ids: vec!["grp-gone".into(), "grp-also-gone".into()],
+            order: None,
             picks: Vec::new(),
         }],
     })
@@ -439,12 +446,16 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
         collections: vec![
             GuiDestinationCollections {
                 destination: library_identity(MUSIC_LIBRARY.0),
+                target: GuiLaunchCollectionTarget::Music,
                 group_ids: vec!["grp-hiphop".into()],
+                order: None,
                 picks: Vec::new(),
             },
             GuiDestinationCollections {
                 destination: library_identity(SECOND_MUSIC.0),
+                target: GuiLaunchCollectionTarget::Music,
                 group_ids: vec!["grp-jazz".into()],
+                order: None,
                 picks: Vec::new(),
             },
         ],
