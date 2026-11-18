@@ -117,6 +117,18 @@ The window SHALL show a top bar with a Home icon and the destination tabs as its
 - **WHEN** the user presses a destination tab
 - **THEN** that destination becomes active and the Library shows in place of the Queue
 
+#### Scenario: The active destination's tab is pressed again in Mini while the Library shows
+
+- **GIVEN** the arrangement is Mini and the Library shows for an active destination
+- **WHEN** the user presses that destination's tab again, or the Home icon while the Home content is present
+- **THEN** the Library's press flips the view back to the Queue
+
+#### Scenario: A different destination's tab is pressed in Mini while the Library shows
+
+- **GIVEN** the arrangement is Mini and the Library shows
+- **WHEN** the user presses a destination tab whose destination is not active
+- **THEN** that destination becomes active and the Library stays showing
+
 #### Scenario: Search opens from the keyboard
 
 - **GIVEN** the Library panel shows

@@ -179,9 +179,9 @@ impl ClientTickHost for CoreThread {
     fn drain_search_results(&mut self) -> bool {
         // The GUI mounts no search surface, so no component receives the
         // search worker's result (add-gui-library-panel design D12, row 12.1).
-        // The top bar's own field reads the App store this App-side drain
-        // fills, and the top bar's section carries it; a landed result reports
-        // changed so the next batch sends it.
+        // The Library Status bar's own field reads the App store this
+        // App-side drain fills, and the bar's section carries it; a landed
+        // result reports changed so the next batch sends it.
         let landed = self.app.drain_gui_search_results();
         if landed {
             self.mark_hook(DrainHook::DrainSearchResults);

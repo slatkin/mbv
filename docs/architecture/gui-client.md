@@ -432,7 +432,7 @@ outlined while it is stopped or resting (the `queue` section still names
 `active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
 solid transport glyphs paint — with the availability the colour already
-carried gating them. The header's playback-target indicator maps both of
+carried gating them. The footer's playback-target control maps both of
 `target_icon`'s states to the one Lucide `Cast` — the TUI paints the
 cast family for local and remote alike — so the role colour and the
 host label carry the distinction. `GuiFooterPill.text` carries glyph-free
@@ -492,13 +492,16 @@ and the change's gap audits, copied into that change's directory under
 the exact values; this file records what the paint changed, not every
 canvas value.
 
-The queue column's backdrop (`queueColumn`) owns the window. The player header row paints the
-playback target (its icon, the host label, and the collapse and queue-fold
-controls) and the right-aligned status word. A press on the target opens the
-`targetChooser` overlay, whose rows carry the choices with the attached
-output marked; Esc or a press elsewhere closes it in the core. The artwork
-follows the header with the season-and-episode badge, and the title and
-parent line sit below it: where the TUI composites the title into the
+The queue column's backdrop (`queueColumn`) owns the window. The column paints
+no player header row: the artwork is its topmost content
+(`move-playback-header-into-queue-footer` D6), directly under the global
+header (below). The window paints no now-playing status word on any surface
+(D5) — a paused panel reads from the transport's play glyph. The playback
+target and the collapse controls moved to the Queue footer's left group
+(below), and the footer's press on the target opens the `targetChooser`
+overlay upward; the chooser's rows carry the choices with the attached output
+marked, and Esc or a press elsewhere closes it in the core. The title and
+parent line sit below the artwork: where the TUI composites the title into the
 artwork's top text row with a scrolling marquee, the GUI measures and cuts it with
 `Truncate`. The art has no fixed pixel box: the slot sizes at most 24 row
 units of the cell grid.
@@ -712,16 +715,25 @@ with the restart's own diagnostic and the quit choice returns the run's
 quit decision to the core.
 
 The footer line paints below the box between gap rows on the
-`queueFooterBand` fill. Its left group carries the autosave indicator
-(while save-on-consume is on for a saved playlist), the queue's source text
-with no leading icon, and the dirty mark beside the source it describes;
-its centre carries the armed `PREFIX` badge and a live toast inline in the
-severity colour; and its right group carries the shown queue's totals — the
-marked rows' total, named `Sel`, while rows are marked, beside the queue
-total, each with a `+` while its sum carries an unknown runtime. The filter
-narrows no total. The footer names no Player owner and paints no liveness
-dot: the shown queue's owner reads from the playback target in the panel's
-header.
+`queueFooterBand` fill. Its left group leads with the two queue-wide
+controls the player panel's header used to paint
+(`move-playback-header-into-queue-footer` D1, D2): the playback target —
+its Cast glyph, host label, and chevron, compacted to the band's 28 px
+control height — then the collapse control with its muted `Maximize2` glyph.
+After them follow the autosave indicator (while save-on-consume is on for a
+saved playlist), the queue's source text with no leading icon, and the dirty
+mark beside the source it describes; its centre carries the armed `PREFIX`
+badge and a live toast inline in the severity colour; and its right group
+carries the shown queue's totals — the marked rows' total, named `Sel`,
+while rows are marked, beside the queue total, each with a `+` while its sum
+carries an unknown runtime. The filter narrows no total. The footer names no
+Player owner and paints no liveness dot: the shown queue's owner reads from
+the playback target at its left edge. The target's press opens the target
+chooser as a popover anchored above the band (D3), under a second report key
+the footer owns, so a press on a popover row wins over the queue row beneath
+it (D4); the collapse control's press runs the same toggle as the `z` chord.
+No surface paints the now-playing status word (D5): the footer carries no
+status fact, and the `playback` section no longer carries one.
 
 ## The Status bar in the footer line
 
@@ -736,10 +748,15 @@ paints but is no press target (the GUI presents no playlists surface), and
 a point anywhere on the line resolves to nothing. The spec permits the GUI to show toasts in a
 conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the line is lawful. While the Library panel shows, the
-Library Status bar paints the same projection (design D10): the hints on the
-left, the location on the right, and the armed prefix or the live toast in
-place of the hints. The location names the destination, `All` or the checked
-collections' names, and the picked item, joined by the canvas's separator.
+Library Status bar paints the same projection (`move-playback-header-`
+`into-queue-footer` D9): the Search field leads its left side with the `Ctrl K`
+hint, the armed prefix or the live toast paints after the field — the toast
+wins, as the footer line drops the badge while a toast is live — and the
+location stays flush right. The bar paints no key hints. The location names
+the destination, `All` or the checked collections' names, and the picked
+item, joined by the canvas's separator. The field mounts only while the
+Library panel shows, so in Mini with the Queue showing no bar paints the
+field and `Ctrl+K` keeps its core effect there.
 
 ## The Library panel
 
@@ -765,9 +782,16 @@ panel holds no cursor and no focus inside it: its keys go to the *Pointer
 target*, not by Panel focus (ADR 0040). The panel uses
 no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
-recogniser or hit map. `src/window/components/library_panel.rs` paints `LibraryTopBar` (the
-Home icon, one tab per Service library destination, and the Search field
-with its results dropdown), the destination's list (`LibraryList` with
+recogniser or hit map. The window's global header (`move-playback-header-`
+`into-queue-footer` D7) is `LibraryTopBar` (`src/window/components/`
+`library_top_bar.rs`): the root mounts it in `src/window/app.rs`, above the
+panel row and across both columns or the collapsed rail, in every
+arrangement; the Settings screen mounts none. It paints the Home icon and
+one tab per presented Service library destination — its Home icon opens
+Home — and the Settings control at its right end; it carries the Library
+pointer zone, so a key pressed over it routes as over the Library column.
+The Search field is not in it: the field leads the Library Status bar's
+left side. `src/window/components/library_panel.rs` paints the destination's list (`LibraryList` with
 `LibraryLetterRail` in Music;
 `LibraryHomeList`, `LibraryShowsList`, `LibraryEmbyList`,
 `LibraryAudiobooksList`, `LibraryPodcastsList`, and `LibraryFeedsList`),
@@ -842,8 +866,8 @@ narrows the list and the detail through `library_pair`
 match, so a mismatched pair paints nothing.
 
 `search` is the Search section (design D12, row 12.1):
-`Option<GuiSearchFrame>`, present while the top bar's Search field — the
-field the `Ctrl+K` chord arms — holds a query or its rows, and `None`
+`Option<GuiSearchFrame>`, present while the Library Status bar's Search
+field — the field the `Ctrl+K` chord arms — holds a query or its rows, and `None`
 while it is closed. It rides its own section beside the
 Library sections, never inside them, because Search is
 cross-destination: a result that lands between two content changes still
@@ -1321,9 +1345,10 @@ With no Settings frame, the Library chain runs. The order is:
    keyboard, with the `Queue` target wherever the pointer is — the keys the
    filter does not consume still reach the Queue leaf.
 2. The `Ctrl+K` chord arms the Search field: wherever the Library panel
-   shows and its top bar mounts the field, the field takes the keyboard;
-   in Mini the Library panel does not show, so no top bar mounts the field
-   and the chord keeps its core effect there.
+   shows, the Library Status bar mounts the field, and the field takes the
+   keyboard; in Mini with the Queue showing the Library Status bar does not
+   paint, so no field exists and the chord keeps its core effect there
+   (design D9 of `move-playback-header-into-queue-footer`).
 3. While a text field of the panel holds the keyboard, the field takes the
    key: the Search field first — its hold is DOM focus, Esc closes its
    results, the arrow keys move the highlight, and Enter activates the
@@ -1362,8 +1387,15 @@ or the width a drag gave it — with the canvas sizes as thresholds. Below
 480 px is Mini, from 880 px with at least 600 px of height is Wide, and
 between them is Narrow. The thresholds are window constants beside the
 Queue panel's state constants, and the core does not classify the size. Mini
-mounts only the Queue panel; a later tabbed Mini view can widen that (ADR
-0040). Narrow mounts both panels, and
+shows one column at a time (`move-playback-header-into-queue-footer` D8):
+the Queue panel first, and the global header's destination press switches
+the view. While the Queue shows, a press on a destination tab makes that
+destination active and shows the Library in place of the Queue; while the
+Library shows, a press on the already active destination's own control — its
+tab, or the Home icon while the Home content is present — puts the Queue
+back, and a press on a different destination keeps the Library showing.
+Outside Mini the view is unaffected: every other arrangement paints both
+columns. Narrow mounts both panels, and
 a picked item opens the Hero as an overlay over the list. Wide mounts both
 panels with the Hero beside the list — the list at the left edge of the
 Library panel, the Hero pane to its right. The Queue panel keeps its four states
@@ -1495,7 +1527,7 @@ An Enter or a click on an `info` row sends no `settings` command. The
 Services content carries each Service's state and the actions
 the TUI offers for it, with the open setup form's progress and error; the Keys
 content the prefix chord, one row per `AllClients` action, and the last
-refusal; the Sessions content the same playback-target choices the header's
+refusal; the Sessions content the same playback-target choices the footer's
 chooser lists; and the Playlists content the saved list, the open playlist, and
 the loading flags. No variant carries a password, an API key, or any other
 Service credential. The `settings` section is absent while the screen is
@@ -1543,8 +1575,8 @@ the sidebar, one component per section kind, and the status line, and
 
 The screen paints the design canvas `canvas/Settings.dc.html` of the
 `add-gui-settings-screen` change (design D13). The pointer is the primary
-path and keys give parity (design D11, *Mouse-centric*). The Library top bar's
-Lucide `Settings` button, right of the Search field, sends `open`, which opens
+path and keys give parity (design D11, *Mouse-centric*). The global header's
+Lucide `Settings` button, at the bar's right end, sends `open`, which opens
 the screen at Services and does nothing while it is open. The sidebar's
 `ArrowLeft` Back button sends `close`. The sidebar is a fixed 260 px
 (`SETTINGS_SIDEBAR_WIDTH_PX`), independent of the Queue column, and Mini

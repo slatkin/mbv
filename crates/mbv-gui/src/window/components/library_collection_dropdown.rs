@@ -7,7 +7,8 @@
 //! (design D7).
 //!
 //! The component sits in the list header on the title's line (design D6a), so
-//! the panel paints no selector row between its top bar and its list. The
+//! the panel paints no selector row between the window's global header and
+//! its list. The
 //! trigger is an outlined box in the accent with a trailing chevron; the open
 //! popover paints the artboard's filter strip, All row, and checkbox rows under
 //! it, over the list.
