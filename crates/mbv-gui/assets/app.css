@@ -314,12 +314,15 @@ label:has(> input:hover) {
 	box-shadow: inset 0 0 0 100vmax var(--canvas-hover-veil);
 }
 
-/* The Queue header's controls paint their own hover (gui-queue-panel-redesign
-   design D7): the switcher takes a raised fill and a brighter border, and each
-   icon button a raised fill and a brighter glyph, named by the component's own
-   `hover:` utilities. The veil above would wash those fills, so the header's
-   buttons take no veil and answer the pointer with the design's colours alone. */
-[data-queue-header] button:not(:disabled):hover {
+/* The Queue header's controls and the Queue chooser's items paint their own
+   hover (gui-queue-panel-redesign design D7, D8): the switcher takes a raised
+   fill and a brighter border, each icon button a raised fill and a brighter
+   glyph, and each chooser item the same raised fill as its cursor row. Those
+   looks are named by the components' own `hover:` utilities, and the veil
+   above would wash them, so these surfaces answer the pointer with the
+   design's colours alone. */
+[data-queue-header] button:not(:disabled):hover,
+[data-queue-chooser-menu] button:not(:disabled):hover {
 	box-shadow: none;
 }
 

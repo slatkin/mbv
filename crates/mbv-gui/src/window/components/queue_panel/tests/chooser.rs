@@ -1,8 +1,9 @@
-//! The Queue chooser's dropdown contracts (gui-named-queues task 8.3, spec
-//! `gui-queue-chooser` "The chooser lists local queues and connected peers"):
-//! the local queues in queue order then the peer, each entry its own pointer
-//! region under the identity it paints; the shown, current, and peer marks; and
-//! the inline rename entry's draft text with its caret.
+//! The Queue chooser's dropdown contracts (gui-named-queues task 8.3, restyled
+//! by design D8 of `gui-queue-panel-redesign`, spec `gui-queue-chooser` "The
+//! chooser lists local queues and connected peers"): the local queues in queue
+//! order then the peer, each entry its own pointer region under the identity it
+//! paints; the shown, current, and peer marks; every entry's slot count; and the
+//! inline rename entry's draft text with its caret.
 
 use blitz_dom::LocalName;
 
@@ -24,10 +25,16 @@ fn the_chooser_lists_the_local_queues_then_the_peer_and_reports_each_entry() {
         Some(queue_chooser(None)),
     );
 
-    assert_eq!(fixture.text_of("[data-chooser-entry=\"1\"]"), "Default");
-    assert_eq!(fixture.text_of("[data-chooser-entry=\"2\"]"), "Kids");
     assert_eq!(
-        fixture.text_of("[data-chooser-entry=\"peer\"]"),
+        fixture.text_of("[data-chooser-entry=\"1\"] [data-chooser-label]"),
+        "Default"
+    );
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"2\"] [data-chooser-label]"),
+        "Kids"
+    );
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"peer\"] [data-chooser-label]"),
         "living-room"
     );
     assert_eq!(
@@ -104,6 +111,38 @@ fn the_chooser_marks_the_shown_and_current_queues_and_the_peer() {
     );
 }
 
+/// Contract (spec `gui-queue-chooser` "Each entry shows its slot count",
+/// design D8 of `gui-queue-panel-redesign`): every entry paints its queue's
+/// slot count at its trailing end, after the marks — the current queue's 26,
+/// the resting queue's 4, and the peer's 9.
+#[test]
+fn the_chooser_paints_each_entrys_slot_count_after_its_mark() {
+    let fixture = built_with_frame(
+        queue_panel_app,
+        queue(Vec::new()),
+        chooser_summary(),
+        Some(queue_chooser(None)),
+    );
+
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"1\"] [data-chooser-count]"),
+        "26"
+    );
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"2\"] [data-chooser-count]"),
+        "4"
+    );
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"peer\"] [data-chooser-count]"),
+        "9"
+    );
+    assert!(
+        fixture
+            .presents("[data-chooser-entry=\"1\"] [data-chooser-current] + [data-chooser-count]"),
+        "the count follows the current queue's mark"
+    );
+}
+
 /// Contract (spec `gui-queue-chooser` "The new-queue control makes and shows a
 /// queue"): the entry whose name is open for edit paints the core-held draft
 /// text with the Queue filter's block caret, and the peer entry opens no draft.
@@ -120,7 +159,10 @@ fn the_chooser_paints_the_rename_draft_with_a_caret() {
         }))),
     );
 
-    assert_eq!(fixture.text_of("[data-chooser-entry=\"2\"]"), "Kid");
+    assert_eq!(
+        fixture.text_of("[data-chooser-entry=\"2\"] [data-chooser-label]"),
+        "Kid"
+    );
     assert!(
         fixture.presents("[data-chooser-entry=\"2\"] [data-caret]"),
         "the draft carries the block caret"

@@ -42,13 +42,22 @@ const DEFAULT_TITLE: &str = "Queue";
 /// The `QUEUE` label's text (design D7).
 const QUEUE_LABEL: &str = "QUEUE";
 
-/// An icon button's look (design D7): 32 × 32, radius 6, the muted glyph that
-/// brightens over the raised fill while the pointer rests on it.
-const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center text-[var(--ef-grey2)] hover:bg-[var(--ef-bg3)] hover:text-[var(--ef-fg)]";
+/// An icon button's look (design D7): 32 × 32, radius 6, the muted glyph. Its
+/// fill and glyph colour live in the class list, never inline, so the `hover:`
+/// pair can raise them — an inline colour would win over the pointer's.
+const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center text-[var(--ef-grey2)]";
+
+/// An icon button's pointer look: the raised fill and the brighter glyph.
+const ICON_BUTTON_HOVER: &str = "hover:bg-[var(--ef-bg3)] hover:text-[var(--ef-fg)]";
 
 /// The close control's enabled hover: the destructive fill and glyph (design
-/// D7). A disabled close answers no pointer, so it paints the rest look alone.
-const CLOSE_HOVER_CLASS: &str = "hover:bg-[var(--ef-bg-red)] hover:text-[var(--ef-red)]";
+/// D7). A disabled close claims nothing, so it paints the rest look alone.
+const CLOSE_HOVER: &str = "hover:bg-[var(--ef-bg-red)] hover:text-[var(--ef-red)]";
+
+/// The Queue switcher's look (design D7): the raised rest fill and the control
+/// border, both in the class list so the pointer can raise them, and the open
+/// state's fill and border inline, which a hover cannot override.
+const SWITCHER_CLASS: &str = "flex min-w-0 items-center bg-[var(--ef-bg2)] border-[var(--ef-bg4)] hover:bg-[var(--ef-bg3)] hover:border-[var(--ef-bg5)]";
 
 /// An icon button's geometry, radius included.
 const ICON_BUTTON_STYLE: &str = "width: 32px; height: 32px; border-radius: 6px;";
@@ -113,14 +122,14 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
             {
                 let mut chooser_slot = chooser;
                 let switcher_style = if chooser_open {
-                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border: 1px solid var(--ef-grey0); background: var(--ef-bg3);"
+                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: var(--ef-grey0); background: var(--ef-bg3);"
                 } else {
-                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border: 1px solid var(--ef-bg4); background: var(--ef-bg2);"
+                    "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
                 };
                 rsx! {
                     button {
                         "type": "button",
-                        class: "flex min-w-0 items-center hover:bg-[var(--ef-bg3)] hover:border-[var(--ef-bg5)]",
+                        class: "{SWITCHER_CLASS}",
                         style: "{switcher_style}",
                         title: "Queue chooser (t)",
                         "aria-label": "Queue chooser",
@@ -130,6 +139,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         ListOrdered {
                             size: 14,
                             stroke_width: 1.6,
+                            color: "var(--ef-grey2)".to_owned(),
                         }
                         span {
                             class: "min-w-0 overflow-hidden whitespace-nowrap",
@@ -149,11 +159,13 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             ChevronUp {
                                 size: 12,
                                 stroke_width: 1.6,
+                                color: "var(--ef-grey2)".to_owned(),
                             }
                         } else {
                             ChevronDown {
                                 size: 12,
                                 stroke_width: 1.6,
+                                color: "var(--ef-grey2)".to_owned(),
                             }
                         }
                     }
@@ -166,7 +178,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 rsx! {
                     button {
                         "type": "button",
-                        class: "{ICON_BUTTON_CLASS}",
+                        class: "{ICON_BUTTON_CLASS} {ICON_BUTTON_HOVER}",
                         style: "{ICON_BUTTON_STYLE}",
                         title: "New queue (Ctrl+T)",
                         "aria-label": "New queue",
@@ -189,7 +201,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 let close_class = if close_disabled {
                     ICON_BUTTON_CLASS.to_owned()
                 } else {
-                    format!("{ICON_BUTTON_CLASS} {CLOSE_HOVER_CLASS}")
+                    format!("{ICON_BUTTON_CLASS} {CLOSE_HOVER}")
                 };
                 let mut close_slot = close;
                 rsx! {
@@ -264,7 +276,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     rsx! {
                         button {
                             "type": "button",
-                            class: "{ICON_BUTTON_CLASS}",
+                            class: "{ICON_BUTTON_CLASS} {ICON_BUTTON_HOVER}",
                             style: "{ICON_BUTTON_STYLE}",
                             title: "Filter (/)",
                             "aria-label": "Filter queue",
