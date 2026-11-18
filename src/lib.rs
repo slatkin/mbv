@@ -52,8 +52,8 @@ pub use self::app::{
     RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
     RowMenuEntryProjection, SegmentMark, SetupSecret, ShellCommand, StartupWorkerDrain,
     StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
-    TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent,
-    WorkspaceRelayout, compare_gui_date_order, resolve_router_outcome_with_focused,
+    TrickplayGrid, TrickplayTile, VisualIntent, WorkspaceRelayout, compare_gui_date_order,
+    resolve_router_outcome_with_focused,
 };
 pub use self::client_kind::ClientKind;
 pub use self::config::{Config, load_config};
