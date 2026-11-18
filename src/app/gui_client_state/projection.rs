@@ -71,9 +71,20 @@ pub struct TrackPopoverChoice {
     pub chosen: bool,
 }
 
-/// The GUI Client's open overlay, as the frame carries it (design D4).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The GUI Client's open overlay, as the frame carries it (design D4). The
+/// player menu's anchor carries CSS pixels, so the equality is `PartialEq`
+/// only.
+#[derive(Clone, Debug, PartialEq)]
 pub enum GuiOverlayProjection {
+    /// The player panel's context menu (gui-player-overlay-menu): the cursor
+    /// over its one auto-hide entry and the right-click's window anchor. The
+    /// entry's checked fact rides the playback section's `controls`.
+    PlayerMenu {
+        cursor: usize,
+        /// The right-click's window anchor, in CSS pixels.
+        x: f32,
+        y: f32,
+    },
     /// The queue row's menu: the anchor row, the menu cursor, and the
     /// entries, each with its key hint.
     RowMenu {
@@ -286,6 +297,11 @@ impl App {
                         }),
                 })
             }
+            Some(GuiOverlay::PlayerMenu(menu)) => Some(GuiOverlayProjection::PlayerMenu {
+                cursor: menu.cursor,
+                x: menu.x,
+                y: menu.y,
+            }),
             // The confirm's message and button row are the modal's own text:
             // the frame carries them verbatim, and the action stays in the
             // core's held state so a press or key answers what the window

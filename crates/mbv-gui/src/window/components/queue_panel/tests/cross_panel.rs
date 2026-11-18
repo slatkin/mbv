@@ -1,11 +1,12 @@
 //! The region-order contracts `QueuePlaybackPanel.test.ts` deferred until
 //! this panel existed: an open chooser's rows reporting after the queue's and
 //! the footer's, and the full player panel's region order over the expanded
-//! artboard — the player block's stage, then its transport, seek, seekbar, and
-//! auto-hide controls, the queue header's and rows' regions, then the footer
-//! band's moved playback-target and collapse controls
+//! artboard — the player block's stage, then its transport, seek, and seekbar
+//! controls, the queue header's and rows' regions, then the footer band's
+//! moved playback-target and collapse controls
 //! (`move-playback-header-into-queue-footer` D4; the stage's lead comes from
-//! `gui-art-player-overlay` D4).
+//! `gui-art-player-overlay` D4; the auto-hide control lives in the player
+//! menu, gui-player-overlay-menu).
 
 use blitz_dom::LocalName;
 use dioxus_native::prelude::*;
@@ -137,9 +138,9 @@ fn the_stage_carries_the_auto_hide_and_playing_attributes_only_while_they_hold()
 /// Contract (`QueuePlaybackPanel.test.ts`, `move-playback-header-into-queue-
 /// footer` D4; `gui-art-player-overlay` D4, task 3.4a): a paint reports the
 /// stage's `VisualSlot` region first, then the player panel's play/pause,
-/// seek, seekbar, and auto-hide regions, then the queue header's and rows'
-/// regions, then the footer band's playback-target and collapse regions — the
-/// three panels mount in that order under the expanded artboard, and the stage
+/// seek, and seekbar regions, then the queue header's and rows' regions,
+/// then the footer band's playback-target and collapse regions — the three
+/// panels mount in that order under the expanded artboard, and the stage
 /// leads its own block so a control over the artwork wins the press.
 #[test]
 fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
@@ -165,7 +166,6 @@ fn a_paint_reports_the_player_panels_regions_then_the_queue_rows() {
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Next),
             RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar),
-            RegionTarget::QueuePlayback(QueuePlaybackTargetId::AutoHide),
             RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::Slot(1)),

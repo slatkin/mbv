@@ -234,6 +234,7 @@ pub(super) fn entry(label: &str, key_hint: Option<&str>, destructive: bool) -> G
         destructive,
         // The queue's entries carry none, so the paint order stands.
         index: None,
+        checked: None,
     }
 }
 

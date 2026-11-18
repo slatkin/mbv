@@ -158,8 +158,8 @@ pixels; only the TUI decodes, for its terminal graphics. The panel
 reports the slot's `visualSlot` region (the TUI's hit target), and the art
 element's resizes report the regions a swapped bitmap moved. Inside one
 report key the last region pushed wins, so the panel pushes `visualSlot`
-first and the transport buttons, the seekbar, the auto-hide control, the
-collapse control, and the playback target follow it, while the chips report
+first and the transport buttons, the seekbar, the collapse control, and the
+playback target follow it, while the chips report
 under their own later keys — so a press on a control over the artwork lands
 on the control, not on the artwork. The section also carries the core's
 `auto_hide` preference, the fact the stage's `data-auto-hide` attribute
@@ -521,7 +521,7 @@ box. It holds three siblings: the media box, the clipped one — so only the
 image is cut, and a track popover that hangs past the artwork's bottom
 paints in full — the absolute top layer, which holds the track chips at its
 left and the season-and-episode badge at its right and always shows, and the
-absolute bottom layer, which holds a gradient and the two control rows.
+absolute bottom layer, which holds a gradient and the control row.
 While the image loads, the media box stays empty at the panel's width with a
 16:9 aspect, and both overlays paint on it as if the image were there; the
 box takes the image's own aspect when the image loads.
@@ -546,7 +546,7 @@ show it. The pointer-driven `:hover` is Blitz's, and a pointer that leaves
 the window unhovers the chain, so the controls hide. Auto-hide never hides
 the top layer: the chips and the badge show at all times.
 
-The control rows scale with the artwork's height (design D3). Container
+The control row scales with the artwork's height (design D3). Container
 queries are unimplemented in Blitz 0.3.0-beta.4 — `query_container_size`
 returns a default size — so `cq*` units do not resolve, and the window
 measures instead. The panel's effect reads the stage's mounted rect,
@@ -563,11 +563,22 @@ reads its own measured rect, so it stays correct at any scale.
 The auto-hide preference is core-owned (design D5). `App` holds
 `gui_player_auto_hide`, read from the prefs key `gui_player_auto_hide` with
 `false` as the default and saved back through `save_prefs`, so the choice
-persists across launches. A press on the stage's auto-hide checkbox — the
-`autoHide` target in the bottom layer's second row — sends
-`PlaybackRequest::ToggleAutoHide`, whose shell arm flips the field and saves
-the prefs. The GUI-only fact rides `GuiQueuePlayback.auto_hide` and stays
-out of the shared `QueuePlaybackProjection`; no key chord rides with it.
+persists across launches. The control that flips it is the player panel's
+right-click menu (gui-player-overlay-menu). The panel's right-click sends
+`PlaybackRequest::OpenPlayerMenu` with the pointer's whole-pixel anchor, the
+core opens its `PlayerMenu` overlay — the cursor over the one auto-hide entry
+plus the anchor — and the frame projects it. The panel paints the card in
+the shared menu-card face at the anchor, and the entry reports its
+`PlayerMenuEntry` region under the menu's own report key, first inserted
+while the menu is open, so the card wins the hit map where it paints over
+the panel. A press on the entry sends `PlaybackRequest::PlayerMenuSelect`,
+which runs the same execution the menu's Enter applies — the shared toggle
+that flips the field and saves the prefs — and closes the menu with the
+choice. The overlay's list key rules own the keyboard while it is open: Esc
+closes it with no toggle, and the core's outside-press rule closes it on a
+press elsewhere. The GUI-only fact rides `GuiQueuePlayback.auto_hide` — the
+menu entry's checked mark reads it — and stays out of the shared
+`QueuePlaybackProjection`; no key chord rides with it.
 
 The scrubber paints the played fraction, the chapter boundaries, the intro
 and credits mark segments, the thumb, and the elapsed, remaining, and finish
@@ -613,27 +624,27 @@ the scrubber hover's `time_label` (the pointer drives it, not the clock).
 the queue row DTO carries no NowPlaying progress — the window reads the
 playhead's played fraction for the row whose slot is the anchor's active
 slot. mbv has no playback-rate fact, so the anchor has no rate and a rate
-change re-anchors only through the drift rule. The bottom layer's first row
-holds play/pause and the scrubber, and its second row holds previous,
-back 10 s, forward 30 s, next, and the auto-hide checkbox, all as solid
-Lucide shapes with the availability that the colour carries. The top layer's
+change re-anchors only through the drift rule. The bottom layer's row
+holds play/pause at the scrubber's left, and the scrubber's clock line
+carries previous, back 10 s, forward 30 s, and next between the two clocks,
+all as solid Lucide shapes with the availability that the colour carries. The top layer's
 chips line holds the video stream's resolved label, and the audio and
 subtitle chips, each opening its `trackPopover` overlay with the choices and
-the chosen one marked. The control rows paint while the title shows, and the
-stopped state paints them without one (below).
+the chosen one marked. The control row paints while the title shows, and the
+stopped state paints it without one (below).
 
 The stage and the no-image column are the panel's two arrangements (design
 D6). When the active item's art is `Placeholder` or absent, the panel paints
 no artwork box at all: under the header it shows the chips line, then the
-two control rows at scale 1.0 — always visible, whatever the auto-hide
-setting — then the title. The auto-hide control still paints and keeps its
-setting. The stopped state (design D7) shows the control rows without a
-title: while a shown local queue holds slots and nothing plays, the frame's
-`can_start` fact is true while `now_playing_title` is `None`, and the panel
-paints, under the header, only the two control rows at scale 1.0 — no
-stage, no chips line, no title — with the scrubber's empty track, which
+control row at scale 1.0 — always visible, whatever the auto-hide setting —
+then the title. The panel's right-click menu still carries the auto-hide
+entry and its setting. The stopped state (design D7) shows the control row
+without a title: while a shown local queue holds slots and nothing plays,
+the frame's `can_start` fact is true while `now_playing_title` is `None`,
+and the panel paints, under the header, only the control row at scale 1.0 —
+no stage, no chips line, no title — with the scrubber's empty track, which
 resolves no seek while nothing plays. A shown peer queue and an empty shown
-local queue leave `can_start` false, so no control rows paint.
+local queue leave `can_start` false, so no control row paints.
 
 The Queue panel's recessed box sits below the player block on the
 `queuePanel` fill, with its header row, its rows, and its bottom spacer. The

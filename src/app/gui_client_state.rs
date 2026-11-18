@@ -14,6 +14,7 @@
 mod confirm;
 mod daemon_lost;
 mod overlay;
+mod player_menu;
 mod popover;
 mod projection;
 mod queue_chooser;

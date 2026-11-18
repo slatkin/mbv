@@ -206,6 +206,7 @@ pub(crate) fn row_menu_entries(entries: &[GuiMusicMenuEntryFrame]) -> Vec<GuiRow
             label: entry.label.clone(),
             key_hint: entry.key_hint.clone(),
             destructive: false,
+            checked: None,
             index: Some(entry.index),
         })
         .collect()

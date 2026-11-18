@@ -8,7 +8,9 @@ use dioxus_native::DioxusDocument;
 
 use super::harness::*;
 use crate::art::GuiArtRef;
+use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::GuiQueuePlayback;
+use crate::bridge::layout::{QueuePlaybackTargetId, RegionTarget};
 use crate::window::time::format_wall_clock;
 
 /// Contract (`Panel.test.ts`): the compact strip paints the meta line with
@@ -132,6 +134,77 @@ fn a_stopped_player_that_cannot_start_paints_no_control_rows() {
     assert!(
         !fixture.presents("[data-target=\"visualSlot\"]"),
         "no stage paints"
+    );
+}
+
+/// Contract (gui-player-overlay-menu): the open player menu paints the menu
+/// card at the frame's anchor, its single auto-hide entry checked from the
+/// playback section's fact, and the entry's region reports last — the menu
+/// card wins the hit map where it paints over the panel.
+#[test]
+fn the_open_player_menu_paints_the_card_at_the_anchor_with_the_checked_entry() {
+    let mut fixture = built(TALL);
+    fixture.set_playback(GuiQueuePlayback {
+        controls: crate::bridge::frame::playback::GuiPlayerControls {
+            auto_hide: true,
+            can_start: false,
+        },
+        ..playback()
+    });
+    fixture.set_overlay(Some(GuiOverlayFrame::PlayerMenu {
+        cursor: 0,
+        x: 30.0,
+        y: 40.0,
+    }));
+
+    assert!(fixture.presents("[data-row-menu]"), "the menu card paints");
+    let text = fixture.text();
+    assert!(text.contains("Auto-hide controls"), "{text}");
+    assert!(
+        fixture.presents("[role=menuitemcheckbox]"),
+        "the check entry paints"
+    );
+    assert_eq!(
+        fixture
+            .attr_of("[role=menuitemcheckbox]", local_name!("aria-checked"))
+            .as_deref(),
+        Some("true"),
+        "the entry paints the playback section's checked fact"
+    );
+    let style = fixture.style_of("[data-row-menu]");
+    assert!(
+        style.contains("top: 40px;") && style.contains("left: 30px;"),
+        "the card paints at the frame's anchor: {style}"
+    );
+    assert_eq!(
+        fixture.last_reported_targets().last(),
+        Some(&RegionTarget::QueuePlayback(
+            QueuePlaybackTargetId::PlayerMenuEntry
+        )),
+        "the entry's region reports last"
+    );
+}
+
+/// Contract (gui-player-overlay-menu): a closed player menu paints no card,
+/// and the menu's key retracts — the newest report carries no entry region.
+#[test]
+fn a_closed_player_menu_paints_no_card_and_retracts_the_entry_region() {
+    let mut fixture = built(TALL);
+    fixture.set_overlay(Some(GuiOverlayFrame::PlayerMenu {
+        cursor: 0,
+        x: 30.0,
+        y: 40.0,
+    }));
+    fixture.set_overlay(None);
+
+    assert!(!fixture.presents("[data-row-menu]"), "no card paints");
+    assert!(
+        !fixture
+            .last_reported_targets()
+            .contains(&RegionTarget::QueuePlayback(
+                QueuePlaybackTargetId::PlayerMenuEntry
+            )),
+        "the newest report carries no entry region"
     );
 }
 

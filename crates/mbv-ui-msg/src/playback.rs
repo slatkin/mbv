@@ -46,11 +46,19 @@ pub enum PlaybackRequest {
     /// The canvas header's queue-fold control: the `q` toggle's pointer
     /// dispatch. GUI-painted only, as `TogglePanelCollapse` is.
     ToggleQueueFold,
-    /// The player stage's auto-hide control (design D5 of
-    /// `gui-art-player-overlay`): the checkbox's press turns the persisted
-    /// auto-hide preference on and off. GUI-painted only, as
-    /// `TogglePanelCollapse` is.
-    ToggleAutoHide,
+    /// The player panel's right-click (gui-player-overlay-menu): opens the
+    /// Client-core player menu at the pointer, whose single entry toggles
+    /// the persisted auto-hide preference. GUI-painted only, as
+    /// `TogglePanelCollapse` is. The anchor is the pointer's CSS pixels.
+    OpenPlayerMenu {
+        /// The right-click's window anchor, in CSS pixels.
+        x: f32,
+        y: f32,
+    },
+    /// The player menu's auto-hide entry press (gui-player-overlay-menu):
+    /// the entry the window painted, run through the same execution the
+    /// menu's Enter applies, and the menu closes with it. GUI-painted only.
+    PlayerMenuSelect,
     /// The canvas queue header's filter control (row 6.5): the `/` chord's
     /// text-entry focus, pressed on the header control. GUI-painted only.
     ActivateQueueFilter,

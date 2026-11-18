@@ -35,6 +35,7 @@ use std::fmt::Write as _;
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::GuiRowMenuEntry;
+use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::menu_card::MENU_CARD_STYLE;
 use crate::window::components::row_handle::record_row_handle;
 use crate::window::truncate::{TextStyle, Truncate};
@@ -152,7 +153,15 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                         button {
                             "type": "button",
                             class: "flex items-center justify-between text-left",
-                            role: "menuitem",
+                            // A check entry is a checkbox menu item: the
+                            // player menu's auto-hide entry paints the state
+                            // the former checkbox painted
+                            // (gui-player-overlay-menu).
+                            role: if entry.checked.is_some() { "menuitemcheckbox" } else { "menuitem" },
+                            "aria-checked": match entry.checked {
+                                Some(checked) => checked.to_string(),
+                                None => "false".to_owned(),
+                            },
                             style: "{row_style}",
                             // The entry's own index in the shared builder's
                             // order, when the frame carries one (the
@@ -171,6 +180,23 @@ pub fn QueueRowMenu(props: QueueRowMenuProps) -> Element {
                             onmounted: move |event| {
                                 record_row_handle(row_slot, index, event);
                             },
+                            // The check entry's small box paints the state
+                            // ahead of the label; a plain entry paints none
+                            // and the label starts at the row's edge.
+                            if let Some(checked) = entry.checked {
+                                CheckboxBox {
+                                    checked,
+                                    element: CheckboxBoxElement::Span,
+                                    style: format!(
+                                        "width: 14px; height: 14px; margin-right: 8px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid var(--canvas-ordinal); background: {};",
+                                        if checked { "var(--canvas-accent)" } else { "transparent" }
+                                    ),
+                                    size: 10,
+                                    stroke_width: 3.0,
+                                    color: "var(--canvas-ink)".to_owned(),
+                                    aria_hidden: true,
+                                }
+                            }
                             // The 13 px the row's style sets is the label's inherited
                             // size and weight: the box carries no style of its own.
                             Truncate {

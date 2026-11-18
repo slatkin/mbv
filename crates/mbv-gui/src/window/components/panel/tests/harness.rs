@@ -16,6 +16,7 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::super::Panel;
 use crate::bridge::frame::GuiPanelToggles;
+use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiTrackChip, GuiTrackChips,
     GuiTransportAvailability,
@@ -55,6 +56,8 @@ const FIXTURE_CSS: &str = concat!(
     ".h-full { height: 100%; }",
     ".block { display: block; }",
     ".truncate { width: 100%; }",
+    ".absolute { position: absolute; }",
+    ".fixed { position: fixed; }",
     // The two roles the rail's ring reads, at rgb values the ring's test names
     // (the theme's `:root` rule in a live window).
     ":root { --mbv-progressTrack: rgb(17, 34, 51); --mbv-accent: rgb(68, 85, 102); }",
@@ -316,6 +319,16 @@ impl Fixture {
         self.doc.vdom.in_runtime(move || {
             sections.summary.set(summary);
             playhead.stamp(anchor);
+        });
+        self.poll_until_idle();
+        self.lay_out();
+    }
+
+    /// Paint the open overlay's frame, as the player menu's tests seed it.
+    pub(super) fn set_overlay(&mut self, overlay: Option<GuiOverlayFrame>) {
+        let mut sections = self.sections.clone();
+        self.doc.vdom.in_runtime(move || {
+            sections.overlay.set(overlay);
         });
         self.poll_until_idle();
         self.lay_out();

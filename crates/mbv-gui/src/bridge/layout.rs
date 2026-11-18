@@ -108,6 +108,7 @@ impl RegionTarget {
                 | QueuePlaybackTargetId::TrackPopoverChoice(_)
                 | QueuePlaybackTargetId::AudioChip
                 | QueuePlaybackTargetId::SubtitleChip
+                | QueuePlaybackTargetId::PlayerMenuEntry
                 | QueuePlaybackTargetId::PlaybackTarget,
             )
             | Self::Queue(
@@ -231,9 +232,10 @@ pub enum QueuePlaybackTargetId {
     PlaybackTarget,
     /// The visual slot's image rectangle.
     VisualSlot,
-    /// The stage's auto-hide checkbox: a press toggles the core-owned
-    /// preference (gui-art-player-overlay design D5).
-    AutoHide,
+    /// The player menu's auto-hide entry: a press runs the entry through the
+    /// same execution the menu's Enter applies, and the menu closes with it
+    /// (gui-player-overlay-menu).
+    PlayerMenuEntry,
     /// The back-10 s control: the `seek_back` chord's pointer target
     /// (add-tauri-gui-client row 6.4).
     SeekBack,

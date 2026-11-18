@@ -328,10 +328,10 @@ button:disabled {
 
 /* The bottom layer's glyphs take the control rows' measured scale (design
    D3): the icons carry `width` and `height` presentation attributes, which
-   these rules override. The play control's 22 px glyph and the row-2
-   controls' 20 px glyphs scale through the bottom layer's `--player-scale`;
-   the no-image column paints the same rows outside the stage, so it keeps
-   the attributes' full size. */
+   these rules override. The play control's 22 px glyph and the transport
+   controls' 20 px glyphs scale through the bottom layer's
+   `--player-scale`; the no-image column paints the same rows outside the
+   stage, so it keeps the attributes' full size. */
 .stage > .bottom .player-play-glyph {
 	width: calc(22px * var(--player-scale));
 	height: calc(22px * var(--player-scale));
@@ -339,10 +339,6 @@ button:disabled {
 .stage > .bottom .player-glyph {
 	width: calc(20px * var(--player-scale));
 	height: calc(20px * var(--player-scale));
-}
-.stage > .bottom [role='checkbox'] svg {
-	width: calc(11px * var(--player-scale));
-	height: calc(11px * var(--player-scale));
 }
 
 @layer base {

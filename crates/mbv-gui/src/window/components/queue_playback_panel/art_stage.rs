@@ -1,7 +1,7 @@
 //! The player stage and its overlay layers (`gui-art-player-overlay` design
 //! D1, D6, D8): the stage wrapper, the clipped media box, the top layer with
 //! the track chips and the episode badge, and the bottom layer with its
-//! gradient and the two control rows.
+//! gradient and the control row.
 //!
 //! The stage is the visual slot: a `relative` wrapper with no clip that
 //! carries the `visualSlot` region, so the panel reports one region for the
@@ -10,8 +10,8 @@
 //! absolute siblings over the media box; a press on a control lands on the
 //! control's own region, which the panel pushes after the stage's (design D4).
 //!
-//! The control rows are one component ([`ControlRows`]) because two
-//! arrangements paint them: the stage's bottom layer, and the no-image column
+//! The control row is one component ([`ControlRow`]) because two
+//! arrangements paint it: the stage's bottom layer, and the no-image column
 //! the panel paints for `Placeholder` and `None` artwork, where no stage
 //! exists (design D6, D7). [`ChipsAndBadge`] is shared the same way: the top
 //! layer holds it, and the no-image column paints it as its own line.
@@ -19,7 +19,11 @@
 //! The sizes are the canvas's pixels times the measured `--player-scale`
 //! (design D3): the panel holds the scale in a window signal and the bottom
 //! layer carries it, so the rows and everything inside them shrink as one
-//! unit while the no-image column paints them at full size.
+//! unit while the no-image column paints it at full size.
+//!
+//! The auto-hide control is not here: the player panel's right-click menu
+//! carries it (gui-player-overlay-menu), so the bottom layer paints one
+//! row and the stage's height limit names that row alone.
 
 use dioxus_native::prelude::*;
 
@@ -28,7 +32,6 @@ use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{GuiTrackChips, GuiTransportAvailability};
 use crate::bridge::frame::theme::GuiRole;
 use crate::window::components::art_image::ArtImage;
-use crate::window::components::checkbox_box::{CheckboxBox, CheckboxBoxElement};
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{Pause, Play, SkipBack, SkipForward};
 use crate::window::theme::{glyph_color, role_var};
@@ -38,20 +41,19 @@ use super::scrubber::Scrubber;
 #[cfg(test)]
 mod tests;
 
-/// The two control rows' full height at scale 1.0 (design D3): row 1's
-/// scrubber block (6 + 24 bar + 30 clock line + 2 px) over row 2's auto-hide
-/// line and tail pad (20 + 4 px). The scale's one-third share is measured
-/// against this height.
-pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 86.0;
+/// The control row's full height at scale 1.0 (design D3): the scrubber
+/// block's 6 px top pad, the 24 px bar, the 30 px clock line, and the 2 px
+/// tail pad. The scale's one-third share is measured against this height.
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 62.0;
 
-/// The control rows' scale for a stage `stage_height` px tall (design D3):
-/// the rows take at most a third of the stage and never grow past their full
+/// The control row's scale for a stage `stage_height` px tall (design D3):
+/// the row takes at most a third of the stage and never grows past its full
 /// size. There is no floor, so the one-third limit holds at every height.
 pub(super) fn player_scale(stage_height: f32) -> f32 {
     (stage_height / 3.0 / BOTTOM_FULL_HEIGHT_PX).min(1.0)
 }
 
-/// The mounted handles the control rows set: the panel holds every handle and
+/// The mounted handles the control row sets: the panel holds every handle and
 /// hands the same set to the stage and to the no-image column (design D8), so
 /// one region report covers both arrangements.
 #[derive(Clone, Copy, PartialEq)]
@@ -68,8 +70,6 @@ pub struct ControlRowHandles {
     pub next: Signal<Option<Event<MountedData>>>,
     /// The scrubber's slider box.
     pub seekbar: Signal<Option<Event<MountedData>>>,
-    /// The auto-hide checkbox.
-    pub auto_hide: Signal<Option<Event<MountedData>>>,
 }
 
 /// The stage's props: the artwork, the two overlay layers' facts, and the
@@ -94,12 +94,12 @@ pub struct ArtStageProps {
     pub availability: GuiTransportAvailability,
     /// Whether the core-owned auto-hide preference is on (design D5).
     pub auto_hide: bool,
-    /// The control rows' scale (design D3): the measured stage height's
+    /// The control row's scale (design D3): the measured stage height's
     /// one-third share of the rows' full height, never above 1.0.
     pub scale: f32,
     /// The stage's own mounted event: the `visualSlot` region.
     pub stage_mounted: Signal<Option<Event<MountedData>>>,
-    /// The two control rows' handles.
+    /// The control row's handles.
     pub rows: ControlRowHandles,
 }
 
@@ -119,7 +119,7 @@ impl std::fmt::Debug for ArtStageProps {
 /// The stage: the visual slot's `relative` wrapper with no clip, holding the
 /// clipped media box and the two absolute overlay layers. The top layer paints
 /// the chips and the badge at all times; the bottom layer paints the gradient
-/// and the two control rows.
+/// and the control row.
 #[component]
 pub fn ArtStage(props: ArtStageProps) -> Element {
     let mut stage_mounted = props.stage_mounted;
@@ -172,10 +172,9 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             div {
                 class: "bottom absolute inset-x-0 bottom-0",
                 style: "padding-top: 6px; background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
-                ControlRows {
+                ControlRow {
                     paused: props.paused,
                     availability: props.availability,
-                    auto_hide: props.auto_hide,
                     rows: props.rows,
                 }
             }
@@ -218,59 +217,43 @@ pub fn ChipsAndBadge(props: ChipsAndBadgeProps) -> Element {
     }
 }
 
-/// The control rows' props.
+/// The control row's props.
 #[derive(Props, Clone, PartialEq)]
-pub struct ControlRowsProps {
+pub struct ControlRowProps {
     /// Whether the transport is paused.
     pub paused: bool,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
-    /// Whether the auto-hide preference is on: the checkbox paints its mark.
-    pub auto_hide: bool,
-    /// The rows' region handles.
+    /// The row's region handles.
     pub rows: ControlRowHandles,
 }
 
-impl std::fmt::Debug for ControlRowsProps {
+impl std::fmt::Debug for ControlRowProps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ControlRowsProps")
+        f.debug_struct("ControlRowProps")
             .field("paused", &self.paused)
             .field("availability", &self.availability)
-            .field("auto_hide", &self.auto_hide)
             .finish_non_exhaustive()
     }
 }
 
-/// The two control rows: row 1 holds play/pause and the scrubber, whose own
-/// clocks paint the elapsed and `−remaining` labels; row 2 holds previous,
-/// back 10 s, forward 30 s, next, and the auto-hide checkbox.
-///
-/// The stage's bottom layer paints them over the artwork at the measured
-/// `--player-scale`, and the no-image column paints them under its chips line
-/// at full size (design D3, D6). The stopped state paints them alone (design
-/// D7); the scrubber then paints its empty track, because the playhead
-/// predicts no progress.
+/// The control row: play/pause and the scrubber, whose own clock line
+/// carries the transport controls between the elapsed and `−remaining`
+/// labels. The stage's bottom layer paints it over the artwork at the
+/// measured `--player-scale`, and the no-image column paints it under its
+/// chips line at full size (design D3, D6). The stopped state paints it
+/// alone (design D7); the scrubber then paints its empty track, because the
+/// playhead predicts no progress.
 #[component]
-pub fn ControlRows(props: ControlRowsProps) -> Element {
+pub fn ControlRow(props: ControlRowProps) -> Element {
     let mut play_pause_mounted = props.rows.play_pause;
     let mut prev_mounted = props.rows.previous;
     let mut seek_back_mounted = props.rows.seek_back;
     let mut seek_forward_mounted = props.rows.seek_forward;
     let mut next_mounted = props.rows.next;
-    let mut auto_hide_mounted = props.rows.auto_hide;
     let seekbar_mounted = props.rows.seekbar;
     let glyph = glyph_color(props.availability.previous, GuiRole::TextPrimary);
     let next_glyph = glyph_color(props.availability.next, GuiRole::TextPrimary);
-    // The box, its radius, and the mark inside it scale with the rows (design
-    // D3); the hairline border stays 1.5 px so it cannot vanish.
-    let (border, background) = if props.auto_hide {
-        ("var(--canvas-accent)", "var(--canvas-accent)")
-    } else {
-        ("var(--canvas-ordinal)", "transparent")
-    };
-    let mark_style = format!(
-        "width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); box-sizing: border-box; border-radius: calc(4px * var(--player-scale)); border: 1.5px solid {border}; background: {background};",
-    );
     // The transport controls ride the scrubber's clock line, between the two
     // clocks, so they sit tight under the bar.
     let transport = rsx! {
@@ -357,39 +340,6 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             div {
                 class: "min-w-0 flex-1",
                 Scrubber { seekbar_mounted, center: transport }
-            }
-        }
-        div {
-            class: "flex items-center justify-end",
-            style: "padding: 0 calc(16px * var(--player-scale)) calc(4px * var(--player-scale));",
-            // The auto-hide control: a checkbox with a visible label and a
-            // tooltip (design D5). Its press toggles the core-owned preference
-            // through the `autoHide` region; the box paints the setting.
-            button {
-                "type": "button",
-                role: "checkbox",
-                "aria-checked": "{props.auto_hide}",
-                "aria-label": "Auto-hide controls",
-                title: "Auto-hide controls",
-                class: "flex items-center justify-center",
-                style: "height: calc(20px * var(--player-scale)); gap: calc(6px * var(--player-scale)); padding: 0 calc(8px * var(--player-scale));",
-                "data-target": "autoHide",
-                onmounted: move |event| auto_hide_mounted.set(Some(event)),
-                CheckboxBox {
-                    checked: props.auto_hide,
-                    element: CheckboxBoxElement::Span,
-                    style: mark_style,
-                    size: 11,
-                    stroke_width: 3.5,
-                    color: "var(--canvas-ink)".to_owned(),
-                    aria_hidden: true,
-                }
-                // The visible label: the checkbox names itself beside the box
-                // rather than only in a tooltip.
-                span {
-                    style: "font-size: calc(12px * var(--player-scale)); white-space: nowrap; color: var(--mbv-textPrimary);",
-                    "Auto-hide"
-                }
             }
         }
     }

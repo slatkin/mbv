@@ -13,17 +13,17 @@
 //! canvas paints no queue-fold control here (`main` audit 4); `q` stays a
 //! chord and the folded line owns the expand control.
 //!
-//! The stage, its two overlay layers, and the control rows are this module's
+//! The stage, its two overlay layers, and the control row are this module's
 //! second file, `queue_playback_panel/art_stage.rs` (`gui-art-player-overlay`
 //! design D1, D8): the stage is the visual slot's wrapper, the media box owns
 //! the clip, the top layer holds the track chips and the episode badge, and
-//! the bottom layer holds the gradient and the two control rows. The panel
+//! the bottom layer holds the gradient and the control row. The panel
 //! keeps every mounted handle and reports the regions in one contribution.
 //!
 //! The scrubber — the 6 px track, the intro and credits blocks, the played
 //! fill, the chapter ticks, the thumb, the hover preview, and the clocks — is
 //! this module's third file, `queue_playback_panel/scrubber.rs` (task 5.3):
-//! the component paints it in the control rows' first row, and its slider box
+//! the component paints it in the control row, and its slider box
 //! is the `seekbar` region of this panel's one report, so the panel holds the
 //! element handle the scrubber sets on mount.
 //!
@@ -34,8 +34,10 @@
 use dioxus_native::prelude::*;
 
 use crate::art::GuiArtRef;
+use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiRowMenuEntry};
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
 use crate::window::components::art_image::ArtEvents;
+use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::layout::LayoutContribution;
 use crate::window::layout::{LayoutEpoch, LayoutKey, LayoutReporter, element_region};
 use crate::window::playhead::Playhead;
@@ -45,7 +47,7 @@ use crate::window::truncate::{TextStyle, Truncate};
 mod art_stage;
 mod scrubber;
 
-use art_stage::{ArtStage, ChipsAndBadge, ControlRowHandles, ControlRows, player_scale};
+use art_stage::{ArtStage, ChipsAndBadge, ControlRow, ControlRowHandles, player_scale};
 
 /// The URL the artwork reference names, `None` while it names none (a
 /// `loading` reference paints no `img`, so no art answer can land for it).
@@ -65,7 +67,7 @@ fn stage_art(art: Option<&GuiArtRef>) -> Option<GuiArtRef> {
     }
 }
 
-/// The stage's region, with the control rows' scale updated from its measured
+/// The stage's region, with the control row's scale updated from its measured
 /// height (`gui-art-player-overlay` design D3, D4): the stage leads the
 /// panel's report, and its height decides how much of itself the two control
 /// rows may take.
@@ -114,8 +116,12 @@ pub fn QueuePlaybackPanel() -> Element {
     let seek_forward_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let next_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let seekbar_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let auto_hide_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    // The control rows' scale (design D3): layout, not interaction state. The
+    // The player menu's entry rows (gui-player-overlay-menu): the handles the
+    // menu's `row_slot` prop records, reported under the menu's own key while
+    // it is open.
+    let menu_row_handles: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
+    let menu_key = use_hook(LayoutKey::next);
+    // The control row's scale (design D3): layout, not interaction state. The
     // region effect measures the stage and writes it; the stage paints it as
     // `--player-scale`, so the rows take at most a third of the art.
     let stage_scale: Signal<f32> = use_signal(|| 1.0);
@@ -130,8 +136,13 @@ pub fn QueuePlaybackPanel() -> Element {
     // so a press on a control over the artwork lands on the control, not on
     // the slot beneath it.
     let watch_playback = sections.playback;
+    let watch_overlay = sections.overlay;
     use_effect(move || {
         let playback = watch_playback.cloned();
+        // The player menu opens and closes with the overlay section (the
+        // menu's key retracts while none is open), so a batch that carries it
+        // re-reports.
+        let overlay = watch_overlay.cloned();
         let _watch_epoch = epoch.0.cloned();
         // The art element's own resizes report (design D4) — the artwork's
         // loaded size moves the rows beside it. The load answers ride the art
@@ -144,9 +155,9 @@ pub fn QueuePlaybackPanel() -> Element {
         let seek_forward = seek_forward_mounted.cloned();
         let next = next_mounted.cloned();
         let seekbar = seekbar_mounted.cloned();
-        let auto_hide = auto_hide_mounted.cloned();
         let art = art_mounted.cloned();
         let scale_signal = stage_scale;
+        let menu_rows = menu_row_handles;
         let mut effect_reporter = reporter.clone();
         spawn(async move {
             let mut regions: Vec<LayoutRegion> = Vec::new();
@@ -165,7 +176,6 @@ pub fn QueuePlaybackPanel() -> Element {
                 (seek_forward, QueuePlaybackTargetId::SeekForward),
                 (next, QueuePlaybackTargetId::Next),
                 (seekbar, QueuePlaybackTargetId::Seekbar),
-                (auto_hide, QueuePlaybackTargetId::AutoHide),
             ];
             for (mounted, id) in elements {
                 if let Some(mounted) = mounted {
@@ -179,11 +189,39 @@ pub fn QueuePlaybackPanel() -> Element {
                     regions,
                 },
             );
+            // The player menu's entry reports under its own key, first
+            // inserted while the menu is open, so it merges after the panel's
+            // and the queue's regions and wins the hit map where the card
+            // paints over them (the queue row menu's second-key technique).
+            // A shrinking row list drops the stale handles (the track chips'
+            // idiom).
+            if matches!(overlay.as_ref(), Some(GuiOverlayFrame::PlayerMenu { .. })) {
+                let mut menu_regions: Vec<LayoutRegion> = Vec::new();
+                for mounted in menu_rows.peek().iter().flatten() {
+                    menu_regions.extend(
+                        element_region(
+                            mounted,
+                            RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayerMenuEntry),
+                        )
+                        .await,
+                    );
+                }
+                effect_reporter.report_layout(
+                    menu_key,
+                    LayoutContribution {
+                        lists: Vec::new(),
+                        regions: menu_regions,
+                    },
+                );
+            } else {
+                effect_reporter.retract_layout(menu_key);
+            }
         });
     });
 
     use_drop(move || {
         drop_reporter.retract_layout(key);
+        drop_reporter.retract_layout(menu_key);
     });
 
     let playback = sections.playback.cloned();
@@ -198,10 +236,9 @@ pub fn QueuePlaybackPanel() -> Element {
         seek_forward: seek_forward_mounted,
         next: next_mounted,
         seekbar: seekbar_mounted,
-        auto_hide: auto_hide_mounted,
     };
     // The two arrangements (design D6): the stage for a media box, and the
-    // no-image column — the chips-and-badge line, then the control rows —
+    // no-image column — the chips-and-badge line, then the control row —
     // for `Placeholder` and `None`. The no-image column carries no stage, so
     // no auto-hide attribute applies there (design D2).
     let art_section = if let Some(art) = stage_art(playback.artwork.as_ref()) {
@@ -229,14 +266,25 @@ pub fn QueuePlaybackPanel() -> Element {
                     overlay: sections.overlay.cloned(),
                     episode_badge: playback.episode_badge.clone(),
                 }
-                ControlRows {
+                ControlRow {
                     paused,
                     availability: playback.availability,
-                    auto_hide: playback.controls.auto_hide,
                     rows,
                 }
             }
         }
+    };
+
+    // The open player menu (gui-player-overlay-menu): the core's cursor, the
+    // right-click's window anchor, and the entry the playback section's
+    // checked fact marks. The card paints in a fixed wrapper at the window's
+    // origin, as the Library's right-click menu does, so the anchor addresses
+    // the window, not the panel's own box. Its presses resolve through the
+    // hit map: the panel reports the entry's region under the menu key, and
+    // the core runs the entry's execution and closes the menu with it.
+    let player_menu = match sections.overlay.cloned().as_ref() {
+        Some(GuiOverlayFrame::PlayerMenu { cursor, x, y }) => Some((*cursor, *x, *y)),
+        _ => None,
     };
 
     rsx! {
@@ -277,15 +325,40 @@ pub fn QueuePlaybackPanel() -> Element {
                     }
                 }
             } else if playback.controls.can_start {
-                // The stopped state (design D7): the two control rows alone,
+                // The stopped state (design D7): the control row alone,
                 // with no stage, no chips line, and no title. The scrubber
                 // paints its empty track, because the playhead predicts no
                 // progress.
-                ControlRows {
+                ControlRow {
                     paused,
                     availability: playback.availability,
-                    auto_hide: playback.controls.auto_hide,
                     rows,
+                }
+            }
+            if let Some((cursor, x, y)) = player_menu {
+                {
+                    let top = format!("{y}px");
+                    let left = format!("{x}px");
+                    rsx! {
+                        div {
+                            class: "fixed",
+                            style: "left: 0; top: 0; width: 0; height: 0;",
+                            QueueRowMenu {
+                                cursor: Some(cursor),
+                                entries: vec![GuiRowMenuEntry {
+                                    label: "Auto-hide controls".to_owned(),
+                                    key_hint: Some("Enter".to_owned()),
+                                    destructive: false,
+                                    index: None,
+                                    checked: Some(playback.controls.auto_hide),
+                                }],
+                                top,
+                                left: Some(left),
+                                label: "Player panel".to_owned(),
+                                row_slot: menu_row_handles,
+                            }
+                        }
+                    }
                 }
             }
         }

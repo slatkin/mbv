@@ -96,7 +96,7 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **THEN** the expanded panel shows, from top to bottom, the artwork with its overlays, the title, the queue header, the queue rows, and a footer line
 - **AND** the footer line's left shows the playback target with a chooser and the collapse control
 - **AND** the artwork shows the active item, with the track chips at its top left, the season and episode badge at its top right, and the player controls at its bottom
-- **AND** the player controls have play/pause and the scrubber on one row, and previous, back 10 s, forward 30 s, next, and the auto-hide control on the row under it
+- **AND** the player controls have play/pause at the scrubber's left, and previous, back 10 s, forward 30 s, and next between the scrubber's elapsed and remaining clocks
 - **AND** the queue lists the slots in canonical order, marks the start slot, and numbers every row with its 1-based position in the queue
 
 #### Scenario: The Status bar projection holds a toast
@@ -207,7 +207,17 @@ In the expanded panel, the player controls SHALL paint over the bottom of the ar
 
 ### Requirement: The player controls auto-hide when the user turns it on
 
-The player controls over the artwork SHALL show at all times by default. The auto-hide control SHALL turn auto-hide on and off. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
+The player controls over the artwork SHALL show at all times by default. A right-click anywhere on the expanded panel SHALL open the panel's context menu at the pointer, whose single auto-hide entry SHALL turn auto-hide on and off and close the menu with the choice; Esc SHALL close the menu with no toggle, and a press outside the menu SHALL close it. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
+
+#### Scenario: The user opens the panel's menu
+
+- **WHEN** the user right-clicks the expanded panel
+- **THEN** the panel's context menu opens at the pointer, and its auto-hide entry carries the check the current setting holds
+
+#### Scenario: The user toggles auto-hide from the menu
+
+- **WHEN** the user presses the menu's auto-hide entry, or presses Enter while the menu is open
+- **THEN** auto-hide flips, the choice persists across launches, and the menu closes with the choice
 
 #### Scenario: Auto-hide is off
 
@@ -241,7 +251,7 @@ The player controls over the artwork SHALL show at all times by default. The aut
 
 ### Requirement: The player panel without an image shows the player alone
 
-When the active item has no image, the expanded panel SHALL paint no artwork box. Under the global header it SHALL show the track chips and the badge on one line, then the player controls, then the title. The player controls SHALL always show in that case, whatever the auto-hide setting, and the auto-hide control SHALL still show and keep its setting.
+When the active item has no image, the expanded panel SHALL paint no artwork box. Under the global header it SHALL show the track chips and the badge on one line, then the player controls, then the title. The player controls SHALL always show in that case, whatever the auto-hide setting, and the panel's right-click menu SHALL still carry the auto-hide entry and its setting.
 
 #### Scenario: The item has no image
 
@@ -253,11 +263,11 @@ When the active item has no image, the expanded panel SHALL paint no artwork box
 
 - **GIVEN** auto-hide is on and the active item has no image
 - **WHEN** an item plays and the pointer is away from the panel
-- **THEN** the player controls show and the auto-hide control still shows that auto-hide is on
+- **THEN** the player controls show, and the panel's menu entry still marks auto-hide on
 
 ### Requirement: The stopped player shows its buttons
 
-While a shown local queue holds slots and nothing plays, the expanded panel SHALL show the two control rows under the global header, with an empty scrubber that resolves no seek. The panel SHALL show no artwork, no title, and no track chips. A press on play/pause SHALL start the shown queue.
+While a shown local queue holds slots and nothing plays, the expanded panel SHALL show the control row under the global header, with an empty scrubber that resolves no seek. The panel SHALL show no artwork, no title, and no track chips. A press on play/pause SHALL start the shown queue.
 
 #### Scenario: Play from the stopped state
 
