@@ -1,9 +1,9 @@
 //! Headless tests of the Shows list's row model (D16): the contracts of
 //! `shows-list.test.ts` — the series list's Music tree over the TUI's TV node
 //! kinds with the letter headings, the closed nodes, the filter's auto-open,
-//! and the A–Z rail. The GUI Shows destination paints this list alone
-//! (gui-collection-dropdown design D8), so the flat modes have no test. The
-//! model is plain data, so the geometry is asserted without a layout.
+//! the A–Z rail, and the flat modes' two-line row height. The GUI Shows
+//! destination paints this list alone (gui-collection-dropdown design D8).
+//! The model is plain data, so the geometry is asserted without a layout.
 
 use super::*;
 use crate::bridge::frame::library::GuiHomeRowStateFrame;
@@ -212,4 +212,31 @@ fn the_rail_holds_the_first_series_row_under_each_letter_and_disables_the_rest()
     assert_eq!(letter('B'), Some(series_row_id("s3")));
     assert_eq!(letter('C'), None);
     assert_eq!(episode_row_id("ep1"), "shows-episode:ep1");
+}
+
+/// One flat New or Upcoming row, as the frame carries it.
+fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
+    GuiShowsRowFrame {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: Some("The Beginning".to_owned()),
+        date: Some("18 Nov".to_owned()),
+        sort_letter: None,
+        display_only: false,
+    }
+}
+
+// The flat New and Upcoming rows paint at the two-line height their format
+// was built for (gui-collection-dropdown D9): the old Home item rows' 48 px,
+// whose two title lines fit — not the one-line track row's 28 px, which
+// clipped them illegibly (the live defect of 2026-11-18).
+#[test]
+fn the_flat_rows_paint_at_the_two_line_height() {
+    let rows = vec![flat_row("n1", "Alfred"), flat_row("n2", "Bridgerton")];
+    let painted = build_shows_rows(GuiShowsView::New, &[], &rows, "", ShowsTreeState::default());
+
+    let heights: Vec<f32> = painted.iter().map(GeometryRow::height).collect();
+    assert_eq!(heights, [SHOWS_FLAT_ROW_HEIGHT, SHOWS_FLAT_ROW_HEIGHT]);
+    assert_eq!(painted[0].top(), 0.0);
+    assert_eq!(painted[1].top(), SHOWS_FLAT_ROW_HEIGHT);
 }

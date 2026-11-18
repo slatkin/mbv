@@ -32,6 +32,12 @@ pub const SHOWS_SERIES_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
 pub const SHOWS_SEASON_ROW_HEIGHT: f32 = NODE_ROW_HEIGHT;
 /// The episode leaf's height in logical pixels: the Music track row.
 pub const SHOWS_EPISODE_ROW_HEIGHT: f32 = TRACK_ROW_HEIGHT;
+/// The flat New or Upcoming row's height in logical pixels: the old Home
+/// item row's two-line height, whose format the relocated rows kept. A track
+/// row's 28 px clips the two title lines to illegibility, so the flat rows
+/// take the height their format was built for (gui-collection-dropdown D9,
+/// the live defect of 2026-11-18: the New and Upcoming rows painted cut off).
+pub const SHOWS_FLAT_ROW_HEIGHT: f32 = 48.0;
 
 /// The tree's open and closed node keys (design D14): the Music tree's rule.
 /// `open` holds the nodes the user opened, and `closed` holds the nodes the
@@ -282,9 +288,9 @@ pub fn build_shows_rows(
                         date: row.date.clone(),
                         display_only: row.display_only,
                         top,
-                        height: TRACK_ROW_HEIGHT,
+                        height: SHOWS_FLAT_ROW_HEIGHT,
                     });
-                    top += TRACK_ROW_HEIGHT;
+                    top += SHOWS_FLAT_ROW_HEIGHT;
                     built
                 })
                 .collect()
