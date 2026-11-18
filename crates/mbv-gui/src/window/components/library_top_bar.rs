@@ -1,38 +1,37 @@
-//! The Library top bar (`replace-tauri-with-blitz` task 7.1, the port of
-//! `LibraryTopBar`; add-gui-library-panel design D2, D12): the
-//! canvas's Home icon, then one tab per presented destination in the frame's
-//! catalog order, with the active destination's tab marked current. The icon
-//! is current while the Home content is present (the destinations are
-//! exclusive), and a press on the icon or on a tab sends the
-//! open-destination command with that destination's own position.
+//! The window's global header (`replace-tauri-with-blitz` task 7.1, the port of
+//! `LibraryTopBar`; add-gui-library-panel design D2, D12; design D7 of
+//! `move-playback-header-into-queue-footer`): the root mounts it above the
+//! panel row, across the full window width, in every arrangement, and the
+//! Settings screen mounts none. It paints the canvas's Home icon, then one tab
+//! per presented destination in the frame's catalog order, with the active
+//! destination's tab marked current. The icon is current while the Home
+//! content is present (the destinations are exclusive), and a press on the
+//! icon or on a tab sends the open-destination command with that destination's
+//! own position.
 //!
-//! The Search field (row 12.1) sits at the bar's right end. The typing
-//! schedules the debounced `searchQuery` command through
-//! [`crate::window::library::search`], the core carries the results back on
-//! the frame, and the dropdown paints them in the list-row look — or its
-//! landing or failed state — under the field. The keys that act on the
-//! results route through the Library key router while the field holds the
-//! keyboard, so this component never interprets a key: it only follows the
-//! focus fact, and a highlight id that a new results frame no longer carries
-//! falls to the first row.
+//! The bar carries the Library pointer zone (design D7): the pointer over the
+//! header is over the Library, so a key pressed there routes as it does over
+//! the Library column. A destination press also reports to the root, which
+//! shows the Library in place of the Queue while the Mini arrangement holds
+//! (design D8).
 //!
-//! The Settings control sits to the right of the field
+//! The Search field is not here: it leads the Library Status bar's left side
+//! (design D9). The Settings control stays at the bar's right end
 //! (add-gui-settings-screen design D11 *Mouse-centric*): a press opens the
 //! Settings screen at Services, so the pointer has its own way into the
 //! screen.
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame, GuiSearchRowFrame};
+use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::settings::GuiSettingsCommand;
-use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::{ChevronLeft, ChevronRight, Settings};
 use crate::window::input::f32_from_f64;
 use crate::window::layout::LayoutEpoch;
 use crate::window::library::state::LibraryState;
+use crate::window::pointer_target::PointerZone;
 use crate::window::theme::{canvas_var, role_var};
-use crate::window::truncate::{TextStyle, Truncate};
 
 /// The props of the Library top bar (the `LibraryTopBar` props, in
 /// order).
@@ -44,20 +43,24 @@ pub struct LibraryTopBarProps {
     /// not one of the tabs (design D2): Home, and every destination the GUI
     /// does not present yet.
     pub current_tab: Option<usize>,
-    /// The carried Search facts while a search runs or its results hold
-    /// (design D12, row 12.1); `None` while the section is closed.
-    #[props(default)]
-    pub search: Option<GuiSearchFrame>,
     /// Whether the Home content is present (design D12): the Home icon
     /// marks itself current on it alone.
     #[props(default)]
     pub home_active: bool,
+    /// A destination press reported to the root (design D8): the root shows
+    /// the Library in place of the Queue while the Mini arrangement holds.
+    #[props(default)]
+    pub on_destination_opened: Option<Callback<()>>,
 }
 
 /// Open the destination tab at `position` (design D2): Home's own position
-/// is 0, and the Home icon opens it.
-fn open_destination(library: &LibraryState, position: usize) {
+/// is 0, and the Home icon opens it. The window's own report follows the
+/// command (design D8).
+fn open_destination(library: &LibraryState, position: usize, on_opened: Option<Callback<()>>) {
     library.open_destination(position);
+    if let Some(on_opened) = on_opened {
+        on_opened.call(());
+    }
 }
 
 /// Open the Settings screen at Services (design D11 *Mouse-centric*), as the
@@ -67,55 +70,10 @@ fn open_settings(library: &LibraryState) {
     library.link.settings(GuiSettingsCommand::Open);
 }
 
-/// The highlighted row's painted fill (the list's cursor fill, design D12):
-/// the highlight marks focus, like the list's cursor. `None` paints no
-/// background, as the former client `rowBackground` returned `undefined`.
-fn row_background(highlight: Option<&str>, row: &GuiSearchRowFrame) -> Option<String> {
-    (highlight == Some(row.id.as_str())).then(|| "background: var(--canvas-selected);".to_owned())
-}
-
-/// The Library top bar. The
-/// field's mount fact arms on the first render and retracts on unmount, the
-/// focus fact drives the input's DOM focus, and a results frame keeps the
-/// held highlight by row id.
+/// The window's global header.
 #[component]
 pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     let library = consume_context::<LibraryState>();
-
-    // The field's mount fact (row 12.1): the key router arms and routes the
-    // field only while this top bar paints it, and the teardown retracts it —
-    // an arrangement change can unmount the bar under an armed field, and the
-    // focus fact must not outlive the element.
-    let mount_library = library.clone();
-    use_effect(move || mount_library.mount_search_field());
-    let drop_library = library.clone();
-    use_drop(move || drop_library.unmount_search_field());
-
-    // The field follows the focus fact into DOM focus and out of it (design
-    // D3, step 2): `Ctrl+K` arms the fact in the key router, and a press
-    // elsewhere retracts it through this same element's blur event. The
-    // effect reads the focus fact and writes no signal — the DOM focus is
-    // the write.
-    let focus_mount_library = library.clone();
-    let mut search_mounted = use_focus_while(move || focus_mount_library.search.cloned().focused);
-
-    // A results frame keeps the held highlight by id (row 12.1): a first
-    // landing and an id a new frame no longer carries — a new query's rows,
-    // or a closed section's leftovers — fall to the first row. Rows compare
-    // by id, never object identity, so a refresh keeps the held id. The held
-    // id reads through `peek`, so the effect never re-runs on its own
-    // write.
-    let highlight_library = library.clone();
-    use_effect(use_reactive((&props.search,), move |(search,)| {
-        let Some(frame) = search else {
-            return;
-        };
-        let held = highlight_library.search.peek().highlight.clone();
-        if held.is_some_and(|held| frame.results.iter().any(|row| row.id == held)) {
-            return;
-        }
-        highlight_library.set_search_highlight(frame.results.first().map(|row| row.id.clone()));
-    }));
 
     // The tab strip's overflow window: the strip's measured width, and the
     // first painted tab the chevrons step. The strip's basis is zero, so its
@@ -168,10 +126,6 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
 
     // The current tab's run: the tab bar's underline role in both strokes.
     let underline = role_var(GuiRole::TabSelectedUnderline);
-    // The Search field's text and the held highlight, read once per render.
-    let search_state = library.search.cloned();
-    let query = search_state.query;
-    let highlight = search_state.highlight;
 
     // The Home icon's and the tabs' painted colours and the current tab's
     // weight, resolved before the markup.
@@ -184,9 +138,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     // The per-press handlers' own state handles (D4): every handler holds
     // its own clone.
     let home_library = library.clone();
-    let focus_library = library.clone();
-    let blur_library = library.clone();
-    let input_library = library.clone();
+    let home_opened = props.on_destination_opened;
     let settings_library = library.clone();
 
     rsx! {
@@ -194,6 +146,9 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             class: "flex flex-none items-center",
             "aria-label": "Libraries",
             "data-library-region": "topBar",
+            // The Library zone (design D7): the header is the Library's, so
+            // the keys pressed over it route as they do over the column.
+            "data-pointer-zone": PointerZone::Library.token(),
             style: "height: 56px; gap: 2px; padding: 0 12px 0 8px; border-bottom: 1px solid var(--canvas-border); background: var(--canvas-dim);",
             // The canvas's Home icon, before the tabs (design D12): the
             // current destination marker follows the tabs' `aria-current`
@@ -205,7 +160,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                 "aria-label": "Home",
                 "aria-current": props.home_active.then_some("page"),
                 "data-library-home": "",
-                onclick: move |_| open_destination(&home_library, 0),
+                onclick: move |_| open_destination(&home_library, 0, home_opened),
                 // The canvas's Home glyph, verbatim.
                 svg {
                     width: "18",
@@ -250,6 +205,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                             canvas_var("muted")
                         };
                         let tab_library = library.clone();
+                        let tab_opened = props.on_destination_opened;
                         rsx! {
                             button {
                                 key: "{position}",
@@ -258,7 +214,7 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                                 style: "height: 56px; padding: 0 12px; font-size: 14px; font-weight: {weight}; letter-spacing: 0.06em; color: {color};",
                                 "aria-current": current.then_some("page"),
                                 "data-library-tab": "{position}",
-                                onclick: move |_| open_destination(&tab_library, position),
+                                onclick: move |_| open_destination(&tab_library, position, tab_opened),
                                 if current {
                                     // The current tab's run: the canvas's two
                                     // underline strokes around the label.
@@ -286,127 +242,10 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                     }
                 }
             }
-            // The Search field at the bar's right end (row 12.1). The key
-            // router owns every key while it holds the keyboard, so the
-            // field never answers a key itself.
-            div {
-                class: "relative",
-                style: "margin-left: auto; flex: 0 1 220px; min-width: 0;",
-                "data-library-search": "",
-                input {
-                    "type": "text",
-                    class: "w-full",
-                    style: "height: 34px; padding: 0 50px 0 10px; box-sizing: border-box; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-heading); font-size: 14px; outline: none;",
-                    placeholder: "Search",
-                    "aria-label": "Search",
-                    value: "{query}",
-                    "data-library-search-input": "",
-                    onmounted: move |event: Event<MountedData>| search_mounted.set(Some(event)),
-                    onfocus: move |_| focus_library.focus_search_field(),
-                    onblur: move |_| blur_library.blur_search_field(),
-                    oninput: move |event: FormEvent| input_library.set_search_query(event.value()),
-                }
-                // The chord's hint inside the field (the spec's "a Search
-                // field with the hint `Ctrl K`", the canvas's bordered chip):
-                // a pointer passes through it to the field.
-                span {
-                    class: "font-mono",
-                    "aria-hidden": "true",
-                    style: "position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--canvas-muted); border: 1px solid var(--canvas-border); border-radius: 4px; padding: 1px 5px; pointer-events: none;",
-                    "data-library-search-hint": "",
-                    "Ctrl K"
-                }
-                if let Some(search) = props.search.as_ref() {
-                    // The results dropdown, in the list-row look (row 12.1):
-                    // the rows under the field while the frame carries them,
-                    // and the loading and failed states while the query
-                    // lands.
-                    div {
-                        class: "absolute",
-                        style: "left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px; padding: 2px 0; z-index: 30;",
-                        "data-library-search-results": "",
-                        role: "listbox",
-                        if search.loading {
-                            div {
-                                class: "font-mono",
-                                style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                                "data-library-search-loading": "",
-                                "Searching…"
-                            }
-                        } else if search.failed {
-                            div {
-                                class: "font-mono",
-                                style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                                "data-library-search-failed": "",
-                                "Search failed"
-                            }
-                        } else if search.results.is_empty() {
-                            div {
-                                class: "font-mono",
-                                style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                                "data-library-search-empty": "",
-                                "No results"
-                            }
-                        } else {
-                            for row in &search.results {
-                                {
-                                    let row = row.clone();
-                                    let activate_library = library.clone();
-                                    let mut row_style =
-                                        "height: 36px; padding: 0 10px; gap: 8px; border: 0; text-align: left; font-size: 14px; cursor: pointer;".to_owned();
-                                    if let Some(background) = row_background(highlight.as_deref(), &row) {
-                                        row_style.push(' ');
-                                        row_style.push_str(&background);
-                                    } else {
-                                        row_style.push_str(" background: none;");
-                                    }
-                                    let is_highlighted = highlight.as_deref() == Some(row.id.as_str());
-                                    let title = row.title.clone();
-                                    let subtitle = row.subtitle.clone();
-                                    let id = row.id.clone();
-                                    rsx! {
-                                        button {
-                                            key: "{id}",
-                                            "type": "button",
-                                            class: "flex w-full items-center overflow-hidden",
-                                            style: "{row_style}",
-                                            "data-library-search-row": "{id}",
-                                            "data-library-search-highlight": is_highlighted.then_some(""),
-                                            onclick: move |_| activate_library.activate_search_row(&row),
-                                            Truncate {
-                                                text: title,
-                                                class: "min-w-0 flex-1".to_owned(),
-                                                // the former client row's 14 px title face:
-                                                // the measure cuts for 14 px, so
-                                                // the box must paint 14 px.
-                                                css: "font-size: 14px; color: var(--canvas-text);"
-                                                    .to_owned(),
-                                                style: TextStyle::sans(14.0, 400.0),
-                                            }
-                                            // The subtitle's own ellipsis (D12): the
-                                            // the former client box clipped its 12 px mono
-                                            // text with `text-overflow`, which
-                                            // Blitz does not paint.
-                                            Truncate {
-                                                text: subtitle,
-                                                class: "font-mono".to_owned(),
-                                                css: "font-size: 12px; color: var(--canvas-muted); max-width: 45%; flex: 0 1 auto;"
-                                                    .to_owned(),
-                                                style: TextStyle::mono(12.0, 400.0),
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // The Settings control to the right of the Search field (design
-            // D11 *Mouse-centric*, the spec's *A Settings control in the top
-            // bar opens the screen*): a Lucide cog whose press opens the
-            // screen at Services. The global hover veil gives it its pointer
-            // feedback.
+            // The Settings control at the bar's right end (design D11
+            // *Mouse-centric*, the spec's *A Settings control in the top bar
+            // opens the screen*): a Lucide cog whose press opens the screen at
+            // Services. The global hover veil gives it its pointer feedback.
             button {
                 "type": "button",
                 class: "flex flex-none items-center justify-center",

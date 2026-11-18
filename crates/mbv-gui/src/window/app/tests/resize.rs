@@ -23,11 +23,11 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 
-use super::super::ROOT_STYLE;
+use super::super::{MiniView, ROOT_STYLE, library_column_shows, queue_column_shows};
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::layout::LayoutSize;
 use crate::core_thread::CoreInput;
-use crate::window::arrangement::{GuiArrangement, library_arrangement};
+use crate::window::arrangement::library_arrangement;
 use crate::window::channel::CoreLink;
 use crate::window::layout::{
     LayoutEpoch, ViewportSize, apply_viewport_size, frame_carries_change, note_presented_frame,
@@ -59,8 +59,8 @@ struct Props {
 
 /// The root, shaped like the window's: one layout size the drain and the
 /// measurement both write, and the arrangement, panel visibility, and column
-/// widths derived from it the way `App` derives them. Mini shows the Queue
-/// panel alone (`gui-pointer-target-interaction` design D5).
+/// widths derived from it the way `App` derives them. The Mini view is the
+/// mounted one, so Mini shows the Queue column alone (design D8).
 fn resize_app(props: Props) -> Element {
     let Props { viewport, epoch } = props;
     let (core, _inputs) = channel::<CoreInput>();
@@ -77,10 +77,9 @@ fn resize_app(props: Props) -> Element {
     let size = container.cloned();
     let widths = panel_widths(size, &expanded(), &DraggedWidths::default());
     let arrangement = library_arrangement(size, widths.queue);
-    let queue_visible =
-        arrangement != GuiArrangement::Mini || super::super::mini_shows_queue(arrangement);
-    let library_visible =
-        arrangement != GuiArrangement::Mini || !super::super::mini_shows_queue(arrangement);
+    let view = MiniView::Queue;
+    let queue_visible = queue_column_shows(true, arrangement, view);
+    let library_visible = library_column_shows(true, arrangement, view);
 
     let stylesheet = ROOT_STYLE.as_str();
     rsx! {

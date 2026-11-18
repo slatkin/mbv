@@ -467,9 +467,11 @@ pub fn route_library_key(
     // the keyboard wherever the Library panel shows, before the open-field
     // checks — even while the filter holds it, where the DOM focus move closes
     // the filter the way any other focus move does. The chord arms the field
-    // only while a top bar mounts it: in Mini the panel paints no top bar, and
-    // arming a field that holds no element leaves the keyboard dead on its
-    // fact, so the chord keeps its core effect there instead.
+    // only while a mounted element paints it: the Library Status bar mounts it
+    // with the Library panel, so in Mini with the Queue showing no field
+    // exists, and arming one that holds no element would leave the keyboard
+    // dead on its fact — the chord keeps its core effect there instead (design
+    // D9 of `move-playback-header-into-queue-footer`).
     if key.modifiers.ctrl_key
         && !key.meta_key
         && !key.modifiers.alt_key

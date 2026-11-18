@@ -1,9 +1,10 @@
 //! The Library panel (`replace-tauri-with-blitz` task 7.1, the port of
 //! `LibraryPanel`; add-gui-library-panel design D4, D12): the column
 //! beside the Queue panel. It paints the shell and the arrangement's
-//! regions — the top bar above the list, and, in Wide, the Hero pane beside
-//! the list; in Narrow the Hero mounts as an overlay over the list once an
-//! item is picked. The active destination decides which painters mount
+//! regions — the list, and, in Wide, the Hero pane beside the list; in Narrow
+//! the Hero mounts as an overlay over the list once an item is picked. The top
+//! bar is the window's global header above both columns, so the panel mounts
+//! none (design D7 of `move-playback-header-into-queue-footer`). The active destination decides which painters mount
 //! (design D12): Music paints the union list and the album Hero (the Home Hero
 //! mounts with row 7.5); Home paints the flat list and its Hero, with no letter
 //! rail and no Workspace; Shows paints its series list with the letter rail and
@@ -15,8 +16,8 @@
 //!
 //! The collection dropdown is not a panel region (gui-collection-dropdown design
 //! D6a): it rides the list header's title line, so the panel paints nothing
-//! between the top bar and the list, and the list's own component carries the
-//! destination's collections frame to its header.
+//! above the list, and the list's own component carries the destination's
+//! collections frame to its header.
 //!
 //! The panel's interaction state lives in [`crate::window::library::state`]
 //! and its keys in [`crate::window::library::keys`], so this shell holds no
@@ -59,7 +60,6 @@ use crate::window::components::library_podcasts_list::LibraryPodcastsList;
 use crate::window::components::library_shows_hero::LibraryShowsHero;
 use crate::window::components::library_shows_list::LibraryShowsList;
 use crate::window::components::library_status_bar::LibraryStatusBar;
-use crate::window::components::library_top_bar::LibraryTopBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::library::parts::{LibraryPair, library_pair};
@@ -308,12 +308,6 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
             // on.
             "data-pointer-zone": PointerZone::Library.token(),
             onpointerdown: move |_| press_in_panel(&press_library),
-            LibraryTopBar {
-                tabs: tabs.clone(),
-                current_tab,
-                search: search.clone(),
-                home_active: pair.is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
-            }
             div {
                 class: "relative flex min-h-0 flex-1",
                 // The list column: the canvas's index in Wide, the whole
@@ -407,14 +401,16 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                     }
                 }
             }
-            // The Library Status bar (design D10): under the list region,
-            // closing the column with the canvas's fixed key hints and the
+            // The Library Status bar (design D10, D9 of
+            // `move-playback-header-into-queue-footer`): under the list
+            // region, closing the column with the Search field and the
             // location while the panel paints.
             LibraryStatusBar {
                 tabs,
                 current_tab,
                 list: list_section,
                 detail: detail_section,
+                search,
                 status,
             }
             if let Some((menu, row_menu)) = menu_open {

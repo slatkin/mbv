@@ -324,8 +324,8 @@ fn built(arrangement: GuiArrangement) -> Fixture {
 }
 
 /// The frame's Status bar facts: nothing armed and no live toast. The panel
-/// paints the carried section, so the tests seed it idle to keep the hints
-/// painting.
+/// paints the carried section, so the tests seed it idle to keep the Search
+/// field and the location painting.
 fn seed_idle_status(fixture: &mut Fixture) {
     let mut sections = fixture.state.sections.clone();
     fixture.in_runtime(move || {
