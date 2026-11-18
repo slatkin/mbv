@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::config::TestStateDirGuard;
+use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 
 /// A series row of the series list, with its sort name.
@@ -38,17 +39,23 @@ fn level(items: Vec<EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
     }
 }
 
-/// A stub `App` whose Shows library is the active destination, with the
-/// series list's root level.
-fn shows_app(items: Vec<EmbyItem>) -> App {
+/// A stub `App` whose Shows library is the active destination, with no root
+/// level yet — the shape a launch restored onto Shows presents.
+fn empty_shows_app() -> App {
     let mut app = make_app_stub();
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-tv".into();
     library.collection_type = "tvshows".into();
-    let mut tab = crate::app::LibraryTab::new(library);
-    tab.nav_stack.push(level(items));
-    app.libs.push(tab);
+    app.libs.push(crate::app::LibraryTab::new(library));
     app.tab = TabSelection::EmbyLibrary(0);
+    app
+}
+
+/// A stub `App` whose Shows library is the active destination, with the
+/// series list's root level.
+fn shows_app(items: Vec<EmbyItem>) -> App {
+    let mut app = empty_shows_app();
+    app.libs[0].nav_stack.push(level(items));
     app
 }
 
@@ -141,6 +148,32 @@ fn the_series_mode_projects_the_tree() {
     assert!(
         projection.series[1].seasons.is_empty() && projection.series[1].expandable,
         "a series without a cached detail paints closed and expandable"
+    );
+}
+
+/// PR 1021 regression: presenting Shows with an empty root starts the series
+/// root load from the frame ensure, without the `OpenDestination` click that was
+/// the only trigger. A launch restored onto Shows paints an empty list until
+/// that click. Two frame passes must leave one loading root, so the trigger
+/// does not fire again while the request is in flight.
+#[test]
+fn presenting_an_empty_shows_root_starts_the_root_load_once_without_an_open_destination_click() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = empty_shows_app();
+
+    app.ensure_gui_shows_workspace(0);
+    app.ensure_gui_shows_workspace(0);
+
+    assert_eq!(app.libs[0].nav_stack.len(), 1, "one root level is started");
+    let root = &app.libs[0].nav_stack[0];
+    assert!(
+        root.loading,
+        "the root level is loading, so the next frame does not re-request it"
+    );
+    assert_eq!(
+        root.tv_content_mode.as_ref(),
+        Some(&TvContentMode::All),
+        "the root load is the All series list the Shows destination presents"
     );
 }
 

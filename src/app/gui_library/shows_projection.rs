@@ -10,6 +10,7 @@
 mod hero;
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_queue::TvContentMode;
 use mbv_render::effective_sort_str;
 use mbv_ui_model::media_list::MediaSemanticState;
 use mbv_ui_model::ui_util::fmt_duration_short;
@@ -281,14 +282,18 @@ impl App {
             })
     }
 
-    /// Start the selected series' detail load and its selected season's
-    /// episode load when the caches do not hold them (design D14): the frame
-    /// path calls this for the Shows destination, so the default first
-    /// series' Hero paints its season pills **and its episodes** without a
-    /// select. The detail fetch alone left the first season selected but
-    /// never fetched (D12's gap), so the Workspace painted empty. Both fetches
-    /// deduplicate what is in flight or cached.
+    /// Start the Shows root load and the selected series' detail and season
+    /// loads when their caches do not hold them (design D14): the frame path
+    /// calls this for the Shows destination, so a launch restored onto Shows
+    /// — which never runs the `OpenDestination` click — still paints the series
+    /// list, and the default first series' Hero paints its season pills and
+    /// episodes without a select. `gui_tv_open` owns the root step; this call
+    /// only starts it once, when no root level or no settled All list exists.
+    /// Both series fetches deduplicate what is in flight or cached.
     pub fn ensure_gui_shows_workspace(&mut self, lib_idx: usize) {
+        if self.gui_shows_root_needs_load(lib_idx) {
+            self.gui_tv_open(lib_idx);
+        }
         let Some(series_id) = self.gui_shows_default_series(lib_idx) else {
             return;
         };
@@ -299,6 +304,22 @@ impl App {
         if let Some(season_id) = self.gui_shows_selected_season(lib_idx, &series_id) {
             self.fetch_series_season_episodes(series_id, season_id);
         }
+    }
+
+    /// Whether the frame path must start the Shows root load: no root level
+    /// yet, or an empty settled root that is not yet the All series list. A
+    /// root already loading, and an empty All list whose load has settled, are
+    /// left alone so a repaint never starts a second request.
+    fn gui_shows_root_needs_load(&self, lib_idx: usize) -> bool {
+        if !self.gui_tv_library(lib_idx) {
+            return false;
+        }
+        let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
+            return true;
+        };
+        level.items.is_empty()
+            && !level.loading
+            && self.libs[lib_idx].tv_content_mode.as_ref() != Some(&TvContentMode::All)
     }
 
     /// The Shows library's selection, as the TUI's empty selection reads.
