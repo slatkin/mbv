@@ -305,24 +305,25 @@ pub fn QueuePlaybackPanel() -> Element {
             style: "--player-scale: 1;",
             if let Some(title) = playback.now_playing_title.as_ref() {
                 {art_section}
-                // The title at the canvas's 18 px/600 and its parent line in
-                // the canvas link style at 13 px (`main` audit 8). The canvas
-                // draws the parent line as an `<a href="#">`, but the GUI
-                // presents no surface to go to: the static line carries no
-                // region and the press is a no-op.
+                // The title block of the canvas's layering (design D2): the
+                // panel fill, its 16/20/18 insets, the rule that separates it
+                // from the queue header, the title in the canvas's 18 px/600
+                // foreground, and the parent line in the canvas link red
+                // (`main` audit 8). The canvas draws the parent line as an
+                // `<a href="#">`, but the GUI presents no surface to go to:
+                // the static line carries no region and the press is a no-op.
                 div {
                     class: "flex min-w-0 flex-col",
-                    style: "padding: 14px 16px 6px; gap: 2px;",
+                    style: "padding: 16px 20px 18px; gap: 2px; background: var(--ef-bg0); border-bottom: 1px solid var(--ef-bg3);",
                     Truncate {
                         text: title.clone(),
-                        css: "font-size: 18px; font-weight: 600; color: {role_var(GuiRole::PlaybackTitleFg)};"
-                            .to_owned(),
+                        css: "font-size: 18px; font-weight: 600; color: var(--ef-fg);".to_owned(),
                         style: TextStyle::sans(18.0, 600.0),
                     }
                     if let Some(parent_line) = playback.parent_line.as_ref() {
                         Truncate {
                             text: parent_line.clone(),
-                            css: "font-size: 13px; color: var(--canvas-type-secondary);".to_owned(),
+                            css: "font-size: 13px; color: var(--ef-red);".to_owned(),
                             style: TextStyle::sans(13.0, 400.0),
                         }
                     }

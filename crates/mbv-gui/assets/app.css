@@ -303,9 +303,8 @@
    the same veil while the pointer is on the field; the Settings forms' fields
    join through their `data-settings-field` marker (design
    add-gui-settings-screen D11 *Pointer contract*). The seekbar is the one
-   control left out: it already answers the pointer with the trickplay tile
-   preview, and a veil over its 60 px box would tint the elapsed and remaining
-   labels with it. */
+   control left out: it already answers the pointer by growing its track and
+   showing its time tip, and a veil over its row would tint them. */
 button:not(:disabled):hover,
 [role='menuitem']:not([aria-disabled='true']):hover,
 [role='tab']:not([aria-disabled='true']):hover,

@@ -267,6 +267,17 @@ impl ArtWindow {
         Some((rect.width, rect.height))
     }
 
+    /// The laid-out client rect of the first node the selector names.
+    fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
+        let dom = self.doc.inner();
+        let id = dom
+            .query_selector(selector)
+            .expect("the selector is valid")
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        dom.get_client_bounding_rect(id)
+            .expect("the node is laid out")
+    }
+
     /// Whether the `img` carries a raster: the bytes Blitz decoded for it.
     fn img_has_raster(&self) -> bool {
         let dom = self.doc.inner();
@@ -348,5 +359,54 @@ fn the_still_slot_paints_its_card_artwork() {
     assert!(
         !window.image_fills().is_empty(),
         "the frame paints the image"
+    );
+}
+
+/// Contract (`gui-queue-panel-redesign` design D3, task 4.3): the player
+/// controls paint as the canvas's two rows — the seek row alone across the
+/// panel, then the transport row under it with the 44 px play control, and
+/// the elapsed and remaining clocks after the next button at the row's
+/// trailing edge.
+#[test]
+fn the_transport_row_paints_under_the_seek_row_before_the_clocks() {
+    let mut window = ArtWindow::built(card_art());
+    window.answer_art(source_png(640, 360));
+    window.present_frame();
+
+    let seek = window.rect_of("[data-target=\"seekbar\"]");
+    let play = window.rect_of("[data-target=\"playPause\"]");
+    let next = window.rect_of("[data-target=\"next\"]");
+    let clocks = window.rect_of("[data-clocks]");
+    assert!(
+        (seek.height - 14.0).abs() < 0.5,
+        "the seek row is 14 px tall: {}",
+        seek.height
+    );
+    assert!(
+        (play.width - 44.0).abs() < 0.5 && (play.height - 44.0).abs() < 0.5,
+        "the play control is the canvas's 44 px circle: {}x{}",
+        play.width,
+        play.height
+    );
+    assert!(
+        play.y >= seek.y + seek.height,
+        "the transport row starts under the seek row: play {} at {}, seek ends at {}",
+        play.y,
+        play.height,
+        seek.y + seek.height
+    );
+    assert!(
+        clocks.y >= play.y && clocks.y + clocks.height <= play.y + play.height + 0.5,
+        "the clocks paint on the transport row: clocks {} at {}, play {} at {}",
+        clocks.height,
+        clocks.y,
+        play.height,
+        play.y
+    );
+    assert!(
+        next.x + next.width <= clocks.x,
+        "the clocks follow the next button: next ends at {}, clocks start at {}",
+        next.x + next.width,
+        clocks.x
     );
 }

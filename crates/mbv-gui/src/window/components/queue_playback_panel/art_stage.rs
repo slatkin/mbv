@@ -170,7 +170,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
     rsx! {
         div {
             class: "stage relative w-full max-w-full",
-            style: "background: var(--mbv-secondary);",
+            style: "background: var(--ef-player);",
             "data-target": "visualSlot",
             // Each attribute is present only while its fact holds and absent
             // otherwise, never `"false"`: the stylesheet's selectors test
