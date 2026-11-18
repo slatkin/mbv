@@ -66,7 +66,6 @@ fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,

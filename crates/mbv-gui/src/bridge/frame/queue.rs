@@ -359,22 +359,19 @@ pub struct GuiQueueSummary {
     pub marked_partial: bool,
     /// The Queue chooser facts the header's controls read (design D9 of
     /// `gui-named-queues`). They travel as one group because each of the
-    /// header's four controls is a function of them: the chooser button's
-    /// presence and label, and the close control's state.
+    /// header's controls is a function of them: the switcher's label and
+    /// count, and the close control's state.
     pub header: GuiQueueHeaderFacts,
 }
 
-/// The Queue header's chooser facts for one frame (design D9 of
-/// `gui-named-queues`, spec `gui-queue-chooser` "The queue header holds the
-/// chooser and its controls"): what the header's controls paint.
+/// The Queue header's chooser facts for one frame (design D7 of
+/// `gui-queue-panel-redesign`, spec `gui-queue-chooser` "The queue header holds
+/// the chooser and its controls"): what the header's controls paint. The
+/// switcher paints at all times, so these facts carry no entry count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiQueueHeaderFacts {
-    /// Every entry the Queue chooser lists: the local Owner's Named queues in
-    /// queue order, then the connected peer Player owner when one is. The
-    /// header shows the chooser only with two or more entries.
-    pub entries: usize,
-    /// The name of the shown entry: the chooser button's label. Empty while
-    /// no entry shows.
+    /// The name of the shown entry: the switcher's label. Empty while no entry
+    /// shows, which the header paints as `Queue`.
     pub shown_name: String,
     /// The shown entry's slot count: the switcher's count chip (design D7 of
     /// `gui-queue-panel-redesign`). The Queue filter narrows no count, so it
@@ -409,7 +406,6 @@ impl GuiQueueSummary {
             marked_secs: summary.marked_secs,
             marked_partial: summary.marked_partial,
             header: GuiQueueHeaderFacts {
-                entries: header.entries,
                 shown_name: header.shown_name.clone(),
                 shown_len: header.shown_len,
                 close_disabled: header.close_disabled,

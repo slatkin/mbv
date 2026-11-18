@@ -94,7 +94,7 @@ fn anchor() -> GuiPlayhead {
 
 /// The summary the seeded tests paint: one remaining row, the queue's
 /// finish 43 minutes past the transport's finish, no filter, and one local
-/// queue with no peer (so no chooser and a disabled close control).
+/// queue with no peer (so a disabled close control).
 pub(super) fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 1,
@@ -107,7 +107,6 @@ pub(super) fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,

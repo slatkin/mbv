@@ -156,7 +156,7 @@ fn row(slot: u64, state: GuiSemanticState) -> GuiQueueRow {
 }
 
 /// The queue summary the header paints: the remaining count, the tail offset,
-/// and the queue's total time, with one local queue so the chooser is absent.
+/// and the queue's total time, with one local queue and no peer.
 fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
@@ -169,7 +169,6 @@ fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,

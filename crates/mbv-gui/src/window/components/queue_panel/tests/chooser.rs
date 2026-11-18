@@ -34,9 +34,9 @@ fn the_chooser_lists_the_local_queues_then_the_peer_and_reports_each_entry() {
         fixture.last_reported_targets(),
         vec![
             RegionTarget::Queue(QueueTargetId::QueueChooser),
-            RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::NewQueue),
             RegionTarget::Queue(QueueTargetId::CloseQueue),
+            RegionTarget::Queue(QueueTargetId::Filter),
             RegionTarget::Queue(QueueTargetId::QueueChooserEntry(1)),
             RegionTarget::Queue(QueueTargetId::QueueChooserEntry(2)),
             RegionTarget::Queue(QueueTargetId::QueueChooserPeer),

@@ -57,7 +57,7 @@ impl App {
             let peer_len = self
                 .remote_view
                 .as_ref()
-                .map_or(0, |view| view.total_queue_len());
+                .map_or(0, crate::app::QueueView::total_queue_len);
             entries.push(QueueChooserEntryProjection {
                 label: self.peer_owner_label(),
                 queue: None,

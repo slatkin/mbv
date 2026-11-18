@@ -71,8 +71,8 @@ pub(super) fn queue(rows: Vec<GuiQueueRow>) -> GuiQueue {
 
 /// The summary the fixture paints: two remaining rows, the queue's finish
 /// 43 minutes past the transport's finish, no filter, and the header's "One
-/// queue and no peer" facts (spec `gui-queue-chooser`) — one entry, so no
-/// chooser and a disabled close control.
+/// queue and no peer" facts (spec `gui-queue-chooser`) — one entry with 26
+/// slots and a disabled close control.
 pub(super) fn summary() -> GuiQueueSummary {
     GuiQueueSummary {
         remaining: 2,
@@ -85,7 +85,6 @@ pub(super) fn summary() -> GuiQueueSummary {
         marked_secs: None,
         marked_partial: false,
         header: GuiQueueHeaderFacts {
-            entries: 1,
             shown_name: "Default".to_owned(),
             shown_len: 26,
             close_disabled: true,
@@ -99,7 +98,6 @@ pub(super) fn summary() -> GuiQueueSummary {
 pub(super) fn several_entries() -> GuiQueueSummary {
     GuiQueueSummary {
         header: GuiQueueHeaderFacts {
-            entries: 2,
             shown_name: "Kids".to_owned(),
             shown_len: 4,
             close_disabled: false,
@@ -114,7 +112,6 @@ pub(super) fn several_entries() -> GuiQueueSummary {
 pub(super) fn chooser_summary() -> GuiQueueSummary {
     GuiQueueSummary {
         header: GuiQueueHeaderFacts {
-            entries: 3,
             shown_name: "Kids".to_owned(),
             shown_len: 4,
             close_disabled: false,
@@ -490,6 +487,24 @@ impl Fixture {
         dom.query_selector_all(selector)
             .expect("the selector is valid")
             .into_iter()
+            .collect()
+    }
+
+    /// The marker attribute each node the selector names carries, in tree
+    /// order: the first of `markers` the node sets, so a test reads the order a
+    /// bar paints its parts in.
+    pub(super) fn marker_order(&self, selector: &str, markers: &[&str]) -> Vec<String> {
+        let dom = self.doc.inner();
+        dom.query_selector_all(selector)
+            .expect("the selector is valid")
+            .into_iter()
+            .filter_map(|id| {
+                let node = dom.get_node(id)?;
+                markers
+                    .iter()
+                    .find(|marker| node.attr(blitz_dom::LocalName::from(**marker)).is_some())
+                    .map(|marker| (*marker).to_owned())
+            })
             .collect()
     }
 

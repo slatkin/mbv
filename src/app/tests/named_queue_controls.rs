@@ -464,7 +464,11 @@ fn the_close_control_follows_the_shown_entry_beside_a_peer(
 
     let header = app.gui_queue_header_projection();
 
-    assert_eq!(header.entries, 2, "one local queue and the peer entry");
+    assert_eq!(
+        app.queue_chooser_entries().len(),
+        2,
+        "one local queue and the peer entry"
+    );
     assert_eq!(header.close_disabled, disabled);
 }
 

@@ -14,16 +14,13 @@ use crate::app::queue_playback_projection::{PlaybackTargetChoice, QueuePlaybackP
 use crate::app::state::playback::ShownEntry;
 
 /// The Queue header's chooser facts for one read (spec `gui-queue-chooser`
-/// "The queue header holds the chooser and its controls"): the number of
-/// entries the Queue chooser lists, the name the chooser button shows, the
-/// shown entry's slot count, and whether the close control is disabled. The
-/// close control acts on the only local queue only through a disabled
-/// control, so it comes from the same entry list the dropdown paints.
+/// "The queue header holds the chooser and its controls"): the name the
+/// chooser button shows, the shown entry's slot count, and whether the close
+/// control is disabled. The header paints its switcher at all times, so it
+/// reads no entry count, and the close control acts on the only local queue
+/// only through a disabled control.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueHeaderProjection {
-    /// Every entry the Queue chooser lists: the local Owner's Named queues in
-    /// queue order, then the connected peer Player owner when one is.
-    pub entries: usize,
     /// The name of the shown entry: the chooser button's label. Empty while
     /// the Owner's first queue list has not arrived, when no entry shows.
     pub shown_name: String,
@@ -202,11 +199,11 @@ pub enum GuiConfirmButtonTone {
 
 impl App {
     /// The Queue header's chooser facts (spec `gui-queue-chooser` "The queue
-    /// header holds the chooser and its controls"): the chooser's entry count,
-    /// the shown entry's name, and whether the close control is disabled.
-    /// Read-only, and read from the same live entry list the chooser's keys
-    /// and presses resolve against, so the header and the dropdown cannot
-    /// disagree inside one tick.
+    /// header holds the chooser and its controls"): the shown entry's name and
+    /// slot count, and whether the close control is disabled. Read-only, and
+    /// read from the same live entry list the chooser's keys and presses
+    /// resolve against, so the header and the dropdown cannot disagree inside
+    /// one tick.
     #[must_use]
     pub fn gui_queue_header_projection(&self) -> QueueHeaderProjection {
         let entries = self.queue_chooser_entries();
@@ -218,7 +215,6 @@ impl App {
                 .unwrap_or_default(),
             shown_len: self.displayed_queue().total_queue_len(),
             close_disabled: self.gui_close_disabled(),
-            entries: entries.len(),
         }
     }
 

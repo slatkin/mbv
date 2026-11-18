@@ -36,12 +36,12 @@
 //! request.
 //!
 //! The regions report in paint order: the header's controls resolve to their
-//! `queueChooser`, `filter`, `newQueue`, and `closeQueue` targets, then the
+//! `queueChooser`, `newQueue`, `closeQueue`, and `filter` targets, then the
 //! rows resolve to their stable slots, then
 //! the hovered row's `rowGrip` and `rowActions`
 //! — pushed after the row's `slot` region so the chrome wins where it paints
-//! over the row (the hit map's last push wins). The chooser's button and the
-//! close control claim a pointer only while they paint and act. The open row
+//! over the row (the hit map's last push wins). The switcher always paints and
+//! so always claims a pointer; the close control claims one only while it acts. The open row
 //! menu's entries
 //! (`QueueRowMenu`, presentation-only) report their `rowMenuEntry` indices
 //! under a second report key this component inserts when the menu opens —
@@ -117,31 +117,28 @@ const ACTIVE_EDGE_PX: u16 = 4;
 /// The Queue header's region handles (gui-named-queues task 8.2): the mounted
 /// events its four controls set, `None` while a control does not paint.
 struct HeaderHandles<'a> {
+    /// The Queue switcher's handle: it always paints (design D7 of
+    /// `gui-queue-panel-redesign`).
     chooser: Option<&'a Event<MountedData>>,
     filter: Option<&'a Event<MountedData>>,
     new_queue: Option<&'a Event<MountedData>>,
     close: Option<&'a Event<MountedData>>,
 }
 
-/// The queue header's painted regions in paint order: the Queue chooser, the
-/// filter, the new-queue control, and the close control (gui-named-queues task
-/// 8.2). A control that does not paint or act claims no pointer, so the
-/// chooser reports only with two or more entries and the close control only
-/// while it is enabled.
+/// The queue header's painted regions in paint order: the Queue switcher, the
+/// new-queue control, the close control, and the filter (design D7 of
+/// `gui-queue-panel-redesign`). The switcher always paints, so it always
+/// reports; a control that does not act claims no pointer, so the close
+/// control reports only while it is enabled.
 async fn header_regions(
     header: &GuiQueueHeaderFacts,
     handles: HeaderHandles<'_>,
 ) -> Vec<LayoutRegion> {
     let mut regions: Vec<LayoutRegion> = Vec::new();
-    if header.entries >= 2
-        && let Some(mounted) = handles.chooser
-    {
+    if let Some(mounted) = handles.chooser {
         regions.extend(
             element_region(mounted, RegionTarget::Queue(QueueTargetId::QueueChooser)).await,
         );
-    }
-    if let Some(mounted) = handles.filter {
-        regions.extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await);
     }
     if let Some(mounted) = handles.new_queue {
         regions.extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::NewQueue)).await);
@@ -151,6 +148,9 @@ async fn header_regions(
     {
         regions
             .extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::CloseQueue)).await);
+    }
+    if let Some(mounted) = handles.filter {
+        regions.extend(element_region(mounted, RegionTarget::Queue(QueueTargetId::Filter)).await);
     }
     regions
 }
@@ -297,8 +297,8 @@ pub fn QueuePanel() -> Element {
         // the section re-reports while a render that read it again would not.
         let queue = watch_queue.cloned();
         // The header's control facts decide which of its handles report
-        // (gui-named-queues task 8.2): the chooser paints only with two or
-        // more entries, and the close control claims no pointer while it is
+        // (design D7 of `gui-queue-panel-redesign`): the switcher always
+        // paints, and the close control claims no pointer while it is
         // disabled.
         let header = watch_summary.cloned().header;
         let overlay_open = watch_overlay.cloned();
@@ -329,9 +329,9 @@ pub fn QueuePanel() -> Element {
             if menu_rows.peek().len() > entry_count {
                 menu_rows.write().truncate(entry_count);
             }
-            // The queue header's controls report in paint order — the chooser,
-            // then the filter, the new-queue control, and the close control —
-            // then the rows, then the hovered row's chrome.
+            // The queue header's controls report in paint order — the
+            // switcher, the new-queue control, the close control, and the
+            // filter — then the rows, then the hovered row's chrome.
             let mut regions: Vec<LayoutRegion> = header_regions(
                 &header,
                 HeaderHandles {
@@ -455,6 +455,7 @@ pub fn QueuePanel() -> Element {
                 "data-pointer-zone": PointerZone::Queue.token(),
                 QueueHeader {
                     summary: summary.clone(),
+                    chooser_open: chooser_open.is_some(),
                     chooser: chooser_handle,
                     filter: filter_handle,
                     new_queue: new_queue_handle,
