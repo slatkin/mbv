@@ -51,3 +51,12 @@
 - [x] 8.5 Remove the popover footer and the Movies and TV selection labels (user decision 2026-11-18); the trigger is right-aligned on the title line and is a rectangular button with the list filter field's corner radius and an accent outline, and the popover's right edge aligns with the trigger's right edge under it. Verify with a header test: empty label paints no label; Movies and Shows paint none; dropdown tests updated for the shape, the alignment, and the popover position; gates as in 8.3.
 - [x] 8.6 Retry failed Music group fetches on a user press (bug: All showed nothing). Verify: test in `src/app/tests/` `gui_library`: failed group refetched on `CollectionAll`, not on a tick; check-one-then-All shows every group; gates `cargo nextest run -p mbv -p mbv-gui`.
 
+## 9. TV view dropdown (user spec change)
+
+- [ ] 9.1 Docs: state the three-choice Shows view dropdown, the two relocated TV lists, the Home removal, and the separate launch field in this change and `docs/architecture/gui-client.md`; `openspec validate gui-collection-dropdown` passes.
+- [ ] 9.2 Core: add the Shows view type, command, per-library state, frame field, and flat New/Upcoming rows; keep `GuiCollectionSet`/`GuiCollectionTarget`/`apply_collection` free of Shows.
+- [ ] 9.3 Relocation: delete the Home Latest episodes and Upcoming sections and their Home-only state, events, launch work, row ids, and no-op arms; reuse their data sources and row types under Shows New and Upcoming.
+- [ ] 9.4 Window: paint the Shows view through a prop-driven dropdown presentation shared with the collection dropdown, with no filter or date order, and close the popover on selection.
+- [ ] 9.5 Persistence: save and restore the Shows view in its own GUI launch field; an old file loads as All.
+- [ ] 9.6 Verify the contracts (single choice, New and Upcoming rows in Shows, no Home sections, Shows launch round trip) and run the repository gates.
+

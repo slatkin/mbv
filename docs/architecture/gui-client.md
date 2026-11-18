@@ -777,9 +777,11 @@ the destination's Hero (`LibraryHero` with `LibraryTracklist` in Music;
 `LibraryFeedsHero`), and `LibraryStatusBar`. The panel paints no selector
 row and no pills region between `LibraryTopBar` and the list. Each list
 paints its own header: `LibraryListHeader` paints the list title line — the
-title, the collection dropdown (`LibraryCollectionDropdown`: the trigger,
-the Clear control, the right-aligned date order toggle, and the popover — a
-destination with no collections paints none) — on that line. The panel also
+title and, where one applies, the dropdown — on that line. Music, Podcasts,
+Feeds, and an Emby feed-group library paint `LibraryCollectionDropdown` with
+the collection frame; Shows paints its single-choice view dropdown over the
+same prop-driven presentation (no filter strip, no date order). A plain Emby,
+Audiobooks, or Home destination paints no dropdown. The panel also
 paints the right-click item menu (`QueueRowMenu` under the panel), which a
 right-press on a list row or a
 Hero tracklist row opens through the `rowMenu` command: the command names
@@ -796,7 +798,9 @@ menu repeated the buttons and offered nothing new.
 The collection dropdown is one component for every destination that has
 collections (gui-collection-dropdown design D6): Music, Podcasts, Feeds, and
 an Emby library in feed-group mode paint it, and no other destination does.
-Its closed state is one trigger that
+Shows paints a separate single-choice view dropdown — All, New, Upcoming —
+through the same prop-driven dropdown presentation; it is not a collection
+filter and adds no key. Its closed state is one trigger that
 names the selection — `All`, the one checked collection's name, or the count
 with the destination's noun (`2 folders`) — with a `Clear` control while the
 selection is not All and a `Newest`/`Oldest` toggle on the three feed-based
@@ -868,11 +872,13 @@ keeps its list and detail parts in one file under `src/bridge/frame/library/`;
 `music.rs`, for example, defines `GuiMusicList` and `GuiMusicDetail`.
 
 `GuiHomeList` carries `loading` and `rows`: Home's flat list in the Music list
-slot, with no collection dropdown, no letter rail, and no Workspace. `rows`
-are the two sections' heading rows and item rows in paint order —
-`Continue watching` first, then `Recently added` — with a heading only above
-its rows, an empty section omitted, and the spacer only between two
-non-empty sections, the TUI's flat list's rules. An item row carries:
+slot, with no dropdown, no letter rail, and no Workspace. `rows` are the two
+sections' heading rows and item rows in paint order — `Continue watching`
+first, then `Recently added` — with a heading only above its rows, an empty
+section omitted, and the spacer only between two non-empty sections, the
+TUI's flat list's rules. The former `Latest episodes` and `Upcoming` sections
+are gone: those lists paint in the Shows destination (gui-collection-dropdown
+D9). An item row carries:
 `id` (`GuiHomeRowIdFrame`), the stable identity `App::home_stable_target`
 resolves — a `Continue` tag with the row's Emby item id, or a `Recent` tag
 with the queue item's content id (`provider`/`value`, never a position);
@@ -898,13 +904,16 @@ shared hero producers' facts, the same facts the TUI paints for the same
 item.
 
 `GuiShowsList` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
-Shows library index the Shows commands name), `collection_names` (empty: the
-series list carries no collection dropdown, design D8), `loading`, `series`,
-`upcoming_failed`, and `rows`. `GuiShowsDetail` carries
-`workspace_loading`, `selected`, and `hero` (design D14). The GUI Shows
-destination paints the series list alone, so it carries no view-mode selector
-and no collection dropdown: the TUI's Latest and Upcoming modes stay TUI-only,
-and the core leaves `rows` empty and `upcoming_failed` `false`.
+Shows library index the Shows commands name), `view` (the single-choice view
+frame: the active All, New, or Upcoming choice; the window paints the three labelled entries),
+`loading`,
+`series`, `upcoming_failed`, and `rows` (gui-collection-dropdown D8, D9).
+`GuiShowsDetail` carries `workspace_loading`, `selected`, and `hero` (design
+D14). All paints the series tree, its letter rail, and its Workspace. New
+paints the merged latest-episodes rows; Upcoming paints the merged premiere
+rows and takes no select. Both flat views reuse the old Home row types and
+data sources; there is no collection dropdown and no collection target for
+Shows. The TUI's Latest and Upcoming modes stay TUI-only.
 
 The list is the Music tree over the TUI's TV node kinds, and
 `GuiShowsList` carries it as `series`: each node holds `id`, `title`, `sort_letter`,
@@ -1121,7 +1130,8 @@ do. `src/bridge/library.rs` translates the wire variants and
 through the existing `App` action, so the TUI's own paths do not change. The
 variants are `openDestination` (`position`), `collectionToggle` (`target`,
 `key`), `collectionAll` (`target`), `dateOrder` (`target`, `order`),
-`showDetail` (`itemId`), `openAlbum` (`albumId`),
+`showsSetView` (`libIdx`, `view`), `showDetail` (`itemId`), `openAlbum`
+(`albumId`),
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
 (`itemId`), and the Home commands — `homeSelect`, `homePlay`,
@@ -1152,6 +1162,13 @@ selection needs through the destination's own loaders, so one dictionary of
 three commands serves all four destinations. A `key` the destination's
 catalog no longer holds, or a target that names no presented destination,
 logs and changes nothing.
+
+The Shows view command `showsSetView` names the library by its `libIdx` and
+one of All, New, or Upcoming. It is a view choice, not a collection command:
+the core holds it in its own per-library map, saves it in the launch file's
+`shows_view` field, and never routes it through `apply_collection`. A press
+selects the choice and closes the dropdown; Upcoming rows take no select,
+play, or enqueue, so the Hero keeps its item.
 
 The Shows commands name a Shows library by its `libIdx` and its content by
 the stable Service id the frame painted: `showsSelect`
@@ -1397,7 +1414,9 @@ nor its hidden empty queue column.
 
 The GUI keeps its own launch location (design D9). Its `App` starts with
 `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab,
-and the GUI never writes the TUI file. The GUI file
+and the GUI never writes the TUI file. The file also carries a separate
+`shows_view` field for the selected Shows destination view; an older file
+without the field loads as All. The GUI file
 (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
 destination and one entry per collection destination whose selection the
 session changed: the checked Music groups, Podcast shows, Feeds subscriptions,
@@ -1420,7 +1439,8 @@ its Home destination resolves to the first presented one, with no saved
 collection choice, so the Library panel is
 reachable from the first launch. The
 second phase applies the saved
-collection choice once the destination's collection catalog lands: it matches
+collection choice once the destination's collection catalog lands, and applies
+the saved `shows_view` to an opened Shows destination: it matches
 the saved destination and target, retains only the saved ids the catalog still
 holds, and installs the checked set and date order through the shared
 collection path. An emptied set, a saved All, or no saved entry leaves All

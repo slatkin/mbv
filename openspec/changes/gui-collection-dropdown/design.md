@@ -25,12 +25,14 @@ Current state:
     sets one `fetching` slot, loads the full set (first page, then a total refill), and caches it in
     `items: HashMap<FeedHomeVideoSelection, Vec<EmbyItem>>`. All is fetched `Descending` and a folder
     `Ascending`, both by `DateCreated`.
-  - Shows: `GuiShowsMode { Latest, Upcoming, All }`. Latest loads into the library's `nav_stack`
-    (`spawn_tv_latest`); Upcoming reads `tv_upcoming_snapshots`, keyed by library id.
+  - Shows: the old `GuiShowsMode` pill row is gone. The TUI still uses `spawn_tv_latest` and
+    `tv_upcoming_snapshots`, keyed by library id. The GUI's New and Upcoming lists read those same
+    data sources and are selected by a single-choice view dropdown, not a collection set.
 - The GUI launch state (`crates/mbv-config/src/gui_launch_state.rs`) saves one
   `GuiDestinationCollections { destination, target, group_ids, order, picks }` per collection
   destination whose selection the session changed. An older entry has no `target` or `order`; it
-  loads as a Music group selection.
+  loads as a Music group selection. The Shows view is a separate `shows_view` field, not a collection
+  entry.
 - The window holds the Library panel's interaction state; the core holds the data selection (spec
   "The window content holds the Library panel's interaction state"). The GUI Library panel takes its
   own keys in the window (ADR 0036). The pills are pointer-only now ("no key SHALL select a pill").
@@ -40,13 +42,16 @@ Current state:
 **Goals:**
 
 - One selection type and one dropdown component for every collection destination, so the four
-  destinations cannot drift.
+  destinations cannot drift. The TV view is a separate small selection type that reuses the dropdown
+  presentation only.
 - The TUI does not change: no TUI-shared store holds a set.
 
 **Non-Goals:**
 
-- The Home redesign. Latest episodes and Upcoming are only appended to the current Home list.
-- A keyboard path into the dropdown. It is pointer-only, as the pills are.
+- The Home redesign. The two TV lists are only presented in the Shows destination; Home keeps its
+  two existing sections.
+- A keyboard path into the dropdown. The collection dropdown and the Shows view dropdown are
+  pointer-only, as the pills are; the view dropdown adds no chord and no filter field.
 - Removal of the TUI's Podcasts state pills, Emby New pill, or Shows modes.
 
 ## Decisions
@@ -139,8 +144,9 @@ no-op arm. No GUI control sends `DateOrder` (D6a); the command stays for the cor
 
 ### D6. One frame, one component
 
-The bridge replaces `GuiMusicPillFrame`, `GuiPillFrame<P>`, the Emby pill frame, and the Shows pill
-frame with one `GuiCollectionsFrame`:
+The bridge replaces `GuiMusicPillFrame`, `GuiPillFrame<P>`, the Emby pill frame, and the old Shows
+pill frame with one `GuiCollectionsFrame` for the four collection destinations. Shows carries its own
+view frame beside the list (D8):
 
 ```rust
 struct GuiCollectionsFrame {
@@ -151,7 +157,11 @@ struct GuiCollectionsFrame {
 }
 ```
 
-The window gets one component, `LibraryCollectionDropdown` (`window/components/library_collection_dropdown.rs`),
+The window gets one prop-driven dropdown presentation component
+(`window/components/library_dropdown.rs`) for the trigger, the rows, and the popover.
+`LibraryCollectionDropdown` (`window/components/library_collection_dropdown.rs`) supplies the
+collection frame's entries and filters to it. Shows supplies its three view rows and no filter
+through the same presentation component; no collection code names Shows.
 with the trigger and the popover. The popover paints with
 `menu_card`, as the row menu and Queue chooser do. The trigger label is All, the one checked name, or
 the count with the noun (for example "2 folders"). `LibraryPillRow`, `LibraryPillButton`,
@@ -176,8 +186,10 @@ The popover is absolutely positioned under the trigger inside the header, over t
 right edge aligned with the trigger's right edge, and paints as the artboard shows: a filter strip
 with a teal `/` and the placeholder (for example "Find a category" for folders), a divider under it,
 a checkbox row for All first with an extra gap after it, and one checkbox row per collection with a
-highlighted band and a bold name on a checked row. The artboard's footer does not paint: the
-popover has no footer strip, and Esc still closes the dropdown (D7).
+highlighted band and a bold name on a checked row. The TV view dropdown omits the filter strip and
+paints the selected view with a radio-style mark; it still uses the same trigger, popover, row look,
+and focus hook. The artboard's footer does not paint: the popover has no footer strip, and Esc still
+closes the dropdown (D7).
 
 The artboard shows no Clear control and no date order toggle, and the user has dropped both from the
 GUI. All is selected by pressing the All row, and the GUI shows no date order control; the core keeps
@@ -194,27 +206,42 @@ Backspace, and Esc to the filter before any other Library key, as the Library fi
 binding is added to `src/app/input/`: the GUI Library panel takes its own keys in the window
 (ADR 0036), and the dropdown adds no new chord.
 
-### D8. Shows is the series list only
+### D8. Shows has a single-choice view dropdown
 
-The GUI Shows destination always uses `TvContentMode::All`. `GuiShowsMode`, its pill frame, and the
-`ShowsSetMode` command are deleted. The Latest and Upcoming flat-row select paths in
-`src/app/gui_library/shows.rs` go with them. The TUI code paths (`spawn_tv_latest`, the Upcoming
-snapshot) stay, because the TUI and Home use them.
+The GUI Shows destination's list header paints one dropdown with exactly three choices: **All**, **New**,
+and **Upcoming**, in that order. All is the default; it is the current series list with its letter rail,
+Hero, and Workspace. A press on one choice replaces the active choice and closes the popover. The
+choice is a view of the destination, not a collection set: `GuiCollectionSet`, `GuiCollectionTarget`,
+`GuiCollections`, `apply_collection`, and the collection commands have no Shows variant.
 
-### D9. Home appends two sections
+The choice's own core type is `GuiShowsView { All, New, Upcoming }`, held per Shows library in
+`App::gui_shows_views` (an absent entry is All). `GuiLibraryCommand::ShowsSetView` carries the library
+index and the choice and installs it through one `App` method. The frame carries a `view` field with
+the active choice; the window paints the three labelled entries from the view type. The window
+reuses the prop-driven dropdown presentation with a radio-style selected mark and no filter field;
+it takes no new chord. The
+selection is saved in `GuiLaunchState::shows_view`, whose absence loads as All (D14).
 
-- **Latest episodes**: a new GUI store `gui_home_tv_latest: HashMap<String, Vec<EmbyItem>>` keyed by
-  TV library id. At GUI launch, for each Emby TV library, the core runs the same
-  `get_latest_episodes(parent_id, 30)` call that `build_tv_latest_level` makes, on a worker thread,
-  and sends one new `LibEvent` that fills the store. It does not touch `nav_stack`. The section
-  merges every library's list by `date_added`, newest first, de-duplicated by item id.
-- **Upcoming**: at GUI launch, the core requests the eager Upcoming fetch for each TV library through
-  the existing once-per-session guard, and the section merges `tv_upcoming_snapshots` by premiere
-  date, soonest first.
-- `GuiHomeRowId` gains `LatestEpisode(String)` (item id) and `Upcoming(String)` (the premiere's
-  stable key). `LatestEpisode` resolves through the Emby item path that Recently added Emby rows use.
-  `HomeSelect`, `HomePlay`, `HomePlayNext`, and `HomeQueue` on an `Upcoming` id are documented no-op
-  arms, so the Hero keeps its item.
+The old `GuiShowsMode`, its pill frame, and the `ShowsSetMode` command stay deleted. The TUI's TV modes
+stay unchanged. The GUI's series selection and Workspace still read the All series tree; New and
+Upcoming use the flat rows of D9.
+
+### D9. The two TV lists move from Home into Shows
+
+Home keeps only `Continue watching` and `Recently added`; its `Latest episodes` and `Upcoming`
+sections and the Home-only launch work are deleted. The same data sources and row types now paint in
+the Shows list under the new choices; no second list store is introduced.
+
+- **New**: the old Shows Latest episodes list, built from `build_tv_latest_level`'s
+  `get_latest_episodes(parent_id, 30)` source. The GUI keeps one merged per-library store
+  (`gui_shows_new: HashMap<String, Vec<EmbyItem>>`) and its completion event, filled once at GUI
+  launch on worker threads. It never touches `nav_stack`. The rows merge every TV library's list by
+  `date_added`, newest first, de-duplicated by item id, and a New row selects, plays, and enqueues as a
+  Recently added Emby row does.
+- **Upcoming**: `tv_upcoming_snapshots`, filled through the existing eager per-library fetch and
+  once-per-session guard at GUI launch. The rows merge every TV library's premieres by premiere date,
+  soonest first. An Upcoming row is display-only: `ShowsSelect`, `ShowsPlay`, `ShowsPlayNext`, and
+  `ShowsQueue` on an Upcoming row are documented no-op arms, and the Hero keeps its item.
 
 ### D10. One saved entry per collection destination
 
@@ -250,6 +277,14 @@ existed holds Music groups, so a missing `target` defaults to Music; a missing `
 saved order. The shared site trait supplies each destination's set, order, and picks, and refuses
 to overwrite a selection the session made before the restore completed.
 
+### D14. The Shows view has its own launch field
+
+`GuiLaunchState` gains `shows_view`, a separate three-value field saved at orderly exit and restored
+after the destination opens. It is not a `collections` entry and never uses a collection target.
+A file written before the field existed deserializes to All. The restore applies the saved view to
+the opened Shows destination through the same `ShowsSetView` path a press uses; a destination that is
+not Shows ignores it.
+
 ## Risks / Trade-offs
 
 - [All in Music loads every group's album list] → The loads go through the existing per-group album
@@ -262,8 +297,11 @@ to overwrite a selection the session made before the restore completed.
   load path.
 - [The panel-order test names a `pills` region] → The `pills` region is deleted with the pill row.
   The panel-order test drops it. The dropdown is part of the list header, not a panel region.
-- [Upcoming rows look selectable] → They paint as rows, but they take no select. This is accepted
-  until the Home redesign.
+- [Upcoming rows look selectable] → They paint as rows in the Shows destination, but they take no
+  select, play, or enqueue. This is accepted until a later Home redesign.
+- [A merged New or Upcoming list shows under one library's tab] → It is the same merged list the two
+  Home sections carried; the destination's dropdown chooses the list, not the library's browse
+  history.
 
 ## Migration Plan
 

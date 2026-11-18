@@ -15,6 +15,7 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 
 - **WHEN** Shows, Audiobooks, or a plain Emby library paints its list
 - **THEN** no collection dropdown shows
+- **AND** Shows paints its own single-choice view dropdown, which is not a collection filter
 
 #### Scenario: Two collections are checked
 
@@ -193,6 +194,18 @@ Each destination SHALL keep its own selection while the GUI Client runs. Every c
 - **WHEN** the GUI Client starts again
 - **THEN** Podcasts and Feeds open on All
 
+#### Scenario: The Shows view survives a restart
+
+- **GIVEN** the GUI Client quit with Upcoming selected in a Shows destination
+- **WHEN** the GUI Client starts again
+- **THEN** that Shows destination opens with Upcoming selected
+
+#### Scenario: An old launch file has no Shows view
+
+- **GIVEN** the GUI Client quit before the launch file held a Shows view
+- **WHEN** the GUI Client starts again
+- **THEN** Shows opens on All
+
 ### Requirement: Each Music group keeps its last picked album
 
 Each Music group SHALL keep the album its Hero last showed while it was the only checked group, across a restart too. When the selection becomes one group, the Hero SHALL show its kept album, else its first album. For All or several groups, the Hero SHALL keep its album while the union holds it, else show the union's first album. The Hero SHALL never be blank while the albums are loaded.
@@ -215,44 +228,55 @@ Each Music group SHALL keep the album its Hero last showed while it was the only
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens with Hip-Hop checked, and the Hero shows Paul's Boutique
 
-### Requirement: Shows shows its series list with no mode selector
+### Requirement: Shows selects one view
 
-The GUI Shows destination SHALL show only its series list with the letter rail. It SHALL offer no Latest or Upcoming mode and no collection dropdown. The TUI Client's Shows modes SHALL NOT change.
+The GUI Shows destination's list header SHALL paint one dropdown with exactly three single-choice entries: All, New, and Upcoming, in that order. All SHALL be the default. A press on one entry SHALL replace the active entry and close the dropdown. The choice SHALL be a view of the destination and SHALL NOT be a collection set, a collection target, a collection filter, or a key binding. The TUI Client's Shows modes SHALL NOT change.
 
-#### Scenario: Shows opens
+#### Scenario: Shows opens on All
 
-- **WHEN** the user opens a Shows destination
-- **THEN** the list shows the library's series sorted by name with the letter rail, and no mode selector shows
+- **WHEN** the user opens a Shows destination with no saved view
+- **THEN** the list shows the library's series sorted by name with the letter rail, the Hero and Workspace are present, and the dropdown marks All
 
-### Requirement: GUI Home shows Latest episodes and Upcoming
+#### Scenario: One view replaces another
 
-GUI Home SHALL show two sections after Recently added: Latest episodes, then Upcoming. Latest episodes SHALL merge the latest episodes of every Emby TV library, newest first. Upcoming SHALL merge the upcoming premieres of every Emby TV library, soonest first. A section with no rows SHALL not show. A Latest episodes row SHALL select into the Hero, play, and enqueue as the other Home rows do. The TUI Client's Home SHALL NOT change.
+- **GIVEN** All is active and the view dropdown is open
+- **WHEN** the user presses New
+- **THEN** New is the only marked entry and the dropdown closes
 
-#### Scenario: Two TV libraries have latest episodes
+### Requirement: Shows paints the New and Upcoming lists
+
+Under New, the GUI Shows destination SHALL show the old Shows Latest episodes list, merged across every Emby TV library, newest first and de-duplicated by item id. A New row SHALL select into the Hero, play, and enqueue as a Recently added Emby row does. Under Upcoming, it SHALL show the old Shows Upcoming premieres list, merged across every Emby TV library, soonest first. An empty list SHALL show no rows. GUI Home SHALL NOT show either list. The TUI Client's Home SHALL NOT change.
+
+#### Scenario: Two TV libraries have new episodes
 
 - **GIVEN** two Emby TV libraries each have recent episodes
-- **WHEN** GUI Home paints
-- **THEN** the Latest episodes section shows the episodes of both libraries as one list, newest first, after Recently added
+- **WHEN** the Shows destination paints New
+- **THEN** the list shows the episodes of both libraries as one list, newest first
 
-#### Scenario: A Latest episodes row plays
+#### Scenario: A New row plays
 
-- **WHEN** the user plays a Latest episodes row
+- **WHEN** the user plays a New row
 - **THEN** that episode plays as a Recently added episode row plays
 
-#### Scenario: No TV library has premieres
+#### Scenario: Upcoming has no premieres
 
 - **WHEN** no Emby TV library has an upcoming premiere
-- **THEN** GUI Home shows no Upcoming section
+- **THEN** the Shows destination's Upcoming view shows no rows
 
-### Requirement: Home Upcoming rows are display-only
+#### Scenario: Home has no relocated sections
 
-An Upcoming row on GUI Home SHALL NOT select, play, or enqueue. A press on it SHALL change nothing, a play or enqueue key over it SHALL do nothing, and the Hero SHALL keep its item.
+- **WHEN** GUI Home paints
+- **THEN** it shows only Continue watching and Recently added sections, with no Latest episodes or Upcoming section
+
+### Requirement: Shows Upcoming rows are display-only
+
+An Upcoming row in the Shows destination SHALL NOT select, play, or enqueue. A press on it SHALL change nothing, a play or enqueue key over it SHALL do nothing, and the Hero SHALL keep its item.
 
 #### Scenario: An Upcoming row is pressed
 
-- **GIVEN** the Hero shows a Continue watching item
+- **GIVEN** the Shows Hero shows a series
 - **WHEN** the user presses an Upcoming row
-- **THEN** the Hero still shows the Continue watching item and nothing plays
+- **THEN** the Hero still shows that series and nothing plays
 
 #### Scenario: Enter over an Upcoming row
 
@@ -332,7 +356,7 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 ### Requirement: One collection pill is selected at a time
 
 **Reason**: The collection dropdown replaces the pill row, and its selection is All or several checked collections.
-**Migration**: See "A collection dropdown selects the collections" and "The selection is All or checked collections". The Podcasts and Feeds Latest pills become All; the Podcasts state pills, the Emby feed-group New pill, and the Shows mode pills go away in the GUI.
+**Migration**: See "A collection dropdown selects the collections" and "The selection is All or checked collections". The Podcasts and Feeds Latest pills become All; the Podcasts state pills and the Emby feed-group New pill go away in the GUI. The Shows mode pills become the separate three-choice view dropdown of "Shows selects one view".
 
 ### Requirement: The pill selection persists per destination
 
