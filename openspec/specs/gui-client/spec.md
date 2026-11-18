@@ -93,10 +93,10 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 - **GIVEN** the Owner process holds a Bound queue with slots
 - **WHEN** the GUI Client window is open
-- **THEN** the expanded panel shows, from top to bottom, the artwork, the title, the scrubber, the transport, the track chips, the queue header, the queue rows, and a footer line
+- **THEN** the expanded panel shows, from top to bottom, the artwork with its overlays, the title, the queue header, the queue rows, and a footer line
 - **AND** the footer line's left shows the playback target with a chooser and the collapse control
-- **AND** the artwork shows the active item with its season and episode badge
-- **AND** the transport has previous, back 10 s, play/pause, forward 30 s, and next
+- **AND** the artwork shows the active item, with the track chips at its top left, the season and episode badge at its top right, and the player controls at its bottom
+- **AND** the player controls have play/pause and the scrubber on one row, and previous, back 10 s, forward 30 s, next, and the auto-hide control on the row under it
 - **AND** the queue lists the slots in canonical order, marks the start slot, and numbers every row with its 1-based position in the queue
 
 #### Scenario: The Status bar projection holds a toast
@@ -130,8 +130,8 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 - **WHEN** the expanded panel paints the artwork of the active item
 - **THEN** a loaded image fills the panel's width and takes its height from the artwork's aspect, as the TUI's visual slot paints at full column width
-- **AND** the placeholder paints in the canvas's fixed 225 px box and hugs its image
-- **AND** the still slot paints a caption that names the image source while no image lands, and the season and episode badge sits at the bottom left as the canvas places it
+- **AND** no placeholder image and no source caption paint
+- **AND** the season and episode badge sits at the top right of the artwork
 
 #### Scenario: The footer paints the queue's source text
 
@@ -184,6 +184,98 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 - **WHEN** the Settings screen shows
 - **THEN** no global header paints
+
+### Requirement: The player controls overlay the artwork
+
+In the expanded panel, the player controls SHALL paint over the bottom of the artwork and SHALL take no more than one third of the artwork's height. The controls SHALL scale down with the artwork's height to stay inside that limit. The track chips and the season and episode badge SHALL paint over the top of the artwork. A press on a control over the artwork SHALL act on that control, not on the artwork.
+
+#### Scenario: A short image scales the controls
+
+- **GIVEN** the artwork's height is less than three times the controls' full height
+- **WHEN** the expanded panel paints
+- **THEN** the controls scale down so that they take no more than one third of the artwork's height
+
+#### Scenario: A press lands on a control over the artwork
+
+- **WHEN** the user presses play/pause over the artwork
+- **THEN** the play/pause request runs and the artwork's own press does not
+
+#### Scenario: A track popover opens over the artwork
+
+- **WHEN** the user opens the audio popover from its chip at the top of the artwork
+- **THEN** the popover paints in full, also where it reaches past the bottom of the artwork
+
+### Requirement: The player controls auto-hide when the user turns it on
+
+The player controls over the artwork SHALL show at all times by default. The auto-hide control SHALL turn auto-hide on and off. With auto-hide on, the controls SHALL hide while an item plays and the pointer is not over the artwork, and SHALL show while the pointer is over the artwork and while the playback is paused. Auto-hide SHALL NOT hide the track chips or the badge. The choice SHALL persist across launches.
+
+#### Scenario: Auto-hide is off
+
+- **GIVEN** auto-hide is off
+- **WHEN** an item plays and the pointer is away from the artwork
+- **THEN** the player controls show
+
+#### Scenario: Auto-hide hides the controls during playback
+
+- **GIVEN** auto-hide is on
+- **WHEN** an item plays and the pointer is away from the artwork
+- **THEN** the player controls are hidden and the track chips and the badge still show
+
+#### Scenario: The pointer comes over the artwork
+
+- **GIVEN** auto-hide is on and an item plays
+- **WHEN** the pointer moves over the artwork
+- **THEN** the player controls show
+
+#### Scenario: The playback is paused
+
+- **GIVEN** auto-hide is on
+- **WHEN** the playback is paused and the pointer is away from the artwork
+- **THEN** the player controls show
+
+#### Scenario: The choice persists
+
+- **GIVEN** the user turned auto-hide on
+- **WHEN** the GUI Client starts again
+- **THEN** auto-hide is on
+
+### Requirement: The player panel without an image shows the player alone
+
+When the active item has no image, the expanded panel SHALL paint no artwork box. Under the global header it SHALL show the track chips and the badge on one line, then the player controls, then the title. The player controls SHALL always show in that case, whatever the auto-hide setting, and the auto-hide control SHALL still show and keep its setting.
+
+#### Scenario: The item has no image
+
+- **GIVEN** the active item has no image
+- **WHEN** the expanded panel paints
+- **THEN** no artwork box and no placeholder paint, and the track chips and badge line, the player controls, and the title paint in that order under the global header
+
+#### Scenario: Auto-hide is on and the item has no image
+
+- **GIVEN** auto-hide is on and the active item has no image
+- **WHEN** an item plays and the pointer is away from the panel
+- **THEN** the player controls show and the auto-hide control still shows that auto-hide is on
+
+### Requirement: The stopped player shows its buttons
+
+While a shown local queue holds slots and nothing plays, the expanded panel SHALL show the two control rows under the global header, with an empty scrubber that resolves no seek. The panel SHALL show no artwork, no title, and no track chips. A press on play/pause SHALL start the shown queue.
+
+#### Scenario: Play from the stopped state
+
+- **GIVEN** a shown local queue holds slots and nothing plays
+- **WHEN** the user presses play/pause in the player controls
+- **THEN** the shown queue starts from its start slot
+
+#### Scenario: A shown peer queue is stopped
+
+- **GIVEN** the shown queue is a peer's queue and nothing plays
+- **WHEN** the expanded panel paints
+- **THEN** the panel paints no control rows
+
+#### Scenario: An empty shown local queue is stopped
+
+- **GIVEN** a shown local queue holds no slots and nothing plays
+- **WHEN** the expanded panel paints
+- **THEN** the panel paints no control rows
 
 ### Requirement: GUI keyboard interaction matches the TUI Client
 
@@ -258,20 +350,6 @@ While the Search field, the Library filter, the Queue filter, or the collection 
 - **WHEN** the pointer moves over the Queue list box and the user types `ti`
 - **THEN** the dropdown filter holds `ti`
 - **AND** the Queue does not change
-
-### Requirement: Every action is reachable from the keyboard
-
-Every action in the panel SHALL have a key chord. No action SHALL be available only by pointer. A hover MAY show an enhancement (the scrubber preview, the row grip, the row-actions button), but the action behind it SHALL have a key chord.
-
-#### Scenario: A pointer-only control is proposed
-
-- **WHEN** the panel offers a control
-- **THEN** a key chord runs the same action
-
-#### Scenario: A hover control appears
-
-- **WHEN** the pointer is over a row and the row-actions button appears
-- **THEN** the same menu opens from the keyboard
 
 ### Requirement: The Queue is a ledger with one active row
 
