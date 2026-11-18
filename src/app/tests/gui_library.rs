@@ -25,6 +25,10 @@ const SOUL: &str = "grp-soul";
 /// One album of a group's listing, as the mock transport returns it.
 const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"},{"Id":"alb-paul","Name":"Paul's Boutique","Type":"MusicAlbum"}],"TotalRecordCount":2}"#;
 
+/// One album of a second group's listing, with ids the first group's list does
+/// not hold, so a union assertion can tell the two lists apart.
+const SOUL_ALBUMS: &str = r#"{"Items":[{"Id":"alb-3ft","Name":"3 Feet High and Rising","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;
+
 /// A group row of a music group level.
 fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
     let mut item = make_item(name, "MusicArtist");
@@ -219,6 +223,104 @@ fn one_failing_group_keeps_the_other_groups_albums() {
         app.gui_group_album_ids_for_test(0, HIPHOP),
         Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
         "the other group keeps its albums"
+    );
+}
+
+/// A failed group's album list refetches when the user presses All
+/// (gui-collection-dropdown design D5): a selection change is the one refetch
+/// trigger, so the All press drops the failed marks of the selection's groups
+/// and the ensure step starts their fetches again, one at a time.
+#[test]
+fn pressing_all_refetches_a_failed_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.fail(ErrorKind::ConnectionRefused);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        None,
+        "the failed group holds no album list"
+    );
+
+    http.respond(200, ALBUMS);
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Music(0),
+    });
+    land_one_group(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the All press refetched the failed group"
+    );
+
+    // The rest of All's groups fetch one at a time on later frames, and the
+    // union holds every group's albums once their fetches land.
+    http.respond(200, SOUL_ALBUMS);
+    app.ensure_gui_music_selection(0);
+    land_one_group(&mut app);
+    let projection = app.gui_music_projection(0);
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "All fetched the group the failed selection had not started"
+    );
+    assert!(
+        projection.failure.is_none(),
+        "the refetch cleared the failure line"
+    );
+}
+
+/// A frame's ensure never refetches a failed group (gui-collection-dropdown
+/// design D5): a hard failure retries only on a selection change, so a paint
+/// never re-issues the fetch.
+#[test]
+fn an_ensure_call_does_not_refetch_a_failed_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.fail(ErrorKind::ConnectionRefused);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+
+    app.ensure_gui_music_selection(0);
+    app.ensure_gui_music_selection(0);
+
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "a failed group's ensure starts no new fetch"
+    );
+}
+
+/// Checking one group and then pressing All fetches the group the checked
+/// selection did not hold and unions every group's albums (gui-collection-
+/// dropdown "The selection is All or checked collections").
+#[test]
+fn checking_one_group_then_pressing_all_unions_every_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(200, ALBUMS);
+    let mut app = app_with_music_groups(&http);
+    select_group(&mut app, HIPHOP);
+    land_one_group(&mut app);
+
+    http.respond(200, SOUL_ALBUMS);
+    app.apply_gui_library_command(GuiLibraryCommand::CollectionAll {
+        target: GuiCollectionTarget::Music(0),
+    });
+    land_one_group(&mut app);
+
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, SOUL),
+        Some(vec!["alb-3ft".to_string()]),
+        "All fetched the group the checked selection did not hold"
+    );
+    assert_eq!(
+        app.gui_group_album_ids_for_test(0, HIPHOP),
+        Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
+        "the checked group keeps its albums"
     );
 }
 

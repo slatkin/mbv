@@ -13,7 +13,9 @@ use crate::app::{App, PAGE_SIZE};
 
 /// One group's album list in the store (design D5): a group's first selection
 /// starts its fetch, a loaded list lives for the session, and a failed list
-/// stays failed until the group is selected again.
+/// stays failed until a selection change puts the group back in the selection
+/// ([`App::install_gui_library_collection`] drops the failed marks, so the
+/// ensure step starts the fetch again).
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) enum GuiGroupAlbums {
     /// The group's album fetch is in flight.
@@ -101,7 +103,24 @@ impl App {
             self.gui_music_union_picks.insert(lib_idx, album_id);
         }
         self.gui_library_groups.insert(lib_idx, set);
+        self.clear_failed_music_groups(lib_idx);
         self.ensure_gui_music_selection(lib_idx);
+    }
+
+    /// Drop the failed album marks of `lib_idx`'s selected groups (design D5):
+    /// a selection change is the one refetch trigger, so a hard failure never
+    /// retries on every frame. The ensure step then starts the cleared groups'
+    /// fetches again, one at a time.
+    fn clear_failed_music_groups(&mut self, lib_idx: usize) {
+        for group_id in self.gui_selected_groups(lib_idx) {
+            let key = (lib_idx, group_id);
+            if matches!(
+                self.gui_music_albums.get(&key),
+                Some(GuiGroupAlbums::Failed)
+            ) {
+                self.gui_music_albums.remove(&key);
+            }
+        }
     }
 
     /// The album the Hero showed under `set` (gui-collection-dropdown design
@@ -165,9 +184,11 @@ impl App {
     /// calls this for the Music destination, so All's and every checked
     /// group's list loads without a pick. One fetch runs at a time per
     /// library: the next group's fetch starts on a later frame, when the
-    /// previous one landed. A failed fetch is not retried here: it stays
-    /// failed until the user selects the group again, so a paint never
-    /// re-issues it.
+    /// previous one landed. A failed fetch is not retried here: a frame's
+    /// ensure never re-issues it, so a hard failure does not retry on every
+    /// paint; a selection change through [`Self::install_gui_library_collection`]
+    /// drops the selection's failed marks, so the next ensure starts their
+    /// fetches again.
     pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
         let group_ids = self.gui_selected_groups(lib_idx);
         if group_ids.iter().any(|group_id| {
