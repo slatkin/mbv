@@ -8,8 +8,6 @@
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
-use mbv::GuiCollections;
-
 use crate::art::GuiArtRef;
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiEmbyDetail, GuiEmbyList,
@@ -183,8 +181,17 @@ pub(crate) fn log_built(
     list: Option<&GuiLibraryList>,
     detail: Option<&GuiLibraryDetail>,
 ) {
-    let (kind, pills, rows) = list.map_or(("none", 0, 0), |list| list_size(&list.destination));
-    let hero = detail.is_some_and(detail_has_hero);
+    let (kind, pills, rows) = list.map_or(("none", 0, 0), |list| {
+        let destination = &list.destination;
+        (
+            destination.kind_word(),
+            destination
+                .collections()
+                .map_or(0, |collections| collections.entries.len()),
+            destination.rows(),
+        )
+    });
+    let hero = detail.is_some_and(GuiLibraryDetail::has_hero);
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -196,47 +203,4 @@ pub(crate) fn log_built(
         hero,
         "the Library sections changed"
     );
-}
-
-/// The destination's kind word, its collection count, and its row count, for
-/// the log.
-fn list_size(list: &GuiDestinationList) -> (&'static str, usize, usize) {
-    match list {
-        GuiDestinationList::Music(list) => {
-            ("music", list.collections.entries.len(), list.artists.len())
-        }
-        GuiDestinationList::Home(list) => ("home", 0, list.rows.len()),
-        GuiDestinationList::Shows(list) => ("shows", 0, list.rows.len()),
-        GuiDestinationList::Emby(list) => (
-            "emby",
-            collection_count(list.collections.as_ref()),
-            list.rows.len(),
-        ),
-        GuiDestinationList::Audiobooks(list) => ("audiobooks", 0, list.rows.len()),
-        GuiDestinationList::Podcasts(list) => {
-            ("podcasts", list.collections.entries.len(), list.rows.len())
-        }
-        GuiDestinationList::Feeds(list) => {
-            ("feeds", list.collections.entries.len(), list.rows.len())
-        }
-    }
-}
-
-/// The collections a destination's optional selector offers, for the log: none
-/// while the destination paints none.
-fn collection_count(collections: Option<&GuiCollections>) -> usize {
-    collections.map_or(0, |collections| collections.entries.len())
-}
-
-/// Whether the detail carries a Hero, for the log.
-fn detail_has_hero(detail: &GuiLibraryDetail) -> bool {
-    match detail {
-        GuiLibraryDetail::Music(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Home(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Shows(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Emby(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Audiobooks(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Podcasts(detail) => detail.hero.is_some(),
-        GuiLibraryDetail::Feeds(detail) => detail.hero.is_some(),
-    }
 }
