@@ -4,7 +4,7 @@
 
 ### Requirement: A collection dropdown selects the collections
 
-Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show one collection dropdown above the list. The dropdown SHALL offer All and one entry per collection: a Music group, a Podcast show, a Feeds subscription, or an Emby folder. The list SHALL show the de-duplicated union of the checked collections, or every collection while All is selected. No other destination SHALL show a collection dropdown.
+Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show one collection dropdown in the list header. The dropdown SHALL offer All and one entry per collection: a Music group, a Podcast show, a Feeds subscription, or an Emby folder. The list SHALL show the de-duplicated union of the checked collections, or every collection while All is selected. No other destination SHALL show a collection dropdown.
 
 #### Scenario: Collections per destination
 
@@ -27,6 +27,26 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 - **GIVEN** the dropdown is closed and the pointer rests on its trigger
 - **WHEN** the user presses Space
 - **THEN** playback plays or pauses and the selection does not change
+
+### Requirement: The collection dropdown sits in the list header and no pill row remains
+
+The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The dropdown trigger SHALL sit in the list header on the title's line, directly after the list title, and SHALL show that it opens a menu. The Clear control and the date order toggle SHALL sit on the same line. The open dropdown SHALL open under its trigger, over the list.
+
+#### Scenario: Podcasts header
+
+- **WHEN** the Podcasts destination paints
+- **THEN** the list header's title line shows the list title, then the dropdown trigger, then the date order toggle
+- **AND** no row of pills or selector controls shows between the top bar and the list
+
+#### Scenario: No destination paints a pill row
+
+- **WHEN** any destination paints, Home, Shows, and Audiobooks included
+- **THEN** no pill row shows above the list
+
+#### Scenario: The dropdown opens under the trigger
+
+- **WHEN** the user presses the trigger
+- **THEN** the dropdown opens directly under the trigger, over the list rows
 
 ### Requirement: The selection is All or checked collections
 

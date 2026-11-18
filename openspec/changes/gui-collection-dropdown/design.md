@@ -149,6 +149,17 @@ the count with the noun (for example "2 folders"). `LibraryPillRow`, `LibraryPil
 `library_pills.rs`, the four destination pill components, and `window/library/pill_list.rs` are
 deleted with their tests.
 
+### D6a. Placement and form follow the artboard (page 7)
+
+The dropdown is painted by `LibraryListHeader`, not by the panel. The header takes an optional
+collections frame. When the frame is present, the title line is: list title, then the trigger, then
+the Clear control, then (right-aligned) the date order toggle. The selection label on the right of
+the title line is not painted when the trigger is present, because the trigger names the selection.
+The panel paints nothing between `LibraryTopBar` and the list region: the selector row and its
+`pills` region are deleted. The trigger is a bordered rectangular button with a trailing
+`ChevronDown`, as on the artboard; it is not a pill. The popover is absolutely positioned under the
+trigger inside the header, over the list.
+
 ### D7. The window holds the open state and the filter text
 
 `LibraryState` gains `collections_open: bool` and `collections_filter: String`. They are interaction
@@ -215,9 +226,8 @@ the checked collections.
   the rest.
 - [Podcasts with several shows uses the All fan-out] → The same loads as today's Latest pill; no new
   load path.
-- [The in-flight change `gui-swap-queue-and-library-sides` renames the panel-order test that names
-  the pill row] → Whichever change lands second updates the region name in that test. The region
-  keeps the name `pills` in the hit-region list so the order test does not change meaning.
+- [The panel-order test names a `pills` region] → The `pills` region is deleted with the pill row.
+  The panel-order test drops it. The dropdown is part of the list header, not a panel region.
 - [Upcoming rows look selectable] → They paint as rows, but they take no select. This is accepted
   until the Home redesign.
 
