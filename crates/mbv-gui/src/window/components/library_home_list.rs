@@ -100,7 +100,7 @@ fn paint_home_item_row(
     // is.
     let selected_row = selected.is_some_and(|picked| home_row_key(picked) == id);
     let mut style = format!(
-        "height: {height}px; padding: 0 10px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;"
+        "height: {height}px; padding: 0 10px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;"
     );
     if selected_row {
         let _ = write!(style, " background: {};", canvas_var("library-raise"));
@@ -111,7 +111,8 @@ fn paint_home_item_row(
         _ => None,
     };
     let title_color = name_color(&item.state);
-    let title_weight = if selected_row { 600.0 } else { 400.0 };
+    // The Music tree's album row is the model: weight 400, selected or not.
+    let title_weight = 400.0;
     let art = item.art.clone();
     let art_kind = art.as_ref().map(art_kind);
     let press_row = row.clone();
@@ -156,7 +157,7 @@ fn paint_home_item_row(
                 Truncate {
                     text: item.title.clone(),
                     css: format!("color: {title_color}; font-weight: {title_weight};"),
-                    style: TextStyle::sans(14.0, title_weight),
+                    style: TextStyle::sans(14.5, title_weight),
                     attrs: vec![Attribute::new("data-library-home-title", "", None, false)],
                 }
                 if let Some(subtitle) = item.subtitle.clone() {

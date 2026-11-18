@@ -113,13 +113,14 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
         ));
     }
     let mut row_style = format!(
-        "height: {}px; padding: 0 12px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14px; cursor: pointer;",
+        "height: {}px; padding: 0 12px; gap: 10px; border: 0; border-radius: 4px; text-align: left; font-size: 14.5px; cursor: pointer;",
         props.height
     );
     if let Some(background) = props.background.as_ref() {
         let _ = write!(row_style, " background: {background};");
     }
-    let title_weight = if props.selected { 600.0 } else { 400.0 };
+    // The Music tree's album row is the model: a fixed 14.5 px at weight 400, selected or not.
+    let title_weight = 400.0;
     let title_attrs = vec![Attribute::new(
         library_attr(props.attr, "title"),
         "",
@@ -172,7 +173,7 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
                 Truncate {
                     text: props.title.clone(),
                     css: format!("color: {}; font-weight: {title_weight};", props.title_color),
-                    style: TextStyle::sans(14.0, title_weight),
+                    style: TextStyle::sans(14.5, title_weight),
                     attrs: title_attrs,
                 }
                 if let Some(subtitle) = props.subtitle.clone() {
