@@ -44,7 +44,7 @@
 
 ## 8. Placement fix (spec "The collection dropdown sits in the list header and no pill row remains")
 
-- [ ] 8.1 Delete the selector row: remove `collections_painter` and its mount in `library_panel.rs`, and drop the `pills` region from the panel-order test (design D6a). Verify with `library_panel/tests` asserting no `pills` region in any destination.
-- [ ] 8.2 Give `LibraryListHeader` an optional collections frame and paint `LibraryCollectionDropdown` on the title line after the title, with no selection label while the trigger shows; pass the frame from the Music, Podcasts, Feeds, and Emby feed-group list components (design D6a). Verify with a header test for the order title, trigger, date order toggle.
-- [ ] 8.3 Restyle the trigger as a bordered rectangular button with a trailing `ChevronDown`, drop the 52px row wrapper, and anchor the popover under the trigger (design D6a). Verify with the dropdown component tests updated, then `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`.
+- [x] 8.1 Delete the selector row: remove `collections_painter` and its mount in `library_panel.rs`, and drop the `pills` region from the panel-order test (design D6a). Verify with `library_panel/tests` asserting no `pills` region in any destination.
+- [x] 8.2 Give `LibraryListHeader` an optional collections frame and paint `LibraryCollectionDropdown` on the title line after the title, with no selection label while the trigger shows; pass the frame from the Music, Podcasts, Feeds, and Emby feed-group list components (design D6a). Verify with a header test for the order title, trigger, date order toggle.
+- [x] 8.3 Restyle the trigger as a bordered rectangular button with a trailing `ChevronDown`, drop the 52px row wrapper, and anchor the popover under the trigger (design D6a). Verify with the dropdown component tests updated, then `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-gui`.
 
