@@ -39,9 +39,9 @@ use super::scrubber::Scrubber;
 mod tests;
 
 /// The two control rows' full height at scale 1.0 (design D3): row 1's
-/// scrubber block (10 + 60 + 4 px) over row 2's buttons and tail pad (44 + 6
+/// scrubber block (6 + 46 + 2 px) over row 2's buttons and tail pad (34 + 4
 /// px). The scale's one-third share is measured against this height.
-pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 124.0;
+pub(super) const BOTTOM_FULL_HEIGHT_PX: f32 = 92.0;
 
 /// The control rows' scale for a stage `stage_height` px tall (design D3):
 /// the rows take at most a third of the stage and never grow past their full
@@ -170,7 +170,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
             }
             div {
                 class: "bottom absolute inset-x-0 bottom-0",
-                style: "padding-top: 28px; background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0)); --player-scale: {scale};",
+                style: "padding-top: 6px; background: rgb(0 0 0 / 0.6); --player-scale: {scale};",
                 ControlRows {
                     paused: props.paused,
                     availability: props.availability,
@@ -277,7 +277,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex flex-none items-center justify-center rounded-full",
-                style: "width: calc(56px * var(--player-scale)); height: calc(56px * var(--player-scale)); background: var(--mbv-accent);",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); background: var(--mbv-accent);",
                 "data-target": "playPause",
                 "aria-label": if props.paused { "Play" } else { "Pause" },
                 onmounted: move |event| play_pause_mounted.set(Some(event)),
@@ -304,11 +304,11 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
         }
         div {
             class: "flex items-center justify-center",
-            style: "gap: calc(4px * var(--player-scale)); padding: 0 calc(16px * var(--player-scale)) calc(6px * var(--player-scale));",
+            style: "gap: calc(4px * var(--player-scale)); padding: 0 calc(16px * var(--player-scale)) calc(4px * var(--player-scale));",
             button {
                 "type": "button",
                 class: "flex items-center justify-center",
-                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
                 "data-target": "previous",
                 "aria-label": "Previous",
                 onmounted: move |event| prev_mounted.set(Some(event)),
@@ -322,7 +322,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center justify-center font-mono",
-                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
                 "data-target": "seekBack",
                 "aria-label": "Back 10 seconds",
                 title: "Back 10 s",
@@ -332,7 +332,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center justify-center font-mono",
-                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale)); font-size: calc(11px * var(--player-scale));",
                 "data-target": "seekForward",
                 "aria-label": "Forward 30 seconds",
                 title: "Forward 30 s",
@@ -342,7 +342,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
             button {
                 "type": "button",
                 class: "flex items-center justify-center",
-                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
                 "data-target": "next",
                 "aria-label": "Next",
                 onmounted: move |event| next_mounted.set(Some(event)),
@@ -363,7 +363,7 @@ pub fn ControlRows(props: ControlRowsProps) -> Element {
                 "aria-label": "Auto-hide controls",
                 title: "Auto-hide controls",
                 class: "flex items-center justify-center",
-                style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale));",
+                style: "width: calc(34px * var(--player-scale)); height: calc(34px * var(--player-scale));",
                 "data-target": "autoHide",
                 onmounted: move |event| auto_hide_mounted.set(Some(event)),
                 CheckboxBox {

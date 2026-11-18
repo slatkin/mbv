@@ -91,10 +91,10 @@ fn tile_crop(hover: &GuiScrubberHover) -> Option<String> {
     ))
 }
 
-/// The scrubber (`main` audits 9–12): the 60 px block with the track at
-/// 22 px, the intro and credits blocks, the played fill, the chapter ticks,
+/// The scrubber (`main` audits 9–12): the 46 px block with the track at
+/// 12 px, the intro and credits blocks, the played fill, the chapter ticks,
 /// the pointer's position line, the thumb, and the elapsed and
-/// `−remaining` labels at 42 px. The block's own rect is the
+/// `−remaining` labels at 28 px. The block's own rect is the
 /// `seekbar` region; a press resolves there in the core.
 ///
 /// Every length in the block multiplies by the control rows' `--player-scale`
@@ -132,7 +132,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
 
     rsx! {
         div {
-            style: "padding: calc(10px * var(--player-scale)) calc(16px * var(--player-scale)) calc(4px * var(--player-scale));",
+            style: "padding: calc(6px * var(--player-scale)) calc(16px * var(--player-scale)) calc(2px * var(--player-scale));",
             div {
                 class: "relative",
                 role: "slider",
@@ -141,7 +141,7 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                 "aria-valuemin": "0",
                 "aria-valuemax": "100",
                 "aria-valuenow": "{progress_pct.round()}",
-                style: "height: calc(60px * var(--player-scale));",
+                style: "height: calc(46px * var(--player-scale));",
                 "data-target": "seekbar",
                 onmounted: move |event| props.seekbar_mounted.set(Some(event)),
                 if let Some(hover) = hover_preview.clone() {
@@ -158,30 +158,30 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                 div {
                     class: "absolute inset-x-0",
                     "data-track": "",
-                    style: "top: calc(22px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressTrack); border-radius: calc(3px * var(--player-scale));",
+                    style: "top: calc(12px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressTrack); border-radius: calc(3px * var(--player-scale));",
                 }
                 if let Some(left) = intro_left {
                     div {
                         class: "absolute",
-                        style: "left: {left * 100.0}%; top: calc(22px * var(--player-scale)); width: calc(6px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressPercent); border-radius: calc(3px * var(--player-scale)) 0 0 calc(3px * var(--player-scale));",
+                        style: "left: {left * 100.0}%; top: calc(12px * var(--player-scale)); width: calc(6px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressPercent); border-radius: calc(3px * var(--player-scale)) 0 0 calc(3px * var(--player-scale));",
                         title: "Intro",
                     }
                 }
                 div {
                     class: "absolute left-0",
                     "data-played": "",
-                    style: "top: calc(22px * var(--player-scale)); width: {progress_pct}%; height: calc(6px * var(--player-scale)); background: var(--mbv-accent); border-radius: calc(3px * var(--player-scale));",
+                    style: "top: calc(12px * var(--player-scale)); width: {progress_pct}%; height: calc(6px * var(--player-scale)); background: var(--mbv-accent); border-radius: calc(3px * var(--player-scale));",
                 }
                 for ratio in chapter_ticks.iter().copied() {
                     div {
                         class: "absolute",
-                        style: "left: {ratio * 100.0}%; top: calc(18px * var(--player-scale)); width: calc(2px * var(--player-scale)); height: calc(14px * var(--player-scale)); background: {muted};",
+                        style: "left: {ratio * 100.0}%; top: calc(8px * var(--player-scale)); width: calc(2px * var(--player-scale)); height: calc(14px * var(--player-scale)); background: {muted};",
                     }
                 }
                 if let Some(left) = credits_left {
                     div {
                         class: "absolute",
-                        style: "left: {left * 100.0}%; top: calc(22px * var(--player-scale)); width: calc(4px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressPercent);",
+                        style: "left: {left * 100.0}%; top: calc(12px * var(--player-scale)); width: calc(4px * var(--player-scale)); height: calc(6px * var(--player-scale)); background: var(--mbv-progressPercent);",
                         title: "Credits",
                     }
                 }
@@ -189,27 +189,28 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
                     div {
                         class: "pointer-events-none absolute",
                         "data-hover-line": "",
-                        style: "left: {hover_pct}%; top: calc(14px * var(--player-scale)); width: calc(1px * var(--player-scale)); height: calc(22px * var(--player-scale)); background: {title_fg};",
+                        style: "left: {hover_pct}%; top: calc(4px * var(--player-scale)); width: calc(1px * var(--player-scale)); height: calc(22px * var(--player-scale)); background: {title_fg};",
                     }
                 }
                 div {
                     class: "absolute -translate-x-1/2 rounded-full",
                     "data-thumb": "",
-                    style: "left: {progress_pct}%; top: calc(17px * var(--player-scale)); width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); background: {title_fg}; box-shadow: 0 0 0 calc(3px * var(--player-scale)) var(--mbv-queuePlaybackBand);",
+                    style: "left: {progress_pct}%; top: calc(7px * var(--player-scale)); width: calc(16px * var(--player-scale)); height: calc(16px * var(--player-scale)); background: {title_fg}; box-shadow: 0 0 0 calc(3px * var(--player-scale)) var(--mbv-queuePlaybackBand);",
                 }
                 div {
                     class: "absolute inset-x-0 flex justify-between font-mono tabular-nums",
-                    style: "top: calc(42px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
-                    // A clock is time (design D14): the elapsed label paints
-                    // the time token, and the remaining label paints it at
-                    // 0.75, as the canvas draws the scrubber's two ends. The
-                    // clocks are the playhead's prediction (design D5).
+                    style: "top: calc(28px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
+                    // The clocks sit on the stage's dark scrim, so they paint
+                    // the primary text role for contrast rather than the time
+                    // token; the remaining label dims slightly (0.85) to
+                    // stay secondary. The clocks are the playhead's
+                    // prediction (design D5).
                     span {
-                        style: "color: var(--canvas-type-time);",
+                        style: "color: var(--mbv-textPrimary);",
                         "{elapsed}"
                     }
                     span {
-                        style: "color: var(--canvas-type-time); opacity: 0.75;",
+                        style: "color: var(--mbv-textPrimary); opacity: 0.85;",
                         "{minus(&remaining)}"
                     }
                 }
@@ -254,7 +255,7 @@ fn HoverPreview(props: HoverPreviewProps) -> Element {
     rsx! {
         div {
             class: "pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center",
-            style: "left: {hover_pct}%; top: -84px; width: 128px; gap: 4px;",
+            style: "left: {hover_pct}%; top: -94px; width: 128px; gap: 4px;",
             if props.hover.tile.is_some() {
                 if let Some(crop) = props.tile_crop.clone() {
                     div {
