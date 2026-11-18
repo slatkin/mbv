@@ -141,9 +141,18 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
         filter_library.set_collections_filter(text);
     });
 
-    let rows = matching_entries(&collections, &filter);
+    // The open dropdown's rows: built only while the dropdown is open, so a
+    // closed repaint walks no rows (design D7). The handlers capture the
+    // destination target alone (design D5): the command comes from the target
+    // and the key, so a repaint clones no whole frame into a kept-alive
+    // closure.
+    let rows = if open {
+        matching_entries(&collections, &filter)
+    } else {
+        Vec::new()
+    };
     let all_library = library.clone();
-    let all_collections = collections.clone();
+    let all_target = collections.target.clone();
 
     // The outside press lands on the window root (the panel's own handler
     // covers its subtree): the dropdown's region stops the presses that land on
@@ -252,7 +261,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                 "aria-checked": "{all}",
                                 "data-library-collections-all": "",
                                 onclick: move |_| {
-                                    all_library.press_collection(&all_collections, ALL_KEY);
+                                    all_library.press_collection_target(&all_target, ALL_KEY);
                                 },
                                 div {
                                     class: "flex flex-none items-center justify-center",
@@ -273,7 +282,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                     let name = entry.name.clone();
                                     let checked = entry.checked;
                                     let row_library = library.clone();
-                                    let row_collections = collections.clone();
+                                    let row_target = collections.target.clone();
                                     rsx! {
                                         button {
                                             "type": "button",
@@ -283,7 +292,7 @@ pub fn LibraryCollectionDropdown(props: LibraryCollectionDropdownProps) -> Eleme
                                             "aria-checked": "{checked}",
                                             "data-library-collections-row": "{key}",
                                             onclick: move |_| {
-                                                row_library.press_collection(&row_collections, &key);
+                                                row_library.press_collection_target(&row_target, &key);
                                             },
                                             div {
                                                 class: "flex flex-none items-center justify-center",

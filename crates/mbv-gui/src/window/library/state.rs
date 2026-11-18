@@ -12,6 +12,7 @@
 
 use dioxus_native::prelude::*;
 
+use mbv::GuiCollectionTarget;
 use mbv::GuiCollections;
 
 use crate::bridge::frame::library::{GuiCollectionsFrame as _, GuiLibraryDetail, GuiLibraryList};
@@ -272,7 +273,16 @@ impl LibraryState {
     /// toggles its collection. The frame names the destination, so every
     /// collection destination shares this one press path.
     pub fn press_collection(&self, collections: &GuiCollections, key: &str) {
-        self.link.library(collections.pressed(key));
+        self.press_collection_target(&collections.target, key);
+    }
+
+    /// Ask for a collection row of one destination `target` to be pressed
+    /// (gui-collection-dropdown design D5): the dropdown's All row and
+    /// checkbox rows capture the target alone, so a repaint clones no whole
+    /// frame into a kept-alive handler.
+    pub fn press_collection_target(&self, target: &GuiCollectionTarget, key: &str) {
+        self.link
+            .library(GuiCollections::pressed_target(target, key));
     }
 
     /// Press the date-order toggle (design D4, D6): the feed-based

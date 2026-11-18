@@ -11,7 +11,7 @@
 //! helpers ride an extension trait over it, because the core type sits below
 //! this crate and cannot carry the window's command vocabulary.
 
-use mbv::GuiDateOrder;
+use mbv::{GuiCollectionTarget, GuiDateOrder};
 
 use crate::bridge::library::GuiLibraryCommand;
 
@@ -34,6 +34,12 @@ pub trait GuiCollectionsFrame {
     /// D5): the All row selects All, and every other key toggles its
     /// collection.
     fn pressed(&self, key: &str) -> GuiLibraryCommand;
+
+    /// The wire command a press on the row painted with `key` of `target`
+    /// sends (design D5): the target-only form lets a handler send the
+    /// command from the target alone, so a repaint captures no whole frame in
+    /// a closure.
+    fn pressed_target(target: &GuiCollectionTarget, key: &str) -> GuiLibraryCommand;
 
     /// The order a press on the date-order toggle asks for (design D4, D6):
     /// Newest switches to Oldest and Oldest to Newest. `None` on Music, whose
@@ -59,17 +65,24 @@ impl GuiCollectionsFrame for GuiCollections {
         }
     }
 
-    fn pressed(&self, key: &str) -> GuiLibraryCommand {
+    /// The wire command a press on the row painted with `key` of `target`
+    /// sends (design D5): the All row selects All, and every other key
+    /// toggles its collection.
+    fn pressed_target(target: &GuiCollectionTarget, key: &str) -> GuiLibraryCommand {
         if key == ALL_KEY {
             GuiLibraryCommand::CollectionAll {
-                target: self.target.clone(),
+                target: target.clone(),
             }
         } else {
             GuiLibraryCommand::CollectionToggle {
-                target: self.target.clone(),
+                target: target.clone(),
                 key: key.to_owned(),
             }
         }
+    }
+
+    fn pressed(&self, key: &str) -> GuiLibraryCommand {
+        Self::pressed_target(&self.target, key)
     }
 
     fn next_order(&self) -> Option<GuiDateOrder> {
