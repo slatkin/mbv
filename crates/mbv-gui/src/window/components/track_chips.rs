@@ -363,6 +363,7 @@ fn TrackPopoverList(props: TrackPopoverProps) -> Element {
                                 // style of its own.
                                 Truncate {
                                     text: choice.label.clone(),
+                                    class: "min-w-0 flex-1".to_owned(),
                                     style: TextStyle::sans(13.0, 400.0),
                                 }
                                 if choice.forced {
