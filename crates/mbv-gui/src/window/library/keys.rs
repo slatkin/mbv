@@ -507,7 +507,7 @@ pub fn route_library_key(
     // DOM focus, which no panel key runs while it types (the key-leak rule),
     // and the field's typing is the `Text` answer the forwarder lets through
     // (design D3, step 2, row 12.1). Both facts must hold: a stale armed fact
-    // an unmounted bar retracted must never route a key under it (the same
+    // an unmounted control retracted must never route a key under it (the same
     // key-leak gate).
     if state.search_field_mounted() && state.search_field_focused() {
         return route_search_key(state, key, sections.search.peek().as_ref());

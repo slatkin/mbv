@@ -4,29 +4,28 @@
 //! column, in the canvas's status-bar form — the canvas's mono type, 16 px
 //! side padding, its top border, and its list-column fill.
 //!
-//! The Search field leads the bar's left side, with the chord's `Ctrl K` hint.
-//! The typing schedules the debounced `searchQuery` command through
-//! [`crate::window::library::search`], the core carries the results back on
-//! the frame, and the dropdown paints them in the list-row look — or its
-//! landing or failed state — above the field: the bar sits at the window's
-//! bottom edge, so the results open upward. The keys that act on the results
-//! route through the Library key router while the field holds the keyboard, so
-//! this component never interprets a key: it only follows the focus fact, and
-//! a highlight id that a new results frame no longer carries falls to the
-//! first row. The field mounts only while the Library panel shows, so `Ctrl+K`
-//! keeps its core effect wherever no bar paints it.
+//! No Search field paints here (user request 2026-11-19): the top bar paints
+//! it at its right end, as `LibrarySearchControl` — inline while the bar has
+//! room, and otherwise as an icon whose press opens a panel that carries the
+//! same field, hint, and results. That control owns the field's mount, its
+//! keyboard hold, and its results dropdown; see
+//! [`crate::window::components::library_search_control`] and
+//! [`crate::window::library::search`]. The keys that act on the results route
+//! through the Library key router while the field holds the keyboard, so no
+//! component interprets a key. The field mounts wherever the top bar paints
+//! the control, so `Ctrl+K` arms it there and keeps its core effect wherever
+//! the control paints nothing.
 //!
-//! The right side is the location: the destination, the selected collection
-//! names, and the picked item's artist or title
-//! ([`crate::window::library::status`]), joined by the canvas's separator. The
-//! bar paints no key hints: the canvas's fixed hints are gone, and the field
-//! takes their place.
+//! The location is the bar's one content: the destination, the selected
+//! collection names, and the picked item's artist or title
+//! ([`crate::window::library::status`]), flush right and joined by the canvas's
+//! separator. The bar paints no key hints.
 //!
 //! The frame's `GuiStatusBar` carries the armed prefix and the live toast,
 //! the same facts the Queue footer's line paints. While either is active it
-//! paints after the field — the toast wins over the prefix badge, as the
-//! footer line drops the badge while a toast is live — and the field and the
-//! location stay. The bar paints no interactive region of its own: a point on
+//! paints at the left edge — the toast wins over the prefix badge, as the
+//! footer line drops the badge while a toast is live — and the location
+//! stays. The bar paints no interactive region of its own: a point on
 //! it resolves to no target, as the canvas's bar carries none, and it reports
 //! no layout contribution.
 

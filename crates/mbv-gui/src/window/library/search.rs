@@ -30,9 +30,10 @@ const SEARCH_DEBOUNCE: Duration = Duration::from_millis(200);
 /// The Search field's front-end state (`search.ts`'s `LibrarySearchState`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibrarySearchState {
-    /// Whether a mounted Library Status bar paints the Search field (design
-    /// D3, step 3): the key router arms and routes the field only on this
-    /// fact, so a chord never arms a field whose element no window paints.
+    /// Whether a mounted Search control paints the field (design D3, step 3):
+    /// the top bar's `LibrarySearchControl`, inline or inside its collapsed
+    /// panel. The key router arms and routes the field only on this fact, so a
+    /// chord never arms a field whose element no window paints.
     pub mounted: bool,
     /// Whether the Search field holds the keyboard (design D3, step 2): the
     /// key router's gate.
@@ -57,10 +58,12 @@ pub fn initial_library_search() -> LibrarySearchState {
 }
 
 impl LibraryState {
-    /// A mounted Library Status bar paints the Search field (design D3, step
-    /// 3): the mount sets this fact, and teardown retracts it with the focus
-    /// fact — an arrangement change that unmounts the bar under an armed
-    /// field must not leave the keyboard armed where no element holds it.
+    /// The top bar's Search control paints the field (design D3, step 3):
+    /// `LibrarySearchControl` in its inline form or inside its collapsed
+    /// panel, in every screen but Settings. The mount sets this fact, and
+    /// teardown retracts it with the focus fact — an arrangement change that
+    /// unmounts the control under an armed field must not leave the keyboard
+    /// armed where no element holds it.
     pub fn mount_search_field(&self) {
         let mut search = self.search;
         if search.peek().mounted {
@@ -83,16 +86,16 @@ impl LibraryState {
         });
     }
 
-    /// Whether a mounted Library Status bar paints the Search field (design
-    /// D3, step 3): the key router's second gate, beside the keyboard hold.
+    /// Whether a mounted Search control paints the field (design D3, step 3):
+    /// the key router's second gate, beside the keyboard hold.
     #[must_use]
     pub fn search_field_mounted(&self) -> bool {
         self.search.peek().mounted
     }
 
     /// Focus the Search field (design D3, step 3): the `Ctrl+K` chord. The
-    /// Library Status bar's input follows this fact into focus, and its
-    /// focus event confirms the same fact back.
+    /// Search control's input follows this fact into focus, and its focus
+    /// event confirms the same fact back.
     pub fn focus_search_field(&self) {
         let mut search = self.search;
         if search.peek().focused {
@@ -147,7 +150,7 @@ impl LibraryState {
     }
 
     /// Hold the highlighted result's row id, or `None` while none is. An id
-    /// the state already holds writes nothing, so the bar's
+    /// the state already holds writes nothing, so the Search control's
     /// keep-the-highlight effect never loops on itself.
     pub fn set_search_highlight(&self, highlight: Option<String>) {
         let mut search = self.search;
