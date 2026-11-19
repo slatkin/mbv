@@ -67,8 +67,8 @@ impl App {
     }
 
     /// The `App` half of the launch Home load (design D11): fetch Home, and on
-    /// success re-arm the Emby `Recently added` fetch and clear a stale status
-    /// row, or on failure flash the "Couldn't load home" toast. The Client
+    /// success re-arm the Emby `Recently added` fetch, or on failure flash the
+    /// "Couldn't load home" toast. The Client
     /// that presents Home keeps its own half — the loading flag and the
     /// content assignment. A launch with a cached Emby client brings the
     /// Service to Ready at construction, so the bootstrap completion's seam
@@ -84,9 +84,6 @@ impl App {
                 // the same facts.
                 self.home_content = content.clone();
                 self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
-                if !self.status_toast_live() {
-                    self.status.clear();
-                }
                 Some(content)
             }
             Err(error) => {

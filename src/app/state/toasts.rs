@@ -54,6 +54,14 @@ impl ToastList {
         self.entries.iter().filter(move |entry| entry.expires > now)
     }
 
+    /// The newest entry, whether or not its duration has run out: the test
+    /// reads of the newest toast (design D5) look at the same entry the old
+    /// single slot held.
+    #[cfg(any(test, feature = "test"))]
+    pub(in crate::app) fn newest(&self) -> Option<&LiveToast> {
+        self.entries.last()
+    }
+
     /// Drops the toasts whose duration has run out at `now`.
     pub(in crate::app) fn expire(&mut self, now: Instant) {
         self.entries.retain(|entry| entry.expires > now);

@@ -100,12 +100,12 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::SkipIntroPlay => {
-                self.status.clear();
+                self.toasts.clear();
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::MpvQuit => {
                 self.next_up_item = None;
-                self.status.clear();
+                self.toasts.clear();
                 self.refresh_after_stop();
                 PlayerEventFlow::Proceed
             }
@@ -293,7 +293,7 @@ impl App {
             }
         }
         self.next_up_item = None;
-        self.status.clear();
+        self.toasts.clear();
         let link = self.active_queue_link();
         self.take_pending_removal_and_consume(link, slot_id, consume);
         self.refresh_after_stop();
@@ -498,9 +498,6 @@ impl App {
         };
         self.visualizer_failed = false;
         self.next_up_item = None;
-        if self.status.starts_with("Next up:") {
-            self.status.clear();
-        }
 
         // Activate by owner-assigned identity. Slot identity is stable
         // across the pending-removal consume above, so resolving it to

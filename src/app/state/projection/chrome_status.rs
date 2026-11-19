@@ -10,39 +10,56 @@
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::toasts::LiveToast;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
-use mbv_ui_model::toast::StatusToast;
+use mbv_ui_model::toast::{StatusToast, ToastCard};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
+use std::time::Instant;
 
 impl App {
-    /// The live toast's presentation for the status row, or `None` when no
-    /// toast should render in-app (spec `toast-notification-semantics`).
+    /// Whether a toast of `severity` renders in-app at all (spec
+    /// `toast-notification-semantics`): a Neutral toast always does; a
+    /// Success, Warning, or Error toast does only when system notifications
+    /// are disabled or the desktop notification failed (`notif_failed`),
+    /// because a delivered desktop notification hides the in-app toast.
     /// Restores the in-app toast surface dropped during the `TuiRealm`
-    /// migration (commit `e9f3ab957`): Neutral toasts always render in-app;
-    /// Success/Warning/Error toasts render in-app only when system
-    /// notifications are disabled or the desktop notification failed
-    /// (`notif_failed`), because a delivered desktop notification hides the
-    /// in-app row. The presentation is neutral (extract-client-core row 4.6):
-    /// the Severity's colour is the painters' choice, and the presented
-    /// facts — the text and the severity — ride the Status bar's Surface
-    /// state.
+    /// migration (commit `e9f3ab957`).
+    fn renders_in_app(&self, severity: ToastSeverity) -> bool {
+        matches!(severity, ToastSeverity::Neutral)
+            || !self.system_notifications
+            || self.notif_failed
+    }
+
+    /// The live toast's presentation for the status row, or `None` when no
+    /// toast should render in-app (spec `toast-notification-semantics`): the
+    /// newest live toast that renders in-app. The presentation is neutral
+    /// (extract-client-core row 4.6): the Severity's colour is the painters'
+    /// choice, and the presented facts — the text and the severity — ride the
+    /// Status bar's Surface state.
     pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
-        if self.status.is_empty() || !self.status_toast_live() {
-            return None;
-        }
-        let delivered_offscreen = self.system_notifications
-            && self.status_severity != ToastSeverity::Neutral
-            && !self.notif_failed;
-        if delivered_offscreen {
-            return None;
-        }
-        Some(StatusToast {
-            text: self.status.clone(),
-            severity: self.status_severity,
-        })
+        self.toasts
+            .live(Instant::now())
+            .filter(|toast| self.renders_in_app(toast.severity))
+            .last()
+            .map(presented_toast)
+    }
+
+    /// Every live toast that renders in-app, oldest first (design D3): one
+    /// card per toast, for the GUI Client's floating toast stack. The id is
+    /// the card's stable key.
+    #[must_use]
+    pub fn toast_cards(&self) -> Vec<ToastCard> {
+        self.toasts
+            .live(Instant::now())
+            .filter(|toast| self.renders_in_app(toast.severity))
+            .map(|toast| ToastCard {
+                id: toast.id,
+                toast: presented_toast(toast),
+            })
+            .collect()
     }
 
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
@@ -378,6 +395,15 @@ impl App {
     }
 }
 
+/// The presented facts of one live toast: its text and its severity. The id
+/// and the expiry are the Client core's, never the painter's.
+fn presented_toast(toast: &LiveToast) -> StatusToast {
+    StatusToast {
+        text: toast.text.clone(),
+        severity: toast.severity,
+    }
+}
+
 fn queue_source_status_label(
     source: &mbv_queue::QueueSource,
     queue_focused: bool,
@@ -402,6 +428,7 @@ fn queue_source_status_label(
 
 #[cfg(test)]
 mod tests {
+    use crate::app::App;
     use crate::app::dispatch::notify::ToastSeverity;
     use crate::app::tests::{
         make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
@@ -533,12 +560,12 @@ mod tests {
     /// toast render path was dropped during the `TuiRealm` migration, commit
     /// `e9f3ab957`.)
     #[rstest::rstest]
-    #[case::live_toast_projects(ToastSeverity::Neutral, false, false, ToastExpiry::Live(2), true)]
+    #[case::live_toast_projects(ToastSeverity::Neutral, false, false, ToastExpiry::Live, true)]
     #[case::delivered_desktop_notification_hides_the_row(
         ToastSeverity::Error,
         true,
         false,
-        ToastExpiry::Live(5),
+        ToastExpiry::Live,
         false
     )]
     #[case::expired_toast_stops_projecting(
@@ -558,9 +585,7 @@ mod tests {
         let mut app = make_app_stub();
         app.system_notifications = system_notifications;
         app.notif_failed = notif_failed;
-        app.status = "Scanning 'Movies'...".into();
-        app.status_severity = severity;
-        app.status_expires = Some(toast_expiry(expiry));
+        push_toast(&mut app, "Scanning 'Movies'...", severity, expiry);
 
         assert_eq!(
             app.toast_presentation()
@@ -569,21 +594,52 @@ mod tests {
         );
     }
 
-    /// Case fixture: the toast under test's expiry instant, future or past.
+    /// The GUI's card list drops the toasts that render out of app: one live
+    /// Neutral toast then one delivered Error toast leaves only the Neutral
+    /// card (spec `toast-notification-semantics`).
+    #[test]
+    fn a_delivered_error_toast_adds_no_card_beside_a_neutral_one() {
+        let mut app = make_app_stub();
+        app.system_notifications = true;
+        app.notif_failed = false;
+        push_toast(
+            &mut app,
+            "Scanning 'Movies'...",
+            ToastSeverity::Neutral,
+            ToastExpiry::Live,
+        );
+        push_toast(
+            &mut app,
+            "Couldn't load home",
+            ToastSeverity::Error,
+            ToastExpiry::Live,
+        );
+
+        let cards = app.toast_cards();
+
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].toast.text, "Scanning 'Movies'...");
+    }
+
+    /// Case fixture: whether the toast under test is still live when the
+    /// projection reads the clock, or already expired.
     #[derive(Clone, Copy)]
     enum ToastExpiry {
-        Live(u64),
+        Live,
         Expired,
     }
 
-    fn toast_expiry(expiry: ToastExpiry) -> std::time::Instant {
-        match expiry {
-            ToastExpiry::Live(secs) => {
-                std::time::Instant::now() + std::time::Duration::from_secs(secs)
-            }
-            ToastExpiry::Expired => std::time::Instant::now()
-                .checked_sub(std::time::Duration::from_secs(1))
-                .unwrap(),
-        }
+    /// Pushes one toast through the `ToastList` so it is live, or already
+    /// expired, when the projection reads the clock: an expired toast arrived
+    /// long enough ago that its own duration has run out.
+    fn push_toast(app: &mut App, text: &str, severity: ToastSeverity, expiry: ToastExpiry) {
+        let now = std::time::Instant::now();
+        let arrived = match expiry {
+            ToastExpiry::Live => now,
+            ToastExpiry::Expired => now
+                .checked_sub(severity.ttl() + std::time::Duration::from_secs(1))
+                .expect("the process has run long enough to place a toast in the past"),
+        };
+        app.toasts.push(text.to_string(), severity, arrived);
     }
 }

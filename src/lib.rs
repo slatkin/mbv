@@ -61,6 +61,7 @@ pub use self::owner_link::{
 };
 pub use self::startup::run;
 pub use mbv_images::ImageDecode;
+pub use mbv_ui_model::toast::{ToastCard, ToastId};
 pub use mbv_ui_msg::TrackChipKind;
 
 /// The `App` stub construction a Client's own tests build their `App` from
