@@ -5,14 +5,17 @@
 //! start a dependent load before its root list, and a destination with no
 //! work for a step still takes the step as a no-op.
 //!
-//! A step that calls for a load ends the pass (design D3), as
-//! `ensure_gui_shows_workspace` returned after `fetch_series_detail`, so no
-//! two steps start their requests in one pass. A step reached in a later pass
-//! keeps its own idempotent guard, so a repaint never repeats a request.
+//! A step that calls for a load ends the pass (design D3), as the Shows root
+//! load returned after `fetch_series_detail`, so no two steps start their
+//! requests in one pass. A step reached in a later pass keeps its own
+//! idempotent guard, so a repaint never repeats a request.
 //!
-//! The per-destination `App` ensure methods still exist, because the
-//! `mbv-gui` crate's frame path calls them; each delegates here, so both
-//! paths run the same code.
+//! Two callers reach the pass: the `mbv-gui` crate's frame path, through
+//! [`App::ensure_gui_active_destination`], and the destination's open step,
+//! after its user-action work (design D2, D4). The Audiobooks and Podcasts
+//! app-facing entries ([`App::ensure_gui_abs_selection`] and
+//! [`App::ensure_gui_podcast_selection`]) stay as the guarded way in, because
+//! a collection command can name a library the tab is not on.
 
 use crate::app::App;
 
@@ -71,6 +74,17 @@ impl App {
                 self.run_gui_destination_loads(&PodcastsLoads { lib_idx });
             }
             GuiDestinationKind::Feeds => self.run_gui_destination_loads(&FeedsLoads),
+        }
+    }
+
+    /// Run the presented destination's one ordered load pass (design D2): the
+    /// `mbv-gui` crate's frame path makes this one call before it builds its
+    /// sections, so no section starts a load of its own. A session that
+    /// presents no destination loads nothing, and the pass runs for the active
+    /// destination only, whose steps then hold their own idempotent guards.
+    pub fn ensure_gui_active_destination(&mut self) {
+        if let Some(kind) = self.gui_active_destination() {
+            self.ensure_gui_destination(kind);
         }
     }
 
@@ -209,7 +223,7 @@ struct ShowsLoads {
 impl GuiDestinationLoads for ShowsLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
         if app.gui_shows_root_needs_load(self.lib_idx) {
-            app.gui_tv_open(self.lib_idx);
+            app.load_gui_shows_root(self.lib_idx);
             return GuiStepOutcome::LoadStarted;
         }
         GuiStepOutcome::Continue

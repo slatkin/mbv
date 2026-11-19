@@ -52,6 +52,11 @@ impl App {
     /// path's root step honours that failure until an open clears it (design
     /// D4, Risks). A `lib_idx` that names no book library is an ignored
     /// command.
+    /// Open the Audiobooks library `lib_idx` (row 9.1; gui-one-destination-ensure
+    /// design D4): the open clears a failed catalog mark, because a failed
+    /// catalog retries on an open and not on a repaint, and then runs the
+    /// destination's load pass. A `lib_idx` that names no Audiobooks library is
+    /// an ignored command.
     pub fn gui_abs_open(&mut self, lib_idx: usize) {
         if !self.gui_abs_book_library(lib_idx) {
             Self::log_ignored_library_command(
@@ -60,13 +65,8 @@ impl App {
             );
             return;
         }
-        if !self.gui_abs_destination_active(lib_idx) {
-            return;
-        }
         self.clear_gui_abs_catalog_failed(lib_idx);
-        if self.gui_abs_catalog_needs_load(lib_idx) {
-            self.audiobookshelf_book_refresh();
-        }
+        self.ensure_gui_abs_selection(lib_idx);
     }
 
     /// Select the book the Hero shows (row 9.1): the selection the core owns,
@@ -96,15 +96,16 @@ impl App {
         }
     }
 
-    /// The frame-path trigger the GUI's frame runs for the active Audiobooks
-    /// destination (row 9.1), the Shows frame path's counterpart: the
-    /// destination's one load pass — the catalog's refresh while it is
-    /// unloaded, then the effective pick's detail load once the catalog lands
-    /// (gui-one-destination-ensure design D3) — so the default first book's
-    /// Hero paints its chapters without a select. A `lib_idx` that names no
-    /// book library, or no active destination, is a no-op, so the frame path
-    /// can call it unguarded for its destination.
-    pub fn ensure_gui_abs_selection(&mut self, lib_idx: usize) {
+    /// The app-facing entry into the Audiobooks destination's load pass (row
+    /// 9.1; gui-one-destination-ensure design D5): the catalog's refresh
+    /// while it is unloaded, then the effective pick's detail load once the
+    /// catalog lands (design D3), so the default first book's Hero paints its
+    /// chapters without a select. The open step enters here, and the
+    /// active-tab guard is what keeps any other entry inert: a caller that
+    /// names a library the tab is not on loads nothing rather than loading a
+    /// library the shell is not presenting. The steps' own destination guards
+    /// keep a `lib_idx` that names no book library a no-op.
+    pub(in crate::app::gui_library) fn ensure_gui_abs_selection(&mut self, lib_idx: usize) {
         if !self.gui_abs_destination_active(lib_idx) {
             return;
         }

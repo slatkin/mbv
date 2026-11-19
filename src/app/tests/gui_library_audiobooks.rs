@@ -239,18 +239,18 @@ fn add_second_book_library(app: &mut App) {
         .push(AudiobookshelfBookBrowseState::new(library));
 }
 
-/// The frame path's entry stays inert for a book library that is not the
-/// active destination (review of gui-one-destination-ensure units 2.4 and
-/// 2.5): the entry tests the tab before it enters the driver, whose steps
-/// assert the pass runs for the active tab, so a `lib_idx` naming another
-/// book library starts no load and does not panic.
+/// The open entry stays inert for a book library that is not the active
+/// destination (review of gui-one-destination-ensure units 2.4 and 2.5): the
+/// entry tests the tab before it enters the driver, whose steps assert the pass
+/// runs for the active tab, so a `lib_idx` naming another book library starts no
+/// load and does not panic.
 #[test]
-fn the_frame_entry_on_another_book_library_starts_no_load() {
+fn the_open_entry_on_another_book_library_starts_no_load() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
     add_second_book_library(&mut app);
 
-    app.ensure_gui_abs_selection(2);
+    app.gui_abs_open(2);
 
     let stale = &app.audiobookshelf_book_browse[2];
     assert_eq!(

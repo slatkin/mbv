@@ -24,6 +24,7 @@ use super::collection::{
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
 use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
+use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
 /// The GUI Library's Feeds selection (row 11.1).
@@ -138,15 +139,17 @@ impl App {
         self.has_feeds_subscriptions()
     }
 
-    /// Open the Feeds destination (row 11.1). The feed entries arrive from the
-    /// shared startup fetch and the shared tick's `drain_feed_tab_results`, so
-    /// an open starts no load and touches no network: the effective set's
-    /// retention settles the stored checked set against the subscription set
-    /// the tab holds wherever it is read.
+    /// Open the Feeds destination (row 11.1; gui-one-destination-ensure design
+    /// D4). The feed entries arrive from the shared startup fetch and the
+    /// shared tick's `drain_feed_tab_results`, so an open starts no load and
+    /// touches no network: the effective set's retention settles the stored
+    /// checked set against the subscription set the tab holds wherever it is
+    /// read, and the destination's load pass is a no-op for every step.
     pub fn gui_feeds_open(&mut self) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command("feedsOpen", format_args!("the feed tab is absent"));
         }
+        self.ensure_gui_destination(GuiDestinationKind::Feeds);
     }
 
     /// Select the entry the Hero shows (row 11.1).

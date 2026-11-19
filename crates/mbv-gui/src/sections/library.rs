@@ -2,9 +2,10 @@
 //! `gui-change-driven-sections` design D8): one gated pass that builds the three
 //! Library sections, `libraryList`, `libraryDetail`, and `rowMenu`. Each
 //! destination makes one App projection call, and that call feeds both its list
-//! part and its detail part. The destination's ensures run inside the pass, so
-//! a build starts the loads its sections wait on (design D12 of
-//! add-gui-library-panel). The ledger compares each section on its own.
+//! part and its detail part. The active destination's load pass runs before the
+//! parts, so a build starts the loads its sections wait on (design D12 of
+//! add-gui-library-panel; gui-one-destination-ensure design D2). The ledger
+//! compares each section on its own.
 
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
@@ -29,20 +30,15 @@ pub(crate) struct LibraryPass {
     pub(crate) row_menu: Option<GuiLibraryRowMenuFrame>,
 }
 
-/// The Library sections of the active destination (design D8): the tabs the top
-/// bar paints with the destination's list part, the detail part, and the right-
-/// click menu. Every section is `None` while no presented destination is active.
+/// The Library sections of the active destination (design D8;
+/// gui-one-destination-ensure design D2): the tabs the top bar paints with the
+/// destination's list part, the detail part, and the right-click menu. Every
+/// section is `None` while no presented destination is active. The
+/// destination's one load pass runs before the parts are built, so a part never
+/// starts a load of its own.
 pub(crate) fn build(app: &mut App) -> LibraryPass {
+    app.ensure_gui_active_destination();
     let destination = app.gui_active_destination();
-    // The Podcasts destination's ensure (add-gui-library-panel design D12,
-    // row 10.1): the selected pill's own loads start before any command does.
-    if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
-        app.ensure_gui_podcast_selection(lib_idx);
-    }
-    // The Feeds destination needs no frame-path ensure (row 11.1): the feed
-    // entries arrive from the shared startup fetch, and the effective set's
-    // retention settles the stored checked set against the subscription set
-    // the tab holds wherever it is read.
     let Some((list, detail)) = destination_parts(app, destination) else {
         return LibraryPass::default();
     };
@@ -84,7 +80,6 @@ fn destination_parts(
 /// the detail facts with the Hero's artwork, the picked item's menu, and the
 /// playing track's id.
 fn music_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    app.ensure_gui_music_selection(lib_idx);
     let projection = app.gui_music_projection(lib_idx);
     let picked = projection
         .hero
@@ -117,11 +112,8 @@ fn home_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
     )
 }
 
-/// The Shows destination's parts (design D14). The ensure loads the selected
-/// series' detail and its selected season's episodes, so the Hero's Workspace
-/// paints on arrival.
+/// The Shows destination's parts (design D14).
 fn shows_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    app.ensure_gui_shows_workspace(lib_idx);
     let projection = app.gui_shows_projection(lib_idx);
     (
         GuiDestinationList::Shows(GuiShowsList::from_projection(lib_idx, &projection)),
@@ -129,11 +121,8 @@ fn shows_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibrary
     )
 }
 
-/// The plain Emby-library destination's parts (design D12, row 8.1). The
-/// ensure is the shown-pass trigger the TUI projection pass's lazy-fetch arm
-/// mirrors.
+/// The Emby-library destination's parts (design D12, row 8.1).
 fn emby_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    app.ensure_gui_emby_selection(lib_idx);
     let projection = app.gui_emby_projection(lib_idx);
     (
         GuiDestinationList::Emby(GuiEmbyList::from_projection(lib_idx, &projection)),
@@ -141,10 +130,8 @@ fn emby_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryD
     )
 }
 
-/// The Audiobooks destination's parts (design D12, row 9.1). The ensure is the
-/// default pick's detail-load trigger.
+/// The Audiobooks destination's parts (design D12, row 9.1).
 fn audiobooks_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
-    app.ensure_gui_abs_selection(lib_idx);
     let projection = app.gui_audiobooks_projection(lib_idx);
     (
         GuiDestinationList::Audiobooks(GuiAudiobooksList::from_projection(lib_idx, &projection)),
@@ -152,8 +139,7 @@ fn audiobooks_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLi
     )
 }
 
-/// The Podcasts destination's parts (design D12, row 10.1). The build's ensure
-/// above is the selected pill's load trigger.
+/// The Podcasts destination's parts (design D12, row 10.1).
 fn podcasts_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = app.gui_podcasts_projection(lib_idx);
     (
@@ -163,7 +149,7 @@ fn podcasts_parts(app: &mut App, lib_idx: usize) -> (GuiDestinationList, GuiLibr
 }
 
 /// The Feeds destination's parts (design D12, row 11.1). The entries arrive
-/// from the shared startup fetch, so the build starts no load.
+/// from the shared startup fetch.
 fn feeds_parts(app: &mut App) -> (GuiDestinationList, GuiLibraryDetail) {
     let projection = app.gui_feeds_projection();
     (

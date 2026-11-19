@@ -436,16 +436,6 @@ impl App {
             })
     }
 
-    /// Run the Shows destination's load pass (gui-one-destination-ensure
-    /// design D1, D3): the driver's Shows site, whose root step starts the All
-    /// series list, whose selection step starts the default series' detail,
-    /// and whose dependents step starts the selected season's episodes. The
-    /// `mbv-gui` crate's frame path still calls this; it delegates so both
-    /// paths run the same code.
-    pub fn ensure_gui_shows_workspace(&mut self, lib_idx: usize) {
-        self.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
-    }
-
     /// Whether the frame path must start the Shows root load: no root level
     /// yet, or a settled root that is not the All series list. A root already
     /// loading is left alone so a repaint never starts a second request, and

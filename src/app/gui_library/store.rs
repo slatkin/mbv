@@ -73,7 +73,7 @@ impl App {
             },
         );
         self.clear_failed_music_groups(lib_idx);
-        self.ensure_gui_music_selection(lib_idx);
+        self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
     }
 
     /// Drop the failed album marks of `lib_idx`'s selected groups (design D5):
@@ -154,14 +154,6 @@ impl App {
         } else {
             Some("the group is not one of the library's collections")
         }
-    }
-
-    /// Run the Music destination's load pass (gui-one-destination-ensure
-    /// design D1, D3): the driver's Music site, whose selection step starts
-    /// the shown groups' album fetches. The `mbv-gui` crate's frame path still
-    /// calls this; it delegates so both paths run the same code.
-    pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
-        self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
     }
 
     /// Start `group_id`'s album fetch when the store holds no list for it
