@@ -194,7 +194,7 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
         harness
             .model()
             .app
-            .status
+            .newest_toast_text()
             .contains("Direct mbv control failed"),
         "the failed direct connect is reported"
     );

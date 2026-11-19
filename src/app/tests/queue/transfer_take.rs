@@ -312,9 +312,10 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
     assert!(app.pending_queue_transfer.is_none());
     assert!(app.staged_queue_transfer.is_none());
     assert!(
-        app.status.contains("nothing is playing on the peer"),
+        app.newest_toast_text()
+            .contains("nothing is playing on the peer"),
         "the report names the stale source, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert_eq!(
         app.local_view
@@ -513,11 +514,11 @@ fn a_local_owner_without_the_start_position_capability_refuses_the_take() {
         app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
         "the refused Take arms and stages nothing"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
     assert!(
-        app.status.contains("does not support Take"),
+        app.newest_toast_text().contains("does not support Take"),
         "the refusal names the cause, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
 }
 
@@ -555,11 +556,12 @@ fn a_dead_home_link_refuses_the_connected_take_before_anything_is_sent() {
         app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
         "the refused Take arms nothing"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert!(
-        app.status.contains("the local Owner connection was lost"),
+        app.newest_toast_text()
+            .contains("the local Owner connection was lost"),
         "the refusal names the lost local Owner link, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
 }
 
@@ -593,9 +595,10 @@ fn a_probe_link_lost_during_the_confirm_names_the_peer() {
     );
 
     assert!(
-        app.status.contains("the peer connection was lost"),
+        app.newest_toast_text()
+            .contains("the peer connection was lost"),
         "the report names the dead probe link, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert!(
         local_replace(&local_cmd_rx).is_none() && peer_replace(&probe_cmd_rx).is_none(),

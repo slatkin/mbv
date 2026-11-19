@@ -287,7 +287,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     assert_eq!(app.playing_queue_link(), QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);
-    assert_eq!(app.status, CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.newest_toast_text(), CONNECTION_LOST_MESSAGE);
     // The Client cannot command a link it already lost, but the contract
     // also forbids a last-moment Stop on the way down: the disconnect
     // handling must tear the link down without sending anything (the peer

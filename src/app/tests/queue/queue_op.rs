@@ -134,7 +134,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
         "the answered-capability owner receives the correlated command"
     );
     assert!(
-        app.status.is_empty(),
+        app.newest_toast_text().is_empty(),
         "a timely answer must not flash a timeout"
     );
 }
@@ -241,10 +241,11 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
     app.await_queue_op_with_bound(QueueLink::Local, QueueOpId(3), Duration::ZERO);
 
     assert_eq!(
-        app.status, "Playback owner did not respond to the queue edit",
+        app.newest_toast_text(),
+        "Playback owner did not respond to the queue edit",
         "the timeout reports the unanswered edit"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert_eq!(
         app.queue_for_link(QueueLink::Local).total_queue_len(),
         2,
@@ -309,7 +310,7 @@ fn rapid_repeated_removals_each_act_on_the_answered_state() {
         "three entries were removed"
     );
     assert!(
-        app.status.is_empty(),
+        app.newest_toast_text().is_empty(),
         "no timeout is flashed when answers arrive"
     );
 }
@@ -407,7 +408,10 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
         app.deferred_player_events.is_empty(),
         "no events were pumped for a legacy owner"
     );
-    assert!(app.status.is_empty(), "the legacy send must not flash");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "the legacy send must not flash"
+    );
     let received = cmd_rx.try_recv().unwrap();
     assert!(
         matches!(&received, CtrlCmd::UnifiedQueueAppend { op: None, .. }),
@@ -450,7 +454,10 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
         Some(500),
         "the adopted snapshot is the owner's answer, not a Client-side merge"
     );
-    assert!(app.status.is_empty(), "a timely answer must not flash");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "a timely answer must not flash"
+    );
 }
 
 #[test]
@@ -485,7 +492,7 @@ fn single_item_play_replaces_the_populated_queue_with_the_played_item() {
         "the play is an answered whole-queue replace-and-start"
     );
     assert!(
-        app.status.is_empty(),
+        app.newest_toast_text().is_empty(),
         "a timely answer must not flash a timeout"
     );
 }
@@ -516,7 +523,10 @@ fn single_item_play_on_a_legacy_owner_replaces_the_queue_with_the_played_item() 
         }
         other => panic!("expected the legacy whole-queue replace form, got {other:?}"),
     }
-    assert!(app.status.is_empty(), "the legacy send must not flash");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "the legacy send must not flash"
+    );
 }
 
 #[test]

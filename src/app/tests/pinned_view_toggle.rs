@@ -82,10 +82,11 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     assert_eq!(app.mini_view_focus, PanelFocus::Queue);
     assert_eq!(app.panel_focus, PanelFocus::Queue);
     assert_eq!(
-        app.status, "the layout is invalid for this monitor",
+        app.newest_toast_text(),
+        "the layout is invalid for this monitor",
         "the rejection reason is flashed"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
 }
 
 /// The one-in-flight contract: an `x` press while the first request is

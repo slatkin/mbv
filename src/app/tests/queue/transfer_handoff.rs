@@ -356,11 +356,12 @@ fn an_audio_only_peer_refuses_a_video_active_item_and_sends_nothing() {
     assert!(!stop_sent_to(&local_cmd_rx), "local playback continues");
     assert!(app.pending_queue_transfer.is_none());
     assert!(app.staged_queue_transfer.is_none());
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
     assert!(
-        app.status.contains("cannot play the active item"),
+        app.newest_toast_text()
+            .contains("cannot play the active item"),
         "the refusal names the cause, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert!(
         !matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
@@ -389,9 +390,10 @@ fn an_older_peer_without_the_start_position_capability_is_refused() {
     assert!(app.pending_queue_transfer.is_none());
     assert!(app.staged_queue_transfer.is_none());
     assert!(
-        app.status.contains("does not support Hand off"),
+        app.newest_toast_text()
+            .contains("does not support Hand off"),
         "the refusal names the cause, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
 }
 
@@ -426,11 +428,11 @@ fn a_peer_link_lost_before_observation_leaves_local_playing() {
 
     let app = &harness.model().app;
     assert!(app.pending_queue_transfer.is_none(), "the transfer reports");
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert!(
-        app.status.starts_with("Hand off failed"),
+        app.newest_toast_text().starts_with("Hand off failed"),
         "the failure is reported, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert!(
         !stop_sent_to(&local_cmd_rx),
@@ -658,12 +660,12 @@ fn a_confirmed_hand_off_without_a_peer_link_reports_and_sends_nothing() {
         confirm_key(KeyCode::Enter),
     );
 
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert!(
-        app.status
+        app.newest_toast_text()
             .contains("Hand off failed: the peer connection was lost"),
         "the loss is reported, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     let local_sent = local_owner_commands(&local_cmd_rx);
     assert!(

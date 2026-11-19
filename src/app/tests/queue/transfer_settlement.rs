@@ -82,6 +82,6 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
             "the source Owner must never be stopped by a failed transfer"
         );
     }
-    assert_eq!(app.status_severity, ToastSeverity::Error);
-    assert!(app.status.starts_with("Hand off failed"));
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
+    assert!(app.newest_toast_text().starts_with("Hand off failed"));
 }

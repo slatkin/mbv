@@ -107,7 +107,11 @@ fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
 
     assert_eq!(app.tab, TabSelection::Home);
     assert!(app.pending_series_landing.is_some());
-    assert!(!app.status.contains("Could not land on"), "{}", app.status);
+    assert!(
+        !app.newest_toast_text().contains("Could not land on"),
+        "{}",
+        app.newest_toast_text()
+    );
 
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::AllItemsPrefetched {
         lib_idx: 0,
@@ -163,11 +167,11 @@ fn series_landing_miss_after_the_whole_library_load_flashes_and_clears() {
         "a complete-corpus miss clears the pending landing"
     );
     assert!(
-        app.status.contains("Could not land on"),
+        app.newest_toast_text().contains("Could not land on"),
         "flash: {}",
-        app.status
+        app.newest_toast_text()
     );
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
     assert_eq!(
         app.libs[0].nav_stack[0].resting().cursor(),
         0,

@@ -9,7 +9,10 @@ fn enqueue_route_conflict_rejects_mismatched_route() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());
     assert!(app.enqueue_route_conflict(Some(&"movies".to_string())));
-    assert!(app.status.contains("Can't mix libraries in a routed queue"));
+    assert!(
+        app.newest_toast_text()
+            .contains("Can't mix libraries in a routed queue")
+    );
 }
 
 #[test]

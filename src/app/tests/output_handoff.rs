@@ -322,9 +322,10 @@ fn a_confirmed_local_detach_while_thin_client_hands_the_home_owner_back_to_local
         "the detach restored the home Owner"
     );
     assert!(
-        app.status.contains("Detached from cast target"),
+        app.newest_toast_text()
+            .contains("Detached from cast target"),
         "the detach reports the hand-back, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
 }
 
@@ -360,7 +361,7 @@ fn a_session_activation_while_controlling_mbvd_selects_it_on_the_home_owner() {
             }) if device_id == "device-tv"
         ),
         "the home Owner selects the Session as its output, status {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert!(
         app.is_local_daemon() && app.suspended_local.is_none(),

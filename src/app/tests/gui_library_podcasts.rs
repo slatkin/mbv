@@ -413,7 +413,8 @@ fn a_denied_podcast_owner_flashes_the_owner_unavailable_toast() {
         item_id: row.clone(),
     });
     assert_eq!(
-        app.status, "Audiobookshelf playback owner is unavailable",
+        app.newest_toast_text(),
+        "Audiobookshelf playback owner is unavailable",
         "the play's refusal flashes the owner-unavailable toast"
     );
     app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
@@ -456,7 +457,10 @@ fn stale_podcast_ids_change_nothing() {
     });
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(app.status.is_empty(), "a stale id flashes no toast");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "a stale id flashes no toast"
+    );
     assert_eq!(
         app.gui_podcast_picked_episode(1)
             .map(GuiPodcastEpisodeId::from)

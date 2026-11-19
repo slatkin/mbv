@@ -123,7 +123,7 @@ fn failed_album_index_becomes_unavailable() {
         app.album_indexes.get("music-lib"),
         Some(AlbumIndexState::Unavailable)
     ));
-    assert!(app.status.contains("index failed"));
+    assert!(app.newest_toast_text().contains("index failed"));
 }
 
 #[test]

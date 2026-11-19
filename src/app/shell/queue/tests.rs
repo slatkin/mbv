@@ -386,7 +386,7 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     });
 
     assert_ne!(
-        model.app.status_severity,
+        model.app.newest_toast_severity(),
         ToastSeverity::Error,
         "no spurious remote-undo-unsupported error"
     );
@@ -423,7 +423,7 @@ fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
         "the peer undo entry was consumed"
     );
     assert_ne!(
-        model.app.status_severity,
+        model.app.newest_toast_severity(),
         ToastSeverity::Error,
         "a lawful peer undo reports no error"
     );

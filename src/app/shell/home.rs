@@ -290,9 +290,9 @@ mod tests {
             .collect();
         assert_eq!(appended, vec!["id2"], "the CW enqueue resolves id2");
 
-        model.app.status.clear();
+        model.app.toasts.clear();
         model.handle_home_request(HomeRequest::Play(target("id0")));
-        assert_eq!(model.app.status, "Emby is unavailable");
+        assert_eq!(model.app.newest_toast_text(), "Emby is unavailable");
     }
 
     #[test]
