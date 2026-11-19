@@ -464,7 +464,7 @@ The panel SHALL pick one of four states from its own size, not from the window s
 
 ### Requirement: The scrubber seeks and previews
 
-The scrubber SHALL show the played progress, the buffered range where the output reports one, and a thumb. It SHALL show no chapter boundaries and no intro or credits marks. The elapsed time and the remaining time show on the transport row. The whole scrubber row SHALL be the bar's hit area. A press on the bar SHALL seek to that position. While the pointer drags on the bar, the bar SHALL keep its hover state and the time tip SHALL follow the pointer. The back 10 s and forward 30 s chords SHALL do the same work as the transport buttons.
+The scrubber SHALL show the played progress and a thumb. It SHALL show no chapter boundaries and no intro or credits marks. The elapsed time and the remaining time show on the transport row. The whole scrubber row SHALL be the bar's hit area. A press on the bar SHALL seek to that position. While the pointer drags on the bar, the bar SHALL keep its hover state and the time tip SHALL follow the pointer. The back 10 s and forward 30 s chords SHALL do the same work as the transport buttons.
 
 #### Scenario: The pointer hovers the bar
 
@@ -487,18 +487,6 @@ The scrubber SHALL show the played progress, the buffered range where the output
 
 - **WHEN** the user drags on the bar
 - **THEN** the bar keeps its hover state and the time tip follows the pointer
-
-#### Scenario: The output reports a buffer
-
-- **GIVEN** the local player reports cached media past the playhead
-- **WHEN** the scrubber paints
-- **THEN** it shows the buffered range from the start to the cache end, under the played progress
-
-#### Scenario: The output reports no buffer
-
-- **GIVEN** the output is a Cast receiver, an Emby Session, or a Player owner that does not send the buffered position
-- **WHEN** the scrubber paints
-- **THEN** it shows no buffered range
 
 #### Scenario: The item has chapters
 

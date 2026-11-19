@@ -173,7 +173,6 @@ pub(crate) fn player_status() -> PlayerStatus {
         position_ticks: POSITION_TICKS,
         last_valid_pos: POSITION_TICKS,
         runtime_ticks: 1_800_000_000,
-        buffered_ticks: 90_000_000,
         paused: false,
         volume: 55,
         volume_max: 130,

@@ -584,7 +584,7 @@ press elsewhere. The GUI-only fact rides `GuiQueuePlayback.auto_hide` — the
 menu entry's checked mark reads it — and stays out of the shared
 `QueuePlaybackProjection`; no key chord rides with it.
 
-The seekbar paints the played fraction, the buffered range, and the thumb,
+The seekbar paints the played fraction and the thumb,
 all derived from the playhead anchor (below); it carries no chapter ticks
 and no mark segments, and its clocks are the transport row's. The data the
 old bar read is deleted, not idle (design D5): the chapter, media-segment,
@@ -600,11 +600,9 @@ drag. A press on the bar seeks through the core.
 
 The window predicts the playhead between the `playhead` section's anchors
 (design D5 of `gui-change-driven-sections`). The core sends the anchor —
-`GuiPlayhead`: the active fact, the active slot, the position, runtime, and
-buffered end in ticks, and the paused fact — only on a changed fact, a
-cache end that moved past the one-second buffered tolerance
-(`gui-queue-panel-redesign` design D6), or a new sample that drifted past
-the one-second position tolerance, and it carries no timestamp, because the
+`GuiPlayhead`: the active fact, the active slot, the position, runtime
+in ticks, and the paused fact — only on a changed fact or a new sample that
+drifted past the one-second position tolerance, and it carries no timestamp, because the
 core and the window share no clock. The window stamps each anchor
 with its own monotonic clock at receipt: `apply_batch` (`src/window/app.rs`)
 calls `Playhead::stamp_if_new` (`src/window/playhead.rs`), which reads the clock
@@ -616,8 +614,7 @@ and the active item's finish epoch. The frame clock advances the prediction
 only while the anchor is active and not paused (see *Clocks* above). The
 `minute` counter (`Playhead::minute`) moves the finish times while playback is
 paused, with no update from the core: one timer re-arms at each wall-clock
-minute. The panels read the derived signals: the seekbar's fill and the
-buffered range, the transport's elapsed and remaining clocks, the rail's
+minute. The panels read the derived signals: the seekbar's fill, the transport's elapsed and remaining clocks, the rail's
 ring and remaining time, the compact
 strip's progress line, the folded line's finish
 clock — the wall clock at the summary's `tail_secs` past the active item's
@@ -628,20 +625,6 @@ chapter row whose `startTicks <= position < endTicks` span holds the
 predicted position while the Hero's book is the frame's `playing_book_id`;
 the span's end is exclusive, and an empty span — an audio-part row's `0`/`0`
 — never holds one.
-
-The buffered end rides the same chain the position rides
-(`gui-queue-panel-redesign` design D6). mpv's `demuxer-cache-time`
-observation lands in `PlayerStatus.buffered_ticks` as media ticks, 0 while
-the player reports none — a Cast receiver or an Emby Session output leaves
-it 0 — and the `buffered-position` ctrl capability carries the field to
-every Client; an older Client ignores the unknown field, so no
-per-connection gate runs. The displayed-state builder copies it into
-`PlaybackState.buffered_ticks`, the anchor carries it, and the window's
-`Playhead` derives `buffered_fraction` — the buffered end clamped into the
-runtime — which the seekbar paints as is, never predicted, and only while
-the range is ahead of the played fraction. The core re-anchors on a cache
-end that moved past the one-second buffered tolerance, so a paused window,
-which takes no position sample, still receives the range.
 
 What stays in Rust are the facts that change only on a discontinuity: the
 end offsets themselves (`App::gui_queue_end_offsets` over

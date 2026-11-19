@@ -31,12 +31,6 @@ pub struct PlayerStatus {
     #[serde(default)]
     pub last_valid_pos: i64,
     pub runtime_ticks: i64,
-    /// Media position up to which the local player holds cached media, in the
-    /// same tick units as `position_ticks`. 0 = unknown: no cache reported, an
-    /// output that keeps no local cache (Cast, Emby Session), or an Owner that
-    /// predates the field (additive, no protocol-version bump).
-    #[serde(default)]
-    pub buffered_ticks: i64,
     pub paused: bool,
     pub volume: i64,
     pub volume_max: i64,
@@ -86,12 +80,9 @@ pub struct PlayerStatus {
 impl PlayerStatus {
     /// Copy the start item's playback position, runtime, and identity into
     /// this status — the shared "player about to start / just scheduled"
-    /// seeding used by every queue path. Callers set `active`. The previous
-    /// item's cache end is cleared with the position: the new start reports
-    /// nothing buffered until mpv observes the new file's demuxer cache.
+    /// seeding used by every queue path. Callers set `active`.
     pub fn seed_from_item(&mut self, item: &QueueItem, idx: usize, queue_len: usize) {
         self.position_ticks = item.playback_position_ticks();
-        self.buffered_ticks = 0;
         self.runtime_ticks = item.runtime_ticks();
         self.paused = false;
         self.current_idx = idx;
@@ -193,7 +184,6 @@ impl Default for PlayerStatus {
             position_ticks: 0,
             last_valid_pos: 0,
             runtime_ticks: 0,
-            buffered_ticks: 0,
             paused: false,
             volume: 100,
             volume_max: 130,

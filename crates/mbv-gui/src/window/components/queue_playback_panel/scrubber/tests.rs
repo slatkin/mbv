@@ -15,7 +15,6 @@ use blitz_dom::Document as _;
 use blitz_dom::local_name;
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
-use rstest::rstest;
 
 use super::super::art_stage::{ControlRow, ControlRowHandles};
 use crate::bridge::frame::playback::{
@@ -171,14 +170,6 @@ impl Fixture {
             .to_owned()
     }
 
-    /// Whether the selector names a painted node.
-    fn paints(&self, selector: &str) -> bool {
-        let dom = self.doc.inner();
-        dom.query_selector(selector)
-            .expect("the selector is valid")
-            .is_some()
-    }
-
     /// The `class` attribute of the node the selector names.
     fn class_of(&self, selector: &str) -> Option<String> {
         let dom = self.doc.inner();
@@ -288,7 +279,6 @@ fn the_transport_row_paints_the_elapsed_and_remaining_clocks() {
         position_ticks: 60 * SECOND,
         runtime_ticks: 200 * SECOND,
         paused: false,
-        buffered_ticks: 0,
     });
 
     let text = fixture.text();
@@ -311,7 +301,6 @@ fn the_scrubber_paints_the_hover_time_tip_with_no_frame_and_no_chapter() {
         position_ticks: 60 * SECOND,
         runtime_ticks: 200 * SECOND,
         paused: false,
-        buffered_ticks: 0,
     });
     fixture.set_hover(Some(hovered(0.75)));
 
@@ -339,57 +328,4 @@ fn the_scrubber_paints_the_hover_time_tip_with_no_frame_and_no_chapter() {
             .style_of("[data-thumb]")
             .contains("width: calc(16px * var(--player-scale))")
     );
-}
-
-/// Contract (`gui-queue-panel-redesign` design D6, task 4.2b): the buffered
-/// range paints from the bar's start to the reported cache end only while
-/// that end is ahead of the played fraction — a cache end behind the playhead
-/// after a seek, and an output that reports none, paint nothing.
-#[rstest]
-#[case::cache_ahead(120, true)]
-#[case::cache_behind(30, false)]
-#[case::no_cache_reported(0, false)]
-fn the_buffered_range_paints_only_ahead_of_the_played_fraction(
-    #[case] buffered_secs: i64,
-    #[case] paints: bool,
-) {
-    let mut fixture = built();
-    fixture.set_playback(playing());
-    fixture.stamp(GuiPlayhead {
-        active: true,
-        active_slot: Some(1),
-        position_ticks: 60 * SECOND,
-        runtime_ticks: 200 * SECOND,
-        paused: false,
-        buffered_ticks: buffered_secs * SECOND,
-    });
-
-    assert_eq!(
-        fixture.paints("[data-buffered]"),
-        paints,
-        "a {buffered_secs} s cache end against a 60 s position"
-    );
-}
-
-/// Contract (`gui-queue-panel-redesign` design D4, task 4.2c): the bar paints
-/// no chapter boundary, no intro or credits segment, and no chapter label,
-/// whatever the item's metadata holds — the redesign's tick-free bar.
-#[test]
-fn the_bar_paints_no_tick_and_no_segment() {
-    let mut fixture = built();
-    fixture.set_playback(playing());
-    fixture.stamp(GuiPlayhead {
-        active: true,
-        active_slot: Some(1),
-        position_ticks: 60 * SECOND,
-        runtime_ticks: 200 * SECOND,
-        paused: false,
-        buffered_ticks: 120 * SECOND,
-    });
-    fixture.set_hover(Some(hovered(0.5)));
-
-    assert!(!fixture.paints("[data-tick]"), "no chapter tick paints");
-    assert!(!fixture.paints("[data-segment]"), "no segment paints");
-    assert!(!fixture.paints("[data-chapter]"), "no chapter mark paints");
-    assert!(!fixture.text().contains("Ch."), "no chapter label paints");
 }

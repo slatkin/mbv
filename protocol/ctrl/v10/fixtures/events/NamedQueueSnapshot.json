@@ -76,7 +76,6 @@
         "audio_id": 0,
         "audio_lang": "",
         "audio_tracks": [],
-        "buffered_ticks": 0,
         "current_idx": 0,
         "last_valid_pos": 0,
         "muted": false,

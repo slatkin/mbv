@@ -1514,12 +1514,6 @@
           },
           "type": "array"
         },
-        "buffered_ticks": {
-          "default": 0,
-          "description": "Media position up to which the local player holds cached media, in the\nsame tick units as `position_ticks`. 0 = unknown: no cache reported, an\noutput that keeps no local cache (Cast, Emby Session), or an Owner that\npredates the field (additive, no protocol-version bump).",
-          "format": "int64",
-          "type": "integer"
-        },
         "current_idx": {
           "format": "uint",
           "minimum": 0,

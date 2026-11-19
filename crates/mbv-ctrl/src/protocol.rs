@@ -116,12 +116,6 @@ pub const CTRL_CAP_QUEUE_SHUFFLE: &str = "queue-shuffle";
 /// only to a peer that advertises this capability. Additive — no
 /// protocol-version bump.
 pub const CTRL_CAP_QUEUE_REPLACE_START_POSITION: &str = "queue-replace-start-position";
-/// Peer understands the buffered position on the Player status:
-/// `PlayerStatus::buffered_ticks`, the media position up to which the local
-/// player holds cached media. The field is additive (a `#[serde(default)]`
-/// decode reads 0 as unknown), so an old peer simply paints no buffered range;
-/// no protocol-version bump.
-pub const CTRL_CAP_BUFFERED_POSITION: &str = "buffered-position";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";

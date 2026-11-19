@@ -125,7 +125,7 @@ impl PropertyValue {
     /// `observe_properties` requests.
     fn from_ipc(name: &str, data: &Value) -> Result<Self, DecodeError> {
         let value = match name {
-            "time-pos" | "volume" | "demuxer-cache-time" => data.as_f64().map(Self::Double),
+            "time-pos" | "volume" => data.as_f64().map(Self::Double),
             "pause" | "mute" | "current-tracks/video/image" => data.as_bool().map(Self::Flag),
             "video-params/h" | "playlist-pos" | "playlist-count" => data.as_i64().map(Self::Int64),
             "sid" | "aid" | "audio-codec-name" => data.as_str().map(|s| Self::Str(s.to_owned())),

@@ -534,7 +534,6 @@ pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     let _ = mpv.observe_property("current-tracks/video/image", 8, Format::Flag);
     let _ = mpv.observe_property("playlist-pos", 9, Format::Int64);
     let _ = mpv.observe_property("playlist-count", 10, Format::Int64);
-    let _ = mpv.observe_property("demuxer-cache-time", 11, Format::Double);
     if use_mpv_config {
         let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
     }

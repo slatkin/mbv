@@ -91,7 +91,6 @@ fn playing(position_ticks: i64) -> GuiPlayhead {
         position_ticks,
         runtime_ticks: 200 * SECOND,
         paused: false,
-        buffered_ticks: 0,
     }
 }
 
@@ -241,7 +240,6 @@ fn a_two_hour_book_predicts_its_real_position_and_fraction() {
         position_ticks: 90 * 60 * SECOND,
         runtime_ticks: 2 * 3600 * SECOND,
         paused: false,
-        buffered_ticks: 0,
     });
 
     assert_eq!(playhead.position.cloned(), 90.0 * 60.0 * SECOND_F);
@@ -266,7 +264,6 @@ fn a_playhead_section_at_its_held_revision_re_stamps_nothing_and_reset_drops_it(
         position_ticks: 1_000,
         runtime_ticks: 2_000,
         paused: false,
-        buffered_ticks: 0,
     };
     playhead.stamp_if_new(&GuiSection {
         revision: 3,
