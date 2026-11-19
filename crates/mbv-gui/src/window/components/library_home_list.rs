@@ -111,8 +111,9 @@ fn paint_home_item_row(
         _ => None,
     };
     let title_color = name_color(&item.state);
-    // The Music tree's album row is the model: weight 400, selected or not.
-    let title_weight = 400.0;
+    // Every flat list's top-level row carries the Music artist and TV series
+    // root weight: 600, selected or not. Only nested rows stay at 400.
+    let title_weight = 600.0;
     let art = item.art.clone();
     let art_kind = art.as_ref().map(art_kind);
     let press_row = row.clone();

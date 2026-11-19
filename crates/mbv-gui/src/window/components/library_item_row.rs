@@ -119,8 +119,9 @@ pub fn LibraryItemRow(props: LibraryItemRowProps) -> Element {
     if let Some(background) = props.background.as_ref() {
         let _ = write!(row_style, " background: {background};");
     }
-    // The Music tree's album row is the model: a fixed 14.5 px at weight 400, selected or not.
-    let title_weight = 400.0;
+    // Every flat list's top-level row carries the Music artist and TV series
+    // root weight: 600, selected or not. Only nested rows stay at 400.
+    let title_weight = 600.0;
     let title_attrs = vec![Attribute::new(
         library_attr(props.attr, "title"),
         "",
