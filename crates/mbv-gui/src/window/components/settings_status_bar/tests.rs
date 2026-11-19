@@ -8,17 +8,18 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use super::SettingsStatusBar;
 use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToastSeverity};
+use mbv_ui_model::toast::ToastId;
 
-/// The status line over the carried facts, mounted once per case.
-fn painted(status: GuiStatusBar) -> DioxusDocument {
+/// The status line over the carried facts and toast, mounted once per case.
+fn painted(status: GuiStatusBar, toast: Option<GuiToast>) -> DioxusDocument {
     let mut doc = DioxusDocument::new(
         VirtualDom::new_with_props(
-            |(status, section): (GuiStatusBar, String)| {
+            |(status, toast, section): (GuiStatusBar, Option<GuiToast>, String)| {
                 rsx! {
-                    SettingsStatusBar { status, section }
+                    SettingsStatusBar { status, toast, section }
                 }
             },
-            (status, "Playback".to_owned()),
+            (status, toast, "Playback".to_owned()),
         ),
         DocumentConfig::default(),
     );
@@ -44,13 +45,14 @@ fn text_of(doc: &DioxusDocument, selector: &str) -> String {
 /// prefix and the live toast together.
 #[test]
 fn the_status_line_shows_the_prefix_and_the_toast_together() {
-    let doc = painted(GuiStatusBar {
-        prefix_armed: true,
-        toast: Some(GuiToast {
+    let doc = painted(
+        GuiStatusBar { prefix_armed: true },
+        Some(GuiToast {
+            id: ToastId(1),
             text: "Setting refused".to_owned(),
             severity: GuiToastSeverity::Warning,
         }),
-    });
+    );
 
     assert_eq!(text_of(&doc, "[data-settings-status-prefix]"), "PREFIX");
     assert_eq!(
@@ -63,10 +65,12 @@ fn the_status_line_shows_the_prefix_and_the_toast_together() {
 /// its fixed key hints, and the shown section sits at the right.
 #[test]
 fn the_quiet_line_paints_the_key_hints_and_the_section() {
-    let doc = painted(GuiStatusBar {
-        prefix_armed: false,
-        toast: None,
-    });
+    let doc = painted(
+        GuiStatusBar {
+            prefix_armed: false,
+        },
+        None,
+    );
 
     assert_eq!(
         doc.inner()

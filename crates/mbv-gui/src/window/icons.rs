@@ -706,5 +706,7 @@ pub fn Zap(props: IconProps) -> Element {
     )
 }
 
+pub mod toast;
+
 #[cfg(test)]
 mod tests;

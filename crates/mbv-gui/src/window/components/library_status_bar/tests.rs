@@ -27,6 +27,7 @@ use crate::bridge::frame::library::{
 };
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::SectionRef;
+use mbv_ui_model::toast::ToastId;
 
 /// The context handles the root hands the test: the layout epoch the
 /// re-measures read. The bar consumes no store of its own — the Search facts
@@ -57,11 +58,10 @@ const FIXTURE_CSS: &str = concat!(
     ".truncate { width: 100%; }",
 );
 
-/// The frame's Status bar facts: nothing armed and no live toast.
+/// The frame's Status bar facts: nothing armed.
 fn idle() -> GuiStatusBar {
     GuiStatusBar {
         prefix_armed: false,
-        toast: None,
     }
 }
 
@@ -131,6 +131,7 @@ fn music_props(status: GuiStatusBar) -> LibraryStatusBarProps {
         })),
         detail: Some(SectionRef::new(music_detail())),
         status,
+        toast: None,
     }
 }
 
@@ -156,6 +157,7 @@ fn status_bar_app(props: FixtureProps) -> Element {
         list,
         detail,
         status,
+        toast,
     } = props;
     rsx! {
         LibraryStatusBar {
@@ -164,6 +166,7 @@ fn status_bar_app(props: FixtureProps) -> Element {
             list,
             detail,
             status,
+            toast,
         }
     }
 }
@@ -294,13 +297,13 @@ fn the_bar_paints_the_location_and_no_key_hints() {
 /// twice on presentation-only moves; user decision 2026-11-19).
 #[test]
 fn a_live_toast_paints_and_keeps_the_location() {
-    let doc = built(music_props(GuiStatusBar {
-        prefix_armed: false,
-        toast: Some(GuiToast {
-            text: "Scanning 'Movies'...".to_owned(),
-            severity: GuiToastSeverity::Neutral,
-        }),
-    }));
+    let mut props = music_props(idle());
+    props.toast = Some(GuiToast {
+        id: ToastId(1),
+        text: "Scanning 'Movies'...".to_owned(),
+        severity: GuiToastSeverity::Neutral,
+    });
+    let doc = built(props);
 
     assert!(
         doc.text_of("[data-library-status-toast]")
@@ -324,10 +327,7 @@ fn a_live_toast_paints_and_keeps_the_location() {
 /// the location. No geometry assertions (see the live-toast test's comment).
 #[test]
 fn an_armed_prefix_paints_and_keeps_the_location() {
-    let doc = built(music_props(GuiStatusBar {
-        prefix_armed: true,
-        toast: None,
-    }));
+    let doc = built(music_props(GuiStatusBar { prefix_armed: true }));
 
     assert!(
         doc.text_of("[data-library-status-prefix]")
@@ -445,6 +445,7 @@ fn destination_props(
         })),
         detail: Some(SectionRef::new(detail)),
         status: idle(),
+        toast: None,
     }
 }
 

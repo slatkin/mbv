@@ -133,6 +133,9 @@ pub fn SettingsScreen(props: SettingsScreenProps) -> Element {
     let sections = consume_context::<Sections>();
     let settings = consume_context::<SettingsState>();
     let status = sections.status.cloned();
+    // The newest live toast the status line still paints inline (task row
+    // 2.1).
+    let toast = sections.toasts.cloned().newest().cloned();
     let Some(view) = settings_section_view(&sections, &settings) else {
         return rsx! {};
     };
@@ -187,7 +190,7 @@ pub fn SettingsScreen(props: SettingsScreenProps) -> Element {
                     }
                 }
             }
-            SettingsStatusBar { status, section: label }
+            SettingsStatusBar { status, toast, section: label }
         }
     }
 }

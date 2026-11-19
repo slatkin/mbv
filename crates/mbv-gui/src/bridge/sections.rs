@@ -10,7 +10,7 @@
 
 use super::frame::GuiAttachState;
 use super::frame::GuiPanelToggles;
-use super::frame::chrome::{GuiQueueFooter, GuiStatusBar};
+use super::frame::chrome::{GuiQueueFooter, GuiStatusBar, GuiToasts};
 use super::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -63,6 +63,9 @@ pub struct GuiSectionBatch {
     pub footer: Option<GuiSection<GuiQueueFooter>>,
     /// The Status bar projection.
     pub status: Option<GuiSection<GuiStatusBar>>,
+    /// The live toasts the window paints as floating cards, oldest first
+    /// (design D6 of `gui-floating-toasts`).
+    pub toasts: Option<GuiSection<GuiToasts>>,
     /// The Library list: the destination tabs and the active destination's list
     /// part, `null` while no presented destination is active.
     pub library_list: Option<GuiSection<Option<GuiLibraryList>>>,

@@ -332,7 +332,7 @@ fn a_source_less_entry_flashes_and_submits_nothing() {
 
     assert!(cmd_rx.try_recv().is_err(), "the refusal submits nothing");
     assert!(
-        newest_frame(&mut test).status().toast.is_some(),
+        newest_frame(&mut test).newest_toast().is_some(),
         "it flashes"
     );
 }
@@ -354,7 +354,7 @@ fn a_stale_feed_row_submits_nothing() {
         },
     );
     assert!(cmd_rx.try_recv().is_err(), "a malformed id submits nothing");
-    assert!(newest_frame(&mut test).status().toast.is_none());
+    assert!(newest_frame(&mut test).newest_toast().is_none());
 
     let absent = mbv::GuiFeedEntryId::new(FEED_A.into(), "gone".into()).encode();
     send_library(
@@ -365,5 +365,5 @@ fn a_stale_feed_row_submits_nothing() {
         cmd_rx.try_recv().is_err(),
         "an id no list holds submits nothing"
     );
-    assert!(newest_frame(&mut test).status().toast.is_none());
+    assert!(newest_frame(&mut test).newest_toast().is_none());
 }

@@ -10,7 +10,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::chrome::GuiStatusBar;
+use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast};
 use crate::window::status::toast_color;
 
 /// The screen's fixed keys (design D11), which `[keys]` does not configure,
@@ -27,8 +27,13 @@ const HINTS: &[(&str, &str)] = &[
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsStatusBarProps {
-    /// The frame's Status bar facts: the armed prefix and the live toast.
+    /// The frame's Status bar facts: the armed prefix.
     pub status: GuiStatusBar,
+    /// The newest live toast, `None` while none is live. It rides the `toasts`
+    /// section now (task row 2.1); the inline paint stays until its own row
+    /// removes it.
+    #[props(default)]
+    pub toast: Option<GuiToast>,
     /// The shown section's sidebar label.
     pub section: String,
 }
@@ -38,7 +43,7 @@ pub struct SettingsStatusBarProps {
 pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
     // The live toast's severity colour, resolved before the markup (the
     // the former client `toastColor` call in the attribute).
-    let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
+    let toast_style = props.toast.as_ref().map_or(String::new(), |toast| {
         format!("color: {};", toast_color(toast.severity))
     });
     rsx! {
@@ -58,14 +63,14 @@ pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
                         "PREFIX"
                     }
                 }
-                if let Some(toast) = props.status.toast.as_ref() {
+                if let Some(toast) = props.toast.as_ref() {
                     span {
                         style: "{toast_style}",
                         "data-settings-status-toast": "",
                         "{toast.text}"
                     }
                 }
-                if props.status.toast.is_none() && !props.status.prefix_armed {
+                if props.toast.is_none() && !props.status.prefix_armed {
                     span {
                         class: "flex items-center",
                         style: "gap: 12px; color: var(--canvas-muted);",

@@ -1,8 +1,8 @@
 //! The Status bar's shared paint facts (D6 of `replace-tauri-with-blitz`):
-//! the port of `lib/bridge/status.ts`. The frame's `GuiStatusBar` is carried
-//! to both surfaces that paint it — the Queue footer's line and the Library
-//! Status bar — so its toast takes one severity colour from here rather
-//! than one per painter.
+//! the port of `lib/bridge/status.ts`. Every surface that paints a toast
+//! takes one severity colour from here rather than one per painter: the
+//! `toasts` section's cards (the floating stack, and the status lines that
+//! still paint a toast inline until task row 2.4 removes that paint).
 
 use crate::bridge::frame::chrome::GuiToastSeverity;
 

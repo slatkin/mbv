@@ -24,7 +24,7 @@ use rstest::rstest;
 use super::QueueFooter;
 use crate::art::GuiArtRef;
 use crate::bridge::frame::chrome::{
-    GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToast, GuiToastSeverity,
+    GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToast, GuiToastSeverity, GuiToasts,
 };
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
@@ -38,6 +38,7 @@ use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::Sections;
 use crate::window::theme::{EfToken, ef_var};
+use mbv_ui_model::toast::ToastId;
 
 /// The footer frame the fixture paints: the `mix` playlist source, no autosave
 /// or dirty indicator.
@@ -121,11 +122,10 @@ fn chooser() -> GuiOverlayFrame {
     }
 }
 
-/// The idle Status bar: nothing armed, no toast.
+/// The idle Status bar: nothing armed.
 fn idle_status() -> GuiStatusBar {
     GuiStatusBar {
         prefix_armed: false,
-        toast: None,
     }
 }
 
@@ -289,6 +289,17 @@ impl Fixture {
             sections.summary.set(summary);
             sections.status.set(status);
         });
+        self.poll_until_idle();
+        self.lay_out();
+    }
+
+    /// Paint the section's live toasts: the line paints the newest one inline
+    /// until its own row removes that paint (task row 2.1).
+    fn show_toasts(&mut self, toasts: GuiToasts) {
+        let mut sections = self.sections.clone();
+        self.doc
+            .vdom
+            .in_runtime(move || sections.toasts.set(toasts));
         self.poll_until_idle();
         self.lay_out();
     }
@@ -493,18 +504,15 @@ fn the_active_footer_states_paint_their_lucide_icons(
     assert_eq!(fixture.all("[data-footer-line] svg").len(), expected_glyphs);
 }
 
-/// Contract (`QueueFooter.test.ts`): an armed frame renders the prefix
-/// badge.
+// Contract (`QueueFooter.test.ts`): an armed frame renders the prefix
+// badge.
 #[test]
 fn an_armed_frame_renders_the_prefix_badge() {
     let mut fixture = built();
     fixture.show(
         footer_frame(),
         summary(),
-        GuiStatusBar {
-            prefix_armed: true,
-            toast: None,
-        },
+        GuiStatusBar { prefix_armed: true },
     );
 
     assert!(fixture.text().contains("PREFIX"));
@@ -519,14 +527,13 @@ fn a_live_toast_paints_inline_in_the_line_and_drops_the_prefix_badge() {
     fixture.show(
         footer_frame(),
         summary(),
-        GuiStatusBar {
-            prefix_armed: true,
-            toast: Some(GuiToast {
-                text: "Scanning 'Movies'...".to_owned(),
-                severity: GuiToastSeverity::Neutral,
-            }),
-        },
+        GuiStatusBar { prefix_armed: true },
     );
+    fixture.show_toasts(GuiToasts(vec![GuiToast {
+        id: ToastId(1),
+        text: "Scanning 'Movies'...".to_owned(),
+        severity: GuiToastSeverity::Neutral,
+    }]));
 
     let text = fixture.text();
     assert!(text.contains("Scanning 'Movies'..."), "{text}");

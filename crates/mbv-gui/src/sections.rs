@@ -29,7 +29,7 @@ use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 
 use crate::bridge::frame::GuiAttachState;
 use crate::bridge::frame::GuiPanelToggles;
-use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar};
+use crate::bridge::frame::chrome::{GuiQueueFooter, GuiStatusBar, GuiToasts};
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -60,6 +60,7 @@ pub enum Section {
     Hover,
     Footer,
     Status,
+    Toasts,
     Library,
     Search,
     Settings,
@@ -202,6 +203,7 @@ pub struct SectionLedger {
     hover: Slot<Option<GuiScrubberHover>>,
     footer: Slot<GuiQueueFooter>,
     status: Slot<GuiStatusBar>,
+    toasts: Slot<GuiToasts>,
     /// The `libraryList` section (design D8): the tabs and the list part. One
     /// gated Library pass builds it with `library_detail` and `row_menu`.
     library_list: Slot<Option<GuiLibraryList>>,
@@ -246,6 +248,7 @@ impl Default for SectionLedger {
             hover: Slot::default(),
             footer: Slot::default(),
             status: Slot::default(),
+            toasts: Slot::default(),
             library_list: Slot::default(),
             library_detail: Slot::default(),
             row_menu: Slot::default(),
@@ -318,6 +321,7 @@ impl SectionLedger {
         self.hover.release();
         self.footer.release();
         self.status.release();
+        self.toasts.release();
         self.library_list.release();
         self.library_detail.release();
         self.row_menu.release();
@@ -395,6 +399,10 @@ impl SectionLedger {
             .adopt(GuiQueueFooter::from(&app.queue_footer_projection()));
         self.status
             .adopt(GuiStatusBar::from(&app.status_bar_projection()));
+        // The toast cards the window's stack paints (design D6). The section
+        // is compared, so a toast that expires leaves on the next build with
+        // no deadline of its own.
+        self.toasts.adopt(GuiToasts::from(app.toast_cards()));
         // The anchor reads the same projection read and the same now-playing
         // marker the queue section built from, so it cannot disagree with
         // them (design D5).
@@ -497,6 +505,7 @@ impl SectionLedger {
             hover: self.hover.take(),
             footer: self.footer.take(),
             status: self.status.take(),
+            toasts: self.toasts.take(),
             library_list: self.library_list.take(),
             library_detail: self.library_detail.take(),
             row_menu: self.row_menu.take(),

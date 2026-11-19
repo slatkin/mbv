@@ -300,9 +300,8 @@ fn a_denied_owner_submits_nothing_and_flashes_the_owner_unavailable_toast() {
 
     let toast = test
         .held()
-        .status()
-        .toast
-        .clone()
+        .newest_toast()
+        .cloned()
         .expect("the refusal flashed a toast");
     assert_eq!(toast.text, "Audiobookshelf playback owner is unavailable");
 }
@@ -322,5 +321,5 @@ fn a_stale_book_id_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(test.held().status().toast.is_none());
+    assert!(test.held().newest_toast().is_none());
 }

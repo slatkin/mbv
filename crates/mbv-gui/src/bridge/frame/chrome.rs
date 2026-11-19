@@ -3,7 +3,7 @@
 //! paint from the same rules.
 
 use mbv::{FooterPill, QueueFooterProjection, StatusBarProjection};
-use mbv_ui_model::toast::{StatusToast, ToastSeverity};
+use mbv_ui_model::toast::{ToastCard, ToastId, ToastSeverity};
 
 use super::theme::GuiRole;
 
@@ -54,35 +54,60 @@ impl From<&FooterPill> for GuiFooterPill {
 }
 
 /// The Status bar's facts for one section value, mirroring `StatusBarProjection`.
+/// The toasts are not among them (design D6 of `gui-floating-toasts`): they
+/// ride their own section, [`GuiToasts`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiStatusBar {
     /// Whether prefix mode is armed. The armed indicator paints only while armed.
     pub prefix_armed: bool,
-    /// The live toast that the row presents, after delivery and expiry gating.
-    pub toast: Option<GuiToast>,
 }
 
 impl From<&StatusBarProjection> for GuiStatusBar {
     fn from(projection: &StatusBarProjection) -> Self {
         Self {
             prefix_armed: projection.prefix_armed,
-            toast: projection.toast.as_ref().map(GuiToast::from),
         }
     }
 }
 
-/// A live toast: its text and severity. Mirrors `StatusToast`.
+/// The live toasts of one section value, oldest first: one card per toast the
+/// Client core keeps live and renders in-app. Mirrors `App::toast_cards`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GuiToasts(pub Vec<GuiToast>);
+
+impl From<Vec<ToastCard>> for GuiToasts {
+    fn from(cards: Vec<ToastCard>) -> Self {
+        Self(cards.iter().map(GuiToast::from).collect())
+    }
+}
+
+impl GuiToasts {
+    /// The newest toast, `None` while none is live: the card of the last
+    /// arrival. A status line that still paints a toast inline reads it here
+    /// until it drops that paint (task row 2.4).
+    #[must_use]
+    pub fn newest(&self) -> Option<&GuiToast> {
+        self.0.last()
+    }
+}
+
+/// A live toast: its stable id, text, and severity. Mirrors `ToastCard`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuiToast {
+    /// The stable identity the card is keyed on.
+    pub id: ToastId,
+    /// The toast's text.
     pub text: String,
+    /// The toast's severity class.
     pub severity: GuiToastSeverity,
 }
 
-impl From<&StatusToast> for GuiToast {
-    fn from(toast: &StatusToast) -> Self {
+impl From<&ToastCard> for GuiToast {
+    fn from(card: &ToastCard) -> Self {
         Self {
-            text: toast.text.clone(),
-            severity: GuiToastSeverity::from(toast.severity),
+            id: card.id,
+            text: card.toast.text.clone(),
+            severity: GuiToastSeverity::from(card.toast.severity),
         }
     }
 }

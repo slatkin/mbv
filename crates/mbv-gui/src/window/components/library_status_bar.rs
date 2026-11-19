@@ -31,7 +31,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::chrome::GuiStatusBar;
+use crate::bridge::frame::chrome::{GuiStatusBar, GuiToast};
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame};
 use crate::window::library::status::library_location;
 use crate::window::sections::SectionRef;
@@ -60,9 +60,14 @@ pub struct LibraryStatusBarProps {
     /// is active, as the same one handle.
     #[props(default)]
     pub detail: Option<SectionRef<GuiLibraryDetail>>,
-    /// The armed prefix and the live toast (design D10): they paint at the
-    /// bar's left edge while active.
+    /// The armed prefix (design D10): it paints at the bar's left edge while
+    /// armed.
     pub status: GuiStatusBar,
+    /// The newest live toast, `None` while none is live: the bar paints it at
+    /// its left edge, over the prefix. It rides the `toasts` section now
+    /// (task row 2.1); the inline paint stays until its own row removes it.
+    #[props(default)]
+    pub toast: Option<GuiToast>,
 }
 
 /// The Library Status bar: the
@@ -80,7 +85,7 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
     );
     // The live toast's severity colour, resolved before the markup (the
     // the former client `toastColor` call in the attribute).
-    let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
+    let toast_style = props.toast.as_ref().map_or(String::new(), |toast| {
         format!("color: {};", toast_color(toast.severity))
     });
 
@@ -96,7 +101,7 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
                 style: "gap: 12px;",
                 span {
                     class: "overflow-hidden",
-                    if let Some(toast) = props.status.toast.as_ref() {
+                    if let Some(toast) = props.toast.as_ref() {
                         span {
                             style: "{toast_style}",
                             "data-library-status-toast": "",

@@ -222,10 +222,12 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
     // The sections the panel reads (design D8): the destination tabs and the
     // active destination's list and detail parts, narrowed together by
     // `library_pair`; the Search section's results; the Status bar's facts;
-    // and the right-click item menu the window last opened.
+    // the live toasts the status bar still paints inline (task row 2.1); and
+    // the right-click item menu the window last opened.
     let list_section = library.sections.library_list.cloned();
     let detail_section = library.sections.library_detail.cloned();
     let status = library.sections.status.cloned();
+    let toast = library.sections.toasts.cloned().newest().cloned();
     let menu = library.sections.row_menu.cloned();
     let ui = library.ui.cloned();
 
@@ -411,6 +413,7 @@ pub fn LibraryPanel(props: LibraryPanelProps) -> Element {
                 list: list_section,
                 detail: detail_section,
                 status,
+                toast,
             }
             if let Some((menu, row_menu)) = menu_open {
                 {

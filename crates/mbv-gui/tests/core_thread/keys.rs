@@ -63,11 +63,7 @@ fn a_key_with_no_queue_target_reaches_no_queue_leaf() {
     test.tx.send(unqueued(Key::Char(' '))).unwrap();
     assert!(test.core.step());
     assert_eq!(
-        test.held()
-            .status()
-            .toast
-            .as_ref()
-            .map(|toast| toast.text.as_str()),
+        test.held().newest_toast().map(|toast| toast.text.as_str()),
         Some("Pause requested"),
         "the transport toggle fired with no Queue target"
     );

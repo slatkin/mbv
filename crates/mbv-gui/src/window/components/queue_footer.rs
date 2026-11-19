@@ -217,6 +217,7 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
     let footer = sections.footer.cloned();
     let summary = sections.summary.cloned();
     let status = sections.status.cloned();
+    let toast = sections.toasts.cloned().newest().cloned();
     let playback = sections.playback.cloned();
     // The target control's colour: the flag picks the local or the remote
     // role.
@@ -225,13 +226,11 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
     } else {
         role_var(GuiRole::PlaybackTargetLocalFg)
     };
-    // The toast this line paints: the section's live toast, or `None` while
-    // the Library panel shows and its Status bar paints it (design D10).
-    let toast = if props.library_visible {
-        None
-    } else {
-        status.toast.clone()
-    };
+    // The toast this line paints: the newest live toast, or `None` while the
+    // Library panel shows and its Status bar paints it (design D10). The
+    // toast rides the `toasts` section (task row 2.1); the inline paint here
+    // stays until its own row removes it.
+    let toast = if props.library_visible { None } else { toast };
     // Whether this line paints the armed prefix badge: prefix mode is armed,
     // no toast is live (the line's pill-drop rule), and the Library panel
     // does not show (design D10).
