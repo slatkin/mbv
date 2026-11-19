@@ -80,6 +80,17 @@ pub struct TrackChoice {
     pub forced: bool,
 }
 
+/// The now-playing item's media kind, the fact a Client's title block paints
+/// its kind icon from (user request 2026-11-20).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NowPlayingMediaKind {
+    /// A video item — or a slotless payload that names no audio type.
+    #[default]
+    Video,
+    /// An audio item: a track, a book, an audio feed entry.
+    Audio,
+}
+
 /// The Queue playback band's facts for one tick. The header row paints in
 /// every state, idle included. The transport section collapses while idle
 /// (task 3.6): `shown` is false, and the section reserves no rows and reports
@@ -132,6 +143,9 @@ pub struct QueuePlaybackProjection {
     /// — the same merge the F3 target panel builds — each marked with whether
     /// it is the Owner's attached output.
     pub target_choices: Vec<PlaybackTargetChoice>,
+    /// The now-playing item's media kind: a Client's title block paints its
+    /// kind icon beside the title from this fact.
+    pub now_playing_media: NowPlayingMediaKind,
     /// The now-playing parent line: the context part of the title parts, the
     /// series of an episode, the artist of a track, the subscription of a
     /// feed entry, the show of an Audiobookshelf episode.
@@ -158,6 +172,20 @@ impl App {
         let (host, host_is_remote) = self.playback_host_label_and_remote();
         let parts = self.now_playing_title_parts(playback);
         let active_item = self.queue_item_at_playhead(playback);
+        // The title item's media kind: the active queue item's own fact, or
+        // — for slotless output, whose title the Emby Session names — the
+        // payload's item type. The Clients' title block paints its kind icon
+        // from it.
+        let now_playing_media = match active_item {
+            Some(item) if item.is_audio() => NowPlayingMediaKind::Audio,
+            None if self
+                .emby_session_now_playing()
+                .is_some_and(|now_playing| now_playing.item_type == "Audio") =>
+            {
+                NowPlayingMediaKind::Audio
+            }
+            Some(_) | None => NowPlayingMediaKind::Video,
+        };
         let episode_badge = active_item.and_then(|item| match item {
             mbv_queue::QueueItem::Emby(item) => episode_badge(item),
             _ => None,
@@ -174,6 +202,7 @@ impl App {
             ),
             show_controls: playback.active || self.output_is_cast(),
             now_playing_title: parts.as_ref().map(|parts| parts.title.text.clone()),
+            now_playing_media,
             parent_line: parts
                 .as_ref()
                 .and_then(|parts| parts.context.as_ref().map(|part| part.text.clone())),

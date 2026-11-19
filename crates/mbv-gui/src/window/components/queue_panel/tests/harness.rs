@@ -13,8 +13,10 @@ use std::sync::{Arc, Mutex};
 
 use blitz_dom::{Document as _, UserAgentStylesheet, local_name, traversal::TreeTraverser};
 use blitz_traits::shell::{ColorScheme, Viewport};
+
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use mbv::NowPlayingMediaKind;
 
 use super::super::QueuePanel;
 use crate::art::GuiArtRef;
@@ -366,6 +368,7 @@ pub(super) fn playing() -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: Some("Track title".to_owned()),
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: Some("The Show".to_owned()),
         episode_badge: Some("S2 · E5".to_owned()),
         availability: GuiTransportAvailability {

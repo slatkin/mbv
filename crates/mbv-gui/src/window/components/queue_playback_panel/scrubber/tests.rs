@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use blitz_dom::Document as _;
 use blitz_dom::local_name;
 use dioxus_native::prelude::*;
+
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use mbv::NowPlayingMediaKind;
 
 use super::super::art_stage::{ControlRow, ControlRowHandles};
 use crate::bridge::frame::playback::{
@@ -59,6 +61,7 @@ fn playing() -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: None,
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: None,
         episode_badge: None,
         availability: GuiTransportAvailability {

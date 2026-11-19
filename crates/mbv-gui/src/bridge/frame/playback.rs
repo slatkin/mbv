@@ -4,8 +4,8 @@
 //! the window predicts from between anchors.
 
 use mbv::{
-    PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection, TrackChip, TrackChips,
-    TrackChoice,
+    NowPlayingMediaKind, PlaybackTargetChoice, QueueCardArtwork, QueuePlaybackProjection,
+    TrackChip, TrackChips, TrackChoice,
 };
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
@@ -27,6 +27,9 @@ pub struct GuiQueuePlayback {
     pub show_controls: bool,
     /// The plain now-playing title, if there is one.
     pub now_playing_title: Option<String>,
+    /// The now-playing item's media kind: the title block paints its kind
+    /// icon beside the title from this fact.
+    pub now_playing_media: NowPlayingMediaKind,
     /// The now-playing parent line: the series of an episode, the artist of a
     /// track, the subscription of a feed entry, the show of an
     /// Audiobookshelf episode. `None` when the item has no container fact.
@@ -122,6 +125,7 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             shown: projection.shown,
             show_controls: projection.show_controls,
             now_playing_title: projection.now_playing_title.clone(),
+            now_playing_media: projection.now_playing_media,
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
             availability: GuiTransportAvailability {

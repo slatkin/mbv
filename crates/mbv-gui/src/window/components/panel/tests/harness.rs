@@ -12,7 +12,9 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use blitz_dom::{Document as _, UserAgentStylesheet, local_name};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
+
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use mbv::NowPlayingMediaKind;
 
 use super::super::Panel;
 use crate::bridge::frame::GuiPanelToggles;
@@ -131,6 +133,7 @@ pub(super) fn playback() -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: Some("Track title".to_owned()),
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: Some("The Show".to_owned()),
         episode_badge: None,
         availability: GuiTransportAvailability {
@@ -170,6 +173,7 @@ pub(super) fn stopped(can_start: bool) -> GuiQueuePlayback {
     GuiQueuePlayback {
         show_controls: false,
         now_playing_title: None,
+        now_playing_media: NowPlayingMediaKind::default(),
         artwork: None,
         controls: GuiPlayerControls {
             auto_hide: false,

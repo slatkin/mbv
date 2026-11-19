@@ -17,7 +17,9 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use blitz_dom::{Document as _, UserAgentStylesheet, local_name, traversal::TreeTraverser};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
+
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use mbv::NowPlayingMediaKind;
 use rstest::rstest;
 
 use super::QueueFooter;
@@ -80,6 +82,7 @@ fn playing() -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: Some("Track title".to_owned()),
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: None,
         episode_badge: None,
         availability: GuiTransportAvailability {

@@ -15,6 +15,8 @@
 
 use dioxus_native::prelude::*;
 
+use mbv::NowPlayingMediaKind;
+
 use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToasts};
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
@@ -318,6 +320,7 @@ fn fresh_playback() -> GuiQueuePlayback {
         shown: false,
         show_controls: false,
         now_playing_title: None,
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: None,
         episode_badge: None,
         availability: GuiTransportAvailability {

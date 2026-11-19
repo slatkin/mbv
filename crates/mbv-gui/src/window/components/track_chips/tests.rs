@@ -16,7 +16,9 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 
 use blitz_dom::{Document as _, local_name};
 use dioxus_native::prelude::*;
+
 use dioxus_native::{DioxusDocument, DocumentConfig};
+use mbv::NowPlayingMediaKind;
 
 use super::TrackChips;
 use crate::art::GuiArtRef;
@@ -554,6 +556,7 @@ fn stage_frame() -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: Some("Track title".to_owned()),
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: None,
         episode_badge: None,
         availability: GuiTransportAvailability {

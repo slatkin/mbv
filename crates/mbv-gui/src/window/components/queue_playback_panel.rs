@@ -1,9 +1,9 @@
 //! The player panel's top block (`replace-tauri-with-blitz` task 5.2, the
 //! port of `QueuePlaybackPanel`'s artwork, title, and transport parts): the
-//! expanded canvas artboard's stage with its overlays, the title and parent
-//! line, and the no-image column. The canvas, not the TUI band, is the
-//! reference; the paint uses the theme's roles and chrome fills through
-//! `--mbv-<name>` properties only (design D7).
+//! expanded canvas artboard's stage with its overlays, the title block with
+//! its media-kind icon, and the no-image column. The canvas, not the TUI
+//! band, is the reference; the paint uses the theme's roles and chrome fills
+//! through `--mbv-<name>` properties only (design D7).
 //!
 //! The stage is the block's topmost content: the panel paints no header row
 //! above it (`move-playback-header-into-queue-footer` D6), so the column's top
@@ -33,11 +33,14 @@
 
 use dioxus_native::prelude::*;
 
+use mbv::NowPlayingMediaKind;
+
 use crate::art::GuiArtRef;
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiRowMenuEntry};
 use crate::bridge::layout::{LayoutRegion, QueuePlaybackTargetId, RegionTarget};
 use crate::window::components::art_image::ArtEvents;
 use crate::window::components::queue_row_menu::QueueRowMenu;
+use crate::window::icons::{EighthNotes, MonitorPlay};
 use crate::window::layout::LayoutContribution;
 use crate::window::layout::{LayoutEpoch, LayoutKey, LayoutReporter, element_region};
 use crate::window::playhead::Playhead;
@@ -49,6 +52,13 @@ mod art_stage;
 mod scrubber;
 
 use art_stage::{ArtStage, ChipsAndBadge, ControlRow, ControlRowHandles, player_scale};
+
+/// The title block's media-kind icon size, in CSS pixels (user request
+/// 2026-11-20): a large glyph against the block's 18 px title.
+const KIND_ICON_SIZE: u16 = 28;
+/// The media-kind icon's colour: the panel accent's sand, the user's named
+/// hex for both kind icons (2026-11-20). No theme role names it.
+const KIND_ICON_COLOR: &str = "#DABC7F";
 
 /// The URL the artwork reference names, `None` while it names none (a
 /// `loading` reference paints no `img`, so no art answer can land for it).
@@ -313,23 +323,48 @@ pub fn QueuePlaybackPanel() -> Element {
                 // (`main` audit 8). The canvas draws the parent line as an
                 // `<a href="#">`, but the GUI presents no surface to go to:
                 // the static line carries no region and the press is a no-op.
+                // The block's leading edge carries the item's media-kind icon
+                // (user request 2026-11-20): the eighth-notes pair for audio,
+                // the playing monitor for video, both in the accent sand.
                 div {
-                    class: "flex min-w-0 flex-col",
+                    class: "flex items-center",
                     style: format!(
-                        "padding: 16px 20px 18px; gap: 2px; background: {}; border-bottom: 1px solid {};",
+                        "padding: 16px 20px 18px; gap: 12px; background: {}; border-bottom: 1px solid {};",
                         ef_var(EfToken::Bg0),
                         ef_var(EfToken::Bg3)
                     ),
-                    Truncate {
-                        text: title.clone(),
-                        css: format!("font-size: 18px; font-weight: 600; color: {};", ef_var(EfToken::Fg)),
-                        style: TextStyle::sans(18.0, 600.0),
+                    // The block's leading edge carries the item's media-kind
+                    // icon (user request 2026-11-20): the eighth-notes pair
+                    // for audio, the playing monitor for video, both in the
+                    // accent sand.
+                    if playback.now_playing_media == NowPlayingMediaKind::Audio {
+                        EighthNotes {
+                            size: KIND_ICON_SIZE,
+                            color: KIND_ICON_COLOR.to_owned(),
+                        }
+                    } else {
+                        MonitorPlay {
+                            size: KIND_ICON_SIZE,
+                            color: KIND_ICON_COLOR.to_owned(),
+                        }
                     }
-                    if let Some(parent_line) = playback.parent_line.as_ref() {
+                    div {
+                        class: "flex min-w-0 flex-col",
+                        style: "gap: 2px;",
                         Truncate {
-                            text: parent_line.clone(),
-                            css: format!("font-size: 13px; color: {};", ef_var(EfToken::Red)),
-                            style: TextStyle::sans(13.0, 400.0),
+                            text: title.clone(),
+                            css: format!(
+                                "font-size: 18px; font-weight: 600; color: {};",
+                                ef_var(EfToken::Fg)
+                            ),
+                            style: TextStyle::sans(18.0, 600.0),
+                        }
+                        if let Some(parent_line) = playback.parent_line.as_ref() {
+                            Truncate {
+                                text: parent_line.clone(),
+                                css: format!("font-size: 13px; color: {};", ef_var(EfToken::Red)),
+                                style: TextStyle::sans(13.0, 400.0),
+                            }
                         }
                     }
                 }

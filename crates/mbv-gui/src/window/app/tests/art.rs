@@ -27,6 +27,7 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_native::prelude::*;
 use dioxus_native::{DioxusDocument, DocumentConfig};
 use kurbo::Shape as _;
+use mbv::NowPlayingMediaKind;
 use mbv_config::GuiPanelWidths;
 
 use crate::art::{ArtResponse, GuiArtRef, art_url, card_path};
@@ -74,6 +75,7 @@ fn playing(art: GuiArtRef) -> GuiQueuePlayback {
         shown: true,
         show_controls: true,
         now_playing_title: Some("Friday Fun Stream".to_owned()),
+        now_playing_media: NowPlayingMediaKind::default(),
         parent_line: Some("The Show".to_owned()),
         episode_badge: None,
         availability: GuiTransportAvailability {

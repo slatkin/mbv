@@ -43,7 +43,7 @@ pub use self::app::{
     GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace, GuiSurfaceLeaf,
-    HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
+    HomeContent, HomeEventDrain, NavigationIntent, NowPlayingMediaKind, OverlayFocus, PanelIntent,
     PanelTogglesProjection, PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain,
     QueueCardArtwork, QueueChooserEntryProjection, QueueChooserRenameProjection, QueueEndOffsets,
     QueueFooterProjection, QueueHeaderProjection, QueuePlaybackProjection, QueueStartProjection,

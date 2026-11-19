@@ -271,6 +271,21 @@ pub fn Clock(props: IconProps) -> Element {
     )
 }
 
+/// The Lucide `eighth-notes` icon (`lucide-music` is its alias class).
+#[component]
+pub fn EighthNotes(props: IconProps) -> Element {
+    icon_shell(
+        "eighth-notes",
+        &["music"],
+        &props,
+        rsx! {
+            path { d: "M21 16V3a1 1 0 0 0-1.28-.96l-10 2.917a1 1 0 0 0-.72.96V19" }
+            circle { cx: "18", cy: "16", r: "3" }
+            circle { cx: "6", cy: "19", r: "3" }
+        },
+    )
+}
+
 /// The Lucide `ellipsis` icon (`lucide-more-horizontal` is its alias class).
 #[component]
 pub fn Ellipsis(props: IconProps) -> Element {
