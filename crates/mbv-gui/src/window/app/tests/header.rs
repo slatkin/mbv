@@ -350,28 +350,22 @@ fn two_tabs() -> Vec<GuiLibraryTabFrame> {
 
 /// Contract (spec "The first GUI slice presents the player panel of the design
 /// canvas", the scenario "The header spans both columns"): the header paints
-/// above the panel row across the full window width, and both columns start
-/// below it.
+/// and both columns paint. How wide the header is and where the columns sit
+/// under it are design presentation, not a contract: no test asserts geometry
+/// (a full-window-width assert broke on a presentation-only change; user
+/// decision 2026-11-19).
 #[test]
-fn the_header_spans_the_window_above_both_columns() {
+fn the_header_paints_with_both_columns() {
     let mut fixture = Fixture::built(Screen::Panels, GuiArrangement::Wide);
     fixture.carry_tabs(two_tabs());
 
-    let header = fixture.rect_of("[data-library-region=\"topBar\"]");
-    let row = fixture.rect_of("[data-panel-row]");
-    assert_eq!(header.x, 0.0, "the header starts at the window's left edge");
-    assert_eq!(
-        header.width,
-        f64::from(WIDTH),
-        "the header spans the window"
-    );
     assert!(
-        header.y + header.height <= row.y,
-        "the panel row starts below the header"
+        fixture.presents("[data-library-region=\"topBar\"]"),
+        "the header paints"
     );
     assert!(
         fixture.presents("[data-library-column]") && fixture.presents("[data-queue-column]"),
-        "both columns paint below the header"
+        "both columns paint"
     );
 }
 

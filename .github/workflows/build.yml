@@ -11,20 +11,30 @@ on:
       - 'docs/**'
       - 'openspec/**'
       - 'assets/**'
+  pull_request:
+    branches:
+      - main
+    # No paths-ignore here on purpose: a required check that skips docs-only
+    # PRs is a check GitHub waits for forever, and the PR can never merge.
+    # A docs-only PR simply pays for a full run. This trigger is what lets a
+    # protected main require these checks before a merge.
   workflow_dispatch:
 
 # One commit means one build. tools/release.sh pushes main and then the tag,
 # so the same commit would otherwise be built twice (~7min each in the Arch
 # container):
 # once on refs/heads/main, once on refs/tags/v*. Keying on the commit SHA makes
-# the tag run supersede the branch run.
+# the tag run supersede the branch run. A pull_request run keys on the PR
+# number instead, so each PR holds one run and its newest push supersedes the
+# older one.
 #
 # The asymmetry matters: only an incoming *tag* run cancels (it is the last and
 # authoritative ref, and it publishes). An incoming branch run waits its turn,
 # so if the two pushes were ever received out of order the release still runs.
+# A PR run cancels freely; only PR head branches depend on it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/') }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/heads/main') }}
 
 jobs:
   build:
@@ -73,9 +83,14 @@ jobs:
           # changes only when that pin is bumped deliberately. clang stays a
           # system package (native build-script tooling, not a cache-keyed
           # compiler).
+          # ttf-dejavu gives the GUI's headless layout tests a system font:
+          # with no font installed, Blitz emits no inline text fragments and
+          # text nodes return no layout box, so a get_client_bounding_rect
+          # call panics (runs on 2026-11-18 and 2026-11-19 failed exactly
+          # there).
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ast-grep
+            zig wayland libxkbcommon fontconfig ttf-dejavu ast-grep
 
       - uses: actions/checkout@v7
 
@@ -321,6 +336,8 @@ jobs:
         run: |
           # Same Arch Linux Archive pin as `build`; keep the date in sync with
           # the image, the cache key, and the `build` job.
+          # ttf-dejavu: see the matching step in `build` (the GUI layout tests
+          # need a system font).
           printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
             > /etc/pacman.d/mirrorlist
           pacman_retry() {
@@ -334,7 +351,7 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig
+            zig wayland libxkbcommon fontconfig ttf-dejavu
 
       - uses: actions/checkout@v7
 
@@ -391,6 +408,8 @@ jobs:
         run: |
           # Same Arch Linux Archive pin as `build`; keep the date in sync with
           # the image, the cache key, and the `build` job.
+          # ttf-dejavu: see the matching step in `build` (the GUI layout tests
+          # need a system font).
           printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
             > /etc/pacman.d/mirrorlist
           pacman_retry() {
@@ -404,7 +423,7 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig
+            zig wayland libxkbcommon fontconfig ttf-dejavu
 
       - uses: actions/checkout@v7
 

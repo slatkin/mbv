@@ -506,17 +506,6 @@ impl Fixture {
             .collect()
     }
 
-    /// The laid-out client rect of the first node the selector names.
-    pub(super) fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_client_bounding_rect(id)
-            .expect("the node is laid out")
-    }
-
     /// Poll the document until the effects have run and their re-renders
     /// landed (a fixed poll count with a tripwire: never an unbounded wait).
     pub(super) fn poll_until_idle(&mut self) {

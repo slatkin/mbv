@@ -29,6 +29,11 @@ git tag --sort=-version:refname | head -10
   running the release command; do not invent product claims.
 - Read `tools/release.sh` before invoking it, especially if the script has
   changed since the last release.
+- Check CI before releasing: `gh run list --repo slatkin/mbv --limit 10`. If
+  the latest run on `main` (the commit being released or an ancestor of it) is
+  red or still running, stop and report; fix or wait for green first. A
+  release pushed from a red `main` ships artifacts CI has already failed.
+  Never announce a release while a run on the release commit is failing.
 - Check both local and remote tag state. Stop if the release tag already exists
   locally or on `origin`; the script only protects against an existing local
   tag. Preserve unrelated work rather than committing it as part of the
@@ -52,6 +57,13 @@ tools/release.sh <version> "<summary>"
 
 The script accepts either `0.x.y` or `v0.x.y`; Cargo uses the version without
 the `v` prefix and the Git tag uses `v0.x.y`.
+
+The script runs the CI gate set first (the same checks, in the same order, as
+`.github/workflows/build.yml`): fmt, clippy, ast-grep, `cargo audit`, the
+release builds, release tests for the workspace and `mbv-gui`, and the
+feature matrix. A failure there means the release push would fail CI the
+same way; fix the cause and rerun the script. Do not skip or shorten the
+gate set, and never bypass it with a manual tag.
 
 On `main`, the script pushes the release commit, creates the tag, and pushes
 the tag. Verify afterward that:

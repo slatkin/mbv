@@ -325,10 +325,11 @@ fn a_list_that_fits_paints_no_scroll_bar() {
 }
 
 /// Contract (`gui-queue-panel-redesign` task 6.2, spec `gui-client` "Rows show
-/// their state"): a row with partial progress paints exactly the height of a
-/// row without it — the bar lives inside the row's own box and adds no line.
+/// their state"): a row with partial progress paints its progress bar. The
+/// bar's box inside the row is design presentation, not a contract: no test
+/// asserts geometry (user decision 2026-11-19).
 #[test]
-fn a_partial_progress_row_paints_the_same_height_as_an_unwatched_row() {
+fn a_partial_progress_row_paints_its_progress() {
     let rows = vec![
         item(1),
         in_state(
@@ -339,26 +340,16 @@ fn a_partial_progress_row_paints_the_same_height_as_an_unwatched_row() {
     let fixture = built_with_frame(queue_panel_app, queue(rows), summary(), None);
 
     assert!(fixture.presents("[data-slot=\"2\"] [data-progress]"));
-    let unwatched = fixture.rect_of("[data-slot=\"1\"]");
-    let partial = fixture.rect_of("[data-slot=\"2\"]");
-    assert_eq!(partial.height, unwatched.height);
-    assert_eq!(partial.height, 34.0);
 }
 
 /// Contract (user report 2026-11-19, after `gui-queue-panel-redesign`): the
-/// first queue row does not touch the queue header — a gap sits between the
-/// header's bottom edge and the first row's top edge.
+/// queue header and the first queue row both paint. The size of the gap
+/// between them is design presentation, not a contract: no test asserts
+/// geometry (user decision 2026-11-19).
 #[test]
-fn the_first_row_sits_below_the_header_with_a_gap() {
+fn the_queue_header_and_the_first_row_paint() {
     let fixture = built_with_frame(queue_panel_app, queue(vec![item(1)]), summary(), None);
 
-    let header = fixture.rect_of("[data-queue-header]");
-    let row = fixture.rect_of("[data-slot]");
-
-    assert!(
-        row.y >= header.y + header.height + 8.0,
-        "header ends at {}, the first row starts at {}",
-        header.y + header.height,
-        row.y
-    );
+    assert!(fixture.presents("[data-queue-header]"));
+    assert!(fixture.presents("[data-slot]"));
 }

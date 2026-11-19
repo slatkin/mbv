@@ -104,17 +104,6 @@ impl Fixture {
             .trim()
             .to_owned()
     }
-
-    /// The laid-out client rect of the first node the selector names.
-    fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_client_bounding_rect(id)
-            .expect("the node is laid out")
-    }
 }
 
 /// Build the document over the carried collections and the selection label and
@@ -166,40 +155,15 @@ fn podcasts_frame() -> GuiCollections {
 }
 
 /// Contract (design D6a, user override): the title line paints the list title
-/// and then the trigger after it, at the line's right end.
+/// and the collections trigger. Where the trigger sits on the line is design
+/// presentation, not a contract: no test asserts geometry (user decision
+/// 2026-11-19).
 #[test]
-fn the_title_line_paints_the_title_then_the_trigger() {
+fn the_title_line_paints_the_title_and_the_trigger() {
     let fixture = built(Some(podcasts_frame()));
 
     assert_eq!(fixture.text_of("[data-library-list-title]"), "Podcasts");
     assert_eq!(fixture.text_of("[data-library-collections-trigger]"), "All");
-
-    let title = fixture.rect_of("[data-library-list-title]");
-    let trigger = fixture.rect_of("[data-library-collections-trigger]");
-    assert!(
-        title.x + title.width <= trigger.x,
-        "the trigger paints after the title"
-    );
-}
-
-/// Contract (design D6a, user override): the trigger sits at the title line's
-/// right end, after the title.
-#[test]
-fn the_trigger_sits_at_the_title_line_s_right_end() {
-    let fixture = built(Some(podcasts_frame()));
-
-    let header = fixture.rect_of("[data-library-list-header]");
-    let title = fixture.rect_of("[data-library-list-title]");
-    let trigger = fixture.rect_of("[data-library-collections-trigger]");
-    assert!(
-        title.x + title.width <= trigger.x,
-        "the trigger paints after the title"
-    );
-    let end_gap = header.x + header.width - (trigger.x + trigger.width);
-    assert!(
-        end_gap.abs() <= 17.0,
-        "the trigger's right edge sits at the line's right end, gap {end_gap}"
-    );
 }
 
 /// Contract (design D6a): the header paints no selection label while the

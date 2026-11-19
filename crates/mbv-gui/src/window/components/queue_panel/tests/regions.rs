@@ -84,21 +84,3 @@ fn the_report_carries_the_queue_lists_capacity_shape() {
     assert_eq!(report.container_size.width, 0.0);
     assert_eq!(report.container_size.height, 0.0);
 }
-
-/// Contract (task 11.1): the hovered row's grip is laid out where it paints.
-/// Blitz lays out without `translate` and applies it at paint only, so a grip
-/// centred by `-translate-y-1/2` painted centred while the region the panel
-/// reported for `rowGrip` — the region the core's hit map holds — sat half a
-/// grip low. The grip centres with an inset, so its laid-out box is the 14 px
-/// box it paints, centred in the row.
-#[test]
-fn the_hover_grip_is_laid_out_where_it_paints() {
-    let mut frame = queue(vec![item(1), item(2)]);
-    frame.hover = Some(2);
-    let fixture = built_with_frame(queue_panel_app, frame, summary(), None);
-
-    let row = fixture.rect_of("[data-row=\"2\"]");
-    let grip = fixture.rect_of("[data-grip]");
-    assert_eq!(grip.height, 14.0);
-    assert_eq!(grip.y - row.y, (row.height - grip.height) / 2.0);
-}

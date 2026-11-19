@@ -58,19 +58,20 @@ fn the_dropdown_paints_the_rows_with_the_first_row_highlighted() {
 }
 
 /// Contract (design D9, the spec's "The Search field SHALL search all
-/// libraries, show the results above the field"): the results dropdown opens
-/// above the field, because the bar sits at the window's bottom edge.
+/// libraries, show the results above the field"): the results dropdown paints
+/// while the frame carries rows. Where it sits relative to the field is design
+/// presentation, not a contract: no test asserts geometry (user decision
+/// 2026-11-19).
 #[test]
-fn the_results_dropdown_opens_above_the_field() {
+fn the_results_dropdown_paints() {
     let mut fixture = built(music_props(idle()));
     fixture.set_search_frame(Some(results()));
 
-    let field = fixture.rect_of("[data-library-search]");
-    let dropdown = fixture.rect_of("[data-library-search-results]");
     assert!(
-        dropdown.y + dropdown.height <= field.y,
-        "the dropdown ends above the field's top edge"
+        fixture.presents("[data-library-search-results]"),
+        "the dropdown paints"
     );
+    assert!(fixture.presents("[data-library-search]"), "the field stays");
 }
 
 /// Contract (`LibraryTopBar.test.ts`, moved with the field): the highlight

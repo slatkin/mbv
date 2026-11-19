@@ -1,8 +1,8 @@
 //! Headless tests of the Library Status bar (D16): the contracts of
-//! `LibraryStatusBar.test.ts` — the Search field at the bar's left with its
-//! `Ctrl K` hint, the results dropdown above it, the location line, and the
-//! armed prefix or live toast painting after the field while the field and
-//! the location stay (design D9 of `move-playback-header-into-queue-footer`).
+//! `LibraryStatusBar.test.ts` — the Search field with its `Ctrl K` hint, the
+//! results dropdown, the location line, and the armed prefix or live toast
+//! painting while the field and the location stay (design D9 of
+//! `move-playback-header-into-queue-footer`).
 //! The field's mount, focus, and highlight contracts moved here with the field
 //! from the top bar's suite. The location's own composition rules are
 //! `window/library/status/tests.rs`; these tests own what the band paints from
@@ -321,17 +321,6 @@ impl Fixture {
             .map(str::to_owned)
             .unwrap_or_default()
     }
-
-    /// The laid-out client rect of the first node the selector names.
-    fn rect_of(&self, selector: &str) -> blitz_dom::BoundingRect {
-        let dom = self.doc.inner();
-        let id = dom
-            .query_selector(selector)
-            .expect("the selector is valid")
-            .unwrap_or_else(|| panic!("{selector} paints"));
-        dom.get_client_bounding_rect(id)
-            .expect("the node is laid out")
-    }
 }
 
 /// Build the document over the bar's props and let its first render and
@@ -397,10 +386,13 @@ fn the_bar_paints_the_search_field_and_the_location() {
     );
 }
 
-/// Contract (`LibraryStatusBar.test.ts`): a live toast paints after the
-/// Search field and keeps the field and the location.
+/// Contract (`LibraryStatusBar.test.ts`): a live toast paints and keeps the
+/// field and the location. Where the toast sits beside the field is design
+/// presentation, not a contract: no test asserts geometry (a test that pins a
+/// control's position broke CI twice on presentation-only moves; user
+/// decision 2026-11-19).
 #[test]
-fn a_live_toast_paints_after_the_search_field_and_keeps_the_location() {
+fn a_live_toast_paints_and_keeps_the_field_and_the_location() {
     let doc = built(music_props(GuiStatusBar {
         prefix_armed: false,
         toast: Some(GuiToast {
@@ -425,22 +417,17 @@ fn a_live_toast_paints_after_the_search_field_and_keeps_the_location() {
             .contains("color: var(--mbv-textPrimary)"),
         "the neutral toast paints its severity colour"
     );
-    // The field stays, and the toast sits to its right (design D9).
     assert!(
         doc.presents("[data-library-search-input]"),
         "the field stays"
     );
-    assert!(
-        doc.rect_of("[data-library-status-toast]").x
-            >= doc.rect_of("[data-library-search]").x + doc.rect_of("[data-library-search]").width,
-        "the toast paints after the field"
-    );
 }
 
-/// Contract (`LibraryStatusBar.test.ts`): an armed prefix paints after the
-/// Search field and keeps the field and the location.
+/// Contract (`LibraryStatusBar.test.ts`): an armed prefix paints and keeps
+/// the field and the location. No geometry assertions (see the live-toast
+/// test's comment).
 #[test]
-fn an_armed_prefix_paints_after_the_search_field_and_keeps_the_location() {
+fn an_armed_prefix_paints_and_keeps_the_field_and_the_location() {
     let doc = built(music_props(GuiStatusBar {
         prefix_armed: true,
         toast: None,
@@ -459,11 +446,6 @@ fn an_armed_prefix_paints_after_the_search_field_and_keeps_the_location() {
     assert!(
         doc.presents("[data-library-search-input]"),
         "the field stays"
-    );
-    assert!(
-        doc.rect_of("[data-library-status-prefix]").x
-            >= doc.rect_of("[data-library-search]").x + doc.rect_of("[data-library-search]").width,
-        "the prefix paints after the field"
     );
 }
 

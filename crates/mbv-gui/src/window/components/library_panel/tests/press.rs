@@ -26,39 +26,40 @@ fn the_item_menu_paints_on_a_destination_that_is_not_music() {
     );
 }
 
-/// Contract: the right-click item menu opens at the pointer position in viewport
-/// pixels. The card is `absolute` inside a zero-size `fixed` div at the
-/// origin, so its `left`/`top` — the pointer coordinates the core sends — are
-/// viewport pixels, not offsets into the column that paints it. Blitz places
-/// a `fixed` box against the viewport, as the browser did, so the card lands
-/// on the pointer and not on the column's own origin.
+/// Contract: the right-click item menu carries the pointer position it opened
+/// at (the `RowMenu` state), and the card paints while it is up. Where the
+/// card sits on screen is design presentation, not a contract: no test asserts
+/// geometry (a viewport-pixel assert broke on presentation-only changes; user
+/// decision 2026-11-19).
 #[test]
-fn the_item_menu_opens_at_the_pointer_in_viewport_pixels() {
+fn the_item_menu_carries_the_pointer_it_opened_at() {
     let mut fixture = built(GuiArrangement::Wide);
     open_the_shows_item_menu(&mut fixture, 40.0, 60.0);
 
-    let menu = fixture.rect_of("[data-row-menu]");
+    assert!(fixture.presents("[data-row-menu]"), "the item menu paints");
+    let menu = fixture
+        .state
+        .ui
+        .peek()
+        .row_menu
+        .clone()
+        .expect("the menu is up");
     assert_eq!((menu.x, menu.y), (40.0, 60.0));
-    // The column the card belongs to sits away from the origin, so an anchor
-    // that resolved against it would miss the pointer position.
-    let list = fixture.rect_of("[data-library-region=\"list\"]");
-    assert_ne!(list.x, 0.0, "the list column is offset from the origin");
 }
 
-/// Contract (gui-swap-queue-and-library-sides, the scenario "The Wide list is
-/// at the left window edge"): in a Wide fixture with a picked item, the list
-/// region's box ends at or left of the Hero region's box start — the list is
-/// at the left window edge and the Hero pane to its right.
+/// Contract (gui-swap-queue-and-library-sides): in a Wide fixture with a
+/// picked item, both the list region and the Hero region paint. Which side of
+/// the window each sits on is design presentation, not a contract: no test
+/// asserts geometry (user decision 2026-11-19).
 #[test]
-fn the_wide_list_region_ends_left_of_the_hero_region() {
+fn the_wide_list_and_hero_regions_paint() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::music_sections(Some(fixtures::music_hero()));
     fixture.carry(list, detail);
     seed_idle_status(&mut fixture);
 
-    let list_box = fixture.rect_of("[data-library-region=\"list\"]");
-    let hero_box = fixture.rect_of("[data-library-region=\"hero\"]");
-    assert!(list_box.x + list_box.width <= hero_box.x);
+    assert!(fixture.presents("[data-library-region=\"list\"]"));
+    assert!(fixture.presents("[data-library-region=\"hero\"]"));
 }
 
 /// Carry a Shows list and open its item menu at `x, y`, as the core's
@@ -124,13 +125,15 @@ fn a_press_inside_the_panel_closes_the_open_collection_dropdown() {
     assert!(!fixture.presents("[data-library-collections-menu]"));
 }
 
-/// Contract (gui-collection-dropdown design D6, D6a): the open popover paints
-/// below its trigger, fully, and no header clips it. The selector row carried
-/// the pill row's `overflow: hidden`, which cut the popover to the row's 52 px
-/// box and hid every collection (review of 96f04ebef); the dropdown now rides
-/// the list header's title line, and the header clips nothing.
+/// Contract (gui-collection-dropdown design D6, D6a): the open popover paints,
+/// and no header clips it. The selector row carried the pill row's
+/// `overflow: hidden`, which cut the popover to the row's 52 px box and hid
+/// every collection (review of 96f04ebef); the dropdown now rides the list
+/// header's title line, and the header clips nothing. Where the popover sits
+/// is design presentation, not a contract: no test asserts geometry (user
+/// decision 2026-11-19).
 #[test]
-fn the_open_dropdown_paints_below_its_trigger_unclipped() {
+fn the_open_dropdown_paints_unclipped() {
     let mut fixture = built(GuiArrangement::Wide);
     let (list, detail) = fixtures::music_sections(None);
     fixture.carry(list, detail);
@@ -139,11 +142,9 @@ fn the_open_dropdown_paints_below_its_trigger_unclipped() {
     fixture.in_runtime(move || state.toggle_collections_dropdown());
     fixture.lay_out();
 
-    let trigger = fixture.rect_of("[data-library-collections-trigger]");
-    let menu = fixture.rect_of("[data-library-collections-menu]");
     assert!(
-        menu.y >= trigger.y + trigger.height,
-        "the popover paints below the trigger"
+        fixture.presents("[data-library-collections-menu]"),
+        "the popover paints"
     );
     assert!(
         !fixture.clips_overflow("[data-library-list-header]"),

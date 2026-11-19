@@ -2,11 +2,18 @@
 # Usage: tools/release.sh <version> "<summary>"
 # Example: tools/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
-# Runs tests + clippy, bumps Cargo.toml + PKGBUILD, updates Cargo.lock,
+# Runs the CI gate set, bumps Cargo.toml + PKGBUILD, updates Cargo.lock,
 # commits, and pushes. On main: pushes, tags, and pushes the tag. On a branch:
 # commits only; merge via PR then tag manually.
 # PKGBUILD sha256sums is set to 'SKIP' here; build.yml fills in the real hash
 # after building the release tarball.
+#
+# The gate set mirrors .github/workflows/build.yml step for step (same checks,
+# same order; each echo names the CI step it matches). The release push is
+# what triggers CI, so there is no earlier run to lean on: a check missing
+# here is a red release run discovered after the tag exists. A failure in
+# this script means the tag push would fail CI the same way — fix the cause,
+# do not bypass the gate.
 set -euo pipefail
 
 VERSION="${1?Usage: tools/release.sh <version> \"<summary>\"}"
@@ -49,15 +56,46 @@ fi
 echo "==> Releasing ${TAG}: ${SUMMARY}"
 
 echo
-echo "==> cargo test..."
-cargo nextest run 
-
-echo
-echo "==> cargo fmt --check (CI runs the same check)..."
+echo "==> cargo fmt --all -- --check (CI: Check formatting)..."
 cargo fmt --all -- --check
 
-echo "==> cargo clippy (same strictness as CI: -D warnings)..."
+echo
+echo "==> cargo clippy --workspace --all-targets -- -D warnings (CI: Lint)..."
 cargo clippy --workspace --all-targets -- -D warnings
+
+echo
+echo "==> ast-grep test + scan (CI: Ast-grep tripwires)..."
+ast-grep test --skip-snapshot-tests
+ast-grep scan .
+
+echo
+echo "==> cargo audit (CI: Audit dependencies)..."
+cargo audit
+
+echo
+echo "==> cargo build --release --all-targets (CI: Build release)..."
+cargo build --release --all-targets
+
+echo
+echo "==> cargo build --release -p mbv-gui (CI: Build GUI Client)..."
+cargo build --release -p mbv-gui
+
+echo
+echo "==> cargo nextest run --release --test-threads=4 (CI: Test release)..."
+# Same throttled invocation as CI: a third of the suite stands up a real
+# libmpv handle or a loopback fixture per test, and unthrottled runs fail on
+# fd/thread budget (see the CI step's comment).
+cargo nextest run --release --test-threads=4
+
+echo
+echo "==> cargo nextest run --release --test-threads=4 -p mbv-gui (CI: Test mbv-gui)..."
+cargo nextest run --release --test-threads=4 -p mbv-gui
+
+echo
+echo "==> cargo hack check --each-feature --workspace --all-targets (CI: Check feature matrix)..."
+# The slow one: --each-feature re-checks the workspace once per feature.
+# It gates every push in CI, so it gates a release too.
+cargo hack check --each-feature --workspace --all-targets
 
 echo
 echo "==> Bumping Cargo.toml to ${VERSION}..."
