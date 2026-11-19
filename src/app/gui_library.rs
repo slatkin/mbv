@@ -12,6 +12,7 @@ mod collection;
 mod collection_command;
 mod emby;
 mod emby_projection;
+pub(in crate::app) mod ensure;
 mod entry_list;
 mod feeds;
 mod feeds_projection;
