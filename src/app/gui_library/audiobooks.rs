@@ -11,6 +11,7 @@ use mbv_queue::QueueItem;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_for_id;
 
+use super::ensure::catalog_unloaded;
 use super::entry_list::picked_or_first;
 use super::tabs::GuiDestinationKind;
 use crate::app::App;
@@ -56,7 +57,7 @@ impl App {
             return;
         }
         self.clear_gui_abs_catalog_failed(lib_idx);
-        self.ensure_gui_abs_selection(lib_idx);
+        self.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
     }
 
     /// Select the book the Hero shows (row 9.1): the selection the core owns,
@@ -86,53 +87,25 @@ impl App {
         }
     }
 
-    /// The app-facing entry into the Audiobooks destination's load pass (row
-    /// 9.1; gui-one-destination-ensure design D5): the catalog's refresh
-    /// while it is unloaded, then the effective pick's detail load once the
-    /// catalog lands (design D3), so the default first book's Hero paints its
-    /// chapters without a select. The open step enters here, and the
-    /// active-tab guard is what keeps any other entry inert: a caller that
-    /// names a library the tab is not on loads nothing rather than loading a
-    /// library the shell is not presenting. The steps' own destination guards
-    /// keep a `lib_idx` that names no book library a no-op.
-    pub(in crate::app::gui_library) fn ensure_gui_abs_selection(&mut self, lib_idx: usize) {
-        if !self.gui_abs_destination_active(lib_idx) {
-            return;
-        }
-        self.ensure_gui_destination(GuiDestinationKind::Audiobooks { lib_idx });
-    }
-
     /// Whether `lib_idx`'s book catalog is unloaded in a shape a catalog load
-    /// may start from (gui-one-destination-ensure design D3, Risks): an empty
-    /// list, a zero total, no page in flight, no replacement batch collecting,
-    /// and no failed mark. The in-flight page marks count as unloaded's
-    /// negation, because the startup chain's first page is already walking and
-    /// an open beside it would start a second chain (review of unit 9.1).
-    ///
-    /// The failed mark is load-bearing: `handle_audiobookshelf_books_fetched`
-    /// records a failure as `state.error` and aborts the replacement batch,
-    /// which leaves the list empty, the total zero, and no page in flight —
-    /// exactly the shape above — so without the mark a repaint would retry the
-    /// failed chain every frame. The frame path's root step and
-    /// [`Self::gui_abs_open`] both call this one rule, so the two starts cannot
-    /// drift.
+    /// may start from ([`catalog_unloaded`]).
     pub(in crate::app::gui_library) fn gui_abs_catalog_needs_load(&self, lib_idx: usize) -> bool {
         self.audiobookshelf_book_browse
             .get(lib_idx)
             .is_some_and(|state| {
-                state.books.is_empty()
-                    && state.total == 0
-                    && state.loading_pages.is_empty()
-                    && state.replacement.is_none()
-                    && state.error.is_none()
+                catalog_unloaded(
+                    state.books.is_empty(),
+                    state.total,
+                    &state.loading_pages,
+                    state.replacement.is_none(),
+                    state.error.is_none(),
+                )
             })
     }
 
     /// Clear the failed mark a user open retries from (design D4, Risks): the
-    /// loader's failure record is the browse state's `error` — the same fact
-    /// the projection paints as the list's failed state — so the frame path's
-    /// root step honours it and an open clears it. An automatic repaint never
-    /// clears it.
+    /// loader's failure record is the browse state's `error`, which the frame
+    /// path's root step honours and an open clears.
     pub(in crate::app::gui_library) fn clear_gui_abs_catalog_failed(&mut self, lib_idx: usize) {
         if let Some(state) = self.audiobookshelf_book_browse.get_mut(lib_idx) {
             state.error = None;

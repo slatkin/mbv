@@ -257,11 +257,10 @@ fn add_second_podcast_library(app: &mut App) {
 }
 
 /// A collection command that names a podcast library other than the active
-/// destination starts no load and does not panic (review of
-/// gui-one-destination-ensure units 2.4 and 2.5): the shared collection path
-/// installs the set for the library it names, as it always did, and the
-/// destination's load pass stays inert instead of entering the driver, whose
-/// steps assert the pass runs for the active tab.
+/// destination starts no load (review of gui-one-destination-ensure units 2.4
+/// and 2.5): the shared collection path installs the set for the library it
+/// names, as it always did, and the driver's active-tab guard keeps the
+/// destination's load pass inert.
 #[test]
 fn a_collection_command_on_another_podcast_library_starts_no_load() {
     let _guard = crate::config::TestStateDirGuard::new();

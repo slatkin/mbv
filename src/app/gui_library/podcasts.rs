@@ -20,6 +20,7 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
+use super::ensure::catalog_unloaded;
 use super::podcasts_projection::GuiPodcastEpisodeId;
 use super::tabs::GuiDestinationKind;
 
@@ -166,7 +167,7 @@ impl App {
             return;
         }
         self.clear_gui_podcast_catalog_failed(lib_idx);
-        self.ensure_gui_podcast_selection(lib_idx);
+        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
     }
 
     /// The one write the toggle and the All press take: the shared collection
@@ -178,7 +179,7 @@ impl App {
             .or_default()
             .selection
             .set = set;
-        self.ensure_gui_podcast_selection(lib_idx);
+        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
     }
 
     /// Select the episode the Hero shows (row 10.1): the selection the core
@@ -206,38 +207,8 @@ impl App {
             .picked_episode = Some(target.clone());
     }
 
-    /// The app-facing entry into the Podcasts destination's load pass (row
-    /// 10.1; gui-one-destination-ensure design D5): the show list's refresh
-    /// while it is unloaded, the checked shows' scope commit, then All's
-    /// one-shot shelf fetch and the bounded per-show fan-out (design D3). The
-    /// collection commands install their set and then enter here, and the open
-    /// step enters here after its failed-mark clear, so this is also where a
-    /// stale frame's command for another podcast library stops (review of units
-    /// 2.4 and 2.5): a `lib_idx` that names no podcast library, or no active
-    /// destination, is a no-op, and an automatic repaint always names the
-    /// active one.
-    pub(in crate::app::gui_library) fn ensure_gui_podcast_selection(&mut self, lib_idx: usize) {
-        if !self.gui_abs_destination_active(lib_idx) {
-            return;
-        }
-        self.ensure_gui_destination(GuiDestinationKind::Podcasts { lib_idx });
-    }
-
     /// Whether `lib_idx`'s show catalog is unloaded in a shape a show-list load
-    /// may start from (gui-one-destination-ensure design D3, Risks): an empty
-    /// list, a zero total, no page in flight, no replacement batch collecting,
-    /// and no failed mark. The in-flight page marks count as unloaded's
-    /// negation, as the books destination's rule has it: the startup chain's
-    /// first page is already walking, and a load beside it would start a
-    /// second chain.
-    ///
-    /// The failed mark is load-bearing: `handle_audiobookshelf_shows_fetched`
-    /// records a failure as `state.error` and aborts the replacement batch,
-    /// which leaves the list empty, the total zero, and no page in flight —
-    /// exactly the shape above — so without the mark a repaint would retry the
-    /// failed chain every frame. The frame path's root step and
-    /// [`Self::gui_podcast_open`] both call this one rule, so the two starts
-    /// cannot drift.
+    /// may start from ([`catalog_unloaded`]).
     pub(in crate::app::gui_library) fn gui_podcast_catalog_needs_load(
         &self,
         lib_idx: usize,
@@ -245,19 +216,19 @@ impl App {
         self.audiobookshelf_browse
             .get(lib_idx)
             .is_some_and(|state| {
-                state.shows.is_empty()
-                    && state.total == 0
-                    && state.loading_pages.is_empty()
-                    && state.replacement.is_none()
-                    && state.error.is_none()
+                catalog_unloaded(
+                    state.shows.is_empty(),
+                    state.total,
+                    &state.loading_pages,
+                    state.replacement.is_none(),
+                    state.error.is_none(),
+                )
             })
     }
 
     /// Clear the failed mark a user open retries from (design D4, Risks): the
-    /// loader's failure record is the browse state's `error` — the same fact
-    /// the projection paints as the list's failed state — so the frame path's
-    /// root step honours it and an open clears it. An automatic repaint never
-    /// clears it.
+    /// loader's failure record is the browse state's `error`, which the frame
+    /// path's root step honours and an open clears.
     pub(in crate::app::gui_library) fn clear_gui_podcast_catalog_failed(&mut self, lib_idx: usize) {
         if let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx) {
             state.error = None;

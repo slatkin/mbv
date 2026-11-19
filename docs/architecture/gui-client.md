@@ -1002,8 +1002,9 @@ its own compare. A build that matches the slot's last built value sends nothing.
 The frame path owns the destination's load order. The `GuiDestinationLoads`
 trait (`src/app/gui_library/ensure.rs`) gives every destination the same three
 steps in one fixed order: the root list, then the selection, then the
-dependent content. A destination with no work for a step states that step as a
-no-op, so a new destination cannot skip a step. The driver,
+dependent content. A destination with no work for a step keeps the trait's
+default no-op; the driver's exhaustive match on the destination kind makes a
+new destination name its site. The driver,
 `App::ensure_gui_active_destination`, runs the steps for the active
 destination. Two callers reach it: `build` in
 `crates/mbv-gui/src/sections/library.rs`, which runs the pass before the parts

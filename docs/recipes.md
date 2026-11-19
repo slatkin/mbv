@@ -162,5 +162,5 @@ and `docs/invariants/06-queue-progress-application-sites.md` first.
    lists its sites. In the GUI Client, give the destination a
    `GuiDestinationLoads` site; the driver `App::ensure_gui_active_destination`
    then runs its loads in the one fixed order — root list, then selection,
-   then dependents — with a stated no-op for a step that has no work.
+   then dependents — with a default no-op for a step that has no work.
 8. **Vocabulary.** Add the new terms to `CONTEXT.md`.
