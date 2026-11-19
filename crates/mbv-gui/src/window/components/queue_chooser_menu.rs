@@ -40,6 +40,7 @@ use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
 use crate::window::components::queue_panel::geometry::{ROW_GAP_PX, ROW_HEIGHT_PX};
 use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Check};
+use crate::window::theme::{EfToken, ef_var};
 
 /// The current queue's mark: the dot's diameter in logical pixels.
 const CURRENT_MARK_PX: u16 = 8;
@@ -142,7 +143,9 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: var(--ef-bg2); border: 1px solid var(--ef-bg4); border-radius: 8px;"
+                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px;",
+                ef_var(EfToken::Bg2),
+                ef_var(EfToken::Bg4)
             ),
             "data-queue-chooser-menu": "",
             for (index, entry) in props.entries.iter().enumerate() {
@@ -150,12 +153,13 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     let paint = EntryPaint::of(entry, props.renaming.as_ref());
                     let cursor = props.cursor == index;
                     let row_background = if cursor {
-                        " background: var(--ef-bg3);"
+                        format!(" background: {};", ef_var(EfToken::Bg3))
                     } else {
-                        ""
+                        String::new()
                     };
                     let row_style = format!(
-                        "height: {ITEM_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: var(--ef-fg);{row_background}"
+                        "height: {ITEM_HEIGHT_PX}px; padding: 0 8px; gap: 8px; border-radius: 5px; font-size: 13px; font-weight: 500; color: {};{row_background}",
+                        ef_var(EfToken::Fg)
                     );
                     let label_align = if paint.draft {
                         " justify-content: flex-end;"
@@ -163,7 +167,11 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                         ""
                     };
                     let label_style = if paint.selected {
-                        "padding: 0 2px; border-radius: 2px; background: var(--ef-green); color: var(--ef-bg-dim);".to_owned()
+                        format!(
+                            "padding: 0 2px; border-radius: 2px; background: {}; color: {};",
+                            ef_var(EfToken::Green),
+                            ef_var(EfToken::BgDim)
+                        )
                     } else {
                         String::new()
                     };
@@ -178,7 +186,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                     rsx! {
                         button {
                             "type": "button",
-                            class: "flex w-full items-center justify-between text-left hover:bg-[var(--ef-bg3)]",
+                            class: "flex w-full items-center justify-between text-left",
                             role: "menuitem",
                             style: "{row_style}",
                             "data-chooser-entry": "{key}",
@@ -195,7 +203,10 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                     class: "flex w-4 shrink-0 justify-center",
                                     "data-chooser-shown": "{shown}",
                                     if shown {
-                                        Check { size: 14, color: "var(--ef-green)".to_owned() }
+                                        Check {
+                                            size: 14,
+                                            color: ef_var(EfToken::Green).to_owned(),
+                                        }
                                     }
                                 }
                                 // The entry's label, or the name open for edit:
@@ -218,7 +229,10 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                     if paint.draft && !paint.selected {
                                         span {
                                             class: "inline-block w-px shrink-0",
-                                            style: "height: 14px; background: var(--ef-fg);",
+                                            style: format!(
+                                                "height: 14px; background: {};",
+                                                ef_var(EfToken::Fg)
+                                            ),
                                             "data-caret": "",
                                         }
                                     }
@@ -236,12 +250,18 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                         class: "flex items-center",
                                         title: "Playing",
                                         "data-chooser-playing": "",
-                                        AudioLines { size: 14, color: "var(--ef-aqua)".to_owned() }
+                                        AudioLines {
+                                            size: 14,
+                                            color: ef_var(EfToken::Aqua).to_owned(),
+                                        }
                                     }
                                 } else if current {
                                     span {
                                         class: "inline-block rounded-full",
-                                        style: "width: {CURRENT_MARK_PX}px; height: {CURRENT_MARK_PX}px; background: var(--ef-green);",
+                                        style: format!(
+                                            "width: {CURRENT_MARK_PX}px; height: {CURRENT_MARK_PX}px; background: {};",
+                                            ef_var(EfToken::Green)
+                                        ),
                                         title: "Current queue",
                                         "data-chooser-current": "",
                                     }
@@ -253,7 +273,10 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
                                     TargetBrandIcon { brand: TargetBrand::DirectPeer, size: 16 }
                                 }
                                 span {
-                                    style: "font-family: var(--font-mono); font-size: 11px; color: var(--ef-grey2);",
+                                    style: format!(
+                                        "font-family: var(--font-mono); font-size: 11px; color: {};",
+                                        ef_var(EfToken::Grey2)
+                                    ),
                                     "data-chooser-count": "",
                                     "{len}"
                                 }

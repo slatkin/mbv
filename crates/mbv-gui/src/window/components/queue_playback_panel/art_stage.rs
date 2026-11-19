@@ -35,7 +35,7 @@ use crate::window::components::art_image::ArtImage;
 use crate::window::components::track_chips::TrackChips;
 use crate::window::icons::{Pause, Play, SkipBack, SkipForward};
 use crate::window::playhead::Playhead;
-use crate::window::theme::{glyph_color, role_var};
+use crate::window::theme::{EfToken, ef_var, glyph_color, role_var};
 use crate::window::time::minus;
 
 use super::scrubber::{SEEK_ROW_HEIGHT_PX, Scrubber};
@@ -170,7 +170,7 @@ pub fn ArtStage(props: ArtStageProps) -> Element {
     rsx! {
         div {
             class: "stage relative w-full max-w-full",
-            style: "background: var(--ef-player);",
+            style: format!("background: {};", ef_var(EfToken::Player)),
             "data-target": "visualSlot",
             // Each attribute is present only while its fact holds and absent
             // otherwise, never `"false"`: the stylesheet's selectors test
@@ -362,7 +362,10 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                 button {
                     "type": "button",
                     class: "flex flex-none items-center justify-center rounded-full",
-                    style: "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); background: var(--ef-green);",
+                    style: format!(
+                        "width: calc(44px * var(--player-scale)); height: calc(44px * var(--player-scale)); background: {};",
+                        ef_var(EfToken::Green)
+                    ),
                     "data-target": "playPause",
                     "aria-label": if props.paused { "Play" } else { "Pause" },
                     onmounted: move |event| play_pause_mounted.set(Some(event)),
@@ -388,11 +391,11 @@ pub fn ControlRow(props: ControlRowProps) -> Element {
                     style: "gap: calc(12px * var(--player-scale)); font-size: calc(12px * var(--player-scale));",
                     "data-clocks": "",
                     span {
-                        style: "color: var(--ef-fg);",
+                        style: format!("color: {};", ef_var(EfToken::Fg)),
                         "{elapsed}"
                     }
                     span {
-                        style: "color: var(--ef-fg); opacity: 0.85;",
+                        style: format!("color: {}; opacity: 0.85;", ef_var(EfToken::Fg)),
                         "{minus(&remaining)}"
                     }
                 }

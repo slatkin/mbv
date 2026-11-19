@@ -39,6 +39,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::queue::GuiQueueSummary;
 use crate::window::components::queue_chooser_menu::{QueueChooserMenu, QueueChooserMenuState};
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
+use crate::window::theme::{EfToken, ef_var};
 
 /// The title the header paints while the shown entry has no name. The title
 /// paints as plain text, never through `Truncate`: its box is sized by its own
@@ -49,22 +50,17 @@ const DEFAULT_TITLE: &str = "Queue";
 /// The `QUEUE` label's text (design D7).
 const QUEUE_LABEL: &str = "QUEUE";
 
-/// An icon button's look (design D7): 32 × 32, radius 6, the muted glyph. Its
-/// fill and glyph colour live in the class list, never inline, so the `hover:`
-/// pair can raise them — an inline colour would win over the pointer's.
-const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center text-[var(--ef-grey2)]";
+/// An icon button's look (design D7): 32 × 32, radius 6. Its rest and pointer
+/// colours live in `assets/app.css` (`[data-queue-header] button`), keyed on
+/// the header's own markers, because they read the `--ef-*` palette through
+/// the typed accessor a class scanner cannot see.
+const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center";
 
-/// An icon button's pointer look: the raised fill and the brighter glyph.
-const ICON_BUTTON_HOVER: &str = "hover:bg-[var(--ef-bg3)] hover:text-[var(--ef-fg)]";
-
-/// The close control's enabled hover: the destructive fill and glyph (design
-/// D7). A disabled close claims nothing, so it paints the rest look alone.
-const CLOSE_HOVER: &str = "hover:bg-[var(--ef-bg-red)] hover:text-[var(--ef-red)]";
-
-/// The Queue switcher's look (design D7): the raised rest fill and the control
-/// border, both in the class list so the pointer can raise them, and the open
-/// state's fill and border inline, which a hover cannot override.
-const SWITCHER_CLASS: &str = "flex min-w-0 items-center bg-[var(--ef-bg2)] border-[var(--ef-bg4)] hover:bg-[var(--ef-bg3)] hover:border-[var(--ef-bg5)]";
+/// The Queue switcher's look (design D7): the raised rest fill, the control
+/// border, and the pointer's raised pair live in `assets/app.css`
+/// (`[data-queue-chooser]`); the open state's fill and border stay inline,
+/// where a hover cannot override them.
+const SWITCHER_CLASS: &str = "flex min-w-0 items-center";
 
 /// An icon button's geometry, radius included.
 const ICON_BUTTON_STYLE: &str = "width: 32px; height: 32px; border-radius: 6px;";
@@ -117,13 +113,20 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     rsx! {
         div {
             class: "flex items-center whitespace-nowrap",
-            style: "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: var(--ef-bg1); border-bottom: 1px solid var(--ef-bg3); margin-inline: calc(var(--mbv-cell-col) * -2);",
+            style: format!(
+                "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2);",
+                ef_var(EfToken::Bg1),
+                ef_var(EfToken::Bg3)
+            ),
             "data-queue-header": "",
             // The `QUEUE` label (design D7): the bar's own name, in the canvas's
             // letter-spaced small caps.
             span {
                 class: "shrink-0",
-                style: "font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ef-grey2);",
+                style: format!(
+                    "font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: {};",
+                    ef_var(EfToken::Grey2)
+                ),
                 "data-queue-label": "",
                 "{QUEUE_LABEL}"
             }
@@ -140,9 +143,13 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 {
                     let mut chooser_slot = chooser;
                     let switcher_style = if chooser_open {
-                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: var(--ef-grey0); background: var(--ef-bg3);"
+                        format!(
+                            "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
+                            ef_var(EfToken::Grey0),
+                            ef_var(EfToken::Bg3)
+                        )
                     } else {
-                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
+                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;".to_owned()
                     };
                     rsx! {
                         button {
@@ -157,11 +164,14 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             ListOrdered {
                                 size: 14,
                                 stroke_width: 1.6,
-                                color: "var(--ef-grey2)".to_owned(),
+                                color: ef_var(EfToken::Grey2).to_owned(),
                             }
                             span {
                                 class: "min-w-0 overflow-hidden whitespace-nowrap",
-                                style: "font-size: 13px; font-weight: 600; color: var(--ef-fg);",
+                                style: format!(
+                                    "font-size: 13px; font-weight: 600; color: {};",
+                                    ef_var(EfToken::Fg)
+                                ),
                                 "data-queue-title": "",
                                 "{title}"
                             }
@@ -170,7 +180,11 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             // fill.
                             span {
                                 class: "shrink-0",
-                                style: "padding: 0 4px; border-radius: 4px; background: var(--ef-bg1); color: var(--ef-grey2); font-family: var(--font-mono); font-size: 11px; line-height: 16px;",
+                                style: format!(
+                                    "padding: 0 4px; border-radius: 4px; background: {}; color: {}; font-family: var(--font-mono); font-size: 11px; line-height: 16px;",
+                                    ef_var(EfToken::Bg1),
+                                    ef_var(EfToken::Grey2)
+                                ),
                                 "data-queue-count": "",
                                 "{summary.header.shown_len}"
                             }
@@ -178,13 +192,13 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                                 ChevronUp {
                                     size: 12,
                                     stroke_width: 1.6,
-                                    color: "var(--ef-grey2)".to_owned(),
+                                    color: ef_var(EfToken::Grey2).to_owned(),
                                 }
                             } else {
                                 ChevronDown {
                                     size: 12,
                                     stroke_width: 1.6,
-                                    color: "var(--ef-grey2)".to_owned(),
+                                    color: ef_var(EfToken::Grey2).to_owned(),
                                 }
                             }
                         }
@@ -206,7 +220,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 rsx! {
                     button {
                         "type": "button",
-                        class: "{ICON_BUTTON_CLASS} {ICON_BUTTON_HOVER}",
+                        class: "{ICON_BUTTON_CLASS}",
                         style: "{ICON_BUTTON_STYLE}",
                         title: "New queue (Ctrl+T)",
                         "aria-label": "New queue",
@@ -226,16 +240,11 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
             {
                 let close_disabled = summary.header.close_disabled;
                 let close_opacity = if close_disabled { "0.4" } else { "1" };
-                let close_class = if close_disabled {
-                    ICON_BUTTON_CLASS.to_owned()
-                } else {
-                    format!("{ICON_BUTTON_CLASS} {CLOSE_HOVER}")
-                };
                 let mut close_slot = close;
                 rsx! {
                     button {
                         "type": "button",
-                        class: "{close_class}",
+                        class: "{ICON_BUTTON_CLASS}",
                         style: "{ICON_BUTTON_STYLE} opacity: {close_opacity};",
                         title: "Close queue (Ctrl+W)",
                         "aria-label": "Close queue",
@@ -266,9 +275,9 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         summary.filter.clone()
                     };
                     let text_color = if summary.filter.is_empty() {
-                        "var(--ef-grey2)"
+                        ef_var(EfToken::Grey2)
                     } else {
-                        "var(--ef-fg)"
+                        ef_var(EfToken::Fg)
                     };
                     let mut filter_slot = filter;
                     let filter_active = summary.filter_active;
@@ -282,7 +291,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             Search {
                                 size: 16,
                                 stroke_width: 1.6,
-                                color: "var(--ef-grey2)".to_owned(),
+                                color: ef_var(EfToken::Grey2).to_owned(),
                             }
                             span {
                                 style: "color: {text_color};",
@@ -291,7 +300,10 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                             if filter_active {
                                 span {
                                     class: "inline-block w-px shrink-0",
-                                    style: "height: 14px; background: var(--ef-fg);",
+                                    style: format!(
+                                        "height: 14px; background: {};",
+                                        ef_var(EfToken::Fg)
+                                    ),
                                     "data-caret": "",
                                 }
                             }
@@ -304,7 +316,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     rsx! {
                         button {
                             "type": "button",
-                            class: "{ICON_BUTTON_CLASS} {ICON_BUTTON_HOVER}",
+                            class: "{ICON_BUTTON_CLASS}",
                             style: "{ICON_BUTTON_STYLE}",
                             title: "Filter (/)",
                             "aria-label": "Filter queue",

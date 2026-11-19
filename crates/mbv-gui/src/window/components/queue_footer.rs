@@ -83,7 +83,7 @@ use crate::window::layout::{
 use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::status::toast_color;
-use crate::window::theme::role_var;
+use crate::window::theme::{EfToken, ef_var, role_var};
 use crate::window::time::format_duration_short;
 use crate::window::truncate::{TextStyle, Truncate};
 
@@ -253,7 +253,11 @@ pub fn QueueFooter(props: QueueFooterProps) -> Element {
         // The open chooser's popover is the band's child, anchored above it.
         div {
             class: "relative flex items-center font-mono whitespace-nowrap",
-            style: "height: 40px; padding-inline: 16px; font-size: 12px; border-top: 1px solid var(--ef-bg3); background: var(--ef-bg0);",
+            style: format!(
+                "height: 40px; padding-inline: 16px; font-size: 12px; border-top: 1px solid {}; background: {};",
+                ef_var(EfToken::Bg3),
+                ef_var(EfToken::Bg0)
+            ),
             "data-footer-line": "",
             // The Queue zone (`gui-pointer-target-interaction` D1) reaches the
             // footer band: it sits under the Queue list box, outside the box's

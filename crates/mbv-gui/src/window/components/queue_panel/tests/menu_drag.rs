@@ -7,6 +7,7 @@ use blitz_dom::local_name;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueInsertion, GuiSemanticState};
+use crate::window::theme::{EfToken, ef_var};
 
 /// Contract (`QueuePanel.test.ts`, the Menus artboard B.2): the open row
 /// menu paints the canvas chrome — a 230 px card in the menu fill, border,
@@ -113,7 +114,10 @@ fn a_drag_paints_the_ghost_its_percent_and_the_inset_insertion_line() {
         "{card}"
     );
     let ghost_title = fixture.style_of("[data-ghost] .truncate");
-    assert!(ghost_title.contains("color: var(--ef-fg)"), "{ghost_title}");
+    assert!(
+        ghost_title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
+        "{ghost_title}"
+    );
     assert!(
         !fixture.presents("[data-ghost] svg"),
         "the ghost paints no start mark"

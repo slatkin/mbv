@@ -8,6 +8,7 @@
 
 use super::row_cells::ItemRow;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiSemanticState};
+use crate::window::theme::{EfToken, ef_var};
 
 /// The canvas's fixed queue row height in logical pixels (design D9).
 pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 34;
@@ -50,13 +51,13 @@ fn picked(queue: &GuiQueue, slot: u64) -> bool {
 /// the hovered row's fill. An ordinary row paints no fill of its own.
 pub(super) fn row_background(row: &ItemRow, queue: &GuiQueue) -> Option<&'static str> {
     if row.state == GuiSemanticState::NowPlaying {
-        return Some("var(--ef-bg-green)");
+        return Some(ef_var(EfToken::BgGreen));
     }
     if picked(queue, row.slot) {
-        return Some("var(--ef-bg3)");
+        return Some(ef_var(EfToken::Bg3));
     }
     if queue.hover == Some(row.slot) {
-        return Some("var(--ef-bg0)");
+        return Some(ef_var(EfToken::Bg0));
     }
     None
 }

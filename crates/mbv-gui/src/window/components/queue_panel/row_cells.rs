@@ -14,6 +14,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
 use crate::window::icons::Play;
 use crate::window::playhead::Playhead;
+use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
 /// The left inset of the row's progress bar in logical pixels: past the
@@ -91,12 +92,12 @@ pub(super) struct RowTone {
 pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
     if row.state == GuiSemanticState::NowPlaying {
         return RowTone {
-            title: "var(--ef-green)",
+            title: ef_var(EfToken::Green),
             weight: 600.0,
-            strike: "var(--ef-bg5)",
-            ordinal: "var(--ef-grey1)",
-            track: "var(--ef-bg2)",
-            fill: "var(--ef-green)",
+            strike: ef_var(EfToken::Bg5),
+            ordinal: ef_var(EfToken::Grey1),
+            track: ef_var(EfToken::Bg2),
+            fill: ef_var(EfToken::Green),
         };
     }
     let watched = row.state == GuiSemanticState::Played;
@@ -104,17 +105,17 @@ pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
     // A hovered row paints the primary text: the pointer outranks the watched
     // row's grey.
     let title = if watched && !hovered {
-        "var(--ef-grey1)"
+        ef_var(EfToken::Grey1)
     } else {
-        "var(--ef-fg)"
+        ef_var(EfToken::Fg)
     };
     RowTone {
         title,
         weight: 400.0,
-        strike: "var(--ef-bg5)",
-        ordinal: "var(--ef-grey1)",
-        track: "var(--ef-bg2)",
-        fill: "var(--ef-orange)",
+        strike: ef_var(EfToken::Bg5),
+        ordinal: ef_var(EfToken::Grey1),
+        track: ef_var(EfToken::Bg2),
+        fill: ef_var(EfToken::Orange),
     }
 }
 
@@ -223,22 +224,22 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     StartMark::Playing => rsx! {
                         Play {
                             size: 12,
-                            fill: "var(--ef-green)",
-                            color: "var(--ef-green)".to_owned(),
+                            fill: ef_var(EfToken::Green),
+                            color: ef_var(EfToken::Green).to_owned(),
                         }
                     },
                     StartMark::Start => rsx! {
                         Play {
                             size: 12,
                             fill: "none".to_owned(),
-                            color: "var(--ef-green)".to_owned(),
+                            color: ef_var(EfToken::Green).to_owned(),
                         }
                     },
                 }
             }
             {
                 let title_color = if chrome == RowChrome::Ghost {
-                    "var(--ef-fg)".to_owned()
+                    ef_var(EfToken::Fg).to_owned()
                 } else {
                     cell_tone.title.to_owned()
                 };
@@ -285,7 +286,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: "font-size: 12px; color: var(--ef-orange);",
+                style: format!("font-size: 12px; color: {};", ef_var(EfToken::Orange)),
                 "data-ghost-percent": "",
                 "{progress}%"
             }

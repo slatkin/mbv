@@ -8,6 +8,7 @@ use rstest::rstest;
 
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiQueueScroll, GuiSemanticState};
+use crate::window::theme::{EfToken, ef_var};
 
 /// Contract (`QueuePanel.test.ts`): a frame with slots renders its rows — the
 /// item rows' titles and the structural heading among them, and one
@@ -127,17 +128,17 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
     assert!(watched.is_some_and(|class| class.contains("line-through")));
     let watched_style = fixture.style_of("[data-slot=\"1\"] .truncate");
     assert!(
-        watched_style.contains("text-decoration-color: var(--ef-bg5)"),
+        watched_style.contains(&format!("text-decoration-color: {}", ef_var(EfToken::Bg5))),
         "{watched_style}"
     );
     assert!(
-        watched_style.contains("color: var(--ef-grey1)"),
+        watched_style.contains(&format!("color: {}", ef_var(EfToken::Grey1))),
         "{watched_style}"
     );
 
     let playing_row = fixture.style_of("[data-slot=\"2\"]");
     assert!(
-        playing_row.contains("background: var(--ef-bg-green)"),
+        playing_row.contains(&format!("background: {}", ef_var(EfToken::BgGreen))),
         "{playing_row}"
     );
     assert!(fixture.presents("[data-slot=\"2\"] svg"));
@@ -147,7 +148,7 @@ fn the_rows_paint_the_watched_active_and_partial_progress_states() {
         "{playing_title}"
     );
     assert!(
-        playing_title.contains("color: var(--ef-green)"),
+        playing_title.contains(&format!("color: {}", ef_var(EfToken::Green))),
         "{playing_title}"
     );
 
@@ -204,7 +205,10 @@ fn the_active_and_marked_rows_paint_the_raised_fill() {
 
     for slot in [1, 2] {
         let style = fixture.style_of(&format!("[data-slot=\"{slot}\"]"));
-        assert!(style.contains("background: var(--ef-bg3)"), "{style}");
+        assert!(
+            style.contains(&format!("background: {}", ef_var(EfToken::Bg3))),
+            "{style}"
+        );
     }
     assert!(!fixture.presents("[data-active-edge]"));
 }
@@ -220,11 +224,14 @@ fn the_hovered_row_paints_the_hover_fill() {
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
     let hovered = fixture.style_of("[data-slot=\"2\"]");
-    assert!(hovered.contains("background: var(--ef-bg0)"), "{hovered}");
+    assert!(
+        hovered.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
+        "{hovered}"
+    );
     assert!(
         fixture
             .style_of("[data-slot=\"1\"]")
-            .contains("background: var(--ef-bg3)"),
+            .contains(&format!("background: {}", ef_var(EfToken::Bg3))),
         "the active row keeps its fill"
     );
 }
@@ -272,12 +279,15 @@ fn the_hovered_row_alone_paints_the_grip_and_the_actions_button() {
         "{row_style}"
     );
     assert!(
-        row_style.contains("background: var(--ef-bg0)"),
+        row_style.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
         "{row_style}"
     );
     assert!(row_style.contains("border-radius: 6px"), "{row_style}");
     let title = fixture.style_of("[data-slot=\"2\"] .truncate");
-    assert!(title.contains("color: var(--ef-fg)"), "{title}");
+    assert!(
+        title.contains(&format!("color: {}", ef_var(EfToken::Fg))),
+        "{title}"
+    );
 }
 
 /// Contract (user request 2026-11-17): a list longer than its viewport paints

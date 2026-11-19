@@ -37,6 +37,7 @@ use crate::core_thread::CoreInput;
 use crate::window::channel::CoreLink;
 use crate::window::layout::LayoutEpoch;
 use crate::window::sections::Sections;
+use crate::window::theme::{EfToken, ef_var};
 
 /// The footer frame the fixture paints: the `mix` playlist source, no autosave
 /// or dirty indicator.
@@ -405,10 +406,13 @@ fn the_line_paints_the_canvas_footer_band() {
     assert!(line.contains("padding-inline: 16px"), "{line}");
     assert!(line.contains("font-size: 12px"), "{line}");
     assert!(
-        line.contains("border-top: 1px solid var(--ef-bg3)"),
+        line.contains(&format!("border-top: 1px solid {}", ef_var(EfToken::Bg3))),
         "{line}"
     );
-    assert!(line.contains("background: var(--ef-bg0)"), "{line}");
+    assert!(
+        line.contains(&format!("background: {}", ef_var(EfToken::Bg0))),
+        "{line}"
+    );
     let source = fixture.style_of("[data-footer-source]");
     assert!(
         source.contains("color: var(--canvas-type-secondary)"),

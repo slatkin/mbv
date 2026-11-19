@@ -16,6 +16,7 @@ use dioxus_native::prelude::*;
 use crate::bridge::frame::playback::GuiScrubberHover;
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
+use crate::window::theme::{EfToken, ef_var};
 
 #[cfg(test)]
 mod tests;
@@ -98,13 +99,17 @@ pub fn Scrubber(mut props: ScrubberProps) -> Element {
     let track_radius_px = track_px / 2.0;
     let row_style = format!("height: calc({SEEK_ROW_HEIGHT_PX}px * var(--player-scale));");
     let track_style = format!(
-        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-grey2); opacity: {TRACK_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));"
+        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: {}; opacity: {TRACK_OPACITY}; border-radius: calc({track_radius_px}px * var(--player-scale));",
+        ef_var(EfToken::Grey2)
     );
     let played_style = format!(
-        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: var(--ef-green); border-radius: calc({track_radius_px}px * var(--player-scale));"
+        "top: calc({track_top_px}px * var(--player-scale)); height: calc({track_px}px * var(--player-scale)); background: {}; border-radius: calc({track_radius_px}px * var(--player-scale));",
+        ef_var(EfToken::Green)
     );
     let thumb_style = format!(
-        "top: calc({thumb_top_px}px * var(--player-scale)); width: calc({thumb_px}px * var(--player-scale)); height: calc({thumb_px}px * var(--player-scale)); background: var(--ef-green); box-shadow: 0 0 0 calc({THUMB_RING_PX}px * var(--player-scale)) var(--ef-bg-dim);"
+        "top: calc({thumb_top_px}px * var(--player-scale)); width: calc({thumb_px}px * var(--player-scale)); height: calc({thumb_px}px * var(--player-scale)); background: {}; box-shadow: 0 0 0 calc({THUMB_RING_PX}px * var(--player-scale)) {};",
+        ef_var(EfToken::Green),
+        ef_var(EfToken::BgDim)
     );
     rsx! {
         div {
@@ -169,7 +174,11 @@ fn HoverPreview(props: HoverPreviewProps) -> Element {
             style: "left: {hover_pct}%; top: {offset}px;",
             div {
                 class: "font-mono",
-                style: "font-size: 11px; padding: 2px 6px; border-radius: 3px; background: var(--ef-bg2); color: var(--ef-fg);",
+                style: format!(
+                    "font-size: 11px; padding: 2px 6px; border-radius: 3px; background: {}; color: {};",
+                    ef_var(EfToken::Bg2),
+                    ef_var(EfToken::Fg)
+                ),
                 "{props.hover.time_label}"
             }
         }

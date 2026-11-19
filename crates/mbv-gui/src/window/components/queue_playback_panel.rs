@@ -42,6 +42,7 @@ use crate::window::layout::LayoutContribution;
 use crate::window::layout::{LayoutEpoch, LayoutKey, LayoutReporter, element_region};
 use crate::window::playhead::Playhead;
 use crate::window::sections::Sections;
+use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
 mod art_stage;
@@ -314,16 +315,20 @@ pub fn QueuePlaybackPanel() -> Element {
                 // the static line carries no region and the press is a no-op.
                 div {
                     class: "flex min-w-0 flex-col",
-                    style: "padding: 16px 20px 18px; gap: 2px; background: var(--ef-bg0); border-bottom: 1px solid var(--ef-bg3);",
+                    style: format!(
+                        "padding: 16px 20px 18px; gap: 2px; background: {}; border-bottom: 1px solid {};",
+                        ef_var(EfToken::Bg0),
+                        ef_var(EfToken::Bg3)
+                    ),
                     Truncate {
                         text: title.clone(),
-                        css: "font-size: 18px; font-weight: 600; color: var(--ef-fg);".to_owned(),
+                        css: format!("font-size: 18px; font-weight: 600; color: {};", ef_var(EfToken::Fg)),
                         style: TextStyle::sans(18.0, 600.0),
                     }
                     if let Some(parent_line) = playback.parent_line.as_ref() {
                         Truncate {
                             text: parent_line.clone(),
-                            css: "font-size: 13px; color: var(--ef-red);".to_owned(),
+                            css: format!("font-size: 13px; color: {};", ef_var(EfToken::Red)),
                             style: TextStyle::sans(13.0, 400.0),
                         }
                     }

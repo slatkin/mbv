@@ -189,8 +189,8 @@
    names describe the roles they held before this change. */
 :root {
 	--ef-player: #15191b; /* the player backdrop */
-	--ef-bg-dim: #1e2326; /* the queue list, recessed */
-	--ef-bg0: #272e33; /* the title block, the footer, a hovered row */
+	--ef-bg-dim: var(--canvas-queue-column); /* the queue list, recessed */
+	--ef-bg0: var(--canvas-library-column); /* the title block, the footer, a hovered row */
 	--ef-bg1: #2e383c; /* the queue header bar, the count chip */
 	--ef-bg2: #374145; /* the switcher at rest, the menu, the row progress track */
 	--ef-bg3: #414b50; /* rules, a hovered control, the active row, an active or hovered menu item */
@@ -198,14 +198,14 @@
 	--ef-bg5: #4f5b58; /* a hovered border, the strike line */
 	--ef-bg-green: #3c4841; /* the now-playing row */
 	--ef-bg-red: #4c3743; /* a hovered close control */
-	--ef-fg: #d3c6aa; /* the primary text */
+	--ef-fg: var(--canvas-text); /* the primary text */
 	--ef-grey0: #7a8478; /* the open switcher's border */
 	--ef-grey1: #859289; /* the row numbers, a watched title */
-	--ef-grey2: #9da9a0; /* the secondary text, the glyphs, the seek track's base */
-	--ef-green: #a7c080; /* the played fill, the play button, the now-playing text, a check */
-	--ef-aqua: #83c092; /* the playing mark in the menu */
-	--ef-orange: #e69875; /* the partial-progress fill */
-	--ef-red: #e67e80; /* the parent line, a destructive entry */
+	--ef-grey2: var(--canvas-muted); /* the secondary text, the glyphs, the seek track's base */
+	--ef-green: var(--canvas-accent); /* the played fill, the play button, the now-playing text, a check */
+	--ef-aqua: var(--canvas-insertion); /* the playing mark in the menu */
+	--ef-orange: var(--canvas-partial); /* the partial-progress fill */
+	--ef-red: var(--canvas-destructive); /* the parent line, a destructive entry */
 }
 
 @theme inline {
@@ -321,6 +321,36 @@ label:has(> input:hover) {
 [data-queue-header] button:not(:disabled):hover,
 [data-queue-chooser-menu] button:not(:disabled):hover {
 	box-shadow: none;
+}
+
+/* The Queue header's controls and the Queue chooser's items paint their own
+   hover (gui-queue-panel-redesign design D7, D8): the switcher takes a raised
+   fill and a brighter border, each icon button a raised fill and a brighter
+   glyph, the enabled close the destructive pair, and each chooser item the
+   raised fill its cursor row paints. The colours read the `--ef-*` palette
+   through `window/theme.rs::ef_var`, so the rules live here rather than in
+   `hover:` utilities whose class names a scanner must see as literals. */
+[data-queue-header] button {
+	color: var(--ef-grey2);
+}
+[data-queue-header] button:not(:disabled):hover {
+	background-color: var(--ef-bg3);
+	color: var(--ef-fg);
+}
+[data-queue-header] [data-queue-chooser] {
+	background-color: var(--ef-bg2);
+	border-color: var(--ef-bg4);
+}
+[data-queue-header] [data-queue-chooser]:hover {
+	background-color: var(--ef-bg3);
+	border-color: var(--ef-bg5);
+}
+[data-queue-header] [data-close-queue]:not(:disabled):hover {
+	background-color: var(--ef-bg-red);
+	color: var(--ef-red);
+}
+[data-queue-chooser-menu] [data-chooser-entry]:hover {
+	background-color: var(--ef-bg3);
 }
 
 /* The transport's seek labels: the `−10` / `+30` seconds text answers the
