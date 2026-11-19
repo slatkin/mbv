@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::bridge::frame::library::{GuiSearchFrame, GuiSearchRowFrame};
+use crate::bridge::frame::playlists::GuiPlaylistsFrame;
 use crate::bridge::sections::GuiSection;
 
 /// One found row, as the frame carries it.
@@ -79,6 +80,26 @@ fn route_key(
     ));
 }
 
+/// Carry the Playlists screen's section, the screen the top bar's Playlists
+/// control opens: it carries no Library list, so the Library keys take no key
+/// while it shows.
+fn open_playlists(state: &LibraryState) {
+    let batch = GuiSectionBatch {
+        playlists: Some(GuiSection {
+            revision: 1,
+            value: Some(GuiPlaylistsFrame {
+                playlists: Vec::new(),
+                open: None,
+                loading: false,
+                open_loading: false,
+            }),
+        }),
+        ..GuiSectionBatch::default()
+    };
+    let mut sections = state.sections.clone();
+    sections.apply_batch(&batch);
+}
+
 /// Carry the Search section's results frame the Esc close and the highlight
 /// read.
 fn carry_search(state: &LibraryState, frame: GuiSearchFrame) {
@@ -136,6 +157,38 @@ fn ctrl_k_answers_the_core_while_no_top_bar_mounts_the_search_field() {
     assert_eq!(
         facts,
         ["k=Core(None) focused=false mounted=false highlight=None"]
+    );
+    assert_eq!(commands(&rx), []);
+}
+
+// Review finding 2026-11-19: the top bar paints the Search control above every
+// screen but Settings, so the armed field keeps typing while the Playlists
+// screen shows. Routed after the Playlists gate, each keystroke became a core
+// keybind and the field got no text.
+#[test]
+fn the_focused_field_types_while_the_playlists_screen_shows() {
+    let (facts, rx) = run(move |state, facts| {
+        state.mount_search_field();
+        state.focus_search_field();
+        open_playlists(state);
+        route_key(state, facts, "b", "b", false, false);
+    });
+    assert_eq!(facts, ["b=Text focused=true mounted=true highlight=None"]);
+    assert_eq!(commands(&rx), []);
+}
+
+// The chord's own arm reaches the field the control paints there too: the
+// Playlists screen carries no Library list, and Ctrl+K still arms the field.
+#[test]
+fn ctrl_k_arms_the_field_while_the_playlists_screen_shows() {
+    let (facts, rx) = run(move |state, facts| {
+        state.mount_search_field();
+        open_playlists(state);
+        route_key(state, facts, "k", "k", false, true);
+    });
+    assert_eq!(
+        facts,
+        ["k=Handled focused=true mounted=true highlight=None"]
     );
     assert_eq!(commands(&rx), []);
 }

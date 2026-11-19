@@ -472,6 +472,46 @@ pub fn route_library_key(
             None => KeyOutcome::Core(target),
         };
     }
+    // The `Ctrl+K` chord and the keyboard hold (design D3, step 2 and 3, row
+    // 12.1): the Search field takes the keyboard wherever its element paints,
+    // and the top bar's Search control paints at the window's top edge in every
+    // screen but Settings — above the Queue, above the Library panel, and
+    // above the Playlists screen. So this step runs before the Playlists screen
+    // and the Library-presence gates below: a focused field must type there
+    // too, not hand its keystrokes to the core's keybinds. Only one element
+    // holds DOM focus, so the order against the field the Panel routes is safe.
+    //
+    // The chord arms the field only while a mounted element paints it: the
+    // control mounts it while it paints the field — inline, or inside its
+    // collapsed panel — so a collapsed-and-closed control holds no field, and
+    // the chord opens the panel instead: the field the panel paints mounts and
+    // takes the keyboard the next frame (user request 2026-11-19). It runs
+    // before the open-field checks — even while the filter holds the keyboard,
+    // where the DOM focus move closes the filter the way any other focus move
+    // does.
+    if key.modifiers.ctrl_key
+        && !key.meta_key
+        && !key.modifiers.alt_key
+        && !key.modifiers.shift_key
+        && matches!(key.key.as_str(), "k" | "K")
+    {
+        if state.search_collapsed() && !state.search_panel_open() {
+            state.open_search_panel();
+        }
+        if state.search_field_mounted() {
+            state.focus_search_field();
+            return KeyOutcome::Handled;
+        }
+    }
+    // (2) The focused Search field takes the keys: its hold on the keyboard is
+    // DOM focus, which no panel key runs while it types (the key-leak rule),
+    // and the field's typing is the `Text` answer the forwarder lets through
+    // (design D3, step 2, row 12.1). Both facts must hold: a stale armed fact
+    // an unmounted bar retracted must never route a key under it (the same
+    // key-leak gate).
+    if state.search_field_mounted() && state.search_field_focused() {
+        return route_search_key(state, key, sections.search.peek().as_ref());
+    }
     // The Playlists screen takes the rename field's keys while it holds the
     // keyboard, and the core takes every other key: the Library panel is not
     // painted, so no Library step runs.
@@ -492,38 +532,7 @@ pub fn route_library_key(
     if !LibraryState::library_shown(sections.library_list.peek().as_deref()) {
         return KeyOutcome::Core(target);
     }
-    // The `Ctrl+K` chord (design D3, step 3, row 12.1): the Search field takes
-    // the keyboard wherever the Library panel shows, before the open-field
-    // checks — even while the filter holds it, where the DOM focus move closes
-    // the filter the way any other focus move does. The chord arms the field
-    // only while a mounted element paints it: the top bar's Search control
-    // mounts it while it paints the field — inline, or inside its collapsed
-    // panel — so a collapsed-and-closed control holds no field, and the chord
-    // opens the panel instead: the field the panel paints mounts and takes
-    // the keyboard the next frame (user request 2026-11-19).
-    if key.modifiers.ctrl_key
-        && !key.meta_key
-        && !key.modifiers.alt_key
-        && !key.modifiers.shift_key
-        && matches!(key.key.as_str(), "k" | "K")
-    {
-        if state.search_collapsed() && !state.search_panel_open() {
-            state.open_search_panel();
-        }
-        if state.search_field_mounted() {
-            state.focus_search_field();
-            return KeyOutcome::Handled;
-        }
-    }
-    // (2) An open text field of the panel takes the keys. The Search field
-    // routes first: its hold on the keyboard is DOM focus, which no panel key
-    // runs while it types (the key-leak rule), and the field's typing is the
-    // `Text` answer the forwarder lets through (design D3, step 2, row 12.1).
-    // Both facts must hold: a stale armed fact an unmounted bar retracted must
-    // never route a key under it (the same key-leak gate).
-    if state.search_field_mounted() && state.search_field_focused() {
-        return route_search_key(state, key, sections.search.peek().as_ref());
-    }
+    // (2) An open text field of the panel takes the keys (design D3, step 2).
     if let Some(outcome) = route_open_field_key(state, key) {
         return outcome;
     }
