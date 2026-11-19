@@ -60,6 +60,10 @@ pub struct LibraryTopBarProps {
     /// marks itself current on it alone.
     #[props(default)]
     pub home_active: bool,
+    /// Whether the Playlists screen shows: the Playlists icon marks itself
+    /// current, as the Home icon does on its content.
+    #[props(default)]
+    pub playlists_active: bool,
     /// A destination press reported to the root (design D8), carrying the
     /// pressed position: the root shows the Library in place of the Queue
     /// while the Mini arrangement holds, and the active destination's own
@@ -255,12 +259,18 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             // screen, as the `playlists_open` action's toggle.
             {
                 let playlists_library = library.clone();
+                let playlists_color = if props.playlists_active {
+                    canvas_var("heading")
+                } else {
+                    canvas_var("muted")
+                };
                 rsx! {
                     button {
                         "type": "button",
                         class: "flex flex-none items-center justify-center",
-                        style: "width: 44px; height: 44px; color: var(--canvas-muted); cursor: pointer;",
+                        style: "width: 44px; height: 44px; color: {playlists_color}; cursor: pointer;",
                         "aria-label": "Playlists",
+                        "aria-current": props.playlists_active.then_some("page"),
                         "data-library-playlists": "",
                         onclick: move |_| open_playlists(&playlists_library),
                         ListVideo { size: 18 }

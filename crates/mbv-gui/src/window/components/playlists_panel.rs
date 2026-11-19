@@ -17,11 +17,13 @@ use crate::bridge::frame::playlists::{GuiOpenPlaylist, GuiPlaylistRow, GuiPlayli
 use crate::bridge::playlists::{GuiPlaylistAction, GuiPlaylistsCommand};
 use crate::window::arrangement::GuiArrangement;
 use crate::window::channel::CoreLink;
+use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::components::settings_button::{SettingsButton, SettingsButtonVariant};
 use crate::window::icons::{ChevronDown, ChevronRight};
 use crate::window::input::f32_from_f64;
 use crate::window::library::state::LibraryState;
+use crate::window::resize::PanelWidthsStore;
 use crate::window::sections::Sections;
 use crate::window::settings::focus::focus_on_mount;
 use crate::window::settings::state::{SettingsForm, SettingsState};
@@ -178,6 +180,8 @@ pub struct PlaylistsPanelProps {
     pub arrangement: GuiArrangement,
     /// The tree column's painted width in Wide.
     pub list_width: f32,
+    /// The column the tree sits in: the divider drag's clamp.
+    pub library_column: f32,
 }
 
 /// The Playlists screen.
@@ -186,6 +190,9 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
     let sections = consume_context::<Sections>();
     let library = consume_context::<LibraryState>();
     let settings = consume_context::<SettingsState>();
+    let widths_store = consume_context::<PanelWidthsStore>();
+    let mut drag_widths = widths_store.clone();
+    let mut reset_widths = widths_store;
     let pick: Signal<Option<Pick>> = use_signal(|| None);
     let mut menu: Signal<Option<RowMenu>> = use_signal(|| None);
     let menu_row_slots: Signal<Vec<Option<Event<MountedData>>>> = use_signal(Vec::new);
@@ -195,9 +202,16 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
     };
     let link = library.link.clone();
     let wide = props.arrangement == GuiArrangement::Wide;
+    // The first playlist is picked until the user picks a row.
     let picked = pick
         .cloned()
-        .filter(|pick| pick_title(&frame, pick).is_some());
+        .filter(|pick| pick_title(&frame, pick).is_some())
+        .or_else(|| {
+            frame
+                .playlists
+                .first()
+                .map(|playlist| Pick::Playlist(playlist.id.clone()))
+        });
 
     let tree = rsx! {
         div {
@@ -215,7 +229,7 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
             } else {
                 "background: var(--canvas-library-panel); border-color: var(--canvas-border);".to_owned()
             },
-            { tree_column(&frame, &link, &settings, pick, menu) }
+            { tree_column(&frame, &link, &settings, picked.as_ref(), pick, menu) }
         }
     };
     let hero = rsx! {
@@ -299,6 +313,19 @@ pub fn PlaylistsPanel(props: PlaylistsPanelProps) -> Element {
             },
             if wide {
                 {tree}
+                // The tree column's divider: dragging resizes it, a
+                // double-click returns the canvas width.
+                PanelDivider {
+                    side: DividerSide::Left,
+                    name: DividerName::List,
+                    width: props.list_width,
+                    on_drag: move |width| {
+                        drag_widths.drag_list_width(width, props.library_column);
+                    },
+                    on_reset: move |()| {
+                        reset_widths.reset_list_width();
+                    },
+                }
                 {hero}
             } else {
                 {hero}
@@ -334,6 +361,7 @@ fn tree_column(
     frame: &GuiPlaylistsFrame,
     link: &CoreLink,
     settings: &SettingsState,
+    picked: Option<&Pick>,
     pick: Signal<Option<Pick>>,
     menu: Signal<Option<RowMenu>>,
 ) -> Element {
@@ -370,7 +398,7 @@ fn tree_column(
                 }
             }
             for playlist in &frame.playlists {
-                { playlist_node(playlist, frame, link, settings, pick, menu) }
+                { playlist_node(playlist, frame, link, settings, picked, pick, menu) }
             }
         }
     }
@@ -383,13 +411,14 @@ fn playlist_node(
     frame: &GuiPlaylistsFrame,
     link: &CoreLink,
     settings: &SettingsState,
+    picked: Option<&Pick>,
     pick: Signal<Option<Pick>>,
     menu: Signal<Option<RowMenu>>,
 ) -> Element {
     let rename = settings.ui.cloned().rename;
     let id = playlist.id.clone();
     let is_open = frame.open.as_ref().is_some_and(|open| open.id == id);
-    let selected = pick.read().as_ref() == Some(&Pick::Playlist(id.clone()));
+    let selected = picked == Some(&Pick::Playlist(id.clone()));
     let press_link = link.clone();
     let play_link = link.clone();
     let press_id = id.clone();
@@ -449,7 +478,7 @@ fn playlist_node(
                 { rename_field(settings, rename_name) }
             }
             if is_open {
-                { items_block(frame.open.as_ref(), link, pick, menu) }
+                { items_block(frame.open.as_ref(), link, picked, pick, menu) }
             }
         }
     }
@@ -459,6 +488,7 @@ fn playlist_node(
 fn items_block(
     open: Option<&GuiOpenPlaylist>,
     link: &CoreLink,
+    picked: Option<&Pick>,
     pick: Signal<Option<Pick>>,
     menu: Signal<Option<RowMenu>>,
 ) -> Element {
@@ -475,7 +505,7 @@ fn items_block(
                         playlist: open.id.clone(),
                         item: item.id.clone(),
                     };
-                    let selected = pick.read().as_ref() == Some(&this);
+                    let selected = picked == Some(&this);
                     let press = this.clone();
                     let context = this.clone();
                     let play_link = link.clone();

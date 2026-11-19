@@ -184,7 +184,7 @@ impl EmbyClient {
             &[
                 ("IncludeItemTypes", "Playlist"),
                 ("Recursive", "true"),
-                ("Fields", ""),
+                ("Fields", "ChildCount"),
             ],
         )
     }

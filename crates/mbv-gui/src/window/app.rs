@@ -645,8 +645,11 @@ pub fn App() -> Element {
                     if !settings_open {
                         LibraryTopBar {
                             tabs: header.tabs.clone(),
-                            current_tab: header.current_tab,
-                            home_active: header.home_active,
+                            // The Playlists screen is the selected destination
+                            // while it shows: no tab and not Home marks itself.
+                            current_tab: if playlists_open { None } else { header.current_tab },
+                            home_active: header.home_active && !playlists_open,
+                            playlists_active: playlists_open,
                             on_destination_opened: Some(on_destination_opened),
                             search: header.search.clone(),
                         }
@@ -674,6 +677,7 @@ pub fn App() -> Element {
                                 PlaylistsPanel {
                                     arrangement,
                                     list_width: widths.list,
+                                    library_column: widths.library_column,
                                 }
                             } else if library_visible && has_library_list {
                                 LibraryPanel {

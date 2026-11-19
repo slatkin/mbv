@@ -245,6 +245,7 @@ fn props(
         tabs,
         current_tab,
         home_active,
+        playlists_active: false,
         on_destination_opened: None,
         search: None,
     }
