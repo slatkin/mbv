@@ -406,12 +406,12 @@ fn a_press_on_the_playlists_control_toggles_the_screen_at_playlists() {
     let state = fixture.state.clone();
     fixture.in_runtime(move || open_playlists(&state));
 
-    let settings_commands: Vec<CoreInput> = fixture.receiver.try_iter().collect();
-    assert_eq!(settings_commands.len(), 1);
+    let commands: Vec<CoreInput> = fixture.receiver.try_iter().collect();
+    assert_eq!(commands.len(), 1);
     assert!(
         matches!(
-            settings_commands.first(),
-            Some(CoreInput::Settings(mbv::GuiSettingsCommand::OpenPlaylists))
+            commands.first(),
+            Some(CoreInput::Playlists(mbv::GuiPlaylistsCommand::Toggle))
         ),
         "the Playlists control sends the toggle command"
     );

@@ -15,6 +15,7 @@ use mbv_ui_msg::{KeyEvent, PointerEvent};
 use crate::bridge::keys::KeyTarget;
 use crate::bridge::layout::LayoutReport;
 use crate::bridge::library::GuiLibraryCommand;
+use crate::bridge::playlists::GuiPlaylistsCommand;
 use crate::bridge::sections::GuiSectionBatch;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::core_thread::CoreInput;
@@ -133,6 +134,14 @@ impl CoreLink {
                 "the settings command names no setting this build declares; the request drops"
             );
         }
+    }
+
+    /// The `playlists` command: the Playlists screen's semantic request.
+    pub fn playlists(&self, command: GuiPlaylistsCommand) {
+        self.push(
+            CoreInput::Playlists(crate::bridge::playlists::neutral(command)),
+            "playlists",
+        );
     }
 
     /// The `sync` command (D4): the window asks for a full snapshot once its

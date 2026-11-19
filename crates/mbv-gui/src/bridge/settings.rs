@@ -7,7 +7,6 @@
 
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::SettingKey;
-use mbv_ui_msg::MusicTreeAction;
 
 use crate::bridge::frame::playback::{GuiTargetKey, chooser_target_key};
 use crate::bridge::frame::settings::GuiSettingsSection;
@@ -24,10 +23,6 @@ pub enum GuiSettingsCommand {
     /// change nothing while it is open (design D5's `open`, D11
     /// *Mouse-centric*). The Library top bar's Settings control sends it.
     Open,
-    /// Open the screen at Playlists, and close it while it shows Playlists —
-    /// the `playlists_open` action's toggle. The Library top bar's Playlists
-    /// control sends it (user request 2026-11-19).
-    OpenPlaylists,
     /// Close the screen.
     Close,
     /// Show a section, and start its load.
@@ -85,27 +80,6 @@ pub enum GuiSettingsCommand {
     KeysClear { target: String },
     /// Select a playback target.
     SelectTarget { target: GuiTargetKey },
-    /// Open a playlist, or the list when `id` is absent.
-    PlaylistOpen { id: Option<String> },
-    /// Return from the open playlist to the list.
-    PlaylistBack,
-    /// Refresh the open playlist, or the one `id` names.
-    PlaylistRefresh { id: Option<String> },
-    /// Play, shuffle, or enqueue a whole playlist.
-    PlaylistAction {
-        id: String,
-        action: GuiPlaylistAction,
-    },
-    /// Play, shuffle, or enqueue one item of the open playlist.
-    PlaylistItemAction {
-        id: String,
-        item_id: String,
-        action: GuiPlaylistAction,
-    },
-    /// Rename a playlist.
-    PlaylistRename { id: String, name: String },
-    /// Raise the delete confirmation for a playlist.
-    PlaylistDelete { id: String },
     /// Reset the GUI's UI state.
     ResetUiState,
 }
@@ -140,24 +114,6 @@ impl From<GuiChoicesKind> for MultiSelectKind {
     }
 }
 
-/// The playlist operation a playlist command carries (design D5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuiPlaylistAction {
-    Play,
-    Shuffle,
-    Enqueue,
-}
-
-impl From<GuiPlaylistAction> for MusicTreeAction {
-    fn from(action: GuiPlaylistAction) -> Self {
-        match action {
-            GuiPlaylistAction::Play => Self::Play,
-            GuiPlaylistAction::Shuffle => Self::Shuffle,
-            GuiPlaylistAction::Enqueue => Self::Enqueue,
-        }
-    }
-}
-
 /// Translate the wire form into the neutral command (design D5). `None` for a
 /// request this build cannot address — a setting name no `SettingKey`
 /// declares — so a stale window's edit reaches nothing.
@@ -165,7 +121,6 @@ impl From<GuiPlaylistAction> for MusicTreeAction {
 pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
     Some(match command {
         GuiSettingsCommand::Open => mbv::GuiSettingsCommand::Open,
-        GuiSettingsCommand::OpenPlaylists => mbv::GuiSettingsCommand::OpenPlaylists,
         GuiSettingsCommand::Close => mbv::GuiSettingsCommand::Close,
         GuiSettingsCommand::SelectSection { section } => mbv::GuiSettingsCommand::SelectSection {
             section: section.into(),
@@ -227,30 +182,6 @@ pub fn neutral(command: GuiSettingsCommand) -> Option<mbv::GuiSettingsCommand> {
         GuiSettingsCommand::SelectTarget { target } => mbv::GuiSettingsCommand::SelectTarget {
             target: chooser_target_key(&target),
         },
-        GuiSettingsCommand::PlaylistOpen { id } => mbv::GuiSettingsCommand::PlaylistOpen { id },
-        GuiSettingsCommand::PlaylistBack => mbv::GuiSettingsCommand::PlaylistBack,
-        GuiSettingsCommand::PlaylistRefresh { id } => {
-            mbv::GuiSettingsCommand::PlaylistRefresh { id }
-        }
-        GuiSettingsCommand::PlaylistAction { id, action } => {
-            mbv::GuiSettingsCommand::PlaylistAction {
-                id,
-                action: action.into(),
-            }
-        }
-        GuiSettingsCommand::PlaylistItemAction {
-            id,
-            item_id,
-            action,
-        } => mbv::GuiSettingsCommand::PlaylistItemAction {
-            id,
-            item_id,
-            action: action.into(),
-        },
-        GuiSettingsCommand::PlaylistRename { id, name } => {
-            mbv::GuiSettingsCommand::PlaylistRename { id, name }
-        }
-        GuiSettingsCommand::PlaylistDelete { id } => mbv::GuiSettingsCommand::PlaylistDelete { id },
         GuiSettingsCommand::ResetUiState => mbv::GuiSettingsCommand::ResetUiState,
     })
 }

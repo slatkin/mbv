@@ -17,8 +17,8 @@ use rstest::rstest;
 #[case::the_same_group_closes(Some(GuiSettingsSection::Keys), GuiSettingsGroup::F2, None)]
 #[case::another_group_switches(
     Some(GuiSettingsSection::Services),
-    GuiSettingsGroup::Playlists,
-    Some(GuiSettingsSection::Playlists)
+    GuiSettingsGroup::Sessions,
+    Some(GuiSettingsSection::Sessions)
 )]
 fn the_open_actions_follow_the_toggle_rule(
     #[case] shown: Option<GuiSettingsSection>,
@@ -33,18 +33,6 @@ fn the_open_actions_follow_the_toggle_rule(
     app.toggle_gui_settings(group);
 
     assert_eq!(app.gui_settings().map(|state| state.section), expected);
-}
-
-/// The sidebar lists no Playlists (user request 2026-11-19): the Library top
-/// bar's Playlists control is the section's route, so the sidebar's own route
-/// is gone. `Sessions` keeps its sidebar entry — the `Sessions` group's route
-/// is the F3 key and the chooser, not a top-bar control.
-#[test]
-fn the_sidebar_lists_no_playlists_section() {
-    let sections = GuiSettingsSection::shown_sections();
-
-    assert!(!sections.contains(&GuiSettingsSection::Playlists));
-    assert_eq!(sections.last(), Some(&GuiSettingsSection::Sessions));
 }
 
 /// A setup secret never reaches a log line (design D9, the spec's *A failed

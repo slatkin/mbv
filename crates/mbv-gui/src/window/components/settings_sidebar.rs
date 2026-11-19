@@ -22,8 +22,8 @@ use crate::window::components::settings_screen::{
     section_label, section_wire, settings_section_view,
 };
 use crate::window::icons::{
-    ArrowLeft, Cast, Clock, IconProps, Keyboard, Library, ListOrdered, ListPlus, Monitor, Play,
-    Rss, Server, SquarePlay, Zap,
+    ArrowLeft, Cast, Clock, IconProps, Keyboard, Library, ListOrdered, Monitor, Play, Rss, Server,
+    SquarePlay, Zap,
 };
 use crate::window::sections::Sections;
 use crate::window::settings::state::{SettingsPane, SettingsState};
@@ -59,7 +59,6 @@ fn section_icon(section: GuiSettingsSection) -> SectionIcon {
         GuiSettingsSection::Actions => Zap,
         GuiSettingsSection::Keys => Keyboard,
         GuiSettingsSection::Sessions => Cast,
-        GuiSettingsSection::Playlists => ListPlus,
     }
 }
 

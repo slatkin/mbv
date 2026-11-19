@@ -50,8 +50,6 @@ impl App {
                     state.set_choices(MultiSelectKind::MyLanguages, rows);
                 }
             }
-            // Playlists lists the saved playlists as it opens (design D9).
-            GuiSettingsSection::Playlists => self.spawn_load_playlists(),
             GuiSettingsSection::Services
             | GuiSettingsSection::Display
             | GuiSettingsSection::Session

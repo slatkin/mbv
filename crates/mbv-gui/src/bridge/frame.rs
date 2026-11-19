@@ -9,6 +9,7 @@ pub mod chrome;
 pub mod library;
 pub mod overlay;
 pub mod playback;
+pub mod playlists;
 pub mod queue;
 pub mod settings;
 pub mod theme;

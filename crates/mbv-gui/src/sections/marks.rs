@@ -42,7 +42,7 @@ pub(crate) fn marks_for_hook(hook: DrainHook) -> &'static [Section] {
         | DrainHook::DrainFeedAddResults
         | DrainHook::DrainWsEvents
         | DrainHook::DrainAudiobookshelfSocketEvents
-        | DrainHook::DrainIdleFeed => &[Section::Library, Section::Settings],
+        | DrainHook::DrainIdleFeed => &[Section::Library, Section::Settings, Section::Playlists],
         DrainHook::DrainSearchResults => &[Section::Search],
         DrainHook::DrainCardImageCompletions => &[Section::Library],
         DrainHook::TickSearchClock

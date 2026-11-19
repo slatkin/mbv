@@ -32,7 +32,6 @@ use crate::window::arrangement::{GuiArrangement, SETTINGS_SIDEBAR_WIDTH_PX};
 use crate::window::components::settings_feeds::SettingsFeeds;
 use crate::window::components::settings_keys::SettingsKeys;
 use crate::window::components::settings_library::SettingsLibrary;
-use crate::window::components::settings_playlists::SettingsPlaylists;
 use crate::window::components::settings_rows::SettingsRows;
 use crate::window::components::settings_services::SettingsServices;
 use crate::window::components::settings_sessions::SettingsSessions;
@@ -61,7 +60,6 @@ pub(crate) fn section_label(section: GuiSettingsSection) -> &'static str {
         GuiSettingsSection::Actions => "Actions",
         GuiSettingsSection::Keys => "Keys",
         GuiSettingsSection::Sessions => "Sessions",
-        GuiSettingsSection::Playlists => "Playlists",
     }
 }
 
@@ -81,7 +79,6 @@ pub(crate) fn section_wire(section: GuiSettingsSection) -> &'static str {
         GuiSettingsSection::Actions => "actions",
         GuiSettingsSection::Keys => "keys",
         GuiSettingsSection::Sessions => "sessions",
-        GuiSettingsSection::Playlists => "playlists",
     }
 }
 
@@ -205,7 +202,6 @@ fn content_pane(frame: &GuiSettingsFrame) -> Element {
         GuiSettingsContent::Feeds { .. } => rsx! { SettingsFeeds {} },
         GuiSettingsContent::Keys { .. } => rsx! { SettingsKeys {} },
         GuiSettingsContent::Sessions { .. } => rsx! { SettingsSessions {} },
-        GuiSettingsContent::Playlists { .. } => rsx! { SettingsPlaylists {} },
     }
 }
 

@@ -77,9 +77,7 @@ impl CoreThread {
                     SidebarId::Sessions => {
                         self.app.toggle_gui_settings(GuiSettingsGroup::Sessions);
                     }
-                    SidebarId::Playlists => {
-                        self.app.toggle_gui_settings(GuiSettingsGroup::Playlists);
-                    }
+                    SidebarId::Playlists => self.app.toggle_gui_playlists(),
                     // Search has no toggle request path: its open raises
                     // `OpenSidebar(Search)` below, which the GUI drops too.
                     SidebarId::Search => log_undelivered(&request),
@@ -108,17 +106,9 @@ impl CoreThread {
                 },
                 OverlayRequest::DismissSidebar(sidebar) => match sidebar {
                     // The playlist play's `ReplacementExecutor` raises this
-                    // after the queue replaces (design D2): the screen closes
-                    // while it shows Playlists, so the replaced queue shows.
-                    SidebarId::Playlists => {
-                        if self
-                            .app
-                            .gui_settings()
-                            .is_some_and(|state| state.section == GuiSettingsSection::Playlists)
-                        {
-                            self.app.close_gui_settings();
-                        }
-                    }
+                    // after the queue replaces (design D2): the screen closes,
+                    // so the replaced queue shows.
+                    SidebarId::Playlists => self.app.close_gui_playlists(),
                     // The GUI's Sessions and Settings close through the
                     // screen's own commands, and no Search dismissal exists.
                     SidebarId::Settings | SidebarId::Sessions | SidebarId::Search => {

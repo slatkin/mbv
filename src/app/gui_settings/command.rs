@@ -8,9 +8,9 @@ use mbv_queue::FeedKind;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::panel_targets::ChooserTargetKey;
 use mbv_ui_model::settings::ServiceActionIntent;
-use mbv_ui_msg::{KeyEvent, MusicTreeAction};
+use mbv_ui_msg::KeyEvent;
 
-use super::{GuiSettingsGroup, GuiSettingsSection};
+use super::GuiSettingsSection;
 use crate::app::App;
 
 /// One setup form a Services section can show (design D5's `cancelSetup`
@@ -65,12 +65,6 @@ pub enum GuiSettingsCommand {
     /// (design D5's `open`, design D11 *Mouse-centric*). The Library top bar's
     /// Settings control sends it.
     Open,
-    /// Open the screen at Playlists, and close it while it shows Playlists —
-    /// the `playlists_open` action's toggle (spec gui-settings-screen "Open
-    /// actions", user request 2026-11-19). The Library top bar's Playlists
-    /// control sends it: the pointer's route to the playlist screen now that
-    /// the sidebar lists the section no more.
-    OpenPlaylists,
     /// Close the screen (design D2).
     Close,
     /// Show a section, and start its load (design D9).
@@ -138,24 +132,6 @@ pub enum GuiSettingsCommand {
     KeysClear { target: String },
     /// Select a playback target (row 5.5).
     SelectTarget { target: ChooserTargetKey },
-    /// Open a playlist, or the list when `id` is `None` (row 5.5).
-    PlaylistOpen { id: Option<String> },
-    /// Return from the open playlist to the list (row 5.5).
-    PlaylistBack,
-    /// Refresh the open playlist, or the one `id` names (row 5.5).
-    PlaylistRefresh { id: Option<String> },
-    /// Play, shuffle, or enqueue a whole playlist (row 5.5).
-    PlaylistAction { id: String, action: MusicTreeAction },
-    /// Play, shuffle, or enqueue one item of the open playlist (row 5.5).
-    PlaylistItemAction {
-        id: String,
-        item_id: String,
-        action: MusicTreeAction,
-    },
-    /// Rename a playlist (row 5.5).
-    PlaylistRename { id: String, name: String },
-    /// Raise the delete confirmation for a playlist (row 5.5).
-    PlaylistDelete { id: String },
     /// Reset the GUI's UI state (row 5.6, design D10).
     ResetUiState,
 }
@@ -173,9 +149,7 @@ impl App {
         );
         if !matches!(
             command,
-            GuiSettingsCommand::Open
-                | GuiSettingsCommand::OpenPlaylists
-                | GuiSettingsCommand::ResetUiState
+            GuiSettingsCommand::Open | GuiSettingsCommand::ResetUiState
         ) && !self.gui_settings_is_open()
         {
             Self::log_ignored_gui_settings_command("stale", "the Settings screen is closed");
@@ -183,9 +157,6 @@ impl App {
         }
         match command {
             GuiSettingsCommand::Open => self.open_gui_settings(),
-            GuiSettingsCommand::OpenPlaylists => {
-                self.toggle_gui_settings(GuiSettingsGroup::Playlists);
-            }
             GuiSettingsCommand::Close => self.close_gui_settings(),
             GuiSettingsCommand::SelectSection { section } => {
                 self.select_gui_settings_section(section);
@@ -246,49 +217,11 @@ impl App {
             GuiSettingsCommand::SelectTarget { target } => {
                 self.apply_gui_settings_select_target(&target);
             }
-            command @ (GuiSettingsCommand::PlaylistOpen { .. }
-            | GuiSettingsCommand::PlaylistBack
-            | GuiSettingsCommand::PlaylistRefresh { .. }
-            | GuiSettingsCommand::PlaylistAction { .. }
-            | GuiSettingsCommand::PlaylistItemAction { .. }
-            | GuiSettingsCommand::PlaylistRename { .. }
-            | GuiSettingsCommand::PlaylistDelete { .. }) => {
-                self.apply_gui_settings_playlist_command(command);
-            }
             // The reset's steps span the App and the core thread (design D10):
             // the GUI's tick host applies the whole reset through
             // `CoreThread::reset_gui_ui_state`, so the App-side arm starts it
             // by running the App-owned steps in their order.
             GuiSettingsCommand::ResetUiState => self.reset_gui_ui_state(),
-        }
-    }
-
-    /// The Playlists section's commands (design D9), split out so the
-    /// dispatcher stays under the complexity lint's line count.
-    fn apply_gui_settings_playlist_command(&mut self, command: GuiSettingsCommand) {
-        match command {
-            GuiSettingsCommand::PlaylistOpen { id } => {
-                self.apply_gui_settings_playlist_open(id.as_deref());
-            }
-            GuiSettingsCommand::PlaylistBack => self.apply_gui_settings_playlist_back(),
-            GuiSettingsCommand::PlaylistRefresh { id } => {
-                self.apply_gui_settings_playlist_refresh(id.as_deref());
-            }
-            GuiSettingsCommand::PlaylistAction { id, action } => {
-                self.apply_gui_settings_playlist_action(&id, action);
-            }
-            GuiSettingsCommand::PlaylistItemAction {
-                id,
-                item_id,
-                action,
-            } => self.apply_gui_settings_playlist_item_action(&id, &item_id, action),
-            GuiSettingsCommand::PlaylistRename { id, name } => {
-                self.apply_gui_settings_playlist_rename(&id, &name);
-            }
-            GuiSettingsCommand::PlaylistDelete { id } => {
-                self.apply_gui_settings_playlist_delete(&id);
-            }
-            _ => unreachable!("the caller matches every other variant"),
         }
     }
 }

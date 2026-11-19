@@ -13,19 +13,17 @@
 mod command;
 mod feeds;
 mod keys;
-mod playlists;
 mod projection;
 mod reset;
 mod sections;
 mod services;
+mod sessions;
 
 pub use self::command::{GuiSettingsCommand, GuiSetupService, SetupSecret};
 pub use self::projection::{
     GuiSettingsChoiceProjection, GuiSettingsFeedProjection, GuiSettingsFeedsProjection,
     GuiSettingsKeyRefusalProjection, GuiSettingsKeyRowProjection, GuiSettingsKeysProjection,
-    GuiSettingsLibraryProjection, GuiSettingsOpenPlaylistProjection,
-    GuiSettingsPlaylistItemProjection, GuiSettingsPlaylistRowProjection,
-    GuiSettingsPlaylistsProjection, GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection,
+    GuiSettingsLibraryProjection, GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection,
     GuiSettingsRowKind, GuiSettingsRowProjection, GuiSettingsServiceProjection,
     GuiSettingsServicesProjection, GuiSettingsSetupProjection,
 };
@@ -36,8 +34,8 @@ use mbv_ui_model::settings::{SETTING_SECTIONS, SettingKey, SettingScope, Setting
 use super::App;
 
 /// The one Settings screen's sections (design D3): the closed list in the
-/// spec's sidebar order. `Sessions` and `Playlists` are the GUI's own sidebar
-/// sections; the rest map one-to-one onto the F2 sections of
+/// spec's sidebar order. `Sessions` is the GUI's own sidebar
+/// section; the rest map one-to-one onto the F2 sections of
 /// `SETTING_SECTIONS` by name, with the TUI's `Panel` page absent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuiSettingsSection {
@@ -52,12 +50,11 @@ pub enum GuiSettingsSection {
     Actions,
     Keys,
     Sessions,
-    Playlists,
 }
 
 impl GuiSettingsSection {
     /// The closed sidebar order (the spec's sidebar-list requirement).
-    pub const ALL: [GuiSettingsSection; 12] = [
+    pub const ALL: [GuiSettingsSection; 11] = [
         Self::Services,
         Self::Playback,
         Self::Display,
@@ -69,12 +66,11 @@ impl GuiSettingsSection {
         Self::Actions,
         Self::Keys,
         Self::Sessions,
-        Self::Playlists,
     ];
 
     /// The `SETTING_SECTIONS` entry the section draws its F2 rows from.
-    /// `Sessions` and `Playlists` carry no F2 rows: their content is the
-    /// playback-target chooser and the playlist list (design D3).
+    /// `Sessions` carries no F2 rows: its content is the playback-target
+    /// chooser (design D3).
     fn setting_section(self) -> Option<&'static str> {
         match self {
             Self::Services => Some("Services"),
@@ -87,13 +83,13 @@ impl GuiSettingsSection {
             Self::Feeds => Some("Feeds"),
             Self::Actions => Some("Actions"),
             Self::Keys => Some("Keys"),
-            Self::Sessions | Self::Playlists => None,
+            Self::Sessions => None,
         }
     }
 
     /// The F2 rows the section shows (design D4): the `SETTING_SECTIONS` rows
     /// of the section's name, filtered to the keys whose scope is
-    /// `AllClients`. Empty for `Sessions` and `Playlists`.
+    /// `AllClients`. Empty for `Sessions`.
     #[must_use]
     pub fn shown_rows(self) -> Vec<SettingKey> {
         let Some(name) = self.setting_section() else {
@@ -112,18 +108,15 @@ impl GuiSettingsSection {
     }
 
     /// The sections the sidebar lists (design D3): the closed order, without
-    /// a section whose every F2 row the GUI hides. `Playlists` lists no more
-    /// either: the Library top bar's Playlists control is the section's route
-    /// now, so the sidebar's route to it is gone (user request 2026-11-19).
+    /// a section whose every F2 row the GUI hides.
     #[must_use]
     pub fn shown_sections() -> Vec<Self> {
         Self::ALL
             .into_iter()
             .filter(|section| {
-                *section != Self::Playlists
-                    && section
-                        .setting_section()
-                        .is_none_or(|_| !section.shown_rows().is_empty())
+                section
+                    .setting_section()
+                    .is_none_or(|_| !section.shown_rows().is_empty())
             })
             .collect()
     }
@@ -131,25 +124,23 @@ impl GuiSettingsSection {
 
 /// The open actions' groups (`add-gui-settings-screen` design D2): the
 /// sections one open action's toggle rule compares. `F2` is the group the
-/// `settings_open` action toggles — every section except `Sessions` and
-/// `Playlists` (the spec's open-action rule).
+/// `settings_open` action toggles — every section except `Sessions` (the
+/// spec's open-action rule).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuiSettingsGroup {
     F2,
     Sessions,
-    Playlists,
 }
 
 impl GuiSettingsGroup {
     /// The section the group's open action opens at when the screen is
-    /// closed: `settings_open` at Services, the other two at their own
-    /// sections (the spec's open-action requirement).
+    /// closed: `settings_open` at Services, the other at its own
+    /// section (the spec's open-action requirement).
     #[must_use]
     pub fn section(self) -> GuiSettingsSection {
         match self {
             Self::F2 => GuiSettingsSection::Services,
             Self::Sessions => GuiSettingsSection::Sessions,
-            Self::Playlists => GuiSettingsSection::Playlists,
         }
     }
 
@@ -158,12 +149,8 @@ impl GuiSettingsGroup {
     #[must_use]
     pub fn contains(self, section: GuiSettingsSection) -> bool {
         match self {
-            Self::F2 => !matches!(
-                section,
-                GuiSettingsSection::Sessions | GuiSettingsSection::Playlists
-            ),
+            Self::F2 => section != GuiSettingsSection::Sessions,
             Self::Sessions => section == GuiSettingsSection::Sessions,
-            Self::Playlists => section == GuiSettingsSection::Playlists,
         }
     }
 }
@@ -279,6 +266,7 @@ impl App {
     /// drain arm's open, and the open half of the toggle rule. The section's
     /// load starts here (design D9).
     pub fn open_gui_settings_at(&mut self, section: GuiSettingsSection) {
+        self.close_gui_playlists();
         self.gui_settings = Some(GuiSettingsState::at(section));
         self.load_gui_settings_section(section);
     }

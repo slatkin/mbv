@@ -5,6 +5,7 @@ mod client_drains;
 mod dispatch;
 mod gui_client_state;
 mod gui_library;
+mod gui_playlists;
 mod gui_settings;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
@@ -66,12 +67,14 @@ pub use self::gui_library::{
     GuiMusicTrackTotal, GuiPlayheadMarks, GuiPodcastEpisodeId, GuiPodcastsHero,
     GuiPodcastsProjection, GuiPodcastsRow, GuiSearchProjection, GuiSearchRow,
 };
+pub use self::gui_playlists::{
+    GuiOpenPlaylistProjection, GuiPlaylistItemProjection, GuiPlaylistRowProjection,
+    GuiPlaylistsCommand, GuiPlaylistsProjection,
+};
 pub use self::gui_settings::{
     GuiSettingsChoiceProjection, GuiSettingsCommand, GuiSettingsFeedProjection,
     GuiSettingsFeedsProjection, GuiSettingsGroup, GuiSettingsKeyRefusalProjection,
     GuiSettingsKeyRowProjection, GuiSettingsKeysProjection, GuiSettingsLibraryProjection,
-    GuiSettingsOpenPlaylistProjection, GuiSettingsPlaylistItemProjection,
-    GuiSettingsPlaylistRowProjection, GuiSettingsPlaylistsProjection,
     GuiSettingsRouteDeviceProjection, GuiSettingsRouteProjection, GuiSettingsRowKind,
     GuiSettingsRowProjection, GuiSettingsSection, GuiSettingsServiceProjection,
     GuiSettingsServicesProjection, GuiSettingsSetupProjection, GuiSettingsState, GuiSetupService,

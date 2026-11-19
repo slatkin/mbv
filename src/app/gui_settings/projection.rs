@@ -5,7 +5,6 @@
 //! `SettingKey` name, the feed URL, the action id, the playlist id — and the
 //! setup form carries no password and no API key.
 
-use mbv_emby_model::EmbyItem;
 use mbv_queue::FeedKind;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::settings::{
@@ -227,39 +226,6 @@ pub struct GuiSettingsKeyRefusalProjection {
     pub text: String,
 }
 
-/// The Playlists section's content (design D9): the saved list, the open
-/// playlist's items, and the two loading flags.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiSettingsPlaylistsProjection {
-    pub playlists: Vec<GuiSettingsPlaylistRowProjection>,
-    pub open: Option<GuiSettingsOpenPlaylistProjection>,
-    pub loading: bool,
-    pub open_loading: bool,
-}
-
-/// One saved playlist (design D9).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiSettingsPlaylistRowProjection {
-    pub id: String,
-    pub name: String,
-    pub item_count: u32,
-}
-
-/// The open playlist and its items (design D9).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiSettingsOpenPlaylistProjection {
-    pub id: String,
-    pub name: String,
-    pub items: Vec<GuiSettingsPlaylistItemProjection>,
-}
-
-/// One item of the open playlist (design D9).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiSettingsPlaylistItemProjection {
-    pub id: String,
-    pub name: String,
-}
-
 impl App {
     /// The open section's F2 rows (design D9): the shown keys in paint order,
     /// each with its label, kind, value text, toggle flag, and — for a choice
@@ -423,47 +389,6 @@ impl App {
             selected: state.and_then(|state| state.route_selection.clone()),
             devices: state.and_then(|state| state.route_devices.clone()),
         }
-    }
-
-    /// The Playlists section's content (design D9): the saved playlists with
-    /// their item counts, the open playlist and its items, and the two
-    /// loading flags.
-    #[must_use]
-    pub fn gui_settings_playlists(&self) -> GuiSettingsPlaylistsProjection {
-        GuiSettingsPlaylistsProjection {
-            playlists: self.playlists.iter().map(playlist_row).collect(),
-            open: self
-                .playlists_open
-                .as_ref()
-                .map(|playlist| GuiSettingsOpenPlaylistProjection {
-                    id: playlist.id.clone(),
-                    name: playlist.name.clone(),
-                    items: self
-                        .playlists_open_items
-                        .iter()
-                        .map(playlist_item)
-                        .collect(),
-                }),
-            loading: self.playlists_loading,
-            open_loading: self.playlists_open_loading,
-        }
-    }
-}
-
-/// One saved playlist's row (design D9): its stable id, name, and item count.
-fn playlist_row(item: &EmbyItem) -> GuiSettingsPlaylistRowProjection {
-    GuiSettingsPlaylistRowProjection {
-        id: item.id.clone(),
-        name: item.name.clone(),
-        item_count: item.child_count.unwrap_or(0),
-    }
-}
-
-/// One item of the open playlist (design D9): its stable id and name.
-fn playlist_item(item: &EmbyItem) -> GuiSettingsPlaylistItemProjection {
-    GuiSettingsPlaylistItemProjection {
-        id: item.id.clone(),
-        name: item.name.clone(),
     }
 }
 

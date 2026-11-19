@@ -251,14 +251,7 @@ pub fn entry_id_string(entry: &SettingsEntry) -> String {
         | SettingsEntry::KeyTarget { id, .. }
         | SettingsEntry::KeyReset { id, .. }
         | SettingsEntry::KeyClear { id, .. }
-        | SettingsEntry::Target { id, .. }
-        | SettingsEntry::Playlist { id, .. }
-        | SettingsEntry::PlaylistAction { id, .. }
-        | SettingsEntry::PlaylistItemAction { id, .. }
-        | SettingsEntry::PlaylistRename { id, .. }
-        | SettingsEntry::PlaylistDelete { id, .. }
-        | SettingsEntry::PlaylistBack { id }
-        | SettingsEntry::PlaylistRefresh { id, .. } => id.clone(),
+        | SettingsEntry::Target { id, .. } => id.clone(),
     }
 }
 
@@ -547,49 +540,6 @@ impl SettingsState {
                 });
             }
             SettingsEntry::Target { target, .. } => self.select_settings_target(target),
-            SettingsEntry::Playlist { playlist, .. } => {
-                self.link.settings(GuiSettingsCommand::PlaylistOpen {
-                    id: Some(playlist.id.clone()),
-                });
-            }
-            SettingsEntry::PlaylistAction {
-                playlist_id,
-                action,
-                ..
-            } => {
-                self.link.settings(GuiSettingsCommand::PlaylistAction {
-                    id: playlist_id.clone(),
-                    action: *action,
-                });
-            }
-            SettingsEntry::PlaylistItemAction {
-                playlist_id,
-                item_id,
-                action,
-                ..
-            } => {
-                self.link.settings(GuiSettingsCommand::PlaylistItemAction {
-                    id: playlist_id.clone(),
-                    item_id: item_id.clone(),
-                    action: *action,
-                });
-            }
-            SettingsEntry::PlaylistRename {
-                playlist_id, name, ..
-            } => self.open_rename_draft(playlist_id, name),
-            SettingsEntry::PlaylistDelete { playlist_id, .. } => {
-                self.link.settings(GuiSettingsCommand::PlaylistDelete {
-                    id: playlist_id.clone(),
-                });
-            }
-            SettingsEntry::PlaylistBack { .. } => {
-                self.link.settings(GuiSettingsCommand::PlaylistBack);
-            }
-            SettingsEntry::PlaylistRefresh { playlist_id, .. } => {
-                self.link.settings(GuiSettingsCommand::PlaylistRefresh {
-                    id: playlist_id.clone(),
-                });
-            }
         }
     }
 

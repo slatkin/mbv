@@ -4,13 +4,12 @@
 //! while the screen is closed, so the window mounts it only for a `Some` value.
 //!
 //! The content is a tagged union with one variant per section kind: the F2
-//! rows, Library, Services, Feeds, Keys, Sessions, and Playlists. No variant
+//! rows, Library, Services, Feeds, Keys, and Sessions. No variant
 //! carries a password, an API key, or any other Service credential.
 
 pub mod feeds;
 pub mod keys;
 pub mod library;
-pub mod playlists;
 pub mod rows;
 pub mod services;
 pub mod sessions;
@@ -20,7 +19,6 @@ use mbv::{App, GuiSettingsSection as CoreSettingsSection, QueuePlaybackProjectio
 use self::feeds::GuiSettingsFeed;
 use self::keys::{GuiSettingsKeyRefusal, GuiSettingsKeyRow};
 use self::library::{GuiSettingsRoute, GuiSettingsRouteDevice};
-use self::playlists::{GuiOpenPlaylist, GuiPlaylistRow};
 use self::rows::GuiSettingRow;
 use self::services::{GuiSettingsService, GuiSettingsSetup};
 use crate::bridge::frame::playback::GuiTargetChoice;
@@ -72,7 +70,6 @@ pub enum GuiSettingsSection {
     Actions,
     Keys,
     Sessions,
-    Playlists,
 }
 
 impl From<CoreSettingsSection> for GuiSettingsSection {
@@ -89,7 +86,6 @@ impl From<CoreSettingsSection> for GuiSettingsSection {
             CoreSettingsSection::Actions => Self::Actions,
             CoreSettingsSection::Keys => Self::Keys,
             CoreSettingsSection::Sessions => Self::Sessions,
-            CoreSettingsSection::Playlists => Self::Playlists,
         }
     }
 }
@@ -108,7 +104,6 @@ impl From<GuiSettingsSection> for CoreSettingsSection {
             GuiSettingsSection::Actions => Self::Actions,
             GuiSettingsSection::Keys => Self::Keys,
             GuiSettingsSection::Sessions => Self::Sessions,
-            GuiSettingsSection::Playlists => Self::Playlists,
         }
     }
 }
@@ -145,13 +140,6 @@ pub enum GuiSettingsContent {
     },
     /// The playback targets the chooser lists.
     Sessions { targets: Vec<GuiTargetChoice> },
-    /// The saved playlists, the open playlist, and the loading flags.
-    Playlists {
-        playlists: Vec<GuiPlaylistRow>,
-        open: Option<GuiOpenPlaylist>,
-        loading: bool,
-        open_loading: bool,
-    },
 }
 
 impl GuiSettingsContent {
@@ -171,7 +159,6 @@ impl GuiSettingsContent {
             CoreSettingsSection::Sessions => Self::Sessions {
                 targets: sessions::targets(&playback.target_choices),
             },
-            CoreSettingsSection::Playlists => Self::playlists(app),
             CoreSettingsSection::Playback
             | CoreSettingsSection::Display
             | CoreSettingsSection::Session
@@ -242,21 +229,6 @@ impl GuiSettingsContent {
                 .map(GuiSettingsKeyRow::from)
                 .collect(),
             refusal: projection.refusal.as_ref().map(GuiSettingsKeyRefusal::from),
-        }
-    }
-
-    /// The Playlists section's content (design D9).
-    fn playlists(app: &App) -> Self {
-        let projection = app.gui_settings_playlists();
-        Self::Playlists {
-            playlists: projection
-                .playlists
-                .iter()
-                .map(GuiPlaylistRow::from)
-                .collect(),
-            open: projection.open.as_ref().map(GuiOpenPlaylist::from),
-            loading: projection.loading,
-            open_loading: projection.open_loading,
         }
     }
 }

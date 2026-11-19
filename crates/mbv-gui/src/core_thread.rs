@@ -82,6 +82,9 @@ pub enum CoreInput {
     /// window content's `settings` command. The core applies it through
     /// [`App::apply_gui_settings_command`].
     Settings(mbv::GuiSettingsCommand),
+    /// One Playlists screen request: the window content's `playlists`
+    /// command, applied through [`App::apply_gui_playlists_command`].
+    Playlists(mbv::GuiPlaylistsCommand),
     /// The window asks for a full snapshot (design D4): the core releases
     /// every section the window holds, so the next batch carries every present
     /// section at its current revision. It marks no section.

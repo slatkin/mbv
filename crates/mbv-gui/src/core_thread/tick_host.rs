@@ -351,6 +351,13 @@ impl ClientTickHost for CoreThread {
                         self.app.apply_gui_settings_command(command);
                     }
                 }
+                CoreInput::Playlists(command) => {
+                    // The Playlists screen's request: the App applies the
+                    // semantic intent, and the sections it marks rebuild.
+                    outcome.input_received = true;
+                    self.ledger.mark_all_gated();
+                    self.app.apply_gui_playlists_command(command);
+                }
                 CoreInput::Layout(report) => {
                     // A `report_layout` applies the layout and marks no
                     // section: a section the layout moves changes through the

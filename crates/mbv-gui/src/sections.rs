@@ -37,6 +37,7 @@ use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiPlayerControls, GuiPlayhead, GuiQueuePlayback, GuiScrubberHover, card_artwork_ref,
 };
+use crate::bridge::frame::playlists::GuiPlaylistsFrame;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueSummary};
 use crate::bridge::frame::scrubber_hover;
 use crate::bridge::frame::settings::GuiSettingsFrame;
@@ -62,6 +63,7 @@ pub enum Section {
     Library,
     Search,
     Settings,
+    Playlists,
 }
 
 /// The gated sections (design D2). A mark on each one rebuilds them all; the
@@ -71,6 +73,7 @@ const GATED_SECTIONS: &[Section] = &[
     Section::Library,
     Section::Search,
     Section::Settings,
+    Section::Playlists,
 ];
 
 /// The revisions the pre-attach campaign sent (design D4). The attached core
@@ -208,6 +211,7 @@ pub struct SectionLedger {
     row_menu: Slot<Option<GuiLibraryRowMenuFrame>>,
     search: Slot<Option<GuiSearchFrame>>,
     settings: Slot<Option<GuiSettingsFrame>>,
+    playlists: Slot<Option<GuiPlaylistsFrame>>,
     /// The playhead anchor (design D5): the last sent anchor, the revision it
     /// carries, and whether the window holds it. A trigger adopts a new
     /// anchor; the window predicts the position between anchors.
@@ -247,6 +251,7 @@ impl Default for SectionLedger {
             row_menu: Slot::default(),
             search: Slot::default(),
             settings: Slot::default(),
+            playlists: Slot::default(),
             playhead: Slot::default(),
             marked: HashSet::new(),
             deadlines: DeadlineMarks::new(Instant::now()),
@@ -318,6 +323,7 @@ impl SectionLedger {
         self.row_menu.release();
         self.search.release();
         self.settings.release();
+        self.playlists.release();
         self.playhead.forget();
         self.playhead_anchor.reset();
     }
@@ -430,6 +436,10 @@ impl SectionLedger {
             let settings = GuiSettingsFrame::build(app, playback);
             audit_clean(Section::Settings, &self.settings, &settings);
         }
+        if !marked.contains(&Section::Playlists) {
+            let playlists = GuiPlaylistsFrame::build(app);
+            audit_clean(Section::Playlists, &self.playlists, &playlists);
+        }
     }
 
     /// Build each gated section that carries a mark (design D2). A mark that
@@ -468,6 +478,9 @@ impl SectionLedger {
         if marked.contains(&Section::Settings) {
             self.settings.adopt(GuiSettingsFrame::build(app, playback));
         }
+        if marked.contains(&Section::Playlists) {
+            self.playlists.adopt(GuiPlaylistsFrame::build(app));
+        }
     }
 
     /// The batch of every slot the window does not hold, or `None` when the
@@ -489,6 +502,7 @@ impl SectionLedger {
             row_menu: self.row_menu.take(),
             search: self.search.take(),
             settings: self.settings.take(),
+            playlists: self.playlists.take(),
             playhead: self.playhead.take(),
         };
         (!batch.is_empty()).then_some(batch)

@@ -1629,11 +1629,7 @@ change. The variants are `open`, `close`, `selectSection` (`section`), `activate
 `serviceAction` (`action`), `cancelSetup` (`service`), `feedAdd` (`name`,
 `url`, `kind`), `feedEdit` (`url`, `name`, `kind`), `feedRemove` (`url`),
 `keysCapture` (`target`, `key` as a `DomKey`), `keysReset` (`action`),
-`keysClear` (`target`), `selectTarget` (`target`), `playlistOpen`,
-`playlistBack`, and `playlistRefresh` (`id` or none), `playlistAction` and
-`playlistItemAction` (`id`, the item `id`, and `play`, `shuffle`, or
-`enqueue`), `playlistRename` (`id`, `name`), `playlistDelete` (`id`), and
-`resetUiState`. Identities are stable — a `SettingKey` name, a playlist id, a
+`keysClear` (`target`), `selectTarget` (`target`), and `resetUiState`. Identities are stable — a `SettingKey` name, a playlist id, a
 feed URL, a chord — never row positions, so a command built from a stale frame
 addresses what that frame painted or nothing, and a `setting` name this build
 declares no key for logs and changes nothing. `src/bridge/keys.rs` translates a
@@ -1641,13 +1637,27 @@ declares no key for logs and changes nothing. `src/bridge/keys.rs` translates a
 window never forms a chord string and the two Clients cannot disagree on one
 chord's spelling.
 
+The Playlists screen is not a Settings section. It is its own main-UI screen:
+it takes the Library panel's slot under the top bar, with the Queue to its right.
+The saved playlists paint as a tree (one open playlist at a time, as the core holds
+one), and the hero beside the tree is the picked row's control set — Play, Shuffle,
+Add, Rename, Refresh, and Delete for a playlist; Play, Shuffle, and Add for an
+item. A right-click on a row opens the same actions as a menu. The core owns
+whether it is open (`App::gui_playlists`, `src/app/gui_playlists.rs`) and sends
+the `playlists` section (`GuiPlaylistsFrame`); the window owns the pick, the
+menu, and the rename draft. Its `playlists` command carries `toggle`, `close`,
+`open` (`id`), `collapse`, `refresh` (`id` or none), `action` (`id` and `play`,
+`shuffle`, or `enqueue`), `itemAction` (`id`, the item `id`, and the action),
+`rename` (`id`, `name`), and `delete` (`id`). Opening one of the two screens
+closes the other, and a press on a destination tab closes the Playlists screen.
+
 The Client core owns whether the screen is open and which section it shows
 (`App::gui_settings`, `src/app/gui_settings.rs`); the window content owns its
 interaction state — the sidebar cursor, the keyboard pane, each list's cursor
 and scroll, the form drafts, the capture, and the Mini pane (ADR 0037). The
 frame's section is `GuiSettingsFrame`: the shown `section`, the `sections` the
 sidebar lists, and `content`, a tagged union with `rows` (an F2 page's rows),
-`services`, `feeds`, `keys`, `sessions`, and `playlists`. Each F2 row carries
+`services`, `feeds`, `keys`, and `sessions`. Each F2 row carries
 its stable setting name, its label, its kind (toggle, cycle, pick with its value list, choice list,
 action, or info), its value text, its toggle flag, and its choices once the section's
 load lands. The `info` kind is the read-only row: the Session section's

@@ -13,16 +13,15 @@ use crate::bridge::frame::playback::GuiTargetChoice;
 use crate::bridge::frame::settings::GuiSettingsContent;
 use crate::bridge::frame::settings::feeds::GuiSettingsFeed;
 use crate::bridge::frame::settings::library::{GuiSettingsRoute, GuiSettingsRouteDevice};
-use crate::bridge::frame::settings::playlists::{GuiOpenPlaylist, GuiPlaylistRow};
 use crate::bridge::frame::settings::rows::{GuiSettingChoice, GuiSettingRow, GuiSettingRowKind};
 use crate::bridge::frame::settings::services::{GuiServiceActionIntent, GuiServiceEntry};
-use crate::bridge::settings::{GuiChoicesKind, GuiPlaylistAction};
+use crate::bridge::settings::GuiChoicesKind;
 
 /// The one grammar for an entry's `id` (`entries.ts`'s `entryId`): the
 /// entries builder and every section component name the same control with
 /// these builders.
 pub mod entry_id {
-    use super::{GuiPlaylistAction, GuiServiceActionIntent, GuiServiceEntry};
+    use super::{GuiServiceActionIntent, GuiServiceEntry};
 
     /// The wire name of one Service entry, as the settings command names it.
     fn service_entry_name(entry: GuiServiceEntry) -> &'static str {
@@ -46,15 +45,6 @@ pub mod entry_id {
             GuiServiceActionIntent::RemoveAudiobookshelf => "removeAudiobookshelf",
             GuiServiceActionIntent::ReplaceAudiobookshelf => "replaceAudiobookshelf",
             GuiServiceActionIntent::ManageFeeds => "manageFeeds",
-        }
-    }
-
-    /// The wire name of one playlist action, as the settings command names it.
-    fn playlist_action_name(action: GuiPlaylistAction) -> &'static str {
-        match action {
-            GuiPlaylistAction::Play => "play",
-            GuiPlaylistAction::Shuffle => "shuffle",
-            GuiPlaylistAction::Enqueue => "enqueue",
         }
     }
 
@@ -145,48 +135,6 @@ pub mod entry_id {
     pub fn target(index: usize) -> String {
         format!("target:{index}")
     }
-
-    /// One saved playlist.
-    #[must_use]
-    pub fn playlist(id: &str) -> String {
-        format!("playlist:{id}")
-    }
-
-    /// One action on a whole playlist.
-    #[must_use]
-    pub fn playlist_action(id: &str, action: GuiPlaylistAction) -> String {
-        format!("playlistAction:{}:{}", id, playlist_action_name(action))
-    }
-
-    /// One action on one playlist item.
-    #[must_use]
-    pub fn playlist_item_action(id: &str, item_id: &str, action: GuiPlaylistAction) -> String {
-        format!("item:{id}:{item_id}:{}", playlist_action_name(action))
-    }
-
-    /// A playlist's rename control.
-    #[must_use]
-    pub fn playlist_rename(id: &str) -> String {
-        format!("playlistRename:{id}")
-    }
-
-    /// A playlist's delete control.
-    #[must_use]
-    pub fn playlist_delete(id: &str) -> String {
-        format!("playlistDelete:{id}")
-    }
-
-    /// The open playlist's back control.
-    #[must_use]
-    pub fn playlist_back() -> String {
-        "playlistBack".to_owned()
-    }
-
-    /// A refresh control: the list's (`None`) or the open playlist's.
-    #[must_use]
-    pub fn playlist_refresh(id: Option<&str>) -> String {
-        format!("playlistRefresh:{}", id.unwrap_or("list"))
-    }
 }
 
 /// One activatable control of the content pane (`entries.ts`'s
@@ -251,39 +199,6 @@ pub enum SettingsEntry {
     KeyClear { id: String, target: String },
     /// One playback target of the Sessions section.
     Target { id: String, target: GuiTargetChoice },
-    /// One saved playlist: Enter opens it.
-    Playlist {
-        id: String,
-        playlist: GuiPlaylistRow,
-    },
-    /// One action on a whole playlist: play, shuffle, or add.
-    PlaylistAction {
-        id: String,
-        playlist_id: String,
-        action: GuiPlaylistAction,
-    },
-    /// One action on one playlist item: play, shuffle, or add.
-    PlaylistItemAction {
-        id: String,
-        playlist_id: String,
-        item_id: String,
-        action: GuiPlaylistAction,
-    },
-    /// A playlist's rename control: opens the rename field.
-    PlaylistRename {
-        id: String,
-        playlist_id: String,
-        name: String,
-    },
-    /// A playlist's delete control: raises the confirm.
-    PlaylistDelete { id: String, playlist_id: String },
-    /// The open playlist's back control.
-    PlaylistBack { id: String },
-    /// A refresh control: the list's (`None`) or the open playlist's.
-    PlaylistRefresh {
-        id: String,
-        playlist_id: Option<String>,
-    },
 }
 
 /// The marked ids a row's choice list holds, seeded from the frame's
@@ -340,42 +255,6 @@ fn row_entries(row: &GuiSettingRow, marks: &[(String, Vec<String>)]) -> Vec<Sett
         row: row.clone(),
     });
     entries
-}
-
-/// The playlist row's five action entries (`entries.ts`'s
-/// `playlistEntries`, design D5): the row itself plus play, shuffle, add,
-/// rename, and delete.
-fn playlist_entries(playlist: &GuiPlaylistRow) -> Vec<SettingsEntry> {
-    vec![
-        SettingsEntry::Playlist {
-            id: entry_id::playlist(&playlist.id),
-            playlist: playlist.clone(),
-        },
-        SettingsEntry::PlaylistAction {
-            id: entry_id::playlist_action(&playlist.id, GuiPlaylistAction::Play),
-            playlist_id: playlist.id.clone(),
-            action: GuiPlaylistAction::Play,
-        },
-        SettingsEntry::PlaylistAction {
-            id: entry_id::playlist_action(&playlist.id, GuiPlaylistAction::Shuffle),
-            playlist_id: playlist.id.clone(),
-            action: GuiPlaylistAction::Shuffle,
-        },
-        SettingsEntry::PlaylistAction {
-            id: entry_id::playlist_action(&playlist.id, GuiPlaylistAction::Enqueue),
-            playlist_id: playlist.id.clone(),
-            action: GuiPlaylistAction::Enqueue,
-        },
-        SettingsEntry::PlaylistRename {
-            id: entry_id::playlist_rename(&playlist.id),
-            playlist_id: playlist.id.clone(),
-            name: playlist.name.clone(),
-        },
-        SettingsEntry::PlaylistDelete {
-            id: entry_id::playlist_delete(&playlist.id),
-            playlist_id: playlist.id.clone(),
-        },
-    ]
 }
 
 /// The entries one section's content produces, in paint order
@@ -441,9 +320,6 @@ pub fn settings_entries(
                 target: target.clone(),
             })
             .collect(),
-        GuiSettingsContent::Playlists {
-            playlists, open, ..
-        } => playlists_entries(playlists, open.as_ref()),
     }
 }
 
@@ -521,58 +397,6 @@ fn keys_entries(
             entries.push(SettingsEntry::KeyClear {
                 id: entry_id::key_clear(&format!("prefix:{}", row.id)),
                 target: format!("prefix:{}", row.id),
-            });
-        }
-    }
-    entries
-}
-
-/// The Playlists section's entries (`entries.ts`'s `playlists` arm): the
-/// list's refresh and the saved playlists, or the open playlist's back,
-/// refresh, actions, and per-item actions.
-fn playlists_entries(
-    playlists: &[GuiPlaylistRow],
-    open: Option<&GuiOpenPlaylist>,
-) -> Vec<SettingsEntry> {
-    let Some(open) = open else {
-        let mut entries = vec![SettingsEntry::PlaylistRefresh {
-            id: entry_id::playlist_refresh(None),
-            playlist_id: None,
-        }];
-        for playlist in playlists {
-            entries.extend(playlist_entries(playlist));
-        }
-        return entries;
-    };
-    let GuiOpenPlaylist {
-        id, name, items, ..
-    } = open;
-    let mut entries = vec![SettingsEntry::PlaylistBack {
-        id: entry_id::playlist_back(),
-    }];
-    entries.push(SettingsEntry::PlaylistRefresh {
-        id: entry_id::playlist_refresh(Some(id)),
-        playlist_id: Some(id.clone()),
-    });
-    let row = GuiPlaylistRow {
-        id: id.clone(),
-        name: name.clone(),
-        item_count: u32::try_from(items.len()).unwrap_or(u32::MAX),
-    };
-    // The open playlist's own row drops (`slice(1)`): its list entry
-    // is the list's, and the open playlist paints its actions.
-    entries.extend(playlist_entries(&row).into_iter().skip(1));
-    for item in items {
-        for action in [
-            GuiPlaylistAction::Play,
-            GuiPlaylistAction::Shuffle,
-            GuiPlaylistAction::Enqueue,
-        ] {
-            entries.push(SettingsEntry::PlaylistItemAction {
-                id: entry_id::playlist_item_action(id, &item.id, action),
-                playlist_id: id.clone(),
-                item_id: item.id.clone(),
-                action,
             });
         }
     }

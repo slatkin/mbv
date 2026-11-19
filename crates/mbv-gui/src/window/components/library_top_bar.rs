@@ -28,6 +28,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
 use crate::bridge::frame::theme::GuiRole;
+use crate::bridge::playlists::GuiPlaylistsCommand;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::window::components::library_search_control::LibrarySearchControl;
 use crate::window::icons::{ChevronLeft, ChevronRight, ListVideo, Settings};
@@ -85,6 +86,9 @@ fn open_destination(
     position: usize,
     on_destination_opened: Option<Callback<usize>>,
 ) {
+    // A destination opens over the Playlists screen: the screen closes first
+    // (a close with the screen shut changes nothing).
+    library.link.playlists(GuiPlaylistsCommand::Close);
     library.open_destination(position);
     if let Some(on_destination_opened) = on_destination_opened {
         on_destination_opened.call(position);
@@ -98,12 +102,11 @@ fn open_settings(library: &LibraryState) {
     library.link.settings(GuiSettingsCommand::Open);
 }
 
-/// Open the Settings screen at Playlists, and close it while it shows
-/// Playlists — the `playlists_open` action's toggle (user request
-/// 2026-11-19): the icon beside Home is the playlist screen's route, the
-/// route the settings sidebar carried before it.
+/// Open the Playlists screen, and close it while it shows — the
+/// `playlists_open` action's toggle: the icon beside Home is the screen's
+/// route.
 fn open_playlists(library: &LibraryState) {
-    library.link.settings(GuiSettingsCommand::OpenPlaylists);
+    library.link.playlists(GuiPlaylistsCommand::Toggle);
 }
 
 /// The window's global header.
@@ -248,10 +251,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
                     path { d: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" }
                 }
             }
-            // The Playlists route (user request 2026-11-19): the icon beside
-            // Home opens the playlist screen — the settings screen shown at
-            // Playlists — as the `playlists_open` action's toggle. The route
-            // the settings sidebar carried before it.
+            // The Playlists route: the icon beside Home opens the Playlists
+            // screen, as the `playlists_open` action's toggle.
             {
                 let playlists_library = library.clone();
                 rsx! {

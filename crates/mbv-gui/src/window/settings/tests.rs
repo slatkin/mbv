@@ -22,7 +22,6 @@ use crate::window::settings::state::SettingsState;
 
 mod feeds;
 mod keys;
-mod playlists;
 mod rows;
 
 /// The facts one scenario recorded, in its run order.

@@ -409,6 +409,20 @@ fn route_music_panel_key(
     }
 }
 
+/// A key typed in the Playlists screen's rename field: Esc cancels, Enter
+/// sends the rename, and every other key types.
+fn rename_field_key(key: &DomKey, settings: &SettingsState) -> KeyOutcome {
+    if key.key == "Escape" {
+        settings.cancel_settings_form();
+        return KeyOutcome::Handled;
+    }
+    if key.key == "Enter" {
+        settings.submit_rename_draft();
+        return KeyOutcome::Handled;
+    }
+    KeyOutcome::Text
+}
+
 /// Route one keydown (design D2): the window does its part, and the answer is
 /// what the input forwarder must do with the key. The section facts the routing
 /// reads come from the window's own section stores (`gui-change-driven-sections`
@@ -457,6 +471,17 @@ pub fn route_library_key(
             Some(settings) => route_settings_key(key, frame, settings, target),
             None => KeyOutcome::Core(target),
         };
+    }
+    // The Playlists screen takes the rename field's keys while it holds the
+    // keyboard, and the core takes every other key: the Library panel is not
+    // painted, so no Library step runs.
+    if sections.playlists.peek().is_some() {
+        if let Some(settings) = settings
+            && settings.ui.peek().text_field.is_some()
+        {
+            return rename_field_key(key, settings);
+        }
+        return KeyOutcome::Core(target);
     }
     // The attach states carry no slice, and no Library panel means no Library
     // keys: the core takes every one of them. The panel's presence is one fact

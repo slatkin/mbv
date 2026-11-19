@@ -17,6 +17,12 @@ fn send_settings(test: &mut TestCore, command: mbv::GuiSettingsCommand) {
     assert!(test.core.step(), "the core thread never quits mid-command");
 }
 
+/// Send one Playlists screen command and run one tick.
+fn send_playlists(test: &mut TestCore, command: mbv::GuiPlaylistsCommand) {
+    test.tx.send(CoreInput::Playlists(command)).unwrap();
+    assert!(test.core.step(), "the core thread never quits mid-command");
+}
+
 /// Send one key press and run one tick.
 fn send_key(test: &mut TestCore, key: Key, modifiers: KeyModifiers) {
     test.tx.send(press(key, modifiers)).unwrap();
@@ -395,15 +401,16 @@ fn a_select_target_leaves_the_screen_open() {
     );
 }
 
-/// A `playlistAction` of play replaces the empty queue with the playlist's
+/// A playlists `Action` of play replaces the empty queue with the playlist's
 /// items, and the drained `DismissSidebar(Playlists)` closes the screen so the
-/// replaced queue shows (row 5.5, design D2).
+/// replaced queue shows.
 #[test]
 fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     let _guard = mbv_config::TestStateDirGuard::new();
     let (app, cmd_rx) = mbv::stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    open_settings_at(&mut test, mbv::GuiSettingsSection::Playlists);
+    send_playlists(&mut test, mbv::GuiPlaylistsCommand::Toggle);
+    assert!(test.core.app_mut().gui_playlists_is_open());
     let http = mbv_net::mock_http::MockHttp::new();
     http.respond_when(
         "/Playlists/pl/Items",
@@ -414,9 +421,9 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
     app.set_gui_emby_client_for_test(crate::test_emby_client(&http));
     app.seed_gui_playlists_for_test(&[("pl", "Road Trip")]);
 
-    send_settings(
+    send_playlists(
         &mut test,
-        mbv::GuiSettingsCommand::PlaylistAction {
+        mbv::GuiPlaylistsCommand::Action {
             id: "pl".to_string(),
             action: mbv_ui_msg::MusicTreeAction::Play,
         },
@@ -438,9 +445,8 @@ fn a_playlist_play_on_an_empty_queue_closes_the_screen() {
         "the replacement names the playlist: {:?}",
         replaces[0].1
     );
-    assert_eq!(
-        test.core.gui_settings_section_for_test(),
-        None,
+    assert!(
+        !test.core.app_mut().gui_playlists_is_open(),
         "the drained dismissal closed the screen"
     );
 }

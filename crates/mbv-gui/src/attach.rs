@@ -281,7 +281,8 @@ impl<'a> AttachCampaign<'a> {
                 | CoreInput::Pointer(_)
                 | CoreInput::Wake
                 | CoreInput::Library(_)
-                | CoreInput::Settings(_),
+                | CoreInput::Settings(_)
+                | CoreInput::Playlists(_),
             )
             | Err(RecvTimeoutError::Timeout) => {}
         }
@@ -332,7 +333,12 @@ impl<'a> AttachCampaign<'a> {
                 // attach. An art request answers `Missing` (design D7), so no
                 // responder is left open before the attach.
                 Ok(CoreInput::Art(request)) => (request.reply)(crate::art::ArtResponse::Missing),
-                Ok(CoreInput::Wake | CoreInput::Library(_) | CoreInput::Settings(_)) => {}
+                Ok(
+                    CoreInput::Wake
+                    | CoreInput::Library(_)
+                    | CoreInput::Settings(_)
+                    | CoreInput::Playlists(_),
+                ) => {}
                 Ok(CoreInput::Close) | Err(RecvError) => {
                     return Err(CampaignEnd::Closed);
                 }
@@ -419,7 +425,8 @@ impl<'a> AttachCampaign<'a> {
                     | CoreInput::Pointer(_)
                     | CoreInput::Wake
                     | CoreInput::Library(_)
-                    | CoreInput::Settings(_),
+                    | CoreInput::Settings(_)
+                    | CoreInput::Playlists(_),
                 ) => {}
                 Ok(CoreInput::Close) | Err(RecvError) => {
                     return Err(CampaignEnd::Closed);

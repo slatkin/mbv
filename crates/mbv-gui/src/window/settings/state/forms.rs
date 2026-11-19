@@ -260,22 +260,28 @@ impl SettingsState {
                     state.text_field = None;
                 });
             }
-            Some(SettingsForm::Rename) => {
-                let Some(draft) = ui.rename.clone() else {
-                    return;
-                };
-                self.link.settings(GuiSettingsCommand::PlaylistRename {
-                    id: draft.id,
-                    name: draft.name,
-                });
-                let mut ui = self.ui;
-                ui.with_mut(|state| {
-                    state.rename = None;
-                    state.text_field = None;
-                });
-            }
+            Some(SettingsForm::Rename) => self.submit_rename_draft(),
             None => {}
         }
+    }
+
+    /// Send the Playlists screen's rename draft and close its field: the
+    /// field's Enter. The draft and its keyboard hold live here with the other
+    /// text fields, so the router's one text-field step covers it.
+    pub fn submit_rename_draft(&self) {
+        let Some(draft) = self.ui.peek().rename.clone() else {
+            return;
+        };
+        self.link
+            .playlists(crate::bridge::playlists::GuiPlaylistsCommand::Rename {
+                id: draft.id,
+                name: draft.name,
+            });
+        let mut ui = self.ui;
+        ui.with_mut(|state| {
+            state.rename = None;
+            state.text_field = None;
+        });
     }
 
     /// Cancel the form that holds the keyboard (`state.ts`'s

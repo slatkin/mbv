@@ -32,12 +32,10 @@ fn press(key: Key, modifiers: KeyModifiers) -> CoreInput {
 }
 
 /// The open action each function key carries: F2 opens the Settings screen's
-/// F2 group, F3 and F4 their own sections (the spec's open-action
-/// requirement).
+/// F2 group, F3 its Sessions section (the spec's open-action requirement).
 #[rstest]
 #[case::f2(Key::Function(2), mbv::GuiSettingsSection::Services)]
 #[case::f3(Key::Function(3), mbv::GuiSettingsSection::Sessions)]
-#[case::f4(Key::Function(4), mbv::GuiSettingsSection::Playlists)]
 fn a_function_key_opens_the_screen_at_its_section(
     #[case] key: Key,
     #[case] section: mbv::GuiSettingsSection,
@@ -48,6 +46,27 @@ fn a_function_key_opens_the_screen_at_its_section(
     assert!(test.core.step());
 
     assert_eq!(test.core.gui_settings_section_for_test(), Some(section));
+}
+
+/// F4 toggles the Playlists screen, which is its own screen and no Settings
+/// section: it opens, leaves the Settings screen closed, and closes on the
+/// next press.
+#[test]
+fn f4_toggles_the_playlists_screen() {
+    let mut test = test_core_with(stub_app_with_queue(2));
+
+    test.tx
+        .send(press(Key::Function(4), KeyModifiers::NONE))
+        .unwrap();
+    assert!(test.core.step());
+    assert!(test.core.app_mut().gui_playlists_is_open());
+    assert_eq!(test.core.gui_settings_section_for_test(), None);
+
+    test.tx
+        .send(press(Key::Function(4), KeyModifiers::NONE))
+        .unwrap();
+    assert!(test.core.step());
+    assert!(!test.core.app_mut().gui_playlists_is_open());
 }
 
 /// A rebound `settings_open` chord opens the screen (the spec's *A rebound

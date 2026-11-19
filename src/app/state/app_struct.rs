@@ -562,6 +562,8 @@ pub struct App {
     /// and its focus sync mirrors it onto the core `FocusStack`; the TUI
     /// Client never sets it (its Settings sidebar keeps its own shell state).
     pub(in crate::app) gui_settings: Option<crate::app::gui_settings::GuiSettingsState>,
+    /// Whether the GUI's Playlists screen is open.
+    pub(in crate::app) gui_playlists_open: bool,
     /// The UI-reset counter the GUI frame carries (`add-gui-settings-screen`
     /// design D10): the front end resets its interaction stores when the value
     /// changes. Row 5.6 raises it. The TUI Client never reads it.

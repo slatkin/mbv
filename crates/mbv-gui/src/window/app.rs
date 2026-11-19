@@ -35,6 +35,7 @@ use crate::window::components::panel::Panel;
 use crate::window::components::panel_divider::{
     DividerDrag, DividerName, DividerSide, PanelDivider,
 };
+use crate::window::components::playlists_panel::PlaylistsPanel;
 use crate::window::components::settings_screen::SettingsScreen;
 use crate::window::input::KeyOutcome;
 use crate::window::layout::{
@@ -497,6 +498,7 @@ pub fn App() -> Element {
     let settings_open = sections.settings.read().is_some();
     let overlay = sections.overlay.cloned();
     let panel = sections.panel.cloned();
+    let playlists_open = sections.playlists.read().is_some();
     let has_library_list = sections.library_list.read().is_some();
     let container_size = container.cloned();
     let widths = resize::panel_widths(container_size, &panel, &widths_store.dragged());
@@ -508,7 +510,7 @@ pub fn App() -> Element {
     // window holds the active destination's content, whose painters the
     // panel mounts. The key router gates on the same fact. (`libraryShown`
     // of `lib/library/state.ts`; its port lands with task 6.1.)
-    let panel_shows = has_library_list;
+    let panel_shows = has_library_list || playlists_open;
     // The panel row's two columns (design D8): both in every arrangement but
     // Mini, which shows the Mini view's pick. The header's destination press
     // flips that pick while Mini holds.
@@ -666,7 +668,14 @@ pub fn App() -> Element {
                         } else {
                             // Paint order, left to right: Library panel, Queue
                             // divider, Queue column (design D1).
-                            if library_visible && has_library_list {
+                            if library_visible && playlists_open {
+                                // The Playlists screen takes the Library panel's
+                                // slot, with the Queue to its right.
+                                PlaylistsPanel {
+                                    arrangement,
+                                    list_width: widths.list,
+                                }
+                            } else if library_visible && has_library_list {
                                 LibraryPanel {
                                     arrangement,
                                     list_width: widths.list,

@@ -16,6 +16,7 @@ use super::frame::library::{
 };
 use super::frame::overlay::GuiOverlayFrame;
 use super::frame::playback::{GuiPlayhead, GuiQueuePlayback, GuiScrubberHover};
+use super::frame::playlists::GuiPlaylistsFrame;
 use super::frame::queue::{GuiQueue, GuiQueueSummary};
 use super::frame::settings::GuiSettingsFrame;
 use super::frame::theme::GuiTheme;
@@ -76,6 +77,8 @@ pub struct GuiSectionBatch {
     pub search: Option<GuiSection<Option<GuiSearchFrame>>>,
     /// The Settings screen, `null` while the screen is closed.
     pub settings: Option<GuiSection<Option<GuiSettingsFrame>>>,
+    /// The Playlists screen, `null` while the screen is closed.
+    pub playlists: Option<GuiSection<Option<GuiPlaylistsFrame>>>,
     /// The playhead anchor (design D5): the position, runtime, paused state,
     /// and active slot at the send, from which the window predicts the
     /// position until the next anchor. The core sends one only on the anchor

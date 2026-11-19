@@ -28,7 +28,6 @@ fn settings() -> GuiSettingsFrame {
             GuiSettingsSection::Actions,
             GuiSettingsSection::Keys,
             GuiSettingsSection::Sessions,
-            GuiSettingsSection::Playlists,
         ],
         GuiSettingsContent::Rows {
             rows: vec![

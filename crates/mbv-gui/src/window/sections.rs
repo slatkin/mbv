@@ -23,6 +23,7 @@ use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::frame::playback::{
     GuiPlayerControls, GuiQueuePlayback, GuiScrubberHover, GuiTransportAvailability,
 };
+use crate::bridge::frame::playlists::GuiPlaylistsFrame;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::frame::settings::GuiSettingsFrame;
 use crate::bridge::frame::theme::{GuiRole, GuiTheme};
@@ -84,6 +85,8 @@ pub struct Sections {
     /// The Settings screen, `None` while the screen is closed, as the one
     /// handle every reader clones.
     pub settings: Signal<Option<SectionRef<GuiSettingsFrame>>>,
+    /// The Playlists screen, `None` while the screen is closed.
+    pub playlists: Signal<Option<GuiPlaylistsFrame>>,
     /// Whether a section batch has arrived: the window paints the main
     /// content while this holds and the `attach` section is `None`, and the
     /// attach screen before that — the wait before the first batch is not
@@ -122,6 +125,7 @@ struct Held {
     row_menu: Option<u64>,
     search: Option<u64>,
     settings: Option<u64>,
+    playlists: Option<u64>,
 }
 
 impl Default for Sections {
@@ -155,6 +159,7 @@ impl Sections {
             row_menu: Signal::new(None),
             search: Signal::new(None),
             settings: Signal::new(None),
+            playlists: Signal::new(None),
             connected: Signal::new(false),
             held: Signal::new(Held::default()),
         }
@@ -212,6 +217,11 @@ impl Sections {
             &mut held.settings,
             self.settings,
             shared_option,
+        );
+        write(
+            batch.playlists.as_ref(),
+            &mut held.playlists,
+            self.playlists,
         );
     }
 }

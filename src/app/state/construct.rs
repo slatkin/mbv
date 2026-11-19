@@ -170,6 +170,7 @@ impl App {
 
             pending_overlay: None,
             gui_settings: None,
+            gui_playlists_open: false,
             gui_ui_reset_epoch: 0,
             pending_exit_message: None,
             pending_delete_slot: None,
