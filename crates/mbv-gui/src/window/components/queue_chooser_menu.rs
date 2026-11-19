@@ -37,17 +37,18 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
+use crate::window::components::queue_panel::geometry::{ROW_GAP_PX, ROW_HEIGHT_PX};
 use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Check};
 
 /// The current queue's mark: the dot's diameter in logical pixels.
 const CURRENT_MARK_PX: u16 = 8;
 
-/// One entry's height (design D8), and the card's own insets: the padding
-/// between an item and the card's edge, and the gap between two items.
-const ITEM_HEIGHT_PX: u16 = 34;
+/// One entry's height and the gap between two items are the queue rows' own
+/// (designs D8 and D9); the card's padding is its own inset.
+const ITEM_HEIGHT_PX: u16 = ROW_HEIGHT_PX;
+const ITEM_GAP_PX: u16 = ROW_GAP_PX;
 const CARD_PADDING_PX: u16 = 4;
-const ITEM_GAP_PX: u16 = 2;
 
 /// The open Queue chooser's dropdown facts, as the frame's overlay carries
 /// them: the core's cursor, the entries in paint order, and the rename draft

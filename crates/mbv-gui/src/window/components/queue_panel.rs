@@ -90,7 +90,7 @@ use crate::window::pointer_target::PointerZone;
 use crate::window::sections::Sections;
 use crate::window::theme::{canvas_var, role_var};
 
-mod geometry;
+pub(super) mod geometry;
 mod row_cells;
 
 use geometry::{

@@ -78,12 +78,12 @@ impl ItemRow {
 /// raised tier, and the fill orange at the watched and active rows alike.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RowTone {
-    title: String,
+    title: &'static str,
     weight: f32,
-    strike: String,
-    ordinal: String,
-    track: String,
-    fill: String,
+    strike: &'static str,
+    ordinal: &'static str,
+    track: &'static str,
+    fill: &'static str,
 }
 
 /// The row's tone under the frame's hover: the now-playing row keeps its own
@@ -91,12 +91,12 @@ pub(super) struct RowTone {
 pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
     if row.state == GuiSemanticState::NowPlaying {
         return RowTone {
-            title: "var(--ef-green)".to_owned(),
+            title: "var(--ef-green)",
             weight: 600.0,
-            strike: "var(--ef-bg5)".to_owned(),
-            ordinal: "var(--ef-grey1)".to_owned(),
-            track: "var(--ef-bg2)".to_owned(),
-            fill: "var(--ef-green)".to_owned(),
+            strike: "var(--ef-bg5)",
+            ordinal: "var(--ef-grey1)",
+            track: "var(--ef-bg2)",
+            fill: "var(--ef-green)",
         };
     }
     let watched = row.state == GuiSemanticState::Played;
@@ -109,12 +109,12 @@ pub(super) fn tone(row: &ItemRow, hover: Option<u64>) -> RowTone {
         "var(--ef-fg)"
     };
     RowTone {
-        title: title.to_owned(),
+        title,
         weight: 400.0,
-        strike: "var(--ef-bg5)".to_owned(),
-        ordinal: "var(--ef-grey1)".to_owned(),
-        track: "var(--ef-bg2)".to_owned(),
-        fill: "var(--ef-orange)".to_owned(),
+        strike: "var(--ef-bg5)",
+        ordinal: "var(--ef-grey1)",
+        track: "var(--ef-bg2)",
+        fill: "var(--ef-orange)",
     }
 }
 
@@ -223,7 +223,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     StartMark::Playing => rsx! {
                         Play {
                             size: 12,
-                            fill: "var(--ef-green)".to_owned(),
+                            fill: "var(--ef-green)",
                             color: "var(--ef-green)".to_owned(),
                         }
                     },
@@ -240,7 +240,7 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                 let title_color = if chrome == RowChrome::Ghost {
                     "var(--ef-fg)".to_owned()
                 } else {
-                    cell_tone.title.clone()
+                    cell_tone.title.to_owned()
                 };
                 // The title is a row-flex item, so it grows into the row's
                 // free width: its measure must read the room the row has,

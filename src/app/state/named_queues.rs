@@ -243,7 +243,7 @@ impl App {
     /// decides it, and `shown_local_queue` and `shown_resting_queue_id` both
     /// read it. A stale entry — the Owner has since made the queue current —
     /// answers `None`, so the panel falls back to the current queue's view.
-    fn shown_resting_live(&self) -> Option<(NamedQueueId, &QueueView)> {
+    pub(in crate::app) fn shown_resting_live(&self) -> Option<(NamedQueueId, &QueueView)> {
         match &self.shown_resting {
             Some((queue, view)) if self.named_queues.rests(*queue) => Some((*queue, view)),
             _ => None,

@@ -58,8 +58,7 @@ pub(crate) fn scrubber_hover(
 
 /// The tick the pointer's `fraction` along the painted bar names, so the
 /// hover's time label reads the same conversion the painted bar does.
-#[must_use]
-pub fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 {
+fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 {
     mbv_emby_model::seconds_to_ticks(
         fraction * mbv_emby_model::ticks_to_seconds(playback.playback.runtime_ticks),
     )

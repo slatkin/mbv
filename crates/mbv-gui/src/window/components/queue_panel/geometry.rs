@@ -10,10 +10,10 @@ use super::row_cells::ItemRow;
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueInsertion, GuiQueueRow, GuiSemanticState};
 
 /// The canvas's fixed queue row height in logical pixels (design D9).
-pub(super) const ROW_HEIGHT_PX: u16 = 34;
+pub(in crate::window::components) const ROW_HEIGHT_PX: u16 = 34;
 
 /// The gap between two stacked rows in logical pixels (design D9).
-pub(super) const ROW_GAP_PX: u16 = 2;
+pub(in crate::window::components) const ROW_GAP_PX: u16 = 2;
 
 /// The space between the queue header and the first row. It is the list box's
 /// top margin, not its padding: the list's measured height (the capacity) and
@@ -61,6 +61,14 @@ pub(super) fn row_background(row: &ItemRow, queue: &GuiQueue) -> Option<&'static
     None
 }
 
+/// The painted index of the item row holding `slot`, if it is a painted row.
+fn slot_index(queue: &GuiQueue, slot: u64) -> Option<usize> {
+    queue
+        .rows
+        .iter()
+        .position(|row| matches!(row, GuiQueueRow::Item { slot: held, .. } if *held == slot))
+}
+
 /// The drag's insertion line resolved against the painted rows: the anchor
 /// slot's row index, or `None` while no drag runs or its anchor is not a
 /// painted row.
@@ -77,10 +85,7 @@ pub(super) fn insertion(queue: &GuiQueue) -> Option<Insertion> {
         GuiQueueInsertion::Before { slot } => (true, slot),
         GuiQueueInsertion::After { slot } => (false, slot),
     };
-    let index = queue
-        .rows
-        .iter()
-        .position(|row| matches!(row, GuiQueueRow::Item { slot: held, .. } if *held == slot))?;
+    let index = slot_index(queue, slot)?;
     Some(Insertion {
         before,
         slot,
@@ -108,10 +113,7 @@ pub(super) fn ghost_top(insertion: &Insertion) -> usize {
 /// holds the menu at the header while the anchor is not a painted row.
 pub(super) fn menu_top(queue: &GuiQueue, anchor_slot: u64) -> String {
     let stride = usize::from(ROW_STRIDE_PX);
-    let index = queue.rows.iter().position(
-        |row| matches!(row, GuiQueueRow::Item { slot: held, .. } if *held == anchor_slot),
-    );
-    let below = index.map_or(0, |index| (index + 1) * stride - 6);
+    let below = slot_index(queue, anchor_slot).map_or(0, |index| (index + 1) * stride - 6);
     format!("calc(var(--canvas-queue-header-height) + {below}px)")
 }
 

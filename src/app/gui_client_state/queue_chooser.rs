@@ -25,10 +25,7 @@ impl App {
     pub(in crate::app) fn queue_chooser_entries(&self) -> Vec<QueueChooserEntryProjection> {
         let current = self.named_queues.current();
         let local_plays = self.local_owner_plays();
-        let shown_resting = match &self.shown_resting {
-            Some((queue, view)) if self.named_queues.rests(*queue) => Some((*queue, view)),
-            _ => None,
-        };
+        let shown_resting = self.shown_resting_live();
         let mut entries: Vec<QueueChooserEntryProjection> = self
             .named_queues
             .entries()
