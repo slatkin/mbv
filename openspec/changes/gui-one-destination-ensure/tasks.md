@@ -15,8 +15,8 @@
 
 ## 3. Callers
 
-- [ ] 3.1 In `crates/mbv-gui/src/sections/library.rs`, replace the per-destination ensure calls with one driver call before the parts are built. Verify the `mbv-gui` core-thread library tests pass with `cargo nextest run -p mbv-gui`.
-- [ ] 3.2 Make `open_gui_active_destination` run the user-action work, then the driver, with an exhaustive match. Make the five per-destination ensure functions non-`pub`. Verify `cargo check --workspace --all-targets` and `cargo clippy --workspace --all-targets -- -D warnings` pass.
+- [x] 3.1 In `crates/mbv-gui/src/sections/library.rs`, replace the per-destination ensure calls with one driver call before the parts are built. Verify the `mbv-gui` core-thread library tests pass with `cargo nextest run -p mbv-gui`.
+- [x] 3.2 Make `open_gui_active_destination` run the user-action work, then the driver, with an exhaustive match. Make the five per-destination ensure functions non-`pub`. Verify `cargo check --workspace --all-targets` and `cargo clippy --workspace --all-targets -- -D warnings` pass.
 - [ ] 3.3 Document the root, selection, dependents order in `docs/architecture/gui-client.md` and in `docs/recipes.md` step 7 (browse destination). Verify the text names the trait and the driver.
 
 ## 4. Close out
