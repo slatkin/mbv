@@ -17,10 +17,10 @@ use crate::window::components::queue_panel::geometry::HEADER_HEIGHT_PX;
 const APP_CSS: &str = include_str!("../../../../../assets/app.css");
 
 /// The markers the header's parts carry, in the design's order (D7): the
-/// `QUEUE` label, the switcher, the new-queue control, the close control, the
-/// spacer, and the filter at the trailing edge.
-const HEADER_PARTS: [&str; 6] = [
-    "data-queue-label",
+/// switcher, the new-queue control, the close control, the spacer, and the
+/// filter at the trailing edge. The bar paints no `QUEUE` label (user request
+/// 2026-11-19).
+const HEADER_PARTS: [&str; 5] = [
     "data-queue-chooser",
     "data-new-queue",
     "data-close-queue",
@@ -29,12 +29,12 @@ const HEADER_PARTS: [&str; 6] = [
 ];
 
 /// The selector that names every part of the header bar.
-const HEADER_PARTS_SELECTOR: &str = "[data-queue-label], [data-queue-chooser], [data-new-queue], \
+const HEADER_PARTS_SELECTOR: &str = "[data-queue-chooser], [data-new-queue], \
                                      [data-close-queue], [data-queue-spacer], [data-filter]";
 
 /// Contract (design D7 of `gui-queue-panel-redesign`, spec `gui-queue-chooser`
 /// "One queue and no peer"): with only `Default` holding 26 slots in the local
-/// Owner and no peer connected, the header paints the `QUEUE` label, the
+/// Owner and no peer connected, the header paints the
 /// switcher with `Default` and the count 26, the new-queue control, the
 /// disabled close control — which claims no pointer — and the filter at the
 /// trailing edge, in that order. It paints no remaining count and no finish
@@ -43,7 +43,10 @@ const HEADER_PARTS_SELECTOR: &str = "[data-queue-label], [data-queue-chooser], [
 fn a_one_entry_header_paints_the_switcher_its_count_and_the_design_order() {
     let fixture = built_with_frame(queue_panel_app, queue(Vec::new()), summary(), None);
 
-    assert_eq!(fixture.text_of("[data-queue-label]"), "QUEUE");
+    assert!(
+        !fixture.presents("[data-queue-label]"),
+        "no QUEUE label paints"
+    );
     assert_eq!(
         fixture
             .attr_of("[data-queue-chooser]", local_name!("aria-label"))

@@ -1,8 +1,8 @@
 //! The Queue header (task 5.6, the port of `QueueHeader`; rewritten by design
 //! D7 of `gui-queue-panel-redesign`): the 48 px bar over the Queue rows. It
-//! paints one row of controls in the design's order — the `QUEUE` label, the
-//! Queue switcher, the new-queue control, the close control, a spacer, and the
-//! filter control at the trailing edge — and nothing else (spec
+//! paints one row of controls in the design's order — the Queue switcher, the
+//! new-queue control, the close control, a spacer, and the filter control at
+//! the trailing edge — and nothing else (spec
 //! `gui-queue-chooser` "The queue header holds the chooser and its controls").
 //!
 //! The switcher always paints (design D7): it is not a row of tabs and it does
@@ -43,14 +43,12 @@ use crate::window::components::queue_panel::geometry::{CONTROL_PX, HEADER_HEIGHT
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
 use crate::window::theme::{EfToken, ef_var};
 
-/// The title the header paints while the shown entry has no name. The title
+/// The title the header paints while the shown entry has no name (the label
+/// the header once led with is gone, user request 2026-11-19). The title
 /// paints as plain text, never through `Truncate`: its box is sized by its own
 /// text, so a measure that read a narrow first layout would cut a name such as
 /// `Default` and keep the cut.
 const DEFAULT_TITLE: &str = "Queue";
-
-/// The `QUEUE` label's text (design D7).
-const QUEUE_LABEL: &str = "QUEUE";
 
 /// An icon button's look (design D7): 32 × 32, radius 6. Its rest and pointer
 /// colours live in `assets/app.css` (`[data-queue-header] button`), keyed on
@@ -119,17 +117,6 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                 ef_var(EfToken::Bg3)
             ),
             "data-queue-header": "",
-            // The `QUEUE` label (design D7): the bar's own name, in the canvas's
-            // letter-spaced small caps.
-            span {
-                class: "shrink-0",
-                style: format!(
-                    "font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: {};",
-                    ef_var(EfToken::Grey2)
-                ),
-                "data-queue-label": "",
-                "{QUEUE_LABEL}"
-            }
             // The Queue switcher and its dropdown's anchor (design D7, D8): the
             // button names the shown entry, counts its slots, and opens the
             // dropdown; the card mounts inside this box, so its leading edge is
