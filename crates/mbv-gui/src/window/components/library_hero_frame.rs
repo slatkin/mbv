@@ -17,8 +17,8 @@
 //! A destination supplies facts and rows and never restates the layout, so a
 //! fix here lands in all of them. The artwork arm is `LibraryHeroArt`'s: the
 //! canvas's 300 px box for a square or portrait cover, and the 16:9 still for
-//! a landscape one, which sits beside the text when 320 px or more is free
-//! and wraps above it when the Hero is narrower.
+//! a landscape one. The text sits beside either when 320 px or more is free
+//! and wraps below the art when the Hero is narrower.
 //!
 //! `attr` names the destination's own attributes: the Music Hero's are
 //! `data-library-hero-*` (`attr` empty) and the Shows Hero's are
@@ -251,8 +251,11 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                 }
             }
             section {
-                class: if band { "flex flex-wrap items-start" } else { "flex items-start" },
-                style: if band { "gap: 18px 32px;" } else { "gap: 32px;" },
+                // Every art shape wraps: the text drops under the art when the
+                // Hero is too narrow to hold both side by side (the text's
+                // 320 px basis), not only for a landscape still.
+                class: "flex flex-wrap items-start",
+                style: "gap: 18px 32px;",
                 "aria-label": "{block.label}",
                 ..block_attrs,
                 LibraryHeroArt {
@@ -267,7 +270,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                     style: if band {
                         "gap: 18px; flex-basis: 320px; padding-top: 0;"
                     } else {
-                        "gap: 18px; padding-top: 8px;"
+                        "gap: 18px; flex-basis: 320px; padding-top: 8px;"
                     },
                     if painted(block.eyebrow.as_ref())
                         || named(block.name.as_deref())

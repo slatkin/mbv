@@ -329,6 +329,31 @@ fn a_cover_hero_places_its_artwork_box_at_300_px_wide(
     );
 }
 
+/// Regression (2026-11-19, the TV Hero was not responsive): a poster (portrait
+/// or square) Hero wraps its text below the art when the Hero is too narrow
+/// for both, as a landscape Hero does. The detail block takes `flex-wrap` and
+/// the text a 320 px basis for every art shape.
+#[rstest]
+#[case::square(GuiArtShapeFrame::Square)]
+#[case::portrait(GuiArtShapeFrame::Portrait)]
+#[case::landscape(GuiArtShapeFrame::Landscape)]
+fn the_detail_block_wraps_its_text_below_the_art_for_every_shape(#[case] shape: GuiArtShapeFrame) {
+    let fixture = built(Some(hero(|facts| facts.art_shape = shape)));
+
+    let class = fixture
+        .attr_of("[data-library-shows-hero-block]", "class")
+        .unwrap_or_default();
+    assert!(
+        class.contains("flex-wrap"),
+        "the block wraps, class: {class}"
+    );
+    let text = fixture.style_of("[data-library-shows-hero-block] > div:last-child");
+    assert!(
+        text.contains("flex-basis: 320px"),
+        "the text holds a 320 px basis, painted: {text}"
+    );
+}
+
 /// Contract (`LibraryShowsHero.test.ts`, design D14): the landscape arm is
 /// the TUI's — the still fills the Hero content width at 16:9 above the
 /// facts.
