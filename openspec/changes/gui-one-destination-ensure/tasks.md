@@ -2,8 +2,8 @@
 
 ## 1. The ensure contract
 
-- [ ] 1.1 Add `src/app/gui_library/ensure.rs`: the `GuiDestinationLoads` trait (`ensure_root`, `ensure_selection`, `ensure_dependents`) and `App::ensure_gui_destination(GuiDestinationKind)` with an exhaustive match and no wildcard. Home and Feeds take no-op steps. Verify with `cargo check -p mbv`.
-- [ ] 1.2 Add one unit test in `src/app/tests/` that a driver run calls root, then selection, then dependents, using a recording site. Verify it passes with `cargo nextest run -p mbv`.
+- [x] 1.1 Add `src/app/gui_library/ensure.rs`: the `GuiDestinationLoads` trait (`ensure_root`, `ensure_selection`, `ensure_dependents`) and `App::ensure_gui_destination(GuiDestinationKind)` with an exhaustive match and no wildcard. Home and Feeds take no-op steps. Verify with `cargo check -p mbv`.
+- [x] 1.2 Add one unit test in `src/app/tests/` that a driver run calls root, then selection, then dependents, using a recording site. Verify it passes with `cargo nextest run -p mbv`.
 
 ## 2. Move the destinations behind the trait
 
