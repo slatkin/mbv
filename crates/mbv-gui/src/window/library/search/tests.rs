@@ -281,7 +281,7 @@ fn an_arrow_with_no_results_moves_nothing_and_holds_no_id() {
 #[test]
 fn activating_a_row_sends_its_id_and_item_type_never_the_close_command() {
     let (_facts, rx, _clock) = run(|state, _clock, _facts| {
-        state.activate_search_row(&row("r7"));
+        state.activate_search_row("r7", "Artist");
     });
     assert_eq!(
         commands(&rx),

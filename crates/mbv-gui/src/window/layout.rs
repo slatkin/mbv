@@ -396,6 +396,33 @@ pub fn track_container_size(
     });
 }
 
+/// The width-only measure effect: the same re-measure as
+/// [`track_container_size`] (a [`LayoutEpoch`] subscription, the box's client
+/// rect, a 0.5 px dedupe) for a box whose width alone matters — the top bar
+/// and its tab strip. It writes only `width`, never the layout reporter's
+/// container size. Without a [`LayoutEpoch`] the box is measured once, at
+/// mount.
+pub fn track_width(mounted: Signal<Option<Event<MountedData>>>, mut width: Signal<f32>) {
+    let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
+    use_effect(move || {
+        // Reading the epoch re-measures the box on every layout change.
+        let _epoch = epoch.as_ref().map(Signal::cloned);
+        let mounted = mounted.cloned();
+        spawn(async move {
+            let Some(event) = mounted else {
+                return;
+            };
+            let Ok(rect) = event.get_client_rect().await else {
+                return;
+            };
+            let measured = f32_from_f64(rect.width());
+            if (*width.peek() - measured).abs() > 0.5 {
+                width.set(measured);
+            }
+        });
+    });
+}
+
 /// One element's painted region (D9), `None` while the element is not
 /// mounted. The rect is the element's bounding box in window coordinates —
 /// already CSS pixels — and `target` is the semantic target a press on the

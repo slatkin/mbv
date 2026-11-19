@@ -510,7 +510,7 @@ pub fn route_library_key(
     // an unmounted control retracted must never route a key under it (the same
     // key-leak gate).
     if state.search_field_mounted() && state.search_field_focused() {
-        return route_search_key(state, key, sections.search.peek().as_ref());
+        return route_search_key(state, key, sections.search.peek().as_deref());
     }
     // The Playlists screen takes the rename field's keys while it holds the
     // keyboard, and the core takes every other key: the Library panel is not
@@ -543,7 +543,7 @@ pub fn route_library_key(
         return route_escape_key(
             state,
             &ui,
-            sections.search.peek().as_ref(),
+            sections.search.peek().as_deref(),
             arrangement,
             target,
         );

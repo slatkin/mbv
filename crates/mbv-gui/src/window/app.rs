@@ -16,7 +16,7 @@ use dioxus_native::winit::window::{Window, WindowId};
 use futures_util::StreamExt;
 use mbv_config::{load_gui_panel_widths, save_gui_panel_widths};
 
-use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
+use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::overlay::GuiOverlayFrame;
 use crate::bridge::keys::DomKey;
 use crate::bridge::pointer::DomPointerKind;
@@ -302,9 +302,6 @@ pub(crate) struct HeaderFacts {
     pub current_tab: Option<usize>,
     /// Whether the Home content is present, which the Home icon marks.
     pub home_active: bool,
-    /// The carried Search facts the top bar's Search control paints (user
-    /// request 2026-11-19).
-    pub search: Option<GuiSearchFrame>,
 }
 
 /// Read the header's facts from the sections the frame carries.
@@ -312,7 +309,6 @@ pub(crate) struct HeaderFacts {
 pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
     let list = sections.library_list.cloned();
     let detail = sections.library_detail.cloned();
-    let search = sections.search.cloned();
     HeaderFacts {
         tabs: list
             .as_ref()
@@ -321,9 +317,6 @@ pub(crate) fn header_facts(sections: &Sections) -> HeaderFacts {
         current_tab: list.as_ref().and_then(|list| list.current_tab),
         home_active: library_pair(list.as_deref(), detail.as_deref())
             .is_some_and(|pair| matches!(pair, LibraryPair::Home(..))),
-        // The Search control's carried facts (user request 2026-11-19): the
-        // top bar paints them now, as the Status bar did before it.
-        search,
     }
 }
 
@@ -669,7 +662,6 @@ pub fn App() -> Element {
                             home_active: header.home_active && !playlists_open,
                             playlists_active: playlists_open,
                             on_destination_opened: Some(on_destination_opened),
-                            search: header.search.clone(),
                         }
                     }
                     div {

@@ -24,13 +24,9 @@ use crate::window::truncate::{TextStyle, Truncate};
 #[cfg(test)]
 mod tests;
 
-/// The props of the Search control: the carried Search facts and the bar's
-/// collapse decision.
+/// The props of the Search control: the bar's collapse decision.
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct LibrarySearchControlProps {
-    /// The carried Search facts while a search runs or its results hold
-    /// (design D9): `None` paints a closed field.
-    pub search: Option<GuiSearchFrame>,
     /// The top bar's collapse decision (user request 2026-11-19): `true`
     /// paints the icon-and-panel form, `false` the inline field.
     pub collapsed: bool,
@@ -76,12 +72,13 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     // A results frame keeps the held highlight by id (design D9): a first
     // landing and an id a new frame no longer carries — a new query's rows,
     // or a closed section's leftovers — fall to the first row. Rows compare
-    // by id, never object identity, so a refresh keeps the held id. The held
-    // id reads through `peek`, so the effect never re-runs on its own
-    // write.
+    // by id, never object identity, so a refresh keeps the held id. The read
+    // subscribes to the Search section, so the effect re-runs when a frame
+    // lands; the held id reads through `peek`, so the effect never re-runs
+    // on its own write.
     let highlight_library = library.clone();
-    use_effect(use_reactive((&props.search,), move |(search,)| {
-        let Some(frame) = search else {
+    use_effect(move || {
+        let Some(frame) = highlight_library.sections.search.cloned() else {
             return;
         };
         let held = highlight_library.search.peek().highlight.clone();
@@ -89,9 +86,13 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
             return;
         }
         highlight_library.set_search_highlight(frame.results.first().map(|row| row.id.clone()));
-    }));
+    });
 
-    // The field's text and the held highlight, read once per render.
+    // The field's text and the held highlight, read once per render. The
+    // Search section rides its one shared handle (design D1 of
+    // `share-gui-sections-by-rc`): the read clones the handle, never the
+    // frame.
+    let search = library.sections.search.cloned();
     let search_state = library.search.cloned();
     let query = search_state.query;
     let highlight = search_state.highlight;
@@ -99,7 +100,7 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     let toggle_library = library.clone();
 
     let field = paint_search_box(
-        props.search.as_ref(),
+        search.as_deref(),
         &library,
         &query,
         highlight.as_deref(),
@@ -194,83 +195,99 @@ fn paint_search_box(
             "Ctrl K"
         }
         if let Some(search) = search {
-            // The results dropdown, in the list-row look (design D9): the
-            // rows under the field while the frame carries them, and the
-            // loading and failed states while the query lands. The bar sits
-            // at the window's top edge, so the results open downward.
-            div {
-                class: "absolute",
-                style: "left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px; padding: 2px 0; z-index: 30;",
-                "data-library-search-results": "",
-                role: "listbox",
-                if search.loading {
-                    div {
-                        class: "font-mono",
-                        style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                        "data-library-search-loading": "",
-                        "Searching…"
-                    }
-                } else if search.failed {
-                    div {
-                        class: "font-mono",
-                        style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                        "data-library-search-failed": "",
-                        "Search failed"
-                    }
-                } else if search.results.is_empty() {
-                    div {
-                        class: "font-mono",
-                        style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
-                        "data-library-search-empty": "",
-                        "No results"
-                    }
-                } else {
-                    for row in &search.results {
-                        {
-                            let row = row.clone();
-                            let activate_library = library.clone();
-                            let is_highlighted = highlight == Some(row.id.as_str());
-                            let background = if is_highlighted {
-                                "var(--canvas-selected)"
-                            } else {
-                                "none"
-                            };
-                            let row_style = format!(
-                                "height: 36px; padding: 0 10px; gap: 8px; border: 0; text-align: left; font-size: 14px; cursor: pointer; background: {background};"
-                            );
-                            let title = row.title.clone();
-                            let subtitle = row.subtitle.clone();
-                            let id = row.id.clone();
-                            rsx! {
-                                button {
-                                    key: "{id}",
-                                    "type": "button",
-                                    class: "flex w-full items-center overflow-hidden",
-                                    style: "{row_style}",
-                                    "data-library-search-row": "{id}",
-                                    "data-library-search-highlight": is_highlighted.then_some(""),
-                                    onclick: move |_| activate_library.activate_search_row(&row),
-                                    Truncate {
-                                        text: title,
-                                        class: "min-w-0 flex-1".to_owned(),
-                                        // the former client row's 14 px title face:
-                                        // the measure cuts for 14 px, so
-                                        // the box must paint 14 px.
-                                        css: "font-size: 14px; color: var(--canvas-text);"
-                                            .to_owned(),
-                                        style: TextStyle::sans(14.0, 400.0),
-                                    }
-                                    // The subtitle's own ellipsis (D9): the
-                                    // the former client box clipped its 12 px mono
-                                    // text with `text-overflow`, which
-                                    // Blitz does not paint.
-                                    Truncate {
-                                        text: subtitle,
-                                        class: "font-mono".to_owned(),
-                                        css: "font-size: 12px; color: var(--canvas-muted); max-width: 45%; flex: 0 1 auto;"
-                                            .to_owned(),
-                                        style: TextStyle::mono(12.0, 400.0),
-                                    }
+            { paint_search_results(search, library, highlight) }
+        }
+    }
+}
+
+/// The results dropdown the frame carries, in the list-row look (design D9):
+/// the rows under the field while the frame carries them, and the loading and
+/// failed states while the query lands. The bar sits at the window's top
+/// edge, so the results open downward.
+fn paint_search_results(
+    search: &GuiSearchFrame,
+    library: &LibraryState,
+    highlight: Option<&str>,
+) -> Element {
+    rsx! {
+        div {
+            class: "absolute",
+            style: "left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; background: var(--canvas-library-panel); border: 1px solid var(--canvas-border); border-radius: 6px; padding: 2px 0; z-index: 30;",
+            "data-library-search-results": "",
+            role: "listbox",
+            if search.loading {
+                div {
+                    class: "font-mono",
+                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    "data-library-search-loading": "",
+                    "Searching…"
+                }
+            } else if search.failed {
+                div {
+                    class: "font-mono",
+                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    "data-library-search-failed": "",
+                    "Search failed"
+                }
+            } else if search.results.is_empty() {
+                div {
+                    class: "font-mono",
+                    style: "padding: 8px 10px; font-size: 12px; color: var(--canvas-muted);",
+                    "data-library-search-empty": "",
+                    "No results"
+                }
+            } else {
+                for row in &search.results {
+                    {
+                        let activate_library = library.clone();
+                        let is_highlighted = highlight == Some(row.id.as_str());
+                        let background = if is_highlighted {
+                            "var(--canvas-selected)"
+                        } else {
+                            "none"
+                        };
+                        let row_style = format!(
+                            "height: 36px; padding: 0 10px; gap: 8px; border: 0; text-align: left; font-size: 14px; cursor: pointer; background: {background};"
+                        );
+                        // The painted labels move into their `Truncate`
+                        // boxes, and the activate identity — the id and
+                        // item type the command sends — is all the press
+                        // handler carries: the row itself is never cloned.
+                        let title = row.title.clone();
+                        let subtitle = row.subtitle.clone();
+                        let id = row.id.clone();
+                        let item_type = row.item_type.clone();
+                        rsx! {
+                            button {
+                                key: "{id}",
+                                "type": "button",
+                                class: "flex w-full items-center overflow-hidden",
+                                style: "{row_style}",
+                                "data-library-search-row": "{id}",
+                                "data-library-search-highlight": is_highlighted.then_some(""),
+                                onclick: move |_| {
+                                    activate_library.activate_search_row(&id, &item_type);
+                                },
+                                Truncate {
+                                    text: title,
+                                    class: "min-w-0 flex-1".to_owned(),
+                                    // the former client row's 14 px title face:
+                                    // the measure cuts for 14 px, so
+                                    // the box must paint 14 px.
+                                    css: "font-size: 14px; color: var(--canvas-text);"
+                                        .to_owned(),
+                                    style: TextStyle::sans(14.0, 400.0),
+                                }
+                                // The subtitle's own ellipsis (D9): the
+                                // the former client box clipped its 12 px mono
+                                // text with `text-overflow`, which
+                                // Blitz does not paint.
+                                Truncate {
+                                    text: subtitle,
+                                    class: "font-mono".to_owned(),
+                                    css: "font-size: 12px; color: var(--canvas-muted); max-width: 45%; flex: 0 1 auto;"
+                                        .to_owned(),
+                                    style: TextStyle::mono(12.0, 400.0),
                                 }
                             }
                         }

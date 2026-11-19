@@ -26,14 +26,13 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiLibraryTabFrame, GuiSearchFrame};
+use crate::bridge::frame::library::GuiLibraryTabFrame;
 use crate::bridge::frame::theme::GuiRole;
 use crate::bridge::playlists::GuiPlaylistsCommand;
 use crate::bridge::settings::GuiSettingsCommand;
 use crate::window::components::library_search_control::LibrarySearchControl;
 use crate::window::icons::{ChevronLeft, ChevronRight, ListVideo, Settings};
-use crate::window::input::f32_from_f64;
-use crate::window::layout::LayoutEpoch;
+use crate::window::layout::track_width;
 use crate::window::library::state::LibraryState;
 use crate::window::pointer_target::PointerZone;
 use crate::window::theme::{canvas_var, role_var};
@@ -45,6 +44,12 @@ use crate::window::theme::{canvas_var, role_var};
 /// width of zero is a bar the layout has not measured yet, which paints the
 /// inline form: the first measure runs with the bar's real width.
 const SEARCH_COLLAPSE_BAR_WIDTH_PX: f32 = 560.0;
+
+/// Whether a bar of `width` paints the Search control collapsed. An unmeasured
+/// bar (zero width) paints the inline form.
+fn is_collapsed(width: f32) -> bool {
+    width > 0.0 && width < SEARCH_COLLAPSE_BAR_WIDTH_PX
+}
 
 /// The props of the Library top bar (the `LibraryTopBar` props, in
 /// order).
@@ -70,11 +75,6 @@ pub struct LibraryTopBarProps {
     /// control puts the Queue back.
     #[props(default)]
     pub on_destination_opened: Option<Callback<usize>>,
-    /// The carried Search facts while a search runs or its results hold
-    /// (design D9): the Search control's carried frame. `None` paints a
-    /// closed field.
-    #[props(default)]
-    pub search: Option<GuiSearchFrame>,
 }
 
 /// Home's own position in the destination order (design D2): the Home icon
@@ -122,61 +122,23 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
     // first painted tab the chevrons step. The strip's basis is zero, so its
     // width never depends on the tabs it holds.
     let mut strip_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
-    let mut strip_width = use_signal(|| 0.0_f32);
+    let strip_width = use_signal(|| 0.0_f32);
     let mut first_tab = use_signal(|| 0_usize);
+    track_width(strip_mounted, strip_width);
     // The bar's own measured width: the Search control's collapse decision
     // reads it (user request 2026-11-19), and the layout epoch re-measures it
     // on every layout change, as the strip's re-measures do.
     let mut bar_mounted: Signal<Option<Event<MountedData>>> = use_signal(|| None);
     let bar_width = use_signal(|| 0.0_f32);
-    let epoch = try_consume_context::<LayoutEpoch>().map(|epoch| epoch.0);
-    use_effect(move || {
-        // Reading the epoch re-measures the strip on every layout change.
-        let _epoch = epoch.as_ref().map(Signal::cloned);
-        let mounted = strip_mounted.cloned();
-        spawn(async move {
-            let Some(event) = mounted else {
-                return;
-            };
-            let Ok(rect) = event.get_client_rect().await else {
-                return;
-            };
-            let width = f32_from_f64(rect.width());
-            if (*strip_width.peek() - width).abs() > 0.5 {
-                strip_width.set(width);
-            }
-        });
-    });
-    use_effect(move || {
-        // Reading the epoch re-measures the bar on every layout change.
-        let _epoch = epoch.as_ref().map(Signal::cloned);
-        let mounted = bar_mounted.cloned();
-        let mut measure = bar_width;
-        spawn(async move {
-            let Some(event) = mounted else {
-                return;
-            };
-            let Ok(rect) = event.get_client_rect().await else {
-                return;
-            };
-            let width = f32_from_f64(rect.width());
-            if (*measure.peek() - width).abs() > 0.5 {
-                measure.set(width);
-            }
-        });
-    });
-    // The collapse decision (user request 2026-11-19): the store carries it,
-    // so the key router's `Ctrl+K` can open the collapsed control's panel.
-    // The effect re-runs on every measured width and writes the decision — a
-    // store write the fact already holds changes nothing. The zero-width
-    // first paint measures nothing yet and paints the inline form; the first
-    // real measure rewrites it.
-    let collapsed = bar_width.cloned() > 0.0 && bar_width.cloned() < SEARCH_COLLAPSE_BAR_WIDTH_PX;
+    track_width(bar_mounted, bar_width);
+    // The collapse decision (user request 2026-11-19): the prop and the store
+    // both take it from `is_collapsed`. The store carries it so the key
+    // router's `Ctrl+K` can open the collapsed control's panel; the effect
+    // re-runs on every measured width, and a store write the fact already
+    // holds changes nothing.
+    let collapsed = is_collapsed(bar_width.cloned());
     let collapse_library = library.clone();
-    use_effect(move || {
-        let width = bar_width.cloned();
-        collapse_library.set_search_collapsed(width > 0.0 && width < SEARCH_COLLAPSE_BAR_WIDTH_PX);
-    });
+    use_effect(move || collapse_library.set_search_collapsed(is_collapsed(bar_width.cloned())));
     // A new current tab, a new tab list, or a new strip width scrolls the
     // current tab into view. The held first tab reads through `peek`, so a
     // chevron press is never undone by this effect.
@@ -349,9 +311,8 @@ pub fn LibraryTopBar(props: LibraryTopBarProps) -> Element {
             }
             // The Search control, before the Settings control at the bar's
             // right end (user request 2026-11-19): the responsive field-or-
-            // icon form over the carried Search facts.
+            // icon form. The control reads the Search section itself.
             LibrarySearchControl {
-                search: props.search.clone(),
                 collapsed,
             }
             // The Settings control at the bar's right end (design D11
