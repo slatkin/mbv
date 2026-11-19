@@ -363,7 +363,11 @@ fn TrackPopoverList(props: TrackPopoverProps) -> Element {
                                 // style of its own.
                                 Truncate {
                                     text: choice.label.clone(),
-                                    class: "min-w-0 flex-1".to_owned(),
+                                    // A forced row keeps its tag right after the
+                                    // label, so its label is sized by its text; any
+                                    // other row's label fills the room.
+                                    class: if choice.forced { "min-w-0" } else { "min-w-0 flex-1" }
+                                        .to_owned(),
                                     style: TextStyle::sans(13.0, 400.0),
                                 }
                                 if choice.forced {
