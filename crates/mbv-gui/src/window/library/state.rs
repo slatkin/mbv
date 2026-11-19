@@ -55,6 +55,12 @@ pub struct LibraryUiState {
     /// while it is open, holding the filter text the open popover narrows its
     /// entries by. One value, so a close clears the filter by construction.
     pub collections: Option<String>,
+    /// The Shows Hero's season dropdown's interaction state (user request
+    /// 2026-11-19, the season pills' replacement): `None` while closed, and
+    /// `Some(filter)` while open, holding the filter text the open popover
+    /// narrows its season rows by — the collection dropdown's one-value
+    /// pattern, so a close clears the filter by construction.
+    pub shows_seasons: Option<String>,
     /// The list's open tree node row ids (design D7): an artist and an album
     /// each open and close on their own.
     pub open_nodes: Vec<String>,
@@ -88,6 +94,7 @@ impl LibraryUiState {
             filter_open: false,
             filter: String::new(),
             collections: None,
+            shows_seasons: None,
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
             filter_closed: Vec::new(),
@@ -363,6 +370,46 @@ impl LibraryState {
     pub fn set_collections_filter(&self, filter: String) {
         let mut ui = self.ui;
         ui.with_mut(|ui| ui.collections = Some(filter));
+    }
+
+    /// Open or close the Shows Hero's season dropdown (user request
+    /// 2026-11-19): a press on the trigger opens it when it is closed and
+    /// closes it when it is open. A close drops the filter text, so the next
+    /// open starts empty.
+    pub fn toggle_shows_seasons_dropdown(&self) {
+        if self.shows_seasons_open() {
+            self.close_shows_seasons_dropdown();
+        } else {
+            let mut ui = self.ui;
+            ui.with_mut(|ui| ui.shows_seasons = Some(String::new()));
+        }
+    }
+
+    /// Close the Shows Hero's season dropdown and clear its filter text: a
+    /// press outside it, Esc, a destination change, and a second press on the
+    /// trigger all land here. A press while it is closed already writes
+    /// nothing: the window's every-press path calls this on each press, and
+    /// the write would repaint the panel for no change.
+    pub fn close_shows_seasons_dropdown(&self) {
+        if !self.shows_seasons_open() {
+            return;
+        }
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.shows_seasons = None);
+    }
+
+    /// Whether the Shows Hero's season dropdown is open: `Some(filter)` is
+    /// open, `None` is closed.
+    #[must_use]
+    pub fn shows_seasons_open(&self) -> bool {
+        self.ui.peek().shows_seasons.is_some()
+    }
+
+    /// Type into the Shows Hero's season dropdown's filter: the season rows
+    /// narrow by the Library filter's match rule.
+    pub fn set_shows_seasons_filter(&self, filter: String) {
+        let mut ui = self.ui;
+        ui.with_mut(|ui| ui.shows_seasons = Some(filter));
     }
 
     /// Record the top bar's narrowness (user request 2026-11-19): the bar's

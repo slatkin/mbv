@@ -79,6 +79,12 @@ pub struct LibraryDropdownProps {
     pub on_filter: Callback<String>,
     /// A press that landed on the dropdown's own surface.
     pub on_inside_press: Callback<()>,
+    /// Whether the trigger sits at the wrapper's trailing edge and the popover
+    /// anchors to the trigger's right. The collection and view dropdowns sit
+    /// in the list header's trailing slot; the Shows Hero's season dropdown
+    /// leads its workspace band instead.
+    #[props(default = true)]
+    pub align_end: bool,
 }
 
 /// One row's look: the selected band and bold name the artboard carries, for
@@ -148,6 +154,7 @@ impl std::fmt::Debug for LibraryDropdownProps {
             .field("open", &self.open)
             .field("rows", &self.rows)
             .field("marker", &self.marker)
+            .field("align_end", &self.align_end)
             .finish_non_exhaustive()
     }
 }
@@ -174,6 +181,7 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
         on_select,
         on_filter,
         on_inside_press,
+        align_end,
     } = props;
 
     let has_filter = filter.is_some();
@@ -187,7 +195,11 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
 
     rsx! {
         div {
-            class: "relative flex min-w-0 flex-1 items-center justify-end",
+            class: if align_end {
+                "relative flex min-w-0 flex-1 items-center justify-end"
+            } else {
+                "relative flex min-w-0 flex-1 items-center justify-start"
+            },
             role: "group",
             "aria-label": "{aria_label}",
             style: "gap: 12px;",
@@ -228,9 +240,15 @@ pub fn LibraryDropdown(props: LibraryDropdownProps) -> Element {
                         class: "absolute z-20 flex flex-col",
                         role: "menu",
                         "aria-label": "{aria_label}",
-                        style: format!(
-                            "top: 34px; right: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
-                        ),
+                        style: if align_end {
+                            format!(
+                                "top: 34px; right: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                            )
+                        } else {
+                            format!(
+                                "top: 34px; left: 0; width: 20rem; max-width: calc(100vw - 48px); {MENU_CARD_STYLE}"
+                            )
+                        },
                         ..menu_attrs,
                         if let Some(filter) = filter {
                             label {
