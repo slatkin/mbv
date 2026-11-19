@@ -36,7 +36,7 @@ impl App {
     /// destination to its site value, then run that site's three steps in
     /// order. The match is exhaustive and has no wildcard arm, so a new
     /// destination kind does not compile until it names its site.
-    pub fn ensure_gui_destination(&mut self, kind: GuiDestinationKind) {
+    pub(in crate::app) fn ensure_gui_destination(&mut self, kind: GuiDestinationKind) {
         match kind {
             GuiDestinationKind::Home => self.run_gui_destination_loads(&HomeLoads),
             GuiDestinationKind::Music { lib_idx } => {
