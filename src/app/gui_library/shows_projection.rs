@@ -424,8 +424,9 @@ impl App {
                         .any(|item| item.id == series_id && item.item_type == "Series")
                 })
         };
-        self.gui_shows_selection(lib_idx)
-            .series_id
+        self.gui_tv_shows
+            .get(&lib_idx)
+            .and_then(|selection| selection.series_id.clone())
             .filter(|stored| in_root(stored))
             .or_else(|| {
                 self.libs

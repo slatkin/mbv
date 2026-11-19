@@ -47,8 +47,8 @@ impl GuiDestinationLoads for RecordingLoads<'_> {
         self.record(LoadStep::Selection)
     }
 
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
-        self.record(LoadStep::Dependents)
+    fn ensure_dependents(&self, _app: &mut App) {
+        self.record(LoadStep::Dependents);
     }
 }
 

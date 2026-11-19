@@ -37,8 +37,7 @@ pub(crate) struct LibraryPass {
 /// destination's one load pass runs before the parts are built, so a part never
 /// starts a load of its own.
 pub(crate) fn build(app: &mut App) -> LibraryPass {
-    app.ensure_gui_active_destination();
-    let destination = app.gui_active_destination();
+    let destination = app.ensure_gui_active_destination();
     let Some((list, detail)) = destination_parts(app, destination) else {
         return LibraryPass::default();
     };

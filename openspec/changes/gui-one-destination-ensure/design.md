@@ -21,7 +21,7 @@ Audiobooks and Podcasts have the same gap Shows had: a restore at launch skips t
 
 **Goals:**
 - One entry point on `App` that the frame path, the open command, and the router's destination steps all use.
-- One order of steps for every destination, enforced by a trait whose three steps are required methods, so a new destination cannot skip one.
+- One order of steps for every destination, enforced by a trait whose three steps have default no-op bodies, with an exhaustive match on the destination kind so a new destination must name its site.
 - No change to what any single fetch does, or to its guards.
 
 **Non-Goals:**
@@ -31,7 +31,7 @@ Audiobooks and Podcasts have the same gap Shows had: a restore at launch skips t
 
 ## Decisions
 
-**D1. A new private trait `GuiDestinationLoads` in `src/app/gui_library/ensure.rs`.** It has three required methods, `ensure_root`, `ensure_selection`, and `ensure_dependents`, each taking `&mut App`. One driver, `App::ensure_gui_destination(kind)`, takes a `GuiDestinationKind`, matches it exhaustively to a small site value (`MusicLoads { lib_idx }`, `ShowsLoads { lib_idx }`, and so on), and runs the three methods in order. The match has no wildcard arm (AGENTS.md, interactive architecture rule 5).
+**D1. A new private trait `GuiDestinationLoads` in `src/app/gui_library/ensure.rs`.** It has three methods with default no-op bodies, `ensure_root`, `ensure_selection`, and `ensure_dependents`, each taking `&mut App`. The first two return a step outcome, and the last step returns nothing. One driver, `App::ensure_gui_destination(kind)`, takes a `GuiDestinationKind`, matches it exhaustively to a small site value (`MusicLoads { lib_idx }`, `ShowsLoads { lib_idx }`, and so on), and runs the three methods in order. The match has no wildcard arm (AGENTS.md, interactive architecture rule 5).
 *Alternative:* keep five ensure functions and add a convention. Rejected: a convention is what failed. *Alternative:* extend `GuiCollectionSite`. Rejected: it does not cover Shows, Audiobooks, or Home, and it mixes command rejection with loading.
 
 **D2. The driver is the only caller.** `build` in `sections/library.rs` makes one call, `app.ensure_gui_active_destination()`, before it builds the parts, and removes the per-destination ensures from `music_parts`, `shows_parts`, `emby_parts`, `audiobooks_parts`, and the Podcasts call at the top of `build`. `open_gui_active_destination` keeps only the user-action work (D4), then calls the driver. The keyboard router's destination steps already go through `open_gui_library_position`.
@@ -46,7 +46,7 @@ Audiobooks and Podcasts have the same gap Shows had: a restore at launch skips t
 
 **D4. The open command keeps its user-action work, then runs the driver.** `gui_tv_open` keeps forcing the All view mode (the GUI's one Shows view). `gui_emby_open` keeps clearing a failed root mark, because the existing rule says a failed list retries on an open, not on a repaint. Their root loads move into the driver. `gui_abs_open`, `gui_podcast_open`, and `gui_feeds_open` keep their ignored-command log for a `lib_idx` that names no matching library and then run the driver. Wire commands (`absOpen`, `podcastOpen`, `tvOpen`, `embyOpen`, `feedsOpen`) do not change.
 
-**D5. The active-tab guard moves into the driver.** Today `ensure_gui_abs_selection`, `ensure_gui_podcast_selection`, and the open steps each test `self.tab.audiobookshelf_index() == Some(lib_idx)`, because the shell loaders read the active tab's browse state. The driver runs only for `gui_active_destination()`, which is the active tab, so the repeated test in the steps becomes a `debug_assert` in the Audiobooks and Podcasts steps. A `lib_idx` that names no library of the kind stays a no-op through the existing `gui_*_library` guards.
+**D5. The active-tab guard moves into the driver.** Today `ensure_gui_abs_selection`, `ensure_gui_podcast_selection`, and the open steps each test `self.tab.audiobookshelf_index() == Some(lib_idx)`, because the shell loaders read the active tab's browse state. The driver runs only for `gui_active_destination()`, which is the active tab, but a collection command can carry a stale frame's destination, so the driver tests the active tab and the `gui_*_library` guard once for the Audiobooks and Podcasts kinds, before it runs their steps. The two wrapper entries and the `debug_assert`s are gone.
 
 **D6. Public ensure functions become `pub(in crate::app::gui_library)` trait steps.** `ensure_gui_music_selection`, `ensure_gui_emby_selection`, `ensure_gui_podcast_selection`, `ensure_gui_abs_selection`, and `ensure_gui_shows_workspace` stop being `pub` on `App`. Tests that call them call `ensure_gui_destination` for the same destination. The `mbv-gui` crate stops importing them.
 

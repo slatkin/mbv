@@ -2,8 +2,8 @@
 //! USER-APPROVED GUI Shows design; gui-collection-dropdown design D8): the
 //! per-library selection the core owns — the selected series and season — and
 //! the open, select-series, and select-season actions the core's commands
-//! apply. The GUI Shows destination has one view mode, the series list, so the
-//! open forces the TUI's `TvContentMode::All` load and no mode command exists.
+//! apply. The GUI Shows destination has one view mode, the series list, which
+//! the load pass's root step settles, so no mode command exists.
 //! Every action runs the TUI's existing level-building and fetch functions, so
 //! the two Clients cannot drift: the series and season loads are
 //! `fetch_series_detail` and `fetch_series_season_episodes`. The TUI never
@@ -38,9 +38,10 @@ impl App {
     }
 
     /// Open the Shows library `lib_idx` (design D12, D8; gui-one-destination-ensure
-    /// design D4): the GUI's one view mode is the All series list, so the open
-    /// forces that mode and then runs the destination's load pass. The TUI's
-    /// own activation, which an empty stack needs, is the pass's root step. A
+    /// design D4): the GUI's one view mode is the All series list, which the
+    /// destination's load pass root step settles, so the open has no
+    /// user-action work beyond its guard. The TUI's own activation, which an
+    /// empty stack needs, is that root step too. A
     /// `lib_idx` that names no Shows library is an ignored command.
     pub fn gui_tv_open(&mut self, lib_idx: usize) {
         if !self.gui_tv_library(lib_idx) {
@@ -50,7 +51,6 @@ impl App {
             );
             return;
         }
-        self.apply_tv_letter_mode(lib_idx, &TvContentMode::All);
         self.ensure_gui_destination(GuiDestinationKind::Shows { lib_idx });
     }
 

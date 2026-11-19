@@ -241,9 +241,8 @@ fn add_second_book_library(app: &mut App) {
 
 /// The open entry stays inert for a book library that is not the active
 /// destination (review of gui-one-destination-ensure units 2.4 and 2.5): the
-/// entry tests the tab before it enters the driver, whose steps assert the pass
-/// runs for the active tab, so a `lib_idx` naming another book library starts no
-/// load and does not panic.
+/// driver tests the tab before it runs the Audiobooks steps, so a `lib_idx`
+/// naming another book library starts no load.
 #[test]
 fn the_open_entry_on_another_book_library_starts_no_load() {
     let _guard = crate::config::TestStateDirGuard::new();

@@ -12,10 +12,11 @@
 //!
 //! Two callers reach the pass: the `mbv-gui` crate's frame path, through
 //! [`App::ensure_gui_active_destination`], and the destination's open step,
-//! after its user-action work (design D2, D4). The Audiobooks and Podcasts
-//! app-facing entries ([`App::ensure_gui_abs_selection`] and
-//! [`App::ensure_gui_podcast_selection`]) stay as the guarded way in, because
-//! a collection command can name a library the tab is not on.
+//! after its user-action work (design D2, D4). A collection command can name
+//! an Audiobooks or Podcasts library the tab is not on, so the driver itself
+//! holds the active-tab guard for those two kinds.
+
+use std::collections::HashSet;
 
 use crate::app::App;
 
@@ -34,27 +35,37 @@ pub(in crate::app) enum GuiStepOutcome {
 }
 
 /// The three load steps one GUI Library destination takes, in the one order
-/// every destination shares (design D1). The methods are required, so a new
-/// destination must state its work for each step rather than skip one.
+/// every destination shares (design D1). A step a destination has no work for
+/// keeps its default no-op; the driver's exhaustive match on
+/// `GuiDestinationKind` is what makes a new destination state its site.
 pub(in crate::app) trait GuiDestinationLoads {
     /// Start the destination's root list load, or do nothing when the root is
     /// already loaded, in flight, or owned by another path.
-    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome;
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
     /// Start the load the root list's selection needs, or do nothing when the
     /// selection is already loaded or in flight.
-    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome;
+    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
     /// Start the content that depends on the selection, or do nothing when the
-    /// dependency is already loaded or in flight.
-    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome;
+    /// dependency is already loaded or in flight. It is the last step, so it
+    /// reports nothing.
+    fn ensure_dependents(&self, _app: &mut App) {}
 }
 
 impl App {
     /// Run the one ordered load pass for `kind` (design D1): resolve the
     /// destination to its site value, then run that site's three steps in
     /// order. The match is exhaustive and has no wildcard arm, so a new
-    /// destination kind does not compile until it names its site.
+    /// destination kind does not compile until it names its site. The shell
+    /// loaders of Audiobooks and Podcasts read the active tab's browse state,
+    /// and a collection command can carry a stale frame's destination, so
+    /// those two kinds run only for a library of their kind that is the active
+    /// tab.
     pub(in crate::app) fn ensure_gui_destination(&mut self, kind: GuiDestinationKind) {
         match kind {
             GuiDestinationKind::Home => self.run_gui_destination_loads(&HomeLoads),
@@ -68,10 +79,18 @@ impl App {
                 self.run_gui_destination_loads(&EmbyLoads { lib_idx });
             }
             GuiDestinationKind::Audiobooks { lib_idx } => {
-                self.run_gui_destination_loads(&AudiobooksLoads { lib_idx });
+                if self.tab.audiobookshelf_index() == Some(lib_idx)
+                    && self.gui_abs_book_library(lib_idx)
+                {
+                    self.run_gui_destination_loads(&AudiobooksLoads { lib_idx });
+                }
             }
             GuiDestinationKind::Podcasts { lib_idx } => {
-                self.run_gui_destination_loads(&PodcastsLoads { lib_idx });
+                if self.tab.audiobookshelf_index() == Some(lib_idx)
+                    && self.gui_podcast_library(lib_idx)
+                {
+                    self.run_gui_destination_loads(&PodcastsLoads { lib_idx });
+                }
             }
             GuiDestinationKind::Feeds => self.run_gui_destination_loads(&FeedsLoads),
         }
@@ -82,10 +101,11 @@ impl App {
     /// sections, so no section starts a load of its own. A session that
     /// presents no destination loads nothing, and the pass runs for the active
     /// destination only, whose steps then hold their own idempotent guards.
-    pub fn ensure_gui_active_destination(&mut self) {
-        if let Some(kind) = self.gui_active_destination() {
-            self.ensure_gui_destination(kind);
-        }
+    /// It returns that destination, so the caller does not resolve it again.
+    pub fn ensure_gui_active_destination(&mut self) -> Option<GuiDestinationKind> {
+        let kind = self.gui_active_destination()?;
+        self.ensure_gui_destination(kind);
+        Some(kind)
     }
 
     /// Run one site's steps in the shared order (design D1): root, then
@@ -103,37 +123,27 @@ impl App {
     }
 }
 
-/// The active-destination contract the Audiobooks and Podcasts steps share
-/// (design D5): the shelf loaders read the active tab's browse state, and the
-/// driver runs only for `gui_active_destination()`, which is that tab, so the
-/// repeated test the open steps carried becomes this assertion instead of a
-/// silent no-op. A `lib_idx` that names no library of the kind is still a
-/// no-op, through the steps' own destination guards.
+/// Whether an Audiobookshelf catalog (book or show list) is unloaded in a shape
+/// a catalog load may start from (design D3, Risks): an empty list, a zero
+/// total, no page in flight, no replacement batch collecting, and no failed
+/// mark. The in-flight page marks count as unloaded's negation, because the
+/// startup chain's first page is already walking and a load beside it would
+/// start a second chain.
 ///
-/// The assertion states the premise; the app-facing entries hold it. See
-/// [`App::gui_abs_destination_active`] for the runtime half.
-fn debug_assert_active_destination(app: &App, lib_idx: usize) {
-    debug_assert_eq!(
-        app.tab.audiobookshelf_index(),
-        Some(lib_idx),
-        "the destination's load pass runs for the active tab only"
-    );
-}
-
-impl App {
-    /// Whether the Audiobookshelf library `lib_idx` is the active tab — the one
-    /// rule the app-facing Audiobooks and Podcasts entries share (design D5;
-    /// review of units 2.4 and 2.5). The steps' loaders read the active tab's
-    /// browse state, so every entry must test the tab before it enters the
-    /// driver: the frame path only ever passes the active destination, but a
-    /// collection command carries the destination a stale frame painted, which
-    /// can name a podcast library the tab is not on. Testing it here rather
-    /// than in each entry keeps the rule in one place, and the steps'
-    /// `debug_assert_active_destination` then states the premise this guard
-    /// upholds.
-    pub(in crate::app::gui_library) fn gui_abs_destination_active(&self, lib_idx: usize) -> bool {
-        self.tab.audiobookshelf_index() == Some(lib_idx)
-    }
+/// The failed mark is load-bearing: a failed fetch records `state.error` and
+/// aborts the replacement batch, which leaves the list empty, the total zero,
+/// and no page in flight, so without the mark a repaint would retry the failed
+/// chain every frame. An open clears the mark (design D4); a repaint never
+/// does. Both catalog kinds call this one rule from their root step, so the
+/// two starts cannot drift.
+pub(in crate::app::gui_library) fn catalog_unloaded(
+    list_empty: bool,
+    total: usize,
+    loading_pages: &HashSet<usize>,
+    no_replacement: bool,
+    no_error: bool,
+) -> bool {
+    list_empty && total == 0 && loading_pages.is_empty() && no_replacement && no_error
 }
 
 /// The Home destination's site: Home rows arrive with the shared Home data,
@@ -141,22 +151,10 @@ impl App {
 #[derive(Debug)]
 struct HomeLoads;
 
-impl GuiDestinationLoads for HomeLoads {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-
-    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-}
+impl GuiDestinationLoads for HomeLoads {}
 
 /// The Music destination's site (design D3): the shared startup fetch owns the
-/// groups catalog, so root and dependents are no-ops and the shown groups'
+/// groups catalog, so root and dependents keep their no-ops and the shown groups'
 /// album fetches are the selection step.
 #[derive(Debug)]
 struct MusicLoads {
@@ -164,10 +162,6 @@ struct MusicLoads {
 }
 
 impl GuiDestinationLoads for MusicLoads {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-
     /// Start the shown groups' album fetches when the store holds no list for
     /// them (design D5, gui-collection-dropdown design D1): the frame path
     /// runs this for the Music destination, so All's and every checked
@@ -205,10 +199,6 @@ impl GuiDestinationLoads for MusicLoads {
         app.fetch_gui_group_albums(self.lib_idx, group_id);
         GuiStepOutcome::LoadStarted
     }
-
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
 }
 
 /// The Shows destination's site (design D3): the root step starts the All
@@ -240,15 +230,14 @@ impl GuiDestinationLoads for ShowsLoads {
         GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome {
+    fn ensure_dependents(&self, app: &mut App) {
         let Some(series_id) = app.gui_shows_default_series(self.lib_idx) else {
-            return GuiStepOutcome::Continue;
+            return;
         };
         let Some(season_id) = app.gui_shows_selected_season(self.lib_idx, &series_id) else {
-            return GuiStepOutcome::Continue;
+            return;
         };
         app.fetch_series_season_episodes(series_id, season_id);
-        GuiStepOutcome::LoadStarted
     }
 }
 
@@ -277,10 +266,6 @@ impl GuiDestinationLoads for EmbyLoads {
         app.ensure_gui_emby_feed_fetch(self.lib_idx);
         GuiStepOutcome::LoadStarted
     }
-
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
 }
 
 /// The Audiobooks destination's site (design D3): the root step starts the
@@ -294,9 +279,7 @@ struct AudiobooksLoads {
 
 impl GuiDestinationLoads for AudiobooksLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        debug_assert_active_destination(app, self.lib_idx);
-        if !app.gui_abs_book_library(self.lib_idx) || !app.gui_abs_catalog_needs_load(self.lib_idx)
-        {
+        if !app.gui_abs_catalog_needs_load(self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
         app.audiobookshelf_book_refresh();
@@ -304,17 +287,9 @@ impl GuiDestinationLoads for AudiobooksLoads {
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        debug_assert_active_destination(app, self.lib_idx);
-        if !app.gui_abs_book_library(self.lib_idx) {
-            return GuiStepOutcome::Continue;
-        }
         if let Some(book_id) = app.gui_abs_effective_pick(self.lib_idx) {
             app.start_audiobookshelf_book_detail(book_id);
         }
-        GuiStepOutcome::Continue
-    }
-
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
         GuiStepOutcome::Continue
     }
 }
@@ -330,10 +305,7 @@ struct PodcastsLoads {
 
 impl GuiDestinationLoads for PodcastsLoads {
     fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
-        debug_assert_active_destination(app, self.lib_idx);
-        if !app.gui_podcast_library(self.lib_idx)
-            || !app.gui_podcast_catalog_needs_load(self.lib_idx)
-        {
+        if !app.gui_podcast_catalog_needs_load(self.lib_idx) {
             return GuiStepOutcome::Continue;
         }
         app.audiobookshelf_refresh(false);
@@ -341,21 +313,12 @@ impl GuiDestinationLoads for PodcastsLoads {
     }
 
     fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
-        debug_assert_active_destination(app, self.lib_idx);
-        if !app.gui_podcast_library(self.lib_idx) {
-            return GuiStepOutcome::Continue;
-        }
         app.commit_gui_podcast_effective_scope(self.lib_idx);
         GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome {
-        debug_assert_active_destination(app, self.lib_idx);
-        if !app.gui_podcast_library(self.lib_idx) {
-            return GuiStepOutcome::Continue;
-        }
+    fn ensure_dependents(&self, app: &mut App) {
         app.ensure_gui_podcast_dependents(self.lib_idx);
-        GuiStepOutcome::Continue
     }
 }
 
@@ -364,16 +327,4 @@ impl GuiDestinationLoads for PodcastsLoads {
 #[derive(Debug)]
 struct FeedsLoads;
 
-impl GuiDestinationLoads for FeedsLoads {
-    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-
-    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-
-    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
-        GuiStepOutcome::Continue
-    }
-}
+impl GuiDestinationLoads for FeedsLoads {}
