@@ -49,13 +49,12 @@ jobs:
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: read
-    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # sccache: object-level rustc cache in a local disk store,
     # shared by every job. The gui and feature-matrix jobs recompile the same
     # crates in their own containers; a shared rustc cache turns their
     # recompiles into cache hits.
     env:
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # Same makedeps as `build` (clippy runs the crates' build scripts with
@@ -100,6 +99,19 @@ jobs:
           key: ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-
+
+      - name: Cache sccache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/sccache
+          # One shared rustc-object cache for every job and run, keyed by the
+          # pinned toolchain: a new rustc invalidates it. The GHA cache
+          # backend cannot see the Actions cache service from inside a
+          # container job, so sccache keeps a local disk store instead and
+          # this step persists it.
+          key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
 
       - name: Install sccache
         uses: taiki-e/install-action@sccache
@@ -146,11 +158,10 @@ jobs:
     permissions:
       contents: write
       actions: write
-    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # The pinned archlinux base-devel image ships no git, and
@@ -221,6 +232,16 @@ jobs:
           key: ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-
+
+      - name: Cache sccache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/sccache
+          # Same shared rustc-object cache as `checks`; see its step for why
+          # the GHA backend stays out of a container job.
+          key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
 
       - name: Install sccache
         uses: taiki-e/install-action@sccache
@@ -408,11 +429,10 @@ jobs:
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: read
-    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # Same makedeps as `build` (check runs build scripts with pkg-config
@@ -462,6 +482,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-
 
+      - name: Cache sccache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/sccache
+          # Same shared rustc-object cache as `checks`; see its step for why
+          # the GHA backend stays out of a container job.
+          key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
+
       - name: Install sccache
         uses: taiki-e/install-action@sccache
 
@@ -489,11 +519,10 @@ jobs:
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: read
-    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # sccache: object-level rustc cache in a local disk store,
     # shared by every job (see the same block on `checks`).
     env:
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # Same makedeps as `build` (pkg-config probes for mpv/pipewire/openssl),
@@ -542,6 +571,16 @@ jobs:
             'rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-
+
+      - name: Cache sccache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/sccache
+          # Same shared rustc-object cache as `checks`; see its step for why
+          # the GHA backend stays out of a container job.
+          key: sccache-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
 
       - name: Install sccache
         uses: taiki-e/install-action@sccache
