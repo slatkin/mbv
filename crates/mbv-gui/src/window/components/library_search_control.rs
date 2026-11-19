@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::library::{GuiSearchFrame, GuiSearchRowFrame};
+use crate::bridge::frame::library::GuiSearchFrame;
 use crate::window::components::use_focus_while::use_focus_while;
 use crate::window::icons::Search;
 use crate::window::library::state::LibraryState;
@@ -23,12 +23,6 @@ use crate::window::truncate::{TextStyle, Truncate};
 
 #[cfg(test)]
 mod tests;
-
-/// One row of the results dropdown (design D9): the title and the subtitle
-/// the former client markup carried, in the list-row look.
-fn row_background(highlight: Option<&str>, row: &GuiSearchRowFrame) -> Option<String> {
-    (highlight == Some(row.id.as_str())).then(|| "background: var(--canvas-selected);".to_owned())
-}
 
 /// The props of the Search control: the carried Search facts and the bar's
 /// collapse decision.
@@ -52,13 +46,16 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     // the collapsed panel. The effect re-runs when the collapse or the panel
     // fact changes, so a collapse that hides the field retracts the facts
     // with it, and the teardown retracts them when the bar unmounts. The
-    // reads subscribe to the ui store (`cloned`, never `peek`: the effect
+    // reads subscribe to the ui store (`read`, never `peek`: the effect
     // must re-run on its facts) and never touch the search state the mount
     // writes, so the effect cannot loop on its own write.
     let mount_library = library.clone();
     use_effect(move || {
-        let ui = mount_library.ui.cloned();
-        let painted = !ui.search_control.collapsed || ui.search_control.panel_open;
+        let (collapsed, panel_open) = {
+            let ui = mount_library.ui.read();
+            (ui.search_control.collapsed, ui.search_control.panel_open)
+        };
+        let painted = !collapsed || panel_open;
         if painted {
             mount_library.mount_search_field();
         } else {
@@ -110,10 +107,8 @@ pub fn LibrarySearchControl(props: LibrarySearchControlProps) -> Element {
     );
 
     // The collapsed panel's open fact: the render reads it through a
-    // subscribed copy of the ui store (`peek` would arm no re-render), as
-    // the collection dropdown's open fact reads.
-    let ui = library.ui.cloned();
-    let panel_open = ui.search_control.panel_open;
+    // subscribed read (`peek` would arm no re-render).
+    let panel_open = library.ui.read().search_control.panel_open;
     if props.collapsed {
         rsx! {
             div {
@@ -234,15 +229,15 @@ fn paint_search_box(
                         {
                             let row = row.clone();
                             let activate_library = library.clone();
-                            let mut row_style =
-                                "height: 36px; padding: 0 10px; gap: 8px; border: 0; text-align: left; font-size: 14px; cursor: pointer;".to_owned();
-                            if let Some(background) = row_background(highlight, &row) {
-                                row_style.push(' ');
-                                row_style.push_str(&background);
-                            } else {
-                                row_style.push_str(" background: none;");
-                            }
                             let is_highlighted = highlight == Some(row.id.as_str());
+                            let background = if is_highlighted {
+                                "var(--canvas-selected)"
+                            } else {
+                                "none"
+                            };
+                            let row_style = format!(
+                                "height: 36px; padding: 0 10px; gap: 8px; border: 0; text-align: left; font-size: 14px; cursor: pointer; background: {background};"
+                            );
                             let title = row.title.clone();
                             let subtitle = row.subtitle.clone();
                             let id = row.id.clone();
