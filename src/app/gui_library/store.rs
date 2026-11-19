@@ -12,6 +12,7 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
+use super::tabs::GuiDestinationKind;
 use crate::app::state::events::LibEvent;
 use crate::app::{App, PAGE_SIZE};
 
@@ -155,42 +156,12 @@ impl App {
         }
     }
 
-    /// Start the shown groups' album fetches when the store holds no list for
-    /// them (design D5, gui-collection-dropdown design D1): the frame path
-    /// calls this for the Music destination, so All's and every checked
-    /// group's list loads without a pick. One fetch runs at a time per
-    /// library: the next group's fetch starts on a later frame, when the
-    /// previous one landed. A failed fetch is not retried here: a frame's
-    /// ensure never re-issues it, so a hard failure does not retry on every
-    /// paint; a selection change through [`Self::install_gui_library_collection`]
-    /// drops the selection's failed marks, so the next ensure starts their
-    /// fetches again.
+    /// Run the Music destination's load pass (gui-one-destination-ensure
+    /// design D1, D3): the driver's Music site, whose selection step starts
+    /// the shown groups' album fetches. The `mbv-gui` crate's frame path still
+    /// calls this; it delegates so both paths run the same code.
     pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
-        let set = self.gui_effective_music_set(lib_idx).into_owned();
-        let group_ids = self
-            .gui_selected_groups(lib_idx, &set)
-            .into_iter()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        if group_ids.iter().any(|group_id| {
-            matches!(
-                self.gui_music_albums
-                    .get(&lib_idx)
-                    .and_then(|groups| groups.get(group_id)),
-                Some(GuiGroupAlbums::Loading)
-            )
-        }) {
-            return;
-        }
-        let Some(group_id) = group_ids.into_iter().find(|group_id| {
-            !self
-                .gui_music_albums
-                .get(&lib_idx)
-                .is_some_and(|groups| groups.contains_key(group_id))
-        }) else {
-            return;
-        };
-        self.fetch_gui_group_albums(lib_idx, group_id);
+        self.ensure_gui_destination(GuiDestinationKind::Music { lib_idx });
     }
 
     /// Start `group_id`'s album fetch when the store holds no list for it

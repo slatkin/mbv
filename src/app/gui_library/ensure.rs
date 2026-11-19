@@ -5,14 +5,30 @@
 //! start a dependent load before its root list, and a destination with no
 //! work for a step still takes the step as a no-op.
 //!
-//! This unit adds the contract only. The frame path and the open command
-//! still call their own per-destination ensures, and the sites here delegate
-//! to those same methods, so a driver run changes no behaviour. The later
-//! units move each body into its steps and point the callers at the driver.
+//! A step that calls for a load ends the pass (design D3), as
+//! `ensure_gui_shows_workspace` returned after `fetch_series_detail`, so no
+//! two steps start their requests in one pass. A step reached in a later pass
+//! keeps its own idempotent guard, so a repaint never repeats a request.
+//!
+//! The per-destination `App` ensure methods still exist, because the
+//! `mbv-gui` crate's frame path calls them; each delegates here, so both
+//! paths run the same code.
 
 use crate::app::App;
 
 use super::GuiDestinationKind;
+use super::store::GuiGroupAlbums;
+
+/// What one load step leaves for the rest of the pass (design D3): the step
+/// that calls for a load ends the pass, so the driver never starts two
+/// requests in one pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum GuiStepOutcome {
+    /// The step called for a load, so the pass ends here.
+    LoadStarted,
+    /// The step called for no load, so the next step runs.
+    Continue,
+}
 
 /// The three load steps one GUI Library destination takes, in the one order
 /// every destination shares (design D1). The methods are required, so a new
@@ -20,15 +36,15 @@ use super::GuiDestinationKind;
 pub(in crate::app) trait GuiDestinationLoads {
     /// Start the destination's root list load, or do nothing when the root is
     /// already loaded, in flight, or owned by another path.
-    fn ensure_root(&self, app: &mut App);
+    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome;
 
     /// Start the load the root list's selection needs, or do nothing when the
     /// selection is already loaded or in flight.
-    fn ensure_selection(&self, app: &mut App);
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome;
 
     /// Start the content that depends on the selection, or do nothing when the
     /// dependency is already loaded or in flight.
-    fn ensure_dependents(&self, app: &mut App);
+    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome;
 }
 
 impl App {
@@ -58,12 +74,17 @@ impl App {
         }
     }
 
-    /// Run one site's steps in the shared order (design D1). This is the only
-    /// place the order lives; every destination reaches it through
-    /// [`Self::ensure_gui_destination`].
+    /// Run one site's steps in the shared order (design D1): root, then
+    /// selection, then dependents, stopping at the first step that calls for a
+    /// load (design D3). This is the only place the order lives; every
+    /// destination reaches it through [`Self::ensure_gui_destination`].
     pub(in crate::app) fn run_gui_destination_loads<L: GuiDestinationLoads>(&mut self, loads: &L) {
-        loads.ensure_root(self);
-        loads.ensure_selection(self);
+        if loads.ensure_root(self) == GuiStepOutcome::LoadStarted {
+            return;
+        }
+        if loads.ensure_selection(self) == GuiStepOutcome::LoadStarted {
+            return;
+        }
         loads.ensure_dependents(self);
     }
 }
@@ -74,11 +95,17 @@ impl App {
 struct HomeLoads;
 
 impl GuiDestinationLoads for HomeLoads {
-    fn ensure_root(&self, _app: &mut App) {}
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
-    fn ensure_selection(&self, _app: &mut App) {}
+    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }
 
 /// The Music destination's site (design D3): the shared startup fetch owns the
@@ -90,51 +117,123 @@ struct MusicLoads {
 }
 
 impl GuiDestinationLoads for MusicLoads {
-    fn ensure_root(&self, _app: &mut App) {}
-
-    fn ensure_selection(&self, app: &mut App) {
-        app.ensure_gui_music_selection(self.lib_idx);
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    /// Start the shown groups' album fetches when the store holds no list for
+    /// them (design D5, gui-collection-dropdown design D1): the frame path
+    /// runs this for the Music destination, so All's and every checked
+    /// group's list loads without a pick. One fetch runs at a time per
+    /// library: the next group's fetch starts on a later pass, when the
+    /// previous one landed. A failed fetch is not retried here: a pass never
+    /// re-issues it, so a hard failure does not retry on every paint; a
+    /// selection change through [`App::install_gui_library_collection`] drops
+    /// the selection's failed marks, so the next pass starts their fetches
+    /// again.
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+        let set = app.gui_effective_music_set(self.lib_idx).into_owned();
+        let group_ids = app
+            .gui_selected_groups(self.lib_idx, &set)
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if group_ids.iter().any(|group_id| {
+            matches!(
+                app.gui_music_albums
+                    .get(&self.lib_idx)
+                    .and_then(|groups| groups.get(group_id)),
+                Some(GuiGroupAlbums::Loading)
+            )
+        }) {
+            return GuiStepOutcome::Continue;
+        }
+        let Some(group_id) = group_ids.into_iter().find(|group_id| {
+            !app.gui_music_albums
+                .get(&self.lib_idx)
+                .is_some_and(|groups| groups.contains_key(group_id))
+        }) else {
+            return GuiStepOutcome::Continue;
+        };
+        app.fetch_gui_group_albums(self.lib_idx, group_id);
+        GuiStepOutcome::LoadStarted
+    }
+
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }
 
-/// The Shows destination's site. This unit keeps the existing workspace pass
-/// whole in the root step, so a driver run matches today's one call; the later
-/// unit splits the default series' detail and the selected season's episodes
-/// into the selection and dependents steps.
+/// The Shows destination's site (design D3): the root step starts the All
+/// series list when the library holds none, the selection step starts the
+/// default series' detail, and the dependents step starts the selected
+/// season's episodes once that detail is cached.
 #[derive(Debug)]
 struct ShowsLoads {
     lib_idx: usize,
 }
 
 impl GuiDestinationLoads for ShowsLoads {
-    fn ensure_root(&self, app: &mut App) {
-        app.ensure_gui_shows_workspace(self.lib_idx);
+    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+        if app.gui_shows_root_needs_load(self.lib_idx) {
+            app.gui_tv_open(self.lib_idx);
+            return GuiStepOutcome::LoadStarted;
+        }
+        GuiStepOutcome::Continue
     }
 
-    fn ensure_selection(&self, _app: &mut App) {}
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+        let Some(series_id) = app.gui_shows_default_series(self.lib_idx) else {
+            return GuiStepOutcome::Continue;
+        };
+        if app.series_detail_cache.contains_key(&series_id) {
+            return GuiStepOutcome::Continue;
+        }
+        app.fetch_series_detail(&series_id);
+        GuiStepOutcome::LoadStarted
+    }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_dependents(&self, app: &mut App) -> GuiStepOutcome {
+        let Some(series_id) = app.gui_shows_default_series(self.lib_idx) else {
+            return GuiStepOutcome::Continue;
+        };
+        let Some(season_id) = app.gui_shows_selected_season(self.lib_idx, &series_id) else {
+            return GuiStepOutcome::Continue;
+        };
+        app.fetch_series_season_episodes(series_id, season_id);
+        GuiStepOutcome::LoadStarted
+    }
 }
 
-/// The plain Emby library destination's site. This unit keeps the existing
-/// selection pass — the plain library's root fetch and the feed-view library's
-/// first feed fetch — whole in the root step; the later unit splits the
-/// feed-view fetch into the selection step.
+/// The plain Emby library destination's site (design D3): a plain library's
+/// root step fetches its root list, and a feed-view library's selection step
+/// fetches the first target of its checked set. A library is one kind or the
+/// other, so the two steps never both have work.
 #[derive(Debug)]
 struct EmbyLoads {
     lib_idx: usize,
 }
 
 impl GuiDestinationLoads for EmbyLoads {
-    fn ensure_root(&self, app: &mut App) {
-        app.ensure_gui_emby_selection(self.lib_idx);
+    fn ensure_root(&self, app: &mut App) -> GuiStepOutcome {
+        if !app.gui_emby_library(self.lib_idx) || app.is_feed_home_video_library(self.lib_idx) {
+            return GuiStepOutcome::Continue;
+        }
+        app.fetch_gui_emby_root_items(self.lib_idx);
+        GuiStepOutcome::LoadStarted
     }
 
-    fn ensure_selection(&self, _app: &mut App) {}
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+        if !app.gui_emby_library(self.lib_idx) || !app.is_feed_home_video_library(self.lib_idx) {
+            return GuiStepOutcome::Continue;
+        }
+        app.ensure_gui_emby_feed_fetch(self.lib_idx);
+        GuiStepOutcome::LoadStarted
+    }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }
 
 /// The Audiobooks destination's site. The catalog refresh still belongs to
@@ -146,13 +245,18 @@ struct AudiobooksLoads {
 }
 
 impl GuiDestinationLoads for AudiobooksLoads {
-    fn ensure_root(&self, _app: &mut App) {}
-
-    fn ensure_selection(&self, app: &mut App) {
-        app.ensure_gui_abs_selection(self.lib_idx);
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+        app.ensure_gui_abs_selection(self.lib_idx);
+        GuiStepOutcome::Continue
+    }
+
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }
 
 /// The Podcasts destination's site. The show-list refresh still belongs to
@@ -165,13 +269,18 @@ struct PodcastsLoads {
 }
 
 impl GuiDestinationLoads for PodcastsLoads {
-    fn ensure_root(&self, _app: &mut App) {}
-
-    fn ensure_selection(&self, app: &mut App) {
-        app.ensure_gui_podcast_selection(self.lib_idx);
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
     }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_selection(&self, app: &mut App) -> GuiStepOutcome {
+        app.ensure_gui_podcast_selection(self.lib_idx);
+        GuiStepOutcome::Continue
+    }
+
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }
 
 /// The Feeds destination's site (design D3): the shared startup fetch owns the
@@ -180,9 +289,15 @@ impl GuiDestinationLoads for PodcastsLoads {
 struct FeedsLoads;
 
 impl GuiDestinationLoads for FeedsLoads {
-    fn ensure_root(&self, _app: &mut App) {}
+    fn ensure_root(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
-    fn ensure_selection(&self, _app: &mut App) {}
+    fn ensure_selection(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 
-    fn ensure_dependents(&self, _app: &mut App) {}
+    fn ensure_dependents(&self, _app: &mut App) -> GuiStepOutcome {
+        GuiStepOutcome::Continue
+    }
 }

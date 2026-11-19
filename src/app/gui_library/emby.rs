@@ -23,6 +23,7 @@ use super::collection::{
     GuiCollectionNoun, GuiCollectionSelection, GuiCollectionSet, GuiDateOrder,
 };
 use super::collection_command::{CollectionRejection, GuiCollectionSite};
+use super::tabs::GuiDestinationKind;
 use crate::app::state::events::{FeedHomeVideoSelectionFailed, LibEvent};
 use crate::app::{App, FeedHomeVideoSelection};
 
@@ -306,21 +307,14 @@ impl App {
         self.ensure_gui_emby_feed_fetch(lib_idx);
     }
 
-    /// The shown-pass trigger the GUI frame path runs for the active plain
-    /// Emby library destination (row 8.1): a feed-view library's checked set
-    /// fetches the first target it is missing (design D3), and a plain
-    /// library's root list fetches when the store holds no list. A `lib_idx`
-    /// that names no plain Emby library is a no-op, so the frame path can
-    /// call it unguarded for its destination.
+    /// Run the plain Emby-library destination's load pass
+    /// (gui-one-destination-ensure design D1, D3): the driver's Emby site,
+    /// whose root step fetches a plain library's root list and whose selection
+    /// step fetches a feed-view library's checked set. The `mbv-gui` crate's
+    /// frame path still calls this; it delegates so both paths run the same
+    /// code.
     pub fn ensure_gui_emby_selection(&mut self, lib_idx: usize) {
-        if !self.gui_emby_library(lib_idx) {
-            return;
-        }
-        if self.is_feed_home_video_library(lib_idx) {
-            self.ensure_gui_emby_feed_fetch(lib_idx);
-        } else {
-            self.fetch_gui_emby_root_items(lib_idx);
-        }
+        self.ensure_gui_destination(GuiDestinationKind::Library { lib_idx });
     }
 
     /// Start the first fetch the GUI's checked set is missing (design D3):
@@ -333,7 +327,7 @@ impl App {
     /// TUI keeps its own selection. The targets iterate the checked set's
     /// borrowed keys, and All is one cache probe, so the per-frame ensure
     /// clones nothing for the walk.
-    fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
+    pub(in crate::app::gui_library) fn ensure_gui_emby_feed_fetch(&mut self, lib_idx: usize) {
         // The GUI owns this library's results from the first frame it shows:
         // the claim marks them as the GUI's own, which the result arm's
         // second acceptance rule reads. The claim is not a stored selection,
