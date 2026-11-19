@@ -12,14 +12,19 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
+use crate::window::components::queue_panel::geometry::{
+    ORDINAL_COL_PX, ROW_CELL_GAP_PX, ROW_INSET_PX, START_MARK_SLOT_PX,
+};
 use crate::window::icons::Play;
 use crate::window::playhead::Playhead;
 use crate::window::theme::{EfToken, ef_var};
 use crate::window::truncate::{TextStyle, Truncate};
 
-/// The left inset of the row's progress bar in logical pixels: past the
-/// ordinal's column, under the title line (design D9).
-const PROGRESS_LEFT_PX: u16 = 54;
+/// The left inset of the row's progress bar in logical pixels (design D9: 54
+/// from the row's leading edge): the row's inset, the ordinal's column, the
+/// cell gap, and the start mark's slot, so the bar starts under the title and
+/// never under a mark.
+const PROGRESS_LEFT_PX: u16 = ROW_INSET_PX + ORDINAL_COL_PX + ROW_CELL_GAP_PX + START_MARK_SLOT_PX;
 
 /// The right inset of the row's progress bar in logical pixels (design D9).
 const PROGRESS_RIGHT_PX: u16 = 12;
@@ -214,7 +219,10 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
         if chrome == RowChrome::Row {
             span {
                 class: "shrink-0 font-mono tabular-nums",
-                style: "width: 18px; font-size: 11px; color: {look.ordinal};",
+                style: format!(
+                    "width: {ORDINAL_COL_PX}px; font-size: 11px; color: {};",
+                    look.ordinal
+                ),
                 "data-ordinal": "",
                 {ordinal_text}
             }

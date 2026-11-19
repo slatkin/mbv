@@ -10,6 +10,11 @@ use rstest::rstest;
 use super::harness::*;
 use crate::bridge::frame::queue::{GuiQueueHeaderFacts, GuiQueueSummary};
 use crate::bridge::layout::{QueueTargetId, RegionTarget};
+use crate::window::components::queue_panel::geometry::HEADER_HEIGHT_PX;
+
+/// The stylesheet the app loads, read so the header's height token must match
+/// the constant its own bar and the panel's overlays place against.
+const APP_CSS: &str = include_str!("../../../../../assets/app.css");
 
 /// The markers the header's parts carry, in the design's order (D7): the
 /// `QUEUE` label, the switcher, the new-queue control, the close control, the
@@ -157,5 +162,20 @@ fn the_switcher_paints_the_shown_name_or_the_default_title(
     assert!(
         fixture.presents("[data-queue-chooser]"),
         "the switcher paints whatever the list holds"
+    );
+}
+
+/// Contract (design D7 of `gui-queue-panel-redesign`): the stylesheet's
+/// `--canvas-queue-header-height` equals `HEADER_HEIGHT_PX`. The bar paints the
+/// constant, while the ghost, the scroll bar, and the row menu position below
+/// the stylesheet token, so a drift between the two would move those overlays
+/// off the bar's bottom edge.
+#[test]
+fn the_header_height_matches_the_stylesheet_token() {
+    assert!(
+        APP_CSS.contains(&format!(
+            "--canvas-queue-header-height: {HEADER_HEIGHT_PX}px;"
+        )),
+        "app.css must define --canvas-queue-header-height: {HEADER_HEIGHT_PX}px"
     );
 }

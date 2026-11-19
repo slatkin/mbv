@@ -38,7 +38,7 @@ use dioxus_native::prelude::*;
 
 use crate::bridge::frame::overlay::{GuiOverlayFrame, GuiQueueChooserEntry, GuiQueueChooserRename};
 use crate::window::brand_icons::{TargetBrand, TargetBrandIcon};
-use crate::window::components::queue_panel::geometry::{ROW_GAP_PX, ROW_HEIGHT_PX};
+use crate::window::components::queue_panel::geometry::{MENU_DROP_PX, ROW_GAP_PX, ROW_HEIGHT_PX};
 use crate::window::components::row_handle::record_row_handle;
 use crate::window::icons::{AudioLines, Check};
 use crate::window::theme::{EfToken, ef_var};
@@ -144,7 +144,7 @@ pub fn QueueChooserMenu(props: QueueChooserMenuProps) -> Element {
             role: "menu",
             "aria-label": "Queue chooser",
             style: format!(
-                "top: calc(100% + 4px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
+                "top: calc(100% + {MENU_DROP_PX}px); left: 0; min-width: 260px; max-width: 28rem; padding: {CARD_PADDING_PX}px; gap: {ITEM_GAP_PX}px; background: {}; border: 1px solid {}; border-radius: 8px; --hover-veil: transparent;",
                 ef_var(EfToken::Bg2),
                 ef_var(EfToken::Bg4)
             ),

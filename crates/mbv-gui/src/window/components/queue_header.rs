@@ -39,6 +39,7 @@
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::queue::GuiQueueSummary;
+use crate::window::components::queue_panel::geometry::{CONTROL_PX, HEADER_HEIGHT_PX};
 use crate::window::icons::{ChevronDown, ChevronUp, ListOrdered, Plus, Search, X};
 use crate::window::theme::{EfToken, ef_var};
 
@@ -62,9 +63,6 @@ const ICON_BUTTON_CLASS: &str = "flex shrink-0 items-center justify-center";
 /// (`[data-queue-chooser]`); the open state's fill and border stay inline,
 /// where a hover cannot override them.
 const SWITCHER_CLASS: &str = "flex min-w-0 items-center";
-
-/// An icon button's geometry, radius included.
-const ICON_BUTTON_STYLE: &str = "width: 32px; height: 32px; border-radius: 6px;";
 
 /// The props of the Queue header (the `QueueHeader` props, plus the region
 /// handles the panel's report reads).
@@ -108,12 +106,15 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
     } else {
         summary.header.shown_name.clone()
     };
+    // An icon button's geometry, radius included.
+    let icon_button_style =
+        format!("width: {CONTROL_PX}px; height: {CONTROL_PX}px; border-radius: 6px;");
 
     rsx! {
         div {
             class: "flex items-center whitespace-nowrap",
             style: format!(
-                "height: var(--canvas-queue-header-height); padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2); --hover-veil: transparent;",
+                "height: {HEADER_HEIGHT_PX}px; padding: 0 12px; gap: 4px; background: {}; border-bottom: 1px solid {}; margin-inline: calc(var(--mbv-cell-col) * -2); --hover-veil: transparent;",
                 ef_var(EfToken::Bg1),
                 ef_var(EfToken::Bg3)
             ),
@@ -143,12 +144,14 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     let mut chooser_slot = chooser;
                     let switcher_style = if chooser_open {
                         format!(
-                            "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
+                            "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid; border-color: {}; background: {};",
                             ef_var(EfToken::Grey0),
                             ef_var(EfToken::Bg3)
                         )
                     } else {
-                        "height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;".to_owned()
+                        format!(
+                            "height: {CONTROL_PX}px; padding: 0 8px 0 10px; gap: 8px; border-radius: 6px; border-width: 1px; border-style: solid;"
+                        )
                     };
                     rsx! {
                         button {
@@ -213,7 +216,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     button {
                         "type": "button",
                         class: "{ICON_BUTTON_CLASS}",
-                        style: "{ICON_BUTTON_STYLE}",
+                        style: "{icon_button_style}",
                         title: "New queue (Ctrl+T)",
                         "aria-label": "New queue",
                         "data-new-queue": "",
@@ -237,7 +240,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     button {
                         "type": "button",
                         class: "{ICON_BUTTON_CLASS}",
-                        style: "{ICON_BUTTON_STYLE} opacity: {close_opacity};",
+                        style: "{icon_button_style} opacity: {close_opacity};",
                         title: "Close queue (Ctrl+W)",
                         "aria-label": "Close queue",
                         "aria-disabled": "{close_disabled}",
@@ -276,7 +279,9 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                     rsx! {
                         span {
                             class: "flex shrink-0 items-center",
-                            style: "height: 32px; padding-inline: 8px; border-radius: 6px; gap: 6px; font-size: 12px;",
+                            style: format!(
+                                "height: {CONTROL_PX}px; padding-inline: 8px; border-radius: 6px; gap: 6px; font-size: 12px;"
+                            ),
                             title: "Filter (/)",
                             "data-filter": "",
                             onmounted: move |event| filter_slot.set(Some(event)),
@@ -309,7 +314,7 @@ pub fn QueueHeader(props: QueueHeaderProps) -> Element {
                         button {
                             "type": "button",
                             class: "{ICON_BUTTON_CLASS}",
-                            style: "{ICON_BUTTON_STYLE}",
+                            style: "{icon_button_style}",
                             title: "Filter (/)",
                             "aria-label": "Filter queue",
                             "data-filter": "",

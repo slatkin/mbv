@@ -95,8 +95,9 @@ pub(super) mod geometry;
 mod row_cells;
 
 use geometry::{
-    GRIP_SIZE_PX, GRIP_TOP_PX, LIST_TOP_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ghost_top, insertion,
-    menu_top, whole_rows,
+    GHOST_LEFT_PX, GHOST_RIGHT_OVERHANG_PX, GRIP_SIZE_PX, GRIP_TOP_PX, LIST_TOP_GAP_PX,
+    ROW_CELL_GAP_PX, ROW_GAP_PX, ROW_HEIGHT_PX, ROW_INSET_PX, ghost_top, insertion, menu_top,
+    whole_rows,
 };
 use row_cells::{ItemRow, RowCells, RowChrome, row_look, start_mark};
 
@@ -495,11 +496,11 @@ pub fn QueuePanel() -> Element {
                                     // the radius the canvas draws, with the trailing
                                     // room the hovered row's actions button needs.
                                     let mut button_style = format!(
-                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: 10px; border-radius: 6px;",
+                                        "height: {ROW_HEIGHT_PX}px; padding-inline: {}; gap: {ROW_CELL_GAP_PX}px; border-radius: 6px;",
                                         if hovered {
                                             format!("4px {HOVERED_TRAILING_PAD_PX}px")
                                         } else {
-                                            "8px".to_owned()
+                                            format!("{ROW_INSET_PX}px")
                                         }
                                     );
                                     let look = row_look(&item, &queue);
@@ -661,7 +662,9 @@ pub fn QueuePanel() -> Element {
                     // request is its.
                     div {
                         class: "pointer-events-none absolute z-20",
-                        style: "top: calc(var(--canvas-queue-header-height) + {top}px); left: 28px; right: -6px;",
+                        style: format!(
+                            "top: calc(var(--canvas-queue-header-height) + {top}px); left: {GHOST_LEFT_PX}px; right: {GHOST_RIGHT_OVERHANG_PX}px;"
+                        ),
                         "data-ghost": "",
                         div {
                             class: "flex items-center overflow-hidden whitespace-nowrap",
