@@ -48,6 +48,7 @@ pub fn LibraryFilterField(props: LibraryFilterFieldProps) -> Element {
     rsx! {
         label {
             class: "flex flex-none items-center",
+            "data-hover-frame": "",
             style: "height: 32px; padding: 0 10px; gap: 8px; background: var(--canvas-library-column); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--canvas-muted);",
             span {
                 class: "font-mono",

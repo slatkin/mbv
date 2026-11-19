@@ -174,6 +174,18 @@ fn stylesheet_probe() -> Element {
                     "−10"
                 }
             }
+            button { id: "probe-filled",
+                "type": "button",
+                // The shorthand the real rows set inline: it resets
+                // `background-image` to `none` unless the veil's rule wins.
+                style: "width: 80px; height: 30px; background: #3d484d;",
+                "Row"
+            }
+            label { id: "probe-frame",
+                "data-hover-frame": "",
+                style: "width: 80px; height: 30px;",
+                input { "type": "text" }
+            }
             div { id: "probe-hover",
                 class: "hover:bg-[var(--canvas-border)]",
                 style: "width: 120px; height: 40px;",
@@ -292,6 +304,46 @@ fn a_hover_utility_paints_under_the_pointer() {
         sheet.hovered("#probe-hover", "background-color"),
         "rgb(61, 72, 77)",
         "the hovered element paints the canvas border"
+    );
+}
+
+/// Contract (2026-11-19, the hover veil painted nothing): a button answers
+/// the pointer through the shared rule, even when it paints its own fill with
+/// the inline `background:` shorthand, as every list row does. The veil is the
+/// one-colour gradient over that fill. The earlier rule resolved to no style
+/// at all on a hovered button — one selector in its list, `label:has(>
+/// input:hover)`, is not valid in Blitz's Stylo and dropped the whole list —
+/// so this test reads the resolved `background-image` under the pointer.
+#[test]
+fn a_filled_button_paints_the_hover_veil_under_the_pointer() {
+    let mut sheet = Stylesheet::built();
+    assert_eq!(
+        sheet.resolved("#probe-filled", "background-image"),
+        "none",
+        "the veil waits for the pointer"
+    );
+    let hovered = sheet.hovered("#probe-filled", "background-image");
+    assert!(
+        hovered.starts_with("linear-gradient("),
+        "the hovered button paints the veil: {hovered}"
+    );
+    assert_eq!(
+        sheet.resolved("#probe-filled", "background-color"),
+        "rgb(61, 72, 77)",
+        "the veil sits over the button's own fill"
+    );
+}
+
+/// Contract (2026-11-19): the Library filter field's frame (a `label` around
+/// its `input`, marked `data-hover-frame`) takes the same veil under the
+/// pointer, since `label:has(> input:hover)` cannot select it.
+#[test]
+fn the_filter_frame_paints_the_hover_veil_under_the_pointer() {
+    let mut sheet = Stylesheet::built();
+    let hovered = sheet.hovered("#probe-frame", "background-image");
+    assert!(
+        hovered.starts_with("linear-gradient("),
+        "the hovered frame paints the veil: {hovered}"
     );
 }
 

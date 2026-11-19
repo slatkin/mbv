@@ -293,13 +293,24 @@
 
 /* Every interactive control answers the pointer (design D16): one rule, so a
    new button cannot be born without the hover, and the glow is a veil rather
-   than a fill because the controls paint their own fills inline. An inset
-   shadow composites over that fill and under the label, which is why a pill, a
-   selected row, and an accent button keep their own colours and still light
-   up. The filter field's frame is a `label` around its `input`, so it takes
-   the same veil while the pointer is on the field; the Settings forms' fields
-   join through their `data-settings-field` marker (design
-   add-gui-settings-screen D11 *Pointer contract*).
+   than a fill because the controls paint their own fills inline. The veil is
+   a one-colour gradient in `background-image`: it composites over the inline
+   `background-color` and under the label, which is why a pill, a selected
+   row, and an accent button keep their own colours and still light up. The
+   `!important` beats the inline `background:` shorthand, which resets the
+   image to `none`. The filter field's frame is a `label` around its `input`;
+   it takes the veil through its `data-hover-frame` marker while the pointer is
+   on the field, and the Settings forms' fields join through their
+   `data-settings-field` marker (design add-gui-settings-screen D11 *Pointer
+   contract*).
+   Two traps made the earlier rule paint nothing, and the test in
+   `window/app/tests.rs` guards both. One selector Blitz's Stylo build does
+   not support (`label:has(> input:hover)`) drops the whole selector list, so
+   no control matched. And an inset `box-shadow` with a `100vmax` spread is
+   erased by the renderer: its blurred-rect fill takes `rect.abs()`, so a
+   spread past half the box inverts the hole into a rect that covers the box.
+   Keep every selector in this list to ones Blitz parses, and keep the veil
+   out of `box-shadow`.
    A control that paints its own pointer look sets `--hover-veil: transparent`
    on itself or on an ancestor (the Queue header's bar, the Queue chooser's
    card, the seekbar's row), so the shared glow does not wash the look and no
@@ -310,8 +321,11 @@ button:not(:disabled):hover,
 [role='option']:hover,
 [role='slider']:hover,
 [data-settings-field]:not(:disabled):hover,
-label:has(> input:hover) {
-	box-shadow: inset 0 0 0 100vmax var(--hover-veil, var(--canvas-hover-veil));
+[data-hover-frame]:hover {
+	background-image: linear-gradient(
+		var(--hover-veil, var(--canvas-hover-veil)),
+		var(--hover-veil, var(--canvas-hover-veil))
+	) !important;
 }
 
 /* The Queue header's controls and the Queue chooser's items paint their own

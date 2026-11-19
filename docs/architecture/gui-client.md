@@ -1838,6 +1838,8 @@ one handling:
 | Gap | Where | Handling |
 | --- | --- | --- |
 | No `text-overflow: ellipsis` | boxes that need an ellipsis | `Truncate` (`src/window/truncate.rs`) measures the text and cuts it with `…` |
+| `:has()` is not a valid selector; one invalid selector drops its whole selector list | the shared hover rule in `assets/app.css` | Never use `:has()`. Mark the element (`data-hover-frame`) and select the marker. `a_filled_button_paints_the_hover_veil_under_the_pointer` guards the hover rule. |
+| An inset `box-shadow` with a spread past half the box paints nothing (the renderer takes `rect.abs()` of the inverted hole) | the hover veil | The veil is a one-colour `linear-gradient` in `background-image` with `!important`, not a `box-shadow`. |
 | No container queries (`cq*` units) | the player stage's control-row scale | The window measures the stage and sets `--player-scale` (design D3 of `gui-art-player-overlay`). |
 | An animation repaints the whole window | `animate-spin`, `transition` classes | Accepted. They run only while shown. |
 | No `NetHandler` error callback | artwork misses | The net provider sends `ArtEvent::Failed` (`src/window/net.rs`) |
