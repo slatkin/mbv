@@ -19,7 +19,7 @@
 
 ## 3. Integration
 
-- [ ] 3.1 Run `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`; fix every failure. Verify: all three are clean.
+- [x] 3.1 Run `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`; fix every failure. Verify: all three are clean.
 
 ## Workflow follow-up
 
