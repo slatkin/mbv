@@ -3,7 +3,7 @@
 //! (`openspec/changes/archive/2026-10-13-mpv-ipc-event-probe`, design D6).
 
 use super::ipc::DecodeError;
-use super::{EndFileReason, MpvEvent, MpvFailure};
+use super::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 use crate::run::{JumpArm, is_clocked_audio_error, is_superseded_jump_end_file};
 
 /// Decodes every line of a fixture. A line that does not decode fails the test.
@@ -70,4 +70,22 @@ fn s1_natural_end_is_eof() {
 fn non_object_line_is_a_decode_error() {
     let error = MpvEvent::from_ipc_value(&serde_json::json!(7));
     assert!(matches!(error, Err(DecodeError::NotAnObject)));
+}
+
+/// Regression (gui-queue-panel-redesign 2.3): every property `observe_properties`
+/// registers must decode. `demuxer-cache-time` was observed but missing from the
+/// decoder, so its first event was an `UnknownProperty` error and playback
+/// stopped a second after it started.
+#[test]
+fn demuxer_cache_time_decodes_as_a_double() {
+    let line =
+        serde_json::json!({"event": "property-change", "name": "demuxer-cache-time", "data": 12.5});
+
+    let event = MpvEvent::from_ipc_value(&line).expect("the property decodes");
+
+    assert!(matches!(
+        event,
+        MpvEvent::PropertyChange { name, value: PropertyValue::Double(secs) }
+            if name == "demuxer-cache-time" && secs.to_bits() == 12.5_f64.to_bits()
+    ));
 }
