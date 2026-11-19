@@ -65,24 +65,33 @@ feature matrix. A failure there means the release push would fail CI the
 same way; fix the cause and rerun the script. Do not skip or shorten the
 gate set, and never bypass it with a manual tag.
 
-On `main`, the script pushes the release commit, creates the tag, and pushes
-the tag. Verify afterward that:
+On `main`, branch protection blocks direct pushes, so the script opens a
+release PR (`release/vX.Y.Z`) carrying only the version bump, and moves the
+local `main` back to `origin/main`. The release then needs three more steps:
 
-```bash
-git status --short
-git rev-parse HEAD
-git ls-remote origin "refs/tags/v<version>"
-```
+1. Watch the PR's checks in the foreground (`gh pr checks --watch`) and merge
+   when every required check is green (`gh pr merge --squash`). Never merge a
+   red PR, and never close-and-reopen to dodge a check.
+2. Tag the merge commit: `tools/release-tag.sh <version>`. The script fetches,
+   tags `origin/main`, and pushes the tag. The tag push triggers the PKGBUILD
+   publish run (tarball, debs, GitHub release, AUR hand-off).
+3. Verify:
 
-The remote tag must point at the intended release commit. Use `gh` to inspect
-the repository's current checks or release status when the repository exposes
-them; do not assume a workflow name or that a pushed tag means the release
-completed.
+   ```bash
+   git status --short
+   git ls-remote origin "refs/tags/v<version>"
+   gh run list --repo slatkin/mbv --limit 3
+   ```
+
+   The remote tag must point at the merge commit, and the publish run must be
+   running. Use `gh` to inspect checks or release status when the repository
+   exposes them; do not assume a workflow name or that a pushed tag means the
+   release completed.
 
 On a feature branch, the script only prepares and commits the version bump.
 Do not tag it there. Report that the branch must be merged into `main` before
-the tag is created, and keep release publishing separate from unrelated PR
-work.
+the tag is created (then `tools/release-tag.sh <version>`), and keep release
+publishing separate from unrelated PR work.
 
 Never wait for the release github action to complete as part of this process.
 
