@@ -37,6 +37,102 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/heads/main') }}
 
 jobs:
+  checks:
+    # The fast gate: fmt, clippy, ast-grep, audit. A separate parallel job so
+    # a style, lint, or advisory failure surfaces in ~3 minutes instead of
+    # after the release build, and so the merge gate has an early signal.
+    # Same pinned builder image as `build` (keep the literal in sync with the
+    # containers and cache keys below): clippy runs every build script, so
+    # this job needs the same makedeps and the toolchain pin from
+    # rust-toolchain.toml.
+    runs-on: ubuntu-latest
+    container: archlinux/archlinux:base-devel-20260818.0.575430
+    permissions:
+      contents: read
+    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # shared by every job. The gui and feature-matrix jobs recompile the same
+    # crates in their own containers; a shared rustc cache turns their
+    # recompiles into cache hits.
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+
+    steps:
+      # Same makedeps as `build` (clippy runs the crates' build scripts with
+      # pkg-config probes for mpv/pipewire/openssl), and checkout needs git
+      # for a real clone (see the comment on the matching step in `build`).
+      - name: Update system and install makedeps
+        run: |
+          # Same Arch Linux Archive pin as `build`; keep the date in sync with
+          # the image, the cache key, and the `build` job.
+          printf 'Server = https://archive.archlinux.org/repos/2026/08/18/$repo/os/$arch\n' \
+            > /etc/pacman.d/mirrorlist
+          pacman_retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              pacman -Syy --noconfirm
+              sleep $((attempt * 10))
+            done
+            "$@"
+          }
+          pacman_retry pacman -Syu --noconfirm
+          pacman_retry pacman -S --noconfirm --needed \
+            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
+            zig wayland libxkbcommon fontconfig ast-grep
+
+      - uses: actions/checkout@v7
+
+      - name: Cache Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.cargo/advisory-db
+            ~/.rustup/toolchains
+            target
+          # Own key family (`check-`, deliberately not under `build`'s
+          # `cargo-` prefix): fmt and clippy leave only check artifacts, and
+          # whichever job saves last would otherwise hand the release build a
+          # check-only target. Same hashFiles inputs as `build`; the
+          # base-devel literal must match the `container:` image above.
+          key: ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-check-base-devel-20260818.0.575430-ala20260818-
+
+      - name: Install sccache
+        uses: taiki-e/install-action@sccache
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Ast-grep tripwires
+        # The repo-specific ast-grep rules (issue #956) run here. One plain
+        # `ast-grep scan .` covers the whole tree: sgconfig.yml at the repo
+        # root merges both rule trees (rules/ast-grep-rules-ci/ and
+        # rules/ast-grep-rules/), and every CI-tree rule scopes its own
+        # paths through its `files`/`ignores` globs, so the invocation needs
+        # no per-rule path arguments and no test-path --globs. The repo-wide
+        # rules (mbv-no-sleep-in-tests, mbv-no-error-helper-crates) must see
+        # test files, which is exactly why nothing excludes tests here.
+        # All rules ship as `warning`, so findings print and the step stays
+        # green; a rule promoted to `error` fails the step. The fixture run
+        # keeps the rules honest: a rule whose two-sided fixtures stop
+        # passing fails here even when its scan is quiet.
+        run: |
+          ast-grep test --skip-snapshot-tests
+          ast-grep scan .
+
+      - name: Audit dependencies
+        run: cargo audit
+
   build:
     runs-on: ubuntu-latest
     # Pin a dated snapshot of the Arch base-devel builder image instead of the
@@ -50,6 +146,11 @@ jobs:
     permissions:
       contents: write
       actions: write
+    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # shared by every job (see the same block on `checks`).
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # The pinned archlinux base-devel image ships no git, and
@@ -90,7 +191,7 @@ jobs:
           # there).
           pacman_retry pacman -S --noconfirm --needed \
             rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig wayland libxkbcommon fontconfig ttf-dejavu ast-grep
+            zig wayland libxkbcommon fontconfig ttf-dejavu
 
       - uses: actions/checkout@v7
 
@@ -121,11 +222,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-base-devel-20260818.0.575430-ala20260818-
 
+      - name: Install sccache
+        uses: taiki-e/install-action@sccache
+
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
 
       - name: Install cargo-deb
         # Prebuilt via install-action like the other two. The old
@@ -143,32 +244,6 @@ jobs:
           fi
           sed -i "s/^version = \".*\"/version = \"${PKGVER}\"/" Cargo.toml
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Lint
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Ast-grep tripwires
-        # The repo-specific ast-grep rules (issue #956) run here. One plain
-        # `ast-grep scan .` covers the whole tree: sgconfig.yml at the repo
-        # root merges both rule trees (rules/ast-grep-rules-ci/ and
-        # rules/ast-grep-rules/), and every CI-tree rule scopes its own
-        # paths through its `files`/`ignores` globs, so the invocation needs
-        # no per-rule path arguments and no test-path --globs. The repo-wide
-        # rules (mbv-no-sleep-in-tests, mbv-no-error-helper-crates) must see
-        # test files, which is exactly why nothing excludes tests here.
-        # All rules ship as `warning`, so findings print and the step stays
-        # green; a rule promoted to `error` fails the step. The fixture run
-        # keeps the rules honest: a rule whose two-sided fixtures stop
-        # passing fails here even when its scan is quiet.
-        run: |
-          ast-grep test --skip-snapshot-tests
-          ast-grep scan .
-
-      - name: Audit dependencies
-        run: cargo audit
 
       - name: Build release (bins + tests, single plan)
         # One cargo plan compiles the shippable bins and the test harnesses
@@ -199,6 +274,10 @@ jobs:
         run: cargo nextest run --release --test-threads=4
 
       - name: Bundle release tarball
+        # Packaging steps only run for a tag or a manual dispatch: a PR or a
+        # main-branch run tests and gates, it does not publish, so it does not
+        # pay for the tarball, the debs, or the artifact upload.
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         run: |
           DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
@@ -220,6 +299,7 @@ jobs:
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
       - name: Build .deb package
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         run: |
           cargo deb --no-build --deb-version "${PKGVER}"
           cargo deb --no-build --manifest-path crates/mbvd/Cargo.toml --deb-version "${PKGVER}"
@@ -306,6 +386,7 @@ jobs:
         run: gh workflow run aur.yml -f version="${PKGVER}"
 
       - name: Upload artifact
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: mbv-linux-x86_64
@@ -327,6 +408,11 @@ jobs:
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: read
+    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # shared by every job (see the same block on `checks`).
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # Same makedeps as `build` (check runs build scripts with pkg-config
@@ -376,6 +462,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-hack-base-devel-20260818.0.575430-ala20260818-
 
+      - name: Install sccache
+        uses: taiki-e/install-action@sccache
+
       - name: Install cargo-hack
         uses: taiki-e/install-action@cargo-hack
 
@@ -400,6 +489,11 @@ jobs:
     container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: read
+    # sccache: object-level rustc cache in the GitHub Actions cache backend,
+    # shared by every job (see the same block on `checks`).
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       # Same makedeps as `build` (pkg-config probes for mpv/pipewire/openssl),
@@ -448,6 +542,9 @@ jobs:
             'rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-gui-base-devel-20260818.0.575430-ala20260818-
+
+      - name: Install sccache
+        uses: taiki-e/install-action@sccache
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
