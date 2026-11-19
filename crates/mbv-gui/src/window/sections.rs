@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar};
+use crate::bridge::frame::chrome::{GuiFooterPill, GuiQueueFooter, GuiStatusBar, GuiToasts};
 use crate::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -69,6 +69,9 @@ pub struct Sections {
     pub footer: Signal<GuiQueueFooter>,
     /// The Status bar projection.
     pub status: Signal<GuiStatusBar>,
+    /// The live toasts the toast stack paints as floating cards, oldest
+    /// first (design D6 of `gui-floating-toasts`).
+    pub toasts: Signal<GuiToasts>,
     /// The Library list: the destination tabs and the active destination's
     /// list part, `None` while no presented destination is active, as the one
     /// handle every reader clones.
@@ -120,6 +123,7 @@ struct Held {
     hover: Option<u64>,
     footer: Option<u64>,
     status: Option<u64>,
+    toasts: Option<u64>,
     library_list: Option<u64>,
     library_detail: Option<u64>,
     row_menu: Option<u64>,
@@ -154,6 +158,7 @@ impl Sections {
             hover: Signal::new(None),
             footer: Signal::new(fresh_footer()),
             status: Signal::new(fresh_status()),
+            toasts: Signal::new(fresh_toasts()),
             library_list: Signal::new(None),
             library_detail: Signal::new(None),
             row_menu: Signal::new(None),
@@ -198,6 +203,7 @@ impl Sections {
         write(batch.hover.as_ref(), &mut held.hover, self.hover);
         write(batch.footer.as_ref(), &mut held.footer, self.footer);
         write(batch.status.as_ref(), &mut held.status, self.status);
+        write(batch.toasts.as_ref(), &mut held.toasts, self.toasts);
         write_shared(
             batch.library_list.as_ref(),
             &mut held.library_list,
@@ -340,12 +346,16 @@ fn fresh_footer() -> GuiQueueFooter {
     }
 }
 
-/// The fresh Status bar: no armed prefix, no toast.
+/// The fresh Status bar: no armed prefix.
 fn fresh_status() -> GuiStatusBar {
     GuiStatusBar {
         prefix_armed: false,
-        toast: None,
     }
+}
+
+/// The fresh toast stack: no live toast.
+fn fresh_toasts() -> GuiToasts {
+    GuiToasts::default()
 }
 
 #[cfg(test)]

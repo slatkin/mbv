@@ -43,9 +43,7 @@ impl App {
         if severity != ToastSeverity::Neutral {
             self.notify_system(&msg);
         }
-        self.status = msg;
-        self.status_severity = severity;
-        self.status_expires = Some(Instant::now() + severity.ttl());
+        self.toasts.push(msg, severity, Instant::now());
     }
 
     /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
@@ -53,17 +51,12 @@ impl App {
         self.flash(format!("Error: {e}"), ToastSeverity::Error);
     }
 
-    /// Clear an expired toast so the status row stops projecting it
-    /// (spec `toast-notification-semantics`: a toast expires on its
-    /// severity-derived duration). The old draw path ran this check before
-    /// every render; the sync pass calls it now. A toast with no expiry is
-    /// never cleared here: only an expired live toast is.
+    /// Drop the toasts whose duration has run out so the status row stops
+    /// projecting them (spec `toast-notification-semantics`: a toast expires
+    /// on its severity-derived duration). The old draw path ran this check
+    /// before every render; the sync pass calls it now.
     pub(in crate::app) fn expire_status_toast(&mut self) {
-        if self.status_expires.is_some() && !self.status_toast_live() {
-            self.status.clear();
-            self.status_expires = None;
-            self.status_severity = ToastSeverity::default();
-        }
+        self.toasts.expire(Instant::now());
     }
 
     /// Enforces #223's queue-route invariant: an item whose resolved

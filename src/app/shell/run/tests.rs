@@ -101,7 +101,8 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
         "clear:yes must dismiss the confirmation modal"
     );
     assert_eq!(
-        app.status, "Queue cleared",
+        app.newest_toast_text(),
+        "Queue cleared",
         "clear:yes must route the clear-queue action"
     );
 }

@@ -106,7 +106,7 @@ fn a_rejected_close_tells_the_user_why() {
     app.player.update_status(|status| status.active = false);
     request_close(&mut app);
     let op = sent_close_op(&cmd_rx).expect("the close reaches the Owner");
-    app.status.clear();
+    app.toasts.clear();
 
     app.handle_player_event(PlayerEvent::QueueOpResult {
         op,
@@ -114,11 +114,12 @@ fn a_rejected_close_tells_the_user_why() {
     });
 
     assert_eq!(
-        app.status, "The last queue cannot be closed",
+        app.newest_toast_text(),
+        "The last queue cannot be closed",
         "the refusal says why the queue stayed"
     );
     assert_eq!(
-        app.status_severity,
+        app.newest_toast_severity(),
         crate::app::dispatch::notify::ToastSeverity::Error,
         "a refusal is an error, not a neutral status"
     );
@@ -259,7 +260,7 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
     let (mut app, cmd_rx) = gui_app_with_named_queues();
     app.dispatch(&AppCommand::Panel(PanelIntent::RequestNewQueue));
     let created = sent_create(&cmd_rx).expect("the control asks for a new queue");
-    app.status.clear();
+    app.toasts.clear();
 
     app.handle_player_event(PlayerEvent::QueueOpResult {
         op: created,
@@ -271,7 +272,8 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
         "the refusal ends the request"
     );
     assert_eq!(
-        app.status, "named queues unavailable",
+        app.newest_toast_text(),
+        "named queues unavailable",
         "the refusal says why no queue was made"
     );
 }
@@ -281,7 +283,7 @@ fn a_rejected_create_ends_the_request_and_tells_the_user_why() {
 #[test]
 fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
     let (mut app, _cmd_rx) = gui_app_with_named_queues();
-    app.status.clear();
+    app.toasts.clear();
 
     app.handle_player_event(PlayerEvent::QueueOpResult {
         op: mbv_ctrl::QueueOpId(42),
@@ -289,7 +291,7 @@ fn a_rejection_that_answers_no_named_queue_command_stays_silent() {
     });
 
     assert!(
-        app.status.is_empty(),
+        app.newest_toast_text().is_empty(),
         "nothing reports an edit's own rejection twice"
     );
 }

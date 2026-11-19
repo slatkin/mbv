@@ -21,13 +21,12 @@
 //! ([`crate::window::library::status`]), flush right and joined by the canvas's
 //! separator. The bar paints no key hints.
 //!
-//! The frame's `GuiStatusBar` carries the armed prefix and the live toast,
-//! the same facts the Queue footer's line paints. While either is active it
-//! paints at the left edge — the toast wins over the prefix badge, as the
-//! footer line drops the badge while a toast is live — and the location
-//! stays. The bar paints no interactive region of its own: a point on
-//! it resolves to no target, as the canvas's bar carries none, and it reports
-//! no layout contribution.
+//! The frame's `GuiStatusBar` carries the armed prefix, the same fact the
+//! Queue footer's line paints. While it is armed, the bar paints the badge at
+//! its left edge, and the location stays. The bar shows no toast: toasts show
+//! as floating cards over the window, never in this line. The bar paints no
+//! interactive region of its own: a point on it resolves to no target, as the
+//! canvas's bar carries none, and it reports no layout contribution.
 
 use dioxus_native::prelude::*;
 
@@ -35,7 +34,6 @@ use crate::bridge::frame::chrome::GuiStatusBar;
 use crate::bridge::frame::library::{GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame};
 use crate::window::library::status::library_location;
 use crate::window::sections::SectionRef;
-use crate::window::status::toast_color;
 
 /// The props of the Library Status bar (the `LibraryStatusBar` props,
 /// in order).
@@ -60,16 +58,15 @@ pub struct LibraryStatusBarProps {
     /// is active, as the same one handle.
     #[props(default)]
     pub detail: Option<SectionRef<GuiLibraryDetail>>,
-    /// The armed prefix and the live toast (design D10): they paint at the
-    /// bar's left edge while active.
+    /// The armed prefix (design D10): it paints at the bar's left edge while
+    /// armed.
     pub status: GuiStatusBar,
 }
 
 /// The Library Status bar: the
-/// canvas status bar band, the armed prefix or the live toast at the left
-/// edge, and the location flush at the right. The Search field it once led
-/// its left side with is the top bar's right end now (user request
-/// 2026-11-19).
+/// canvas status bar band, the armed prefix at the left edge, and the
+/// location flush at the right. The Search field it once led its left side
+/// with is the top bar's right end now (user request 2026-11-19).
 #[component]
 pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
     let location = library_location(
@@ -78,31 +75,19 @@ pub fn LibraryStatusBar(props: LibraryStatusBarProps) -> Element {
         props.list.as_deref(),
         props.detail.as_deref(),
     );
-    // The live toast's severity colour, resolved before the markup (the
-    // the former client `toastColor` call in the attribute).
-    let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
-        format!("color: {};", toast_color(toast.severity))
-    });
 
     rsx! {
         div {
             class: "flex flex-none items-center justify-between font-mono whitespace-nowrap",
             style: "height: 40px; padding-inline: 16px; font-size: 13px; border-top: 1px solid var(--canvas-border); background: var(--canvas-library-panel);",
             "data-library-status": "",
-            // The left side: the armed prefix or the live toast while either
-            // is active.
+            // The left side: the armed prefix while prefix mode is armed.
             div {
                 class: "flex min-w-0 items-center",
                 style: "gap: 12px;",
                 span {
                     class: "overflow-hidden",
-                    if let Some(toast) = props.status.toast.as_ref() {
-                        span {
-                            style: "{toast_style}",
-                            "data-library-status-toast": "",
-                            "{toast.text}"
-                        }
-                    } else if props.status.prefix_armed {
+                    if props.status.prefix_armed {
                         span {
                             class: "font-bold",
                             style: "color: var(--mbv-accent);",

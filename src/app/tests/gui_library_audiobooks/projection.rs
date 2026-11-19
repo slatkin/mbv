@@ -494,7 +494,8 @@ fn a_denied_owner_flashes_the_owner_unavailable_toast_and_submits_nothing() {
         item_id: "book-a".into(),
     });
     assert_eq!(
-        app.status, "Audiobookshelf playback owner is unavailable",
+        app.newest_toast_text(),
+        "Audiobookshelf playback owner is unavailable",
         "the play's refusal flashes the owner-unavailable toast"
     );
     app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsQueue {
@@ -537,7 +538,10 @@ fn stale_book_and_chapter_ids_change_nothing() {
         item_id: "gone".into(),
     });
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(app.status.is_empty(), "a stale id flashes no toast");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "a stale id flashes no toast"
+    );
 
     app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::AbsPlayChapter {
         lib_idx: 0,
@@ -545,7 +549,8 @@ fn stale_book_and_chapter_ids_change_nothing() {
         chapter: 9,
     });
     assert_eq!(
-        app.status, "That chapter is no longer available",
+        app.newest_toast_text(),
+        "That chapter is no longer available",
         "the activation rule's refusal arm resolves the stale chapter"
     );
     assert!(

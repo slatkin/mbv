@@ -15,11 +15,11 @@
 //! second line, and no date gutter, as the canvas's row draws. The shown
 //! queue's start slot carries the start mark: a filled triangle while that
 //! queue plays and an outlined one while it is stopped or resting (task 8.4,
-//! design D9). The rows paint four looks: the now-playing row's green fill, the
-//! active row's (the cursor slot) and a marked row's raised fill, the hovered
-//! row's own fill, and otherwise no fill. The active row's look needs no focus
-//! fact: the window holds no focus, and the pointer resting on the active row
-//! leaves its fill in place.
+//! design D9). The rows paint three looks: the now-playing row's green fill, a
+//! marked row's raised fill, the hovered row's own fill, and otherwise no fill.
+//! The cursor slot paints nothing: only a multi-selection shows as selected.
+//! A marked row's look needs no focus fact: the window holds no focus, and the
+//! pointer resting on a marked row leaves its fill in place.
 //!
 //! The row hover and the drag paint from the frame too — the window holds
 //! neither (the `gui-client` spec): `queue.hover` names the row that shows

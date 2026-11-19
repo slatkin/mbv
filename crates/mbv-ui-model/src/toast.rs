@@ -1,7 +1,8 @@
 //! Toast presentation models (extract-client-core row 4.6): the neutral
-//! severity class and the presented toast the Status bar's Surface state
-//! carries. The TUI and GUI painters style the severity each in their own
-//! way; the presented facts are the shared state.
+//! severity class, the stable toast identity and card a painter keys on, and
+//! the presented toast the Status bar's Surface state carries. The TUI and GUI
+//! painters style the severity each in their own way; the presented facts are
+//! the shared state.
 
 use std::time::Duration;
 
@@ -30,6 +31,22 @@ impl ToastSeverity {
             ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
         }
     }
+}
+
+/// Stable identity of one toast, so a painter can key a card on it: a card
+/// that stays does not remount when an older card goes, and a repeated toast
+/// gets a new id, so its card moves to the newest position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ToastId(pub u64);
+
+/// One toast to present as its own card: the stable id the painter keys on
+/// plus the presented facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToastCard {
+    /// The toast's stable identity.
+    pub id: ToastId,
+    /// The toast's text and severity.
+    pub toast: StatusToast,
 }
 
 /// The toast a live status row presents: its text and severity. Whether the

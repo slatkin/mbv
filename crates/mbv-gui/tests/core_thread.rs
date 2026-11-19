@@ -24,7 +24,7 @@ use mbv_config::{
 };
 use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::GuiPanelToggles;
-use mbv_gui::bridge::frame::chrome::GuiStatusBar;
+use mbv_gui::bridge::frame::chrome::{GuiStatusBar, GuiToast, GuiToasts};
 use mbv_gui::bridge::frame::library::{
     GuiLibraryDetail, GuiLibraryList, GuiLibraryRowMenuFrame, GuiSearchFrame,
 };
@@ -186,6 +186,7 @@ impl Held {
         held.hover = batch.hover.or(held.hover.take());
         held.footer = batch.footer.or(held.footer.take());
         held.status = batch.status.or(held.status.take());
+        held.toasts = batch.toasts.or(held.toasts.take());
         held.library_list = batch.library_list.or(held.library_list.take());
         held.library_detail = batch.library_detail.or(held.library_detail.take());
         held.row_menu = batch.row_menu.or(held.row_menu.take());
@@ -227,6 +228,18 @@ impl Held {
     /// The Status bar section's value.
     pub(crate) fn status(&self) -> &GuiStatusBar {
         section_value(self.batch.status.as_ref(), "status")
+    }
+
+    /// The Toasts section's value: every live toast the toast stack paints,
+    /// oldest first.
+    pub(crate) fn toasts(&self) -> &GuiToasts {
+        section_value(self.batch.toasts.as_ref(), "toasts")
+    }
+
+    /// The newest live toast, `None` while none is live: the card of the last
+    /// arrival, read off the list's tail.
+    pub(crate) fn newest_toast(&self) -> Option<&GuiToast> {
+        self.toasts().0.last()
     }
 
     /// The Library list section (design D8), `None` while no presented

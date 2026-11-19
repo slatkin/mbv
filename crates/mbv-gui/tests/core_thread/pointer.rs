@@ -7,6 +7,7 @@
 
 use mbv::{stub_app_with_cast_target, stub_app_with_prefix_and_toast, stub_app_with_track_choices};
 use mbv_config::TestStateDirGuard;
+use mbv_gui::bridge::frame::chrome::GuiStatusBar;
 use mbv_gui::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind};
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::layout::{
@@ -142,9 +143,8 @@ fn a_press_on_the_play_pause_region_dispatches_the_playback_request() {
     assert!(test.core.step());
     let frame = test.held();
     let toast = frame
-        .status()
-        .toast
-        .clone()
+        .newest_toast()
+        .cloned()
         .expect("the toggle flashed a toast");
     assert_eq!(toast.text, "Pause requested");
 }
@@ -192,6 +192,24 @@ fn an_untargeted_pointer_press_cancels_an_armed_prefix() {
     assert!(test.core.step());
     let frame = test.held();
     assert!(!frame.status().prefix_armed);
+    // The toast rides the `Toasts` section now (task row 2.1 of
+    // `gui-floating-toasts`), so the Status bar carries the armed prefix
+    // alone.
+    assert_eq!(
+        *frame.status(),
+        GuiStatusBar {
+            prefix_armed: false
+        }
+    );
+    assert_eq!(
+        frame
+            .toasts()
+            .0
+            .iter()
+            .map(|toast| toast.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["prefix armed"],
+    );
 }
 
 /// The header's playback-target press opens the chooser, and a chooser

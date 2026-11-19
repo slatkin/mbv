@@ -414,8 +414,11 @@ fn a_second_mark_while_one_is_in_flight_is_refused() {
         None,
     );
 
-    assert_eq!(app.status, "Audiobookshelf mark already in progress");
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(
+        app.newest_toast_text(),
+        "Audiobookshelf mark already in progress"
+    );
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
     assert!(
         app.setup.audiobookshelf_mark_rx.is_some(),
         "the pending receiver is untouched"

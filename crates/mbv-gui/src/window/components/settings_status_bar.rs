@@ -1,17 +1,15 @@
 //! The Settings screen's status line (`replace-tauri-with-blitz` task 8.3,
-//! the port of `SettingsStatusBar`; add-gui-settings-screen design D9,
-//! the spec's *The Settings screen shows the toasts*; the canvas's status
-//! bar, design D13): the 36 px band that closes the screen, painting the
-//! shared Status bar projection — the armed prefix and the live toast —
-//! because neither the footer line nor the Library Status bar shows while
-//! the screen is open. The left side is the screen's fixed key hints in the
-//! canvas's source tone while no toast or prefix is live; the right side is
-//! the shown section.
+//! the port of `SettingsStatusBar`; add-gui-settings-screen design D9, the
+//! canvas's status bar, design D13): the 36 px band that closes the screen,
+//! painting the shared Status bar projection's armed prefix, because neither
+//! the footer line nor the Library Status bar shows while the screen is open.
+//! The left side is the screen's fixed key hints in the canvas's source tone
+//! while prefix mode is not armed; the right side is the shown section. The
+//! line shows no toast: toasts show as floating cards over the screen.
 
 use dioxus_native::prelude::*;
 
 use crate::bridge::frame::chrome::GuiStatusBar;
-use crate::window::status::toast_color;
 
 /// The screen's fixed keys (design D11), which `[keys]` does not configure,
 /// so the text is fixed.
@@ -27,7 +25,7 @@ const HINTS: &[(&str, &str)] = &[
 /// order).
 #[derive(Props, Debug, Clone, PartialEq)]
 pub struct SettingsStatusBarProps {
-    /// The frame's Status bar facts: the armed prefix and the live toast.
+    /// The frame's Status bar facts: the armed prefix.
     pub status: GuiStatusBar,
     /// The shown section's sidebar label.
     pub section: String,
@@ -36,11 +34,6 @@ pub struct SettingsStatusBarProps {
 /// The one status line.
 #[component]
 pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
-    // The live toast's severity colour, resolved before the markup (the
-    // the former client `toastColor` call in the attribute).
-    let toast_style = props.status.toast.as_ref().map_or(String::new(), |toast| {
-        format!("color: {};", toast_color(toast.severity))
-    });
     rsx! {
         div {
             class: "flex flex-none items-center justify-between overflow-hidden font-mono whitespace-nowrap",
@@ -58,14 +51,7 @@ pub fn SettingsStatusBar(props: SettingsStatusBarProps) -> Element {
                         "PREFIX"
                     }
                 }
-                if let Some(toast) = props.status.toast.as_ref() {
-                    span {
-                        style: "{toast_style}",
-                        "data-settings-status-toast": "",
-                        "{toast.text}"
-                    }
-                }
-                if props.status.toast.is_none() && !props.status.prefix_armed {
+                if !props.status.prefix_armed {
                     span {
                         class: "flex items-center",
                         style: "gap: 12px; color: var(--canvas-muted);",

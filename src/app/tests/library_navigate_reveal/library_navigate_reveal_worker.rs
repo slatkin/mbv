@@ -146,9 +146,9 @@ fn resolve_failure_drains_the_error_event_and_flashes_without_a_tab_change() {
     app.handle_lib_event(ev);
     assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
     assert!(
-        app.status.contains("Library error"),
+        app.newest_toast_text().contains("Library error"),
         "flash: {}",
-        app.status
+        app.newest_toast_text()
     );
-    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Error);
 }

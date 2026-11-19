@@ -110,8 +110,11 @@ fn refused_pinned_request_keeps_the_value_and_the_panel() {
     assert_eq!(app.config.lock().unwrap().panel.width_expanded, previous);
     assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
     assert!(app.settings_save_at.is_none(), "no save is armed");
-    assert_eq!(app.status, "the panel does not fit this output");
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(
+        app.newest_toast_text(),
+        "the panel does not fit this output"
+    );
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
 }
 
 /// The one-in-flight contract: a second F2 step while the first request is
@@ -164,8 +167,11 @@ fn a_refused_panel_request_saves_nothing_when_its_outcome_arrives() {
 
     assert_eq!(app.config.lock().unwrap().panel.width_expanded, previous);
     assert!(app.settings_save_at.is_none(), "a refusal arms no save");
-    assert_eq!(app.status, "the panel does not fit this output");
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert_eq!(
+        app.newest_toast_text(),
+        "the panel does not fit this output"
+    );
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -183,10 +189,10 @@ fn accent_row_while_pinned_saves_and_announces_the_next_launch() {
 
     assert!(!app.config.lock().unwrap().panel.accent);
     assert_eq!(
-        app.status,
+        app.newest_toast_text(),
         "Accent changes apply on the next mbv --pin launch"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Neutral);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Neutral);
 }
 
 /// A launch outside the panel saves the value with no request, no
@@ -205,7 +211,10 @@ fn unpinned_row_saves_without_recording_a_pinned_width() {
 
     assert_eq!(app.config.lock().unwrap().panel.width, 480);
     assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert!(app.status.is_empty(), "no toast outside the panel");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "no toast outside the panel"
+    );
     assert!(app.settings_save_at.is_some(), "the save is armed");
 }
 
@@ -231,7 +240,10 @@ fn the_reserve_row_enable_while_collapsed_saves_without_an_announcement() {
     );
     assert!(app.config.lock().unwrap().panel.reserve, "the saved enable");
     assert!(app.settings_save_at.is_some(), "the save is armed");
-    assert!(app.status.is_empty(), "enabling needs no toast");
+    assert!(
+        app.newest_toast_text().is_empty(),
+        "enabling needs no toast"
+    );
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -258,10 +270,10 @@ fn the_reserve_row_disable_while_pinned_saves_and_announces_the_release() {
         "the saved disable"
     );
     assert_eq!(
-        app.status,
+        app.newest_toast_text(),
         "The held strip is released on the next mbv --pin launch"
     );
-    assert_eq!(app.status_severity, ToastSeverity::Neutral);
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Neutral);
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
@@ -301,6 +313,9 @@ fn a_saved_enable_while_expanded_announces_the_next_collapse() {
     app.apply_panel_setting_outcome(true, SettingKey::PanelReserve, None, candidate(), Ok(()));
 
     assert!(app.config.lock().unwrap().panel.reserve, "the saved enable");
-    assert_eq!(app.status, "The strip is reserved on the next collapse");
-    assert_eq!(app.status_severity, ToastSeverity::Neutral);
+    assert_eq!(
+        app.newest_toast_text(),
+        "The strip is reserved on the next collapse"
+    );
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Neutral);
 }

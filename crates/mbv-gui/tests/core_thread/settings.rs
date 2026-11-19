@@ -177,11 +177,7 @@ fn space_toggles_playback_behind_the_screen() {
 
     let frame = test.held();
     assert_eq!(
-        frame
-            .status()
-            .toast
-            .as_ref()
-            .map(|toast| toast.text.as_str()),
+        frame.newest_toast().map(|toast| toast.text.as_str()),
         Some("Pause requested"),
         "the transport toggle fired behind the screen"
     );

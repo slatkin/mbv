@@ -122,9 +122,9 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
     app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
     assert!(
-        app.status.contains("no playable source"),
+        app.newest_toast_text().contains("no playable source"),
         "expected a no-playable-source toast, got {:?}",
-        app.status
+        app.newest_toast_text()
     );
     assert!(
         app.playback_queue().slots().is_empty(),

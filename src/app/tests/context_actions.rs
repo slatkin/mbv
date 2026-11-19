@@ -26,7 +26,7 @@ fn context_played_mark_uses_the_requested_remote_mutation() {
     app.execute_context_action(Some(ContextAction::MarkPlayed("movie".into())), None);
 
     assert!(http.requests()[0].contains("POST /Users/user/PlayedItems/movie"));
-    assert_ne!(app.status_severity, ToastSeverity::Error);
+    assert_ne!(app.newest_toast_severity(), ToastSeverity::Error);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn watched_toggle_unmarks_a_played_item_through_emby() {
     let mut movie = make_item("movie", "Movie");
     movie.id = "movie".into();
     movie.played = true;
-    let severity = app.status_severity;
+    let severity = app.newest_toast_severity();
 
     app.toggle_watched_item(0, &movie);
 
@@ -46,5 +46,5 @@ fn watched_toggle_unmarks_a_played_item_through_emby() {
         "request: {:?}",
         http.requests()
     );
-    assert_eq!(app.status_severity, severity);
+    assert_eq!(app.newest_toast_severity(), severity);
 }

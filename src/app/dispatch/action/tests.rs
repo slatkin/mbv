@@ -133,11 +133,11 @@ fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
     app.play_item(make_item("Track", "Audio"));
 
     assert_eq!(
-        app.status,
+        app.newest_toast_text(),
         crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
     );
-    assert!(!app.status.contains("Requesting playback"));
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert!(!app.newest_toast_text().contains("Requesting playback"));
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Warning);
 }
 
 #[test]
@@ -185,9 +185,9 @@ fn playlists_load_error_preserves_existing_list_and_flashes() {
     assert_eq!(app.playlists.len(), 1);
     assert_eq!(app.playlists[0].name, "Existing");
     assert!(
-        app.status.contains("connection refused"),
+        app.newest_toast_text().contains("connection refused"),
         "status was: {:?}",
-        app.status
+        app.newest_toast_text()
     );
 }
 
@@ -209,5 +209,5 @@ fn playlist_items_load_error_preserves_existing_items_and_flashes() {
     assert!(!app.playlists_open_loading);
     assert_eq!(app.playlists_open_items.len(), 1);
     assert_eq!(app.playlists_open_items[0].name, "Track 1");
-    assert!(app.status.contains("timeout"));
+    assert!(app.newest_toast_text().contains("timeout"));
 }

@@ -70,8 +70,11 @@ fn tray_toggle_is_refused_while_stay_alive_is_on() {
     app.handle_settings_activate(SettingKey::ShowSysTrayIcon);
 
     assert!(!app.config.lock().unwrap().show_systray_icon);
-    assert_eq!(app.status, "Tray stays on while Stay alive is on");
-    assert_eq!(app.status_severity, ToastSeverity::Neutral);
+    assert_eq!(
+        app.newest_toast_text(),
+        "Tray stays on while Stay alive is on"
+    );
+    assert_eq!(app.newest_toast_severity(), ToastSeverity::Neutral);
 }
 
 #[test]

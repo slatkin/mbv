@@ -148,9 +148,12 @@ pub struct App {
     /// finds the request it answers and tells the user why; an op leaves the
     /// set when its answer arrives, and a lost Owner clears it.
     pub(in crate::app) pending_named_queue_ops: std::collections::HashSet<mbv_ctrl::QueueOpId>,
-    pub(in crate::app) status: String,
-    pub(in crate::app) status_expires: Option<Instant>,
-    pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
+    /// The Client core's live toasts (design D1): one list in one place, so
+    /// several toasts are live at once, with the cap, the repeat rule, and
+    /// the per-severity expiry owned by `ToastList`. The status row presents
+    /// the newest toast that renders in-app; the GUI Client paints a card per
+    /// toast.
+    pub(in crate::app) toasts: crate::app::state::toasts::ToastList,
     /// The daemon endpoint for the current player target. `None` means an
     /// in-process player (bare mode). `Some(DaemonEndpoint::Local)` is this
     /// machine's managed local daemon. `Some(Tcp | Unix)` is a different
@@ -702,13 +705,21 @@ pub struct App {
 }
 
 impl App {
-    /// Whether a flash toast is still live: its expiry instant is strictly
-    /// in the future. One predicate for every liveness reader (the status-row
-    /// projection, the expiry cleanup, and the startup guards) so the rule
-    /// lives once.
-    pub(in crate::app) fn status_toast_live(&self) -> bool {
-        self.status_expires
-            .is_some_and(|expires| expires > Instant::now())
+    /// The newest toast's text, whether or not its duration has run out, or
+    /// `""` when there is none (design D5). A test read: the presented toasts
+    /// come from `toast_presentation` and `toast_cards`.
+    #[cfg(any(test, feature = "test"))]
+    pub fn newest_toast_text(&self) -> &str {
+        self.toasts.newest().map_or("", |toast| toast.text.as_str())
+    }
+
+    /// The newest toast's severity, whether or not its duration has run out,
+    /// or the default when there is none (design D5). A test read.
+    #[cfg(any(test, feature = "test"))]
+    pub fn newest_toast_severity(&self) -> crate::app::dispatch::notify::ToastSeverity {
+        self.toasts
+            .newest()
+            .map_or_else(Default::default, |toast| toast.severity)
     }
 
     /// A pinned launch's default screen is always the Queue panel, never the

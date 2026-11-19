@@ -192,34 +192,29 @@ fn a_long_title_regrows_when_the_row_gets_room() {
     assert_eq!(fixture.text_of("[data-slot=\"1\"] .truncate"), title);
 }
 
-/// Contract (`gui-queue-panel-redesign` design D9): the active row and a marked
-/// row paint the raised fill with no focus fact — the window holds none — and
-/// no leading accent stripe paints on either.
+/// Contract (`gui-client` "The Queue is a ledger"): a marked row paints the
+/// raised fill with no focus fact — the window holds none — and the cursor row
+/// paints no selection fill, because only a multi-selection shows as selected.
 #[test]
-fn the_active_and_marked_rows_paint_the_raised_fill() {
-    let rows = vec![item(1), item(2)];
-    let mut rows_frame = queue(rows);
+fn only_a_marked_row_paints_the_raised_fill() {
+    let mut rows_frame = queue(vec![item(1), item(2)]);
     rows_frame.cursor = Some(1);
     rows_frame.marks = vec![2];
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
-    for slot in [1, 2] {
-        let style = fixture.style_of(&format!("[data-slot=\"{slot}\"]"));
-        assert!(
-            style.contains(&format!("background: {}", ef_var(EfToken::Bg3))),
-            "{style}"
-        );
-    }
+    let raised = format!("background: {}", ef_var(EfToken::Bg3));
+    assert!(fixture.style_of("[data-slot=\"2\"]").contains(&raised));
+    assert!(!fixture.style_of("[data-slot=\"1\"]").contains("background"));
     assert!(!fixture.presents("[data-active-edge]"));
 }
 
-/// Contract (`gui-queue-panel-redesign` design D9): a hovered row that is not
-/// the active row paints the hover fill, while the active row keeps its raised
-/// fill under the pointer resting on its neighbour.
+/// Contract (`gui-queue-panel-redesign` design D9): a hovered row paints the
+/// hover fill, while a marked row keeps its raised fill under the pointer
+/// resting on its neighbour.
 #[test]
 fn the_hovered_row_paints_the_hover_fill() {
     let mut rows_frame = queue(vec![item(1), item(2)]);
-    rows_frame.cursor = Some(1);
+    rows_frame.marks = vec![1];
     rows_frame.hover = Some(2);
     let fixture = built_with_frame(queue_panel_app, rows_frame, summary(), None);
 
@@ -232,7 +227,7 @@ fn the_hovered_row_paints_the_hover_fill() {
         fixture
             .style_of("[data-slot=\"1\"]")
             .contains(&format!("background: {}", ef_var(EfToken::Bg3))),
-        "the active row keeps its fill"
+        "the marked row keeps its fill"
     );
 }
 

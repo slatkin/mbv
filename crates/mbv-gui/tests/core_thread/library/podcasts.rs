@@ -305,5 +305,5 @@ fn a_stale_podcast_row_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(newest_frame(&mut test).status().toast.is_none());
+    assert!(newest_frame(&mut test).newest_toast().is_none());
 }

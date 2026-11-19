@@ -516,10 +516,10 @@ fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
         harness
             .model()
             .app
-            .status
+            .newest_toast_text()
             .contains("cannot select an Emby Session"),
         "the activation reports why nothing was selected: {}",
-        harness.model().app.status
+        harness.model().app.newest_toast_text()
     );
 }
 

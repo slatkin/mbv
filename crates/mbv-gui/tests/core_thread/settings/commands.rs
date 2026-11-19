@@ -308,11 +308,7 @@ fn a_capture_to_a_free_chord_fires_the_action_on_the_next_key() {
 
     let frame = newest_frame(&mut test);
     assert_eq!(
-        frame
-            .status()
-            .toast
-            .as_ref()
-            .map(|toast| toast.text.as_str()),
+        frame.newest_toast().map(|toast| toast.text.as_str()),
         Some("Pause requested"),
         "the captured chord fired its action"
     );

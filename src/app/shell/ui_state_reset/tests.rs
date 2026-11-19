@@ -249,7 +249,7 @@ fn assert_saved_presentation_cleared(model: &Model) {
     assert_eq!(prefs["ui_volume"], serde_json::json!(37));
     assert_eq!(prefs["unrelated_future_key"], serde_json::json!("keep"));
     assert_eq!(
-        model.app.status_severity,
+        model.app.newest_toast_severity(),
         crate::app::dispatch::notify::ToastSeverity::Success
     );
 }

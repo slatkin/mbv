@@ -113,7 +113,7 @@ fn add_fetch_failure_does_not_save() {
     model.drain_feed_add_results();
 
     assert!(model.app.config.lock().unwrap().feeds.is_empty());
-    assert!(model.app.status.contains("Couldn't add feed"));
+    assert!(model.app.newest_toast_text().contains("Couldn't add feed"));
 }
 
 /// D5 of `add-gui-settings-screen`: the URL is the subscription list's
@@ -141,6 +141,6 @@ fn duplicate_url_add_is_refused_and_list_unchanged() {
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "A");
     assert_eq!(feeds[0].url, "https://a");
-    assert!(model.app.status.contains("Couldn't add feed"));
+    assert!(model.app.newest_toast_text().contains("Couldn't add feed"));
     assert_eq!(model.app.feeds_manage.as_ref().unwrap().pending_add, None);
 }

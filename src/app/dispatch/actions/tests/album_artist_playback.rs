@@ -228,8 +228,8 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         mbv_queue::QueueSource::Playlist { .. }
     ));
     assert!(
-        app.status.contains("Library error"),
+        app.newest_toast_text().contains("Library error"),
         "resolution failure uses the existing library error channel: {}",
-        app.status
+        app.newest_toast_text()
     );
 }
